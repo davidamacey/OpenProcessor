@@ -25,6 +25,7 @@ from src.services.detection.region_text import (
     resolve_region_text,
 )
 from src.services.detection.region_text_rules import RegionTextRules, text_key
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, prompt_text_examples
 
@@ -224,9 +225,9 @@ class TestWriters:
         reply = VlmCombinedReply(
             img_id='c1',
             region_visible=True,
-            region_bbox_correct=True,
-            region_text_reply='XYZ987',
-            region_confidence='high',
+            region_boxes=[
+                VlmBoxVerdict(box=1, bbox_correct=True, confidence='high', text_reply='XYZ987')
+            ],
         )
         await _drive(
             tmp_path,
@@ -239,11 +240,12 @@ class TestWriters:
             text_reader='vlm_then_ocr',
         )
         doc = fake_os.live['c1']
-        assert doc[F.text] == 'ABC1234'
-        assert doc[F.text_source] == 'ocr'
-        assert doc[F.text_vlm] == 'XYZ987'
-        assert doc[F.text_vlm_invalid] == 'placeholder'
-        assert doc[F.text_choice] == 'vlm_invalid'
+        box = doc[F.boxes][0]
+        assert box['text'] == 'ABC1234'
+        assert box['text_source'] == 'ocr'
+        assert box['text_vlm'] == 'XYZ987'
+        assert box['text_vlm_invalid'] == 'placeholder'
+        assert box['text_choice'] == 'vlm_invalid'
 
 
 @pytest.mark.usefixtures('reference_region_profile')

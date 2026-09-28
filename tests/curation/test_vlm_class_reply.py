@@ -129,6 +129,7 @@ class TestCombinedClassAnswer:
             img_id='c1',
             fields=get_region_fields(),
             class_names=self.NAMES,
+            n_boxes=0,
         )
 
     @pytest.mark.parametrize(
@@ -165,6 +166,7 @@ class TestCombinedClassAnswer:
             img_id='c1',
             fields=get_region_fields(),
             class_names=None,
+            n_boxes=0,
         )
         assert (reply.class_id, reply.class_raw) == (None, 'gadget')
 
@@ -185,18 +187,16 @@ class TestCombinedNestedEntryUnwrap:
                 'class_id': None,
                 'class_confidence': None,
                 'region_visible': True,
-                'region_bbox_correct': None,
-                'region_text': '782CCB',
-                'region_confidence': 'high',
+                'region_boxes': [{'box': 1, 'region_text': '782CCB', 'region_confidence': 'high'}],
                 'make': None,
                 'model': None,
             },
         }
         reply = _combined_reply_from_entry(
-            entry, img_id='c1', fields=get_region_fields(), class_names=None
+            entry, img_id='c1', fields=get_region_fields(), class_names=None, n_boxes=1
         )
         assert reply.region_visible is True
-        assert reply.region_text_reply == '782CCB'
+        assert reply.region_boxes[0].text_reply == '782CCB'
 
     def test_a_different_invented_key_name_is_also_unwrapped(self) -> None:
         entry = {
@@ -205,7 +205,7 @@ class TestCombinedNestedEntryUnwrap:
                 'class_id': 11,
                 'class_confidence': 'high',
                 'region_visible': True,
-                'region_bbox_correct': True,
+                'region_boxes': [{'box': 1, 'region_bbox_correct': True}],
             },
         }
         reply = _combined_reply_from_entry(
@@ -213,6 +213,7 @@ class TestCombinedNestedEntryUnwrap:
             img_id='c1',
             fields=get_region_fields(),
             class_names=[f'c{i}' for i in range(20)],
+            n_boxes=1,
         )
         assert reply.region_visible is True
         assert reply.class_id == 11
@@ -225,7 +226,7 @@ class TestCombinedNestedEntryUnwrap:
         }
         with pytest.raises(ValueError, match='region_visible'):
             _combined_reply_from_entry(
-                entry, img_id='c1', fields=get_region_fields(), class_names=None
+                entry, img_id='c1', fields=get_region_fields(), class_names=None, n_boxes=0
             )
 
     def test_batch_parse_unwraps_nested_entries(self) -> None:
@@ -236,7 +237,7 @@ class TestCombinedNestedEntryUnwrap:
                         'img': 1,
                         'layout_analysis': {
                             'region_visible': True,
-                            'region_text': '782CCB',
+                            'region_boxes': [{'box': 1, 'region_text': '782CCB'}],
                         },
                     },
                     {
@@ -244,21 +245,21 @@ class TestCombinedNestedEntryUnwrap:
                         'interim_results': {
                             'class_id': 0,
                             'region_visible': True,
-                            'region_bbox_correct': True,
+                            'region_boxes': [{'box': 1, 'region_bbox_correct': True}],
                         },
                     },
                 ]
             }
         )
         chunk = [
-            CombinedCrop(crop_id='c1', jpeg_bytes=b'x'),
-            CombinedCrop(crop_id='c2', jpeg_bytes=b'x'),
+            CombinedCrop(crop_id='c1', jpeg_bytes=b'x', region_bboxes_norm=[(0, 0, 1, 1)]),
+            CombinedCrop(crop_id='c2', jpeg_bytes=b'x', region_bboxes_norm=[(0, 0, 1, 1)]),
         ]
         out = VlmLabeler._parse_combined_batch_response(
             raw, chunk, get_region_fields(), class_names=['widget']
         )
         assert out['c1'] is not None
-        assert out['c1'].region_text_reply == '782CCB'
+        assert out['c1'].region_boxes[0].text_reply == '782CCB'
         assert out['c2'] is not None
         assert out['c2'].class_id == 0
 

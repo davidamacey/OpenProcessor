@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from scripts.curation.worker.verify import _combined_write_doc, _region_write_doc
+from scripts.curation.worker.verify import _region_write_doc
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.region_validation_repair import (
@@ -27,6 +27,7 @@ from src.services.curation.region_validation_repair import (
 from src.services.curation.review_queries import build_tab_query
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item
@@ -53,25 +54,23 @@ class TestWorkerWrites:
         assert doc[F.validated] is False
         assert doc[F.auto_confirmed] is True
 
-    def test_combined_accept_never_validates(self) -> None:
-        doc = _combined_write_doc(
-            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=True),
-            candidate_in_source=(0.1, 0.1, 0.2, 0.2),
-            candidate_score=0.9,
-            detector='det_model',
-            detector_version='1',
-            chain=[],
-            class_names=None,
-            auto_confirmed=False,
-        )
-        assert doc[F.validated] is False
-        assert doc[F.auto_confirmed] is False
-
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('reference_region_profile')
-    async def test_streaming_worker_auto_confirm_leaves_region_unvalidated(
+    async def test_streaming_worker_combined_accept_writes_an_accepted_box(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """W8: the combined-call accept path writes the box-list shape
+        (``region_boxes[i].state == 'accepted'``), not the legacy
+        item-level ``region_auto_confirmed`` / ``region_validated``
+        scalars this class used to assert on -- the box-list schema does
+        not yet carry an auto-confirm-vs-human-validated distinction per
+        box (W8c follow-up); every accepted box reads the same until
+        that lands. A human validating a box is still a distinct,
+        separate action from a machine accepting one -- see
+        ``test_region_review_tab_keeps_auto_confirmed_regions`` below,
+        which covers the legacy-scalar wire/query contract untouched by
+        this pass.
+        """
         fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         await _drive_worker(
             tmp_path,
@@ -82,15 +81,14 @@ class TestWorkerWrites:
             reply=VlmCombinedReply(
                 img_id='c1',
                 region_visible=True,
-                region_bbox_correct=True,
-                region_text_reply='DNV20',
-                region_confidence='high',
+                region_boxes=[
+                    VlmBoxVerdict(box=1, bbox_correct=True, confidence='high', text_reply='DNV20')
+                ],
             ),
         )
         doc = fake.live['c1']
         assert doc[F.status] == 'detected'
-        assert doc[F.auto_confirmed] is True
-        assert doc[F.validated] is False
+        assert doc[F.boxes][0]['state'] == 'accepted'
 
 
 def test_auto_confirmed_region_is_on_the_wire_and_not_label_validated() -> None:

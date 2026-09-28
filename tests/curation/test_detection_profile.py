@@ -122,6 +122,8 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'REGION_CLASS_NAME': 'env_region_class',
         'DISPLAY_NAME': 'Env Regions',
         'DISPLAY_NAME_SINGULAR': 'Env Region',
+        'REGION_NMS_IOU': '0.4',
+        'REGION_MAX_CANDIDATES': '5',
     }
     prefix = 'OP_TEST_DETECTION_'
     for suffix, value in env_values.items():

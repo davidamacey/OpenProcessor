@@ -23,6 +23,7 @@ from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.profile_registry import register_profile
 from src.services.detection.region_text import OcrLine
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 from .test_region_cascade_integrity import (
@@ -82,7 +83,9 @@ async def _drive(
     install_static_project_registry(monkeypatch)
 
     primary_det = MagicMock()
+    primary_det.confidence_floor = 0.0
     primary_det.detect_batch = AsyncMock(return_value=[primary])
+    primary_det.detect_batch_multi = AsyncMock(return_value=[[primary] if primary else []])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
 
     ocr = MagicMock()
@@ -96,6 +99,7 @@ async def _drive(
 
     seg = MagicMock(aclose=AsyncMock())
     seg.segment = AsyncMock(return_value=segmenter)
+    seg.segment_multi = AsyncMock(return_value=[segmenter] if segmenter else [])
     monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
@@ -163,19 +167,22 @@ class TestNoVlmDeployment:
         doc = fake_os.live['c1']
         det = _profile().detector_model
         assert doc[F.status] == 'detected'
-        assert doc[F.verified] is False
-        assert doc[F.validated] is False
-        assert F.verifier not in doc
-        assert doc[F.detector] == det
+        # W8: no-VLM-configured accept writes the box-list shape.
+        # RegionBox has no verified/validated/verifier concept (those
+        # legacy item-level scalars are Item 2 scope) -- the box's own
+        # state='accepted' is the acceptance signal.
+        box = doc[F.boxes][0]
+        assert box['state'] == 'accepted'
+        assert box['detector'] == det
         assert doc[F.detector_chain] == [f'{det}:hit', f'{det}:accepted_unverified']
-        assert doc[F.text] == 'ABC1234'
-        assert doc[F.text_source] == 'ocr'
-        assert doc[F.text_ocr] == 'ABC1234'
-        assert doc[F.text_raw] == 'Ohio ABC-1234 Birthplace of Aviation'
-        assert doc[F.text_confidence] == pytest.approx(0.91)
-        assert doc[F.text_engine_version] == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
-        assert F.text_vlm not in doc
-        assert F.text_disagreement not in doc
+        assert box['text'] == 'ABC1234'
+        assert box['text_source'] == 'ocr'
+        assert box['text_ocr'] == 'ABC1234'
+        assert box['text_raw'] == 'Ohio ABC-1234 Birthplace of Aviation'
+        assert box['text_confidence'] == pytest.approx(0.91)
+        assert box['text_engine_version'] == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
+        assert box['text_vlm'] is None
+        assert box['text_disagreement'] is None
         assert [ln['text'] for ln in doc['item_text_lines']] == ['ABC-1234', 'Smith Motors']
         assert 'SMITH' in doc['item_text_tokens']
 
@@ -192,10 +199,11 @@ class TestNoVlmDeployment:
         doc = fake_os.live['c1']
         seg = _profile().segmenter_name
         assert doc[F.status] == 'detected'
-        assert doc[F.detector] == seg
+        box = doc[F.boxes][0]
+        assert box['detector'] == seg
         assert f'{seg}:accepted_unverified' in doc[F.detector_chain]
         assert not any(e.startswith('vlm_visible') for e in doc[F.detector_chain])
-        assert doc[F.text] == 'ABC1234'
+        assert box['text'] == 'ABC1234'
 
 
 class TestBothReaders:
@@ -208,9 +216,9 @@ class TestBothReaders:
         reply = VlmCombinedReply(
             img_id='c1',
             region_visible=True,
-            region_bbox_correct=True,
-            region_text_reply='ABC 1284',
-            region_confidence='high',
+            region_boxes=[
+                VlmBoxVerdict(box=1, bbox_correct=True, confidence='high', text_reply='ABC 1284')
+            ],
         )
         mocks = await _drive(
             tmp_path,
@@ -224,11 +232,12 @@ class TestBothReaders:
         F = get_region_fields()
         doc = fake_os.live['c1']
         assert doc[F.status] == 'detected'
-        assert doc[F.text] == 'ABC 1284'
-        assert doc[F.text_source] == 'vlm'
-        assert doc[F.text_vlm] == 'ABC 1284'
-        assert doc[F.text_ocr] == 'ABC1234'
-        assert doc[F.text_disagreement] is True
+        box = doc[F.boxes][0]
+        assert box['text'] == 'ABC 1284'
+        assert box['text_source'] == 'vlm'
+        assert box['text_vlm'] == 'ABC 1284'
+        assert box['text_ocr'] == 'ABC1234'
+        assert box['text_disagreement'] is True
         # The region OCR ran on the candidate box, framed for small text.
         call = mocks['ocr'].read_region_lines.await_args
         assert call.kwargs['min_height'] == _profile().text_crop_min_height
@@ -241,9 +250,7 @@ class TestBothReaders:
         reply = VlmCombinedReply(
             img_id='c1',
             region_visible=True,
-            region_bbox_correct=True,
-            region_text_reply=None,
-            region_confidence='high',
+            region_boxes=[VlmBoxVerdict(box=1, bbox_correct=True, confidence='high')],
         )
         await _drive(
             tmp_path,
@@ -257,9 +264,10 @@ class TestBothReaders:
         )
         F = get_region_fields()
         doc = fake_os.live['c1']
-        assert doc[F.text] == 'ABC1234'
-        assert doc[F.text_source] == 'ocr'
-        assert F.text_disagreement not in doc
+        box = doc[F.boxes][0]
+        assert box['text'] == 'ABC1234'
+        assert box['text_source'] == 'ocr'
+        assert box['text_disagreement'] is None
 
     @pytest.mark.asyncio
     async def test_vlm_mode_never_reads_region_ocr(
@@ -269,9 +277,9 @@ class TestBothReaders:
         reply = VlmCombinedReply(
             img_id='c1',
             region_visible=True,
-            region_bbox_correct=True,
-            region_text_reply='ABC1234',
-            region_confidence='medium',
+            region_boxes=[
+                VlmBoxVerdict(box=1, bbox_correct=True, confidence='medium', text_reply='ABC1234')
+            ],
         )
         mocks = await _drive(
             tmp_path,
@@ -285,4 +293,5 @@ class TestBothReaders:
         )
         mocks['ocr'].read_region_lines.assert_not_awaited()
         doc = fake_os.live['c1']
-        assert doc[get_region_fields().text_source] == 'vlm'
+        F = get_region_fields()
+        assert doc[F.boxes][0]['text_source'] == 'vlm'

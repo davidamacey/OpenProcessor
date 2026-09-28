@@ -20,13 +20,8 @@ from PIL import Image
 
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
-from src.services.labeling.vlm_labeler import (
-    CombinedCrop,
-    RegionCrop,
-    VlmCombinedReply,
-    VlmLabeler,
-    _draw_bbox_overlay,
-)
+from src.services.labeling.region_overlay import draw_region_overlay
+from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop, VlmCombinedReply, VlmLabeler
 
 from .test_region_cascade_integrity import _chat, _drive_worker, _FakeOpenSearch, _item
 
@@ -52,7 +47,7 @@ def _is_red(px: tuple[int, int, int]) -> bool:
 class TestOverlay:
     def test_outline_is_drawn_outside_the_region(self) -> None:
         # Region x 50..150, y 40..60 (a 20 px tall region).
-        out = _draw_bbox_overlay(_gray_jpeg(), (0.25, 0.4, 0.75, 0.6))
+        out = draw_region_overlay(_gray_jpeg(), [(0.25, 0.4, 0.75, 0.6)])
         assert out is not None
         im = Image.open(io.BytesIO(out)).convert('RGB')
         # Just outside the region's edges: the outline.
@@ -71,7 +66,7 @@ class TestDirective:
         lab._post_chat = post  # type: ignore[method-assign]
         crops = [
             CombinedCrop(
-                crop_id=f'c{i}', jpeg_bytes=_gray_jpeg(), region_bbox_norm=(0.2, 0.2, 0.6, 0.6)
+                crop_id=f'c{i}', jpeg_bytes=_gray_jpeg(), region_bboxes_norm=[(0.2, 0.2, 0.6, 0.6)]
             )
             for i in range(2)
         ]
@@ -87,10 +82,10 @@ class TestDirective:
     @pytest.mark.asyncio
     async def test_single_call_names_the_red_rectangle(self) -> None:
         lab = VlmLabeler(base_url='http://vlm.invalid/v1')
-        reply = {'region_visible': True, 'region_bbox_correct': True}
+        reply = {'region_visible': True, 'region_boxes': [{'box': 1, 'region_bbox_correct': True}]}
         post = AsyncMock(return_value=_chat(json.dumps(reply)))
         lab._post_chat = post  # type: ignore[method-assign]
-        await lab.label_combined('c1', _gray_jpeg(), region_bbox_norm=(0.2, 0.2, 0.6, 0.6))
+        await lab.label_combined('c1', _gray_jpeg(), region_bboxes_norm=[(0.2, 0.2, 0.6, 0.6)])
         assert post.await_args is not None
         user = post.await_args.args[0]['messages'][1]['content'][0]['text']
         assert 'red rectangle' in user

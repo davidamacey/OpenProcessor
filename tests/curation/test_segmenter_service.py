@@ -33,9 +33,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-import scripts.curation.region_worker_main as worker
 from scripts.curation.worker.client import SegmenterClient
-from src.config import get_region_fields
+from src.services.detection.cascade_detect import crop_norm_to_source_norm
 
 
 _SEGMENTER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'segmenter'
@@ -435,40 +434,34 @@ class TestCascadeWithTheShippedSegmenter:
     ) -> None:
         """The whole point of G4: with a segmenter deployed, a crop the
         primary detector missed comes back with a segmenter-sourced box
-        and segmenter provenance — where ``test_segmenter_optional`` sees
-        ``no_region_box``.
+        -- where ``test_segmenter_optional`` sees ``no_region_box``.
+
+        W8: ported off the deleted per-crop ``_process_crop`` (which
+        wrapped this in the full class+region cascade); the concern this
+        test actually guards -- ``SegmenterClient`` against a real
+        HTTP-shaped SAM3 server, source-projected via
+        ``crop_norm_to_source_norm`` -- is exercised directly. The live
+        streaming pipeline's equivalent routing (primary-detector miss ->
+        segmenter hit -> combined VLM call -> ``detected`` write with
+        ``region_boxes[0].source == 'sam3'``) is covered end-to-end by
+        ``test_region_cascade_integrity.py``'s ``_drive_worker`` harness
+        (with a mocked, not real-HTTP, segmenter).
         """
-        F = get_region_fields()
         async with _asgi_client() as http:
             segmenter = SegmenterClient(
                 base_url='http://segmenter', client=http, text_prompt=_PROMPT, source_name='sam3'
             )
             assert segmenter.enabled is True
 
-            task = worker._ItemTask(
-                crop_id='crop-1',
-                image_path='/dev/null/never-read',
-                item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-                region_status='pending',
-                class_name='audi',
-                group='cars',
-                detector_region_in_source=None,
-                detector_score=0.0,
-                crop_jpeg=_make_jpeg(),
-            )
-            await worker._process_crop(
-                task,
-                detector=_detector_mock([None]),
-                segmenter=segmenter,
-                ocr_recognizer=_ocr_recognizer_mock(),
-                vlm=_vlm_mock(is_region=True),
-            )
+            candidates = await segmenter.segment_multi(_make_jpeg())
 
-        assert task.update_doc[F.detector] == 'sam3'
-        assert task.update_doc[F.bbox_norm] == pytest.approx([0.40, 0.60, 0.60, 0.68])
-        chain = task.update_doc.get(F.detector_chain) or []
-        assert 'sam3:hit' in chain
-        assert 'sam3:vlm_verify_ok' in chain
+        assert len(candidates) == 1
+        candidate = candidates[0]
+        assert candidate.source == 'sam3'
+        # item_bbox_norm is the identity (0,0,1,1) for this crop, so the
+        # crop-frame bbox IS the source-frame bbox once projected.
+        projected = crop_norm_to_source_norm(candidate.bbox_norm, (0.0, 0.0, 1.0, 1.0))
+        assert projected == pytest.approx((0.40, 0.60, 0.60, 0.68))
         assert served.prompt_calls == [_PROMPT]
 
 

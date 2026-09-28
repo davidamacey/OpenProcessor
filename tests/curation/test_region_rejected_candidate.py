@@ -23,6 +23,7 @@ from src.config.curation import base_curation_config
 from src.services.curation.edit_history import EditKind, restore_edit_state
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile
@@ -148,18 +149,24 @@ class TestWorkerKeepsTheCandidate:
             fake_os=fake,
             primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.77, source='det'),
             segmenter=None,
-            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=False),
+            reply=VlmCombinedReply(
+                img_id='c1',
+                region_visible=True,
+                region_boxes=[VlmBoxVerdict(box=1, bbox_correct=False, confidence=None)],
+            ),
         )
         doc = fake.live['c1']
         det = _profile().detector_model
         assert doc[F.status] == 'verify_rejected'
         assert doc.get(F.bbox_norm) is None
-        assert doc[F.candidate_bbox_norm] == pytest.approx([0.34, 0.58, 0.58, 0.7])
-        assert doc[F.candidate_score] == pytest.approx(0.77)
-        assert doc[F.candidate_detector] == det
-        assert doc[F.candidate_source] == 'detector'
-        assert doc[F.rejection_reason] == 'region_visible_elsewhere'
-        assert doc[F.bbox_correct] is False
+        box = doc[F.boxes][0]
+        assert box['state'] == 'rejected'
+        assert box['bbox_norm'] == pytest.approx([0.34, 0.58, 0.58, 0.7])
+        assert box['score'] == pytest.approx(0.77)
+        assert box['detector'] == det
+        assert box['source'] == 'detector'
+        assert box['rejection_reason'] == 'region_visible_elsewhere'
+        assert box['bbox_correct'] is False
 
 
 class TestRegionsStatusFilter:
