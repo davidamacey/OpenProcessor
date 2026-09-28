@@ -125,6 +125,9 @@ def _assert_no_verdict_reject(doc: dict[str, Any]) -> None:
     assert box['detector'] == _profile().detector_model
     det = _profile().detector_model
     assert f'{det}:combined_verify_reject:{REJECT_REASON_NO_VERDICT}' in doc[F.detector_chain]
+    # R-M4: the cap-reached write rejects every candidate -- never
+    # `verified=True` just because a reply was eventually received.
+    assert doc[F.verified] is False
 
 
 class TestCombinedNoVerdictIsCapped:

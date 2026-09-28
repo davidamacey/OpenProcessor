@@ -15,6 +15,7 @@ box, never the top-scored (but possibly-rejected) one.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -244,15 +245,31 @@ class TestM3EmbeddingSourceIsAcceptedBox:
         assert t.candidate_source == accepted.source
 
     @pytest.mark.asyncio
-    async def test_embedding_eligibility_source_is_the_accepted_box_end_to_end(
+    async def test_embedding_and_region_verified_event_are_written_end_to_end(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """End-to-end: drive the real runner with one rejected + one
-        accepted candidate and confirm the item's `candidate_in_crop`
-        mirror -- what `embed_written_regions`'s eligibility filter and
-        crop-extraction both key off -- lands on the ACCEPTED box, by
-        capturing every `_sync_accepted_candidate` call the pipeline
-        makes."""
+        """R-M1 fix gate (2026-09-27 re-review): this used to spy on
+        `_sync_accepted_candidate` (an internal helper) instead of
+        asserting the real written output -- which is exactly why the
+        R-M1 regression (moving status-writing into `bulk_writer._merge`
+        silently stopped `region_embed_stage._eligible_tasks` and
+        `bulk_writer._publish_region_events` from ever seeing a
+        `DETECTED` status, so NO region embedding and NO
+        `crop.region_verified` event were ever produced for ANY output,
+        including the single-box N=1 case that worked before this pass)
+        shipped undetected: the embed stage is disabled by default in
+        `_drive_worker` (a bare `MagicMock` pool fails the readiness
+        probe), so a spy on an internal helper proved nothing about the
+        real write.
+
+        Drives the real runner with the embed stage genuinely enabled
+        (``region_embed_ready=True`` + a stubbed ``PEEncoder``) and event
+        publishing genuinely enabled (a stubbed event client), then
+        asserts directly on the item doc's ``F.embedding`` and the
+        published event body -- plus (M3's own concern) that the embedded
+        crop came from the ACCEPTED box, never the top-scored
+        (``candidates[0]``, here rejected) one.
+        """
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         rejected_cand = RegionCandidate(bbox_norm=BOX_A, score=0.9, source='det')
         accepted_cand = RegionCandidate(bbox_norm=BOX_B, score=0.7, source='det')
@@ -264,14 +281,39 @@ class TestM3EmbeddingSourceIsAcceptedBox:
                 VlmBoxVerdict(box=2, bbox_correct=True, confidence='high'),
             ],
         )
-        calls: list[tuple[float, float, float, float] | None] = []
-        real_sync = runner_mod._sync_accepted_candidate
 
-        def _spy(t: Any, boxes: Any) -> None:
-            real_sync(t, boxes)
-            calls.append(t.candidate_in_crop)
+        import numpy as np
 
-        monkeypatch.setattr(runner_mod, '_sync_accepted_candidate', _spy)
+        import scripts.curation.worker.region_embed_stage as region_embed_stage_mod
+        import src.clients.pe_encoder as pe_encoder_mod
+        from scripts.curation.worker import bulk_writer as bulk_writer_mod
+
+        class _FakePE:
+            async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> Any:  # noqa: ARG002
+                return np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (len(crops), 1))
+
+        monkeypatch.setattr(pe_encoder_mod, 'PEEncoder', MagicMock(return_value=_FakePE()))
+
+        # Which crop-frame bbox the embed stage actually cropped -- the
+        # real consumer of the M3 fix's accepted-box mirror, not a spy on
+        # the mirror-writing helper itself.
+        crop_calls: list[tuple[float, float, float, float]] = []
+        real_crop_region_jpeg = region_embed_stage_mod._crop_region_jpeg
+
+        def _recording_crop(jpeg: bytes, region_in_crop: Any) -> bytes:
+            crop_calls.append(tuple(region_in_crop))
+            return real_crop_region_jpeg(jpeg, region_in_crop)
+
+        monkeypatch.setattr(region_embed_stage_mod, '_crop_region_jpeg', _recording_crop)
+
+        published: list[dict[str, Any]] = []
+
+        class _FakeEventClient:
+            async def post(self, url: str, json: Any = None, timeout: Any = None) -> None:  # noqa: ARG002
+                published.append({'url': url, 'body': json})
+
+        monkeypatch.setattr(bulk_writer_mod, '_EVENT_API_URL', 'http://fake-event-api')
+        monkeypatch.setattr(bulk_writer_mod, '_EVENT_CLIENT', _FakeEventClient())
 
         await _drive_worker(
             tmp_path,
@@ -281,12 +323,23 @@ class TestM3EmbeddingSourceIsAcceptedBox:
             segmenter=None,
             reply=reply,
             profile_overrides=MULTI_BOX_PROFILE,
+            region_embed_ready=True,
         )
 
-        assert calls, 'the write path never re-synced the embedding source'
-        # The accepted candidate's crop-frame bbox, never the rejected
-        # (higher-scored, candidates[0]) one's.
-        assert calls[-1] == BOX_B
-        assert calls[-1] != BOX_A
         doc = fake_os.live['c1']
         assert doc[F.status] == 'detected'
+
+        # The real written embedding -- absent entirely under R-M1.
+        assert F.embedding in doc, 'no region embedding was written (R-M1 regression)'
+        assert list(doc[F.embedding][:3]) == pytest.approx([0.0, 1.0, 0.0])
+
+        # M3: embedded from the ACCEPTED box's crop, never the rejected
+        # (higher-scored, candidates[0]) one's.
+        assert crop_calls, 'the embed stage never extracted a region crop'
+        assert crop_calls[-1] == BOX_B
+        assert crop_calls[-1] != BOX_A
+
+        # The real published event -- absent entirely under R-M1.
+        assert published, 'crop.region_verified event was never published (R-M1 regression)'
+        assert published[-1]['body']['type'] == 'crop.region_verified'
+        assert published[-1]['body']['crop_id'] == 'c1'

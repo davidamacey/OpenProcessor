@@ -167,6 +167,10 @@ class TestWorkerKeepsTheCandidate:
         assert box['source'] == 'detector'
         assert box['rejection_reason'] == 'region_visible_elsewhere'
         assert box['bbox_correct'] is False
+        # R-M4: a fully-rejected combined-VLM write must never mark the
+        # item `verified` -- the VLM DID answer, but it rejected the only
+        # candidate, so no region was ever confirmed.
+        assert doc[F.verified] is False
 
 
 class TestRegionsStatusFilter:

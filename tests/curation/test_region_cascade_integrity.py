@@ -494,6 +494,7 @@ async def _drive_worker(
     on_write: Any = None,
     class_group: Any = None,
     profile_overrides: dict[str, Any] | None = None,
+    region_embed_ready: bool = False,
 ) -> dict[str, Any]:
     """Run the streaming worker in continuous mode until the item is
     written plus several more polls, then stop it. Returns the mocks.
@@ -511,6 +512,17 @@ async def _drive_worker(
     candidates through that leg's ``detect_batch_multi`` / ``segment_multi``
     in one pass, exercising the real multi-box selection/verify/write path
     instead of the single-candidate shape every pre-M8 test used.
+
+    ``region_embed_ready`` (R-M1 re-review fix gate, 2026-09-27): every
+    other test leaves this False, which is exactly the pre-existing gap
+    the re-review flagged -- ``run()``'s readiness probe
+    (``pool.is_model_ready(...)``) always fails against a bare
+    ``MagicMock``, so the region-embed stage is silently disabled and no
+    test here ever drove it. Passing True stubs ``pool.is_model_ready``
+    to succeed so a caller can also patch
+    ``src.clients.pe_encoder.PEEncoder`` and assert on the REAL written
+    ``F.embedding`` / published event, instead of spying on an internal
+    helper.
     """
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
@@ -518,6 +530,8 @@ async def _drive_worker(
         register_profile(dataclasses.replace(_profile(), **profile_overrides), default=True)
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
+    if region_embed_ready:
+        pool.is_model_ready = AsyncMock(return_value=True)
     monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
     monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
@@ -581,20 +595,25 @@ async def _drive_worker(
     )
 
     async def _stopper() -> None:
-        # W8 pipeline-review flaky-test fix (2026-09-27): this used to be
-        # a FIXED 500 x 10ms budget (5s), regardless of wall-clock time
-        # actually elapsed. Under load (e.g. full-suite xdist runs
-        # sharing CPU across workers) `asyncio.sleep(0.01)` can itself
-        # take longer than 10ms, so 500 iterations no longer guaranteed
-        # ~5s of real waiting -- a multi-retry scenario (this test needs
-        # 6 combined-VLM round trips across 2 write cycles) could run out
-        # of budget one retry short of the cap and stop the worker
-        # early, an observed ~1/12 failure rate standalone. That is a
-        # harness time-budget issue, not a pipeline logic bug (confirmed
-        # by re-running the same scenario with a generous budget below:
-        # 0/12). Deadline-based on the event loop's own monotonic clock,
-        # generously bounded well under the outer `wait_for` timeout, so
-        # CPU contention costs wall-clock slack instead of iterations.
+        # W8 pipeline-review flaky-test fix (2026-09-27, comment corrected
+        # 2026-09-27 re-review): this used to be a FIXED 500 x 10ms
+        # iteration budget -- a ~5s nominal wall-clock allowance assuming
+        # each `asyncio.sleep(0.01)` returns close to schedule. The actual
+        # cause of the flake is plain wall-clock variance against that
+        # fixed ~5s budget, not individual sleeps somehow running long
+        # (a slower `asyncio.sleep(0.01)` makes 500 iterations take MORE
+        # wall time, not less, so that direction was never the problem).
+        # Under load (e.g. full-suite xdist runs sharing CPU across many
+        # parallel workers), THIS test's own actual work -- the worker's
+        # producer polls plus 6 real combined-VLM round trips across 2
+        # write cycles -- can simply take longer in wall-clock terms than
+        # a fixed ~5s allowance, independent of how the budget is framed;
+        # an observed ~1/12 failure rate standalone confirmed it (0/12
+        # with a generous budget). Switched to a deadline on the event
+        # loop's own monotonic clock: 18s gives ~7x headroom over the
+        # measured ~2.66s single-attempt latency, so CPU contention costs
+        # wall-clock slack against a generous ceiling instead of a
+        # marginal iteration count.
         seen = 0
         deadline = asyncio.get_running_loop().time() + 18.0
         while asyncio.get_running_loop().time() < deadline:
