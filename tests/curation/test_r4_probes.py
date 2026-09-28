@@ -290,6 +290,12 @@ def test_r4_job_reresolution_keeps_request_pin(app_client, monkeypatch):
             cluster_id=None,
             prompt_pack=name,
             prompt_pack_revision=revision,
+            # R5-2 fix (W3/W4 round-5 review): "already resolved" is now
+            # its own explicit flag, not inferred from `prompt_pack_
+            # revision is not None` -- `/start` sets it unconditionally
+            # (pinned, bare-name, AND omitted alike), matching what a
+            # real trigger dict now carries.
+            prompt_pack_resolved=True,
         )
     )
     print('pinned job summary ->', summary['prompt_pack'], summary['prompt_pack_revision'])
