@@ -633,8 +633,8 @@ class CurationIngestService:
         Delegates to :func:`src.services.curation.ingest_batch.run_ingest_batch`
         — see that module's docstring for why the batch path is more than
         ``ingest_one`` run N times concurrently. To ingest an
-        already-labeled dataset, use ``POST /datasets/imports`` (W10)
-        instead.
+        already-labeled dataset, use ``POST /datasets/imports``
+        (planned, W10 route not yet built).
 
         Args:
             images: Raw image bytes, one per entry.

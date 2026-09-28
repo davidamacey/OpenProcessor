@@ -35,12 +35,17 @@ silent no-op.
 
 ## Ingest and label import
 
+Importing an already-labeled YOLO dataset as item class labels is a
+**planned** `POST /datasets/imports` route (not built yet) — the routes
+this section used to list here (`/import_labels`, `/import_labels/batch`)
+are removed. `scripts/curation/import_labeled_dataset.py --images-only`
+ingests images with no label import today.
+
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/ingest/image` | Ingest one image by `path` (under a configured source root) |
 | POST | `/ingest/batch` | Ingest `items` by path; capped by `OP_BATCH_MAX_ITEMS_PER_REQUEST` (`413` over it) |
 | POST | `/ingest/upload` | Multipart upload of `images`; bytes are persisted content-addressed under `OP_UPLOAD_ROOT`; optional `run_id` |
-| POST | `/import_labels`, `/import_labels/batch` | Ingest images together with existing YOLO-format label files; returns a model-vs-label disagreement report |
 | POST | `/ingest/path_lookup` | Which image paths (or upload identifiers) are already indexed |
 | GET | `/ingest/config` | Served upload/batch limits and drain-poll parameters |
 | GET | `/ingest/status` | Totals by source and day (optionally `?run_id=`) |

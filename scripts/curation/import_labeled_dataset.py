@@ -539,6 +539,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def _async_main(args: argparse.Namespace) -> int:
+    if not args.images_only:
+        # W10 (Opus review 2026-09-28, finding M1): labeled mode posts
+        # forbidden fields (label_txt_path/detect_mismatches) to
+        # /ingest/batch (IngestBatchRequest is extra='forbid' -- every
+        # batch 422s) and --relabel-duplicates posts to the deleted
+        # /import_labels/batch (404). Neither surface exists anymore;
+        # dataset_import's Python API (import_dataset()) has no HTTP
+        # route yet to front it (planned: POST /datasets/imports). Fail
+        # loudly here instead of letting a batch 422 deep in a request
+        # with no clear signal to the operator.
+        logger.error(
+            'Labeled import mode is not available: it posts to routes this repo removed '
+            "(/ingest/batch's label fields, /import_labels/batch), and the replacement "
+            '(POST /datasets/imports, fronting dataset_import.import_dataset()) is not built '
+            'yet. Pass --images-only to ingest images without labels, or use the '
+            'dataset_import Python API directly for a labeled import today.'
+        )
+        return 1
     try:
         found, names = discover(args.dataset)
     except DatasetError as exc:

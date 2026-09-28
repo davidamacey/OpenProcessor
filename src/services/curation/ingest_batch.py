@@ -25,8 +25,9 @@ Triton round-trips and is measurably slower for identical output. It is:
    quality metrics, bulk index) runs under a semaphore, consuming the
    prefilled results via ``ingest_one``'s ``prefilled_*`` arguments.
 
-Ingesting an already-labeled dataset is ``POST /datasets/imports`` (W10)
-— this module carries no label-import machinery.
+Ingesting an already-labeled dataset will be ``POST /datasets/imports``
+(planned, W10 route not yet built) — this module carries no
+label-import machinery.
 
 If the batched inference raises, the prefilled detections are dropped
 entirely and every image falls back to its own single-image call — a

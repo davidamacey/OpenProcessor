@@ -4,8 +4,9 @@
 are the generic curation ingest front door: they create ``images`` +
 ``items`` documents, backed by
 :class:`~src.services.curation.ingest.CurationIngestService`. Importing
-an already-labeled dataset is ``POST /datasets/imports``
-(``src/routers/curation/datasets.py``, W10) — the per-image
+an already-labeled dataset will be ``POST /datasets/imports`` (planned,
+W10 route not yet built — ``dataset_import.import_dataset()`` exists as
+a pure Python API with no HTTP route fronting it yet) — the per-image
 ``/import_labels*`` routes this module used to carry are deleted
 outright (no 410; see any_domain_plan.md W10.5). Everything else in this
 module (status/backlog introspection, the path-existence lookup) is
@@ -155,7 +156,7 @@ async def curation_ingest_batch(
     Every item shares its ``source`` tag independently; a per-item read
     failure is reported as a ``failed`` result rather than aborting the
     whole batch. To ingest an already-labeled dataset, use
-    ``POST /datasets/imports`` (W10) instead.
+    ``POST /datasets/imports`` (planned, W10 route not yet built).
 
     The whole-image detector inference is issued in batched Triton calls
     (one per ``DetectionProfile.batch_limit`` chunk), so a larger batch

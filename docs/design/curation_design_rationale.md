@@ -225,8 +225,10 @@ unfinished in these specific ways* lives somewhere durable.
 - **Ingest is thinner than the reference deployment's, by design.**
   `POST /curation/ingest/image` and `/ingest/batch` exist and create
   items (duplicate detection, quality-gate scoring, crop-cache
-  population, bulk indexing), and `POST /curation/import_labels(/batch)`
-  imports pre-existing YOLO-format labels. What did **not** port: the
+  population, bulk indexing). Importing pre-existing YOLO-format labels
+  is a **planned** `POST /datasets/imports` route (not built yet) — the
+  reference's `/import_labels(/batch)` routes are gone, removed along
+  with the rest of the `label_import` module. What did **not** port: the
   reference's dual-head domain detector runner, its fixed
   domain-specific class allowlist, and its region-status assignment
   policy tuned to one domain — those remain a future, deployment-specific

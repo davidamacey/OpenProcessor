@@ -16121,7 +16121,7 @@
     },
     "/curation/projects/{project}/ingest/batch": {
       "post": {
-        "description": "Ingest a batch of images from paths already reachable inside the container.\n\nEvery item shares its ``source`` tag independently; a per-item read\nfailure is reported as a ``failed`` result rather than aborting the\nwhole batch. To ingest an already-labeled dataset, use\n``POST /datasets/imports`` (W10) instead.\n\nThe whole-image detector inference is issued in batched Triton calls\n(one per ``DetectionProfile.batch_limit`` chunk), so a larger batch\nis materially faster than the same images posted one at a time.",
+        "description": "Ingest a batch of images from paths already reachable inside the container.\n\nEvery item shares its ``source`` tag independently; a per-item read\nfailure is reported as a ``failed`` result rather than aborting the\nwhole batch. To ingest an already-labeled dataset, use\n``POST /datasets/imports`` (planned, W10 route not yet built).\n\nThe whole-image detector inference is issued in batched Triton calls\n(one per ``DetectionProfile.batch_limit`` chunk), so a larger batch\nis materially faster than the same images posted one at a time.",
         "operationId": "curation_ingest_batch_curation_projects__project__ingest_batch_post",
         "parameters": [
           {

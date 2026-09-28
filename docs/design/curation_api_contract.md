@@ -76,7 +76,7 @@ by router module; every path is relative to the configured
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
-| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/region_drain`, `POST /ingest/path_lookup` |
+| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `GET /ingest/status`, `GET /ingest/region_drain`, `POST /ingest/path_lookup` (W10: the `/import_labels(/batch)` routes this table used to list here are removed; label import is a **planned** `POST /datasets/imports`, not built yet) |
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
@@ -112,12 +112,14 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - `IngestImageRequest`: `path`, `source` (F-22: `extra='forbid'` -- an unknown key 422s instead of silently ingesting on defaults)
 - `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`, `secondary_detector_error` (F-43: set when a configured secondary detector call failed for this image -- the image still ingests successfully on the primary detector's output alone)
 - `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`, `secondary_detector_failures` (F-43: count of otherwise-successful images where the configured secondary detector call failed, e.g. a Triton `DEADLINE_EXCEEDED` -- previously only a `warning` log line, invisible on the wire)
-- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`, `disagreements` (with `detect_mismatches`: one record per model-vs-label disagreement, `kind` = `class_mismatch`/`missed_label`/`unmatched_detection`; also returned by `POST /import_labels/batch`)
+- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results` (W10: the `disagreements`/`detect_mismatches` model-vs-label reporting this entry described belonged to the removed `label_import` module and `/import_labels/batch`; it's gone with them)
 - D3 (2026-09-25 F8 acceptance): dedup applies **within** a batch, not just against the index. Two byte-identical files (`imohash`) uploaded in the same request collapse onto one representative -- only the first ingests; every later same-hash upload in the batch reports `status: 'duplicate'` with `image_id` set to the representative's `image_id` (the same field the cross-batch duplicate path uses), and exactly one item is created. Previously `hash_to_existing` only resolved hashes already committed to the index before the batch started, so two identical files in one request both ingested `'success'` with `duplicates: 0`.
 - `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
 - `IngestBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'` -- a wrong key like `paths` used to 200 with all-zero counts instead of 422)
-- `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source` (F-22: `extra='forbid'`)
-- `ImportLabelsBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'`)
+- (W10: `ImportLabelsRequest`/`ImportLabelsBatchRequest` and the
+  `/import_labels(/batch)` routes they backed are removed along with the
+  rest of the `label_import` module; labeled dataset import is a
+  **planned** `POST /datasets/imports`, not built yet)
 
 ### Crops
 
@@ -2142,6 +2144,12 @@ label file path outside the configured source roots fails that item
 (`error_kind: 'unservable_path'`) before any read. Batch item cap (`CurationConfig.batch_max_items_per_request`) served on
 `GET /ingest/config` and enforced on `POST /ingest/batch` (413 over the
 cap).
+
+(**W10 note**: `label_txt_path`, `detect_mismatches` and the
+`/import_labels(/batch)` routes this entry describes were since removed
+along with the rest of the `label_import` module — `IngestBatchRequest`
+is `extra='forbid'` and no longer accepts them. See the "Ingest" wire
+models below and `docs/CURATION.md`'s known-gaps section.)
 
 **BA-6** — `GET /ingest/status` is now a typed `IngestStatusResponse`
 (`total`, `by_source`, `by_day`); shape unchanged, just declared.

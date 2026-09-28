@@ -185,10 +185,12 @@ those routes do something.
 
 ### What's intentionally thinner than a bespoke pipeline
 
-`POST /curation/ingest/image`, `/ingest/batch`, and
-`/import_labels(/batch)` exist and create items (duplicate detection, a
-quality gate, crop-cache population, bulk indexing, YOLO-format label
-import). What is deliberately not included: any single-class /
+`POST /curation/ingest/image` and `/ingest/batch` exist and create items
+(duplicate detection, a quality gate, crop-cache population, bulk
+indexing). YOLO-format label import is a **planned** `POST
+/datasets/imports` route (not built yet) — the removed per-image
+`/import_labels(/batch)` routes are gone. What is deliberately not
+included: any single-class /
 domain-specific dataset export (a proprietary single-class export has no
 generic equivalent — a single-class exporter is inherently domain-shaped), a
 fixed class allowlist, or a region-status assignment policy tuned to
