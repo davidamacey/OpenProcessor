@@ -20,6 +20,7 @@ from src.services.projects.busy import (
     JobRef,
     _autolabel_jobs,
     _bakeoff_jobs,
+    _dataset_import_jobs,
     _detection_worker_inflight,
     _export_jobs,
     _train_jobs,
@@ -216,6 +217,51 @@ def test_export_jobs_stub_reports_nothing(tmp_path) -> None:
     request -- there is no background job file to poll."""
     record = _record('alpha', tmp_path)
     assert _export_jobs(record) == []
+
+
+def test_dataset_import_jobs_reports_nothing_with_no_state_dir(tmp_path) -> None:
+    """Reduced-scope gap (W10, dataset_import/job.py): import_dataset()
+    writes no state.json this pass, so there is nothing on disk to find
+    busy yet -- this hook reports [] until a later pass adds
+    ledger/resume persistence, at which point it starts working with no
+    further P2 wiring."""
+    record = _record('alpha', tmp_path)
+    assert _dataset_import_jobs(record) == []
+
+
+def test_dataset_import_jobs_reads_the_conventional_state_layout(tmp_path) -> None:
+    """Once something writes
+    <project_state_dir>/dataset_imports/<import_id>/state.json, this hook
+    picks it up with no further wiring."""
+    record = _record('alpha', tmp_path)
+    state_dir = record.resources.project_state_dir / 'dataset_imports' / 'imp_1'
+    state_dir.mkdir(parents=True)
+    (state_dir / 'state.json').write_text(
+        json.dumps({'import_id': 'imp_1', 'status': 'running', 'started_at': '2026-01-01T00:00:00'})
+    )
+    jobs = _dataset_import_jobs(record)
+    assert jobs == [JobRef(kind='dataset_import', job_id='imp_1', started_at='2026-01-01T00:00:00')]
+
+
+def test_dataset_import_jobs_ignores_terminal_status(tmp_path) -> None:
+    record = _record('alpha', tmp_path)
+    state_dir = record.resources.project_state_dir / 'dataset_imports' / 'imp_2'
+    state_dir.mkdir(parents=True)
+    (state_dir / 'state.json').write_text(json.dumps({'import_id': 'imp_2', 'status': 'completed'}))
+    assert _dataset_import_jobs(record) == []
+
+
+def test_dataset_import_jobs_scoped_to_its_own_dir(tmp_path) -> None:
+    alpha = _record('alpha', tmp_path)
+    beta = _record('beta', tmp_path)
+    for record, import_id in ((alpha, 'imp_a'), (beta, 'imp_b')):
+        state_dir = record.resources.project_state_dir / 'dataset_imports' / import_id
+        state_dir.mkdir(parents=True)
+        (state_dir / 'state.json').write_text(
+            json.dumps({'import_id': import_id, 'status': 'running'})
+        )
+    assert [j.job_id for j in _dataset_import_jobs(alpha)] == ['imp_a']
+    assert [j.job_id for j in _dataset_import_jobs(beta)] == ['imp_b']
 
 
 def test_detection_worker_inflight_reads_the_real_liveness_file(tmp_path) -> None:

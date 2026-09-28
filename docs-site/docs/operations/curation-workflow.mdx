@@ -36,7 +36,8 @@ some single-key hotkeys are reserved for labeling actions.
 |---|---|
 | Images on storage the API container mounts | `POST /curation/ingest/image`, or `scripts/curation/ingest_walker.py` for a resumable bulk walk |
 | Images only on your machine | `scripts/curation/ingest_upload.py` (uploads bytes to `POST /curation/ingest/upload`; resuming relies on server-side content dedup) |
-| An already-labeled YOLO dataset | `scripts/curation/import_labeled_dataset.py` (checks class names against the registry first, writes a disagreement report) |
+| Images only (no labels) from a YOLO-layout dataset | `scripts/curation/import_labeled_dataset.py --images-only` |
+| An already-labeled YOLO dataset | **Pending** `POST /datasets/imports` (not built yet) — `import_labeled_dataset.py`'s labeled mode is disabled and fails loudly rather than importing incorrectly; see the script's own `--help` |
 
 Ingest runs the item detector (`OP_INGEST_PRIMARY_*`), crops each
 detection into an item, embeds it with PE-Core, rejects duplicates and

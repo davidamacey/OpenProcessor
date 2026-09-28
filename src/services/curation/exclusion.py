@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.clients.occ import is_human_owned_class
+from src.clients.occ_locks import _is_human_marker
 from src.services.curation.cluster_ids import cluster_kind
 
 
@@ -83,14 +83,21 @@ def unexclusion_update(
     Items excluded before ``excluded_prior_class_validated`` was recorded
     lost their validation flag at exclude time; for those a human-sourced
     class (the only validated class a human exclusion could have wiped
-    without a record) is taken as validated.
+    without a record) is taken as validated. This checks specifically for
+    a human write (``_is_human_marker``), NOT ``is_locked_class`` — lock
+    is a broader "never touch" rule (it also covers ``test_holdout`` and
+    validated imports) and is not the same claim as "a human validated
+    this", which is what the legacy branch is standing in for. Using the
+    broader lock check here would restore a `test_holdout` item with a
+    machine-set class as ``class_validated=True`` on un-exclude, which is
+    wrong: freezing a holdout item never implies a human validated it.
     """
     if not current.get('class_excluded'):
         return {}
     if PRIOR_VALIDATED in current and current[PRIOR_VALIDATED] is not None:
         validated = bool(current[PRIOR_VALIDATED])
     else:
-        validated = is_human_owned_class(current)
+        validated = _is_human_marker(current.get('class_source'))
     class_id = current.get('class_id')
     validated = validated and class_id is not None
 

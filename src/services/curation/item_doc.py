@@ -9,7 +9,7 @@ from pipeline orchestration.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
@@ -17,6 +17,10 @@ from src.config.region_state import RegionStatus
 from src.services.curation.region_scope import in_parent_classes
 from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.profile_registry import get_active_region_profile
+
+
+if TYPE_CHECKING:
+    from src.services.curation.class_label import ItemLabel
 
 
 # ``class_labeler`` recorded on every ingest-written items doc — the same
@@ -67,6 +71,13 @@ class DetectedItem:
     # class/proposal (primary, or a secondary that overrode it).
     class_detector: str | None = None
     class_detector_version: str | None = None
+    # W10: set for a labeled object from a dataset import (or, in
+    # principle, any other first-write labeler). When set,
+    # build_item_doc() writes class_label_fields(label) instead of the
+    # detector class fields above -- the single class-label writer
+    # (src/services/curation/class_label.py) applies even to brand-new
+    # items, not just updates to existing ones.
+    label: ItemLabel | None = None
 
 
 def build_image_doc(
@@ -202,6 +213,10 @@ def build_item_doc(
         )
     if region_status is not None:
         doc[get_region_fields().status] = region_status.value
+    if item.label is not None:
+        from src.services.curation.class_label import class_label_fields
+
+        doc.update(class_label_fields(item.label))
     return doc
 
 

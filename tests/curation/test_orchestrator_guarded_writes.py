@@ -21,7 +21,7 @@ kind (``CLASS_CLUSTER_WRITE_GUARD_CLAUSES`` /
 ``_guard_condition_matches`` -- both read off the *same* list, so there is
 nothing for a "predicate vs. script text" consistency test to catch
 drifting apart; the tests below instead prove the list matches
-``is_human_owned_class`` (class writes) and ``fp_candidate_must_not``
+``is_locked_class`` (class writes) and ``fp_candidate_must_not``
 (region writes), and that the writers actually build ``script`` actions,
 not ``doc`` actions.
 """
@@ -32,7 +32,7 @@ from typing import Any
 
 import pytest
 
-from src.clients.occ import is_human_owned_class
+from src.clients.occ import is_locked_class
 from src.config import get_region_fields
 from src.services.curation.clustering import orchestrator as orch
 
@@ -58,8 +58,8 @@ def test_guarded_class_cluster_write_script_sets_expected_fields() -> None:
     assert "ctx.op = 'noop'" in src
 
 
-def test_class_cluster_write_guard_matches_is_human_owned_class() -> None:
-    """Cross-check: every source is_human_owned_class flags as human-owned
+def test_class_cluster_write_guard_matches_is_locked_class() -> None:
+    """Cross-check: every source is_locked_class flags as human-owned
     must also be flagged by CLASS_CLUSTER_WRITE_GUARD_CLAUSES (the list
     that renders into the painless guard), for a representative sample of
     the markers occ.py documents (human, human_move, vlm_human_confirmed)
@@ -73,7 +73,7 @@ def test_class_cluster_write_guard_matches_is_human_owned_class() -> None:
         {'class_excluded': True, 'class_source': 'item_model'},
     ]
     for source in samples:
-        human_owned = is_human_owned_class(source) or bool(
+        human_owned = is_locked_class(source) or bool(
             source.get('class_validated') or source.get('class_excluded')
         )
         assert human_owned, source  # sanity: the sample really is guarded
@@ -81,8 +81,35 @@ def test_class_cluster_write_guard_matches_is_human_owned_class() -> None:
 
     # And a normal doc is NOT guarded on either side.
     normal = {'class_source': 'item_model', 'class_validated': False}
-    assert not is_human_owned_class(normal)
+    assert not is_locked_class(normal)
     assert not orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, normal)
+
+
+def test_class_cluster_write_guard_intentionally_diverges_on_test_holdout() -> None:
+    """W10 fix pass (Opus review 2026-09-28, lock-rule call-site m3): an
+    unvalidated ``test_holdout`` item IS locked by ``is_locked_class``
+    (its class must never be touched by an automated writer), but this
+    clause list intentionally does NOT guard it -- this write is cluster
+    PLACEMENT (cluster_id/cluster_distance), not a class write, so
+    residual clustering may still assign a holdout item's cluster id.
+    Pins the divergence the (now corrected) module comment documents,
+    so a future accidental narrowing/widening of either side is caught."""
+    holdout_unvalidated = {
+        'class_source': 'item_model',
+        'class_validated': False,
+        'test_holdout': True,
+    }
+    assert is_locked_class(holdout_unvalidated)
+    assert not orch._guard_condition_matches(
+        orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, holdout_unvalidated
+    )
+
+    # A validated import IS covered on both sides -- is_locked_class's
+    # import branch requires class_validated=True, which this clause
+    # list already guards generically (not a divergence).
+    validated_import = {'class_source': 'external_label', 'class_validated': True}
+    assert is_locked_class(validated_import)
+    assert orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, validated_import)
 
 
 def test_class_cluster_write_guard_script_text_names_same_fields_as_predicate() -> None:

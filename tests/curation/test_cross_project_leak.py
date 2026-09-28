@@ -98,11 +98,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
     here that answers 422 fails with "unmapped body"."""
     item = f'{slug}-item-0001'
     proposal = f'{slug}-item-0002'
-    # Ingest takes a server path under the source root; import matches
-    # the stored (relative) image_path of an already-ingested image.
+    # Ingest takes a server path under the source root.
     source = f'{_source_root()}/{slug}'
     img = f'{source}/{slug}-new-0001.jpg'
-    labeled = f'{source}/{slug}-lab-0001.jpg'
     b64 = base64.b64encode(jpeg_bytes(len(slug))).decode('ascii')
     force = {'force': 'true'}
     return {
@@ -135,16 +133,6 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/ingest/image'): {'json': {'path': img}},
         ('POST', '/ingest/batch'): {'json': {'items': [{'path': f'{source}/{slug}-new-0002.jpg'}]}},
-        ('POST', '/import_labels'): {
-            'json': {'image_path': labeled, 'label_txt_path': labeled.replace('.jpg', '.txt')}
-        },
-        ('POST', '/import_labels/batch'): {
-            'json': {
-                'items': [
-                    {'image_path': labeled, 'label_txt_path': labeled.replace('.jpg', '.txt')}
-                ]
-            }
-        },
         ('POST', '/ingest/path_lookup'): {'json': {'image_paths': [img]}},
         ('POST', '/ingest/upload'): {
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],

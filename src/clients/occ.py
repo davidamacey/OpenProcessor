@@ -32,6 +32,7 @@ import os
 from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, Any
 
+from src.clients.occ_locks import _is_locked_marker, is_locked_box, is_locked_class, is_locked_item
 from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
 from src.config.curation import items_index
 from src.core.logging import get_logger
@@ -325,39 +326,10 @@ async def occ_skip_on_conflict_bulk(
     return {'updated': updated, 'skipped_due_to_conflict': skipped, 'errors': errors}
 
 
-def _is_human_marker(value: Any) -> bool:
-    """A guard-field value indicates a human write iff it's a string
-    containing the substring ``human``.
-
-    Matches the in-codebase markers ``human``, ``human_move``, and
-    ``vlm_human_confirmed`` (used across the crops, regions, and
-    clustering write paths).
-    Non-human writers use ``ingest``, ``item_model``, ``coco_yolo11``,
-    ``vlm``, ``cluster_majority_agreement``, etc.
-    """
-    return isinstance(value, str) and 'human' in value
-
-
-def is_human_owned_class(source: dict[str, Any]) -> bool:
-    """Reusable human-label guard predicate.
-
-    True when a crop's current ``class_source`` indicates a human already
-    set/confirmed the class label. Every automated CLASS writer must
-    consult this before overwriting class fields. Currently wired into:
-      * the region-detection worker's classification gate (guards
-        whether the combined VLM call is even asked to classify).
-      * the region-detection worker's bulk writer (defense-in-depth on
-        the write path — the classification gate already prevents class
-        fields from reaching ``update_doc`` for a human crop in practice).
-      * the VLM label-batch router endpoint (this endpoint takes
-        caller-supplied ``crop_ids`` with no upstream query filter, so
-        it's the site with no other protection).
-      * the ingest pipeline router (defense-in-depth; the pipeline's own
-        ``unvalidated_query`` already excludes ``class_validated=true``
-        upstream).
-    """
-    return _is_human_marker(source.get('class_source'))
-
+# is_locked_class / _is_locked_marker / is_locked_box / is_locked_item /
+# _is_human_marker live in occ_locks.py (LOC ratchet) and are imported at
+# module top, so every existing `from src.clients.occ import
+# is_locked_class`-shaped call site keeps working unchanged.
 
 # Fields an automated class writer must never apply on top of a human-owned
 # class row: the one surface every consumer strips/skips (``is_human_owned_class``).
@@ -653,19 +625,36 @@ def _apply_fill_if_absent(
     return filled
 
 
+# Guards that describe the item's CLASS state (as opposed to a region-
+# level field like region_text_source) must fire on the same contract
+# is_locked_class() defines, not a narrower per-value string check --
+# otherwise re-ingest preserves an unvalidated ("suggestion") import's
+# class_source/label_source the same as a human's or a VALIDATED
+# import's, which is_locked_class explicitly does NOT lock (W10 fix
+# pass, Opus review 2026-09-28, lock-rule call-site m4). Region-only
+# guard fields (region_label_source, region_text_source, ...) keep the
+# narrower per-value check -- is_locked_class doesn't speak to them.
+_CLASS_LOCK_GUARD_FIELDS = frozenset({'class_source', 'label_source'})
+
+
 def _merge_preserving_human(
     *,
     new_doc: dict[str, Any],
     existing: dict[str, Any],
     human_field_guards: list[str],
 ) -> tuple[dict[str, Any], list[str]]:
-    """Build the update body that preserves any human-set guard fields.
+    """Build the update body that preserves any human- or import-set
+    guard fields.
 
-    A guard "fires" only when the existing doc's value matches the
-    ``_is_human_marker`` predicate — i.e. a string containing ``human``.
-    Non-human source values (``ingest``, ``item_model``, ``vlm``, etc.)
-    do not trip preservation; ingest is free to overwrite them with its
-    fresh-pass value.
+    For ``class_source``/``label_source``, a guard "fires" exactly when
+    :func:`is_locked_class` says the item's class is locked (human-set,
+    a VALIDATED import, or ``test_holdout``) -- matching that contract
+    means an unvalidated ("suggestion") import's provenance is free to
+    be overwritten by a fresh ingest pass, same as ``ingest``/``vlm``/etc.
+    Every other guard field keeps the narrower :func:`_is_locked_marker`
+    per-value check (a string containing ``human``, or an import
+    provenance marker) -- ``is_locked_class`` doesn't speak to
+    region-level fields.
 
     Returns ``(merged_doc, preserved_field_names)``. ``preserved_field_names``
     counts each guard that actually fired (used by the per-field Grafana
@@ -675,7 +664,12 @@ def _merge_preserving_human(
     preserved: list[str] = []
     for field in human_field_guards:
         existing_val = existing.get(field)
-        if _is_human_marker(existing_val):
+        fires = (
+            is_locked_class(existing)
+            if field in _CLASS_LOCK_GUARD_FIELDS
+            else _is_locked_marker(existing_val)
+        )
+        if fires:
             merged[field] = existing_val
             preserved.append(field)
             for companion in _HUMAN_GUARD_COMPANIONS.get(field, ()):
@@ -693,6 +687,9 @@ def _merge_preserving_human(
 __all__ = [
     'Merger',
     'OCCFinalConflictError',
+    'is_locked_box',
+    'is_locked_class',
+    'is_locked_item',
     'occ_skip_on_conflict_bulk',
     'occ_update_one',
     'occ_upsert_bulk',

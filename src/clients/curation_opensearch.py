@@ -562,11 +562,12 @@ def _items_body() -> dict[str, Any]:
     }
 
 
-# Fields written by label_import.py (mismatch provenance, :449-458) and by
-# the class-merge relabel script (classes.py, :506-518). Previously absent
-# from the mapping, so the index picked them up dynamically on first write
-# instead of with a deliberate type. Additive-only; see
-# `ensure_labels_confirmed_fields`.
+# Mismatch-provenance fields the now-deleted label_import.py used to write,
+# plus fields written by the class-merge relabel script (classes.py,
+# :506-518). W10 (any_domain_plan.md I13): the labels_confirmed index and
+# its mapping stay -- mappings are never dropped -- but nothing writes it
+# anymore; the dataset-import ledger is the record now. Kept
+# additive-only; see `ensure_labels_confirmed_fields`.
 LABELS_CONFIRMED_EXTRA_MAPPING: dict[str, dict[str, Any]] = {
     'class_mismatch': {'type': 'boolean'},
     'detector_class_id': {'type': 'integer'},

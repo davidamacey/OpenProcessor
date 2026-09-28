@@ -7,7 +7,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **W10 dataset-import foundation fix pass (post-review).** An
+  independent review of the W10 foundation slice below found 4 majors;
+  all fixed before any route is wired to `import_dataset()`:
+  - **Sparse YOLO `names` dict crossed class indexes** (`yolo.py`): a
+    `data.yaml` `names` dict with a gap (e.g. `{0: car, 2: truck}`, a
+    class pruned from training) built a dense list by sorted-position, so
+    index `1` silently resolved to `truck` instead of being rejected —
+    the exact index-crossing bug this wave exists to close. Now parsed
+    into `dict[int, str]` and looked up by key; a missing index is a
+    clean `label_class_out_of_range` (new info issue
+    `data_yaml_names_sparse` flags the gap).
+  - **Re-import over an existing item could overwrite a locked (human or
+    validated-import) class, keeping `class_source: human`** (`job.py`):
+    `import_dataset()` now mgets existing docs first and drops any
+    `is_locked_item()` match from the write set, reported as a conflict
+    (`DatasetImportReport.conflicts`/`items_locked_skipped`), never
+    applied. `import_ids` is appended, not replaced. The region-box
+    write path had the same hole (`_region_merger` unconditionally
+    overwrote the box list) and is fixed the same way
+    (`regions_locked_skipped`).
+  - **The class-identity E2E test could not detect index-crossing**
+    (`tests/integration/test_class_identity_e2e.py`): every hop compared
+    values derived from the same map, so a deliberate car/truck name
+    swap still passed. Rewritten to tie each box's specific geometry to
+    its specific class name at every hop (import, export through the
+    real `GenericYoloExportService`, promote, predict) — verified to
+    fail against the reversed-names reproduction.
+  - **Lock-rule call sites**: `exclusion.py`'s legacy un-exclude branch
+    now checks `_is_human_marker` instead of the broader `is_locked_class`
+    (a `test_holdout` item with a machine class was incorrectly restored
+    as validated); `_merge_preserving_human` (`occ.py`) now gates the
+    `class_source`/`label_source` guards on `is_locked_class`, not a bare
+    per-value marker check, so an unvalidated ("suggestion") import is no
+    longer incorrectly locked on re-ingest — correcting the "Re-ingest ...
+    now respects it" claim below, which previously only preserved
+    provenance strings, not the class value; `revert_class_cluster_
+    promotions.py` now reports frozen-`test_holdout` skips as their own
+    counter instead of silently folding them in.
+  - **`scripts/curation/import_labeled_dataset.py`'s default (labeled)
+    mode was broken two ways** (posts forbidden fields to
+    `/ingest/batch`, and to the deleted `/import_labels/batch`) with its
+    own test deleted and no replacement. It now fails loudly and
+    immediately when invoked without `--images-only` instead of 422ing
+    deep in a request; `--images-only` is unaffected. Fixed every stale
+    doc pointing at the removed `/import_labels(/batch)` routes.
+  - Narrowed the `auto_promote.py` `class_validated: True` AST-gate
+    allowlist (`test_class_label_single_writer.py`) to the specific
+    `_merge_promote` function, not the whole file.
+- **W10 dataset-import R2 fix pass (second confirmation round).** A
+  follow-up review of the fix pass above found the region-box fix
+  introduced one new major (R2-M1) plus minors; all fixed:
+  - **R2-M1: a first validated import wrote zero region boxes**
+    (`job.py`): `_region_merger`'s lock check read `is_locked_class` off
+    the parent item's *current* OpenSearch state — which, on a first
+    import, is the `class_source: external_label` /
+    `class_validated: True` this same import just wrote to the parent
+    moments earlier via `class_label_fields`. Under the default
+    `label_trust='validated'`, every region box was therefore dropped
+    and reported as a false "region boxes locked" conflict against the
+    importer's own write (`boxes_written=0` on a fresh dataset).
+    `_region_merger` now decides the lock from pre-import state only:
+    whether the parent item was already in `_split_locked_items`'s
+    `locked_ids` (locked by something other than this import), plus any
+    already-locked existing region boxes — never `is_locked_class` on
+    the current doc. New regression test
+    `test_first_validated_import_writes_region_boxes`
+    (`test_job_import.py`) seeds fresh items with no prior human/
+    validated state and asserts `boxes_written` is nonzero.
+  - **Fixed the wrong-items-index test bug that let R2-M1 slip through**
+    (`test_job_import.py`): tests passed a hardcoded
+    `items_index='op_curation_items'` string instead of the bound
+    project's real `get_curation_config().items_index` — `FakeOpenSearch`
+    routes bulk/update writes by comparing against the real config value,
+    so a mismatched literal silently misrouted writes. All three existing
+    tests plus the new one now use `get_curation_config().images_index` /
+    `.items_index`.
+  - `import_labeled_dataset.py`'s labeled-import mode: the dead
+    `_relabel` method, `label_txt_path` posting branch, disagreement-
+    report generation, and their CLI flags (`--relabel-duplicates`,
+    `--label-source`, `--no-detect-mismatches`, `--no-verify-labels`,
+    `--skip-class-check`) are deleted, not just gated off — the guard
+    that fails loudly for non-`--images-only` invocations is the only
+    labeled-mode-related code left. The module docstring and `--help`
+    text now describe `--images-only` as the only working path instead
+    of still documenting the disabled labeled mode as if it worked.
+  - `main()` now skips `bind_script_project()` (which contacts
+    OpenSearch to resolve the project) when `--images-only` was not
+    passed, so the disabled-mode guard fails immediately/cheaply instead
+    of after an OpenSearch round-trip.
+
 ### Added
+- **W10 dataset import (partial): the lock rule, class-name mapping, and a
+  reduced-scope import job.** See
+  `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the
+  full spec and the wave handback report for the exact deferred list
+  (no ledger/resume/backpressure/undo/archive-upload/negatives/holdout/
+  `propose` processing/region `parents: detect`/reprocess-route
+  unification this pass).
+  - `src/clients/occ_locks.py` (new): `is_locked_class` / `is_locked_box`
+    / `is_locked_item` / `_is_locked_marker` — the lock rule. Replaces
+    `is_human_owned_class` (superset semantics: also locks validated
+    imported labels and `test_holdout` items). Re-ingest and
+    `/vlm/label_batch` now respect it.
+  - `src/services/curation/class_label.py` (renamed from
+    `human_label.py`): `ItemLabel` (`.human()`/`.imported()`),
+    `class_label_fields()`, `class_label_update()` — the single writer
+    every human AND dataset-import class-label write goes through
+    (`tests/test_class_label_single_writer.py` gates it).
+  - New `src/services/curation/dataset_import/` package: `scan.py` /
+    `yolo.py` / `coco.py` (format detection + reading; OpenProcessor's
+    own export format is not yet detected/read), `mapping.py`
+    (`suggest_mapping`/`resolve_mapping` — class mapping is always by
+    NAME, never by index; exported for P4's combine-projects wave),
+    `regions.py` (`attach_region_boxes`), `issues.py` (the served issue
+    catalog), `job.py` (`import_dataset` — synchronous, in-process,
+    `processing: none` only).
+  - `tests/integration/test_class_identity_e2e.py`: two YOLO fixtures
+    with the same class names in different `data.yaml` index orders (one
+    with an extra class) import → export (dense remap) → stub-train
+    (`class_remap.json`) → promote (`labels.txt`) → predict, asserting
+    `(class_id, class_name)` pairing at every hop.
+  - `src/services/projects/busy.py` gains `_dataset_import_jobs()` (the
+    P2 busy-inventory hook) — returns `[]` today since the reduced-scope
+    job writes no persistent state yet; ready for a later pass.
+
+### Changed
+- `DetectedItem` (`item_doc.py`) gains an optional `label: ItemLabel`
+  field; `build_item_doc()` applies `class_label_fields(item.label)` on
+  top of the detector-class defaults when set (`None` is a no-op for
+  every existing caller).
+- `confident_class_sources()` (`ingest_class_sources.py`) now includes
+  `LABEL_IMPORT_CLASS_SOURCE` (`external_label`).
+
+### Removed
+- **W10 (breaking, no back-compat): `POST /import_labels` and
+  `/import_labels/batch`, deleted outright (no 410).** Importing an
+  already-labeled dataset is `POST /datasets/imports` — not yet built
+  this pass; see the handback report. `src/services/curation/
+  label_import.py` (the parallel, non-OCC item writer these routes used)
+  is deleted entirely, along with `IngestBatchItem.label_txt_path`,
+  `IngestBatchRequest.label_source`/`detect_mismatches`, and the
+  matching response fields (`labels_imported`, `mismatches`,
+  `missed_labels`, `unmatched_detections`, `disagreements`). The
+  `labels_confirmed` OpenSearch index/mapping stay (mappings are never
+  dropped) as documented legacy — nothing writes it anymore.
 - **W8 multi-box regions (partial, foundational slice).** Laid the core
   storage primitives for the per-item region-box list
   (`src/services/curation/region_boxes.py`): `RegionBox`, `read_boxes`,

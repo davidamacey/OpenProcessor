@@ -220,12 +220,10 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/routers/curation/pipeline.py',
     'tests/curation/test_pipeline.py',
     # Generic curation ingest path.
-    'src/services/curation/label_import.py',
     'src/services/detection/geometry.py',
     'src/services/curation/ingest.py',
     'src/services/curation/item_doc.py',
     'src/services/curation/clustering/ivf_ingest.py',
-    'tests/curation/test_label_import.py',
     'tests/curation/test_geometry.py',
     'tests/curation/test_ingest_service.py',
     'tests/curation/test_ensemble_nms.py',

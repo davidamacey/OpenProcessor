@@ -27,6 +27,11 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.class_label import (
+    candidate_move_update,
+    human_label_update,
+    human_move_class_update,
+)
 from src.services.curation.cluster_ids import cluster_kind
 from src.services.curation.crop_browse import (
     classifier_low_confidence_clause,
@@ -35,11 +40,6 @@ from src.services.curation.crop_browse import (
     parse_crop_sort,
 )
 from src.services.curation.crop_orders import ordered_crops_page
-from src.services.curation.human_label import (
-    candidate_move_update,
-    human_class_provenance,
-    human_label_update,
-)
 from src.services.curation.item_text import item_text_query
 from src.services.curation.wire import (
     item_list_source_excludes,
@@ -466,29 +466,17 @@ async def move_crops(
     if not payload.crop_ids:
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
-    from src.services.curation.history import record_class_snapshot
-
     target_name = target.class_name if target is not None else ''
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
         if kind == 'candidate':
             return candidate_move_update(current, cluster_id=target_id, now=_now_iso())
-        history = record_class_snapshot(current, writer='human:move_crops', restorable=True)
-        return {
-            'cluster_id': target_id,
-            'class_id': target_id,
-            'class_name': target_name,
-            'class_source': 'human_move',
-            # Move-from-cluster is a class gesture.
-            'class_validated': True,
-            'label_source': 'human',
-            'class_id_history': history,
-            # See label_crop above — subid only applies inside the crop's
-            # original cluster; clear on move.
-            'cluster_subid': None,
-            **human_class_provenance(),
-            'updated_at': _now_iso(),
-        }
+        # Move-from-cluster is a class gesture ("move this to the X
+        # cluster" means "this is an X") — routed through class_label.py,
+        # the single class-label writer (tests/test_class_label_single_writer.py).
+        return human_move_class_update(
+            current, class_id=target_id, class_name=target_name, now=_now_iso()
+        )
 
     # Batched via occ_update_bulk — see batch_label_crops above.
     return await _occ_bulk_human_relabel(

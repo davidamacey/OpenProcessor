@@ -1,11 +1,14 @@
-"""Curation router sub-module — ingest, label import, and status/lookup helpers.
+"""Curation router sub-module — ingest and status/lookup helpers.
 
-``POST /ingest/image``, ``POST /ingest/batch``, ``POST /ingest/upload``,
-``POST /import_labels`` and ``POST /import_labels/batch`` are the generic
-curation ingest front door: they create ``images`` + ``items`` documents (and, for label
-import, ``labels_confirmed`` documents), backed by
-:class:`~src.services.curation.ingest.CurationIngestService` and
-:mod:`src.services.curation.label_import`. Everything else in this
+``POST /ingest/image``, ``POST /ingest/batch`` and ``POST /ingest/upload``
+are the generic curation ingest front door: they create ``images`` +
+``items`` documents, backed by
+:class:`~src.services.curation.ingest.CurationIngestService`. Importing
+an already-labeled dataset will be ``POST /datasets/imports`` (planned,
+W10 route not yet built — ``dataset_import.import_dataset()`` exists as
+a pure Python API with no HTTP route fronting it yet) — the per-image
+``/import_labels*`` routes this module used to carry are deleted
+outright (no 410; see any_domain_plan.md W10.5). Everything else in this
 module (status/backlog introspection, the path-existence lookup) is
 unchanged pure-OpenSearch read queries.
 
@@ -28,8 +31,6 @@ from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_
 from src.routers.curation._common import (
     BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
-    ImportLabelsBatchRequest,
-    ImportLabelsRequest,
     IngestBatchConfig,
     IngestConfigResponse,
     IngestImageRequest,
@@ -51,27 +52,10 @@ from src.routers.curation._common import (
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
-from src.services.curation.label_import import (
-    DEFAULT_LABEL_SOURCE,
-    count_disagreements,
-    import_labels_batch,
-    import_yolo_labels,
-)
 
 
 class IngestBatchItem(IngestImageRequest):
-    """One batch entry: an image, and optionally its ground-truth labels.
-
-    ``label_txt_path`` is what makes an "ingest an already-labeled
-    dataset and compare the detector against ground truth" pass a single
-    call instead of an ingest followed by a second
-    ``POST /import_labels/batch`` round trip.
-    """
-
-    label_txt_path: str | None = Field(
-        default=None,
-        description='Optional companion YOLO .txt label file for this image',
-    )
+    """One batch entry: an image to ingest."""
 
 
 class IngestBatchRequest(BaseModel):
@@ -84,17 +68,6 @@ class IngestBatchRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     items: list[IngestBatchItem] = Field(..., min_length=1)
-    label_source: str = Field(
-        default=DEFAULT_LABEL_SOURCE,
-        description='label_source recorded on labels imported from label_txt_path',
-    )
-    detect_mismatches: bool = Field(
-        default=False,
-        description=(
-            'Flag labels whose IoU-matched item carried a different detector class, '
-            'and report the count as summary.mismatches'
-        ),
-    )
 
 
 def _get_detection_profile() -> DetectionProfile:
@@ -182,8 +155,8 @@ async def curation_ingest_batch(
 
     Every item shares its ``source`` tag independently; a per-item read
     failure is reported as a ``failed`` result rather than aborting the
-    whole batch. Items that carry a ``label_txt_path`` also have their
-    ground-truth YOLO labels imported in the same call.
+    whole batch. To ingest an already-labeled dataset, use
+    ``POST /datasets/imports`` (planned, W10 route not yet built).
 
     The whole-image detector inference is issued in batched Triton calls
     (one per ``DetectionProfile.batch_limit`` chunk), so a larger batch
@@ -202,7 +175,6 @@ async def curation_ingest_batch(
 
     images: list[bytes] = []
     paths: list[str] = []
-    label_paths: list[str | None] = []
     failed_early: list[IngestImageResponse] = []
     for item in body.items:
         if not is_servable_image_path(item.path):
@@ -215,23 +187,9 @@ async def curation_ingest_batch(
                 )
             )
             continue
-        if item.label_txt_path is not None and not is_servable_image_path(item.label_txt_path):
-            # label_txt_path gets the same root guard as the image
-            # path -- a client-controlled label file path must not escape
-            # the configured source roots either.
-            failed_early.append(
-                IngestImageResponse(
-                    status='failed',
-                    image_path=item.path,
-                    error=f'label_txt_path {item.label_txt_path!r}: {UNSERVABLE_PATH_ERROR}',
-                    error_kind=ERROR_KIND_UNSERVABLE_PATH,
-                )
-            )
-            continue
         try:
             images.append(Path(item.path).read_bytes())
             paths.append(item.path)
-            label_paths.append(item.label_txt_path)
         except OSError as exc:
             failed_early.append(
                 IngestImageResponse(
@@ -249,10 +207,7 @@ async def curation_ingest_batch(
         await service.ingest_batch(
             images,
             paths,
-            label_paths=label_paths if any(label_paths) else None,
             source=sources.pop() if len(sources) == 1 else 'batch',
-            label_source=body.label_source,
-            detect_mismatches=body.detect_mismatches,
         )
         if images
         else None
@@ -287,10 +242,6 @@ def _batch_response(
         summary.duplicates += batch_result.summary.duplicates
         summary.failed += batch_result.summary.failed
         summary.crops_indexed += batch_result.summary.crops_indexed
-        summary.labels_imported += batch_result.summary.labels_imported
-        summary.mismatches += batch_result.summary.mismatches
-        summary.missed_labels += batch_result.summary.missed_labels
-        summary.unmatched_detections += batch_result.summary.unmatched_detections
         summary.secondary_detector_failures += batch_result.summary.secondary_detector_failures
 
     if summary.failed == 0:
@@ -299,63 +250,7 @@ def _batch_response(
         status = 'error'
     else:
         status = 'partial'
-    return _BatchIngestResponse(
-        status=status,
-        summary=summary,
-        results=results,
-        disagreements=list(batch_result.disagreements) if batch_result is not None else [],
-    )
-
-
-@router.post('/import_labels')
-async def curation_import_labels(
-    body: ImportLabelsRequest,
-    opensearch: OpenSearchDep,
-    registry: RegistryDep,
-) -> dict[str, int]:
-    """Import a single YOLO ``.txt`` label file against an already-ingested image."""
-    await _ensure_indexes(opensearch)
-    mismatches: list[dict[str, Any]] = []
-    n = await import_yolo_labels(
-        Path(body.image_path),
-        Path(body.label_txt_path),
-        registry,
-        opensearch,
-        label_source=body.label_source or DEFAULT_LABEL_SOURCE,
-        detect_mismatches=body.detect_mismatches,
-        mismatch_sink=mismatches,
-    )
-    return {'labels_imported': n, **count_disagreements(mismatches)}
-
-
-@router.post('/import_labels/batch')
-async def curation_import_labels_batch(
-    body: ImportLabelsBatchRequest,
-    opensearch: OpenSearchDep,
-    registry: RegistryDep,
-) -> dict[str, Any]:
-    """Batch-import YOLO ``.txt`` label files against already-ingested images.
-
-    With ``detect_mismatches`` the response also carries the per-label
-    ``disagreements`` records (same shape as ``POST /ingest/batch``).
-    """
-    await _ensure_indexes(opensearch)
-    pairs = [(Path(i.image_path), Path(i.label_txt_path)) for i in body.items]
-    label_source = body.items[0].label_source if body.items else DEFAULT_LABEL_SOURCE
-    detect_mismatches = any(i.detect_mismatches for i in body.items)
-    disagreements: list[dict[str, Any]] = []
-    summary: dict[str, Any] = dict(
-        await import_labels_batch(
-            pairs,
-            registry,
-            opensearch,
-            label_source=label_source,
-            detect_mismatches=detect_mismatches,
-            disagreement_sink=disagreements,
-        )
-    )
-    summary['disagreements'] = disagreements
-    return summary
+    return _BatchIngestResponse(status=status, summary=summary, results=results)
 
 
 @router.get('/ingest/status', response_model=IngestStatusResponse)

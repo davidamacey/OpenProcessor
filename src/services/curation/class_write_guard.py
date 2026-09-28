@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.clients.occ import is_human_owned_class
+from src.clients.occ import is_locked_class
 from src.core.logging import get_logger
 
 
@@ -65,7 +65,7 @@ def class_state_token(source: dict[str, Any]) -> tuple[Any, ...]:
 def class_write_locked(source: dict[str, Any]) -> bool:
     """True when no automated class write may touch the item: a human owns
     its class, or any writer validated it."""
-    return is_human_owned_class(source) or bool(source.get('class_validated'))
+    return is_locked_class(source) or bool(source.get('class_validated'))
 
 
 class ClassWriteGuard:

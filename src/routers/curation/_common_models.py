@@ -17,7 +17,6 @@ from src.routers.curation._region_vocabulary_models import RegionProfileSummary 
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
 from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
-from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_LABEL_SOURCE
 
 
 # =============================================================================
@@ -65,10 +64,6 @@ class BatchIngestSummaryResponse(BaseModel):
     successful: int = 0
     duplicates: int = 0
     failed: int = 0
-    mismatches: int = 0
-    missed_labels: int = 0
-    unmatched_detections: int = 0
-    labels_imported: int = 0
     crops_indexed: int = 0
     # F-43: count of images (among 'successful') where the configured
     # secondary detector call failed and was silently skipped before this
@@ -80,27 +75,6 @@ class BatchIngestResponse(BaseModel):
     status: Literal['success', 'partial', 'error']
     summary: BatchIngestSummaryResponse
     results: list[IngestImageResponse] = Field(default_factory=list)
-    # Populated only when the request set ``detect_mismatches``: one record
-    # per model-vs-label disagreement (``kind`` = class_mismatch |
-    # missed_label | unmatched_detection).
-    disagreements: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class ImportLabelsRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-
-    image_path: str
-    label_txt_path: str
-    # Defaulted from the label importer so the public API carries no
-    # deployment-specific label-source vocabulary.
-    label_source: str = _DEFAULT_LABEL_SOURCE
-    detect_mismatches: bool = False
-
-
-class ImportLabelsBatchRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-
-    items: list[ImportLabelsRequest] = Field(..., min_length=1)
 
 
 class CropLabelRequest(BaseModel):

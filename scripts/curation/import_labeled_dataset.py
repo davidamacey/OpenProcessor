@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
-"""Bulk-import an existing YOLO-labeled dataset and report where the model disagrees.
+"""Bulk-ingest a YOLO dataset's images (``--images-only`` only).
 
 Walks a YOLO dataset (``data.yaml`` splits, or ``images/<split>`` /
-``<split>/images`` directories) and, per split, sends every image together
-with its paired ``.txt`` to ``POST {api_base}/ingest/batch``
-(``label_txt_path`` + ``label_source`` + ``detect_mismatches``). The server
-ingests the image (detector + embeddings), imports the ground-truth boxes as
-validated labels, and IoU-matches them against the detector's own boxes.
-Every disagreement comes back and is written to a JSONL report:
+``<split>/images`` directories) and, per split, sends every image to
+``POST {api_base}/ingest/batch``. The server ingests the image (detector +
+embeddings). Use it when the dataset's labels are not item classes to
+import — e.g. whole frames labeled with the *region* class
+(``names: {0: defect}``) that should be checked against the region cascade
+afterwards with ``eval_regions_vs_gt.py``, not imported into the item
+registry.
 
-* ``class_mismatch`` — same box, different class.
-* ``missed_label`` — a labeled object no detector box overlaps.
-* ``unmatched_detection`` — a detector box no label overlaps. On a background
-  image (empty or absent ``.txt``) every detection is one — that is the
-  false-positive signal for single-class datasets with hard negatives.
+**Labeled-import mode (posting ground-truth boxes as validated item labels,
+and ``--relabel-duplicates``) is currently disabled.** It depended on
+``/ingest/batch`` label fields and ``/import_labels/batch``, both removed
+from this repo's API surface; the planned replacement,
+``POST /datasets/imports`` fronting ``dataset_import.import_dataset()``, is
+not built yet (W10 Opus review 2026-09-28, finding M1). Passing anything
+other than ``--images-only`` fails immediately with a clear error — pass
+``--images-only``, or call ``src.services.curation.dataset_import.job.import_dataset()``
+directly for a labeled import today.
 
-The server reads the images and labels itself, so it must see the dataset:
-``--path-map LOCAL=SERVER`` rewrites the local dataset prefix to where the API
-container mounts it. Before anything is written the driver checks (a) that
-the dataset's ``names`` agree id-for-id with the server's class registry — a
-label ``0`` imported into a registry whose id 0 is another class would
-silently corrupt training data — and (b) on the first batch with labels,
-that the server actually imported some (else the label files are not
-visible server-side and the run aborts instead of recording every image as
-a background).
+``--images-only`` behavior: no registry class check, no label import, no
+disagreement report. Resume, checkpoints, ``--limit`` (stratified by
+positive = non-empty label file), ``--seed``, ``--splits`` and
+``--path-map`` all still apply, and local label-file stats (positives,
+backgrounds, label row counts) are still collected and reported for context.
 
 Resume, at two levels, under ``--state-dir``:
 
@@ -33,17 +34,7 @@ Resume, at two levels, under ``--state-dir``:
   counts), so an interrupted split resumes where it stopped.
 
 Server-side content dedup additionally makes a re-sent image a cheap
-``duplicate``. Note a duplicate's labels are *not* re-imported (they were
-imported with it the first time); ``--relabel-duplicates`` sends them through
-``POST /import_labels/batch`` for images first ingested without labels.
-
-``--images-only`` ingests the images without their labels: no
-``label_txt_path``, no registry class check, no label checks. Use it when
-the dataset's labels are not item classes — e.g. whole frames labeled with
-the *region* class (``names: {0: defect}``) that should be checked
-against the region cascade, not imported into the item registry.
-Resume, checkpoints, ``--limit`` (still stratified by positive = non-empty
-label file), ``--seed``, ``--splits`` and ``--path-map`` behave as usual.
+``duplicate``.
 
 Every run writes ``ingested/<split>.jsonl`` under ``--state-dir``: one line
 per image that landed (``image``, ``server_path``, ``image_id``,
@@ -52,21 +43,14 @@ as its cohort.
 
 Usage::
 
-    # Preview: discovered splits, positives/backgrounds, class check
+    # Preview: discovered splits, positives/backgrounds
     python3 scripts/curation/import_labeled_dataset.py --dataset /data/ds/data.yaml \\
-        --api-base http://localhost:4603/curation --path-map /data/ds=/datasets/ds --dry-run
-
-    # Smoke cohort: 500 images from the test split, stratified positives/backgrounds
-    python3 scripts/curation/import_labeled_dataset.py --dataset /data/ds/data.yaml \\
-        --path-map /data/ds=/datasets/ds --splits test --limit 500 --state-dir ./state/smoke
+        --api-base http://localhost:4603/curation --path-map /data/ds=/datasets/ds \\
+        --images-only --dry-run
 
     # Region ground truth: ingest images only, then evaluate the region cascade
     python3 scripts/curation/import_labeled_dataset.py --dataset /data/regions/data.yaml \\
         --images-only --splits test --limit 1000 --state-dir ./state/regions
-
-    # Full run (re-run the same command to resume)
-    python3 scripts/curation/import_labeled_dataset.py --dataset /data/ds/data.yaml \\
-        --path-map /data/ds=/datasets/ds --label-source dataset_v1 --state-dir ./state/full
 """
 
 from __future__ import annotations
@@ -114,18 +98,7 @@ COUNT_KEYS = (
     'successful',
     'duplicates',
     'failed',
-    'label_rows_on_ingested',
-    'labels_imported',
-    'mismatches',
-    'missed_labels',
-    'unmatched_detections',
-    'backgrounds_with_detections',
-    'relabeled',
 )
-
-
-class PreflightError(RuntimeError):
-    """A check that must pass before (or early in) an import failed."""
 
 
 # =============================================================================
@@ -139,12 +112,8 @@ class ImportConfig:
     state_dir: Path
     source_prefix: str
     path_map: tuple[str, str] | None = None
-    label_source: str | None = None
-    detect_mismatches: bool = True
     batch_size: int = 32
     concurrency: int = 4
-    relabel_duplicates: bool = False
-    verify_labels: bool = True
     images_only: bool = False
     force: bool = False
     retries: int = 3
@@ -162,37 +131,17 @@ def _add(into: dict[str, int], other: dict[str, Any]) -> None:
 
 
 class DatasetImporter:
+    """Images-only dataset ingest driver. Labeled-import mode is disabled --
+    see the module docstring."""
+
     def __init__(self, cfg: ImportConfig, client: httpx.AsyncClient) -> None:
         self.cfg = cfg
         self.client = client
-        self.labels_verified = not cfg.verify_labels or cfg.images_only
-        self.report_path = cfg.state_dir / 'disagreements.jsonl'
         for sub in ('checkpoints', 'progress', 'ingested'):
             (cfg.state_dir / sub).mkdir(parents=True, exist_ok=True)
 
     def server_path(self, local: Path) -> str:
         return map_identifier(local, self.cfg.path_map)
-
-    # ---------------------------------------------------------- preflight
-
-    async def check_classes(self, names: list[str]) -> None:
-        resp = await self.client.get(f'{self.cfg.api_base}/classes', timeout=60.0)
-        resp.raise_for_status()
-        registry = {int(c['class_id']): c for c in resp.json().get('classes', [])}
-        problems = []
-        for i, name in enumerate(names):
-            entry = registry.get(i)
-            if entry is None:
-                problems.append(f'id {i} ({name!r}) is not in the server registry')
-            elif entry.get('class_name') != name:
-                problems.append(f'id {i}: dataset {name!r} vs registry {entry.get("class_name")!r}')
-            elif entry.get('deprecated'):
-                problems.append(f'id {i} ({name!r}) is deprecated in the server registry')
-        if problems:
-            raise PreflightError(
-                'dataset class ids do not match the server class registry:\n  '
-                + '\n  '.join(problems)
-            )
 
     # ------------------------------------------------------------- server
 
@@ -213,100 +162,24 @@ class DatasetImporter:
                 await asyncio.sleep(self.cfg.retry_backoff_s * attempt)
         return None
 
-    async def _relabel(self, samples: list[Sample]) -> tuple[int, list[dict[str, Any]], int]:
-        items = [
-            {
-                'image_path': self.server_path(s.image),
-                'label_txt_path': self.server_path(s.label),
-                'detect_mismatches': self.cfg.detect_mismatches,
-                **({'label_source': self.cfg.label_source} if self.cfg.label_source else {}),
-            }
-            for s in samples
-        ]
-        result = await self._post(f'{self.cfg.api_base}/import_labels/batch', {'items': items})
-        if result is None:
-            return 0, [], 0
-        return int(result.get('labels_imported', 0)), result.get('disagreements') or [], len(items)
-
     async def import_batch(self, split: str, batch: list[Sample]) -> dict[str, Any] | None:
-        """One ``/ingest/batch`` call. Returns this batch's counts, or None on failure."""
+        """One ``/ingest/batch`` call (images only). Returns this batch's
+        counts, or None on failure."""
         by_server = {self.server_path(s.image): s for s in batch}
         items: list[dict[str, Any]] = [
             {'path': self.server_path(s.image), 'source': f'{self.cfg.source_prefix}:{split}'}
             for s in batch
         ]
-        body: dict[str, Any] = {'items': items}
-        if not self.cfg.images_only:
-            for item, s in zip(items, batch, strict=True):
-                item['label_txt_path'] = self.server_path(s.label)
-            body['detect_mismatches'] = self.cfg.detect_mismatches
-            if self.cfg.label_source:
-                body['label_source'] = self.cfg.label_source
-        result = await self._post(f'{self.cfg.api_base}/ingest/batch', body)
+        result = await self._post(f'{self.cfg.api_base}/ingest/batch', {'items': items})
         if result is None:
             return None
 
         counts = _zero()
         summary = result.get('summary') or {}
-        for key in (
-            'successful',
-            'duplicates',
-            'failed',
-            'labels_imported',
-            'mismatches',
-            'missed_labels',
-            'unmatched_detections',
-        ):
+        for key in ('successful', 'duplicates', 'failed'):
             counts[key] = int(summary.get(key, 0))
         rows = {r.get('image_path'): r for r in result.get('results') or []}
         status = {p: r.get('status') for p, r in rows.items()}
-        ingested = [s for p, s in by_server.items() if status.get(p) == 'success']
-        if not self.cfg.images_only:
-            counts['label_rows_on_ingested'] = sum(s.n_labels for s in ingested)
-
-        if not self.labels_verified and counts['label_rows_on_ingested'] > 0:
-            if counts['labels_imported'] == 0:
-                raise PreflightError(
-                    f'server imported 0 of {counts["label_rows_on_ingested"]} label rows in the '
-                    f'first labeled batch — it cannot read the label files (check --path-map; '
-                    f'e.g. {self.server_path(ingested[0].label)}) or the class ids are out of '
-                    'range for its registry'
-                )
-            self.labels_verified = True
-
-        records = list(result.get('disagreements') or [])
-        duplicates = [s for p, s in by_server.items() if status.get(p) == 'duplicate']
-        if self.cfg.relabel_duplicates and duplicates:
-            imported, extra, n = await self._relabel(duplicates)
-            counts['labels_imported'] += imported
-            counts['relabeled'] += n
-            records.extend(extra)
-            for r in extra:
-                kind_key = {
-                    'class_mismatch': 'mismatches',
-                    'missed_label': 'missed_labels',
-                    'unmatched_detection': 'unmatched_detections',
-                }.get(str(r.get('kind')))
-                if kind_key:
-                    counts[kind_key] += 1
-
-        backgrounds = {p for p, s in by_server.items() if not s.positive}
-        counts['backgrounds_with_detections'] = len(
-            {
-                r.get('image_path')
-                for r in records
-                if r.get('kind') == 'unmatched_detection' and r.get('image_path') in backgrounds
-            }
-        )
-        if records:
-            with self.report_path.open('a', encoding='utf-8') as fh:
-                for r in records:
-                    sample = by_server.get(str(r.get('image_path')))
-                    row = {'split': split, **r}
-                    if sample is not None:
-                        row['local_image_path'] = str(sample.image)
-                        row['background'] = not sample.positive
-                    fh.write(json.dumps(row) + '\n')
         landed = [(p, s) for p, s in by_server.items() if status.get(p) in ('success', 'duplicate')]
         return {
             'paths': [str(s.image) for _p, s in landed],
@@ -377,8 +250,6 @@ class DatasetImporter:
             return json.loads(ckpt.read_text(encoding='utf-8'))['counts']
 
         done, counts = self._load_progress(split)
-        if counts['labels_imported'] > 0:
-            self.labels_verified = True
         pending = [s for s in samples if str(s.image) not in done]
         counts['images'] = len(samples)
         counts['positives'] = sum(1 for s in samples if s.positive)
@@ -413,12 +284,6 @@ class DatasetImporter:
             rate = handled / max(1e-6, time.monotonic() - started)
             logger.info('[%s] %d handled (%.1f img/s)', split, handled, rate)
 
-        # Until one labeled batch has proven the server can read the label
-        # files, go one batch at a time: a bad --path-map then aborts after
-        # a single batch instead of --concurrency of them.
-        while batches and not self.labels_verified:
-            await _process(batches.pop(0))
-
         async def _worker() -> None:
             while batches:
                 await _process(batches.pop(0))
@@ -446,20 +311,10 @@ def summarize(per_split: dict[str, dict[str, int]]) -> dict[str, Any]:
     total = _zero()
     for c in per_split.values():
         _add(total, c)
-
-    def _derived(c: dict[str, int]) -> dict[str, Any]:
-        rows = c['label_rows_on_ingested']
-        return {
-            **c,
-            # Share of ground-truth boxes some detector box overlapped at the
-            # label importer's IoU threshold — a plumbing-level recall proxy.
-            'label_match_rate': round(1 - c['missed_labels'] / rows, 4) if rows else None,
-        }
-
     return {
         'generated_at': datetime.now(UTC).isoformat(),
-        'splits': {k: _derived(v) for k, v in per_split.items()},
-        'total': _derived(total),
+        'splits': dict(per_split),
+        'total': total,
     }
 
 
@@ -467,16 +322,8 @@ async def run(
     cfg: ImportConfig,
     client: httpx.AsyncClient,
     splits: dict[str, list[Sample]],
-    names: list[str] | None,
-    *,
-    check_classes: bool = True,
 ) -> dict[str, Any]:
     importer = DatasetImporter(cfg, client)
-    if check_classes and not cfg.images_only:
-        if names is None:
-            logger.warning('dataset declares no class names; skipping the registry check')
-        else:
-            await importer.check_classes(names)
     per_split: dict[str, dict[str, int]] = {}
     for split, samples in splits.items():
         per_split[split] = await importer.run_split(split, samples)
@@ -508,7 +355,6 @@ def build_parser() -> argparse.ArgumentParser:
         metavar='LOCAL=SERVER',
         help='Rewrite the local dataset prefix to the path the API container sees',
     )
-    p.add_argument('--label-source', default=None, help='label_source stamped on imported labels')
     p.add_argument(
         '--source-prefix', default=None, help='Image source tag prefix (<prefix>:<split>)'
     )
@@ -517,37 +363,45 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--concurrency', type=int, default=4, help='Concurrent in-flight batches')
     p.add_argument('--limit', type=int, default=None, help='Stratified sample of N per split')
     p.add_argument('--seed', type=int, default=0, help='Seed for --limit sampling')
-    p.add_argument('--no-detect-mismatches', action='store_true')
-    p.add_argument('--relabel-duplicates', action='store_true')
     p.add_argument(
         '--images-only',
         action='store_true',
-        help='Ingest the images without importing their labels (no registry check). For '
-        'datasets whose labels are a different taxonomy, e.g. region-level ground truth '
-        'checked afterwards with eval_regions_vs_gt.py',
-    )
-    p.add_argument('--skip-class-check', action='store_true')
-    p.add_argument(
-        '--no-verify-labels',
-        action='store_true',
-        help='Do not abort when the first labeled batch imports zero labels',
+        help='Ingest the dataset images without importing their labels. REQUIRED today -- '
+        'labeled-import mode is disabled (see module docstring); any run without this flag '
+        'fails immediately.',
     )
     p.add_argument('--force', action='store_true', help='Redo splits that have checkpoints')
-    p.add_argument('--dry-run', action='store_true', help='Discover and check only')
+    p.add_argument('--dry-run', action='store_true', help='Discover only')
     add_project_argument(p)
     return p
 
 
 async def _async_main(args: argparse.Namespace) -> int:
+    if not args.images_only:
+        # W10 (Opus review 2026-09-28, finding M1): labeled mode posted
+        # forbidden fields (label_txt_path/detect_mismatches) to
+        # /ingest/batch (IngestBatchRequest is extra='forbid' -- every
+        # batch 422s) and relabel-duplicates posted to the deleted
+        # /import_labels/batch (404). Neither surface exists anymore;
+        # dataset_import's Python API (import_dataset()) has no HTTP
+        # route yet to front it (planned: POST /datasets/imports), so the
+        # labeled-mode code was deleted rather than kept unreachable. Fail
+        # loudly and immediately here -- before any dataset discovery,
+        # project binding, or HTTP call -- instead of erroring deep in a
+        # request with no clear signal to the operator.
+        logger.error(
+            'Labeled import mode is not available: it posted to routes this repo removed '
+            "(/ingest/batch's label fields, /import_labels/batch), and the replacement "
+            '(POST /datasets/imports, fronting dataset_import.import_dataset()) is not built '
+            'yet. Pass --images-only to ingest images without labels, or call '
+            'src.services.curation.dataset_import.job.import_dataset() directly for a labeled '
+            'import today.'
+        )
+        return 1
     try:
-        found, names = discover(args.dataset)
+        found, _names = discover(args.dataset)
     except DatasetError as exc:
         logger.error('%s', exc)
-        return 1
-    if args.images_only and args.relabel_duplicates:
-        logger.error(
-            '--relabel-duplicates imports labels; it cannot be combined with --images-only'
-        )
         return 1
     wanted = [s.strip() for s in args.splits.split(',')] if args.splits else list(found)
     missing = [s for s in wanted if s not in found]
@@ -566,12 +420,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         state_dir=args.state_dir or Path('dataset_import_state') / dataset_root.name,
         source_prefix=args.source_prefix or dataset_root.name,
         path_map=args.path_map,
-        label_source=args.label_source,
-        detect_mismatches=not args.no_detect_mismatches,
         batch_size=max(1, args.batch_size),
         concurrency=max(1, args.concurrency),
-        relabel_duplicates=args.relabel_duplicates,
-        verify_labels=not args.no_verify_labels,
         images_only=args.images_only,
         force=args.force,
     )
@@ -580,20 +430,11 @@ async def _async_main(args: argparse.Namespace) -> int:
         logger.info(
             '%s: %d images, %d positive, %d background', name, len(samples), pos, len(samples) - pos
         )
+    if args.dry_run:
+        return 0
     async with httpx.AsyncClient() as client:
-        try:
-            if args.dry_run:
-                if names is not None and not (args.skip_class_check or args.images_only):
-                    await DatasetImporter(cfg, client).check_classes(names)
-                    logger.info('class registry check passed for %d classes', len(names))
-                return 0
-            summary = await run(cfg, client, splits, names, check_classes=not args.skip_class_check)
-        except PreflightError as exc:
-            logger.error('%s', exc)
-            return 3
+        summary = await run(cfg, client, splits)
     logger.info('summary: %s', json.dumps(summary['total']))
-    if not cfg.images_only:
-        logger.info('report: %s', cfg.state_dir / 'disagreements.jsonl')
     logger.info('ingested image lists: %s', cfg.state_dir / 'ingested')
     return 0 if summary['total']['failed'] == 0 else 2
 
@@ -601,7 +442,12 @@ async def _async_main(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     args = build_parser().parse_args(argv)
-    bind_script_project(args.project)
+    # The disabled-labeled-mode guard inside _async_main needs no project
+    # binding (no OpenSearch connection) to fire -- skip bind_script_project
+    # (which does contact OpenSearch to resolve the project) when it is
+    # about to fail loudly anyway, so the failure is immediate/cheap.
+    if args.images_only:
+        bind_script_project(args.project)
     return asyncio.run(_async_main(args))
 
 

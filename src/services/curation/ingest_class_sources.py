@@ -31,6 +31,10 @@ CLASSIFIER_SOURCE_SUFFIX = '_model'
 DEFAULT_PROPOSAL_CLASS_SOURCE = 'unlabeled_proposal'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
+# ``label_source`` (not ``class_source``) value stamped by dataset import
+# (W10) — distinct namespace from LABEL_IMPORT_CLASS_SOURCE above, which
+# is the class_source value. Both feed the lock rule (src/clients/occ.py).
+LABEL_SOURCE_IMPORT = 'import'
 
 
 def unlabeled_proposal_class_sources() -> frozenset[str]:
@@ -59,9 +63,15 @@ def is_classifier_class_source(source: object) -> bool:
 
 
 def confident_class_sources() -> tuple[str, ...]:
-    """Classifier + VLM + human sources: labels trusted enough to keep an
-    item out of the residual clustering pool. Sorted for stable queries."""
-    return tuple(sorted(classifier_class_sources() | {VLM_CLASS_SOURCE, HUMAN_CLASS_SOURCE}))
+    """Classifier + VLM + human + imported-label sources: labels trusted
+    enough to keep an item out of the residual clustering pool. Sorted
+    for stable queries."""
+    return tuple(
+        sorted(
+            classifier_class_sources()
+            | {VLM_CLASS_SOURCE, HUMAN_CLASS_SOURCE, LABEL_IMPORT_CLASS_SOURCE}
+        )
+    )
 
 
 __all__ = [
@@ -71,6 +81,7 @@ __all__ = [
     'DEFAULT_PROPOSAL_CLASS_SOURCE',
     'HUMAN_CLASS_SOURCE',
     'LABEL_IMPORT_CLASS_SOURCE',
+    'LABEL_SOURCE_IMPORT',
     'VLM_CLASS_SOURCE',
     'classifier_class_sources',
     'confident_class_sources',

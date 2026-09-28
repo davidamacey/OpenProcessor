@@ -24,13 +24,10 @@ Triton round-trips and is measurably slower for identical output. It is:
 4. **Bounded-concurrency finish** — per-image work (crops, embeddings,
    quality metrics, bulk index) runs under a semaphore, consuming the
    prefilled results via ``ingest_one``'s ``prefilled_*`` arguments.
-5. **Optional ground-truth import** — companion YOLO ``.txt`` label
-   paths are imported through
-   :mod:`src.services.curation.label_import` in the same call, so
-   ingesting an already-labeled dataset (and reporting where the
-   detector disagreed with it) is one request, not two. The images and
-   items indexes are refreshed first so the importer's searches can see
-   the documents this batch just wrote.
+
+Ingesting an already-labeled dataset will be ``POST /datasets/imports``
+(planned, W10 route not yet built) — this module carries no
+label-import machinery.
 
 If the batched inference raises, the prefilled detections are dropped
 entirely and every image falls back to its own single-image call — a
@@ -40,8 +37,7 @@ half-batched hybrid would be harder to reason about than either path.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
@@ -129,80 +125,11 @@ async def _prefill_detections(
     return prefilled_imgs, prefilled_items, prefilled_secondary
 
 
-async def _refresh_items_for_label_import(service: CurationIngestService) -> None:
-    """Make this batch's just-written item docs searchable.
-
-    The images-index refresh is no longer needed — ``_import_batch_labels``
-    now passes each result's ``image_id`` straight through to
-    ``import_labels_batch`` (this batch already knows it; no need to
-    search the images index to rediscover it). The detector items still
-    need one: the label importer's IoU match does a *search* on
-    ``image_id`` against the items index, which — bulk-written with
-    ``refresh=False`` — is invisible until refreshed. Without this, every
-    label would silently skip its IoU match ("no detector item found")
-    and no disagreement would ever be detected.
-    """
-    cfg = service.config
-    try:
-        await service.opensearch.indices.refresh(index=cfg.items_index)
-    except Exception as exc:
-        # Broad on purpose: the import below still runs; if the docs are
-        # not yet visible it reports labels_imported=0, which the caller
-        # sees — this does not hide the failure, it just does not abort
-        # the already-completed ingest.
-        logger.warning('ingest_batch_label_refresh_failed', error=str(exc))
-
-
-async def _import_batch_labels(
-    service: CurationIngestService,
-    image_paths: list[str],
-    label_paths: list[str | None],
-    results: list[IngestResult],
-    *,
-    label_source: str,
-    detect_mismatches: bool,
-    disagreement_sink: list[dict[str, Any]],
-) -> dict[str, int]:
-    """Import companion YOLO ``.txt`` labels for the images that ingested OK."""
-    from src.services.curation.label_import import DEFAULT_LABEL_SOURCE, import_labels_batch
-
-    pairs: list[tuple[Path, Path]] = []
-    image_docs: dict[str, dict[str, Any]] = {}
-    for image_path, label_path, res in zip(image_paths, label_paths, results, strict=False):
-        if not (label_path and res.status == 'success'):
-            continue
-        pairs.append((Path(image_path), Path(label_path)))
-        # This ingest batch already knows the image_id it just wrote
-        # — hand it straight to the importer instead of making it search
-        # the images index to rediscover what this call already knows.
-        if res.image_id:
-            image_docs[image_path] = {'image_id': res.image_id, '_id': res.image_id}
-    if not pairs:
-        return {}
-    await _refresh_items_for_label_import(service)
-    try:
-        return await import_labels_batch(
-            pairs,
-            service.registry,
-            service.opensearch,
-            label_source=label_source or DEFAULT_LABEL_SOURCE,
-            detect_mismatches=detect_mismatches,
-            disagreement_sink=disagreement_sink,
-            image_docs=image_docs,
-        )
-    except Exception as exc:
-        logger.warning('ingest_batch_label_import_failed', error=str(exc), n_pairs=len(pairs))
-        return {}
-
-
 async def run_ingest_batch(
     service: CurationIngestService,
     images: list[bytes],
     image_paths: list[str],
-    label_paths: list[str | None] | None = None,
     source: str = 'batch',
-    label_source: str = '',
-    detect_mismatches: bool = False,
     whole_frame_from_bytes: bool = False,
     source_identifiers: list[str | None] | None = None,
     ingest_run_id: str | None = None,
@@ -215,8 +142,6 @@ async def run_ingest_batch(
 
     if len(images) != len(image_paths):
         raise ValueError('images and image_paths must be same length')
-    if label_paths is not None and len(label_paths) != len(images):
-        raise ValueError('label_paths must match images length')
     if source_identifiers is not None and len(source_identifiers) != len(images):
         raise ValueError('source_identifiers must match images length')
 
@@ -329,22 +254,6 @@ async def run_ingest_batch(
         if res.secondary_detector_error:
             summary.secondary_detector_failures += 1
 
-    disagreements: list[dict[str, Any]] = []
-    if label_paths is not None:
-        label_summary: dict[str, Any] = await _import_batch_labels(
-            service,
-            image_paths,
-            label_paths,
-            results,
-            label_source=label_source,
-            detect_mismatches=detect_mismatches,
-            disagreement_sink=disagreements,
-        )
-        summary.labels_imported += label_summary.get('labels_imported', 0)
-        summary.mismatches += label_summary.get('mismatches', 0)
-        summary.missed_labels += label_summary.get('missed_labels', 0)
-        summary.unmatched_detections += label_summary.get('unmatched_detections', 0)
-
     if summary.failed == 0:
         status: Literal['success', 'partial', 'error'] = 'success'
     elif summary.successful == 0:
@@ -352,9 +261,7 @@ async def run_ingest_batch(
     else:
         status = 'partial'
 
-    return BatchIngestResult(
-        status=status, summary=summary, results=results, disagreements=disagreements
-    )
+    return BatchIngestResult(status=status, summary=summary, results=results)
 
 
 __all__ = ['run_ingest_batch']

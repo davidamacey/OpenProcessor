@@ -106,38 +106,23 @@ def test_ingest_batch_then_crops_and_status(
     assert fake_triton.batch_sizes == [2]
 
 
-def test_ingest_batch_imports_companion_labels(
-    client: TestClient, fake_opensearch: FakeOpenSearch
-) -> None:
-    """G12 guard: images + paired ground-truth YOLO labels in one call."""
+def test_ingest_batch_rejects_the_removed_label_fields(client: TestClient) -> None:
+    """W10: ``label_txt_path``/``label_source``/``detect_mismatches`` are
+    removed from ``/ingest/batch`` outright (no back-compat) -- ingesting
+    an already-labeled dataset is ``POST /datasets/imports`` now. The old
+    G12 companion-label roundtrip this replaces
+    (``test_ingest_batch_imports_companion_labels``) lives on as
+    ``tests/curation/dataset_import/test_job_import.py`` and
+    ``tests/integration/test_class_identity_e2e.py``."""
     from pathlib import Path
 
     image_path = Path('/tmp/roundtrip_labeled.jpg')
     image_path.write_bytes(_jpeg_bytes(7))
-    label_path = Path('/tmp/roundtrip_labeled.txt')
-    # Same region the fake detector proposes (norm box 0.1,0.1..0.5,0.5
-    # of the letterboxed square maps to roughly the upper-left quadrant).
-    label_path.write_text('0 0.3 0.3 0.4 0.4\n')
 
     resp = client.post(
         '/curation/projects/default/ingest/batch',
         json={
-            'items': [
-                {
-                    'path': str(image_path),
-                    'source': 'roundtrip_test',
-                    'label_txt_path': str(label_path),
-                }
-            ],
-            'label_source': 'ground_truth',
-            'detect_mismatches': True,
+            'items': [{'path': str(image_path), 'source': 'roundtrip_test', 'label_txt_path': 'x'}],
         },
     )
-    assert resp.status_code == 200, resp.text
-    payload = resp.json()
-    assert payload['summary']['successful'] == 1
-    assert payload['summary']['labels_imported'] == 1
-    assert len(fake_opensearch.labels) == 1
-    [label_doc] = list(fake_opensearch.labels.values())
-    assert label_doc['class_id'] == 0
-    assert label_doc['label_source'] == 'ground_truth'
+    assert resp.status_code == 422, resp.text
