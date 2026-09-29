@@ -71,6 +71,27 @@ the files it covers. Release signing is follow-up work.
   OpenSearch Dashboards ports either. Enable OpenSearch's security
   plugin before any production or multi-tenant deployment.
 
+### VLM endpoints and server-side requests
+
+Any caller can register a VLM endpoint URL (there is no authentication) and
+make the API send requests to it (a test call, a probe, and every labeling
+call once it is activated). Endpoint URLs are therefore checked before use:
+this stack's own services, link-local and cloud-metadata addresses, and
+anything that resolves to them are refused for every spelling of the
+address, redirects are never followed, keys are only ever
+references to files on the host, and an endpoint outside this deployment
+needs an explicit acknowledgement (`OP_VLM_EXTERNAL_POLICY=deny` refuses
+them).
+
+The residual risk is deliberate: a URL that resolves to another host on
+your private network (a router, a NAS, an internal admin page) is a valid
+VLM endpoint as far as the API can tell, so a caller who can reach the API
+can make it send synthetic probe requests and OpenAI-shaped chat requests
+there. DNS is checked when an endpoint is saved, tested, activated and
+built, not at every request, so a name that changes its answer later is
+caught at the next of those points, not mid-call. Put the API behind your
+own network controls, as the rest of this document already says.
+
 None of this is a bug to be reported — it's the current, deliberate
 state of the project, tracked internally as follow-up work.
 Authentication is explicitly out of scope for this release: this is a

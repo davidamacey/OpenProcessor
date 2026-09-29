@@ -262,6 +262,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — zero call sites) were left in place; see the handback report.
 
 ### Added
+- **W9 VLM model selection: a registry of VLM endpoints, a per-project `vlm`
+  axis, a local model catalog, and one place every model choice is served.**
+  See `docs/design/openprocessor_internal/any_domain_plan.md` W9.
+  - **Endpoint registry** (deployment-wide, stored in `op_global_configs`,
+    never per project): `GET/POST /curation/vlm/endpoints`,
+    `GET /vlm/endpoints/schema`, `POST /vlm/endpoints/validate`,
+    `GET/PUT/DELETE /vlm/endpoints/{name}`, `.../revisions[/{revision}]`,
+    `POST .../{name}/clone`, `POST .../{name}/probe`. Every save is a new
+    immutable revision (numbers are never reused); a probe (synthetic
+    images only) records the served model root, context length, image
+    cost, image cap and JSON-mode support, and belongs to the body it
+    tested. The `env` built-in (`OP_VLM_URL`/`OP_VLM_MODEL`) is listed
+    first, read-only.
+  - **Activation per project** (`/curation/projects/{project}/vlm/endpoints/
+    active`, `.../{name}/activate`, `.../active/rollback`, `.../deactivate`),
+    `PUT /settings` `defaults.vlm`, and a per-run `?vlm=`
+    (+ `acknowledge_external`) on `/vlm/label_batch`, `/vlm/verify_regions`,
+    `/vlm/verify_region_batch`, `/vlm/region_visible_batch`,
+    `/vlm/label_cluster/{cluster_id}`, `/pipeline/auto_label` and
+    `/pipeline/auto_label/start`. All of them go through ONE gate
+    (`enforce_vlm_gate`); `tests/curation/test_vlm_selection_paths.py`
+    walks each with an input that must be refused. `/start` pins the
+    resolved `(name, revision)` into the job.
+  - **Hot switch**: the detection worker follows a project's VLM at its
+    quiesce points (queues drained) from one pinned registry store shared by
+    every project; an activation, a re-probe or a rollback swaps the
+    labeler, a new revision of the active endpoint changes nothing until it
+    is activated.
+  - **Safety**: URL policy (`vlm_url_policy`) refuses this stack's own
+    services, link-local / metadata / unspecified addresses in any notation,
+    for the literal host and every resolved address; keys are references
+    only (`secret:<slug>` files under `./secrets/vlm`, written by
+    `openprocessor vlm key set <slug>`), never stored, served or logged;
+    no client to an endpoint follows a redirect; an endpoint outside this
+    deployment needs an acknowledgement (`OP_VLM_EXTERNAL_POLICY=deny`
+    refuses them outright) that is recorded per `name@revision`.
+  - **Pairing** (`vlm_pairing_issues`): context-size estimate per labeler
+    call, the server's own image cap, multi-box and text-reading
+    verification, JSON mode; it runs on VLM activation, pack activation,
+    profile activation, per-run selection, and a combined `PUT /settings`
+    pairs with what the request will change (not what it replaces).
+  - **Local model catalog** `examples/vlm/catalog.tsv`, read by the
+    installer/CLI's bash and by `src/services/labeling/vlm_catalog.py`;
+    `GET /curation/vlm/catalog`, `GET /vlm/local`,
+    `POST /vlm/local/select` (records the DESIRED model; the API never
+    restarts vLLM), `DELETE /vlm/local/select`; and the host CLI
+    `openprocessor vlm status|use <id> [--force] [--yes]|apply|probe`
+    (fit check, training-lock and pause handling, `.env` rewrite with
+    restore on failure, wait for the new model, probe, unpause).
+  - `GET /config/vocabulary` serves a `model_choices` table
+    (`src/services/curation/model_choices.py`) and its `vlm` block comes
+    from the registry; `GET /methods` gains a `vlm` axis with each
+    endpoint's status, locality and acknowledgement flags;
+    `GET /regions/vocabulary` offers every endpoint's resolved model as a
+    verifier.
+  - Items gain `vlm_endpoint` and `vlm_model` (which endpoint and resolved
+    model answered), stamped per task at call time; `vlm_prompt_pack` is
+    now on the item wire.
+  - `clone_settings` gains the `vlm_activation` axis (an acknowledgement is
+    never copied); global SSE event `vlm.changed`.
+  - Compose: the `vlm` service is parameterised by `VLM_*` (defaults
+    reproduce the previous command argument for argument);
+    `yolo-api`, the detection worker and the auto-label worker mount
+    `./secrets/vlm` read-only; `SECURITY.md` records the SSRF residual risk.
 - **W10 dataset import (partial): the lock rule, class-name mapping, and a
   reduced-scope import job.** See
   `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the
@@ -297,6 +361,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     job writes no persistent state yet; ready for a later pass.
 
 ### Changed
+- **W9 (wire changes; see the Cropwright delta list).** `region_verifier`,
+  `text_engine_version` and the class `detector`/`labeler` provenance now
+  record the resolved model of the endpoint that ran (the probe's model
+  root), not the process's `OP_VLM_MODEL`. `GET /models/status` VLM rows are
+  one per registered endpoint with `kind: "vlm"` (was `external`), named by
+  endpoint, with `active` and `active_in` (the bound project only; other
+  projects' use is on `GET /vlm/endpoints`). The `vlm` compose service
+  starts through a shell entrypoint so one file serves every catalog model.
+  `POST /pipeline/auto_label` now also refuses a bad `?vlm=` when no VLM
+  stage runs, as `/start` does. `GET /health` and `/curation/health` report
+  the active endpoint.
 - `DetectedItem` (`item_doc.py`) gains an optional `label: ItemLabel`
   field; `build_item_doc()` applies `class_label_fields(item.label)` on
   top of the detector-class defaults when set (`None` is a no-op for
@@ -305,6 +380,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LABEL_IMPORT_CLASS_SOURCE` (`external_label`).
 
 ### Removed
+- **W9: the detection worker's `--vlm-url` flag and the process-wide
+  `VlmLabeler` singleton** (`_get_vlm_labeler._insts`). The `env` built-in
+  endpoint (`OP_VLM_URL`) is the one remaining environment path; every
+  labeler is built by `vlm_factory`.
 - **W10 (breaking, no back-compat): `POST /import_labels` and
   `/import_labels/batch`, deleted outright (no 410).** Importing an
   already-labeled dataset is `POST /datasets/imports` — not yet built
