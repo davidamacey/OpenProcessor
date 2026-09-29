@@ -261,7 +261,7 @@ def _patch_worker_io(
         'AsyncTritonPool': MagicMock(return_value=pool),
         'make_script_opensearch': MagicMock(return_value=os_client),
         'SegmenterClient': MagicMock(return_value=segmenter),
-        'VlmLabeler': MagicMock(return_value=vlm),
+        'build_vlm_labeler': MagicMock(return_value=vlm),
     }
     for name, mock in mocks.items():
         monkeypatch.setattr(worker, name, mock)
@@ -276,6 +276,7 @@ def _patch_worker_io(
         raising=False,
     )
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
     return mocks
 
 
@@ -287,7 +288,6 @@ def _worker_args(
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
             f'--segmenter-url={segmenter_url}',
-            '--vlm-url=http://vlm.local:8000',
             f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
         ]

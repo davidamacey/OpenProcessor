@@ -2,19 +2,18 @@
 
 After the naming sweep, the
 worker's detector/segmenter/VLM identifiers come entirely from deployment
-config (``DetectionProfile``, ``OP_VLM_*``), so the frontend can no longer
+config (``DetectionProfile``, the VLM endpoint registry), so the frontend can no longer
 hardcode a label/palette map keyed on deployment model ids
 (``my_region_det_640``, ``sam3``, ...). This module is the
 single catalog a client renders from instead — mirrors the
 ``class_sources.py`` / ``GET {prefix}/class_sources`` pattern.
 
 Never hardcodes a model id: everything here is read from the active
-``DetectionProfile`` / ingest profiles / ``OP_VLM_MODEL`` at call time.
+``DetectionProfile`` / ingest profiles / the VLM endpoint registry at call time.
 """
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
@@ -46,7 +45,7 @@ def _entry(entry_id: str, label: str, role: str, *, filterable: bool) -> dict[st
     return {'id': entry_id, 'label': label, 'role': role, 'filterable': filterable}
 
 
-def _detectors(vlm_model: str) -> list[dict[str, Any]]:
+def _detectors() -> list[dict[str, Any]]:
     """Every identifier that can appear in ``region_detector``,
     ``region_verifier``, ``class_labeler`` or ``class_detector`` — with
     ``filterable=True`` reserved for the ``region_detector`` values only
@@ -83,8 +82,13 @@ def _detectors(vlm_model: str) -> list[dict[str, Any]]:
     else:
         add('human', 'Human', 'human', filterable=True)
 
-    if vlm_model:
-        add(vlm_model, f'VLM ({vlm_model})', 'verifier', filterable=False)
+    # Every registered endpoint's resolved model (what `region_verifier` /
+    # `class_labeler` are stamped with), so rows written by an endpoint that
+    # is no longer active stay filterable and their chips keep a label.
+    from src.services.labeling.vlm_endpoints import available_vlm_endpoints
+
+    for endpoint in available_vlm_endpoints():
+        add(endpoint.model_id, f'VLM ({endpoint.model_id})', 'verifier', filterable=False)
 
     primary = ingest_primary_profile()
     p_model = primary.detector_model or primary.name
@@ -179,8 +183,7 @@ def region_vocabulary_catalog() -> dict[str, Any]:
 
     from src.services.detection.region_text import TEXT_CHOICES
 
-    vlm_model = os.environ.get('OP_VLM_MODEL', '')
-    detectors = _detectors(vlm_model)
+    detectors = _detectors()
     region_sources = _region_sources(profile)
     # chain_actors: the identifiers that can appear in a
     # detector_chain tag (``f'{actor}:hit'`` etc). Same underlying

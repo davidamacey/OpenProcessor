@@ -156,6 +156,7 @@ class TestWorkerKeepsTheCandidate:
             detector='det_model',
             detector_version='3',
             chain=[],
+            verifier='vlm-model',
         )
         assert doc[F.candidate_bbox_norm] is None
         assert doc[F.candidate_detector] is None

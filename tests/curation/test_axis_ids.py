@@ -17,14 +17,14 @@ async def test_methods_axes_ids_are_the_config_axis_ids() -> None:
     registry = await get_registry(None)
     served_axis_ids = {a['axis'] for a in registry['axes']}
     assert 'region_profile' not in served_axis_ids
-    assert {'prompt_pack', 'detection_profile'} <= served_axis_ids
+    assert {'prompt_pack', 'detection_profile', 'vlm'} <= served_axis_ids
 
 
 def test_active_config_response_axis_literal_matches() -> None:
     from src.routers.curation._config_common_models import ActiveConfigResponse
 
     literal_values = set(get_args(ActiveConfigResponse.model_fields['axis'].annotation))
-    assert literal_values == {'prompt_pack', 'detection_profile'}
+    assert literal_values == {'prompt_pack', 'detection_profile', 'vlm'}
     assert 'region_profile' not in literal_values
 
 

@@ -205,6 +205,7 @@ class TestWriters:
             chain=[],
             region_text_reply='999',
             region_text_confidence='high',
+            verifier='vlm-model',
         )
         assert F.text not in doc
         assert doc[F.text_vlm] == '999'

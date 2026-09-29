@@ -54,6 +54,17 @@ def axis_copy() -> list[dict[str, str]]:
                 'revision) without a restart.'
             ),
         },
+        {
+            'axis': 'vlm',
+            'label': 'VLM',
+            'description': (
+                'The vision-language model endpoint that verifies and labels '
+                'items for this project. Settable: activating an endpoint '
+                'here switches VLM calls onto it without a restart. An '
+                'endpoint outside this deployment is activated from the VLM '
+                'page, where the external-images warning is acknowledged.'
+            ),
+        },
     ]
 
 

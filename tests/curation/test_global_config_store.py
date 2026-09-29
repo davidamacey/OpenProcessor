@@ -20,16 +20,14 @@ from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.config_store.index import activate, get_activation, save_config
-from src.services.config_store.store import (
-    ConfigStore,
+from src.services.config_store.global_store import (
     ensure_global_configs_index,
-    get_config_store,
     get_global_config_store,
     global_configs_index,
-    reset_config_stores,
     reset_global_config_store,
 )
+from src.services.config_store.index import activate, get_activation, save_config
+from src.services.config_store.store import ConfigStore, get_config_store, reset_config_stores
 
 
 if TYPE_CHECKING:

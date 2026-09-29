@@ -53,11 +53,31 @@ async def triton_status(triton: Any) -> dict[str, Any]:
     return status
 
 
-async def vlm_status() -> dict[str, Any]:
-    """``{reachable, model?, last_error?, detail?}`` for the VLM labeler."""
+async def vlm_status(client: Any = None, *, scoped: bool = True) -> dict[str, Any]:
+    """``{reachable, model?, last_error?, detail?}`` for a VLM endpoint: the
+    bound project's active one (``scoped``), or -- for the project-less
+    global health -- the deployment's ``env`` built-in."""
     status: dict[str, Any] = {'reachable': False}
     try:
-        labeler = _get_vlm_labeler()
+        from src.services.config_store import get_global_config_store
+        from src.services.labeling.vlm_endpoints import (
+            active_vlm_endpoint,
+            env_builtin,
+            refresh_vlm_state,
+        )
+
+        if scoped:
+            await refresh_vlm_state(client)
+            endpoint = active_vlm_endpoint()
+        else:
+            from src.services.projects.guard import make_curation_opensearch
+
+            await get_global_config_store().ensure_fresh(client or await make_curation_opensearch())
+            endpoint = env_builtin()
+        if endpoint is None:
+            status['detail'] = 'no VLM endpoint is configured'
+            return status
+        labeler = _get_vlm_labeler(endpoint=endpoint)
         h = await labeler.health()
         status['reachable'] = h.reachable
         status['model'] = h.model
@@ -96,7 +116,7 @@ async def curation_health(
     except Exception as exc:
         os_status['detail'] = str(exc)
 
-    vlm = await vlm_status()
+    vlm = await vlm_status(raw_os)
 
     reg_path = get_class_registry().path
     registry_status: dict[str, Any] = {

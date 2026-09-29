@@ -414,10 +414,10 @@ async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
     real function with no project bound, a fake client, and assert it
     returns a task whose first tick refreshes an active project's store."""
     from curation._fake_config_opensearch import TwoProjectOpenSearch
+    from src.services.config_store.global_store import reset_global_config_store
     from src.services.config_store.store import (
         get_config_store,
         reset_config_stores,
-        reset_global_config_store,
         shutdown_config_store_poll,
         startup_bootstrap_config_store_safe,
     )
@@ -475,10 +475,10 @@ async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reac
     eventually enters the poll loop once OpenSearch becomes reachable."""
     from curation._fake_config_opensearch import TwoProjectOpenSearch
     from src.services.config_store import store as store_module
+    from src.services.config_store.global_store import reset_global_config_store
     from src.services.config_store.store import (
         get_config_store,
         reset_config_stores,
-        reset_global_config_store,
         shutdown_config_store_poll,
         startup_bootstrap_config_store_safe,
     )

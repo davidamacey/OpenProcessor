@@ -153,6 +153,11 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/export/yolo'): {'json': {'version_tag': f'{slug}-v1'}},
         ('POST', '/export/single_class'): {'json': {'version_tag': f'{slug}-v1', 'class_ids': [1]}},
+        ('POST', '/vlm/endpoints/{name}/activate'): {
+            'json': {'expected_active': _VLM_ACTIVE, 'force': True}
+        },
+        ('POST', '/vlm/endpoints/active/rollback'): {'json': {'expected_active': _VLM_ACTIVE}},
+        ('POST', '/vlm/endpoints/deactivate'): {'json': {'expected_active': _VLM_ACTIVE}},
         ('POST', '/vlm/label_batch'): {'json': {'crop_ids': [item]}},
         ('POST', '/vlm/verify_regions'): {'json': {'crop_ids': [f'{slug}-item-0004']}},
         ('POST', '/vlm/verify_region_batch'): {
@@ -368,6 +373,10 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('POST', '/vlm/label_cluster/{cluster_id}'): (
         '409s: /pipeline/auto_label/start already queued a run earlier in the pass'
     ),
+    ('POST', '/vlm/endpoints/active/rollback'): (
+        'the seeded previous endpoint was deleted (409 previous_deleted, the marker this '
+        'sweep plants); rollback success is covered by test_vlm_hot_switch_api.py'
+    ),
     ('POST', '/prompt_packs/active/rollback'): (
         'a fresh per-slug config store has no prior activation to roll back to '
         '(409 no_previous); rollback success is covered by test_prompt_packs_router.py'
@@ -518,7 +527,81 @@ def _stored_region_profile(env: Any, slug: str) -> None:
     reset_config_stores()
 
 
+# The VLM endpoint registry is deployment-wide (one endpoint both projects can
+# use); what is per project is which one it activated. The seeded activation's
+# ``previous`` is the per-project marker: an endpoint this project ran before
+# and has since deleted, so it must only ever appear in that project's own
+# ``/vlm/endpoints/active`` answer.
+_SHARED_VLM = 'shared-vlm'
+_VLM_ACTIVE = {'name': _SHARED_VLM, 'revision': 1}
+_VLM_KEYS = frozenset(
+    {
+        ('POST', '/vlm/endpoints/{name}/activate'),
+        ('POST', '/vlm/endpoints/active/rollback'),
+        ('POST', '/vlm/endpoints/deactivate'),
+    }
+)
+NAME_FOR: dict[tuple[str, str], str] = {
+    ('POST', '/vlm/endpoints/{name}/activate'): _SHARED_VLM,
+}
+
+
+def _seed_vlm(env: Any, slug: str) -> None:
+    """The shared endpoint in the global registry (revision 1, the private
+    address ``_FAKE_VLM_HOST`` resolves to) and ``slug``'s activation of it,
+    re-seeded before each VLM activation route so every one is independent
+    of what an earlier route left behind."""
+    from src.config.curation import IndexRole
+    from src.services.config_store.global_store import global_configs_index
+    from src.services.config_store.store import reset_config_stores
+    from src.services.config_store.vlm_snapshot import reset_vlm_revision_cache
+    from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
+
+    now = '2026-01-01T00:00:00+00:00'
+    endpoint = {
+        'doc_type': 'config',
+        'kind': 'vlm_endpoint',
+        'name': _SHARED_VLM,
+        'revision': 1,
+        'body': VlmEndpointBody(base_url=f'http://{_FAKE_VLM_HOST}/v1', model='leak-test-vlm')
+        .normalized()
+        .model_dump(),
+        'description': '',
+        'created_at': now,
+        'updated_at': now,
+        'updated_by': None,
+        'cloned_from': None,
+    }
+    registry = env.transport.store.setdefault(global_configs_index(), {})
+    registry[f'vlm:{_SHARED_VLM}'] = endpoint
+    registry[f'vlm:{_SHARED_VLM}@1'] = {**endpoint, 'doc_type': 'revision'}
+    meta = registry.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
+    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
+    docs = env.transport.store.setdefault(index, {})
+    docs['activation:vlm'] = {
+        'doc_type': 'activation',
+        'axis': 'vlm',
+        **_VLM_ACTIVE,
+        'activated_at': now,
+        'previous': {'name': f'{slug}-model', 'revision': 1},
+        'acked_refs': {},
+        'external_ack_at': None,
+    }
+    project_meta = docs.setdefault(
+        'meta:config_revision', {'doc_type': 'meta', 'config_revision': 0}
+    )
+    project_meta['config_revision'] = int(project_meta.get('config_revision', 0)) + 1
+    reset_config_stores()
+    reset_vlm_revision_cache()
+
+
+def _prepare_vlm(env: Any, slug: str) -> None:
+    _seed_vlm(env, slug)
+
+
 PREPARE: dict[tuple[str, str], Any] = {
+    **dict.fromkeys(_VLM_KEYS, _prepare_vlm),
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,
     ('DELETE', '/models/{model_name}'): _promoted_model,
     ('PATCH', '/crops/{crop_id}/regions/{box_id}'): _region_box_seeded,
@@ -1285,6 +1368,8 @@ def leak_env(
         own_dirs=own_dirs,
         root=tmp_path,
     )
+    for slug in records:
+        _seed_vlm(env, slug)
     monkeypatch.setattr(event_hub, '_HUB', None)
     hub = event_hub.get_event_hub()
     real_dispatch = hub._dispatch
@@ -1307,14 +1392,16 @@ def leak_env(
     monkeypatch.setattr(httpx.HTTPTransport, 'handle_request', _no_network)
     # Every VLM route talks to the in-process fake VLM (a real
     # OpenAI-shaped reply), so the labeling/verify routes really write.
-    from src.routers.curation import vlm as vlm_router
-    from src.services.labeling.vlm_labeler import VlmLabeler
+    # Every VLM route talks to the in-process fake VLM (a real
+    # OpenAI-shaped reply) through the ``env`` built-in endpoint, so the
+    # labeling/verify routes really write.
+    from src.services.labeling import vlm_url_policy
 
-    defaults = VlmLabeler.__init__.__defaults__ or ()
     monkeypatch.setattr(
-        VlmLabeler.__init__, '__defaults__', (f'http://{_FAKE_VLM_HOST}/v1', *defaults[1:])
+        vlm_url_policy, '_resolve', lambda host: ['10.20.30.40'] if host == _FAKE_VLM_HOST else []
     )
-    monkeypatch.setitem(vlm_router._get_vlm_labeler.__dict__, '_insts', {})
+    monkeypatch.setenv('OP_VLM_URL', f'http://{_FAKE_VLM_HOST}/v1')
+    monkeypatch.setenv('OP_VLM_MODEL', 'leak-test-vlm')
 
     def _no_subprocess(*_a: Any, **_k: Any) -> Any:
         raise OSError('subprocesses disabled in the leak test')
@@ -1388,6 +1475,8 @@ def _fill(path: str, slug: str, key: tuple[str, str] | None = None) -> str:
     params = route_params(slug)
     if key in CROP_FOR:
         params['crop_id'] = f'{slug}-{CROP_FOR[key]}'
+    if key in NAME_FOR:
+        params['name'] = NAME_FOR[key]
 
     def _sub(match: re.Match[str]) -> str:
         name = match.group(1)
@@ -1466,6 +1555,11 @@ def _sweep(
     bodies = route_bodies(slug, records[slug].resources.export_root)
 
     role_of = {name: role.value for role, name in records[slug].resources.indexes.items()}
+    # The deployment-wide VLM registry is a process cache shared by every
+    # project by design, so it is excluded from the per-role parity below.
+    from src.services.config_store.global_store import global_configs_index
+
+    role_of[global_configs_index()] = 'registry'
     leaks: list[str] = []
     wrote: set[tuple[str, str]] = set()
     roles: dict[tuple[str, str], collections.Counter[Shape]] = {}
@@ -1494,7 +1588,9 @@ def _sweep(
         route_events = env.events[before_events:]
         tag = f'[{slug}] {method} {key[1]}'
         roles[key] = collections.Counter(
-            _shape(role_of, verb, os_url, index) for _b, verb, os_url, index in route_accesses
+            shape
+            for _b, verb, os_url, index in route_accesses
+            if (shape := _shape(role_of, verb, os_url, index))[0] != 'registry'
         )
 
         for bound, _verb, os_url, index in route_accesses:
@@ -1739,7 +1835,7 @@ def test_publish_cannot_redirect_an_event(leak_env: LeakEnv, injected: str | Non
     assert all(event.get('project') == 'beta' for event in leak_env.events[before:])
 
 
-@pytest.mark.parametrize('event_type', ['project.created', 'combine.finished'])
+@pytest.mark.parametrize('event_type', ['project.created', 'combine.finished', 'vlm.changed'])
 def test_publish_refuses_global_event_types(leak_env: LeakEnv, event_type: str) -> None:
     """Re-review R11: a client cannot spoof a lifecycle/combine event, not
     even on its own project's stream."""

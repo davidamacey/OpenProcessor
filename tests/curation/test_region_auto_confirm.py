@@ -51,6 +51,7 @@ class TestWorkerWrites:
             detector_version='1',
             chain=[],
             auto_confirmed=True,
+            verifier='vlm-model',
         )
         assert doc[F.validated] is False
         assert doc[F.auto_confirmed] is True

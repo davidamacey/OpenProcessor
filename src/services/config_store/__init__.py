@@ -6,6 +6,12 @@ reload -- no CRUD routes live here yet (W3/W4). See
 
 from __future__ import annotations
 
+from src.services.config_store.global_store import (
+    ensure_global_configs_index,
+    get_global_config_store,
+    global_configs_index,
+    reset_global_config_store,
+)
 from src.services.config_store.index import (
     ActiveConflictError,
     RevisionConflictError,
@@ -27,12 +33,8 @@ from src.services.config_store.store import (
     ConfigStore,
     StoredConfig,
     activate_axis,
-    ensure_global_configs_index,
     get_config_store,
-    get_global_config_store,
-    global_configs_index,
     reset_config_stores,
-    reset_global_config_store,
     shutdown_config_store_poll,
     startup_bootstrap_config_store_safe,
 )

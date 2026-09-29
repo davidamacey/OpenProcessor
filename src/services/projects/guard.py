@@ -94,8 +94,33 @@ def bind_registry_admin() -> Generator[None, None, None]:
         _REGISTRY_ADMIN.reset(token)
 
 
+_GLOBAL_CONFIGS_READ: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    'op_global_configs_read', default=False
+)
+
+
+@contextmanager
+def global_configs_read() -> Generator[None, None, None]:
+    """Allow READS of the ``op_global_configs`` registry (W9: the VLM
+    endpoint registry) while a project is bound. Project-scoped code
+    (a run's ``?vlm=``, the worker's per-project runtime) resolves the
+    deployment-wide endpoints through the config store, which enters this
+    for its own reads only; a write to that index while bound is still
+    refused (global routes run unbound), and so is any raw access outside
+    the block."""
+    token = _GLOBAL_CONFIGS_READ.set(True)
+    try:
+        yield
+    finally:
+        _GLOBAL_CONFIGS_READ.reset(token)
+
+
 def _projects_index() -> str:
     return os.environ.get('OP_PROJECTS_INDEX', 'op_projects')
+
+
+def _global_configs_index() -> str:
+    return os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
 
 
 def _project_index_prefix() -> str:
@@ -263,6 +288,12 @@ def _check_targets(
                 continue
             if name.startswith(_project_index_prefix()):
                 raise _refuse(f'{name!r} belongs to no known project', target=name)
+            if bound is not None and name == _global_configs_index() and not write:
+                if _GLOBAL_CONFIGS_READ.get():
+                    continue
+                raise _refuse(
+                    f'{name!r} is readable while bound only through the config store', target=name
+                )
             if bound is not None:
                 raise _refuse(f'{name!r} is not an index of the bound project', target=name)
             continue

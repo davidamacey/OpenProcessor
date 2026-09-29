@@ -189,8 +189,12 @@ _PROCESS_CACHES = (
     ('src.services.config_store.store', '_STORES'),
     # The global (non-project-scoped) config store singleton (M3) -- its
     # own cache dict, never conflated with `_STORES` above.
-    ('src.services.config_store.store', '_GLOBAL_STORE'),
+    ('src.services.config_store.global_store', '_GLOBAL_STORE'),
+    # W9: immutable VLM endpoint revision copies fetched from the registry.
+    ('src.services.config_store.vlm_snapshot', '_REVISION_CACHE'),
     ('src.services.training.preflight_scan', '_scan_cache'),
+    # W9: the labeler factory's LRU (one labeler per endpoint revision + pack).
+    ('src.services.labeling.vlm_factory', '_LABELERS'),
 )
 
 
@@ -201,6 +205,9 @@ def _clear_process_caches() -> None:
         module = sys.modules.get(module_name)
         if module is not None:
             getattr(module, attr).clear()
+    policy = sys.modules.get('src.services.labeling.vlm_url_policy')
+    if policy is not None:
+        policy.reset_policy_caches()
     capacity = sys.modules.get('src.services.projects.capacity')
     if capacity is not None:
         setattr(capacity, '_cache', None)  # noqa: B010 - module attr unknown to mypy
@@ -212,6 +219,26 @@ def _fresh_process_caches() -> Iterator[None]:
     _clear_process_caches()
     yield
     _clear_process_caches()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The VLM URL policy resolves hostnames; no test may hit real DNS (an
+    unresolvable name is what the policy sees). A test that needs answers
+    patches ``vlm_url_policy._resolve`` itself."""
+    import src.services.labeling.vlm_url_policy as policy
+
+    monkeypatch.setattr(policy, '_resolve', lambda _host: [])
+
+
+@pytest.fixture
+def vlm_env(monkeypatch: pytest.MonkeyPatch) -> str:
+    """An ``env`` built-in VLM endpoint (``OP_VLM_URL``), i.e. a project
+    that never activated one. Returns the base URL."""
+    url = 'http://vlm.invalid:8000/v1'
+    monkeypatch.setenv('OP_VLM_URL', url)
+    monkeypatch.setenv('OP_VLM_MODEL', 'test-vlm')
+    return url
 
 
 collect_ignore = [

@@ -15,6 +15,9 @@ from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 @pytest.fixture(autouse=True)
 def _reset_caches():
     from src.clients import curation_opensearch

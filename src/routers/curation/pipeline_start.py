@@ -18,10 +18,19 @@ from src.routers.curation.pipeline_params import (
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
+    labeler_resolution_args,
     omitted_pack_is_store_active,
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
+from src.routers.curation.pipeline_vlm import (
+    ACKNOWLEDGE_EXTERNAL_DESC,
+    VLM_DESC,
+    RunVlm,
+    require_run_vlm,
+    resolve_run_vlm,
+)
+from src.routers.curation.vlm import _resolve_pack
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 
 
@@ -48,6 +57,8 @@ async def pipeline_auto_label_start(
     cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -76,6 +87,23 @@ async def pipeline_auto_label_start(
         # default has nothing to go stale against, so it must keep
         # running the exact pack it echoes.
         prompt_pack_was_omitted = omitted_pack_is_store_active(prompt_pack)
+    # W9: resolved, gated (SSRF, external-images ack, pack pairing) and PINNED
+    # to a concrete `(name, revision)` here, before queueing -- the job then
+    # resolves exactly that by id, in whichever process runs it, so an
+    # activation or an endpoint edit made mid-job changes nothing for it.
+    vlm_run = RunVlm(None, None, None)
+    if run_vlm or isinstance(vlm, str):
+        pack_name, pack_revision = labeler_resolution_args(
+            prompt_pack, prompt_pack_revision, prompt_pack_omitted=prompt_pack_was_omitted
+        )
+        vlm_run = await resolve_run_vlm(
+            opensearch,
+            vlm,
+            pack=_resolve_pack(pack_name, pack_revision),
+            acknowledge_external=acknowledge_external,
+        )
+        if run_vlm:
+            require_run_vlm(vlm_run)
     try:
         return auto_label_job.start_job(
             # R6-m1 fix: the worker must invoke the internal implementation
@@ -116,6 +144,9 @@ async def pipeline_auto_label_start(
                 # name, which can go stale between `/start` and the VLM
                 # stage actually running (see `_run_auto_label`).
                 'prompt_pack_omitted': prompt_pack_was_omitted,
+                'vlm_endpoint': vlm_run.name,
+                'vlm_endpoint_revision': vlm_run.revision,
+                'vlm_resolved': True,
             },
         )
     except RuntimeError as exc:

@@ -32,6 +32,9 @@
     "class_labeled_at",
     "class_labeler",
     "vlm_confidence",
+    "vlm_prompt_pack",
+    "vlm_endpoint",
+    "vlm_model",
     "vlm_class_attempted_at",
     "vlm_class_empty_reason",
     "vlm_raw_class",
@@ -1403,6 +1406,42 @@
         ],
         "default": null,
         "title": "Vlm Confidence"
+      },
+      "vlm_endpoint": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Endpoint"
+      },
+      "vlm_model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Model"
+      },
+      "vlm_prompt_pack": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Prompt Pack"
       },
       "vlm_proposed_class_id": {
         "anyOf": [

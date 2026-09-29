@@ -104,6 +104,12 @@ services:
       # -- the worker resolves item paths against the same root the API used
       # at ingest time. See docs/CURATION.md "Mounting your image source".
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      # W9.9: VLM API keys, by reference only (`api_key_ref: secret:<slug>` ->
+      # /run/secrets/op_vlm/<slug>). Written on the host with
+      # `openprocessor vlm key set <slug>`; never stored in OpenSearch. Create
+      # the directory (mode 700) before the first `up`, or Docker creates it
+      # root-owned.
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
       # G-08: worked-example region profiles / bake-off baselines
       # (OP_REGION_PROFILE_PATH=/app/examples/region_profiles/license_plate.json).
       # examples/ ships baked into the image (see Dockerfile) for this
@@ -135,6 +141,12 @@ services:
       # value that has to exactly match this name anyway. Still
       # overridable via .env for a deployment that renames/moves it.
       - OP_GPU_ARBITER_TRAINER_CONTAINER=${OP_GPU_ARBITER_TRAINER_CONTAINER:-${COMPOSE_PROJECT_NAME:-openprocessor}-trainer}
+      # W9: the endpoint name that reaches the in-compose vLLM (the
+      # installer writes `env`); empty = this deployment has no in-compose
+      # VLM to switch. The card size lets the API compute which catalog
+      # models fit.
+      - OP_LOCAL_VLM_ENDPOINT=${OP_LOCAL_VLM_ENDPOINT:-}
+      - OP_LOCAL_VLM_GPU_TOTAL_MIB=${VLM_GPU_TOTAL_MIB:-}
     # G-10: on Linux, host.docker.internal only resolves with this mapping
     # (Docker Desktop adds it automatically; the Linux engine does not).
     # Needed for the "point OP_VLM_URL at a VLM running on the host" example
@@ -238,6 +250,8 @@ services:
       # worker resolves item source paths written at ingest time against
       # this mount. See docs/CURATION.md "Mounting your image source".
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      # W9.9: VLM API keys by reference (see yolo-api's mount).
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
       # G-08: region profile examples (OP_REGION_PROFILE_PATH) ship baked
       # into the image (see Dockerfile); docker-compose.dev.yml overrides
       # with a writable-checkout mount.
@@ -257,6 +271,8 @@ services:
       - OP_VLM_URL=${OP_VLM_URL:-}
       - OP_VLM_MODEL=${OP_VLM_MODEL:-}
       - OP_VLM_API_KEY=${OP_VLM_API_KEY:-}
+      - OP_LOCAL_VLM_ENDPOINT=${OP_LOCAL_VLM_ENDPOINT:-}
+      - OP_LOCAL_VLM_GPU_TOTAL_MIB=${VLM_GPU_TOTAL_MIB:-}
       # S-3: lets the worker publish crop.region_verified events to every
       # subscribed SSE client via POST {api_prefix}/events/publish, not
       # just whichever uvicorn worker happened to handle a given POST.
@@ -347,6 +363,9 @@ services:
       # without this the registry loads empty and the stage raises
       # "class_names or class_catalog must be supplied".
       - ./data:/app/data
+      # W9.9: VLM API keys by reference (see yolo-api's mount): this worker
+      # builds the VLM labeler in-process for the auto-label VLM stage.
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
       # Region profiles (OP_REGION_PROFILE_PATH): without this the worker
       # dies with FileNotFoundError the moment it claims a job that needs
       # a region profile (e.g. license_plate.json). Ships baked into the
@@ -647,21 +666,41 @@ services:
       - ./cache/vllm:/root/.cache/huggingface
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
-    command:
-      - --model=${VLM_MODEL:-google/gemma-4-E4B-it}
-      - --served-model-name=${VLM_SERVED_MODEL_NAME:-gemma-4-e4b}
-      - --dtype=${VLM_DTYPE:-bfloat16}
-      - --max-model-len=${VLM_MAX_MODEL_LEN:-8192}
+      - VLM_MODEL=${VLM_MODEL:-google/gemma-4-E4B-it}
+      - VLM_SERVED_MODEL_NAME=${VLM_SERVED_MODEL_NAME:-gemma-4-e4b}
+      - VLM_DTYPE=${VLM_DTYPE:-bfloat16}
+      - VLM_MAX_MODEL_LEN=${VLM_MAX_MODEL_LEN:-8192}
       # Fraction of this GPU's VRAM vLLM may claim. Lower it to share the
       # GPU with Triton/the segmenter/training; see docs/CURATION.md
       # "VLM VRAM budget" for worked numbers per card size.
-      - --gpu-memory-utilization=${VLM_GPU_MEMORY_UTILIZATION:-0.4}
-      # See the module comment above: keep this equal to
-      # OP_VLM_MAX_IMAGES_PER_CALL.
-      - --limit-mm-per-prompt={"image":${VLM_LIMIT_MM_IMAGES:-8},"audio":0}
-      - --chat-template=/vllm-workspace/examples/tool_chat_template_gemma4.jinja
-      - --reasoning-parser=gemma4
-      - --enable-prefix-caching
+      - VLM_GPU_MEMORY_UTILIZATION=${VLM_GPU_MEMORY_UTILIZATION:-0.4}
+      # Keep this equal to OP_VLM_MAX_IMAGES_PER_CALL.
+      - VLM_LIMIT_MM_IMAGES=${VLM_LIMIT_MM_IMAGES:-8}
+      # `-` not `:-`: a value that is SET but empty means "no parser /
+      # template" (a catalog model that needs neither), unset means Gemma 4's.
+      - VLM_REASONING_PARSER=${VLM_REASONING_PARSER-gemma4}
+      - VLM_CHAT_TEMPLATE=${VLM_CHAT_TEMPLATE-/vllm-workspace/examples/tool_chat_template_gemma4.jinja}
+      - VLM_EXTRA_ARGS=${VLM_EXTRA_ARGS:-}
+    # W9.7: the model-specific flags (chat template, reasoning parser, extra
+    # args) are added only when set, so ONE compose file serves every entry of
+    # examples/vlm/catalog.tsv; the `openprocessor vlm use <id>` CLI writes
+    # the VLM_* values below into .env. The defaults reproduce the Gemma 4
+    # command this stack was tested with, argument for argument
+    # (tests/test_compose_contract.py renders it).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        exec python3 -m vllm.entrypoints.openai.api_server
+        --model="$${VLM_MODEL}"
+        --served-model-name="$${VLM_SERVED_MODEL_NAME}"
+        --dtype="$${VLM_DTYPE}"
+        --max-model-len="$${VLM_MAX_MODEL_LEN}"
+        --gpu-memory-utilization="$${VLM_GPU_MEMORY_UTILIZATION}"
+        --limit-mm-per-prompt="{\"image\":$${VLM_LIMIT_MM_IMAGES},\"audio\":0}"
+        $${VLM_CHAT_TEMPLATE:+--chat-template="$${VLM_CHAT_TEMPLATE}"}
+        $${VLM_REASONING_PARSER:+--reasoning-parser="$${VLM_REASONING_PARSER}"}
+        --enable-prefix-caching
+        $${VLM_EXTRA_ARGS}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/health || exit 1"]
       interval: 30s

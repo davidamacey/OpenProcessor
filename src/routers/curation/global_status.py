@@ -54,7 +54,7 @@ async def global_health(triton_pool: AsyncTritonDep) -> GlobalHealthResponse:
     """Deployment health: Triton, OpenSearch reachability, VLM, versions."""
     triton = await triton_status(triton_pool)
     opensearch = await _opensearch_reachable()
-    vlm = await vlm_status()
+    vlm = await vlm_status(scoped=False)
 
     overall: Literal['ok', 'degraded', 'down']
     if triton['reachable'] and opensearch['reachable']:

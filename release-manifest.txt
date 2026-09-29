@@ -13,6 +13,7 @@ scripts/lib/download.sh
 scripts/lib/export.sh
 scripts/lib/model_setup.sh
 scripts/lib/vlm_catalog.sh
+scripts/lib/vlm_switch.sh
 scripts/lib/image_keys.sh
 scripts/lib/opensearch_heap.sh
 examples/vlm/catalog.tsv

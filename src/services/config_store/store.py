@@ -20,6 +20,7 @@ Two modes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import threading
 import time
@@ -86,8 +87,24 @@ class ConfigSnapshot:
     active_profile_body: StoredConfig | None = None
     loaded_at: float = 0.0
     stale: bool = False
+    # W9 -- global (op_global_configs) snapshot: the endpoint registry
+    # (current docs), each endpoint's last probe record and the desired
+    # local model. Empty on a project's store.
+    vlm_endpoints: dict[str, StoredConfig] = field(default_factory=dict)
+    vlm_probes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    local_vlm_desired: dict[str, Any] | None = None
+    # W9 -- project snapshot: this project's VLM activation, the activated
+    # revision's body pinned from the registry, and the ``name@rev`` refs of
+    # external endpoints this project has acknowledged. Unset/empty on the
+    # global store.
+    active_vlm: AxisRef = None
+    active_vlm_body: StoredConfig | None = None
+    active_vlm_ack_at: str | None = None
+    acked_refs: frozenset[str] = frozenset()
 
     def active_ref(self, axis: ConfigAxis) -> AxisRef:
+        if axis == 'vlm':
+            return self.active_vlm
         return self.active_pack if axis == 'prompt_pack' else self.active_profile
 
 
@@ -154,11 +171,19 @@ class ConfigStore:
     """Per-project, per-process config-store cache. See module docstring."""
 
     def __init__(
-        self, index: str, *, mode: Literal['live', 'pinned'] = 'live', label: str = 'default'
+        self,
+        index: str,
+        *,
+        mode: Literal['live', 'pinned'] = 'live',
+        label: str = 'default',
+        is_global: bool = False,
     ) -> None:
         self.index = index
         self.mode = mode
         self.label = label
+        # The one deployment-wide store (op_global_configs, W9): loads the
+        # endpoint registry instead of a project's packs/profiles/activations.
+        self.is_global = is_global
         self.current: ConfigSnapshot = _EMPTY_SNAPSHOT
         self.pending_snapshot: ConfigSnapshot | None = None
         self._lock = asyncio.Lock()
@@ -170,28 +195,42 @@ class ConfigStore:
         the revision hasn't moved -- one cheap ``GET`` per call in the
         steady state."""
         async with self._lock:
-            try:
-                revision = await get_config_revision(client, self.index)
-            except Exception as exc:
-                logger.warning('config_store_refresh_failed', index=self.index, error=str(exc))
-                self.current = replace(self.current, stale=True)
-                return self.current
+            with self._read_scope():
+                return await self._refresh_locked(client)
 
-            if revision == self.current.config_revision and self.current.loaded_at:
-                return self.current
+    def _read_scope(self) -> contextlib.AbstractContextManager[None]:
+        """The global store's reads are allowed while a project is bound
+        (the project guard otherwise refuses an index that project does not
+        own); a project's own store needs no allowance."""
+        if not self.is_global:
+            return contextlib.nullcontext()
+        from src.services.projects.guard import global_configs_read
 
-            try:
-                snapshot = await self._load_snapshot(client, revision)
-            except Exception as exc:
-                logger.warning('config_store_refresh_failed', index=self.index, error=str(exc))
-                self.current = replace(self.current, stale=True)
-                return self.current
+        return global_configs_read()
 
-            if self.mode == 'live':
-                self.current = snapshot
-            else:
-                self.pending_snapshot = snapshot
-            return snapshot
+    async def _refresh_locked(self, client: Any) -> ConfigSnapshot:
+        try:
+            revision = await get_config_revision(client, self.index)
+        except Exception as exc:
+            logger.warning('config_store_refresh_failed', index=self.index, error=str(exc))
+            self.current = replace(self.current, stale=True)
+            return self.current
+
+        if revision == self.current.config_revision and self.current.loaded_at:
+            return self.current
+
+        try:
+            snapshot = await self._load_snapshot(client, revision)
+        except Exception as exc:
+            logger.warning('config_store_refresh_failed', index=self.index, error=str(exc))
+            self.current = replace(self.current, stale=True)
+            return self.current
+
+        if self.mode == 'live':
+            self.current = snapshot
+        else:
+            self.pending_snapshot = snapshot
+        return snapshot
 
     async def _load_snapshot(self, client: Any, revision: int) -> ConfigSnapshot:
         # B5: `revision` above was read with a realtime GET; `_search` is
@@ -211,6 +250,7 @@ class ConfigStore:
         )
         packs: dict[str, StoredConfig] = {}
         profiles: dict[str, StoredConfig] = {}
+        vlm_endpoints: dict[str, StoredConfig] = {}
         for hit in resp['hits']['hits']:
             src = hit['_source']
             item = StoredConfig(
@@ -227,6 +267,18 @@ class ConfigStore:
                 packs[src['name']] = item
             elif src['kind'] == 'region_profile':
                 profiles[src['name']] = item
+            elif src['kind'] == 'vlm_endpoint':
+                vlm_endpoints[src['name']] = item
+
+        from src.services.config_store import vlm_snapshot
+
+        if self.is_global:
+            vlm_fields = await vlm_snapshot.load_global_fields(client, self.index)
+            vlm_fields['vlm_endpoints'] = vlm_endpoints
+        else:
+            vlm_fields = await vlm_snapshot.load_project_fields(
+                client, await get_activation(client, self.index, 'vlm')
+            )
 
         pack_activation = await get_activation(client, self.index, 'prompt_pack')
         profile_activation = await get_activation(client, self.index, 'detection_profile')
@@ -248,6 +300,7 @@ class ConfigStore:
             active_profile_body=active_profile_body,
             loaded_at=time.monotonic(),
             stale=False,
+            **vlm_fields,
         )
 
     async def ensure_fresh(self, client: Any, max_age_s: float = 1.0) -> ConfigSnapshot:
@@ -274,7 +327,10 @@ class ConfigStore:
         stale). Recognized keys: ``pack``, ``profile`` (a
         :class:`StoredConfig` or ``None`` to delete; pair with ``name``
         when deleting), ``active_pack``, ``active_profile``
-        (:data:`AxisRef`), ``config_revision``.
+        (:data:`AxisRef`), ``config_revision``, and the W9 fields
+        (``vlm_endpoints``, ``vlm_probes``, ``local_vlm_desired``,
+        ``active_vlm``, ``active_vlm_body``, ``active_vlm_ack_at``,
+        ``acked_refs``), each replacing the whole field.
 
         In ``pinned`` mode this updates ``pending_snapshot`` too (the
         worker still only *acts* on it at the next :meth:`pin_active`),
@@ -308,6 +364,13 @@ class ConfigStore:
             active_profile_body=patch.get('active_profile_body', current.active_profile_body),
             loaded_at=time.monotonic(),
             stale=False,
+            vlm_endpoints=patch.get('vlm_endpoints', current.vlm_endpoints),
+            vlm_probes=patch.get('vlm_probes', current.vlm_probes),
+            local_vlm_desired=patch.get('local_vlm_desired', current.local_vlm_desired),
+            active_vlm=patch.get('active_vlm', current.active_vlm),
+            active_vlm_body=patch.get('active_vlm_body', current.active_vlm_body),
+            active_vlm_ack_at=patch.get('active_vlm_ack_at', current.active_vlm_ack_at),
+            acked_refs=patch.get('acked_refs', current.acked_refs),
         )
         self.current = new_current
         if self.mode == 'pinned':
@@ -395,10 +458,18 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
     import asyncio
 
     from src.config.project_context import bind_project
+    from src.services.config_store.global_store import get_global_config_store
     from src.services.projects.registry import ProjectRegistry
 
     registry = ProjectRegistry(lambda: client)
     while True:
+        try:
+            # W9: the deployment-wide VLM registry, refreshed unbound (its
+            # index belongs to no project) so a probe or an endpoint edit
+            # made through another uvicorn worker shows up here within a tick.
+            await get_global_config_store(mode='live').refresh(client)
+        except Exception as exc:
+            logger.warning('config_store_poll_global_failed', error=str(exc))
         try:
             await registry.ensure_fresh()
             for record in registry.active_projects():
@@ -426,6 +497,7 @@ async def _bootstrap_config_store_once() -> tuple[Any, float]:
     ``indices.create``, another worker having just won it) hasn't yet
     resolved into ``indices.exists`` seeing the winner's index -- the
     caller retries until it doesn't."""
+    from src.services.config_store.global_store import ensure_global_configs_index
     from src.services.projects.guard import make_curation_opensearch
 
     client = await make_curation_opensearch()
@@ -541,139 +613,19 @@ def get_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> ConfigStore
 def reset_config_stores() -> None:
     """Test-only: drop every cached store so a test's fake OpenSearch
     starts from a clean snapshot."""
+    from src.services.config_store.vlm_snapshot import reset_vlm_revision_cache
+
     with _STORES_LOCK:
         _STORES.clear()
-
-
-# =============================================================================
-# The global (non-project-scoped) config store -- M3
-# =============================================================================
-#
-# any_domain_plan.md / projects_plan.md §11 W2: "ConfigStores: one per
-# project plus op_global_configs". Everything above this section is
-# per-project (keyed by the bound project's slug, unusable unbound). This
-# is its sibling: ONE store for the whole deployment, for a config axis
-# that is not scoped to any project at all -- the concrete near-term
-# consumer is W9's VLM endpoint registry (a `local_vlm:desired`-style
-# global axis), but the mechanism itself is general, the same way
-# ``op_projects`` (src.services.projects.registry) is the one other index
-# that lives outside every project's own index set.
-#
-# No CRUD routes read/write this yet (that is W9's job); this pass only
-# builds the storage primitive: the index name/bootstrap, and a
-# process-singleton :class:`ConfigStore` that never touches
-# ``current_project()`` -- calling it while a project happens to be bound
-# has no effect on which store it returns, and calling it fully unbound
-# (a script, a global route, the lifespan) works with no binding at all.
-
-
-def global_configs_index() -> str:
-    """The one config-store index that belongs to no project -- mirrors
-    ``src.services.projects.registry.projects_index()`` for ``op_projects``."""
-    return os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
-
-
-# Same config-store row shapes as a project's folded ``configs`` index
-# (``src.clients.curation_opensearch._configs_body``), minus the folded
-# SETTINGS/UMAP_VIZ_STATE properties -- the global store never folds any
-# other role onto it, so it carries only the config-store fields
-# ``src.services.config_store.index``'s primitives read/write (``get``,
-# ``save_config``, ``activate``, ``upsert_runtime_doc``, ...). Kept as its
-# own literal body (not imported from ``curation_opensearch``) so this
-# module stays dependency-light, per its own module docstring.
-GLOBAL_CONFIGS_INDEX_BODY: dict[str, Any] = {
-    'settings': {'index': {'number_of_shards': 1, 'number_of_replicas': 0}},
-    'mappings': {
-        'dynamic': False,
-        'properties': {
-            'doc_type': {'type': 'keyword'},
-            'kind': {'type': 'keyword'},
-            'name': {'type': 'keyword'},
-            'revision': {'type': 'integer'},
-            'body': {'type': 'object', 'enabled': False},
-            'description': {'type': 'keyword', 'ignore_above': 512, 'index': False},
-            'created_at': {'type': 'date'},
-            'updated_at': {'type': 'date'},
-            'updated_by': {'type': 'keyword'},
-            'cloned_from': {'type': 'keyword'},
-            'axis': {'type': 'keyword'},
-            'previous': {'type': 'object', 'enabled': False},
-            'config_revision': {'type': 'long'},
-            'process': {'type': 'keyword'},
-            'applied_at': {'type': 'date'},
-        },
-    },
-}
-
-
-async def ensure_global_configs_index(client: Any) -> None:
-    """Create ``op_global_configs`` with its explicit mapping if it does
-    not exist yet -- mirrors
-    ``src.services.projects.bootstrap.ensure_projects_index`` for
-    ``op_projects``. Idempotent; call at startup before the first
-    global-store read/write. Needs no project bound (this index belongs
-    to none)."""
-    index = global_configs_index()
-    if await client.indices.exists(index=index):
-        return
-    await client.indices.create(index=index, body=GLOBAL_CONFIGS_INDEX_BODY)
-
-
-# Cached separately from `_STORES` (never by the same key/dict) so a
-# global store instance can never collide with, or be mistaken for, any
-# project's own store.
-_GLOBAL_STORE: dict[str, ConfigStore] = {}
-_GLOBAL_STORE_LOCK = threading.Lock()
-_GLOBAL_STORE_KEY = 'op_global_configs'
-
-
-def get_global_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> ConfigStore:
-    """The process's singleton :class:`ConfigStore` for
-    ``op_global_configs``.
-
-    Unlike :func:`get_config_store` (keyed by, and unusable without, the
-    *bound* project), this never consults
-    :func:`~src.config.project_context.current_project` at all -- it
-    requires no project binding, and calling it while a project happens
-    to be bound has no effect on which store it returns.
-
-    That binding-independence is about which *store object* comes back,
-    not its I/O: the object returned here still needs an unbound client
-    to actually read/write (m2, W2-finish review) -- calling
-    :meth:`ConfigStore.refresh` on it while a project is bound gets
-    refused by the project guard (this index is unowned, so a bound
-    request has no business touching it) and silently degrades to a
-    stale, empty snapshot, the same as any other refresh failure. W9
-    (the first real consumer with project-bound call sites) must decide
-    the read-while-bound rule -- an unbound-read helper, or a guard
-    exception allowing read-only access the way ``op_projects`` gets it.
-    """
-    with _GLOBAL_STORE_LOCK:
-        store = _GLOBAL_STORE.get(_GLOBAL_STORE_KEY)
-        if store is None:
-            store = ConfigStore(index=global_configs_index(), mode=mode, label='__global__')
-            _GLOBAL_STORE[_GLOBAL_STORE_KEY] = store
-        return store
-
-
-def reset_global_config_store() -> None:
-    """Test-only: drop the cached global store so a test's fake
-    OpenSearch starts from a clean snapshot."""
-    with _GLOBAL_STORE_LOCK:
-        _GLOBAL_STORE.clear()
+    reset_vlm_revision_cache()
 
 
 __all__ = [
-    'GLOBAL_CONFIGS_INDEX_BODY',
     'AxisRef',
     'ConfigSnapshot',
     'ConfigStore',
     'StoredConfig',
     'activate_axis',
-    'ensure_global_configs_index',
     'get_config_store',
-    'get_global_config_store',
-    'global_configs_index',
     'reset_config_stores',
-    'reset_global_config_store',
 ]
