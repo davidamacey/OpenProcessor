@@ -44,11 +44,7 @@ logger = get_logger('curation_worker')
 
 
 from scripts.curation.worker.bulk_writer import _bulk_update
-from scripts.curation.worker.cascade import (
-    SegmenterAllHostsDown,
-    _resegment_from_text_hint,
-    _source_to_crop,
-)
+from scripts.curation.worker.cascade import SegmenterAllHostsDown, _resegment_from_text_hint
 from scripts.curation.worker.combined_resolve import resolve_combined_reply, should_classify
 from scripts.curation.worker.fairness import (
     FairnessScheduler,
@@ -84,6 +80,7 @@ from scripts.curation.worker.verify import (
     TaskBoxInput,
     _bbox_shape_is_plausible,
     item_verification_fields,
+    task_box_from_stored,
 )
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
@@ -183,27 +180,6 @@ def _select_candidates(
         )
         for c in sel.selected
     ]
-
-
-def _task_box_from_stored(
-    box: RegionBox, *, item_bbox_norm: tuple[float, float, float, float]
-) -> TaskBoxInput:
-    """W8 B1 fix: wrap one stored ``proposed`` box as a VLM re-verify
-    candidate, preserving its ``box_id`` (never minting a fresh one --
-    this is the same box, going back through verification, not a new
-    detection) plus its stored score/detector/source. The real source of
-    truth for Path 1 (``pending_verification``), never the legacy
-    single-scalar fields.
-    """
-    return TaskBoxInput(
-        bbox_in_crop=_source_to_crop(box.bbox_norm, item_bbox_norm),
-        bbox_in_source=box.bbox_norm,
-        score=box.score or 0.0,
-        detector=box.detector or 'human',
-        detector_version=box.detector_version or '1',
-        source=box.source or 'human',
-        box_id=box.box_id,
-    )
 
 
 def _box_list_doc(
@@ -816,7 +792,7 @@ async def run(args: argparse.Namespace) -> int:
                 proposed_stored = [b for b in t.stored_boxes if b.state == 'proposed']
                 if t.region_status in _PENDING_VERIFICATION_ALIASES and proposed_stored:
                     t.candidates = [
-                        _task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
+                        task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
                         for b in proposed_stored
                     ]
                     # B1: this pass only re-verifies the stored

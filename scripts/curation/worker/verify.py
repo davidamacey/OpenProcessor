@@ -10,6 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from scripts.curation.worker.cascade import _source_to_crop
 from scripts.curation.worker.state import region_profile
 from src.config import get_region_fields
 from src.config.region_rejection import (
@@ -259,6 +260,27 @@ class TaskBoxInput:
     box_id: str | None = None
     hint_text: str | None = None
     hint_text_confidence: float | None = None
+
+
+def task_box_from_stored(
+    box: RegionBox, *, item_bbox_norm: tuple[float, float, float, float]
+) -> TaskBoxInput:
+    """W8 B1 fix: wrap one stored ``proposed`` box as a VLM re-verify
+    candidate, preserving its ``box_id`` (never minting a fresh one --
+    this is the same box, going back through verification, not a new
+    detection) plus its stored score/detector/source. The real source of
+    truth for Path 1 (``pending_verification``), never the legacy
+    single-scalar fields.
+    """
+    return TaskBoxInput(
+        bbox_in_crop=_source_to_crop(box.bbox_norm, item_bbox_norm),
+        bbox_in_source=box.bbox_norm,
+        score=box.score or 0.0,
+        detector=box.detector or 'human',
+        detector_version=box.detector_version or '1',
+        source=box.source or 'human',
+        box_id=box.box_id,
+    )
 
 
 def verdicts_to_boxes(
