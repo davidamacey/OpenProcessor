@@ -73,7 +73,7 @@ async def _taken_over_while_parked(
     world: World, monkeypatch: pytest.MonkeyPatch, *, park_in: str
 ) -> tuple[Any, int, tuple[dict[str, Any], dict[Any, Any]]]:
     """Worker A parks (in its first chunk's ``copy_page``, between its
-    first and second page, or after its last chunk), worker B takes the job over and finishes it, then
+    first and second page, after its last chunk, or inside the holdout step), worker B takes the job over and finishes it, then
     A is released. Returns the store, how many pages A copied, and the job
     state and chunk marks as B left them."""
     build(world)
@@ -118,6 +118,20 @@ async def _taken_over_while_parked(
 
         return gen()
 
+    def parked_in_holdout(real: Any) -> Any:
+        async def wrapped(*args: Any, **kwargs: Any) -> Any:
+            out = await real(*args, **kwargs)
+            if park_in == 'in_finish' and asyncio.current_task() is worker_a:
+                entered.set()
+                await release.wait()
+            return out
+
+        return wrapped
+
+    monkeypatch.setattr(
+        execute.holdout, 'record_union', parked_in_holdout(execute.holdout.record_union)
+    )
+    monkeypatch.setattr(execute.holdout, 'recompute', parked_in_holdout(execute.holdout.recompute))
     monkeypatch.setattr(execute, 'copy_page', copy_page)
     monkeypatch.setattr(execute, 'iter_source_pages', pages)
     monkeypatch.setattr(execute, '_copy_all', copy_all)
@@ -161,6 +175,17 @@ async def test_a_fenced_worker_after_its_last_chunk_does_not_finish_the_job(
 ) -> None:
     store, _a_pages, (state, marks) = await _taken_over_while_parked(
         world, monkeypatch, park_in='before_finish'
+    )
+    assert store.job.read() == state
+    assert store.chunks_done() == marks
+
+
+@pytest.mark.asyncio
+async def test_a_fenced_worker_inside_the_holdout_step_does_not_write_completed(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, _a_pages, (state, marks) = await _taken_over_while_parked(
+        world, monkeypatch, park_in='in_finish'
     )
     assert store.job.read() == state
     assert store.chunks_done() == marks

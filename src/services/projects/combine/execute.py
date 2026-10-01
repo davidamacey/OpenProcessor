@@ -219,8 +219,7 @@ async def run_combine(
             originals=plan.originals,
         )
         if not await _copy_all(ctx, store, plan, done, claim):
-            ensure_owner(job, claim)
-            await _finish(ctx, store)
+            await _finish(ctx, store, claim)
     except FencedError:
         logger.warning('combine_worker_fenced', job_id=job_id, claim=claim)
         return False
@@ -277,8 +276,9 @@ async def _copy_all(
     return False
 
 
-async def _finish(ctx: CopyContext, store: ImportStore) -> None:
+async def _finish(ctx: CopyContext, store: ImportStore, claim: str) -> None:
     job = store.job
+    ensure_owner(job, claim)
     job.update(phase='holdout')
     with bind_project(ctx.target):
         await ctx.client.indices.refresh(index=ctx.items_index)
@@ -297,6 +297,7 @@ async def _finish(ctx: CopyContext, store: ImportStore) -> None:
             'reason': 'Source clusters were not copied; recluster the combined items.',
         }
     ]
+    ensure_owner(job, claim)  # the holdout step is long; a takeover may have landed in it
     job.update(
         status='completed',
         phase='done',
