@@ -285,6 +285,20 @@ async def test_an_item_with_150_matching_boxes_returns_150_rows_once_the_window_
     assert len(body['items']) == 150
     assert body['total'] == 1
     assert body['total_rows'] == 150
+    assert body['rows_truncated'] is False
+
+
+def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation() -> None:
+    # No ensure step ran: the window is OpenSearch's default 100.
+    client = _client(QueryFakeOpenSearch({ITEMS: _many_boxes_doc(150)}))
+
+    resp = client.get(f'{PREFIX}/regions', params={'page_size': 10})
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert len(body['items']) == 100
+    assert body['total_rows'] == 150
+    assert body['rows_truncated'] is True
 
 
 def test_inner_hits_size_clamps_to_the_window_the_ensure_step_read_back(

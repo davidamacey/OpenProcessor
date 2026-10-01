@@ -1601,7 +1601,10 @@ response next to the `threshold` actually used).
 (the box the row is about; `null` for an item-level row), `total` counts
 **items** (page math: `hasMore = page * page_size < total`) and
 `total_rows` counts rows; `page` / `page_size` page items and a page returns
-every row of its items.
+every row of its items. `rows_truncated` is `true` when an item on the page
+matched more boxes than the index reports per item
+(`index.max_inner_result_window`), so some of its rows are missing from
+`items` (`total_rows` still counts them).
 
 `GET /regions` filter params: `page`, `page_size`, `class_id`,
 `cluster_id` (the item cluster), `region_cluster_id`,

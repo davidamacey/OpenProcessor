@@ -11097,6 +11097,12 @@
             "title": "Page Size",
             "type": "integer"
           },
+          "rows_truncated": {
+            "default": false,
+            "description": "True when an item on this page matched more boxes than the index reports per item (index.max_inner_result_window), so some of its rows are missing; total_rows still counts them.",
+            "title": "Rows Truncated",
+            "type": "boolean"
+          },
           "total": {
             "description": "Items matching (page math: hasMore = page * page_size < total). suspected_false_positives pages rows directly, so there total == total_rows.",
             "title": "Total",

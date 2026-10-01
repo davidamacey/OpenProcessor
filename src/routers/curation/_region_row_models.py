@@ -47,5 +47,11 @@ class RegionRowPage(BaseModel):
         'suspected_false_positives pages rows directly, so there total == total_rows.'
     )
     total_rows: int = Field(description='Rows matching (boxes when the request selects boxes).')
+    rows_truncated: bool = Field(
+        default=False,
+        description='True when an item on this page matched more boxes than the '
+        'index reports per item (index.max_inner_result_window), so some of its '
+        'rows are missing; total_rows still counts them.',
+    )
     page: int
     page_size: int = Field(description='Items per page (suspected_false_positives: rows).')

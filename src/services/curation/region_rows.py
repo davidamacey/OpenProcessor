@@ -108,6 +108,13 @@ def matched_box_ids(hit: dict[str, Any], F: RegionFields | None = None) -> list[
     return ids
 
 
+def matched_box_count(hit: dict[str, Any]) -> int:
+    """How many boxes of ``hit`` matched the selector, per OpenSearch's own
+    count (which, unlike the returned hits, is not cut at ``inner_hits.size``)."""
+    block = ((hit.get('inner_hits') or {}).get(INNER_HITS_NAME) or {}).get('hits') or {}
+    return int((block.get('total') or {}).get('value', 0))
+
+
 def as_row(item: dict[str, Any], box_id: str | None, **row_keys: Any) -> dict[str, Any]:
     """``item`` (a wire item) as a row about ``box_id`` (``None``: item-level)."""
     return {**item, 'region_box_id': box_id, **row_keys}
@@ -192,6 +199,11 @@ async def search_region_rows(
     hits = hits_block.get('hits') or []
     total = int((hits_block.get('total') or {}).get('value', 0))
     rows = region_rows(hits, boxes_selected=box_clause is not None, F=F, row_keys=row_keys)
+    # An item with more matching boxes than the inner-hits window reports
+    # only the first ones; say so instead of silently dropping rows.
+    truncated = box_clause is not None and any(
+        matched_box_count(h) > len(matched_box_ids(h, F)) for h in hits
+    )
     if box_clause is None:
         total_rows = total
     else:
@@ -201,6 +213,7 @@ async def search_region_rows(
         'items': rows,
         'total': total,
         'total_rows': total_rows,
+        'rows_truncated': truncated,
         'page': page,
         'page_size': page_size,
     }
@@ -211,6 +224,7 @@ __all__ = [
     'as_row',
     'box_selector',
     'inner_hits_size',
+    'matched_box_count',
     'matched_box_ids',
     'region_rows',
     'rows_aggs',
