@@ -125,13 +125,13 @@ async def test_region_not_visible_on_a_reverify_pass_rejects_the_stored_boxes_by
 def _classify(
     *,
     class_validated: bool = False,
-    class_source: str = 'vlm',
+    stored_class_source: str = 'vlm',
     test_holdout: bool = False,
     registry_loaded: bool = True,
 ) -> bool:
     return should_classify(
         class_validated=class_validated,
-        class_source=class_source,
+        stored_class_source=stored_class_source,
         test_holdout=test_holdout,
         class_confidence=0.0,
         registry_loaded=registry_loaded,
@@ -142,5 +142,5 @@ def test_should_classify_follows_the_trust_rules() -> None:
     assert _classify() is True
     assert _classify(registry_loaded=False) is False
     assert _classify(class_validated=True) is False
-    assert _classify(class_source='human') is False
+    assert _classify(stored_class_source='human') is False
     assert _classify(test_holdout=True) is False

@@ -13,16 +13,17 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from src.clients.occ import CLASS_WRITE_FIELDS, occ_skip_on_conflict_bulk, strip_class_write_fields
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
 from src.config.project_context import project_api_base
 from src.core.logging import get_logger
-from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
-from src.services.curation.class_write_guard import class_write_allowed
-from src.services.curation.history import merge_region_chain, record_class_snapshot
 from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_box_embeddings import entry_for, write_box_embeddings
-from src.services.curation.region_box_pass import box_pass_update, worker_stamps
+from src.services.curation.region_box_pass import (
+    box_pass_update,
+    finalize_region_write,
+    worker_stamps,
+)
 from src.services.curation.wire import region_event_payload
 
 
@@ -204,73 +205,32 @@ async def _bulk_update_one_project(
         # Item text read this pass rides on the region write; it is not
         # class data, so the human-label guard below leaves it alone.
         update.update(task.item_text_update)
-        # Class fields land only on the exact class state this task was
-        # read in, never on a human-owned/validated class: a human write
-        # (an undo, a relabel) during this pass wins. runner.py's
-        # _should_classify gates human-owned crops at read time; this is
-        # the write-time half. Scoped to class fields only
-        # (strip_class_write_fields) so the region write in the SAME
-        # update_doc (the combined class+region write) still lands.
-        if CLASS_WRITE_FIELDS & update.keys() and not class_write_allowed(
-            task.class_token, current
-        ):
-            logger.info('class_write_stale_skip', doc_id=doc_id, writer_id='region_worker')
-            update = strip_class_write_fields(update)
-        # A vlm_unmatched write must not keep the class the VLM's answer
-        # just contradicted (IT-2). Runs after the stale-write strip above
-        # so a stripped-of-class-fields update (stale/locked) never gets a
-        # class_id reset re-added; class_write_locked() inside the helper
-        # is a second, independent guard against a locked item.
-        if update.get('class_source') == VLM_UNMATCHED_CLASS_SOURCE:
-            update.update(unmatched_class_clear(current))
-        # Phase 3 (b): the worker's combined-VLM path changes the class
-        # without appending class_id_history unless we do it here — the
-        # reset happens in the update dict itself (verify.py's
-        # ``_combined_class_update``), the history snapshot happens
-        # here where the pre-write ``current`` doc is available. A full,
-        # restorable snapshot (also for a proposal with no class_id yet
-        # and a class_source-only ``vlm_unmatched`` write).
-        if 'class_source' in update:
-            update['class_id_history'] = record_class_snapshot(
-                current, writer='region_worker', restorable=True
-            )
-        # Merge this pass's entries onto whatever chain is stored (a human
-        # or an earlier pass may have appended) — ordered, de-duplicated,
-        # normalized to ``<actor>:<event>``, capped.
-        new_entries = list(task.detection_trace) or list(update.get(F.detector_chain) or [])
-        if new_entries:
-            update[F.detector_chain] = merge_region_chain(
-                current.get(F.detector_chain), new_entries
-            )
-        # Config-store provenance (W2 sec 4.5): every worker region write
-        # stamps the profile that produced it. Read once per bulk call
-        # (all `eligible` tasks share one bound project), not per task --
-        # by the time this runs, the producer's quiesce-and-swap has
-        # already drained every in-flight item onto the *old* runtime's
-        # queues, so the store's current active refs always match
-        # whatever pass actually processed this batch. Only stamp when
-        # something is actually being written -- an update that stripped
-        # down to empty (a documented noop, e.g. a stale/locked
-        # class-only write) must stay empty, never turn into a real
-        # write just because of the stamp.
-        if update:
-            # Per-TASK stamps: a batch's pack may be configured while this
-            # task's write never involved a VLM (none configured, or the
-            # high-confidence segmenter auto-skip), and a swap between the
-            # call and this flush must not relabel the answer.
-            update.update(
-                worker_stamps(
-                    profile_name=profile_name,
-                    profile_revision=profile_revision,
-                    pack_stamp=pack_stamp,
-                    vlm_called=task.vlm_called,
-                    vlm_endpoint=(
-                        task.vlm_identity.endpoint_ref if task.vlm_identity is not None else None
-                    ),
-                    vlm_model=task.vlm_identity.model if task.vlm_identity is not None else None,
-                )
-            )
-        return update
+        # Write-time class guard, unmatched-class clearing, class-history
+        # snapshot, detector-chain merge and provenance stamps are
+        # `finalize_region_write`, shared with the test-on-crop preview.
+        # Stamps are per TASK: a batch's pack may be configured while this
+        # task's write never involved a VLM (none configured, or the
+        # high-confidence segmenter auto-skip), and a swap between the call
+        # and this flush must not relabel the answer. The profile/pack refs
+        # are read once per bulk call (all `eligible` tasks share one bound
+        # project).
+        return finalize_region_write(
+            update,
+            current,
+            doc_id=doc_id,
+            class_token=task.class_token,
+            trace=task.detection_trace,
+            stamps=worker_stamps(
+                profile_name=profile_name,
+                profile_revision=profile_revision,
+                pack_stamp=pack_stamp,
+                vlm_called=task.vlm_called,
+                vlm_endpoint=(
+                    task.vlm_identity.endpoint_ref if task.vlm_identity is not None else None
+                ),
+                vlm_model=task.vlm_identity.model if task.vlm_identity is not None else None,
+            ),
+        )
 
     result = await occ_skip_on_conflict_bulk(
         opensearch,

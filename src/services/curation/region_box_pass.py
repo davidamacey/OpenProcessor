@@ -14,7 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from src.clients.occ import CLASS_WRITE_FIELDS, strip_class_write_fields
 from src.config.region_fields import RegionFields, get_region_fields
+from src.core.logging import get_logger
+from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
+from src.services.curation.class_write_guard import class_write_allowed
+from src.services.curation.history import merge_region_chain, record_class_snapshot
 from src.services.curation.region_boxes import (
     RegionBox,
     boxes_write_fields,
@@ -27,9 +32,12 @@ from src.services.curation.region_boxes import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from src.config.region_state import RegionStatus
+
+
+logger = get_logger('region_box_pass')
 
 
 @dataclass(frozen=True)
@@ -122,4 +130,45 @@ def worker_stamps(
     return stamps
 
 
-__all__ = ['BoxPassResult', 'box_pass_update', 'worker_stamps']
+def finalize_region_write(
+    update: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    doc_id: str,
+    class_token: Any,
+    trace: Sequence[str],
+    stamps: Mapping[str, Any],
+    F: RegionFields | None = None,
+) -> dict[str, Any]:
+    """The write-time guards and bookkeeping the worker puts on a region
+    update, in order, against the live doc ``current``:
+
+    - class fields land only on the class state the task was read in, and
+      never on a human-owned or validated class (a human write during the
+      pass wins); region fields in the same update still land;
+    - an unmatched VLM answer does not keep the class it contradicted;
+    - a class change snapshots the previous class for undo;
+    - this pass's detector-chain entries merge onto the stored chain;
+    - the provenance ``stamps`` (only when something is being written: an
+      update stripped to nothing stays nothing).
+    """
+    F = F or get_region_fields()
+    out = dict(update)
+    if CLASS_WRITE_FIELDS & out.keys() and not class_write_allowed(class_token, current):
+        logger.info('class_write_stale_skip', doc_id=doc_id, writer_id='region_worker')
+        out = strip_class_write_fields(out)
+    if out.get('class_source') == VLM_UNMATCHED_CLASS_SOURCE:
+        out.update(unmatched_class_clear(current))
+    if 'class_source' in out:
+        out['class_id_history'] = record_class_snapshot(
+            current, writer='region_worker', restorable=True
+        )
+    new_entries = list(trace) or list(out.get(F.detector_chain) or [])
+    if new_entries:
+        out[F.detector_chain] = merge_region_chain(current.get(F.detector_chain), new_entries)
+    if out:
+        out.update(stamps)
+    return out
+
+
+__all__ = ['BoxPassResult', 'box_pass_update', 'finalize_region_write', 'worker_stamps']

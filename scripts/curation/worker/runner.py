@@ -135,7 +135,7 @@ def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
     see ``tests/curation/test_write_guards.py``."""
     return should_classify(
         class_validated=t.class_validated,
-        class_source=t.class_source,
+        stored_class_source=t.class_source,
         test_holdout=t.test_holdout,
         class_confidence=t.class_confidence,
         registry_loaded=registry_loaded,

@@ -56,7 +56,7 @@ CLASSIFIER_HIGH_CONF_THRESHOLD = 0.80
 def should_classify(
     *,
     class_validated: bool,
-    class_source: str,
+    stored_class_source: str,
     test_holdout: bool,
     class_confidence: float,
     registry_loaded: bool,
@@ -71,12 +71,12 @@ def should_classify(
     """
     if not registry_loaded:
         return False
-    if class_validated or class_source.startswith('human'):
+    if class_validated or stored_class_source.startswith('human'):
         return False
     if test_holdout:
         return False
     return not (
-        class_source in (classifier_class_sources() | {CLUSTER_MAJORITY_CLASS_SOURCE})
+        stored_class_source in (classifier_class_sources() | {CLUSTER_MAJORITY_CLASS_SOURCE})
         and class_confidence >= CLASSIFIER_HIGH_CONF_THRESHOLD
     )
 

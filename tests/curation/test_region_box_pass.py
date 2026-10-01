@@ -174,3 +174,58 @@ def test_stamps_name_the_profile_and_only_claim_a_vlm_when_one_answered() -> Non
     }
     assert _stamps(vlm_called=False) == {F.profile: 'wheels', F.profile_revision: 3}
     assert F.profile not in _stamps(vlm_called=True, profile_name=None)
+
+
+def _finalize(update: dict[str, Any], current: dict[str, Any], token: Any, **over: Any):
+    from src.services.curation.region_box_pass import finalize_region_write
+
+    kwargs: dict[str, Any] = {
+        'doc_id': 'c1',
+        'class_token': token,
+        'trace': [],
+        'stamps': {'region_profile': 'p'},
+    }
+    kwargs.update(over)
+    return finalize_region_write(update, current, **kwargs)
+
+
+def test_a_class_write_on_a_human_owned_class_is_stripped_but_the_region_write_lands() -> None:
+    from src.services.curation.class_write_guard import class_state_token
+
+    current = {'class_id': 1, 'class_name': 'a', 'class_source': 'human', 'class_validated': True}
+    update = {'class_id': 2, 'class_name': 'b', 'class_source': 'vlm', F.status: 'detected'}
+
+    out = _finalize(update, current, class_state_token(current))
+
+    assert out[F.status] == 'detected'
+    assert 'class_id' not in out
+    assert 'class_id_history' not in out
+    assert out['region_profile'] == 'p'
+
+
+def test_an_update_stripped_to_nothing_stays_nothing_and_gets_no_stamps() -> None:
+    from src.services.curation.class_write_guard import class_state_token
+
+    current = {'class_id': 1, 'class_source': 'human', 'class_validated': True}
+
+    assert (
+        _finalize({'class_id': 2, 'class_source': 'vlm'}, current, class_state_token(current)) == {}
+    )
+
+
+def test_a_class_change_snapshots_the_previous_class_and_the_chain_merges() -> None:
+    from src.services.curation.class_write_guard import class_state_token
+
+    current = {
+        'class_id': 1,
+        'class_name': 'a',
+        'class_source': 'item_model',
+        F.detector_chain: ['x:hit'],
+    }
+    update = {'class_id': 2, 'class_name': 'b', 'class_source': 'vlm'}
+
+    out = _finalize(update, current, class_state_token(current), trace=['sam3:hit'])
+
+    assert out['class_id'] == 2
+    assert out['class_id_history'][-1]['class_id'] == 1
+    assert out[F.detector_chain] == ['x:hit', 'sam3:hit']
