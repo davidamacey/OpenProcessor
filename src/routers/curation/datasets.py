@@ -47,7 +47,6 @@ from src.services.curation.dataset_import.prepare import (
 )
 from src.services.curation.dataset_import.scan import FormatUndetectedError
 from src.services.curation.dataset_import.store import (
-    ACTIVE_STATUSES,
     COMPLETED_STATUSES,
     RESUMABLE_STATUSES,
     list_stores,
@@ -66,10 +65,6 @@ from src.services.curation.ingest import CurationIngestService
 if TYPE_CHECKING:
     from src.clients.curation_opensearch import ClassRegistry
     from src.services.curation.dataset_import.store import ImportStore
-
-_UNDOABLE = frozenset(
-    {'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted', 'undone'}
-)
 
 
 def _slug() -> str:
@@ -472,15 +467,23 @@ async def undo_dataset_import(
     registry: RegistryDep,
 ) -> DatasetUndoReportWire | DatasetImportJob:
     store = _open(import_id)
-    state = store.job.read()
-    if state.get('status') not in _UNDOABLE or store.job.is_live(ACTIVE_STATUSES):
+    try:
+        if body.dry_run:
+            runner.check_undoable(store)
+        else:
+            runner.claim_undo(store)
+    except runner.ImportNotUndoableError:
         raise api_error(
             409,
             'import_not_undoable',
             'an import that is running cannot be undone',
             import_id=import_id,
             project=_slug(),
-        )
+        ) from None
+    except runner.ImportBusyError as exc:
+        raise api_error(
+            409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
+        ) from None
     cfg = get_curation_config()
     from src.config.region_fields import get_region_fields
 

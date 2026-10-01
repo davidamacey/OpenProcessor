@@ -214,6 +214,21 @@ def test_undo_dry_run_then_apply(
     assert second.status_code == 202, second.text
 
 
+def test_undo_is_refused_while_another_import_is_live(client: TestClient, tmp_path: Path) -> None:
+    from src.services.curation.file_job import FileJob
+
+    root = _dataset(tmp_path)
+    import_id = client.post(f'{BASE}/imports', json=_body(root)).json()['import_id']
+    _wait(client, import_id, until={'completed'})
+    other = FileJob(tmp_path / 'imports' / 'projects' / 'default' / 'imp_20990101T000000_deadbeef')
+    other.write({'status': 'running'})
+    other.touch_heartbeat()
+    refused = client.post(f'{BASE}/imports/{import_id}/undo', json={'dry_run': False})
+    assert refused.status_code == 409, refused.text
+    assert refused.json()['detail']['error'] == 'import_busy'
+    assert client.get(f'{BASE}/imports/{import_id}').json()['status'] == 'completed'
+
+
 def _zip_bytes(root: Path) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w') as zf:

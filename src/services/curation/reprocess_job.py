@@ -102,15 +102,7 @@ def read_job(job_id: str) -> ReprocessJobInfo | None:
     state = job.read()
     if not state:
         return None
-    # A heartbeat that went stale means the owning process died: report it.
-    if state.get('status') in ACTIVE:
-        age = job.heartbeat_age()
-        if age is not None and age > 30.0:
-            state = job.update(
-                status='interrupted',
-                error='reprocess job heartbeat stale',
-                finished_at=_now(),
-            )
+    state = job.repair_if_stale(ACTIVE, error_prefix='reprocess job')
     for key in ('started_at', 'updated_at', 'finished_at'):
         # Startup reconciliation stamps ``finished_at`` as an epoch number.
         if isinstance(state.get(key), int | float):

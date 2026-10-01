@@ -37,6 +37,9 @@ IMPORT_ID_RE = re.compile(r'^imp_\d{8}T\d{6}_[0-9a-f]{8}$')
 ACTIVE_STATUSES = frozenset({'queued', 'running', 'paused_backpressure', 'undoing'})
 COMPLETED_STATUSES = frozenset({'completed', 'completed_with_errors'})
 RESUMABLE_STATUSES = frozenset({'interrupted', 'failed', 'cancelled'})
+UNDOABLE_STATUSES = frozenset(
+    {'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted', 'undone'}
+)
 
 
 def imports_root() -> Path:
@@ -95,6 +98,11 @@ class ImportStore:
     @property
     def import_id(self) -> str:
         return self.directory.name
+
+    def repaired_state(self) -> dict[str, Any]:
+        """The job state, with a run left active by a dead worker rewritten
+        to ``interrupted`` first (so it can be resumed or undone)."""
+        return self.job.repair_if_stale(ACTIVE_STATUSES, error_prefix='dataset import')
 
     # ------------------------------------------------------------- documents
 
@@ -199,7 +207,11 @@ def open_store(import_id: str) -> ImportStore | None:
     if not valid_import_id(import_id):
         return None
     directory = imports_root() / import_id
-    return ImportStore(directory) if directory.is_dir() else None
+    if not directory.is_dir():
+        return None
+    store = ImportStore(directory)
+    store.repaired_state()
+    return store
 
 
 def list_stores() -> list[ImportStore]:
@@ -209,6 +221,8 @@ def list_stores() -> list[ImportStore]:
     if not root.is_dir():
         return []
     stores = [ImportStore(p) for p in root.iterdir() if p.is_dir() and valid_import_id(p.name)]
+    for store in stores:
+        store.repaired_state()
     return sorted(stores, key=lambda s: s.import_id, reverse=True)
 
 
@@ -247,6 +261,7 @@ __all__ = [
     'COMPLETED_STATUSES',
     'IMPORT_ID_RE',
     'RESUMABLE_STATUSES',
+    'UNDOABLE_STATUSES',
     'ImportStore',
     'active_import',
     'imports_root',

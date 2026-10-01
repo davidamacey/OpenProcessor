@@ -170,7 +170,7 @@ def _report_wire(raw: dict[str, Any]) -> DatasetImportReportWire:
 
 
 def job_wire(store: ImportStore, *, project: str, reused: bool = False) -> DatasetImportJob:
-    state = store.job.read()
+    state = store.repaired_state()
     mapping_raw = store.read_mapping()
     resolved = mapping_from_dict(mapping_raw) if mapping_raw else None
     targets = []

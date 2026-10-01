@@ -18,6 +18,7 @@ import contextlib
 import json
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.services.curation.job_reconcile import reconcile_stale_running
@@ -87,6 +88,28 @@ class FileJob:
             return False
         age = self.heartbeat_age()
         return age is None or age <= HEARTBEAT_STALE_S
+
+    def repair_if_stale(
+        self, active_statuses: frozenset[str], *, error_prefix: str
+    ) -> dict[str, Any]:
+        """The current state, after rewriting one left active by a dead
+        process (an active status whose heartbeat went stale) to
+        ``interrupted``. The lazy twin of :meth:`reconcile`: it runs on
+        whatever reads the job, so a worker killed and restarted inside the
+        liveness window (which the startup reconcile leaves alone) is still
+        resumable once its heartbeat has aged out. A job that has not
+        ticked once yet is not stale."""
+        state = self.read()
+        if state.get('status') not in active_statuses:
+            return state
+        age = self.heartbeat_age()
+        if age is None or age <= HEARTBEAT_STALE_S:
+            return state
+        return self.update(
+            status='interrupted',
+            error=state.get('error') or f'{error_prefix} heartbeat stale',
+            finished_at=datetime.now(UTC).isoformat(),
+        )
 
     def request_cancel(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)

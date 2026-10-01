@@ -35,6 +35,7 @@ from src.services.curation.dataset_import.store import (
     ACTIVE_STATUSES,
     COMPLETED_STATUSES,
     RESUMABLE_STATUSES,
+    UNDOABLE_STATUSES,
     ImportStore,
     active_import,
     imports_root,
@@ -73,6 +74,10 @@ class ImportResumableError(Exception):
 
 
 class ImportNotResumableError(Exception):
+    pass
+
+
+class ImportNotUndoableError(Exception):
     pass
 
 
@@ -336,14 +341,40 @@ async def finalize(ctx: ImportContext, store: ImportStore, report: ImportReport)
     )
 
 
+def check_undoable(store: ImportStore) -> None:
+    """An import that finished (or was cut off) can be undone; one a live
+    worker is still running cannot."""
+    if store.repaired_state().get('status') not in UNDOABLE_STATUSES or store.job.is_live(
+        ACTIVE_STATUSES
+    ):
+        raise ImportNotUndoableError(store.import_id)
+
+
+def claim_undo(store: ImportStore) -> None:
+    """Atomically move ``store`` to ``undoing``. Like a start or a resume it
+    refuses while any other import of the project is live: an undo and an
+    import writing the same items would race each other's decisions."""
+    root = imports_root()
+    root.mkdir(parents=True, exist_ok=True)
+    with exclusive_start_lock(root / 'start.lock') as acquired:
+        if not acquired:
+            raise ImportBusyError(None)
+        check_undoable(store)
+        live = active_import()
+        if live is not None:
+            raise ImportBusyError(live.import_id)
+        job = store.job
+        job.clear_signals()
+        job.update(status='undoing', mode='undo', error=None, finished_at=None, poll_after_s=2)
+        job.touch_heartbeat()
+
+
 def spawn_undo(
     ctx: UndoContext, store: ImportStore, body: Any, created_classes: dict[str, int]
 ) -> None:
-    """Run an undo as a background job: ``undoing`` -> ``undone``."""
+    """Run a claimed undo (:func:`claim_undo`) as a background job:
+    ``undoing`` -> ``undone``."""
     job = store.job
-    job.clear_signals()
-    job.update(status='undoing', mode='undo', error=None, finished_at=None, poll_after_s=2)
-    job.touch_heartbeat()
 
     async def run() -> None:
         ticker = asyncio.create_task(heartbeat_ticker(job))
@@ -417,7 +448,7 @@ def rescan_for_resume(
 
 
 def check_resumable(store: ImportStore) -> None:
-    state = store.job.read()
+    state = store.repaired_state()
     if state.get('mode') == 'undo' or state.get('status') not in RESUMABLE_STATUSES:
         raise ImportNotResumableError(store.import_id)
     live = active_import()
@@ -475,11 +506,14 @@ __all__ = [
     'DatasetChangedError',
     'ImportBusyError',
     'ImportNotResumableError',
+    'ImportNotUndoableError',
     'ImportResumableError',
     'cancel_import',
     'check_resumable',
+    'check_undoable',
     'chunked',
     'claim_import',
+    'claim_undo',
     'freeze_default',
     'load_pinned',
     'ordered_entries',
