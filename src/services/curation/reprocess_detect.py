@@ -105,7 +105,9 @@ async def _apply_plan(
     plan: MergePlan,
     by_proposal: dict[Proposal, DetectedItem],
     existing_bbox: dict[str, tuple[float, float, float, float]],
-) -> None:
+) -> list[str]:
+    """Apply ``plan``. Returns the stale ids left in place because a human
+    locked them while the detector ran."""
     cfg = get_curation_config()
     note = f'{service.profile.name}:match'
     for crop_id, _prop in plan.merged_into_locked:
@@ -131,15 +133,22 @@ async def _apply_plan(
         if outcome.result.status != 'success':
             raise RuntimeError(outcome.result.error or 'index_items failed')
     stale = [cid for cid, _ in plan.replaced] + list(plan.removed)
-    if stale:
-        result = await delete_items(
-            opensearch,
-            stale,
-            items_index=cfg.items_index,
-            crop_cache_dir=cfg.crop_cache_dir,
-        )
-        if result['errors']:
-            raise RuntimeError(f'delete failed: {result["errors"][:3]}')
+    if not stale:
+        return []
+
+    async def still_unlocked(_crop_id: str, doc: dict[str, Any]) -> bool:
+        return not item_locked(doc)
+
+    result = await delete_items(
+        opensearch,
+        stale,
+        items_index=cfg.items_index,
+        crop_cache_dir=cfg.crop_cache_dir,
+        deletable=still_unlocked,
+    )
+    if result['errors']:
+        raise RuntimeError(f'delete failed: {result["errors"][:3]}')
+    return list(result['skipped'])
 
 
 async def redetect_image(
@@ -186,14 +195,15 @@ async def redetect_image(
     by_proposal = dict(zip(proposals, items, strict=True))
     plan = merge_item_proposals(existing, proposals, remove_stale=True)
     existing_bbox = {e.crop_id: e.bbox_norm for e in existing}
-    await _apply_plan(opensearch, service, ctx, plan, by_proposal, existing_bbox)
+    kept = await _apply_plan(opensearch, service, ctx, plan, by_proposal, existing_bbox)
+    kept_replaced = len(set(kept) & {cid for cid, _ in plan.replaced})
     return {
         'merged': len(plan.merged_into_locked),
         'refreshed': len(plan.refreshed),
-        'replaced': len(plan.replaced),
+        'replaced': len(plan.replaced) - kept_replaced,
         'created': len(plan.created),
-        'removed': len(plan.removed),
-        'locked_untouched': sum(1 for e in existing if e.locked),
+        'removed': len(plan.removed) - (len(kept) - kept_replaced),
+        'locked_untouched': sum(1 for e in existing if e.locked) + len(kept),
     }
 
 

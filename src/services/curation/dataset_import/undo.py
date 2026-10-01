@@ -299,7 +299,7 @@ async def undo_import(
 ) -> UndoReport:
     """Undo (or, with ``dry_run``, count) one import from its ledger."""
     report = UndoReport(import_id=ctx.import_id, dry_run=dry_run)
-    to_delete: list[str] = []
+    to_delete: dict[str, tuple[dict[str, Any], list[dict[str, Any]], str]] = {}
     created_images: list[str] = []
     for row in store.ledger_rows():
         if row.get('status') == 'failed':
@@ -319,25 +319,52 @@ async def undo_import(
             decision = _decide(docs[cid], ctx, entry, boxes_by_crop.get(cid, []))
             _tally(report, decision)
             if decision.kind == 'delete':
-                to_delete.append(cid)
+                to_delete[cid] = (entry, boxes_by_crop.get(cid, []), str(entry.get('action')))
             elif decision.kind == 'update' and not dry_run:
                 await _write(ctx, cid, entry, boxes_by_crop.get(cid, []))
         if row.get('image_created') and row.get('image_id'):
             created_images.append(row['image_id'])
+    deleting = set(to_delete)
     if not dry_run and to_delete:
-        await delete_items(
-            ctx.opensearch,
-            to_delete,
-            items_index=ctx.items_index,
-            crop_cache_dir=ctx.crop_cache_dir,
-        )
+        skipped = await _delete_decided(ctx, report, to_delete)
+        deleting -= skipped
     if remove_images:
-        await _undo_images(ctx, report, created_images, set(to_delete), dry_run=dry_run)
+        await _undo_images(ctx, report, created_images, deleting, dry_run=dry_run)
     if deprecate_created_classes and ctx.registry is not None:
-        await _deprecate_classes(
-            ctx, report, created_classes or {}, set(to_delete), dry_run=dry_run
-        )
+        await _deprecate_classes(ctx, report, created_classes or {}, deleting, dry_run=dry_run)
     return report
+
+
+async def _delete_decided(
+    ctx: UndoContext,
+    report: UndoReport,
+    to_delete: dict[str, tuple[dict[str, Any], list[dict[str, Any]], str]],
+) -> set[str]:
+    """Delete the items decided ``delete``, re-deciding on each fresh doc. An
+    item a human edited since is kept: it takes the update path instead
+    (import stamp removed, human parts kept) and moves from the deleted
+    counts to ``items_kept_human_edited``. Returns the ids not deleted."""
+
+    async def still_import_only(crop_id: str, doc: dict[str, Any]) -> bool:
+        entry, boxes, _action = to_delete[crop_id]
+        return _decide(doc, ctx, entry, boxes).kind == 'delete'
+
+    result = await delete_items(
+        ctx.opensearch,
+        list(to_delete),
+        items_index=ctx.items_index,
+        crop_cache_dir=ctx.crop_cache_dir,
+        deletable=still_import_only,
+    )
+    skipped = set(result['skipped'])
+    for cid in sorted(skipped):
+        entry, boxes, action = to_delete[cid]
+        key = 'proposals_deleted' if action in ('proposal', 'parent') else 'items_deleted'
+        setattr(report, key, getattr(report, key) - 1)
+        report.items_kept_human_edited += 1
+        report.sample('kept_human_edited', cid)
+        await _write(ctx, cid, entry, boxes)
+    return skipped
 
 
 async def _write(
@@ -360,7 +387,8 @@ async def _undo_images(
     dry_run: bool,
 ) -> None:
     """Delete an image the import created when nothing else is on it."""
-    for image_id in created:
+
+    async def nothing_else_on(image_id: str, img: dict[str, Any]) -> bool:
         resp = await ctx.opensearch.search(
             index=ctx.items_index,
             body={'size': 1000, 'query': {'term': {'image_id': image_id}}, '_source': ['crop_id']},
@@ -369,18 +397,28 @@ async def _undo_images(
             h['_source'].get('crop_id') or h['_id']
             for h in (resp.get('hits') or {}).get('hits') or []
         } - deleting
-        img = (await _mget(ctx, ctx.images_index, [image_id])).get(image_id)
-        if img is None:
-            continue  # already gone: a second undo reports nothing
         others = [i for i in img.get('import_ids') or [] if i != ctx.import_id]
-        if remaining or others:
-            report.images_kept += 1
-            continue
-        report.images_deleted += 1
-        if not dry_run:
-            await ctx.opensearch.bulk(
-                body=[{'delete': {'_index': ctx.images_index, '_id': image_id}}], refresh=False
-            )
+        return not remaining and not others
+
+    if dry_run:
+        for image_id in created:
+            img = (await _mget(ctx, ctx.images_index, [image_id])).get(image_id)
+            if img is None:
+                continue  # already gone: a second undo reports nothing
+            if await nothing_else_on(image_id, img):
+                report.images_deleted += 1
+            else:
+                report.images_kept += 1
+        return
+    result = await delete_items(
+        ctx.opensearch,
+        created,
+        items_index=ctx.images_index,
+        crop_cache_dir=None,
+        deletable=nothing_else_on,
+    )
+    report.images_deleted += result['deleted']
+    report.images_kept += len(result['skipped'])
 
 
 async def _deprecate_classes(

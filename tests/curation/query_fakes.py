@@ -23,7 +23,7 @@ evaluates the subset of the query DSL those paths use:
   item with 2+ boxes in the same bucket);
 - ``count``, ``get``, ``update`` (``if_seq_no`` honoured), ``mget``,
   ``bulk`` (``update`` with ``if_seq_no``, ``index``, ``create`` and
-  ``delete``), ``indices.refresh``.
+  ``delete`` with ``if_seq_no``), ``indices.refresh``.
 
 A ``None`` field value is treated as absent, matching how OpenSearch never
 indexes nulls (``exists`` is false for them).
@@ -375,6 +375,10 @@ class QueryFakeOpenSearch:
             idx, doc_id = meta['_index'], meta['_id']
             if op == 'delete':
                 # A delete action has no source line.
+                if 'if_seq_no' in meta and meta['if_seq_no'] != self.seq.get((idx, doc_id), 1):
+                    errors = True
+                    items.append({op: {'_id': doc_id, 'status': 409, 'error': {'type': 'vc'}}})
+                    continue
                 found = self.docs(idx).pop(doc_id, None) is not None
                 items.append({op: {'_id': doc_id, 'status': 200 if found else 404}})
                 continue
