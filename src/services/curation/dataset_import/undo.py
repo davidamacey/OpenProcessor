@@ -385,10 +385,16 @@ async def _reinstate(ctx: UndoContext, crop_id: str, doc: dict[str, Any]) -> Non
     """Put back an item a later import's reconcile removed (kept whole in
     that import's ledger)."""
     resp = await ctx.opensearch.bulk(
-        body=[{'index': {'_index': ctx.items_index, '_id': crop_id}}, doc], refresh=False
+        body=[{'create': {'_index': ctx.items_index, '_id': crop_id}}, doc], refresh=False
     )
-    if resp.get('errors'):
-        raise RuntimeError(f'could not reinstate {crop_id}: {resp.get("items", [])[:1]}')
+    # A 409 means the doc reappeared since the check: whoever wrote it wins.
+    failed = [
+        item
+        for item in resp.get('items', [])
+        if item['create'].get('status', 200) not in (200, 201, 409)
+    ]
+    if failed:
+        raise RuntimeError(f'could not reinstate {crop_id}: {failed[:1]}')
 
 
 async def _write(

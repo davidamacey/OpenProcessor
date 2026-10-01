@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W10 round-3 review fixes** (`w10_p4_review_2026-10-01`).
+  - **`data.yaml` tagged scalars.** `names: [!!bool abc]` (KeyError) and
+    `[!!timestamp abc]` (AttributeError) escaped `load_bounded_yaml` and made
+    `POST /datasets/preview` a 500; any constructor error now raises
+    `YAMLError` and answers `data_yaml_invalid`.
+  - **Non-finite coordinates.** A NaN or infinite YOLO label value or COCO
+    bbox is a per-row scan issue (`label_row_malformed` /
+    `coco_bbox_out_of_image`) instead of a box that failed its whole chunk.
+  - **Combine** re-checks its claim right before writing `completed`, after
+    the long holdout step, so a worker taken over inside it cannot complete
+    the job.
+  - **Undo reinstate** of a reconcile-removed item uses `create`: a doc that
+    reappeared since the check is kept, never overwritten.
+  - Tests pinned: the resume heartbeat ticker keeps the claim live across a
+    rescan longer than the stale window; `FileJob.update` waits for the
+    state lock another process holds.
 - **W10 finish and combine confirmation-review fixes** (round 2 of
   `w10_p4_review_2026-10-01`).
   - **Import resume takes the project start lock.** `POST

@@ -147,6 +147,28 @@ async def test_undoing_the_newer_import_puts_the_removed_item_back(tmp_path, mon
 
 
 @pytest.mark.asyncio
+async def test_reinstate_never_overwrites_a_doc_recreated_after_the_check(
+    tmp_path, monkeypatch
+) -> None:
+    from src.services.curation.dataset_import import undo
+
+    h, root = await _v1(tmp_path, monkeypatch)
+    victim = _truck(h)
+    store, _ = await h.run(h.request(_v2(root, [CAR]), map_all(h.registry, 'car')))
+    assert victim not in h.items
+    recreated = {'crop_id': victim, 'edited_by': 'human'}
+    real = undo._reinstate
+
+    async def recreated_first(ctx, crop_id, doc) -> None:
+        h.items[crop_id] = dict(recreated)  # lands between the mget and the write
+        await real(ctx, crop_id, doc)
+
+    monkeypatch.setattr(undo, '_reinstate', recreated_first)
+    await undo_import(h.undo_context(store.import_id), store, dry_run=False)
+    assert h.items[victim] == recreated
+
+
+@pytest.mark.asyncio
 async def test_a_redone_image_keeps_what_the_crashed_attempt_recorded(
     tmp_path, monkeypatch
 ) -> None:
