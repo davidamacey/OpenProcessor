@@ -246,6 +246,7 @@ def _region_fields(
     import numpy as np
 
     from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
+    from src.services.curation.region_box_embeddings import entry_for
     from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
     is_fp = region == RegionStatus.FALSE_POSITIVE
@@ -269,9 +270,7 @@ def _region_fields(
                 detected_at=now.isoformat(),
             )
         )
-        embeddings.append(
-            {'box_id': box_id, 'embedding': _round_vec(np.roll(vector, k) if k else vector)}
-        )
+        embeddings.append(entry_for(boxes[-1], _round_vec(np.roll(vector, k) if k else vector)))
     return {
         **boxes_write_fields(boxes, current_src={}),
         fields.box_embeddings: embeddings,
