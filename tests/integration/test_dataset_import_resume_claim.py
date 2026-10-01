@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -144,3 +145,23 @@ def test_a_resume_that_crashes_before_its_worker_runs_leaves_the_import_as_it_wa
     with pytest.raises(RuntimeError, match='registry unavailable'):
         client.post(f'{BASE}/imports/{import_id}/resume')
     assert client.get(f'{BASE}/imports/{import_id}').json()['status'] == 'interrupted'
+
+
+def test_the_claim_stays_live_through_a_rescan_longer_than_the_stale_window(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.curation import file_job
+
+    import_id = _interrupted_import(client, tmp_path)
+    monkeypatch.setattr(file_job, 'HEARTBEAT_STALE_S', 0.4)
+    monkeypatch.setattr(file_job, 'HEARTBEAT_TICK_S', 0.05)
+    entered, release = _hold_the_rescan(monkeypatch)
+    thread, first = _resume_in_background(client, import_id)
+    assert entered.wait(10)
+
+    time.sleep(1.2)  # three stale windows with the rescan still running
+    assert client.get(f'{BASE}/imports/{import_id}').json()['status'] == 'queued'
+
+    release.set()
+    thread.join(10)
+    assert first[0].status_code == 202

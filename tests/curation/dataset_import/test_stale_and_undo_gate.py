@@ -171,3 +171,29 @@ def test_reading_a_healthy_job_creates_no_lock_file(tmp_path: Path) -> None:
     job.touch_heartbeat()
     assert job.repair_if_stale(frozenset({'running'}), error_prefix='t')['status'] == 'running'
     assert not (job.directory / 'state.lock').exists()
+
+
+def test_update_waits_for_the_state_lock_another_fd_holds(tmp_path: Path) -> None:
+    import fcntl
+    import threading
+
+    job = FileJob(tmp_path / 'job')
+    job.write({'status': 'running'})
+    done = threading.Event()
+
+    def write() -> None:
+        job.update(status='queued')
+        done.set()
+
+    fd = os.open(job.directory / 'state.lock', os.O_CREAT | os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        writer = threading.Thread(target=write)
+        writer.start()
+        assert not done.wait(0.5)
+        assert job.read()['status'] == 'running'
+    finally:
+        os.close(fd)  # releases the lock
+    writer.join(10)
+    assert done.is_set()
+    assert job.read()['status'] == 'queued'
