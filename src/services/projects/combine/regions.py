@@ -19,7 +19,8 @@ from src.services.curation.region_boxes import (
     next_box_id,
     read_boxes,
 )
-from src.services.detection.geometry import crop_id as make_crop_id
+from src.services.curation.reprocess_locks import region_set_locked
+from src.services.detection.geometry import crop_id as make_crop_id, iou
 
 
 if TYPE_CHECKING:
@@ -90,20 +91,29 @@ def attach_regions(
     job_id: str,
     origin_project: str,
     containment: float,
+    iou_min: float,
     now: str,
-) -> tuple[int, list[dict[str, Any]]]:
-    """Attach each region item to its parent (mutating the parent docs in
-    place) and return ``(boxes attached, standalone region docs)``."""
-    attached = 0
+) -> tuple[int, int, list[dict[str, Any]]]:
+    """Place each region item and return ``(attached, already present,
+    standalone docs)``. An unlocked parent (mutated in place) takes the box;
+    a parent whose region set is validated (a human, or an import, set it) is
+    never rewritten, so a box that would land on it becomes a standalone
+    region item instead; a box that overlaps one the parent already holds is
+    already present (the existing box wins), which also makes a redone chunk
+    attach nothing twice."""
+    attached = merged = 0
     standalone: list[dict[str, Any]] = []
     for item in region_items:
         bbox = tuple(item['bbox_norm'])
         parent = parent_of(bbox, parents, containment)  # type: ignore[arg-type]
-        if parent is None:
+        stored = read_boxes(parent, fields) if parent is not None else []
+        if any(iou(b.bbox_norm, bbox) >= iou_min for b in stored):  # type: ignore[arg-type]
+            merged += 1
+            continue
+        if parent is None or region_set_locked(parent, fields):
             doc = _standalone(item, image_id, image_path, fields, job_id, origin_project, now)
             standalone.append(doc)
             continue
-        stored = read_boxes(parent, fields)
         seq = int(parent.get(fields.box_seq) or 0)
         parent.update(
             _state_fields(
@@ -115,7 +125,7 @@ def attach_regions(
             )
         )
         attached += 1
-    return attached, standalone
+    return attached, merged, standalone
 
 
 def _standalone(

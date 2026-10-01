@@ -8,6 +8,8 @@ duplicate is recomputed to the same result.
 
 from __future__ import annotations
 
+import asyncio
+import copy
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -146,6 +148,34 @@ def _item_docs(
     return docs, regions
 
 
+def _attach(
+    ctx: CopyContext,
+    parents: list[dict[str, Any]],
+    regions: list[dict[str, Any]],
+    image_id: str,
+    image_path: str,
+    project: str,
+) -> list[dict[str, Any]]:
+    """Place a source image's region-class items on ``parents`` (counting
+    them) and return the standalone region docs."""
+    attached, present, standalone = attach_regions(
+        parents,
+        regions,
+        image_id=image_id,
+        image_path=image_path,
+        fields=ctx.fields,
+        job_id=ctx.job_id,
+        origin_project=project,
+        containment=ctx.containment,
+        iou_min=ctx.request.dedup_iou,
+        now=ctx.now,
+    )
+    ctx.counts['regions_attached'] += attached
+    ctx.counts['regions_already_present'] += present
+    ctx.counts['regions_standalone'] += len(standalone)
+    return standalone
+
+
 def _apply_holdout(docs: list[dict[str, Any]], flag: bool, mode: str) -> None:
     for doc in docs:
         if mode == 'preserve_union':
@@ -200,7 +230,8 @@ async def _copy_image(
     project = ctx.sources[source_index].slug
     tpath, tid, link_src = _target_location(ctx, source_index, image.path, image.imohash)
     if link_src is not None:
-        ctx.counts[f'files_{link_or_copy(link_src, Path(tpath))}'] += 1
+        linked = await asyncio.to_thread(link_or_copy, link_src, Path(tpath))
+        ctx.counts[f'files_{linked}'] += 1
     negative_for = (
         map_negative_for(list(image.doc.get('negative_for') or []), ctx, project)
         if image.is_negative
@@ -223,25 +254,43 @@ async def _copy_image(
         }
     ]
     docs, regions = _item_docs(ctx, source_index, image, tid, tpath)
-    attached, standalone = attach_regions(
-        docs,
-        regions,
-        image_id=tid,
-        image_path=tpath,
-        fields=ctx.fields,
-        job_id=ctx.job_id,
-        origin_project=project,
-        containment=ctx.containment,
-        now=ctx.now,
-    )
-    ctx.counts['regions_attached'] += attached
-    ctx.counts['regions_standalone'] += len(standalone)
+    standalone = _attach(ctx, docs, regions, tid, tpath, project)
     all_docs = [*docs, *standalone]
     _apply_holdout(all_docs, _holdout_flag(ctx, image), ctx.request.holdout)
     ops.extend({'index': ctx.items_index, 'id': d['crop_id'], 'doc': d} for d in all_docs)
     ctx.counts['images_copied'] += 1
     ctx.counts['items_copied'] += len(all_docs)
     return ops
+
+
+def _attach_to_target(
+    ctx: CopyContext,
+    existing: list[dict[str, Any]],
+    changed: dict[str, dict[str, Any]],
+    added: list[dict[str, Any]],
+    regions: list[dict[str, Any]],
+    location: tuple[str, str],
+    origin: tuple[int, SourceImage],
+) -> list[dict[str, Any]]:
+    """Attach a duplicate image's region boxes to the target's item docs
+    (existing ones are copied into ``changed`` only when a box lands on
+    them); returns the standalone region docs, which are new target docs."""
+    tid, tpath = location
+    source_index, image = origin
+    parents = [
+        changed.get(d['crop_id']) or copy.deepcopy(d)
+        for d in existing
+        if not d.get('import_standalone_region')
+    ]
+    originals = {d['crop_id']: d for d in existing}
+    standalone = _attach(
+        ctx, [*parents, *added], regions, tid, tpath, ctx.sources[source_index].slug
+    )
+    for parent in parents:
+        if parent != originals[parent['crop_id']]:
+            changed[parent['crop_id']] = parent
+    _apply_holdout(standalone, _holdout_flag(ctx, image), ctx.request.holdout)
+    return standalone
 
 
 async def _merge_duplicate(
@@ -257,7 +306,7 @@ async def _merge_duplicate(
         Probe(tuple(d['bbox_norm']), d.get('class_name'), trust_rank(d))  # type: ignore[arg-type]
         for d in existing
     ]
-    docs, _regions = _item_docs(ctx, source_index, image, tid, tpath)
+    docs, regions = _item_docs(ctx, source_index, image, tid, tpath)
     _apply_holdout(docs, _holdout_flag(ctx, image), ctx.request.holdout)
     changed: dict[str, dict[str, Any]] = {}
     added: list[dict[str, Any]] = []
@@ -286,6 +335,11 @@ async def _merge_duplicate(
             keep.update(flags)
         keep['combine_merged_origins'] = merged_from
         ctx.counts['items_merged'] += 1
+    added.extend(
+        _attach_to_target(
+            ctx, existing, changed, added, regions, (tid, tpath), (source_index, image)
+        )
+    )
     flag = _holdout_flag(ctx, image)
     final = [*changed.values(), *added]
     untouched = [d for d in existing if d['crop_id'] not in changed]
