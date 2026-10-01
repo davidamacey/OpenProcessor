@@ -400,6 +400,19 @@ def test_wheel_example_end_to_end(
         for box, (crop_box, _score) in zip(boxes, SCORED, strict=False):
             assert close_to(box['bbox_norm'], to_frame(item['bbox_norm'], crop_box))
         assert (item['region_count'], item['region_rejected_count']) == (3, 1)
+        # provenance: the profile and pack that produced it, the endpoint that verified it
+        assert (item['region_profile'], item['region_profile_revision']) == ('wheel_example', 1)
+        assert item['vlm_prompt_pack'] == 'wheel_example@1'
+        assert (item['vlm_endpoint'], item['vlm_model']) == ('fake-vlm@1', 'fake-vlm')
+        assert item['region_detector_chain'] == [
+            'vlm_visible:yes',
+            'sam3:hit',
+            'sam3:combined_verify_ok',
+        ]
+        for box in boxes:
+            assert (box['detector'], box['source']) == ('sam3', 'segmenter')
+            # a text-free profile: every text field of every box is empty
+            assert {k: v for k, v in box.items() if k.startswith('text') and v} == {}
     untouched = [d for k, d in items.items() if k not in cars]
     assert untouched
     for d in untouched:
@@ -410,6 +423,30 @@ def test_wheel_example_end_to_end(
         for e in cluster.audit[before_worker:]
         if e[1] in world.default_indexes and e[0] != 'search'
     ] == []
+    assert world.default_traffic(since=world.mark, writes_only=True) == []
+
+    # -- hop 5b: a human adds a missed wheel to one car through the route ----
+    edited_id = sorted(cars)[0]
+    edited = items[edited_id]
+    missed = (0.02, 0.70, 0.08, 0.90)
+    put = client.put(
+        f'{API}/crops/{edited_id}/regions',
+        json={
+            'boxes': [{'box_id': b['box_id']} for b in edited['region_boxes']]
+            + [{'box_id': None, 'bbox_norm': list(to_frame(edited['bbox_norm'], missed))}],
+            'frame': 'source',
+            'expected_region_revision': edited['region_revision'],
+        },
+    )
+    assert put.status_code == 200, put.text
+    edited = items[edited_id]
+    assert [b['state'] for b in edited['region_boxes']] == ['accepted'] * 2 + ['rejected'] + [
+        'accepted'
+    ] * 2
+    assert (edited['region_count'], edited['region_rejected_count']) == (4, 1)
+    assert edited['region_validated'] is True
+    assert edited['region_label_source'] == 'human'
+    assert edited['region_boxes'][2]['rejection_reason'] == 'region_visible_elsewhere'
     assert world.default_traffic(since=world.mark, writes_only=True) == []
 
     # -- hop 6: export wheels from the car crops -----------------------------
@@ -452,13 +489,37 @@ def test_wheel_example_end_to_end(
     )
     label_files = sorted((out / 'labels').rglob('*.txt'))
     assert len(label_files) == len(cars)
+    missed_row = (
+        round((missed[0] + missed[2]) / 2, 4),
+        round((missed[1] + missed[3]) / 2, 4),
+        round(missed[2] - missed[0], 4),
+        round(missed[3] - missed[1], 4),
+    )
+    edited_labels = [p for p in label_files if edited_id in p.stem]
+    assert len(edited_labels) == 1, 'the human-edited car is exported under its own crop id'
     for path in label_files:
         rows = [ln.split() for ln in path.read_text().splitlines()]
         assert {r[0] for r in rows} == {'0'}  # the one dense id: wheel
-        assert sorted(tuple(round(float(v), 4) for v in r[1:]) for r in rows) == wheel_rows
+        got = sorted(tuple(round(float(v), 4) for v in r[1:]) for r in rows)
+        # three machine wheels per car, plus the one the human added to the edited car
+        assert got == (sorted([*wheel_rows, missed_row]) if path in edited_labels else wheel_rows)
     by_split = {s: len(list((out / 'labels' / s).glob('*.txt'))) for s in ('train', 'val')}
     for split in ('train', 'val'):
         assert by_split[split] == sum(1 for d in cars.values() if d['dataset_split'] == split)
+
+    pre = client.post(f'{API}/train/preflight', json={'dataset_export_dir': str(out)})
+    assert pre.status_code == 200, pre.text
+    checks = {c['name']: c['severity'] for c in pre.json()['checks']}
+    # The export itself is sound for a single-class run: pairing, emptiness and
+    # splits all pass. What blocks is only the environment (no trainer volume
+    # in this process) and the 5-frame size of the toy dataset.
+    for name in ('region_pairing', 'empty_labels', 'export_not_empty', 'export_splits_nonempty'):
+        assert checks[name] == 'ok', (name, pre.json())
+    assert {n for n, sev in checks.items() if sev == 'block'} == {
+        'free_disk',
+        'class_balance',
+        'test_holdout',
+    }
 
     # -- the sibling project, end to end --------------------------------------
     assert world.default_traffic(since=world.mark, writes_only=True) == []
