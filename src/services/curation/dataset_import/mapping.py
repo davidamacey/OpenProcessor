@@ -165,7 +165,19 @@ def resolve_mapping(
     fill in anything; entries always take precedence over a suggestion.
     """
     result = ResolvedMapping()
-    by_class: dict[str, ClassMappingEntry] = {e.dataset_class: e for e in entries}
+    by_class: dict[str, ClassMappingEntry] = {}
+    known = set(dataset_classes)
+    for e in entries:
+        if e.dataset_class not in known:
+            result.errors.append(
+                MappingError('class_mapping_invalid', e.dataset_class, 'not a dataset class')
+            )
+        elif e.dataset_class in by_class:
+            result.errors.append(
+                MappingError('class_mapping_invalid', e.dataset_class, 'mapped more than once')
+            )
+        else:
+            by_class[e.dataset_class] = e
     by_id = {c.class_id: c for c in registry_classes}
     by_norm_name = {norm_class_name(c.class_name): c for c in registry_classes if not c.deprecated}
     created_norm_names: set[str] = set()

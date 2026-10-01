@@ -1,0 +1,490 @@
+"""Undo one import batch (W10.12): remove only what the import wrote, never
+a later human edit.
+
+Every decision is a pure function of the document as the OCC write reads it
+(``decide_*``), so the dry run and the apply run the same code and a human
+edit that lands between them is respected. The ledger says what the import
+did to each item (``created`` / ``updated`` / ``noop`` ...); the document says
+who owns each part NOW.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+from src.clients.occ import occ_update_one
+from src.clients.occ_locks import is_human_marker, is_human_owned_item
+from src.config.region_source import CANDIDATE_IMPORT
+from src.config.region_state import RegionStatus
+from src.services.curation.dataset_import import reconcile
+from src.services.curation.edit_history import (
+    EDIT_HISTORY_FIELD,
+    EditKind,
+    region_state_fields,
+    restore_edit_state,
+)
+from src.services.curation.history import CLASS_STATE_FIELDS, restore_class_state
+from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.services.curation.item_delete import delete_items
+from src.services.curation.region_boxes import (
+    RegionBox,
+    boxes_write_fields,
+    derive_status,
+    is_human_owned,
+    read_boxes,
+)
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from src.clients.curation_opensearch import ClassRegistry
+    from src.config.region_fields import RegionFields
+    from src.services.curation.dataset_import.store import ImportStore
+
+_IMPORT_STAMP_FIELDS = (
+    'imported_at',
+    'import_dataset_name',
+    'import_dataset_sha',
+    'import_source_stem',
+    'import_stratum',
+    'import_hard_negative',
+    'dataset_split',
+    'proposal_chain',
+    'proposed_by_import',
+    'on_negative_frame',
+    'import_standalone_region',
+)
+_MAX_SAMPLES = 20
+
+
+@dataclass
+class UndoReport:
+    import_id: str
+    dry_run: bool
+    items_deleted: int = 0
+    items_restored: int = 0
+    items_reinstated: int = 0
+    items_kept_human_edited: int = 0
+    items_kept_shared: int = 0
+    class_labels_removed: int = 0
+    boxes_removed: int = 0
+    boxes_kept_human_edited: int = 0
+    proposals_deleted: int = 0
+    holdout_flags_cleared: int = 0
+    images_deleted: int = 0
+    images_kept: int = 0
+    classes_deprecated: list[str] = field(default_factory=list)
+    samples: dict[str, list[Any]] = field(
+        default_factory=lambda: {'kept_human_edited': [], 'boxes_kept_human_edited': []}
+    )
+
+    def sample(self, key: str, value: Any) -> None:
+        if len(self.samples[key]) < _MAX_SAMPLES:
+            self.samples[key].append(value)
+
+    def to_dict(self) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclass
+class UndoContext:
+    import_id: str
+    opensearch: Any
+    images_index: str
+    items_index: str
+    crop_cache_dir: str | Path | None
+    region_fields: RegionFields
+    registry: ClassRegistry | None = None
+
+    @property
+    def writer(self) -> str:
+        return f'import:{self.import_id}'
+
+
+@dataclass
+class Decision:
+    kind: str
+    """``delete`` | ``update`` | ``noop``."""
+    fields: dict[str, Any] = field(default_factory=dict)
+    counts: dict[str, int] = field(default_factory=dict)
+    sample: tuple[str, Any] | None = None
+
+
+def _without_import(doc: dict[str, Any], import_id: str) -> dict[str, Any]:
+    ids = [i for i in doc.get('import_ids') or [] if i != import_id]
+    out: dict[str, Any] = {'import_ids': ids}
+    if not ids:
+        out.update(dict.fromkeys(_IMPORT_STAMP_FIELDS))
+    return out
+
+
+def _class_is_import_owned(doc: dict[str, Any]) -> bool:
+    return doc.get('class_source') == LABEL_IMPORT_CLASS_SOURCE and not is_human_marker(
+        doc.get('label_source')
+    )
+
+
+def _import_boxes(
+    boxes: list[RegionBox], import_id: str, ledger: list[dict[str, Any]]
+) -> tuple[list[RegionBox], list[RegionBox]]:
+    """``(still import's, edited by a human since)`` among the ledger's boxes."""
+    wanted = {b['box_id']: b for b in ledger if b.get('box_id')}
+    mine: list[RegionBox] = []
+    edited: list[RegionBox] = []
+    for b in boxes:
+        row = wanted.get(b.box_id)
+        if row is None:
+            continue
+        untouched = (
+            b.source == CANDIDATE_IMPORT
+            and b.detector_version == import_id
+            and [round(v, 6) for v in b.bbox_norm] == [round(v, 6) for v in row['bbox_norm']]
+            and not is_human_owned(b)
+        )
+        (mine if untouched else edited).append(b)
+    return mine, edited
+
+
+def _region_fields_after(
+    doc: dict[str, Any],
+    removed: list[RegionBox],
+    F: RegionFields,
+    writer: str,
+    *,
+    created: bool,
+) -> dict[str, Any]:
+    """Region fields once ``removed`` are gone: the snapshot when no human box
+    remains (or cleared, for an item the import created), else the list
+    rewritten and the status re-derived."""
+    stored = read_boxes(doc, F)
+    gone = {b.box_id for b in removed}
+    remaining = [b for b in stored if b.box_id not in gone]
+    if not any(is_human_owned(b) for b in remaining):
+        if created:
+            return dict.fromkeys(region_state_fields())
+        for entry in reversed(doc.get(EDIT_HISTORY_FIELD) or []):
+            if (
+                isinstance(entry, dict)
+                and entry.get('kind') == EditKind.REGION.value
+                and entry.get('writer') == writer
+            ):
+                return restore_edit_state(entry, EditKind.REGION, current=doc)
+        return {}
+    fields = boxes_write_fields(remaining, current_src=doc, F=F)
+    fields[F.status] = derive_status(remaining, empty_status=RegionStatus.NO_REGION_VISIBLE).value
+    return fields
+
+
+def decide_created(
+    doc: dict[str, Any], ctx: UndoContext, entry: dict[str, Any], ledger_boxes: list[dict[str, Any]]
+) -> Decision:
+    """An item the import created: delete it unless a human (or another
+    import) also owns part of it."""
+    F = ctx.region_fields
+    if ctx.import_id not in (doc.get('import_ids') or []):
+        return Decision('noop')
+    others = [i for i in doc.get('import_ids') or [] if i != ctx.import_id]
+    stored = read_boxes(doc, F)
+    mine, edited = _import_boxes(stored, ctx.import_id, ledger_boxes)
+    human = is_human_owned_item(doc, F, count_holdout=not entry.get('import_froze_holdout'))
+    counts: dict[str, int] = {'boxes_removed': len(mine), 'boxes_kept_human_edited': len(edited)}
+    if others:
+        return Decision(
+            'update', _without_import(doc, ctx.import_id), {**counts, 'items_kept_shared': 1}
+        )
+    if not (human or edited):
+        key = (
+            'proposals_deleted'
+            if entry.get('action') in ('proposal', 'parent')
+            else 'items_deleted'
+        )
+        return Decision('delete', counts={**counts, key: 1})
+    fields = _without_import(doc, ctx.import_id)
+    if _class_is_import_owned(doc):
+        fields.update(dict.fromkeys(CLASS_STATE_FIELDS))
+        fields['class_validated'] = False
+        counts['class_labels_removed'] = 1
+    if mine:
+        fields.update(_region_fields_after(doc, mine, F, ctx.writer, created=True))
+    if doc.get('test_holdout') and entry.get('import_froze_holdout'):
+        fields['test_holdout'] = False
+        counts['holdout_flags_cleared'] = 1
+    counts['items_kept_human_edited'] = 1
+    return Decision('update', fields, counts, sample=('kept_human_edited', doc.get('crop_id')))
+
+
+def decide_updated(
+    doc: dict[str, Any], ctx: UndoContext, entry: dict[str, Any], ledger_boxes: list[dict[str, Any]]
+) -> Decision:
+    """An existing item the import relabeled or wrote boxes on: restore the
+    pre-import class state when the class is still the import's."""
+    F = ctx.region_fields
+    if ctx.import_id not in (doc.get('import_ids') or []):
+        return Decision('noop')
+    fields = _without_import(doc, ctx.import_id)
+    counts: dict[str, int] = {}
+    history = doc.get('class_id_history') or []
+    snap_idx = next((i for i, h in enumerate(history) if h.get('writer') == ctx.writer), None)
+    later_human = snap_idx is not None and any(
+        not str(h.get('writer', '')).startswith('import:') for h in history[snap_idx + 1 :]
+    )
+    if snap_idx is not None and _class_is_import_owned(doc) and not later_human:
+        fields.update(restore_class_state(history[snap_idx]))
+        counts['items_restored'] = 1
+        counts['class_labels_removed'] = 1
+    elif snap_idx is not None:
+        counts['items_kept_human_edited'] = 1
+    if (
+        entry.get('holdout_prior') is False
+        and entry.get('import_froze_holdout')
+        and doc.get('test_holdout')
+    ):
+        fields['test_holdout'] = False
+        counts['holdout_flags_cleared'] = 1
+    stored = read_boxes(doc, F)
+    mine, edited = _import_boxes(stored, ctx.import_id, ledger_boxes)
+    if mine:
+        fields.update(_region_fields_after(doc, mine, F, ctx.writer, created=False))
+        counts['boxes_removed'] = len(mine)
+    if edited:
+        counts['boxes_kept_human_edited'] = len(edited)
+    return Decision('update', fields, counts)
+
+
+def decide_noop(doc: dict[str, Any], ctx: UndoContext) -> Decision:
+    if ctx.import_id not in (doc.get('import_ids') or []):
+        return Decision('noop')
+    return Decision('update', _without_import(doc, ctx.import_id))
+
+
+def _decide(
+    doc: dict[str, Any], ctx: UndoContext, entry: dict[str, Any], ledger_boxes: list[dict[str, Any]]
+) -> Decision:
+    action = entry.get('action')
+    if action in ('created', 'standalone', 'parent', 'proposal'):
+        return decide_created(doc, ctx, entry, ledger_boxes)
+    if action == 'updated':
+        return decide_updated(doc, ctx, entry, ledger_boxes)
+    if action == 'noop':
+        # A parent that only received region boxes is 'noop' for its class
+        # but still owns import boxes.
+        if ledger_boxes:
+            return decide_updated(doc, ctx, entry, ledger_boxes)
+        return decide_noop(doc, ctx)
+    return Decision('noop')
+
+
+def _tally(report: UndoReport, decision: Decision) -> None:
+    for key, value in decision.counts.items():
+        setattr(report, key, getattr(report, key) + value)
+    if decision.sample is not None:
+        report.sample(*decision.sample)
+
+
+async def _mget(ctx: UndoContext, index: str, ids: list[str]) -> dict[str, dict[str, Any]]:
+    if not ids:
+        return {}
+    resp = await ctx.opensearch.mget(body={'docs': [{'_id': i, '_index': index} for i in ids]})
+    return {
+        d['_id']: d['_source']
+        for d in resp.get('docs') or []
+        if d.get('found') and d.get('_source')
+    }
+
+
+async def undo_import(
+    ctx: UndoContext,
+    store: ImportStore,
+    *,
+    dry_run: bool,
+    remove_images: bool = True,
+    deprecate_created_classes: bool = True,
+    created_classes: dict[str, int] | None = None,
+) -> UndoReport:
+    """Undo (or, with ``dry_run``, count) one import from its ledger."""
+    report = UndoReport(import_id=ctx.import_id, dry_run=dry_run)
+    to_delete: dict[str, tuple[dict[str, Any], list[dict[str, Any]], str]] = {}
+    created_images: list[str] = []
+    for row in store.ledger_rows():
+        if row.get('status') == 'failed':
+            continue
+        froze = bool(row.get('froze_test'))
+        entries = [{**e, 'import_froze_holdout': froze} for e in row.get('items') or []]
+        boxes_by_crop: dict[str, list[dict[str, Any]]] = {}
+        for b in row.get('boxes') or []:
+            boxes_by_crop.setdefault(b['crop_id'], []).append(b)
+        crop_ids = list(dict.fromkeys([e['crop_id'] for e in entries] + list(boxes_by_crop)))
+        docs = await _mget(ctx, ctx.items_index, crop_ids)
+        seen: set[str] = set()
+        for entry in entries:
+            cid = entry['crop_id']
+            if entry.get('action') == reconcile.ACTION:
+                if cid not in docs:
+                    report.items_reinstated += 1
+                    if not dry_run:
+                        await _reinstate(ctx, cid, entry['doc'])
+                continue
+            if cid in seen or cid not in docs:
+                continue
+            seen.add(cid)
+            decision = _decide(docs[cid], ctx, entry, boxes_by_crop.get(cid, []))
+            _tally(report, decision)
+            if decision.kind == 'delete':
+                to_delete[cid] = (entry, boxes_by_crop.get(cid, []), str(entry.get('action')))
+            elif decision.kind == 'update' and not dry_run:
+                await _write(ctx, cid, entry, boxes_by_crop.get(cid, []))
+        if row.get('image_created') and row.get('image_id'):
+            created_images.append(row['image_id'])
+    deleting = set(to_delete)
+    if not dry_run and to_delete:
+        skipped = await _delete_decided(ctx, report, to_delete)
+        deleting -= skipped
+    if remove_images:
+        await _undo_images(ctx, report, created_images, deleting, dry_run=dry_run)
+    if deprecate_created_classes and ctx.registry is not None:
+        await _deprecate_classes(ctx, report, created_classes or {}, deleting, dry_run=dry_run)
+    return report
+
+
+async def _delete_decided(
+    ctx: UndoContext,
+    report: UndoReport,
+    to_delete: dict[str, tuple[dict[str, Any], list[dict[str, Any]], str]],
+) -> set[str]:
+    """Delete the items decided ``delete``, re-deciding on each fresh doc. An
+    item a human edited since is kept: it takes the update path instead
+    (import stamp removed, human parts kept) and moves from the deleted
+    counts to ``items_kept_human_edited``. Returns the ids not deleted."""
+
+    async def still_import_only(crop_id: str, doc: dict[str, Any]) -> bool:
+        entry, boxes, _action = to_delete[crop_id]
+        return _decide(doc, ctx, entry, boxes).kind == 'delete'
+
+    result = await delete_items(
+        ctx.opensearch,
+        list(to_delete),
+        items_index=ctx.items_index,
+        crop_cache_dir=ctx.crop_cache_dir,
+        deletable=still_import_only,
+    )
+    skipped = set(result['skipped'])
+    for cid in sorted(skipped):
+        entry, boxes, action = to_delete[cid]
+        key = 'proposals_deleted' if action in ('proposal', 'parent') else 'items_deleted'
+        setattr(report, key, getattr(report, key) - 1)
+        report.items_kept_human_edited += 1
+        report.sample('kept_human_edited', cid)
+        await _write(ctx, cid, entry, boxes)
+    return skipped
+
+
+async def _reinstate(ctx: UndoContext, crop_id: str, doc: dict[str, Any]) -> None:
+    """Put back an item a later import's reconcile removed (kept whole in
+    that import's ledger)."""
+    resp = await ctx.opensearch.bulk(
+        body=[{'create': {'_index': ctx.items_index, '_id': crop_id}}, doc], refresh=False
+    )
+    # A 409 means the doc reappeared since the check: whoever wrote it wins.
+    failed = [
+        item
+        for item in resp.get('items', [])
+        if item['create'].get('status', 200) not in (200, 201, 409)
+    ]
+    if failed:
+        raise RuntimeError(f'could not reinstate {crop_id}: {failed[:1]}')
+
+
+async def _write(
+    ctx: UndoContext, crop_id: str, entry: dict[str, Any], boxes: list[dict[str, Any]]
+) -> None:
+    def merger(current: dict[str, Any]) -> dict[str, Any]:
+        return _decide(current, ctx, entry, boxes).fields
+
+    await occ_update_one(
+        ctx.opensearch, doc_id=crop_id, merger=merger, index=ctx.items_index, writer_id=ctx.writer
+    )
+
+
+async def _undo_images(
+    ctx: UndoContext,
+    report: UndoReport,
+    created: list[str],
+    deleting: set[str],
+    *,
+    dry_run: bool,
+) -> None:
+    """Delete an image the import created when nothing else is on it."""
+
+    async def nothing_else_on(image_id: str, img: dict[str, Any]) -> bool:
+        resp = await ctx.opensearch.search(
+            index=ctx.items_index,
+            body={'size': 1000, 'query': {'term': {'image_id': image_id}}, '_source': ['crop_id']},
+        )
+        remaining = {
+            h['_source'].get('crop_id') or h['_id']
+            for h in (resp.get('hits') or {}).get('hits') or []
+        } - deleting
+        others = [i for i in img.get('import_ids') or [] if i != ctx.import_id]
+        return not remaining and not others
+
+    if dry_run:
+        for image_id in created:
+            img = (await _mget(ctx, ctx.images_index, [image_id])).get(image_id)
+            if img is None:
+                continue  # already gone: a second undo reports nothing
+            if await nothing_else_on(image_id, img):
+                report.images_deleted += 1
+            else:
+                report.images_kept += 1
+        return
+    result = await delete_items(
+        ctx.opensearch,
+        created,
+        items_index=ctx.images_index,
+        crop_cache_dir=None,
+        deletable=nothing_else_on,
+    )
+    report.images_deleted += result['deleted']
+    report.images_kept += len(result['skipped'])
+
+
+async def _deprecate_classes(
+    ctx: UndoContext,
+    report: UndoReport,
+    created: dict[str, int],
+    deleting: set[str],
+    *,
+    dry_run: bool,
+) -> None:
+    """Deprecate classes the import created when no item references them."""
+    assert ctx.registry is not None
+    for _dataset_class, class_id in sorted(created.items()):
+        resp = await ctx.opensearch.search(
+            index=ctx.items_index,
+            body={'size': 1000, 'query': {'term': {'class_id': class_id}}, '_source': ['crop_id']},
+        )
+        users = {
+            h['_source'].get('crop_id') or h['_id']
+            for h in (resp.get('hits') or {}).get('hits') or []
+        } - deleting
+        if users:
+            continue
+        entry = next((c for c in ctx.registry.load().classes if c.class_id == class_id), None)
+        if entry is None or entry.deprecated:
+            continue
+        report.classes_deprecated.append(entry.class_name)
+        if not dry_run:
+            ctx.registry.set_deprecated(class_id, True)
+
+
+__all__ = [
+    'Decision',
+    'UndoContext',
+    'UndoReport',
+    'decide_created',
+    'decide_updated',
+    'undo_import',
+]

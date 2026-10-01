@@ -18,6 +18,10 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from src.routers.curation._dataset_issue_models import (
+    DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
+)
+
 
 # P1 seeded the project-related codes it raises. W2 adds the codes its
 # own low-level primitives (``src.services.config_store``) and the
@@ -77,6 +81,29 @@ ErrorCode = Literal[
     # was refused because a first finish for it is still in flight --
     # distinct from project_busy (a step *inside* one finish failed).
     'finish_in_progress',
+    # W10: dataset import and reprocess.
+    'dataset_not_found',
+    'import_not_found',
+    'upload_not_found',
+    'image_not_found',
+    'import_busy',
+    'import_resumable',
+    'dataset_changed',
+    'import_not_resumable',
+    'import_not_undoable',
+    'reprocess_busy',
+    'upload_too_large',
+    'dataset_path_not_allowed',
+    'format_undetected',
+    'import_blocked',
+    'class_mapping_incomplete',
+    'class_mapping_invalid',
+    'archive_invalid',
+    'reprocess_targets_invalid',
+    'region_profile_required',
+    # P4: combine projects.
+    'combine_not_found',
+    'combine_not_resumable',
     # W9: VLM endpoint registry / selection
     'unknown_vlm',
     'vlm_external_not_acknowledged',
@@ -152,6 +179,23 @@ ValidationCode = Literal[
     'text_fields_ignored',
     'display_name_missing',
     'parent_class_unknown',
+    # P4: combine-projects preview / start validation.
+    'unmapped_class',
+    'mapping_target_invalid',
+    'source_not_found',
+    'source_busy',
+    'source_not_ready',
+    'slug_taken',
+    'slug_retired',
+    'slug_invalid',
+    'shard_budget_exceeded',
+    'shard_budget_high',
+    'too_many_sources',
+    'duplicate_source',
+    'target_is_source',
+    'label_conflicts',
+    'holdout_recompute_contamination',
+    'class_mapping_invalid',
     # W9: VLM endpoint validation (any_domain_plan.md W9.4/W9.5)
     'vlm_name_invalid',
     'vlm_name_reserved',
@@ -258,6 +302,13 @@ class ConfigErrorDetail(BaseModel):
     actions: list[dict[str, Any]] | None = None
     class_id: int | None = None
     class_name: str | None = None
+    # W10: 422 import_blocked / dataset_path_not_allowed carry the issues,
+    # 422 class_mapping_incomplete the unmapped dataset classes, a 409 or a
+    # 413 the import id / byte limit it concerns.
+    issues: list[DatasetIssueWire] | None = None
+    unmapped: list[str] | None = None
+    import_id: str | None = None
+    limit: int | None = None
     # W9: unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None

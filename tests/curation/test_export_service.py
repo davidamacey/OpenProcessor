@@ -26,8 +26,8 @@ from src.services.curation.export import (
     hash_split,
     label_content_sha,
     resolve_current_export_dir,
-    stratified_split,
 )
+from src.services.curation.export_split import stratified_split
 
 
 class _FakeOpenSearch:

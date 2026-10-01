@@ -100,6 +100,16 @@ def _region_profile_body() -> dict[str, Any]:
     return raw
 
 
+def _dataset_zip(slug: str) -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as zf:
+        zf.writestr(f'{slug}/data.yaml', f'train: images/train\nnames: [{slug}]\n')
+    return buf.getvalue()
+
+
 def route_params(slug: str) -> dict[str, str]:
     """Every path parameter a scoped route may carry, filled with ``slug``'s
     ids. A route with a parameter missing here fails ("unmapped route")."""
@@ -118,6 +128,7 @@ def route_params(slug: str) -> dict[str, str]:
         'artifact': 'results.csv',
         'box_id': 'b1',
         'revision': '1',
+        'import_id': 'imp_20260101T000000_0123abcd',
     }
 
 
@@ -173,6 +184,14 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('POST', '/datasets/preview'): {'json': {'source': {'path': source}}},
+        ('POST', '/datasets/imports'): {'json': {'source': {'path': source}}},
+        ('POST', '/datasets/imports/{import_id}/cancel'): {},
+        ('POST', '/datasets/imports/{import_id}/resume'): {},
+        ('POST', '/datasets/imports/{import_id}/undo'): {'json': {'dry_run': True}},
+        ('POST', '/datasets/uploads'): {
+            'files': [('file', ('d.zip', _dataset_zip(slug), 'application/zip'))]
+        },
         ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {
             'json': {'region_rejection_reason': f'{slug}-note'}
@@ -188,6 +207,14 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/regions/batch_box_state'): {
             'json': {'targets': [{'crop_id': item, 'box_id': 'b1'}], 'state': 'accepted'}
         },
+        # W10: unified reprocess. The batch form names one item; the
+        # single forms take their target from the path.
+        ('POST', '/reprocess'): {
+            'json': {'targets': {'crop_ids': [proposal]}, 'scopes': ['region'], 'dry_run': False}
+        },
+        ('POST', '/images/{image_id}/reprocess'): {'json': {'scopes': ['region']}},
+        ('POST', '/crops/{crop_id}/reprocess'): {'json': {'scopes': ['region']}},
+        ('POST', '/reprocess/jobs/{job_id}/cancel'): {'json': {}},
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},
         ('POST', '/review/new_class_proposals/resolve'): {
             'json': {'label': f'{slug}-proposal', 'class_id': 1}
@@ -286,10 +313,22 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.
 NO_WRITE: dict[tuple[str, str], str] = {
+    ('POST', '/datasets/preview'): 'scans a dataset read-only; writes nothing',
+    ('POST', '/datasets/imports'): (
+        'the sweep sends no mapping, so it is refused before anything is claimed; the '
+        'import writes are covered in tests/integration/test_dataset_import_routes.py'
+    ),
+    ('POST', '/datasets/imports/{import_id}/cancel'): 'the sweep has no live import to cancel',
+    ('POST', '/datasets/imports/{import_id}/resume'): 'the sweep has no interrupted import',
+    ('POST', '/datasets/imports/{import_id}/undo'): 'a dry run reads the ledger; writes nothing',
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     ('POST', '/train/preflight'): 'read-only validation under POST',
     ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
+    ('POST', '/reprocess/jobs/{job_id}/cancel'): (
+        'touches a cancel flag only for a live job; the sweep has none (the live path is '
+        'covered in test_reprocess_entrypoints)'
+    ),
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',
@@ -324,6 +363,8 @@ CROP_FOR: dict[tuple[str, str], str] = {
     ('POST', '/crops/{crop_id}/vlm_dismiss'): 'item-0004',
     ('POST', '/crops/{crop_id}/vlm_dismiss/undo'): 'item-0004',
     ('POST', '/crops/{crop_id}/region/undo'): 'item-0005',
+    # an unlocked item: the default item-0001 is a validated set (locked)
+    ('POST', '/crops/{crop_id}/reprocess'): 'item-0002',
 }
 
 # Routes that answer 5xx in the fixture for a reason that is not isolation.
@@ -523,6 +564,33 @@ def _stored_region_profile(env: Any, slug: str) -> None:
     reset_config_stores()
 
 
+def _region_failed_item(env: LeakEnv, slug: str) -> None:
+    """``item-0002`` as an unlocked, machine-failed region (a rejected
+    machine box, not validated): earlier sweep calls may have validated it,
+    and a reprocess skips a validated set, so it must be reset right before
+    each reprocess route that acts on it."""
+    from src.config import get_region_fields
+    from src.config.curation import IndexRole
+
+    F = get_region_fields()
+    index = env.records[slug].resources.indexes[IndexRole.ITEMS]
+    doc = env.transport.store.setdefault(index, {}).setdefault(f'{slug}-item-0002', {})
+    doc[F.status] = 'detection_failed'
+    doc[F.validated] = False
+    doc[F.boxes] = [
+        {
+            'box_id': 'b1',
+            'bbox_norm': [0.1, 0.1, 0.4, 0.4],
+            'state': 'rejected',
+            'score': 0.3,
+            'detector': 'leak_detector',
+            'source': 'detector',
+        }
+    ]
+    doc[F.count] = 0
+    doc[F.rejected_count] = 1
+
+
 # The VLM endpoint registry is deployment-wide (one endpoint both projects can
 # use); what is per project is which one it activated. The seeded activation's
 # ``previous`` is the per-project marker: an endpoint this project ran before
@@ -598,6 +666,8 @@ def _prepare_vlm(env: Any, slug: str) -> None:
 
 PREPARE: dict[tuple[str, str], Any] = {
     **dict.fromkeys(_VLM_KEYS, _prepare_vlm),
+    ('POST', '/reprocess'): _region_failed_item,
+    ('POST', '/crops/{crop_id}/reprocess'): _region_failed_item,
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,
     ('DELETE', '/models/{model_name}'): _promoted_model,
     ('PATCH', '/crops/{crop_id}/regions/{box_id}'): _region_box_seeded,
@@ -1255,6 +1325,19 @@ def leak_env(
     }.items():
         monkeypatch.setenv(f'OP_{name}', str(tmp_path / sub))
     monkeypatch.setenv('OP_EVENT_BUS', 'process')
+    # `ensure_fresh` skips the config read while the snapshot is under a
+    # second old, so how many `configs` operations a route issues would
+    # depend on how fast the previous route ran, and the sweep compares
+    # those counts between projects. Pin the window to zero: every route
+    # reads, for every project, in every run.
+    from src.services.config_store.store import ConfigStore
+
+    real_ensure_fresh = ConfigStore.ensure_fresh
+
+    async def ensure_fresh_always(self: Any, client: Any, max_age_s: float = 1.0) -> Any:
+        return await real_ensure_fresh(self, client, max_age_s=0.0)
+
+    monkeypatch.setattr(ConfigStore, 'ensure_fresh', ensure_fresh_always)
     for flag in ('SCORES_ENABLED', 'SELECT_DIVERSE_ENABLED', 'VIZ_PROJECTION_ENABLED'):
         monkeypatch.setenv(f'OP_{flag}', '1')
     # Diverse selection over the job path (the one that writes); the
@@ -2126,3 +2209,68 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     assert 'pack:from-alpha-pack' not in source_docs
     assert 'profile:from-alpha-profile' in target_docs
     assert 'profile:from-alpha-profile' not in source_docs
+
+
+def test_import_state_of_alpha_is_invisible_to_beta_and_a_misplaced_dir_is_refused(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Imports, uploads and reprocess jobs are filesystem state the route
+    sweep cannot see leak. Each project's dir carries a ``.project`` marker."""
+    import shutil
+
+    from src.config.project_context import ProjectDirMismatchError, bind_project
+    from src.services.curation.dataset_import.store import (
+        ImportStore,
+        imports_root,
+        list_stores,
+        open_store,
+    )
+
+    monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(leak_env.root / 'imports'))
+    import_id = 'imp_20260101T000000_0123abcd'
+    with bind_project(leak_env.records['alpha']):
+        ImportStore(imports_root() / import_id).job.write({'status': 'completed'})
+        assert open_store(import_id) is not None
+        alpha_dir = imports_root()
+        assert (alpha_dir / '.project').read_text() == 'alpha'
+    with bind_project(leak_env.records['beta']):
+        assert open_store(import_id) is None
+        assert list_stores() == []
+        beta_dir = imports_root()
+    assert beta_dir != alpha_dir
+    # alpha's directory copied under beta's path: refused, not served.
+    shutil.copytree(alpha_dir, beta_dir)
+    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
+        open_store(import_id)
+
+
+def test_reprocess_and_upload_dirs_are_marked_with_their_project(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+    import zipfile
+
+    from src.config.project_context import ProjectDirMismatchError, bind_project
+    from src.services.curation import reprocess_job
+    from src.services.curation.dataset_import.upload import datasets_root, receive_archive
+
+    monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(leak_env.root / 'reprocess'))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as zf:
+        zf.writestr('ds/data.yaml', 'names: [a]')
+
+    async def upload(record: Any) -> None:
+        async def body() -> Any:
+            yield buf.getvalue()
+
+        await receive_archive(body(), upload_root=record.resources.upload_root)
+
+    with bind_project(leak_env.records['alpha']):
+        reprocess_job.jobs_root().mkdir(parents=True)
+        assert (reprocess_job.jobs_root() / '.project').read_text() == 'alpha'
+        asyncio.run(upload(leak_env.records['alpha']))
+        alpha_uploads = datasets_root(leak_env.records['alpha'].resources.upload_root)
+        assert (alpha_uploads / '.project').read_text() == 'alpha'
+    # beta handed alpha's upload root: refused
+    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
+        asyncio.run(upload(leak_env.records['alpha']))

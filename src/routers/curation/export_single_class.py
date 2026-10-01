@@ -40,6 +40,7 @@ def _profile_from_request(payload: ExportSingleClassRequest) -> SingleClassExpor
         class_ids=tuple(payload.class_ids),
         box_source=payload.box_source,
         region_class_name=payload.region_class_name,
+        split_mode=payload.split_mode,
     )
 
 

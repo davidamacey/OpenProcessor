@@ -105,6 +105,14 @@ export interface ItemWire {
   region_max_score: number | null;
   region_set_complete: boolean | null;
   region_revision: number;
+  label_locked: boolean;
+  import_ids: string[];
+  dataset_split: string | null;
+  imported_at: string | null;
+  proposed_by_import: string | null;
+  on_negative_frame: boolean;
+  import_standalone_region: boolean;
+  proposal_chain: string[];
   item_text_lines: ItemTextLine[];
 }
 
@@ -201,6 +209,14 @@ export const ITEM_WIRE_KEYS = [
   'region_max_score',
   'region_set_complete',
   'region_revision',
+  'label_locked',
+  'import_ids',
+  'dataset_split',
+  'imported_at',
+  'proposed_by_import',
+  'on_negative_frame',
+  'import_standalone_region',
+  'proposal_chain',
   'item_text_lines',
 ] as const satisfies readonly ItemWireKey[];
 

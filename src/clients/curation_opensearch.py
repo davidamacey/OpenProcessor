@@ -162,6 +162,53 @@ def _plain_settings() -> dict[str, Any]:
     }
 
 
+# Dataset-import provenance (W10.10), on both indexes: the split a frame
+# was filed under, the exporter's stem, its stratum string, the hard-negative
+# marker, and every import that wrote a label on the doc.
+_IMPORT_COMMON_MAPPING: dict[str, Any] = {
+    'dataset_split': {'type': 'keyword'},
+    'import_ids': {'type': 'keyword'},
+    'import_source_stem': {'type': 'keyword'},
+    'import_stratum': {'type': 'keyword'},
+    'import_hard_negative': {'type': 'boolean'},
+}
+
+# Combine provenance (projects plan section 6): where a copied doc came from.
+_COMBINE_IMAGES_MAPPING: dict[str, Any] = {
+    'origin_project': {'type': 'keyword'},
+    'origin_image_id': {'type': 'keyword'},
+    'origin_split': {'type': 'keyword'},
+}
+
+_COMBINE_ITEMS_MAPPING: dict[str, Any] = {
+    **_COMBINE_IMAGES_MAPPING,
+    'origin_item_id': {'type': 'keyword'},
+    'combine_conflict': {'type': 'boolean'},
+    'combine_conflict_origins': {'type': 'keyword'},
+    'combine_merged_origins': {'type': 'keyword'},
+}
+
+_IMAGES_IMPORT_MAPPING: dict[str, Any] = {
+    **_IMPORT_COMMON_MAPPING,
+    **_COMBINE_IMAGES_MAPPING,
+    # A reviewed negative says "none of THESE classes" (W10.8).
+    'import_label_state': {'type': 'keyword'},
+    'negative_for': {'type': 'keyword'},
+}
+
+_ITEMS_IMPORT_MAPPING: dict[str, Any] = {
+    **_IMPORT_COMMON_MAPPING,
+    **_COMBINE_ITEMS_MAPPING,
+    'imported_at': {'type': 'date'},
+    'import_dataset_name': {'type': 'keyword'},
+    'import_dataset_sha': {'type': 'keyword'},
+    'proposed_by_import': {'type': 'keyword'},
+    'on_negative_frame': {'type': 'boolean'},
+    'import_standalone_region': {'type': 'boolean'},
+    'proposal_chain': {'type': 'keyword'},
+}
+
+
 def _images_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -194,6 +241,7 @@ def _images_body() -> dict[str, Any]:
                 # OpenSearch, so enabling it on a pre-existing index
                 # needs a reindex.
                 'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
+                **_IMAGES_IMPORT_MAPPING,
             }
         },
     }
@@ -508,6 +556,7 @@ def _items_body() -> dict[str, Any]:
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
                 # see src/services/curation/history.py).
                 'class_id_history': _CLASS_HISTORY_MAPPING,
+                **_ITEMS_IMPORT_MAPPING,
                 # Label Ignore/Undo: exclusion flag + provenance, and the
                 # pre-exclusion validation/cluster placement un-exclude
                 # restores (src/services/curation/exclusion.py).

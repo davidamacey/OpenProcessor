@@ -257,11 +257,18 @@ async def create_project(
     description: str = '',
     clone_settings_from: str | None = None,
     clone_axes: list[str] | None = None,
+    origin: dict | None = None,
+    activate: bool = True,
 ) -> tuple[ProjectRecord, list[dict[str, str]]]:
     """§4 ``POST /projects``. Steps: validate → capacity → record
     ``building`` → create indexes/dirs → optional clone → ``active``. A
     failure midway leaves the record ``failed`` with an error, never
-    partially ``active``."""
+    partially ``active``.
+
+    ``origin`` is stored on the record (a combine's target names its job and
+    sources). ``activate=False`` stops with the verified record still
+    ``building`` for a caller that fills the project first and then calls
+    :func:`finish_building`."""
     from src.config.curation import base_curation_config
 
     if not is_valid_slug(slug):
@@ -303,7 +310,7 @@ async def create_project(
         revision=1,
         created_at=now,
         updated_at=now,
-        origin=None,
+        origin=origin,
         resources=resources,
     )
     try:
@@ -427,28 +434,40 @@ async def create_project(
         await registry.ensure_fresh()
         raise
 
-    # MA1: same 'expect_status' guard on the success path -- without it,
-    # a re-read taken immediately before this write always has a
-    # trivially-current seq/term (nothing else was writing at that
-    # exact instant), so OCC alone never catches a slow create's final
-    # 'active' write landing after some other caller already deleted
-    # and tombstoned this slug in between. Refuse instead of resurrecting.
-    # F2 (known gap): if that refusal fires because a concurrent DELETE
-    # won the race, see _cleanup_orphaned_by_concurrent_delete.
+    if not activate:
+        return record, warnings
+
+    return await finish_building(client, record), warnings
+
+
+async def finish_building(client: Any, record: ProjectRecord, *, ok: bool = True) -> ProjectRecord:
+    """The ``building`` -> ``active`` (or ``failed``) transition that ends a
+    create, and a combine's fill of its target.
+
+    MA1: the ``expect_status='building'`` guard is what stops a slow finish
+    from resurrecting a slug a concurrent DELETE already tombstoned -- a
+    re-read taken right before this write always has a current seq/term, so
+    OCC alone would not catch it. F2 (known gap): see
+    ``_cleanup_orphaned_by_concurrent_delete``.
+    """
     try:
-        active, seq, term = await _refetch_for_write(
-            client, slug, expect_status='building', status='active', updated_at=_now()
+        finished, seq, term = await _refetch_for_write(
+            client,
+            record.slug,
+            expect_status='building',
+            status='active' if ok else 'failed',
+            updated_at=_now(),
         )
     except HTTPException as refetch_exc:
         await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
         raise
-    await write_record(client, active, if_seq_no=seq, if_primary_term=term)
-    await registry.ensure_fresh()
+    await write_record(client, finished, if_seq_no=seq, if_primary_term=term)
+    await get_project_registry().ensure_fresh()
 
     from src.services.projects.capacity import invalidate_capacity_cache
 
     invalidate_capacity_cache()  # m7: a create just changed this cluster's shard count
-    return active, warnings
+    return finished
 
 
 async def patch_project(

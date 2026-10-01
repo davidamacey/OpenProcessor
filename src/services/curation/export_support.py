@@ -21,14 +21,14 @@ import subprocess  # nosec B404 - only used with a fixed argv + resolved executa
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from src.core.logging import get_logger
 
 
 if TYPE_CHECKING:
     import random
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from src.clients.curation_opensearch import RegistryClassEntry
     from src.config import CurationConfig
@@ -37,21 +37,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _T = TypeVar('_T')
-
-
-class SplittableRow(Protocol):
-    """Minimum surface :func:`stratified_split` needs from a row.
-
-    Declared structurally rather than as ``_ExportRow`` so the
-    single-class exporter's own frame-level row type can be handed to
-    the same splitter without either module having to fake the other's
-    fields. ``group_key`` is read via ``getattr``, so any additional
-    grouping attribute (e.g. ``image_id``) is reachable too.
-    """
-
-    item_id: str
-    class_id: int
-    has_test_crop: bool
 
 
 @dataclass
@@ -76,6 +61,10 @@ class _ExportRow:
     # 'test'.
     has_test_crop: bool = False
     export_class_id: int = -1
+    # Dataset-import provenance (W10.9): the split the frame was filed under
+    # and the stem its label file had in the export it was imported from.
+    dataset_split: str | None = None
+    import_source_stem: str | None = None
 
 
 def hash_split(key: str, seed: int, train_ratio: float, val_ratio: float) -> str:
@@ -142,144 +131,6 @@ def even_stratified_sample(
         if not progressed:  # pragma: no cover - unreachable: n < len(rows)
             break
     return picked
-
-
-DEFAULT_SPLIT_GROUP_KEY = 'image_id'
-"""The leakage unit :func:`stratified_split` groups on by default.
-
-Items cut from the same source image share pixels, so a group never
-straddles train/val/test. ``cluster_id`` is NOT a leakage unit: clustering
-assigns class-sized semantic clusters (``cluster_id == class_id`` for every
-validated item), so grouping on it put a whole class into one group.
-"""
-
-_SPLIT_PRIORITY = ('train', 'val', 'test')
-# Below this a ratio counts as zero (``1 - 0.89 - 0.11`` is ~1e-17, not 0).
-_RATIO_EPSILON = 1e-9
-
-
-def _allocate_group_counts(n: int, weights: dict[str, float]) -> dict[str, int]:
-    """Split ``n`` groups across the positive-weight splits.
-
-    Every active split (weight > 0) gets one group first, in
-    ``train -> val -> test`` priority order, as far as ``n`` reaches; the
-    rest go one at a time to whichever split is furthest below its target
-    ``n * weight`` (ties to the higher-priority split). Pure arithmetic on
-    counts, so it's deterministic and never depends on group identity.
-    """
-    active = [s for s in _SPLIT_PRIORITY if weights.get(s, 0.0) > _RATIO_EPSILON]
-    counts = dict.fromkeys(_SPLIT_PRIORITY, 0)
-    if n <= 0 or not active:
-        return counts
-    total = sum(weights[s] for s in active)
-    target = {s: n * weights[s] / total for s in active}
-    for split in active[:n]:
-        counts[split] = 1
-    for _ in range(n - min(n, len(active))):
-        best = max(active, key=lambda s: (target[s] - counts[s], -active.index(s)))
-        counts[best] += 1
-    return counts
-
-
-def stratified_split(
-    rows: Sequence[SplittableRow],
-    *,
-    seed: int,
-    train_ratio: float,
-    val_ratio: float,
-    group_key: str | None = DEFAULT_SPLIT_GROUP_KEY,
-) -> dict[str, str]:
-    """Per-class, per-group deterministic stratified split.
-
-    **Groups.** Rows sharing a ``group_key`` value (default ``image_id``:
-    every item cut from one source image) are always assigned to the same
-    split, so near-identical pixels never straddle train/val/test. A row
-    with no ``group_key`` value is its own singleton group (keyed by
-    ``item_id``). ``group_key=None`` makes every row a singleton.
-
-    **Frozen holdout.** A row with ``has_test_crop=True`` (the frozen
-    ``test_holdout`` flag) goes to ``test``, and so does every other row
-    of its group (a same-image mate), whatever its class — otherwise the
-    mate would leak the holdout's pixels into training.
-
-    **Strata.** Every remaining group belongs to the class stratum of its
-    most common ``class_id`` (ties to the smallest id). Within a stratum,
-    groups are ordered by ``sha256(seed:stratum:group_id)`` and cut by
-    exact counts, not an independent per-item hash bucket, so each class's
-    actual ratio tracks the target even when the class is small.
-
-    **Per-class allocation of the remaining ``n`` groups:**
-
-    * a class with at least one frozen holdout row: its test split IS the
-      frozen holdout, so the remaining groups are split between train and
-      val only, in the ratio ``train_ratio : val_ratio``;
-    * a class with no frozen holdout: train / val / test in the ratio
-      ``train_ratio : val_ratio : (1 - train_ratio - val_ratio)``.
-
-    Each split with a positive ratio gets one group before any split gets
-    a second, in ``train -> val -> test`` priority order; the remainder
-    follows the target ratio (:func:`_allocate_group_counts`). So:
-
-    * ``n == 0`` — the class contributes only its holdout rows (to test);
-    * ``n == 1`` — train;
-    * ``n == 2`` — one train, one val;
-    * ``n >= 3`` — at least one train and one val; with no holdout, also
-      at least one test.
-
-    Deterministic: the same rows (in any order) and seed always give the
-    same assignment. Returns ``{item_id: split}`` for every row.
-    """
-
-    def _group_of(row: SplittableRow) -> str:
-        if group_key is None:
-            return f'item:{row.item_id}'
-        value = getattr(row, group_key, None)
-        if value in (None, ''):
-            return f'item:{row.item_id}'
-        return f'{group_key}:{value}'
-
-    groups: dict[str, list[SplittableRow]] = {}
-    for row in rows:
-        groups.setdefault(_group_of(row), []).append(row)
-
-    holdout_classes = {row.class_id for row in rows if row.has_test_crop}
-    forced_groups: set[str] = set()
-    class_to_groups: dict[int, list[str]] = {}
-    for gid, members in groups.items():
-        if any(m.has_test_crop for m in members):
-            forced_groups.add(gid)
-            continue
-        counts: dict[int, int] = {}
-        for m in members:
-            counts[m.class_id] = counts.get(m.class_id, 0) + 1
-        best_count = max(counts.values())
-        stratum = min(cid for cid, c in counts.items() if c == best_count)
-        class_to_groups.setdefault(stratum, []).append(gid)
-
-    test_ratio = max(0.0, 1.0 - train_ratio - val_ratio)
-    group_split: dict[str, str] = dict.fromkeys(forced_groups, 'test')
-    for stratum, gids in class_to_groups.items():
-        ordered = sorted(
-            gids, key=lambda gid: hashlib.sha256(f'{seed}:{stratum}:{gid}'.encode()).hexdigest()
-        )
-        weights = {
-            'train': train_ratio,
-            'val': val_ratio,
-            'test': 0.0 if stratum in holdout_classes else test_ratio,
-        }
-        allocation = _allocate_group_counts(len(ordered), weights)
-        cursor = 0
-        for split in _SPLIT_PRIORITY:
-            for gid in ordered[cursor : cursor + allocation[split]]:
-                group_split[gid] = split
-            cursor += allocation[split]
-
-    item_split: dict[str, str] = {}
-    for gid, members in groups.items():
-        split = group_split[gid]
-        for m in members:
-            item_split[m.item_id] = split
-    return item_split
 
 
 async def scroll_hits(
@@ -389,6 +240,21 @@ def label_content_sha(
     return digest[:truncate] if truncate else digest
 
 
+def frozen_sha_of_names(names: Iterable[str]) -> str:
+    """The test-split identity digest over label file names (``''`` for none).
+    Shared by :func:`frozen_test_sha_of` (the names on disk) and
+    :func:`source_frozen_test_sha` (the names the frames had in the export
+    they were imported from), so the two can only agree by construction."""
+    ordered = sorted(names)
+    if not ordered:
+        return ''
+    h = hashlib.sha256()
+    for name in ordered:
+        h.update(name.encode('utf-8'))
+        h.update(b'\n')
+    return h.hexdigest()[:16]
+
+
 def frozen_test_sha_of(export_dir: Path) -> str:
     """Checksum over the test split's *identity* — which frames are in it.
 
@@ -402,14 +268,25 @@ def frozen_test_sha_of(export_dir: Path) -> str:
     test_labels = export_dir / 'labels' / 'test'
     if not test_labels.is_dir():
         return ''
-    names = sorted(p.name for p in test_labels.glob('*.txt'))
-    if not names:
+    return frozen_sha_of_names(p.name for p in test_labels.glob('*.txt'))
+
+
+def source_frozen_test_sha(test_stems: Iterable[str | None], fallback_stems: Iterable[str]) -> str:
+    """:func:`frozen_test_sha_of`'s digest over the test rows' *source* stems.
+
+    ``test_stems`` are the ``import_source_stem`` of each test row (``None``
+    when the row was never imported); a row without one contributes its own
+    written stem from ``fallback_stems`` (same order). ``''`` unless at least
+    one test row carries an imported stem: then a re-export of an imported
+    dataset reproduces the source manifest's ``frozen_test_sha`` although the
+    label files are named by this project's own ids.
+    """
+    stems = list(test_stems)
+    if not any(stems):
         return ''
-    h = hashlib.sha256()
-    for name in names:
-        h.update(name.encode('utf-8'))
-        h.update(b'\n')
-    return h.hexdigest()[:16]
+    return frozen_sha_of_names(
+        f'{stem or own}.txt' for stem, own in zip(stems, fallback_stems, strict=True)
+    )
 
 
 def _build_export_id_map(classes: list[RegistryClassEntry]) -> dict[int, int]:
@@ -623,8 +500,6 @@ def _code_sha() -> str:
 
 
 __all__ = [
-    'DEFAULT_SPLIT_GROUP_KEY',
-    'SplittableRow',
     'atomic_symlink_flip',
     'atomic_write_text',
     'even_stratified_sample',
@@ -632,5 +507,4 @@ __all__ = [
     'hash_split',
     'label_content_sha',
     'scroll_hits',
-    'stratified_split',
 ]

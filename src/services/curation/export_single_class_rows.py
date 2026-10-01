@@ -21,11 +21,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.region_state import RegionStatus
+from src.services.curation.export_negatives import scroll_negative_frames
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.region_boxes import accepted, read_boxes
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import CurationConfig
     from src.config.region_fields import RegionFields
     from src.services.curation.export_single_class import SingleClassExportProfile
@@ -59,7 +62,7 @@ class _FrameRow:
     """One output image's worth of state: its boxes, stratum and split key.
 
     Structurally satisfies both
-    :class:`~src.services.curation.export_support.SplittableRow` (via
+    :class:`~src.services.curation.export_split.SplittableRow` (via
     ``item_id`` / ``class_id`` / ``has_test_crop``) and
     ``frame_dedup._DedupRow`` (via ``image_id`` / ``has_test_crop``), so
     the same objects flow through the shared splitter and the shared
@@ -81,10 +84,53 @@ class _FrameRow:
     crop_norm: tuple[float, float, float, float] | None = None
     # A detector fired here and a human rejected it. Kept in full.
     is_hard_negative: bool = False
+    # The stratum an import recorded for this frame (preferred over the
+    # computed one, so a re-export keeps the source's strings).
+    import_stratum: str | None = None
+    # Dataset-import provenance (W10.9): the split the frame was filed under
+    # and the stem its label file had in the export it was imported from.
+    dataset_split: str | None = None
+    import_source_stem: str | None = None
 
     @property
     def is_positive(self) -> bool:
         return bool(self.boxes)
+
+
+IMPORT_SOURCE_FIELDS = (
+    'dataset_split',
+    'import_source_stem',
+    'import_stratum',
+    'import_hard_negative',
+)
+
+
+def _apply_import_fields(
+    row: _FrameRow,
+    *,
+    dataset_split: str | None,
+    import_source_stem: str | None,
+    import_stratum: str | None,
+    hard_negative: bool,
+) -> None:
+    """Stamp a dataset import's provenance on an export row (first writer
+    wins per field, so the images doc and its items can both feed it).
+    ``import_stratum`` is what a re-export writes into ``stratum_map.json``,
+    so bake-off per-stratum metrics stay comparable across a round trip."""
+    row.dataset_split = row.dataset_split or dataset_split
+    row.import_source_stem = row.import_source_stem or import_source_stem
+    row.import_stratum = row.import_stratum or import_stratum
+    row.is_hard_negative = row.is_hard_negative or hard_negative
+
+
+def _apply_import_fields_from(row: _FrameRow, src: dict[str, Any]) -> None:
+    _apply_import_fields(
+        row,
+        dataset_split=src.get('dataset_split') or None,
+        import_source_stem=src.get('import_source_stem') or None,
+        import_stratum=src.get('import_stratum') or None,
+        hard_negative=bool(src.get('import_hard_negative')),
+    )
 
 
 class RowCollector:
@@ -97,18 +143,62 @@ class RowCollector:
         profile: SingleClassExportProfile,
         config: CurationConfig,
         region_fields: RegionFields,
+        class_names: Sequence[str] = (),
     ) -> None:
         self.opensearch = opensearch
         self.profile = profile
         self.config = config
         self.fields = region_fields
+        # The dataset's class names: an imported negative frame is a
+        # background for this export when its ``negative_for`` names one.
+        self.class_names = frozenset(class_names)
 
     async def collect(self, *, image_mode: ImageMode, empty_bg_ratio: float) -> list[_FrameRow]:
         if self.profile.box_source == 'region':
-            return await self._collect_region_rows(
+            rows = await self._collect_region_rows(
                 image_mode=image_mode, empty_bg_ratio=empty_bg_ratio
             )
-        return await self._collect_item_rows()
+        else:
+            rows = await self._collect_item_rows()
+        if image_mode == 'item_crop':
+            # A frame-sized background has no place in a crop dataset.
+            return rows
+        return await self._merge_imported_negatives(rows)
+
+    async def _merge_imported_negatives(self, rows: list[_FrameRow]) -> list[_FrameRow]:
+        """Add (or annotate) the frames a dataset import marked as reviewed
+        negatives for this export's classes (W10.8).
+
+        A frame that already has a row (it carries other items) keeps its row
+        and takes the import's stem/split/stratum/hard-negative marker; one
+        with no items becomes a label-free background row.
+        """
+        frames = await scroll_negative_frames(
+            self.opensearch, images_index=self.config.images_index
+        )
+        by_image = {r.image_id: r for r in rows}
+        for frame in frames:
+            if not (frame.negative_for & self.class_names):
+                continue
+            row = by_image.get(frame.image_id)
+            if row is None:
+                row = _FrameRow(
+                    item_id=frame.image_id,
+                    image_id=frame.image_id,
+                    image_path=frame.image_path,
+                    stratum=frame.import_stratum or 'bg:import_negative',
+                )
+                rows.append(row)
+                by_image[frame.image_id] = row
+            _apply_import_fields(
+                row,
+                dataset_split=frame.dataset_split,
+                import_source_stem=frame.import_source_stem,
+                import_stratum=frame.import_stratum,
+                hard_negative=frame.import_hard_negative,
+            )
+            row.stratum = row.import_stratum or row.stratum
+        return rows
 
     # ------------------------------------------------------------- item mode
 
@@ -138,6 +228,7 @@ class RowCollector:
                 'class_id',
                 'test_holdout',
                 'cluster_id',
+                *IMPORT_SOURCE_FIELDS,
             ],
         )
 
@@ -154,6 +245,7 @@ class RowCollector:
                 _FrameRow(item_id=frame_key, image_id=frame_key, image_path=image_path),
             )
             row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
+            _apply_import_fields_from(row, src)
             if src.get('cluster_id') is not None:
                 cluster_by_frame[frame_key].append(str(src['cluster_id']))
 
@@ -166,7 +258,9 @@ class RowCollector:
                 row.boxes.append((dense, *box))
 
         for key, row in per_frame.items():
-            row.stratum = self._fallback_stratum(row, cluster_by_frame.get(key, []))
+            row.stratum = row.import_stratum or self._fallback_stratum(
+                row, cluster_by_frame.get(key, [])
+            )
         return list(per_frame.values())
 
     # ----------------------------------------------------------- region mode
@@ -191,6 +285,7 @@ class RowCollector:
             'class_id',
             'test_holdout',
             'cluster_id',
+            *IMPORT_SOURCE_FIELDS,
             f.boxes,
             f.status,
         ]
@@ -265,6 +360,7 @@ class RowCollector:
                 _FrameRow(item_id=frame_key, image_id=frame_key, image_path=image_path),
             )
             row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
+            _apply_import_fields_from(row, src)
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
                 # W8-cleanup: an item can carry more than one accepted box
@@ -290,7 +386,11 @@ class RowCollector:
                 cluster_keys[frame_key].append(f'bg:{src.get("cluster_id")}')
 
         for key, row in per_frame.items():
-            row.stratum = dominant(cluster_keys.get(key, [])) or self._fallback_stratum(row, [])
+            row.stratum = (
+                row.import_stratum
+                or dominant(cluster_keys.get(key, []))
+                or self._fallback_stratum(row, [])
+            )
         return list(per_frame.values())
 
     def _build_region_crop_rows(self, hits: list[dict[str, Any]]) -> list[_FrameRow]:
@@ -318,6 +418,7 @@ class RowCollector:
                 has_test_crop=bool(src.get('test_holdout')),
                 crop_norm=parent,
             )
+            _apply_import_fields_from(row, src)
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
                 # W8-cleanup: every accepted box on this item that lands
@@ -338,6 +439,7 @@ class RowCollector:
                 )
             else:
                 row.stratum = f'bg:{src.get("cluster_id")}'
+            row.stratum = row.import_stratum or row.stratum
             rows.append(row)
         return rows
 

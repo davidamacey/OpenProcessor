@@ -74,6 +74,14 @@ class TestIsLockedBox:
         box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', source='import')
         assert is_locked_box(box) is True
 
+    def test_suggestion_import_box_is_not_locked(self) -> None:
+        """``label_trust: suggestion`` writes ``proposed`` boxes with
+        ``source: import``: the machine pipeline may still replace them."""
+        box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='proposed', source='import')
+        assert is_locked_box(box) is False
+        accepted = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', source='import')
+        assert is_locked_box(accepted) is True
+
     def test_machine_box_unlocked(self) -> None:
         box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='proposed', source='segmenter')
         assert is_locked_box(box) is False
@@ -122,7 +130,7 @@ class TestReingestPreservesImportedLabel:
     fields — the OCC guard the ingest pipeline runs through
     ``occ_upsert_bulk`` (``ingest.py``'s ``_CROP_HUMAN_FIELD_GUARDS =
     ('label_source', 'class_source')``). Red before W10:
-    ``_merge_preserving_human`` used ``_is_human_marker``, which does not
+    ``_merge_preserving_human`` used ``is_human_marker``, which does not
     recognize import provenance.
 
     W10 fix-pass note (Opus review 2026-09-28, lock-rule call-site m4):

@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
+from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.class_sources import (
@@ -304,6 +305,18 @@ def serialize_item(
         'review_dismissed_at': src.get('review_dismissed_at'),
         'source': src.get('source') or '',
         'test_holdout': bool(src.get('test_holdout', False)),
+        # Server-computed lock rule (src.clients.occ_locks.is_locked_item): a
+        # human- or import-owned label, box or verdict that no automated
+        # writer will touch. The client never re-derives it.
+        'label_locked': is_locked_item(src, f),
+        # Dataset-import provenance (W10.10).
+        'import_ids': list(src.get('import_ids') or []),
+        'dataset_split': src.get('dataset_split'),
+        'imported_at': src.get('imported_at'),
+        'proposed_by_import': src.get('proposed_by_import'),
+        'on_negative_frame': bool(src.get('on_negative_frame', False)),
+        'import_standalone_region': bool(src.get('import_standalone_region', False)),
+        'proposal_chain': list(src.get('proposal_chain') or []),
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
@@ -388,6 +401,7 @@ def region_boxes_to_wire(
     boxes = []
     for box in read_boxes(src, f):
         doc = box.to_doc()
+        doc['locked'] = is_locked_box(box)
         doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
         doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None
         boxes.append(doc)

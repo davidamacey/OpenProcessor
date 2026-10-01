@@ -45,18 +45,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
-from scripts.curation.worker.state import _crop_jpeg_from_disk
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
-from src.services.curation.region_box_embeddings import (
-    EMBEDDED_BOX_STATES,
-    entry_for,
-    missing_boxes,
-    write_box_embeddings,
-)
+from src.services.curation.region_box_embeddings import EMBEDDED_BOX_STATES, missing_boxes
 from src.services.curation.region_boxes import box_query
-from src.services.detection.region_embed import embed_region_crops
+from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
@@ -68,7 +62,6 @@ if TYPE_CHECKING:
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
 _SCROLL_PAGE = 200
-_ENCODE_BATCH = 32
 
 logging.basicConfig(
     level=logging.INFO,
@@ -148,37 +141,23 @@ async def _run(
         await pool.initialize()
         pe = PEEncoder(triton_pool=pool)
 
-        # (crop_id, box, crop jpeg) for every box to embed, in item order.
-        work: list[tuple[str, Any, bytes]] = []
-        n_missing_image = 0
+        # The per-item work is the unified reprocess's `embed` scope
+        # (src/services/curation/reprocess_embed.py): same crop, same
+        # encoder, same vector, only the region part.
+        by_path: dict[str, EmbedTarget] = {}
         for h in hits:
             source = h.get('_source') or {}
-            image_path = source.get('image_path')
-            for box in missing_boxes(source):
-                jpeg = (
-                    await asyncio.to_thread(_crop_jpeg_from_disk, image_path, box.bbox_norm)
-                    if image_path
-                    else None
-                )
-                if jpeg is None:
-                    n_missing_image += 1
-                    continue
-                work.append((h['_id'], box, jpeg))
-
-        n_written = 0
-        n_decode_failed = 0
-        for start in range(0, len(work), _ENCODE_BATCH):
-            batch = work[start : start + _ENCODE_BATCH]
-            embeddings = await embed_region_crops(pe, [jpeg for _cid, _box, jpeg in batch])
-            by_crop: dict[str, list[dict[str, Any]]] = {}
-            for (crop_id, box, _jpeg), emb in zip(batch, embeddings, strict=True):
-                if emb is None:
-                    n_decode_failed += 1
-                    continue
-                by_crop.setdefault(crop_id, []).append(entry_for(box, emb))
-                n_written += 1
-            if by_crop:
-                await write_box_embeddings(client, index=cfg.items_index, by_crop=by_crop)
+            path = source.get('image_path') or ''
+            target = by_path.setdefault(
+                path, EmbedTarget(image_id=source.get('image_id') or '', image_path=path)
+            )
+            target.items.append((h['_id'], source))
+        counts = await reembed_items(
+            client, pe, list(by_path.values()), parts=frozenset({'region'}), only_missing=True
+        )
+        n_written = counts['region_written']
+        n_missing_image = counts['missing_image']
+        n_decode_failed = counts['decode_failed']
 
         try:
             await client.indices.refresh(index=cfg.items_index)

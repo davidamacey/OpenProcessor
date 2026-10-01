@@ -39,7 +39,7 @@ frozen ``test_holdout`` item always lands in the ``test`` split, honoring
 whatever holdout freeze a deployment has already committed to (see
 ``src.services.curation.holdout``); a class with a frozen holdout splits
 its other images between train and val only. The exact per-class rules
-are on :func:`~src.services.curation.export_support.stratified_split`.
+are on :func:`~src.services.curation.export_split.stratified_split`.
 
 Dense export ids (``class_registry.json:export_id_map``) are resolved from
 the live :class:`~src.clients.curation_opensearch.ClassRegistry` at export
@@ -54,8 +54,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -63,16 +61,18 @@ from typing import Any, Literal
 
 from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
-from src.config.project_context import run_in_executor_bound
 from src.core.logging import get_logger
 from src.services.curation.export_images import (
-    _ExportImage,
-    group_rows_by_image,
+    copy_export_images,
     image_file_stem,
     normalized_box,
-    rarest_class_key,
-    unlabeled_items_by_image,
+    select_export_images,
     yolo_line,
+)
+from src.services.curation.export_negatives import (
+    plan_multi_class_negatives,
+    scroll_negative_frames,
+    write_negative_frames,
 )
 from src.services.curation.export_readiness import (
     MANIFEST_GENERATION_KEY,
@@ -80,11 +80,15 @@ from src.services.curation.export_readiness import (
     items_index_generation,
 )
 from src.services.curation.export_retention import prune_exports_after_write
-from src.services.curation.export_support import (
+from src.services.curation.export_split import (
     DEFAULT_SPLIT_GROUP_KEY,
+    SplitMode,
+    pins_from_rows,
+    stratified_split_with_stats,
+)
+from src.services.curation.export_support import (
     _build_export_id_map,
     _code_sha,
-    _copy_or_resize_one,
     _ExportRow,
     _remap_rows_to_export_ids,
     _resolve_source_path,
@@ -95,10 +99,9 @@ from src.services.curation.export_support import (
     hash_split,
     label_content_sha,
     scroll_hits,
-    stratified_split,
+    source_frozen_test_sha,
 )
 from src.services.curation.holdout import compute_holdout_sha
-from src.services.detection.frame_dedup import dedup_rows_by_embedding
 
 
 logger = get_logger(__name__)
@@ -241,6 +244,8 @@ class GenericYoloExportService:
                 'class_id',
                 'class_name',
                 'test_holdout',
+                'dataset_split',
+                'import_source_stem',
             ],
         )
 
@@ -274,106 +279,11 @@ class GenericYoloExportService:
                     class_id=int(class_id),
                     class_name=str(src.get('class_name') or class_id),
                     has_test_crop=bool(src.get('test_holdout')),
+                    dataset_split=src.get('dataset_split') or None,
+                    import_source_stem=src.get('import_source_stem') or None,
                 )
             )
         return rows, skipped
-
-    async def _apply_dedup(
-        self, images: list[_ExportImage], dedup_threshold: float | None
-    ) -> tuple[list[_ExportImage], dict[str, Any]]:
-        """Collapse near-duplicate images; the stats' ``*_rows`` count images."""
-        if dedup_threshold is None:
-            return images, {'enabled': False}
-        kept, stats = await dedup_rows_by_embedding(
-            self.opensearch, images, threshold=dedup_threshold, config=self.config
-        )
-        return sorted(kept, key=lambda im: im.image_id), stats
-
-    async def _copy_images(
-        self,
-        jobs: list[tuple[str, str]],
-        *,
-        resize_mode: Literal['aspect'] | None,
-        image_size: int,
-        max_workers: int,
-    ) -> dict[str, Any]:
-        if not jobs:
-            return {'attempted': 0, 'copied': 0, 'failed': 0, 'errors': []}
-        loop = asyncio.get_running_loop()
-        copied = 0
-        failed = 0
-        errors: list[str] = []
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            futures = [
-                run_in_executor_bound(
-                    loop, pool, _copy_or_resize_one, src, dest, resize_mode, image_size
-                )
-                for src, dest in jobs
-            ]
-            for fut in asyncio.as_completed(futures):
-                _dest, ok, err = await fut
-                if ok:
-                    copied += 1
-                else:
-                    failed += 1
-                    if err:
-                        errors.append(err)
-        return {'attempted': len(jobs), 'copied': copied, 'failed': failed, 'errors': errors[:20]}
-
-    async def _select_images(
-        self,
-        rows: list[_ExportRow],
-        *,
-        require_fully_labeled_images: bool,
-        dedup_threshold: float | None,
-        max_images: int | None,
-        seed: int,
-    ) -> tuple[list[_ExportImage], dict[str, int], dict[str, Any]]:
-        """Group dense-id rows into images, then apply the partial-frame
-        policy, the near-dup collapse and the ``max_images`` cap, in that
-        order — so a dropped partial frame can't knock out a fully labeled
-        near-duplicate, and the cap lands on exactly
-        ``min(max_images, pool)`` images.
-
-        Returns ``(images, unlabeled_by_image, info)``.
-        """
-        images = group_rows_by_image(rows)
-        unlabeled = await unlabeled_items_by_image(
-            self.opensearch,
-            index=self.config.items_index,
-            image_ids=[im.image_id for im in images],
-            labeled_item_ids={r.item_id for r in rows},
-        )
-        dropped_partial = 0
-        if require_fully_labeled_images:
-            full = [im for im in images if not unlabeled.get(im.image_id)]
-            dropped_partial = len(images) - len(full)
-            if not full:
-                raise NothingToExportError(
-                    f'require_fully_labeled_images: all {len(images)} image(s) with a validated '
-                    'object also carry an unreviewed or unexported object; none is fully labeled'
-                )
-            images = full
-        images, dedup_stats = await self._apply_dedup(images, dedup_threshold)
-
-        sampling_mode = 'all'
-        if max_images is not None and len(images) > max_images:
-            frequency: dict[int, int] = {}
-            for image in images:
-                for obj in image.objects:
-                    frequency[obj.export_class_id] = frequency.get(obj.export_class_id, 0) + 1
-            images = even_stratified_sample(
-                images, max_images, lambda im: rarest_class_key(im, frequency), random.Random(seed)
-            )
-            images.sort(key=lambda im: im.image_id)
-            sampling_mode = 'stratified_even'
-            logger.info('export_sampled', n_images=len(images), max_images=max_images)
-        info = {
-            'dedup': dedup_stats,
-            'sampling_mode': sampling_mode,
-            'images_dropped_not_fully_labeled': dropped_partial,
-        }
-        return images, unlabeled, info
 
     async def export_dataset(
         self,
@@ -388,6 +298,8 @@ class GenericYoloExportService:
         image_size: int = 640,
         copy_images: bool = True,
         max_image_workers: int = 4,
+        split_mode: SplitMode = 'keep_imported',
+        include_negative_frames: bool = True,
     ) -> ExportResult:
         """Export every validated, non-excluded, non-dismissed item as a
         multi-class YOLO detection dataset, one image + one label file per
@@ -401,7 +313,13 @@ class GenericYoloExportService:
 
         Splits are assigned per image (:func:`stratified_split` grouped on
         ``image_id``); an image carrying a frozen ``test_holdout`` item goes
-        to ``test`` with all its objects. The manifest records
+        to ``test`` with all its objects. ``split_mode='keep_imported'`` (the
+        default) keeps the split a dataset import filed each frame under
+        (``dataset_split``); ``'recompute'`` ignores it. A frame an import
+        marked a reviewed negative is written as an empty label file when
+        ``include_negative_frames`` and its ``negative_for`` covers every
+        class this export has objects for (see
+        :mod:`~src.services.curation.export_negatives`). The manifest records
         ``split_counts`` (images per split), ``split_object_counts``
         (objects per split) and ``class_split_counts`` (objects per class
         per split).
@@ -479,7 +397,9 @@ class GenericYoloExportService:
                 f'(or is deprecated): {dict(sorted(dropped_unregistered.items()))}'
             )
 
-        images, unlabeled, selection = await self._select_images(
+        images, unlabeled, selection = await select_export_images(
+            self.opensearch,
+            self.config,
             rows,
             require_fully_labeled_images=require_fully_labeled_images,
             dedup_threshold=dedup_threshold,
@@ -504,12 +424,14 @@ class GenericYoloExportService:
             (labels_root / split).mkdir(parents=True, exist_ok=True)
 
         # Grouped on image_id, so all of an image's objects share one split.
-        item_split = stratified_split(
-            [obj for image in images for obj in image.objects],
+        split_rows = [obj for image in images for obj in image.objects]
+        item_split, split_stats = stratified_split_with_stats(
+            split_rows,
             seed=seed,
             train_ratio=self.profile.train_ratio,
             val_ratio=self.profile.val_ratio,
             group_key=DEFAULT_SPLIT_GROUP_KEY,
+            pinned=pins_from_rows(split_rows, split_mode),
         )
 
         counts = SplitCounts()
@@ -518,10 +440,15 @@ class GenericYoloExportService:
         item_ids: list[str] = []
         holdout_item_ids: list[str] = []
         image_jobs: list[tuple[str, str]] = []
+        # (import_source_stem, own label stem) of every test image, for the
+        # manifest's source_frozen_test_sha.
+        test_stems: list[tuple[str | None, str]] = []
 
         for image in images:
             split = item_split[image.objects[0].item_id]
             stem = image_file_stem(image.image_id)
+            if split == 'test':
+                test_stems.append((image.objects[0].import_source_stem, stem))
             lines = [yolo_line(o.export_class_id, o.bbox_norm) for o in image.objects]
             (labels_root / split / f'{stem}.txt').write_text('\n'.join(lines) + '\n')
             setattr(counts, split, getattr(counts, split) + 1)
@@ -546,7 +473,34 @@ class GenericYoloExportService:
                         image_path=image.image_path,
                     )
 
-        image_copy_stats = await self._copy_images(
+        negatives_written = 0
+        negatives_skipped_partial = 0
+        if include_negative_frames:
+            planned, negatives_skipped_partial = plan_multi_class_negatives(
+                await scroll_negative_frames(
+                    self.opensearch, images_index=self.config.images_index
+                ),
+                exported_class_names={
+                    names[o.export_class_id] for im in images for o in im.objects
+                },
+                already_exported={im.image_id for im in images},
+                split_mode=split_mode,
+                seed=seed,
+                train_ratio=self.profile.train_ratio,
+                val_ratio=self.profile.val_ratio,
+            )
+            negatives_written = write_negative_frames(
+                planned,
+                labels_root=labels_root,
+                images_root=images_root,
+                config=self.config,
+                split_counts=counts,
+                test_stems=test_stems,
+                image_jobs=image_jobs,
+                copy_images=copy_images,
+            )
+
+        image_copy_stats = await copy_export_images(
             image_jobs,
             resize_mode=resize_mode,
             image_size=image_size,
@@ -619,7 +573,19 @@ class GenericYoloExportService:
             'dataset_sha': checksum,
             'frozen_test_sha': frozen_test_sha,
             'test_label_sha': test_label_sha,
-            'image_count': len(images),
+            'image_count': len(images) + negatives_written,
+            'negative_images': negatives_written,
+            'negative_frames_skipped_partial': negatives_skipped_partial,
+            **split_stats.to_manifest(split_mode),
+            **(
+                {'source_frozen_test_sha': source_sha}
+                if (
+                    source_sha := source_frozen_test_sha(
+                        (s for s, _ in test_stems), (o for _, o in test_stems)
+                    )
+                )
+                else {}
+            ),
             'object_count': len(item_ids),
             'split_counts': counts.to_dict(),
             'split_object_counts': object_counts.to_dict(),
@@ -666,7 +632,7 @@ class GenericYoloExportService:
             data_yaml_path=str(data_yaml_path),
             dataset_sha=checksum,
             split_counts=counts,
-            image_count=len(images),
+            image_count=len(images) + negatives_written,
             class_count=len(names),
             classes_with_objects=classes_with_objects,
             started_at=started_at,
@@ -695,5 +661,4 @@ __all__ = [
     'hash_split',
     'label_content_sha',
     'resolve_current_export_dir',
-    'stratified_split',
 ]

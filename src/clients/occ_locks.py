@@ -15,7 +15,7 @@ from typing import Any
 from src.config import get_region_fields
 
 
-def _is_human_marker(value: Any) -> bool:
+def is_human_marker(value: Any) -> bool:
     """A guard-field value indicates a human write iff it's a string
     containing the substring ``human``.
 
@@ -29,7 +29,7 @@ def _is_human_marker(value: Any) -> bool:
 
 
 def _is_locked_marker(value: Any) -> bool:
-    """``_is_human_marker`` plus the two import-provenance string values
+    """``is_human_marker`` plus the two import-provenance string values
     (W10). Used wherever a re-ingest/automated writer must never clobber
     an imported label the same way it must never clobber a human one."""
     from src.services.curation.ingest_class_sources import (
@@ -37,7 +37,7 @@ def _is_locked_marker(value: Any) -> bool:
         LABEL_SOURCE_IMPORT,
     )
 
-    return _is_human_marker(value) or value in (LABEL_SOURCE_IMPORT, LABEL_IMPORT_CLASS_SOURCE)
+    return is_human_marker(value) or value in (LABEL_SOURCE_IMPORT, LABEL_IMPORT_CLASS_SOURCE)
 
 
 def is_locked_class(source: dict[str, Any]) -> bool:
@@ -47,7 +47,7 @@ def is_locked_class(source: dict[str, Any]) -> bool:
 
     True when a crop's current class state must never be touched by an
     automated writer:
-      * a human already set/confirmed the class (``_is_human_marker``);
+      * a human already set/confirmed the class (``is_human_marker``);
       * OR it's a *validated* imported label (``class_source ==
         LABEL_IMPORT_CLASS_SOURCE`` and ``class_validated``) — an
         unvalidated (``label_trust: suggestion``) import is NOT locked,
@@ -66,7 +66,7 @@ def is_locked_class(source: dict[str, Any]) -> bool:
     from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 
     class_source = source.get('class_source')
-    if _is_human_marker(class_source):
+    if is_human_marker(class_source):
         return True
     if class_source == LABEL_IMPORT_CLASS_SOURCE and bool(source.get('class_validated')):
         return True
@@ -77,11 +77,13 @@ def is_locked_box(box: Any) -> bool:
     """True when a region box must never be touched by an automated
     writer: a human created/verdicted/transcribed it
     (:func:`src.services.curation.region_boxes.is_human_owned`), or it
-    came from a dataset import (``source == CANDIDATE_IMPORT``)."""
+    came from a dataset import and is not a mere suggestion (a
+    ``label_trust: suggestion`` import writes ``state: proposed`` boxes with
+    ``source: import``, which the machine pipeline may still replace)."""
     from src.config.region_source import CANDIDATE_IMPORT
     from src.services.curation.region_boxes import is_human_owned as _box_is_human_owned
 
-    return _box_is_human_owned(box) or box.source == CANDIDATE_IMPORT
+    return _box_is_human_owned(box) or (box.source == CANDIDATE_IMPORT and box.state != 'proposed')
 
 
 def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
@@ -98,9 +100,36 @@ def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
     return bool(source.get(fields.validated)) and source.get(fields.verifier) in ('human', 'import')
 
 
+def is_human_owned_item(
+    source: dict[str, Any], F: Any = None, *, count_holdout: bool = True
+) -> bool:
+    """True when a person, not an import, owns some part of an item: the
+    members of the lock rule (:func:`is_locked_item`) that an import's own
+    work cannot satisfy. A human class (``class_source`` / ``label_source``),
+    a curator holdout freeze (``test_holdout``; ``count_holdout=False`` when
+    the caller knows the freeze is the import's own), a human-owned box, or a
+    region set a human validated (``validated`` with ``verifier == 'human'``,
+    the only trace of a human accept of an import's untouched boxes).
+
+    The one "an import is still the sole owner" test: everything that deletes
+    what an import created (undo, reconcile) asks it, so none can be narrower
+    than the others."""
+    from src.services.curation.region_boxes import is_human_owned, read_boxes
+
+    fields = F or get_region_fields()
+    return (
+        is_human_marker(source.get('class_source'))
+        or is_human_marker(source.get('label_source'))
+        or (count_holdout and bool(source.get('test_holdout')))
+        or any(is_human_owned(box) for box in read_boxes(source, fields))
+        or (bool(source.get(fields.validated)) and source.get(fields.verifier) == 'human')
+    )
+
+
 __all__ = [
-    '_is_human_marker',
     '_is_locked_marker',
+    'is_human_marker',
+    'is_human_owned_item',
     'is_locked_box',
     'is_locked_class',
     'is_locked_item',

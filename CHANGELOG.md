@@ -8,6 +8,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W10 round-3 review fixes** (`w10_p4_review_2026-10-01`).
+  - **`data.yaml` tagged scalars.** `names: [!!bool abc]` (KeyError) and
+    `[!!timestamp abc]` (AttributeError) escaped `load_bounded_yaml` and made
+    `POST /datasets/preview` a 500; any constructor error now raises
+    `YAMLError` and answers `data_yaml_invalid`.
+  - **Non-finite coordinates.** A NaN or infinite YOLO label value or COCO
+    bbox is a per-row scan issue (`label_row_malformed` /
+    `coco_bbox_out_of_image`) instead of a box that failed its whole chunk.
+  - **Combine** re-checks its claim right before writing `completed`, after
+    the long holdout step, so a worker taken over inside it cannot complete
+    the job.
+  - **Undo reinstate** of a reconcile-removed item uses `create`: a doc that
+    reappeared since the check is kept, never overwritten.
+  - Tests pinned: the resume heartbeat ticker keeps the claim live across a
+    rescan longer than the stale window; `FileJob.update` waits for the
+    state lock another process holds.
+- **W10 finish and combine confirmation-review fixes** (round 2 of
+  `w10_p4_review_2026-10-01`).
+  - **Import resume takes the project start lock.** `POST
+    /datasets/imports/{id}/resume` claims the job (`queued`) under the same lock
+    a start and an undo take, before the dataset rescan, and keeps the claim's
+    heartbeat alive during it. Two resumes, or a resume and an undo, can no
+    longer both pass the check (two workers; resume overwriting `undoing`);
+    the loser gets `409 import_not_resumable` / `import_not_undoable`. A
+    resume that fails before its worker runs puts the job back as it was.
+  - **One "an import is still the sole owner" test** (`is_human_owned_item` in
+    `occ_locks`) for undo of an import-created item and for reconcile: a
+    curator holdout freeze (unless the import itself froze it), a human accept
+    of the region set (`validated` + `verifier == human`), a human class and a
+    human box all keep the item. Both paths used narrower tests and deleted
+    such items.
+  - **One live worker per combine job.** `resume` refuses while this process
+    still holds a live task for the job, even when its heartbeat has gone
+    stale. Every worker writes a fresh `claim` into the job state when it
+    starts and re-checks it before each chunk and before it finishes: a worker
+    that was taken over stops (no chunk mark, no state write, and its caller
+    does not settle the target). Across processes the check and the write
+    after it are not atomic, so a fenced worker can finish the chunk it is in
+    (idempotent writes: repeated work, not duplicates).
+  - Tests pinned: a conflicting delete is retried then reported skipped, never
+    swallowed; the combine resume source gate asserts its own error code; a
+    cancelled combine resumed through `service.resume` runs to completion.
+  - **Malformed dataset input.** A `data.yaml` scalar the YAML constructor
+    rejects (`2001-13-45`, a 5000-digit integer) answers `data_yaml_invalid`
+    instead of a 500; `load_bounded_yaml` now raises only `YAMLError` /
+    `YamlTooComplexError`. A COCO or OpenProcessor-export JSON nested past the
+    interpreter stack is a clean issue / an absent file, not a
+    `RecursionError` (one shared `loads_json`).
+  - **Tests: the cross-project leak sweep is deterministic.** `ConfigStore.
+    ensure_fresh` skips the config read while a snapshot is under a second
+    old, so the number of `configs` operations a route issued (which the sweep
+    compares between projects) depended on wall-clock speed. The sweep
+    fixture pins the window to zero; nothing it asserts changed. (Red under a
+    clock that jumps 0 or 2 s per reading, green with the pin.)
+  - **Minors.** The startup upload sweep refuses an upload dir marked for
+    another project and survives a `.incoming` file that vanishes mid-scan;
+    a job dir is created and marked in one step (`ensure_marked_dir`);
+    `FileJob.repair_if_stale` re-checks staleness under a per-job state lock
+    (`update` takes it too), so a resume claim that lands between the check
+    and the write is no longer overwritten with `interrupted`; the redundant
+    liveness test in `check_undoable` is gone.
+- **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
+  - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
+    path: it re-reads each document, asks the caller whether it is still
+    deletable, and deletes with `if_seq_no`/`if_primary_term` (retrying on a
+    version conflict), reporting `skipped` ids. Import undo (items and the
+    images it created), reprocess `detect` and reconcile use it, so a human edit
+    made after the decision is no longer destroyed. Undo applies its update
+    path to a skipped item.
+  - **YAML alias bomb.** `data.yaml` is parsed by `safe_yaml.load_bounded_yaml`,
+    which rejects every alias and caps nodes (50,000) and depth (32); class
+    names and split entries must be scalars. A hostile file is a
+    `data_yaml_invalid` issue. Only the dataset-import reader changed; the
+    operator scripts under `scripts/curation` still use `yaml.safe_load`.
+  - **Stale imports.** `FileJob.repair_if_stale` lazily rewrites a job whose
+    heartbeat aged out to `interrupted`; imports (on open and list), the resume
+    check, `job_wire`, reprocess jobs and combine jobs use it, so a stale
+    `running` import is resumable and undoable.
+  - **Undo vs import.** Undo claims the import under the project start lock and
+    returns 409 `import_busy` while another import is live (dry runs only check
+    that the import is undoable).
+  - **Combine resume** takes a per-job claim (a second concurrent resume is
+    409), runs the same `resolve_sources` gate as preview and start, and
+    refuses with 409 `preview_stale` when a source changed since the preview.
+    The duplicate-hash scan and the file copy run off the event loop.
+  - **Combine duplicates.** A duplicate image's region boxes are attached to the
+    target copy instead of dropped; a box the copy already holds is not added
+    twice, and a validated region set is never rewritten (the box becomes a
+    standalone region item). The same rule now applies to a first copy.
+  - **Archive upload.** Tar and zip directory members count against the member
+    cap and nesting is capped at 64; the sweep removes `.incoming` leftovers
+    idle for an hour; a re-upload restarts the TTL; two uploads of one archive
+    no longer remove each other's extraction; `__MACOSX` no longer hides a
+    single root folder. The COCO annotation cap is 128 MiB (was 1 GiB).
+  - **Smaller fixes.** Combine resolves a stored image path before judging it
+    against the upload root (a `..` could hard-link outside it). Undo clears
+    only a holdout flag the import set (the ledger row records `froze_test`).
+    A reprocess of `detect` over more than `OP_REPROCESS_SYNC_MAX` images
+    together with `region` or `vlm` is a 422 instead of reordering them.
+    `is_human_marker` is public; the region requeue uses `region_locked_clause`
+    and `region_set_locked`.
+  - **Project dir marker.** Import, upload and reprocess-job dirs carry a
+    `.project` marker; a dir marked as another project's raises
+    `ProjectDirMismatchError`.
+  - **Tests** now fail when removed: undo of a human verdict on an untouched
+    import box, combine embedding-dimension mismatch (`embeddings_dropped`) and
+    unclassed items.
+  - Not changed: `images_already_indexed`, the `near_duplicate_pairs_estimate`
+    stub, sequential detector calls in `propose`, the read-time export-root
+    check in `image_load.stored_path`, and pruning of combine job dirs.
 - **W8-cleanup items 3-6 review fixes.**
   - **Breaking (response keys):** every region clustering count names its
     unit. `POST /regions/cluster` job result: `n_regions` -> `n_boxes`,
@@ -467,13 +577,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     reproduce the previous command argument for argument);
     `yolo-api`, the detection worker and the auto-label worker mount
     `./secrets/vlm` read-only; `SECURITY.md` records the SSRF residual risk.
-- **W10 dataset import (partial): the lock rule, class-name mapping, and a
-  reduced-scope import job.** See
-  `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the
-  full spec and the wave handback report for the exact deferred list
-  (no ledger/resume/backpressure/undo/archive-upload/negatives/holdout/
-  `propose` processing/region `parents: detect`/reprocess-route
-  unification this pass).
+- **W10.11 reconcile.** Importing a different dataset version over images an
+  earlier import labeled removes the earlier import's items the new version no
+  longer has, unless a human or a holdout freeze touched them, a box the
+  dataset still has (even one mapped to `skip`) matches them, or the frame has
+  no label file. The whole document is kept in the new import's ledger row and
+  undoing that import reinstates it. Region boxes written by an earlier import
+  are not reconciled. Wire: `items_reconciled_removed` on the import report and
+  `items_reinstated` on the undo report (`contracts/openapi/curation.json`).
+
+- **P4 combine projects: `POST /projects/combine` builds a new project from
+  1 to 8 existing ones.** `/projects/combine/preview` (writes nothing; returns
+  errors, warnings, `suggested_mapping`, counts, duplicate and conflict
+  numbers, bytes to link and a `preview_sha`), `/projects/combine` (start,
+  `expected_preview_sha`, `202 {job_id, target}`), `/projects/combine/{job_id}`
+  and `/cancel`, `/resume`; progress is also published as `combine.progress`.
+  The sources are only read (bound read-only); the target is `building` while
+  it fills, then `active` (`failed` on an error; deleting it is a complete
+  undo). `src/services/projects/combine/` plus
+  `dataset_import/project_source.py`, W10's project reader (a source project
+  as a `ScanEntry` stream).
+  - Class identity: each source class maps to a target class BY NAME with
+    W10's `map` / `create` / `skip` / `region` rows and completeness rule
+    (`unmapped_class`, `mapping_target_invalid`); the target owns its ids and
+    nothing numbered in a source (class ids, class-id history, clusters)
+    crosses. `tests/integration/test_class_identity_combine.py` extends the
+    identity E2E through combine, export, remap, promote and predict.
+  - Dedup by content: byte-identical images (imohash candidate, full sha256
+    confirmed) are copied once from the first-listed source; boxes of the
+    other copy merge by IoU and target class (human > import > VLM > model;
+    ties keep the priority source), and a box with a different class keeps the
+    priority label and is flagged `combine_conflict` (new
+    `GET /review/*?combine_conflict=true` filter; the `all` tab includes them).
+  - Provenance: `import_ids` = the job, `origin_project` / `origin_item_id` /
+    `origin_image_id`, `label_source` preserved; upload files are hard-linked
+    into the target. Frozen test splits are kept by union
+    (`holdout: preserve_union`, with a freeze record) or recomputed (warns).
+  - Jobs are file-backed under `OP_COMBINE_JOBS_DIR`, chunked
+    (`OP_COMBINE_PAGE_SIZE`), reconciled to `interrupted` on startup and
+    resumable from the persisted plan; a live combine marks its source and
+    target projects busy.
+  - `create_project` gains `origin` and `activate=False`, and a public
+    `finish_building`.
+- **W10 dataset import: `/datasets/imports` (preview, start, status, cancel,
+  list, resume, undo), archive uploads and the OpenProcessor-export reader.**
+  A chunked, persisted, resumable importer on the shared jobs volume
+  (`dataset_import/{prepare,runner,chunk,store,undo,upload,op_export}.py`):
+  - Class identity is the name in the project's registry; every dataset class
+    needs a `map`/`create`/`skip`/`region` decision, pinned in `mapping.json`
+    and consumed (not re-resolved) on resume. `import_key` (project, source
+    hash, name-based mapping, write-affecting options) makes a repeated
+    request idempotent (`reused`); one import per project at a time.
+  - Labels are written through `class_label_update` / `ItemLabel.imported`; a
+    human edit between plan and write still wins (the merger re-checks the
+    lock inside the OCC write). A write-ahead ledger keeps `created` vs
+    `updated` truthful across a mid-chunk crash; undo restores each class
+    snapshot or region `edit_history`, deletes created items (and crops),
+    deprecates created classes, and a second undo reports zeros.
+  - Negatives, splits, `test` holdout freeze, `processing: propose` (the
+    shared `detect_items` path), region class labels with `parents: detect`,
+    and backpressure on the region worker (`OP_DATASET_IMPORT_MAX_PENDING`).
+  - Uploads: only regular files and directories, member-count / bytes-written
+    / compression-ratio caps, content-addressed extraction, 413 on the stream
+    cap; every path is checked after symlink resolution.
+  - A thin `scripts/curation/import_labeled_dataset.py` client replaces the
+    old labeled mode. New env vars are documented in `env.template`.
+- **W10 unified `POST /reprocess`** (scopes `detect|region|vlm|embed`)
+  replaces the requeue route, `clear_detection` and the retry endpoints;
+  larger detect/embed runs are file-backed jobs. `ActivationImpact` gains
+  `suggested_reprocess`.
+- **W10 export**: negative frames, split pinning and the frozen test-holdout
+  record; items and regions carry `locked` / import provenance on the wire.
+- **W10 dataset import (earlier slice): the lock rule, class-name mapping.**
+  See `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the spec.
   - `src/clients/occ_locks.py` (new): `is_locked_class` / `is_locked_box`
     / `is_locked_item` / `_is_locked_marker` — the lock rule. Replaces
     `is_human_owned_class` (superset semantics: also locks validated
@@ -485,21 +661,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     every human AND dataset-import class-label write goes through
     (`tests/test_class_label_single_writer.py` gates it).
   - New `src/services/curation/dataset_import/` package: `scan.py` /
-    `yolo.py` / `coco.py` (format detection + reading; OpenProcessor's
-    own export format is not yet detected/read), `mapping.py`
+    `yolo.py` / `coco.py` (format detection + reading), `mapping.py`
     (`suggest_mapping`/`resolve_mapping` — class mapping is always by
     NAME, never by index; exported for P4's combine-projects wave),
-    `regions.py` (`attach_region_boxes`), `issues.py` (the served issue
-    catalog), `job.py` (`import_dataset` — synchronous, in-process,
-    `processing: none` only).
+    `issues.py` (the served issue catalog).
   - `tests/integration/test_class_identity_e2e.py`: two YOLO fixtures
     with the same class names in different `data.yaml` index orders (one
     with an extra class) import → export (dense remap) → stub-train
     (`class_remap.json`) → promote (`labels.txt`) → predict, asserting
     `(class_id, class_name)` pairing at every hop.
-  - `src/services/projects/busy.py` gains `_dataset_import_jobs()` (the
-    P2 busy-inventory hook) — returns `[]` today since the reduced-scope
-    job writes no persistent state yet; ready for a later pass.
+  - `src/services/projects/busy.py`'s `_dataset_import_jobs()` (the P2
+    busy-inventory hook) reports a project's live import.
 
 ### Changed
 - **W9 (wire changes; see the Cropwright delta list).** `region_verifier`,
@@ -519,6 +691,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every existing caller).
 - `confident_class_sources()` (`ingest_class_sources.py`) now includes
   `LABEL_IMPORT_CLASS_SOURCE` (`external_label`).
+- Re-ingest keeps a locked item's whole class state (`class_source`,
+  `class_validated`, `test_holdout`) -- fixes #31; a pruned `names` map with
+  `nc == max + 1` is accepted.
 
 ### Removed
 - **W8-cleanup Items 4-6 (breaking, no back-compat): every item-level
@@ -587,8 +762,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   labeler is built by `vlm_factory`.
 - **W10 (breaking, no back-compat): `POST /import_labels` and
   `/import_labels/batch`, deleted outright (no 410).** Importing an
-  already-labeled dataset is `POST /datasets/imports` — not yet built
-  this pass; see the handback report. `src/services/curation/
+  already-labeled dataset is `POST /datasets/imports`. `src/services/curation/
   label_import.py` (the parallel, non-OCC item writer these routes used)
   is deleted entirely, along with `IngestBatchItem.label_txt_path`,
   `IngestBatchRequest.label_source`/`detect_mismatches`, and the

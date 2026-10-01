@@ -174,6 +174,16 @@ class ItemDoc(BaseModel):
     region_max_score: float | None = None
     region_set_complete: bool | None = None
     region_revision: int = 0
+    # The lock rule, server-computed: a human- or import-owned label/box/verdict.
+    label_locked: bool = False
+    # Dataset-import provenance and split (W10.10).
+    import_ids: list[str] = Field(default_factory=list)
+    dataset_split: str | None = None
+    imported_at: str | None = None
+    proposed_by_import: str | None = None
+    on_negative_frame: bool = False
+    import_standalone_region: bool = False
+    proposal_chain: list[str] = Field(default_factory=list)
     # Every OCR line read on the item crop ([] when none / not yet read).
     item_text_lines: list[ItemTextLine] = Field(default_factory=list)
 

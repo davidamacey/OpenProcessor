@@ -35,11 +35,12 @@ silent no-op.
 
 ## Ingest and label import
 
-Importing an already-labeled YOLO dataset as item class labels is a
-**planned** `POST /datasets/imports` route (not built yet) — the routes
-this section used to list here (`/import_labels`, `/import_labels/batch`)
-are removed. `scripts/curation/import_labeled_dataset.py --images-only`
-ingests images with no label import today.
+Importing an already-labeled dataset (YOLO, COCO or an OpenProcessor
+export) is `POST /datasets/imports`, with `/datasets/preview`,
+`/datasets/uploads` (zip / tar), `/datasets/imports/{id}` (status, issues,
+entries, cancel, resume, undo) and `/datasets/formats`. The routes this
+section used to list here (`/import_labels`, `/import_labels/batch`) are
+removed. `scripts/curation/import_labeled_dataset.py` is a thin client.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -56,6 +57,39 @@ Each image result carries `status` (`success` / `duplicate` / `failed`),
 (`empty`, `unservable_path`, `unsupported_type`, `decode_failed`,
 `detector_infer`, `bulk_index`, ...). Byte-identical files are
 deduplicated within a batch as well as against the index.
+
+## Combining projects
+
+`POST /projects/combine` builds a NEW project from 1 to 8 existing ones. It
+never writes to a source: the target is created `building`, filled, then
+made `active` (a failed run leaves it `failed`; deleting the target is a
+complete undo). These are global routes, not under a project.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/projects/combine/preview` | Dry run (writes nothing): errors and warnings, `suggested_mapping`, per-source and target counts, duplicate and conflict counts, bytes to link, and a `preview_sha` |
+| POST | `/projects/combine` | Start with the preview body plus `expected_preview_sha` (`409 preview_stale` if a source changed, `422 combine_invalid` with a report). `202 {job_id, target}` |
+| GET | `/projects/combine/{job_id}` | `status`, `phase`, `done` / `total` images, `report`, `next_steps`; also published as `combine.progress` events |
+| POST | `/projects/combine/{job_id}/cancel`, `/resume` | Cancel a running job; resume an interrupted or cancelled one from its last finished chunk |
+
+A class is its name. `class_mapping` has one list of `map` / `create` /
+`skip` / `region` rows per source, the same rows a dataset import takes: the
+target registry is new, so a `create` row defines a target class and a `map`
+row names one with `new_class_name`. Every source class with an included
+label needs a row (`unmapped_class`). The target numbers its own classes, in
+`target_classes` order when given.
+
+Sources are listed in priority order. With `dedup: content_hash` an image
+that is byte-identical in two sources (confirmed by a full hash) is copied
+once, from the highest-priority source; boxes of the other copy with IoU of
+at least `dedup_iou` and the same target class are merged (the more trusted
+label wins: human, import, VLM, model; ties keep the priority source), and a
+box with a different class keeps the priority label and is flagged
+`combine_conflict` (`GET /review/all?combine_conflict=true` lists them).
+Upload files are hard-linked into the target (a copy across filesystems), so
+deleting a source never breaks it. Clusters are not copied: recluster the
+combined items. `holdout: preserve_union` keeps anything that was test in
+any source as test; `recompute` picks a new split and warns.
 
 ## Items (crops) and labeling
 

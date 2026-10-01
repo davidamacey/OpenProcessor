@@ -96,8 +96,9 @@ To retry items after fixing a model, threshold or mount, use
 ```bash
 python3 scripts/curation/requeue_regions.py --status detection_failed
 python3 scripts/curation/requeue_regions.py --status detection_failed --apply
-# filters: --reason, --detector, --missing-provenance, --max-docs
-# --clear-detection also clears box/verify/text/embedding for a from-scratch re-detect
+# filters: --reason, --detector, --missing-provenance, --to pending_verification
+# (re-verify only). The script is a client of POST /reprocess; a from-scratch
+# re-detect is {"scopes": ["detect"], ...} on that route.
 python3 scripts/curation/requeue_regions.py --missing-status --apply   # items that predate the region profile
 ```
 

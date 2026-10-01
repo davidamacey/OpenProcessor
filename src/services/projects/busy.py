@@ -236,6 +236,20 @@ def _state_file_jobs(record: ProjectRecord) -> list[JobRef]:
     return out
 
 
+def _reprocess_jobs(record: ProjectRecord) -> list[JobRef]:
+    """Live reprocess jobs (``src.services.curation.reprocess_job``): one
+    state dir per job under the project's reprocess jobs dir, resolved from
+    the bound project, so this binds ``record`` just for the read."""
+    from src.config.project_context import bind_project
+    from src.services.curation import reprocess_job
+
+    with bind_project(record, read_only=True):
+        return [
+            JobRef(kind='reprocess', job_id=job_id, started_at=_iso_or_none(started_at))
+            for job_id, started_at in reprocess_job.running_job_ids()
+        ]
+
+
 def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
     """The detection worker's per-project ``inflight`` count.
 
@@ -284,39 +298,31 @@ def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
 
 
 def _dataset_import_jobs(record: ProjectRecord) -> list[JobRef]:
-    """Dataset-import jobs (W10, ``src/services/curation/dataset_import/``).
+    """Live dataset imports (``src.services.curation.dataset_import``): one
+    state dir per import under the project's imports dir, resolved from the
+    bound project, so this binds ``record`` just for the read. Live means an
+    active status with a fresh heartbeat (a dead worker's import is not busy:
+    startup repair marks it ``interrupted``)."""
+    from src.config.project_context import bind_project
+    from src.services.curation.dataset_import.store import running_import_ids
 
-    Reduced-scope note (see ``dataset_import/job.py``'s module
-    docstring): this pass's ``import_dataset()`` runs synchronously
-    in-process and writes no persistent ``state.json``/heartbeat, so
-    there is nothing on disk for this function to find busy yet — it
-    always returns ``[]`` today. It reads the conventional per-project
-    state layout (``<project_state_dir>/dataset_imports/<import_id>/state.json``,
-    mirroring ``_state_file_jobs`` above) so a later pass that adds
-    ledger/resume persistence only has to start writing there; this P2
-    busy-inventory hook already exists and needs no further wiring.
-    """
-    import json
+    with bind_project(record, read_only=True):
+        return [
+            JobRef(kind='dataset_import', job_id=import_id, started_at=_iso_or_none(started_at))
+            for import_id, started_at in running_import_ids()
+        ]
 
-    state_dir = record.resources.project_state_dir / 'dataset_imports'
-    if not state_dir.is_dir():
-        return []
-    out: list[JobRef] = []
-    for state_file in sorted(state_dir.glob('*/state.json')):
-        try:
-            payload = json.loads(state_file.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            continue
-        if payload.get('status') not in ('running', 'queued', 'paused_backpressure'):
-            continue
-        out.append(
-            JobRef(
-                kind='dataset_import',
-                job_id=str(payload.get('import_id') or state_file.parent.name),
-                started_at=_iso_or_none(payload.get('started_at')),
-            )
-        )
-    return out
+
+def _combine_jobs(record: ProjectRecord) -> list[JobRef]:
+    """Live combine jobs that read or write this project (as a source or as
+    the target being built); a combine is global, so its jobs dir is not
+    nested under a project."""
+    from src.services.projects.combine.store import running_jobs_for
+
+    return [
+        JobRef(kind='combine', job_id=job_id, started_at=_iso_or_none(started_at))
+        for job_id, started_at in running_jobs_for(record.slug)
+    ]
 
 
 def running_jobs(record: ProjectRecord) -> list[JobRef]:
@@ -333,8 +339,10 @@ def running_jobs(record: ProjectRecord) -> list[JobRef]:
     jobs.extend(_autolabel_jobs(record))
     jobs.extend(_export_jobs(record))
     jobs.extend(_state_file_jobs(record))
+    jobs.extend(_reprocess_jobs(record))
     jobs.extend(_detection_worker_inflight(record))
     jobs.extend(_dataset_import_jobs(record))
+    jobs.extend(_combine_jobs(record))
     return jobs
 
 

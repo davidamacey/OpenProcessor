@@ -19,6 +19,7 @@ from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch, matches
 from src.config import get_region_fields
+from src.services.curation import image_serving, reprocess_embed
 from src.services.curation.region_box_embeddings import current_vectors, entry_for
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
@@ -80,22 +81,27 @@ def _item(crop_id: str, boxes: list[RegionBox], **extra: Any) -> dict[str, Any]:
     }
 
 
-def _patch(monkeypatch: pytest.MonkeyPatch, client: _OS, *, jpeg: bytes | None) -> _FakePE:
+def _patch(monkeypatch: pytest.MonkeyPatch, client: _OS, *, root: Path | None) -> _FakePE:
+    """``root``: a servable source root holding every item's image, or
+    ``None`` to leave the stored paths unservable (unreadable images)."""
     fake_pe = _FakePE()
+    if root is not None:
+        resolved = root.resolve()
+        monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (resolved,))  # noqa: ARG005
+        for cid, doc in client.docs(INDEX).items():
+            (resolved / f'{cid}.jpg').write_bytes(_tiny_jpeg())
+            doc['image_path'] = str(resolved / f'{cid}.jpg')
     monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
     monkeypatch.setattr(backfill_script, 'get_curation_config', lambda: _Cfg())
-    monkeypatch.setattr(
-        backfill_script,
-        '_crop_jpeg_from_disk',
-        lambda image_path, bbox: jpeg,  # noqa: ARG005
-    )
+    monkeypatch.setattr(reprocess_embed, 'get_curation_config', lambda: _Cfg())
     return fake_pe
 
 
 class _Cfg:
     items_index = INDEX
+    images_index = 'images'
 
 
 async def _run(*, apply: bool) -> int:
@@ -103,9 +109,11 @@ async def _run(*, apply: bool) -> int:
 
 
 @pytest.mark.asyncio
-async def test_dry_run_does_not_touch_triton_or_write(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_dry_run_does_not_touch_triton_or_write(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     client = _OS({INDEX: {'c1': _item('c1', [_box('b1')])}})
-    _patch(monkeypatch, client, jpeg=_tiny_jpeg())
+    _patch(monkeypatch, client, root=tmp_path)
     ctor = MagicMock(side_effect=AssertionError('Triton must not be touched in dry-run'))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', ctor)
 
@@ -117,11 +125,11 @@ async def test_dry_run_does_not_touch_triton_or_write(monkeypatch: pytest.Monkey
 
 @pytest.mark.asyncio
 async def test_apply_embeds_every_missing_box_not_one_per_item(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     boxes = [_box('b1'), _box('b2', x=0.5), _box('b3', 'false_positive', x=0.7)]
     client = _OS({INDEX: {'c1': _item('c1', boxes)}})
-    fake_pe = _patch(monkeypatch, client, jpeg=_tiny_jpeg())
+    fake_pe = _patch(monkeypatch, client, root=tmp_path)
 
     assert await _run(apply=True) == 0
 
@@ -137,13 +145,13 @@ async def test_apply_embeds_every_missing_box_not_one_per_item(
 
 @pytest.mark.asyncio
 async def test_apply_is_resumable_and_re_embeds_a_moved_box(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     b1, b2 = _box('b1'), _box('b2', x=0.5)
     moved_b2 = _box('b2', x=0.6)
     stored = [entry_for(b1, [1.0, 0.0, 0.0]), entry_for(b2, [0.0, 1.0, 0.0])]
     client = _OS({INDEX: {'c1': _item('c1', [b1, moved_b2], **{F.box_embeddings: stored})}})
-    fake_pe = _patch(monkeypatch, client, jpeg=_tiny_jpeg())
+    fake_pe = _patch(monkeypatch, client, root=tmp_path)
 
     assert await _run(apply=True) == 0
 
@@ -155,10 +163,10 @@ async def test_apply_is_resumable_and_re_embeds_a_moved_box(
 
 @pytest.mark.asyncio
 async def test_apply_skips_boxes_whose_source_image_is_unreadable(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     client = _OS({INDEX: {'c1': _item('c1', [_box('b1')])}})
-    fake_pe = _patch(monkeypatch, client, jpeg=None)
+    fake_pe = _patch(monkeypatch, client, root=None)
 
     assert await _run(apply=True) == 0
 

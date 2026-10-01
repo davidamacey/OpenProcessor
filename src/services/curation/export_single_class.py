@@ -30,7 +30,7 @@ Everything else is shared with the multi-class exporter rather than
 reimplemented: the class-balanced cap
 (:func:`~src.services.curation.export_support.even_stratified_sample`),
 the group-aware deterministic splitter
-(:func:`~src.services.curation.export_support.stratified_split`), the
+(:func:`~src.services.curation.export_split.stratified_split`), the
 near-duplicate frame collapse
 (:func:`~src.services.detection.frame_dedup.dedup_rows_by_embedding`),
 the resize worker and the atomic-write primitives.
@@ -67,6 +67,12 @@ from src.services.curation.export_readiness import (
     items_index_generation,
 )
 from src.services.curation.export_single_class_rows import ImageMode, RowCollector, _FrameRow
+from src.services.curation.export_split import (
+    SplitMode,
+    SplitStats,
+    pins_from_rows,
+    stratified_split_with_stats,
+)
 from src.services.curation.export_support import (
     _code_sha,
     _copy_or_resize_one,
@@ -76,7 +82,7 @@ from src.services.curation.export_support import (
     even_stratified_sample,
     frozen_test_sha_of,
     label_content_sha,
-    stratified_split,
+    source_frozen_test_sha,
 )
 from src.services.detection.frame_dedup import dedup_rows_by_embedding
 
@@ -147,6 +153,10 @@ class SingleClassExportProfile:
     # `src/routers/curation_train.py`'s single-class preflight branch.
     dataset_kind: str = 'single_class'
 
+    # 'keep_imported' honours the split a dataset import filed each frame
+    # under (``dataset_split``); 'recompute' ignores it (W10.9).
+    split_mode: SplitMode = 'keep_imported'
+
 
 @dataclass
 class SingleClassSplitCounts:
@@ -199,6 +209,7 @@ class SingleClassExportService:
             profile=profile,
             config=self.config,
             region_fields=region_fields or get_region_fields(),
+            class_names=self._resolve_class_names(),
         )
 
     # ----------------------------------------------------------------- public
@@ -295,7 +306,7 @@ class SingleClassExportService:
             (resolved_dir / 'images' / split).mkdir(parents=True, exist_ok=True)
             (resolved_dir / 'labels' / split).mkdir(parents=True, exist_ok=True)
 
-        splits = self._assign_splits(rows, seed=seed, skip_test_split=skip_test_split)
+        splits, split_stats = self._assign_splits(rows, seed=seed, skip_test_split=skip_test_split)
         counts, stratum_distribution, image_jobs = self._write_labels(
             rows, splits, resolved_dir, copy_images=copy_images
         )
@@ -351,6 +362,8 @@ class SingleClassExportService:
             'stratum_count': len(stratum_distribution),
             'image_count': counts.train + counts.val + counts.test,
             'image_copy': image_copy_stats,
+            **split_stats.to_manifest(self.profile.split_mode),
+            **self._source_frozen_manifest(rows, splits),
             MANIFEST_GENERATION_KEY: generation,
         }
         manifest_path = resolved_dir / MANIFEST_FILENAME
@@ -445,9 +458,20 @@ class SingleClassExportService:
 
     # ----------------------------------------------------------------- split
 
+    def _source_frozen_manifest(
+        self, rows: list[_FrameRow], splits: dict[str, str]
+    ) -> dict[str, str]:
+        """``source_frozen_test_sha`` when any test row came from an import
+        (see :func:`~src.services.curation.export_support.source_frozen_test_sha`)."""
+        test_rows = [r for r in rows if splits[r.item_id] == 'test']
+        sha = source_frozen_test_sha(
+            (r.import_source_stem for r in test_rows), (r.item_id for r in test_rows)
+        )
+        return {'source_frozen_test_sha': sha} if sha else {}
+
     def _assign_splits(
         self, rows: list[_FrameRow], *, seed: int, skip_test_split: bool
-    ) -> dict[str, str]:
+    ) -> tuple[dict[str, str], SplitStats]:
         """Group-aware stratified split over the shared splitter.
 
         Strata are this exporter's human-readable stratum strings, mapped
@@ -468,16 +492,17 @@ class SingleClassExportService:
             train_ratio, val_ratio = 0.89, 0.11
         else:
             train_ratio, val_ratio = self.profile.train_ratio, self.profile.val_ratio
-        splits = stratified_split(
+        splits, stats = stratified_split_with_stats(
             rows,
             seed=seed,
             train_ratio=train_ratio,
             val_ratio=val_ratio,
             group_key='image_id',
+            pinned=pins_from_rows(rows, self.profile.split_mode),
         )
         if skip_test_split:
             splits = {k: ('train' if v == 'test' else v) for k, v in splits.items()}
-        return splits
+        return splits, stats
 
     # ----------------------------------------------------------------- write
 
@@ -559,16 +584,29 @@ class SingleClassExportService:
             'exported_at': datetime.now(UTC).isoformat(),
             'dataset_kind': self.profile.dataset_kind,
             'box_source': self.profile.box_source,
-            'classes': [
-                {'class_id': cid, 'class_name': name}
-                for cid, name in zip(self.profile.class_ids, names, strict=False)
-            ],
+            'classes': self._class_entries(names),
             'export_id_map': export_id_map,
             'names': names,
         }
         atomic_write_text(
             export_dir / CLASS_REGISTRY_FILENAME, json.dumps(payload, indent=2, sort_keys=True)
         )
+
+    def _class_entries(self, names: list[str]) -> list[dict[str, Any]]:
+        """``class_registry.json``'s ``classes``: the dataset's classes, or --
+        in region mode, where the one dataset class is the region itself -- the
+        parent-class filter, named by the live registry (never by the region
+        class name, which a positional zip with ``names`` would give them)."""
+        if self.profile.box_source != 'region':
+            return [
+                {'class_id': cid, 'class_name': name}
+                for cid, name in zip(self.profile.class_ids, names, strict=False)
+            ]
+        by_id = {c.class_id: c.class_name for c in self.registry.load().classes}
+        return [
+            {'class_id': cid, 'class_name': by_id.get(cid, str(cid))}
+            for cid in self.profile.class_ids
+        ]
 
     @staticmethod
     def _write_label_stats(export_dir: Path, names: list[str]) -> None:

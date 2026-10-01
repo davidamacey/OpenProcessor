@@ -35,6 +35,11 @@ GLOBAL_ROUTES = frozenset(
         ('POST', f'{API}/projects/{{project}}/unarchive'),
         ('POST', f'{API}/projects/{{project}}/clone_settings'),
         ('GET', f'{API}/projects/{{project}}/stats'),
+        ('POST', f'{API}/projects/combine/preview'),
+        ('POST', f'{API}/projects/combine'),
+        ('GET', f'{API}/projects/combine/{{job_id}}'),
+        ('POST', f'{API}/projects/combine/{{job_id}}/cancel'),
+        ('POST', f'{API}/projects/combine/{{job_id}}/resume'),
         ('GET', f'{API}/health'),
         ('GET', f'{API}/events'),
         # W9: the VLM endpoint registry and local model catalog are
@@ -166,10 +171,12 @@ def test_scoped_health_carries_the_bound_project(client: TestClient) -> None:
 
 
 def test_unknown_or_reserved_slug_is_404_not_a_scoped_route(client: TestClient) -> None:
-    for slug in ('combine', 'no-such-project'):
+    for slug, error in (('combine', 'combine_not_found'), ('no-such-project', 'project_not_found')):
         response = client.get(f'{API}/projects/{slug}/health')
         assert response.status_code == 404
-        assert response.json()['detail']['error'] == 'project_not_found'
+        # `combine` is reserved: `/projects/combine/<x>` is the combine job
+        # lookup (an unknown id), never a scoped route of a project.
+        assert response.json()['detail']['error'] == error
 
 
 def test_unscoped_curation_path_is_404(client: TestClient) -> None:

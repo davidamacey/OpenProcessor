@@ -58,10 +58,10 @@ Stated up front, honestly, rather than discovered in production:
 - **Thinner ingest than a bespoke pipeline.** `POST /curation/ingest/image`
   and `/ingest/batch` create items with duplicate detection, a quality
   gate, crop-cache population, and bulk indexing. Importing pre-existing
-  YOLO-format labels is a **planned** `POST /datasets/imports` route,
-  not built yet — the removed per-image `/import_labels(/batch)` routes
-  are gone, and `scripts/curation/import_labeled_dataset.py`'s labeled
-  mode is disabled pending that route (see the script's own docstring).
+  labeled datasets (YOLO, COCO or an OpenProcessor export) is
+  `POST /datasets/imports` (preview, job, undo); `scripts/curation/import_labeled_dataset.py`
+  is a thin client of it. The removed per-image `/import_labels(/batch)`
+  routes are gone.
   What is *not* included: any domain-specific detector-ensemble
   policy, class allowlist, or region-status assignment heuristic tuned
   to one domain — you supply that via `DetectionProfile` and your own
@@ -620,12 +620,12 @@ sample-clean` removes everything fetched.
    the API container can mount, use `scripts/curation/ingest_upload.py`
    instead — it reads the files locally and uploads the bytes to
    `POST /curation/ingest/upload` (resume = server-side content dedup).
-   Bringing in an **already-labeled** YOLO dataset (importing the paired
-   `.txt` boxes as item class labels) is **pending** `POST
-   /datasets/imports` — not built yet; `import_labeled_dataset.py`'s
-   labeled mode fails loudly rather than importing incorrectly. What
-   works today: `scripts/curation/import_labeled_dataset.py
-   --images-only` ingests the images with no label import at all — use
+   Bringing in an **already-labeled** dataset (YOLO, COCO or an
+   OpenProcessor export) is `POST /datasets/imports`: preview it, map its
+   class names onto the registry (by name, never by index), then start the
+   import; it can be resumed and undone as one batch.
+   `scripts/curation/import_labeled_dataset.py` drives it from a shell.
+   `--images-only` skips every class (images indexed, no labels) — use
    it when the dataset's labels are *region* ground truth rather than
    item classes (whole frames labeled with, e.g., a single region class
    plus background frames), so the labels never touch the item registry;

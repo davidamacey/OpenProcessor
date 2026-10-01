@@ -65,6 +65,7 @@ def mount_all_curation_routers(app: FastAPI) -> None:
     """Mount the global router and every curation router on ``app``
     (see :func:`mount_curation`)."""
     import src.routers.curation.global_status
+    import src.routers.curation.projects_combine
     import src.routers.curation.vlm_catalog
     import src.routers.curation.vlm_endpoints  # noqa: F401 - registers /vlm/endpoints* on global_router
     from src.config.curation import base_curation_config

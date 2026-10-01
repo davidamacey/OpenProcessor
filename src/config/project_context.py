@@ -124,6 +124,44 @@ def project_jobs_dir(base: Path) -> Path:
     return base / 'projects' / current_project().record.slug
 
 
+class ProjectDirMismatchError(RuntimeError):
+    """A per-project state dir is marked as another project's."""
+
+
+def mark_project_dir(directory: Path) -> Path:
+    """Stamp an existing ``directory`` with the bound project's slug in
+    ``.project`` (a missing one is left alone: reads create nothing, and the
+    code that creates it calls this again afterwards). Filesystem state
+    (imports, uploads, reprocess jobs) has no index to scope it, so the
+    marker is what makes a dir mounted, copied or symlinked under the wrong
+    project detectable: a marker naming another slug raises rather than
+    being read or written. A read-only binding verifies but never writes."""
+    bound = current_project()
+    if not directory.is_dir():
+        return directory
+    marker = directory / '.project'
+    try:
+        found = marker.read_text(encoding='utf-8').strip()
+    except FileNotFoundError:
+        if not bound.read_only:
+            marker.write_text(bound.record.slug, encoding='utf-8')
+        return directory
+    if found != bound.record.slug:
+        raise ProjectDirMismatchError(
+            f'{directory} belongs to project {found!r}, not {bound.record.slug!r}'
+        )
+    return directory
+
+
+def ensure_marked_dir(directory: Path) -> Path:
+    """Create ``directory`` (and parents) and stamp it with the bound
+    project's slug (:func:`mark_project_dir`). The claim of a job dir that
+    may not exist yet calls this, so no window leaves a fresh dir unmarked;
+    a read-only binding verifies a marker but never writes one."""
+    directory.mkdir(parents=True, exist_ok=True)
+    return mark_project_dir(directory)
+
+
 def project_api_base() -> str:
     """``{api_prefix}/projects/{bound slug}`` -- the base every served URL
     (and forward-looking route) is built from."""

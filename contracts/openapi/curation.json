@@ -1257,6 +1257,20 @@
         "title": "Body_curation_ingest_upload_curation_projects__project__ingest_upload_post",
         "type": "object"
       },
+      "Body_upload_dataset_curation_projects__project__datasets_uploads_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_dataset_curation_projects__project__datasets_uploads_post",
+        "type": "object"
+      },
       "BoxPatchRequest": {
         "additionalProperties": false,
         "description": "Body for ``PATCH /crops/{crop_id}/regions/{box_id}``.",
@@ -1356,6 +1370,29 @@
           }
         },
         "title": "BoxWriteElement",
+        "type": "object"
+      },
+      "BreakdownRow": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "detector": {
+            "title": "Detector",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detector",
+          "reason",
+          "count"
+        ],
+        "title": "BreakdownRow",
         "type": "object"
       },
       "CampaignRunSpec": {
@@ -1678,6 +1715,65 @@
         "title": "ClassMapping",
         "type": "object"
       },
+      "ClassMappingEntry": {
+        "additionalProperties": false,
+        "description": "One dataset-class mapping decision in a preview/import request.",
+        "properties": {
+          "action": {
+            "enum": [
+              "map",
+              "create",
+              "skip",
+              "region"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "dataset_class": {
+            "title": "Dataset Class",
+            "type": "string"
+          },
+          "new_class_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Class Group"
+          },
+          "new_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Class Name"
+          }
+        },
+        "required": [
+          "dataset_class",
+          "action"
+        ],
+        "title": "ClassMappingEntry",
+        "type": "object"
+      },
       "ClassMergeRequest": {
         "properties": {
           "source_id": {
@@ -1767,6 +1863,513 @@
           "expected_revision"
         ],
         "title": "CloneSettingsRequest",
+        "type": "object"
+      },
+      "CocoAnnotationFileSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "images_dir": {
+            "title": "Images Dir",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "enum": [
+                  "train",
+                  "val",
+                  "test"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
+          }
+        },
+        "required": [
+          "path",
+          "images_dir"
+        ],
+        "title": "CocoAnnotationFileSpec",
+        "type": "object"
+      },
+      "CombineInclude": {
+        "additionalProperties": false,
+        "properties": {
+          "label_states": {
+            "default": "all",
+            "enum": [
+              "all",
+              "validated_only"
+            ],
+            "title": "Label States",
+            "type": "string"
+          }
+        },
+        "title": "CombineInclude",
+        "type": "object"
+      },
+      "CombineIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "severity": {
+            "default": "error",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "CombineIssue",
+        "type": "object"
+      },
+      "CombineJobResponse": {
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "next_steps": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "report": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Report",
+            "type": "object"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "CombineJobResponse",
+        "type": "object"
+      },
+      "CombinePreview": {
+        "properties": {
+          "bytes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Bytes",
+            "type": "object"
+          },
+          "dedup": {
+            "additionalProperties": true,
+            "title": "Dedup",
+            "type": "object"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/CombineIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "preview_sha": {
+            "title": "Preview Sha",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "suggested_mapping": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClassMappingEntry"
+              },
+              "type": "array"
+            },
+            "title": "Suggested Mapping",
+            "type": "object"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/CombineIssue"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "errors",
+          "warnings",
+          "preview_sha",
+          "suggested_mapping",
+          "sources",
+          "target",
+          "dedup",
+          "bytes"
+        ],
+        "title": "CombinePreview",
+        "type": "object"
+      },
+      "CombineRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "class_mapping": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClassMappingEntry"
+              },
+              "type": "array"
+            },
+            "title": "Class Mapping",
+            "type": "object"
+          },
+          "dedup": {
+            "default": "content_hash",
+            "enum": [
+              "content_hash",
+              "none"
+            ],
+            "title": "Dedup",
+            "type": "string"
+          },
+          "dedup_iou": {
+            "default": 0.9,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "holdout": {
+            "default": "preserve_union",
+            "enum": [
+              "preserve_union",
+              "recompute",
+              "none"
+            ],
+            "title": "Holdout",
+            "type": "string"
+          },
+          "settings_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings From"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CombineSource"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CombineTarget"
+          },
+          "target_classes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Classes"
+          }
+        },
+        "required": [
+          "target",
+          "sources"
+        ],
+        "title": "CombineRequest",
+        "type": "object"
+      },
+      "CombineSource": {
+        "additionalProperties": false,
+        "properties": {
+          "include": {
+            "$ref": "#/components/schemas/CombineInclude"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "CombineSource",
+        "type": "object"
+      },
+      "CombineStartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "class_mapping": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClassMappingEntry"
+              },
+              "type": "array"
+            },
+            "title": "Class Mapping",
+            "type": "object"
+          },
+          "dedup": {
+            "default": "content_hash",
+            "enum": [
+              "content_hash",
+              "none"
+            ],
+            "title": "Dedup",
+            "type": "string"
+          },
+          "dedup_iou": {
+            "default": 0.9,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "expected_preview_sha": {
+            "title": "Expected Preview Sha",
+            "type": "string"
+          },
+          "holdout": {
+            "default": "preserve_union",
+            "enum": [
+              "preserve_union",
+              "recompute",
+              "none"
+            ],
+            "title": "Holdout",
+            "type": "string"
+          },
+          "settings_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings From"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CombineSource"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CombineTarget"
+          },
+          "target_classes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Classes"
+          }
+        },
+        "required": [
+          "target",
+          "sources",
+          "expected_preview_sha"
+        ],
+        "title": "CombineStartRequest",
+        "type": "object"
+      },
+      "CombineStartResponse": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "target"
+        ],
+        "title": "CombineStartResponse",
+        "type": "object"
+      },
+      "CombineTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "title": "CombineTarget",
         "type": "object"
       },
       "CommonMetricBlock": {
@@ -2275,6 +2878,27 @@
               "hotkey_taken",
               "path_escape",
               "finish_in_progress",
+              "dataset_not_found",
+              "import_not_found",
+              "upload_not_found",
+              "image_not_found",
+              "import_busy",
+              "import_resumable",
+              "dataset_changed",
+              "import_not_resumable",
+              "import_not_undoable",
+              "reprocess_busy",
+              "upload_too_large",
+              "dataset_path_not_allowed",
+              "format_undetected",
+              "import_blocked",
+              "class_mapping_incomplete",
+              "class_mapping_invalid",
+              "archive_invalid",
+              "reprocess_targets_invalid",
+              "region_profile_required",
+              "combine_not_found",
+              "combine_not_resumable",
               "unknown_vlm",
               "vlm_external_not_acknowledged",
               "vlm_not_configured",
@@ -2309,6 +2933,31 @@
             ],
             "title": "Heap Max Bytes"
           },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Id"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DatasetIssueWire"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues"
+          },
           "jobs": {
             "anyOf": [
               {
@@ -2322,6 +2971,17 @@
               }
             ],
             "title": "Jobs"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
           },
           "message": {
             "title": "Message",
@@ -2420,6 +3080,20 @@
               }
             ],
             "title": "Unbound Class Hotkeys"
+          },
+          "unmapped": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmapped"
           },
           "valid_ids": {
             "anyOf": [
@@ -3083,6 +3757,1167 @@
         "title": "CustomModelRef",
         "type": "object"
       },
+      "DatasetClassRow": {
+        "properties": {
+          "boxes": {
+            "title": "Boxes",
+            "type": "integer"
+          },
+          "dataset_class": {
+            "title": "Dataset Class",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "images": {
+            "title": "Images",
+            "type": "integer"
+          },
+          "index_would_have_mapped_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IndexWouldHaveMapped"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "merged_from": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Merged From",
+            "type": "array"
+          },
+          "resolved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedMapTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Class Id"
+          },
+          "suggestion": {
+            "$ref": "#/components/schemas/MappingSuggestionWire"
+          }
+        },
+        "required": [
+          "dataset_class",
+          "boxes",
+          "images",
+          "suggestion"
+        ],
+        "title": "DatasetClassRow",
+        "type": "object"
+      },
+      "DatasetEstimate": {
+        "properties": {
+          "detector_images": {
+            "title": "Detector Images",
+            "type": "integer"
+          },
+          "embeddings": {
+            "title": "Embeddings",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "detector_images",
+          "embeddings"
+        ],
+        "title": "DatasetEstimate",
+        "type": "object"
+      },
+      "DatasetFormatInfo": {
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "label"
+        ],
+        "title": "DatasetFormatInfo",
+        "type": "object"
+      },
+      "DatasetFormatsResponse": {
+        "properties": {
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetFormatInfo"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetIssueCatalogEntry"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "mapping_actions": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledChoice"
+            },
+            "title": "Mapping Actions",
+            "type": "array"
+          },
+          "match_kinds": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledChoice"
+            },
+            "title": "Match Kinds",
+            "type": "array"
+          },
+          "parents_modes": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledChoice"
+            },
+            "title": "Parents Modes",
+            "type": "array"
+          },
+          "processing_modes": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledChoice"
+            },
+            "title": "Processing Modes",
+            "type": "array"
+          },
+          "status_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Status Labels",
+            "type": "object"
+          },
+          "trust_levels": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledChoice"
+            },
+            "title": "Trust Levels",
+            "type": "array"
+          },
+          "upload_limits": {
+            "$ref": "#/components/schemas/DatasetUploadLimits"
+          }
+        },
+        "required": [
+          "formats",
+          "issues",
+          "mapping_actions",
+          "match_kinds",
+          "processing_modes",
+          "parents_modes",
+          "trust_levels",
+          "upload_limits",
+          "status_labels"
+        ],
+        "title": "DatasetFormatsResponse",
+        "type": "object"
+      },
+      "DatasetImportEntry": {
+        "properties": {
+          "boxes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
+          "image_created": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Created"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Path"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "label_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label State"
+          },
+          "rel_path": {
+            "title": "Rel Path",
+            "type": "string"
+          },
+          "source_stem": {
+            "title": "Source Stem",
+            "type": "string"
+          },
+          "split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_stem",
+          "rel_path",
+          "status"
+        ],
+        "title": "DatasetImportEntry",
+        "type": "object"
+      },
+      "DatasetImportEntryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetImportEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "DatasetImportEntryPage",
+        "type": "object"
+      },
+      "DatasetImportJob": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "import_id": {
+            "title": "Import Id",
+            "type": "string"
+          },
+          "import_key": {
+            "title": "Import Key",
+            "type": "string"
+          },
+          "issues_summary": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Issues Summary",
+            "type": "array"
+          },
+          "labels": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Labels",
+            "type": "object"
+          },
+          "mapping": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedMapTarget"
+            },
+            "title": "Mapping",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_steps": {
+            "items": {
+              "$ref": "#/components/schemas/NextStep"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "options": {
+            "$ref": "#/components/schemas/DatasetImportOptions"
+          },
+          "poll_after_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After S"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/DatasetImportProgress"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/DatasetImportReportWire"
+          },
+          "reused": {
+            "default": false,
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DatasetImportSource"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "paused_backpressure",
+              "completed",
+              "completed_with_errors",
+              "failed",
+              "cancelled",
+              "interrupted",
+              "undoing",
+              "undone"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetUndoReportWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting For"
+          }
+        },
+        "required": [
+          "project",
+          "import_id",
+          "import_key",
+          "name",
+          "status",
+          "progress",
+          "report",
+          "options",
+          "source"
+        ],
+        "title": "DatasetImportJob",
+        "type": "object"
+      },
+      "DatasetImportList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetImportJob"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "DatasetImportList",
+        "type": "object"
+      },
+      "DatasetImportOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "freeze_test_split": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freeze Test Split"
+          },
+          "label_trust": {
+            "default": "validated",
+            "enum": [
+              "validated",
+              "suggestion"
+            ],
+            "title": "Label Trust",
+            "type": "string"
+          },
+          "missing_label": {
+            "default": "unlabeled",
+            "enum": [
+              "unlabeled",
+              "negative"
+            ],
+            "title": "Missing Label",
+            "type": "string"
+          },
+          "name": {
+            "default": "dataset_import",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parents": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "labels",
+              "detect"
+            ],
+            "title": "Parents",
+            "type": "string"
+          },
+          "processing": {
+            "default": "none",
+            "enum": [
+              "none",
+              "propose"
+            ],
+            "title": "Processing",
+            "type": "string"
+          },
+          "region_containment": {
+            "default": 0.9,
+            "maximum": 1.0,
+            "minimum": 0.5,
+            "title": "Region Containment",
+            "type": "number"
+          },
+          "region_negatives": {
+            "default": true,
+            "title": "Region Negatives",
+            "type": "boolean"
+          },
+          "source_tag": {
+            "default": "dataset_import",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source Tag",
+            "type": "string"
+          }
+        },
+        "title": "DatasetImportOptions",
+        "type": "object"
+      },
+      "DatasetImportProgress": {
+        "properties": {
+          "chunks_done": {
+            "default": 0,
+            "title": "Chunks Done",
+            "type": "integer"
+          },
+          "chunks_total": {
+            "default": 0,
+            "title": "Chunks Total",
+            "type": "integer"
+          },
+          "eta_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta S"
+          },
+          "images_done": {
+            "default": 0,
+            "title": "Images Done",
+            "type": "integer"
+          },
+          "images_failed": {
+            "default": 0,
+            "title": "Images Failed",
+            "type": "integer"
+          },
+          "images_per_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images Per S"
+          },
+          "images_total": {
+            "default": 0,
+            "title": "Images Total",
+            "type": "integer"
+          }
+        },
+        "title": "DatasetImportProgress",
+        "type": "object"
+      },
+      "DatasetImportReportWire": {
+        "properties": {
+          "boxes_written": {
+            "default": 0,
+            "title": "Boxes Written",
+            "type": "integer"
+          },
+          "disagreements": {
+            "$ref": "#/components/schemas/DisagreementsWire"
+          },
+          "holdout_frozen": {
+            "default": 0,
+            "title": "Holdout Frozen",
+            "type": "integer"
+          },
+          "images_created": {
+            "default": 0,
+            "title": "Images Created",
+            "type": "integer"
+          },
+          "images_failed": {
+            "default": 0,
+            "title": "Images Failed",
+            "type": "integer"
+          },
+          "images_reused": {
+            "default": 0,
+            "title": "Images Reused",
+            "type": "integer"
+          },
+          "images_skipped": {
+            "default": 0,
+            "title": "Images Skipped",
+            "type": "integer"
+          },
+          "items_created": {
+            "default": 0,
+            "title": "Items Created",
+            "type": "integer"
+          },
+          "items_noop": {
+            "default": 0,
+            "title": "Items Noop",
+            "type": "integer"
+          },
+          "items_reconciled_removed": {
+            "default": 0,
+            "title": "Items Reconciled Removed",
+            "type": "integer"
+          },
+          "items_updated": {
+            "default": 0,
+            "title": "Items Updated",
+            "type": "integer"
+          },
+          "label_conflicts_locked": {
+            "default": 0,
+            "title": "Label Conflicts Locked",
+            "type": "integer"
+          },
+          "labels_written": {
+            "default": 0,
+            "title": "Labels Written",
+            "type": "integer"
+          },
+          "negatives": {
+            "default": 0,
+            "title": "Negatives",
+            "type": "integer"
+          },
+          "parents_detected": {
+            "default": 0,
+            "title": "Parents Detected",
+            "type": "integer"
+          },
+          "proposals_created": {
+            "default": 0,
+            "title": "Proposals Created",
+            "type": "integer"
+          },
+          "proposals_merged": {
+            "default": 0,
+            "title": "Proposals Merged",
+            "type": "integer"
+          },
+          "standalone_regions": {
+            "default": 0,
+            "title": "Standalone Regions",
+            "type": "integer"
+          },
+          "unlabeled": {
+            "default": 0,
+            "title": "Unlabeled",
+            "type": "integer"
+          }
+        },
+        "title": "DatasetImportReportWire",
+        "type": "object"
+      },
+      "DatasetImportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accept_suggestions": {
+            "default": false,
+            "title": "Accept Suggestions",
+            "type": "boolean"
+          },
+          "expected_import_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Import Key"
+          },
+          "mapping": {
+            "items": {
+              "$ref": "#/components/schemas/ClassMappingEntry"
+            },
+            "title": "Mapping",
+            "type": "array"
+          },
+          "options": {
+            "$ref": "#/components/schemas/DatasetImportOptions"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DatasetSource"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "DatasetImportRequest",
+        "type": "object"
+      },
+      "DatasetImportSource": {
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          },
+          "source_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sha"
+          }
+        },
+        "title": "DatasetImportSource",
+        "type": "object"
+      },
+      "DatasetIssueCatalogEntry": {
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "bypassable": {
+            "title": "Bypassable",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "blocking",
+          "bypassable",
+          "label"
+        ],
+        "title": "DatasetIssueCatalogEntry",
+        "type": "object"
+      },
+      "DatasetIssuePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "DatasetIssuePage",
+        "type": "object"
+      },
+      "DatasetIssueSampleWire": {
+        "properties": {
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "DatasetIssueSampleWire",
+        "type": "object"
+      },
+      "DatasetIssueWire": {
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "bypassable": {
+            "title": "Bypassable",
+            "type": "boolean"
+          },
+          "code": {
+            "enum": [
+              "dataset_path_not_allowed",
+              "format_undetected",
+              "dataset_too_large",
+              "dataset_file_too_large",
+              "data_yaml_invalid",
+              "data_yaml_names_missing",
+              "data_yaml_names_sparse",
+              "split_dir_missing",
+              "coco_json_invalid",
+              "coco_category_duplicate_name",
+              "label_file_missing",
+              "label_file_orphan",
+              "label_row_malformed",
+              "label_class_out_of_range",
+              "label_coords_out_of_range",
+              "label_coords_clamped",
+              "label_box_degenerate",
+              "yolo_polygon_to_box",
+              "coco_crowd_skipped",
+              "coco_bbox_out_of_image",
+              "image_size_mismatch",
+              "image_path_not_servable",
+              "image_duplicate_in_dataset",
+              "images_already_indexed",
+              "already_imported",
+              "class_unmapped",
+              "class_mapping_conflict",
+              "class_name_exists",
+              "class_mapped_to_deprecated",
+              "class_index_name_mismatch",
+              "region_profile_required",
+              "region_class_name_differs",
+              "region_box_no_parent",
+              "label_conflicts_locked",
+              "manifest_unreadable",
+              "names_mismatch",
+              "test_split_changed",
+              "op_export_detected",
+              "dataset_sha_mismatch",
+              "test_frozen_from_manifest",
+              "test_frozen_missing",
+              "stratum_map_partial",
+              "item_crop_export_imported_as_frames",
+              "images_reused_by_stem",
+              "image_unreadable"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetIssueSampleWire"
+            },
+            "title": "Samples",
+            "type": "array"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "blocking",
+          "bypassable",
+          "message",
+          "count"
+        ],
+        "title": "DatasetIssueWire",
+        "type": "object"
+      },
+      "DatasetPreview": {
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "classes": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetClassRow"
+            },
+            "title": "Classes",
+            "type": "array"
+          },
+          "estimate": {
+            "$ref": "#/components/schemas/DatasetEstimate"
+          },
+          "force_allowed": {
+            "title": "Force Allowed",
+            "type": "boolean"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "import_key": {
+            "title": "Import Key",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetIssueWire"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "op_export": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Op Export"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetRegionInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root": {
+            "title": "Root",
+            "type": "string"
+          },
+          "source_sha": {
+            "title": "Source Sha",
+            "type": "string"
+          },
+          "splits": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetSplitRow"
+            },
+            "title": "Splits",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/DatasetTotals"
+          }
+        },
+        "required": [
+          "project",
+          "format",
+          "root",
+          "source_sha",
+          "import_key",
+          "splits",
+          "totals",
+          "classes",
+          "issues",
+          "blocking",
+          "force_allowed",
+          "estimate"
+        ],
+        "title": "DatasetPreview",
+        "type": "object"
+      },
+      "DatasetPreviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accept_suggestions": {
+            "default": false,
+            "title": "Accept Suggestions",
+            "type": "boolean"
+          },
+          "mapping": {
+            "items": {
+              "$ref": "#/components/schemas/ClassMappingEntry"
+            },
+            "title": "Mapping",
+            "type": "array"
+          },
+          "options": {
+            "$ref": "#/components/schemas/DatasetImportOptions"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DatasetSource"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "DatasetPreviewRequest",
+        "type": "object"
+      },
       "DatasetRef": {
         "additionalProperties": false,
         "properties": {
@@ -3096,6 +4931,327 @@
           "id"
         ],
         "title": "DatasetRef",
+        "type": "object"
+      },
+      "DatasetRegionInfo": {
+        "properties": {
+          "parent_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parent Classes",
+            "type": "array"
+          },
+          "parents_mode": {
+            "enum": [
+              "labels",
+              "detect"
+            ],
+            "title": "Parents Mode",
+            "type": "string"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "region_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Class Name"
+          },
+          "standalone_boxes": {
+            "default": 0,
+            "title": "Standalone Boxes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parents_mode"
+        ],
+        "title": "DatasetRegionInfo",
+        "type": "object"
+      },
+      "DatasetSource": {
+        "additionalProperties": false,
+        "properties": {
+          "coco_annotations": {
+            "items": {
+              "$ref": "#/components/schemas/CocoAnnotationFileSpec"
+            },
+            "title": "Coco Annotations",
+            "type": "array"
+          },
+          "format": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "yolo",
+              "coco",
+              "openprocessor_export"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DatasetSource",
+        "type": "object"
+      },
+      "DatasetSplitRow": {
+        "properties": {
+          "boxes": {
+            "title": "Boxes",
+            "type": "integer"
+          },
+          "images": {
+            "title": "Images",
+            "type": "integer"
+          },
+          "labeled": {
+            "title": "Labeled",
+            "type": "integer"
+          },
+          "negatives": {
+            "title": "Negatives",
+            "type": "integer"
+          },
+          "split": {
+            "title": "Split",
+            "type": "string"
+          },
+          "unlabeled": {
+            "title": "Unlabeled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "split",
+          "images",
+          "labeled",
+          "negatives",
+          "unlabeled",
+          "boxes"
+        ],
+        "title": "DatasetSplitRow",
+        "type": "object"
+      },
+      "DatasetTotals": {
+        "properties": {
+          "boxes": {
+            "title": "Boxes",
+            "type": "integer"
+          },
+          "images": {
+            "title": "Images",
+            "type": "integer"
+          },
+          "images_already_indexed": {
+            "title": "Images Already Indexed",
+            "type": "integer"
+          },
+          "images_to_ingest": {
+            "title": "Images To Ingest",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "images",
+          "boxes",
+          "images_already_indexed",
+          "images_to_ingest"
+        ],
+        "title": "DatasetTotals",
+        "type": "object"
+      },
+      "DatasetUndoReportWire": {
+        "properties": {
+          "boxes_kept_human_edited": {
+            "default": 0,
+            "title": "Boxes Kept Human Edited",
+            "type": "integer"
+          },
+          "boxes_removed": {
+            "default": 0,
+            "title": "Boxes Removed",
+            "type": "integer"
+          },
+          "class_labels_removed": {
+            "default": 0,
+            "title": "Class Labels Removed",
+            "type": "integer"
+          },
+          "classes_deprecated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Classes Deprecated",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "holdout_flags_cleared": {
+            "default": 0,
+            "title": "Holdout Flags Cleared",
+            "type": "integer"
+          },
+          "images_deleted": {
+            "default": 0,
+            "title": "Images Deleted",
+            "type": "integer"
+          },
+          "images_kept": {
+            "default": 0,
+            "title": "Images Kept",
+            "type": "integer"
+          },
+          "import_id": {
+            "title": "Import Id",
+            "type": "string"
+          },
+          "items_deleted": {
+            "default": 0,
+            "title": "Items Deleted",
+            "type": "integer"
+          },
+          "items_kept_human_edited": {
+            "default": 0,
+            "title": "Items Kept Human Edited",
+            "type": "integer"
+          },
+          "items_kept_shared": {
+            "default": 0,
+            "title": "Items Kept Shared",
+            "type": "integer"
+          },
+          "items_reinstated": {
+            "default": 0,
+            "title": "Items Reinstated",
+            "type": "integer"
+          },
+          "items_restored": {
+            "default": 0,
+            "title": "Items Restored",
+            "type": "integer"
+          },
+          "proposals_deleted": {
+            "default": 0,
+            "title": "Proposals Deleted",
+            "type": "integer"
+          },
+          "samples": {
+            "additionalProperties": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Samples",
+            "type": "object"
+          }
+        },
+        "required": [
+          "import_id",
+          "dry_run"
+        ],
+        "title": "DatasetUndoReportWire",
+        "type": "object"
+      },
+      "DatasetUndoRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "deprecate_created_classes": {
+            "default": true,
+            "title": "Deprecate Created Classes",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "remove_images": {
+            "default": true,
+            "title": "Remove Images",
+            "type": "boolean"
+          }
+        },
+        "title": "DatasetUndoRequest",
+        "type": "object"
+      },
+      "DatasetUploadLimits": {
+        "properties": {
+          "max_bytes": {
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "max_files": {
+            "title": "Max Files",
+            "type": "integer"
+          },
+          "preview_max_files": {
+            "title": "Preview Max Files",
+            "type": "integer"
+          },
+          "ttl_hours": {
+            "title": "Ttl Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_bytes",
+          "max_files",
+          "ttl_hours",
+          "preview_max_files"
+        ],
+        "title": "DatasetUploadLimits",
+        "type": "object"
+      },
+      "DatasetUploadResponse": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "dataset_path": {
+            "title": "Dataset Path",
+            "type": "string"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "upload_id": {
+            "title": "Upload Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "dataset_path",
+          "bytes",
+          "files"
+        ],
+        "title": "DatasetUploadResponse",
         "type": "object"
       },
       "DeleteBlockingIssue": {
@@ -3250,6 +5406,27 @@
           "source"
         ],
         "title": "DetectorEntry",
+        "type": "object"
+      },
+      "DisagreementsWire": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "samples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Samples",
+            "type": "array"
+          }
+        },
+        "title": "DisagreementsWire",
         "type": "object"
       },
       "DryRunDirReport": {
@@ -3716,6 +5893,15 @@
             "title": "Skip Test Split",
             "type": "boolean"
           },
+          "split_mode": {
+            "default": "keep_imported",
+            "enum": [
+              "keep_imported",
+              "recompute"
+            ],
+            "title": "Split Mode",
+            "type": "string"
+          },
           "version_tag": {
             "default": "",
             "title": "Version Tag",
@@ -4034,6 +6220,11 @@
             ],
             "title": "Export Dir"
           },
+          "include_negative_frames": {
+            "default": true,
+            "title": "Include Negative Frames",
+            "type": "boolean"
+          },
           "max_images": {
             "anyOf": [
               {
@@ -4054,6 +6245,15 @@
             "default": 42,
             "title": "Seed",
             "type": "integer"
+          },
+          "split_mode": {
+            "default": "keep_imported",
+            "enum": [
+              "keep_imported",
+              "recompute"
+            ],
+            "title": "Split Mode",
+            "type": "string"
           },
           "version_tag": {
             "default": "",
@@ -4281,6 +6481,24 @@
           "region_profile"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "IndexWouldHaveMapped": {
+        "properties": {
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "IndexWouldHaveMapped",
         "type": "object"
       },
       "IngestBatchConfig": {
@@ -4906,6 +7124,17 @@
             ],
             "title": "Crop Rank In Image"
           },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
           "dup_group_id": {
             "title": "Dup Group Id"
           },
@@ -4967,12 +7196,40 @@
             "title": "Image Path",
             "type": "string"
           },
+          "import_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Import Ids",
+            "type": "array"
+          },
+          "import_standalone_region": {
+            "default": false,
+            "title": "Import Standalone Region",
+            "type": "boolean"
+          },
+          "imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          },
           "item_text_lines": {
             "items": {
               "$ref": "#/components/schemas/ItemTextLine"
             },
             "title": "Item Text Lines",
             "type": "array"
+          },
+          "label_locked": {
+            "default": false,
+            "title": "Label Locked",
+            "type": "boolean"
           },
           "label_source": {
             "anyOf": [
@@ -5051,6 +7308,11 @@
             ],
             "title": "Needs New Class Note"
           },
+          "on_negative_frame": {
+            "default": false,
+            "title": "On Negative Frame",
+            "type": "boolean"
+          },
           "probe_actionable": {
             "anyOf": [
               {
@@ -5120,6 +7382,13 @@
             ],
             "title": "Probe Pred Entropy"
           },
+          "proposal_chain": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposal Chain",
+            "type": "array"
+          },
           "proposal_name": {
             "anyOf": [
               {
@@ -5130,6 +7399,17 @@
               }
             ],
             "title": "Proposal Name"
+          },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
           },
           "proposed_class_id": {
             "anyOf": [
@@ -6268,6 +8548,29 @@
         "title": "KeymapValidateResponse",
         "type": "object"
       },
+      "LabeledChoice": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "LabeledChoice",
+        "type": "object"
+      },
       "LatencyStats": {
         "properties": {
           "mean": {
@@ -6315,6 +8618,52 @@
           "lines"
         ],
         "title": "LogTailResponse",
+        "type": "object"
+      },
+      "MappingSuggestionWire": {
+        "properties": {
+          "action": {
+            "enum": [
+              "map",
+              "create",
+              "skip",
+              "region"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "match": {
+            "title": "Match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "match"
+        ],
+        "title": "MappingSuggestionWire",
         "type": "object"
       },
       "MatrixCell": {
@@ -7014,6 +9363,34 @@
           "project"
         ],
         "title": "ModelSharingUser",
+        "type": "object"
+      },
+      "NextStep": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "method",
+          "path",
+          "reason"
+        ],
+        "title": "NextStep",
         "type": "object"
       },
       "NotCoveredClass": {
@@ -10627,6 +13004,17 @@
             ],
             "title": "Crop Rank In Image"
           },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
           "dup_group_id": {
             "title": "Dup Group Id"
           },
@@ -10688,12 +13076,40 @@
             "title": "Image Path",
             "type": "string"
           },
+          "import_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Import Ids",
+            "type": "array"
+          },
+          "import_standalone_region": {
+            "default": false,
+            "title": "Import Standalone Region",
+            "type": "boolean"
+          },
+          "imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          },
           "item_text_lines": {
             "items": {
               "$ref": "#/components/schemas/ItemTextLine"
             },
             "title": "Item Text Lines",
             "type": "array"
+          },
+          "label_locked": {
+            "default": false,
+            "title": "Label Locked",
+            "type": "boolean"
           },
           "label_source": {
             "anyOf": [
@@ -10784,6 +13200,11 @@
             ],
             "title": "Needs New Class Note"
           },
+          "on_negative_frame": {
+            "default": false,
+            "title": "On Negative Frame",
+            "type": "boolean"
+          },
           "probe_actionable": {
             "anyOf": [
               {
@@ -10853,6 +13274,13 @@
             ],
             "title": "Probe Pred Entropy"
           },
+          "proposal_chain": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposal Chain",
+            "type": "array"
+          },
           "proposal_name": {
             "anyOf": [
               {
@@ -10863,6 +13291,17 @@
               }
             ],
             "title": "Proposal Name"
+          },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
           },
           "proposed_class_id": {
             "anyOf": [
@@ -11510,6 +13949,449 @@
         "title": "ReloadPromotedResponse",
         "type": "object"
       },
+      "ReprocessFilter": {
+        "additionalProperties": false,
+        "description": "The W4 requeue selection, moved here, plus provenance selectors.\n\n``profile_not`` / ``profile_revision_below`` select items not produced\nby the profile@revision named (both given: not produced by that exact\nprofile@revision); ``include_detected`` widens a region selection to\n``detected`` items and is only valid together with a profile selector.",
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
+          "detector": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Detector",
+            "type": "array"
+          },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Id"
+          },
+          "include_detected": {
+            "default": false,
+            "title": "Include Detected",
+            "type": "boolean"
+          },
+          "missing_provenance": {
+            "default": false,
+            "title": "Missing Provenance",
+            "type": "boolean"
+          },
+          "missing_status": {
+            "default": false,
+            "title": "Missing Status",
+            "type": "boolean"
+          },
+          "profile_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Not"
+          },
+          "profile_revision_below": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Revision Below"
+          },
+          "reason": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason",
+            "type": "array"
+          },
+          "region_status": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Region Status",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "title": "ReprocessFilter",
+        "type": "object"
+      },
+      "ReprocessJobInfo": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "images_done": {
+            "default": 0,
+            "title": "Images Done",
+            "type": "integer"
+          },
+          "images_failed": {
+            "default": 0,
+            "title": "Images Failed",
+            "type": "integer"
+          },
+          "images_total": {
+            "default": 0,
+            "title": "Images Total",
+            "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "poll_after_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After S"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ReprocessScopeResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "detect",
+                "region",
+                "vlm",
+                "embed"
+              ],
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "ReprocessJobInfo",
+        "type": "object"
+      },
+      "ReprocessOneRequest": {
+        "additionalProperties": false,
+        "description": "The body of ``POST /images/{id}/reprocess`` and\n``POST /crops/{id}/reprocess``: the target is the path.",
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "region_mode": {
+            "default": "redetect",
+            "enum": [
+              "redetect",
+              "reverify"
+            ],
+            "title": "Region Mode",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "detect",
+                "region",
+                "vlm",
+                "embed"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scopes"
+        ],
+        "title": "ReprocessOneRequest",
+        "type": "object"
+      },
+      "ReprocessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "region_mode": {
+            "default": "redetect",
+            "enum": [
+              "redetect",
+              "reverify"
+            ],
+            "title": "Region Mode",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "detect",
+                "region",
+                "vlm",
+                "embed"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/ReprocessTargets"
+          }
+        },
+        "required": [
+          "targets",
+          "scopes"
+        ],
+        "title": "ReprocessRequest",
+        "type": "object"
+      },
+      "ReprocessScopeResult": {
+        "properties": {
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/BreakdownRow"
+            },
+            "title": "Breakdown",
+            "type": "array"
+          },
+          "detail": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Detail",
+            "type": "object"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "locked_skipped": {
+            "default": 0,
+            "title": "Locked Skipped",
+            "type": "integer"
+          },
+          "not_found": {
+            "default": 0,
+            "title": "Not Found",
+            "type": "integer"
+          },
+          "queued": {
+            "default": 0,
+            "title": "Queued",
+            "type": "integer"
+          },
+          "scope": {
+            "enum": [
+              "detect",
+              "region",
+              "vlm",
+              "embed"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "selected": {
+            "default": 0,
+            "title": "Selected",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scope"
+        ],
+        "title": "ReprocessScopeResult",
+        "type": "object"
+      },
+      "ReprocessTargets": {
+        "additionalProperties": false,
+        "description": "Exactly one of ``image_ids`` / ``crop_ids`` / ``filter``.",
+        "properties": {
+          "crop_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Ids"
+          }
+        },
+        "title": "ReprocessTargets",
+        "type": "object"
+      },
+      "ReprocessWireResponse": {
+        "description": "``ReprocessResponse`` plus the post-write ``items`` (only the\nsingle image / crop routes fill it; the GUI adopts them).",
+        "properties": {
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessJobInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ReprocessScopeResult"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "scopes"
+        ],
+        "title": "ReprocessWireResponse",
+        "type": "object"
+      },
       "ResolveConflict": {
         "properties": {
           "crop_id": {
@@ -11682,6 +14564,56 @@
           "updated"
         ],
         "title": "ResolveNewClassResponse",
+        "type": "object"
+      },
+      "ResolvedMapTarget": {
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "created": {
+            "default": false,
+            "title": "Created",
+            "type": "boolean"
+          },
+          "dataset_class": {
+            "title": "Dataset Class",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "item",
+              "region",
+              "skip"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_class",
+          "kind"
+        ],
+        "title": "ResolvedMapTarget",
         "type": "object"
       },
       "ReviewEmptyState": {
@@ -13571,6 +16503,22 @@
               "text_fields_ignored",
               "display_name_missing",
               "parent_class_unknown",
+              "unmapped_class",
+              "mapping_target_invalid",
+              "source_not_found",
+              "source_busy",
+              "source_not_ready",
+              "slug_taken",
+              "slug_retired",
+              "slug_invalid",
+              "shard_budget_exceeded",
+              "shard_budget_high",
+              "too_many_sources",
+              "duplicate_source",
+              "target_is_source",
+              "label_conflicts",
+              "holdout_recompute_contamination",
+              "class_mapping_invalid",
               "vlm_name_invalid",
               "vlm_name_reserved",
               "vlm_field_range",
@@ -16339,6 +19287,315 @@
           }
         },
         "summary": "Create Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine": {
+      "post": {
+        "operationId": "combine_start_curation_projects_combine_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CombineStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Start",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/preview": {
+      "post": {
+        "description": "Dry run: what a combine would do. Writes nothing.",
+        "operationId": "combine_preview_curation_projects_combine_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CombineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombinePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Preview",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/{job_id}": {
+      "get": {
+        "operationId": "combine_status_curation_projects_combine__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Status",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/{job_id}/cancel": {
+      "post": {
+        "operationId": "combine_cancel_curation_projects_combine__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Cancel",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/{job_id}/resume": {
+      "post": {
+        "operationId": "combine_resume_curation_projects_combine__job_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Resume",
         "tags": [
           "Projects"
         ]
@@ -20065,6 +23322,68 @@
         ]
       }
     },
+    "/curation/projects/{project}/crops/{crop_id}/reprocess": {
+      "post": {
+        "description": "The explicit per-item button: apply by default. The response carries\nthe item as written; a locked set with nothing to regenerate reports\n``locked_skipped: 1`` and ``queued: 0``.",
+        "operationId": "reprocess_crop_curation_projects__project__crops__crop_id__reprocess_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprocessOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReprocessWireResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reprocess Crop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/crops/{crop_id}/review_dismiss": {
       "post": {
         "description": "Permanently dismiss a crop from every /review queue.\n\nStamps ``review_dismissed_at`` + ``review_dismissed_by``. The\nreview_queue handler excludes any crop where ``review_dismissed_at``\nexists, so this is one-way: once an operator says 'I never want to\nsee this again in review', it's gone from every tab. The crop's\nunderlying class / region state is left intact — only the review\nvisibility changes.",
@@ -20340,6 +23659,707 @@
           }
         },
         "summary": "Undo Vlm Dismiss",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/formats": {
+      "get": {
+        "operationId": "dataset_formats_curation_projects__project__datasets_formats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetFormatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dataset Formats",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports": {
+      "get": {
+        "operationId": "list_dataset_imports_curation_projects__project__datasets_imports_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Dataset Imports",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "start_dataset_import_curation_projects__project__datasets_imports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Dataset Import",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports/{import_id}": {
+      "get": {
+        "operationId": "get_dataset_import_curation_projects__project__datasets_imports__import_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dataset Import",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports/{import_id}/cancel": {
+      "post": {
+        "operationId": "cancel_dataset_import_curation_projects__project__datasets_imports__import_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Dataset Import",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports/{import_id}/entries": {
+      "get": {
+        "operationId": "dataset_import_entries_curation_projects__project__datasets_imports__import_id__entries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "split",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Split"
+            }
+          },
+          {
+            "in": "query",
+            "name": "label_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportEntryPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dataset Import Entries",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports/{import_id}/issues": {
+      "get": {
+        "operationId": "dataset_import_issues_curation_projects__project__datasets_imports__import_id__issues_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetIssuePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dataset Import Issues",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports/{import_id}/resume": {
+      "post": {
+        "operationId": "resume_dataset_import_curation_projects__project__datasets_imports__import_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Dataset Import",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/imports/{import_id}/undo": {
+      "post": {
+        "operationId": "undo_dataset_import_curation_projects__project__datasets_imports__import_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Dataset Import",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/preview": {
+      "post": {
+        "operationId": "preview_dataset_curation_projects__project__datasets_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Dataset",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/datasets/uploads": {
+      "post": {
+        "operationId": "upload_dataset_curation_projects__project__datasets_uploads_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_dataset_curation_projects__project__datasets_uploads_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Dataset",
         "tags": [
           "Curation"
         ]
@@ -21053,6 +25073,68 @@
         "summary": "Serve Image",
         "tags": [
           "Curation - Images"
+        ]
+      }
+    },
+    "/curation/projects/{project}/images/{image_id}/reprocess": {
+      "post": {
+        "description": "The explicit per-image button: apply (``dry_run`` false) by default.\nThe response carries the image's items as written.",
+        "operationId": "reprocess_image_curation_projects__project__images__image_id__reprocess_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprocessOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReprocessWireResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reprocess Image",
+        "tags": [
+          "Curation"
         ]
       }
     },
@@ -25705,6 +29787,162 @@
         ]
       }
     },
+    "/curation/projects/{project}/reprocess": {
+      "post": {
+        "description": "Re-run one or more scopes (``detect`` / ``region`` / ``vlm`` /\n``embed``) over images, items or a filter. Dry run by default: the\nresponse counts, per scope, what is selected and what the lock rule\nskips (``locked_skipped``). Detect and embed over many images return a\n``job`` to poll at ``GET /reprocess/jobs/{job_id}``.",
+        "operationId": "reprocess_batch_curation_projects__project__reprocess_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReprocessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReprocessWireResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reprocess Batch",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/reprocess/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_reprocess_job_curation_projects__project__reprocess_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReprocessJobInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Reprocess Job",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/reprocess/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "Ask a live job to stop after its current chunk.",
+        "operationId": "cancel_reprocess_job_curation_projects__project__reprocess_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReprocessJobInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Reprocess Job",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/resume": {
       "post": {
         "description": "Clear this project's pause flag. Idempotent -- resuming an\nalready-running project is a no-op, not an error.",
@@ -26307,6 +30545,18 @@
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }
+          },
+          {
+            "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+            "in": "query",
+            "name": "combine_conflict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+              "title": "Combine Conflict",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -26594,6 +30844,18 @@
               ],
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
+            }
+          },
+          {
+            "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+            "in": "query",
+            "name": "combine_conflict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+              "title": "Combine Conflict",
+              "type": "boolean"
             }
           }
         ],

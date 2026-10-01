@@ -2,12 +2,10 @@
 codes, so ``GET /datasets/formats`` never needs a hardcoded copy on the
 client.
 
-Not the full any_domain_plan.md W10.4 table (deferred codes are the
-OpenProcessor-export-specific ones — ``op_export.py`` is out of scope
-this pass, see the wave report) — every code this pass's readers
-(``yolo.py``, ``coco.py``) and mapping (``mapping.py``) actually emit is
-here, plus the DatasetIssue/DatasetIssueSample shapes ``scan.py`` and the
-routes build responses from.
+Every code a reader (``yolo.py``, ``coco.py``, ``op_export.py``), the
+mapping (``mapping.py``) or the job emits is here, plus the
+DatasetIssue/DatasetIssueSample shapes ``scan.py`` and the routes build
+responses from. Adding a code is additive; renaming one is breaking.
 """
 
 from __future__ import annotations
@@ -22,6 +20,7 @@ DatasetIssueCode = Literal[
     'dataset_path_not_allowed',
     'format_undetected',
     'dataset_too_large',
+    'dataset_file_too_large',
     'data_yaml_invalid',
     'data_yaml_names_missing',
     'data_yaml_names_sparse',
@@ -52,6 +51,17 @@ DatasetIssueCode = Literal[
     'region_class_name_differs',
     'region_box_no_parent',
     'label_conflicts_locked',
+    'manifest_unreadable',
+    'names_mismatch',
+    'test_split_changed',
+    'op_export_detected',
+    'dataset_sha_mismatch',
+    'test_frozen_from_manifest',
+    'test_frozen_missing',
+    'stratum_map_partial',
+    'item_crop_export_imported_as_frames',
+    'images_reused_by_stem',
+    'image_unreadable',
 ]
 
 
@@ -68,6 +78,9 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
     'dataset_path_not_allowed': IssueSpec('error', True, False, 'Dataset path is not allowed'),
     'format_undetected': IssueSpec('error', True, False, 'Could not detect a dataset format'),
     'dataset_too_large': IssueSpec('error', True, False, 'Dataset exceeds the preview file limit'),
+    'dataset_file_too_large': IssueSpec(
+        'error', True, False, 'A label, annotation or manifest file is over the size cap'
+    ),
     'data_yaml_invalid': IssueSpec('error', True, False, 'data.yaml is invalid'),
     'data_yaml_names_missing': IssueSpec('error', True, False, 'data.yaml has no class names'),
     'data_yaml_names_sparse': IssueSpec(
@@ -126,6 +139,33 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
     'label_conflicts_locked': IssueSpec(
         'warning', False, False, 'Label conflicted with a locked (human/import) item'
     ),
+    'manifest_unreadable': IssueSpec(
+        'error', True, False, 'manifest.json or class_registry.json is unreadable'
+    ),
+    'names_mismatch': IssueSpec(
+        'error', True, False, 'data.yaml class names differ from class_registry.json'
+    ),
+    'test_split_changed': IssueSpec(
+        'error', True, True, 'The frozen test split no longer matches TEST_FROZEN.json'
+    ),
+    'op_export_detected': IssueSpec('info', False, False, 'An OpenProcessor export'),
+    'dataset_sha_mismatch': IssueSpec(
+        'warning', False, False, 'The labels differ from the export manifest checksum'
+    ),
+    'test_frozen_from_manifest': IssueSpec(
+        'info', False, False, 'Test split frozen: the export came from a frozen holdout'
+    ),
+    'test_frozen_missing': IssueSpec('info', False, False, 'No frozen test split on record'),
+    'stratum_map_partial': IssueSpec(
+        'warning', False, False, 'stratum_map.json names stems with no image'
+    ),
+    'item_crop_export_imported_as_frames': IssueSpec(
+        'warning', False, False, 'Item-crop export imported as crop-sized frames'
+    ),
+    'images_reused_by_stem': IssueSpec(
+        'info', False, False, 'Export stems resolved to images already in this project'
+    ),
+    'image_unreadable': IssueSpec('warning', False, False, 'Image could not be decoded'),
 }
 
 

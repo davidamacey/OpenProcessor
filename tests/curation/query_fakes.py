@@ -27,7 +27,8 @@ evaluates the subset of the query DSL those paths use:
   OpenSearch's 400), and ``top_hits`` inside a nested aggregation with
   ``docvalue_fields`` (parent ``_id`` + the requested ``fields``);
 - ``count``, ``get``, ``update`` (``if_seq_no`` honoured), ``mget``,
-  ``bulk`` (``update`` with ``if_seq_no`` and ``index``), ``indices.refresh``.
+  ``bulk`` (``update`` with ``if_seq_no``, ``index``, ``create`` and
+  ``delete`` with ``if_seq_no``), ``indices.refresh``.
 
 A ``None`` field value is treated as absent, matching how OpenSearch never
 indexes nulls (``exists`` is false for them).
@@ -122,6 +123,8 @@ _LEAF_MATCHERS = {
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
     'wildcard': _wildcard_matches,
     'nested': _nested_matches,
+    # Scoring is irrelevant to which docs match.
+    'function_score': lambda doc, clause: matches(doc, clause.get('query')),
 }
 
 
@@ -464,9 +467,20 @@ class QueryFakeOpenSearch:
         self.bulk_calls += 1
         items = []
         errors = False
-        for action, payload in zip(body[0::2], body[1::2], strict=True):
+        lines = iter(body)
+        for action in lines:
             ((op, meta),) = action.items()
             idx, doc_id = meta['_index'], meta['_id']
+            if op == 'delete':
+                # A delete action has no source line.
+                if 'if_seq_no' in meta and meta['if_seq_no'] != self.seq.get((idx, doc_id), 1):
+                    errors = True
+                    items.append({op: {'_id': doc_id, 'status': 409, 'error': {'type': 'vc'}}})
+                    continue
+                found = self.docs(idx).pop(doc_id, None) is not None
+                items.append({op: {'_id': doc_id, 'status': 200 if found else 404}})
+                continue
+            payload = next(lines)
             if op == 'index':
                 self.docs(idx)[doc_id] = copy.deepcopy(payload)
                 self._bump(idx, doc_id)

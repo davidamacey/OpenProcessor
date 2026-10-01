@@ -273,6 +273,12 @@ class ExportYoloRequest(BaseModel):
     # preflight warns, because a detector learns unlabeled objects as
     # background. True: leave such images out.
     require_fully_labeled_images: bool = False
+    # 'keep_imported' (default) keeps the split a dataset import filed each
+    # frame under; 'recompute' ignores it and splits by the exporter's rule.
+    split_mode: Literal['keep_imported', 'recompute'] = 'keep_imported'
+    # Write an imported reviewed-negative frame as an empty label file when
+    # its negative_for covers every class this export has objects for.
+    include_negative_frames: bool = True
 
 
 class ExportSingleClassRequest(BaseModel):
@@ -321,6 +327,9 @@ class ExportSingleClassRequest(BaseModel):
     img_max_side: int = 1280
     # False writes labels + artifacts only (fast dry run, no pixel copy).
     copy_images: bool = True
+    # 'keep_imported' (default) keeps the split a dataset import filed each
+    # frame under; 'recompute' ignores it and splits by the exporter's rule.
+    split_mode: Literal['keep_imported', 'recompute'] = 'keep_imported'
 
 
 class StatusResponse(BaseModel):

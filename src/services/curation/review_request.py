@@ -35,6 +35,7 @@ class ReviewFilters:
     conf_min: float | None = None
     conf_max: float | None = None
     region_status: str | None = None
+    combine_conflict: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,8 @@ async def build_review_request(
         must.append({'term': {'class_id': filters.class_id}})
     if filters.source:
         must.append({'term': {'source': filters.source}})
+    if filters.combine_conflict:
+        must.append({'term': {'combine_conflict': True}})
     band = confidence_band(filters.conf_min, filters.conf_max)
     if band is not None:
         must.append(band)

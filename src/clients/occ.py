@@ -36,6 +36,7 @@ from src.clients.occ_locks import _is_locked_marker, is_locked_box, is_locked_cl
 from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
 from src.config.curation import items_index
 from src.core.logging import get_logger
+from src.services.curation.history import CLASS_STATE_FIELDS
 
 
 if TYPE_CHECKING:
@@ -336,7 +337,7 @@ async def occ_skip_on_conflict_bulk(
 
 
 # is_locked_class / _is_locked_marker / is_locked_box / is_locked_item /
-# _is_human_marker live in occ_locks.py (LOC ratchet) and are imported at
+# is_human_marker live in occ_locks.py (LOC ratchet) and are imported at
 # module top, so every existing `from src.clients.occ import
 # is_locked_class`-shaped call site keeps working unchanged.
 
@@ -384,12 +385,7 @@ def strip_class_write_fields(update: dict[str, Any]) -> dict[str, Any]:
 # produced the *preserved* class_source, so an ingest detector's
 # provenance must not land on (or be invented for) a human-owned row.
 _HUMAN_GUARD_OWNED: dict[str, tuple[str, ...]] = {
-    'class_source': (
-        'class_detector',
-        'class_detector_version',
-        'class_labeler',
-        'class_labeled_at',
-    ),
+    'class_source': (*CLASS_STATE_FIELDS, 'test_holdout'),
 }
 
 

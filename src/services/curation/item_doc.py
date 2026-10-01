@@ -8,7 +8,7 @@ from pipeline orchestration.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
@@ -78,6 +78,10 @@ class DetectedItem:
     # (src/services/curation/class_label.py) applies even to brand-new
     # items, not just updates to existing ones.
     label: ItemLabel | None = None
+    # Provenance/split fields a labeler stamps on the new doc (a dataset
+    # import's ``import_ids``, ``dataset_split``, ...). Written before
+    # ``label``, so they can never override a class field.
+    extra_fields: dict[str, Any] = field(default_factory=dict)
 
 
 def build_image_doc(
@@ -213,6 +217,7 @@ def build_item_doc(
         )
     if region_status is not None:
         doc[get_region_fields().status] = region_status.value
+    doc.update(item.extra_fields)
     if item.label is not None:
         from src.services.curation.class_label import class_label_fields
 

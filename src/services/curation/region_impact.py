@@ -13,11 +13,18 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from src.config import PENDING_STATUSES
+from src.config import PENDING_STATUSES, RegionStatus
 from src.config.curation import items_index
 from src.config.region_fields import get_region_fields
 from src.services.curation.region_eval import LEGACY_STATUS_ALIASES
+from src.services.curation.region_requeue import REQUEUEABLE_STATUSES
 from src.services.curation.region_scope import parent_classes_clause
+from src.services.curation.reprocess_models import (
+    ReprocessFilter,
+    ReprocessRequest,
+    ReprocessTargets,
+)
+from src.services.curation.reprocess_targets import selector_clauses
 
 
 if TYPE_CHECKING:
@@ -42,10 +49,16 @@ class ActivationImpactByProfile(BaseModel):
 
 
 class ActivationImpact(BaseModel):
-    """§4.6/§7.3. No ``suggested_reprocess``/``suggested_requeue`` field
-    yet (glue G2): that is W10's ``ReprocessRequest`` reference, added at
-    merge time by whichever of W4/W10 merges second -- see this wave's
-    handback report."""
+    """§4.6/§7.3.
+
+    ``suggested_reprocess`` is the explicit re-run for "every unlocked,
+    machine-written item the active profile@revision did not produce": a
+    :class:`~src.services.curation.reprocess_models.ReprocessRequest` (a dry
+    run) a client POSTs to ``/reprocess`` verbatim; ``stale_items`` is how
+    many items it selects. ``None`` when there is no active profile or
+    nothing is stale. Nothing here rewrites an item: the re-run is the
+    caller's explicit action.
+    """
 
     items_total: int
     by_profile: list[ActivationImpactByProfile]
@@ -53,11 +66,70 @@ class ActivationImpact(BaseModel):
     unseeded_items: int
     pending_items: int
     pending_not_matching: int
+    stale_items: int = 0
+    suggested_reprocess: ReprocessRequest | None = None
 
 
 def _hits_total(resp: dict[str, Any]) -> int:
     raw = resp.get('hits', {}).get('total', 0)
     return int(raw['value']) if isinstance(raw, dict) else int(raw)
+
+
+def _active_revision(profile: DetectionProfile) -> int | None:
+    """The revision the config store has active for ``profile`` (``None``
+    for an env/file-registered profile never activated through the store);
+    the same stamp the detection worker writes on every region write."""
+    from src.services.config_store import get_config_store
+
+    try:
+        ref = get_config_store().current.active_profile
+    except Exception:
+        return None
+    return ref[1] if isinstance(ref, tuple) and ref[0] == profile.name else None
+
+
+async def _suggest_reprocess(
+    opensearch: Any, profile: DetectionProfile | None, fields: Any, index: str
+) -> tuple[ReprocessRequest | None, int]:
+    if profile is None:
+        return None, 0
+    revision = _active_revision(profile)
+    selector = ReprocessFilter(
+        profile_not=profile.name, profile_revision_below=revision, include_detected=True
+    )
+    stale = await opensearch.count(
+        index=index,
+        body={
+            'query': {
+                'bool': {
+                    'filter': [
+                        *selector_clauses(selector, fields),
+                        {
+                            'terms': {
+                                fields.status: [
+                                    *(s.value for s in REQUEUEABLE_STATUSES),
+                                    RegionStatus.DETECTED.value,
+                                ]
+                            }
+                        },
+                    ],
+                    'must_not': [{'term': {fields.validated: True}}],
+                }
+            }
+        },
+    )
+    count = int(stale.get('count', 0))
+    if count == 0:
+        return None, 0
+    return (
+        ReprocessRequest(
+            targets=ReprocessTargets(filter=selector),
+            scopes=['region'],
+            region_mode='redetect',
+            dry_run=True,
+        ),
+        count,
+    )
 
 
 async def compute_activation_impact(
@@ -131,7 +203,10 @@ async def compute_activation_impact(
             )
             pending_not_matching = int(count_resp.get('count', 0))
 
+    suggested, stale_items = await _suggest_reprocess(opensearch, profile, fields, index)
     return ActivationImpact(
+        stale_items=stale_items,
+        suggested_reprocess=suggested,
         items_total=_hits_total(resp),
         by_profile=by_profile,
         validated_items=validated_items,

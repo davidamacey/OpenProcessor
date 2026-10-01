@@ -479,40 +479,69 @@ class _Closable:
         return None
 
 
+def _bound_items() -> str:
+    from src.config import get_curation_config
+
+    return get_curation_config().items_index
+
+
+def _cli_fake(corpus: dict[str, dict[str, Any]] | None = None) -> QueryFakeOpenSearch:
+    """The CLI resolves its index from the bound project, not from ``CFG``."""
+    return QueryFakeOpenSearch({_bound_items(): corpus if corpus is not None else _corpus()})
+
+
+def _cli_changed(fake: QueryFakeOpenSearch, original: dict[str, dict[str, Any]]) -> set[str]:
+    return {i for i, d in fake.docs(_bound_items()).items() if d != original[i]}
+
+
 def _run_cli(monkeypatch, argv: list[str], fake: QueryFakeOpenSearch) -> int:
     mod = _load_script()
     monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
-    monkeypatch.setattr(mod, 'get_curation_config', lambda: CFG)
     monkeypatch.setattr(sys, 'argv', ['requeue_regions.py', *argv])
     return mod.main()
 
 
 def test_cli_defaults_to_dry_run(monkeypatch, capsys):
-    fake = _fake()
+    fake = _cli_fake()
     assert _run_cli(monkeypatch, ['--status', 'detection_failed'], fake) == 0
     out = capsys.readouterr().out
     # W8c nit fix: "items selected" (not "regions" -- the count is items,
     # never boxes, and the per-detector/reason lines below it are boxes;
     # conflating the two units in one label is exactly what confused the
-    # review).
-    assert '5 items selected' in out
+    # review). The selection includes the one human-validated item f5,
+    # which the lock rule skips and the report names.
+    assert '6 items selected' in out
     assert 'detector=det_a' in out
     assert 'reason=aspect' in out
     assert '(no box at all)' in out  # f4
-    assert _changed(fake) == set()
+    assert '(locked, skipped)' in out
+    assert _cli_changed(fake, _corpus()) == set()
 
 
 def test_cli_apply_with_filters(monkeypatch):
-    fake = _fake()
+    fake = _cli_fake()
     argv = ['--status', 'detection_failed', '--detector', 'det_b', '--apply']
     assert _run_cli(monkeypatch, argv, fake) == 0
-    assert _changed(fake) == {'f3'}
+    assert _cli_changed(fake, _corpus()) == {'f3'}
 
 
-def test_cli_rejects_clear_detection_with_pending_verification(monkeypatch):
-    argv = ['--status', 'verify_rejected', '--to', 'pending_verification', '--clear-detection']
+def test_cli_pending_verification_reverifies_and_keeps_the_box(monkeypatch):
+    """Was ``--clear-detection`` refused with ``--to pending_verification``:
+    the flag is gone (a full re-detect always clears unlocked machine
+    boxes), and a re-verify never clears one -- r1's rejected box is
+    re-proposed in place."""
+    fake = _cli_fake()
+    argv = ['--status', 'verify_rejected', '--to', 'pending_verification', '--apply']
+    assert _run_cli(monkeypatch, argv, fake) == 0
+    r1 = fake.docs(_bound_items())['r1']
+    assert r1[F.status] == RegionStatus.PENDING_VERIFICATION
+    assert [(b['box_id'], b['state']) for b in r1[F.boxes]] == [('b1', 'proposed')]
     with pytest.raises(SystemExit):
-        _run_cli(monkeypatch, argv, _fake())
+        _run_cli(
+            monkeypatch,
+            ['--status', 'verify_rejected', '--to', 'pending_verification', '--clear-detection'],
+            _cli_fake(),
+        )
 
 
 def test_cli_status_choices_exclude_human_and_success_states(monkeypatch):
@@ -574,13 +603,17 @@ async def test_unseeded_backfill_seeds_pending_detection_into_worker_queue():
 
 
 def test_cli_missing_status_dry_run_then_apply(monkeypatch, capsys):
-    fake = QueryFakeOpenSearch({ITEMS: _unseeded_corpus()})
+    fake = _cli_fake(_unseeded_corpus())
     assert _run_cli(monkeypatch, ['--missing-status'], fake) == 0
-    assert '3 items selected' in capsys.readouterr().out
-    assert F.status not in fake.docs(ITEMS)['u0']
+    out = capsys.readouterr().out
+    # u0-u2 plus the human-validated h1, which the lock rule skips.
+    assert '4 items selected' in out
+    assert '(locked, skipped)' in out
+    assert F.status not in fake.docs(_bound_items())['u0']
 
     assert _run_cli(monkeypatch, ['--missing-status', '--apply'], fake) == 0
-    assert fake.docs(ITEMS)['u0'][F.status] == RegionStatus.PENDING_DETECTION
+    assert fake.docs(_bound_items())['u0'][F.status] == RegionStatus.PENDING_DETECTION
+    assert F.status not in fake.docs(_bound_items())['h1']
 
 
 def test_cli_requires_exactly_one_of_status_or_missing_status(monkeypatch):

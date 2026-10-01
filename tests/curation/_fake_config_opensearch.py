@@ -153,6 +153,11 @@ class FakeConfigOpenSearch:
         size = body.get('size', 10)
         return {'hits': {'hits': hits[:size]}}
 
+    async def count(self, index: str, body: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG002
+        """This fake stores config docs only: no items, so nothing to count
+        (the profile-impact stale-item count runs on activation)."""
+        return {'count': 0}
+
 
 class NearRealTimeConfigOpenSearch(FakeConfigOpenSearch):
     """Models the real gap ``indices.refresh()`` exists to close:
