@@ -7,17 +7,15 @@ the ``scripts/curation/worker/`` package for the rest of the split.
 from __future__ import annotations
 
 import asyncio
-import io
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PIL import Image, ImageOps, UnidentifiedImageError
-
 from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config, get_region_fields
 from src.config.curation import items_index  # noqa: F401 - re-exported for the worker package
 from src.core.logging import get_logger
+from src.services.curation.crop_bytes import CROP_JPEG_QUALITY, load_item_crop_jpeg
 from src.services.detection.profile_registry import get_active_region_profile
 
 
@@ -54,7 +52,7 @@ DEFAULT_PAUSE_SENTINEL = Path(
         str(_config.pause_sentinel_path),
     )
 )
-JPEG_QUALITY = 90
+JPEG_QUALITY = CROP_JPEG_QUALITY
 
 
 class RegionProfileNotConfiguredError(RuntimeError):
@@ -327,40 +325,6 @@ def bound_class_catalog() -> tuple[list[str], dict[str, int]]:
 # Crop IO
 # =============================================================================
 
-# Phase A: RAM-backed crop cache populated by yolo-api at ingest time.
-# The worker reads <CROP_CACHE_DIR>/<crop_id>.jpg first; only falls
-# back to opening + cropping the source image when the cache misses
-# (e.g. crops ingested before this code shipped). When the cache hits
-# we skip the HDD read AND the EXIF + decode + crop work.
-CROP_CACHE_DIR = str(_config.crop_cache_dir)
-
-
-# Cache hit/miss counters — process-local, reset on restart. Aggregated
-# into the periodic metrics log so we can audit /dev/shm utilization
-# without a separate Prometheus endpoint.
-_cache_hits = 0
-_cache_misses = 0
-
-
-def _crop_jpeg_from_cache(crop_id: str) -> bytes | None:
-    """Return the cached item-crop JPEG bytes or None on miss."""
-    global _cache_hits, _cache_misses  # noqa: PLW0603 — counter intentionally module-level
-    if not CROP_CACHE_DIR:
-        _cache_misses += 1
-        return None
-    p = Path(CROP_CACHE_DIR) / f'{crop_id}.jpg'
-    try:
-        b = p.read_bytes()
-        _cache_hits += 1
-        return b
-    except FileNotFoundError:
-        _cache_misses += 1
-        return None
-    except OSError as exc:
-        _cache_misses += 1
-        logger.warning('crop_cache_read_error', crop_id=crop_id, error=str(exc))
-        return None
-
 
 def unreadable_crop_update(task: _ItemTask) -> dict[str, Any]:
     """Region update for an item whose source image could not be read.
@@ -378,52 +342,11 @@ def unreadable_crop_update(task: _ItemTask) -> dict[str, Any]:
     }
 
 
-def _crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]) -> bytes | None:
-    """Extract a JPEG of the item crop from the source image on disk.
-
-    This is the slow path — re-opens the source image, EXIF-transposes,
-    crops, re-encodes JPEG. Used only when the RAM crop cache misses.
-    """
-    p = Path(image_path)
-    if not p.is_file():
-        logger.warning('image_missing', path=image_path)
-        return None
-    try:
-        with p.open('rb') as f:
-            img = Image.open(f)
-            img.load()
-            img = ImageOps.exif_transpose(img)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-    except UnidentifiedImageError:
-        logger.warning('image_unreadable', path=image_path)
-        return None
-    except OSError as exc:
-        logger.warning('image_io_error', path=image_path, error=str(exc))
-        return None
-
-    full_w, full_h = img.size
-    x1, y1, x2, y2 = bbox
-    x1i = max(0, round(x1 * full_w))
-    y1i = max(0, round(y1 * full_h))
-    x2i = max(x1i + 1, round(x2 * full_w))
-    y2i = max(y1i + 1, round(y2 * full_h))
-    if x2i <= x1i or y2i <= y1i:
-        return None
-    crop = img.crop((x1i, y1i, x2i, y2i))
-    buf = io.BytesIO()
-    crop.save(buf, format='JPEG', quality=JPEG_QUALITY)
-    return buf.getvalue()
-
-
 def _crop_jpeg_for_task(
     crop_id: str, image_path: str, bbox: tuple[float, float, float, float]
 ) -> bytes | None:
-    """Cache-first crop fetch: try RAM cache, fall back to source image."""
-    cached = _crop_jpeg_from_cache(crop_id)
-    if cached is not None:
-        return cached
-    return _crop_jpeg_from_disk(image_path, bbox)
+    """Cache-first crop fetch (the one implementation lives in ``crop_bytes``)."""
+    return load_item_crop_jpeg(crop_id, image_path, bbox)
 
 
 def _is_secondary_shape(task: _ItemTask) -> bool:

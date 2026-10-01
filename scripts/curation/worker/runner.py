@@ -21,6 +21,7 @@ import structlog
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.crop_bytes import cache_stats as crop_cache_stats
 from src.services.curation.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     classifier_class_sources,
@@ -47,7 +48,6 @@ from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker import state
 from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.cascade import (
     SegmenterAllHostsDown,
@@ -1993,8 +1993,9 @@ async def run(args: argparse.Namespace) -> int:
             now = time.monotonic()
             window_processed = metrics['total_processed'] - last_processed
             window_cps = window_processed / max(now - last_t, 1e-6)
-            cache_total = state._cache_hits + state._cache_misses
-            hit_rate = state._cache_hits / cache_total if cache_total > 0 else 0.0
+            cache_hits, cache_misses = crop_cache_stats()
+            cache_total = cache_hits + cache_misses
+            hit_rate = cache_hits / cache_total if cache_total > 0 else 0.0
             async with in_flight_lock:
                 in_flight_count = len(in_flight)
             vis_total = metrics['vlm_visible_kept'] + metrics['vlm_visible_skipped']
@@ -2014,8 +2015,8 @@ async def run(args: argparse.Namespace) -> int:
                 in_flight=in_flight_count,
                 window_cps=round(window_cps, 2),
                 session_processed=metrics['total_processed'],
-                cache_hits=state._cache_hits,
-                cache_misses=state._cache_misses,
+                cache_hits=cache_hits,
+                cache_misses=cache_misses,
                 cache_hit_rate=round(hit_rate, 3),
                 vlm_visible_kept=metrics['vlm_visible_kept'],
                 vlm_visible_skipped=metrics['vlm_visible_skipped'],
