@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests pinned: a conflicting delete is retried then reported skipped, never
     swallowed; the combine resume source gate asserts its own error code; a
     cancelled combine resumed through `service.resume` runs to completion.
+  - **Malformed dataset input.** A `data.yaml` scalar the YAML constructor
+    rejects (`2001-13-45`, a 5000-digit integer) answers `data_yaml_invalid`
+    instead of a 500; `load_bounded_yaml` now raises only `YAMLError` /
+    `YamlTooComplexError`. A COCO or OpenProcessor-export JSON nested past the
+    interpreter stack is a clean issue / an absent file, not a
+    `RecursionError` (one shared `loads_json`).
 - **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
   - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
     path: it re-reads each document, asks the caller whether it is still

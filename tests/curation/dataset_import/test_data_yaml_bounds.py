@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING
 
 import pytest
+import yaml
 
 from src.services.curation.dataset_import import yolo
 from src.services.curation.dataset_import.issues import IssueCollector
@@ -85,3 +86,21 @@ def test_a_document_one_level_past_the_depth_cap_is_refused() -> None:
     too_deep = '[' * MAX_YAML_DEPTH + ']' * MAX_YAML_DEPTH
     with pytest.raises(YamlTooComplexError, match='nested deeper'):
         load_bounded_yaml(f'names: {too_deep}')
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        'train: images/train\nnames: [' + '9' * 5000 + ']\n',
+        'train: images/train\nnames: [2001-13-45]\n',
+        'train: 2001-02-30\nnames: [car]\n',
+    ],
+    ids=['over-long integer', 'impossible month', 'impossible day'],
+)
+def test_a_scalar_the_constructor_rejects_is_a_clean_issue(tmp_path: Path, text: str) -> None:
+    (tmp_path / 'data.yaml').write_text(text)
+    issues = IssueCollector()
+    assert yolo.discover_yolo(tmp_path, issues) == ({}, {})
+    assert _codes(issues) == ['data_yaml_invalid']
+    with pytest.raises(yaml.YAMLError):
+        load_bounded_yaml(text)

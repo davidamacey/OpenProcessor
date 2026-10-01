@@ -161,7 +161,9 @@ def _coco(tmp_path: Path, data) -> list[CocoAnnotationFile]:
         {'images': {}, 'annotations': [], 'categories': []},
         {'images': [], 'annotations': [], 'categories': 'car'},
         {'images': [], 'annotations': []},
+        '[' * 100_000 + ']' * 100_000,
     ],
+    ids=['truncated', 'array', 'images-not-list', 'categories-str', 'no-categories', 'nested-100k'],
 )
 def test_malformed_coco_json_is_a_blocking_issue(tmp_path: Path, data) -> None:
     scan = scan_coco(_coco(tmp_path, data))

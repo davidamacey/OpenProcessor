@@ -437,3 +437,12 @@ async def test_a_symlink_inside_the_frozen_test_labels_is_never_verified(tmp_pat
     assert info.test_frozen.present
     assert not info.test_frozen.verified
     assert 'symlinks' in info.test_frozen.message
+
+
+def test_a_deeply_nested_manifest_reads_as_absent_not_as_a_crash(tmp_path: Path) -> None:
+    from src.services.curation.dataset_import.op_export import read_json_object
+
+    (tmp_path / 'manifest.json').write_text('[' * 100_000 + ']' * 100_000)
+    assert read_json_object(tmp_path, 'manifest.json') is None
+    (tmp_path / 'ok.json').write_text('{"a": 1}')
+    assert read_json_object(tmp_path, 'ok.json') == {'a': 1}

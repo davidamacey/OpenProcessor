@@ -9,7 +9,6 @@ unread.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,6 +20,7 @@ from src.services.curation.dataset_import.paths import (
     PathGuard,
     resolve_ref,
 )
+from src.services.curation.dataset_import.safe_json import loads_json
 from src.services.curation.dataset_import.scan import (
     DatasetScan,
     LabelBox,
@@ -73,7 +73,7 @@ def _load_json(f: CocoAnnotationFile, issues: IssueCollector) -> dict[str, Any] 
         if size > MAX_COCO_JSON_BYTES:
             issues.add('dataset_file_too_large', file=name)
             return None
-        data = json.loads(f.path.read_text(encoding='utf-8'))
+        data = loads_json(f.path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
         issues.add('coco_json_invalid', file=name, detail={'error': str(exc)[:200]})
         return None

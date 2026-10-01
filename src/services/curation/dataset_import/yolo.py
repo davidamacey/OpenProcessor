@@ -136,7 +136,7 @@ def _load_data_yaml(yaml_path: Path, issues: IssueCollector) -> dict[str, Any] |
         return None
     try:
         data = load_bounded_yaml(text)
-    except (yaml.YAMLError, YamlTooComplexError, RecursionError) as exc:
+    except (yaml.YAMLError, YamlTooComplexError) as exc:
         issues.add(
             'data_yaml_invalid', file=name, detail={'reason': f'not valid YAML: {exc}'[:200]}
         )

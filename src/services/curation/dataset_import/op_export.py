@@ -20,13 +20,13 @@ Stem resolution against existing project docs (``resolve_stems``) lives in
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.services.curation.dataset_import.issues import IssueCollector
 from src.services.curation.dataset_import.limits import MAX_MANIFEST_BYTES, preview_max_files
 from src.services.curation.dataset_import.paths import resolve_ref
+from src.services.curation.dataset_import.safe_json import loads_json
 from src.services.curation.dataset_import.scan import (
     DatasetScan,
     LabelBox,
@@ -121,7 +121,7 @@ def read_json_object(root: Path, name: str) -> dict[str, Any] | None:
     try:
         if path.stat().st_size > MAX_MANIFEST_BYTES:
             return None
-        data = json.loads(path.read_text(encoding='utf-8'))
+        data = loads_json(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
