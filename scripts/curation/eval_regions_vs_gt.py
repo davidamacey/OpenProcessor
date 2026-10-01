@@ -362,8 +362,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         '--api',
-        default=os.environ.get('OP_API_URL', 'http://localhost:4603'),
-        help='API base URL for --import-id (default: $OP_API_URL, else http://localhost:4603)',
+        default=os.environ.get('OP_API', 'http://localhost:4603'),
+        help='API base URL for --import-id (default: $OP_API, else http://localhost:4603)',
     )
     p.add_argument('--state-dir', type=Path, default=None, help='Import state dir (cohort)')
     p.add_argument('--image-list', type=Path, default=None, help='File of local image paths')
