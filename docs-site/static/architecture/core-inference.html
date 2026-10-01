@@ -5034,13 +5034,13 @@
         <text x="54" y="74" class="t-dim" font-size="10" font-weight="600">01 / POST /detect</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-1" x="40" y="178" width="981" height="106" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="200" class="t-dim" font-size="10" font-weight="600">02 / POST /faces/*</text>
+        <text x="54" y="200" class="t-dim" font-size="10" font-weight="600">02 / POST /faces/recognize</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="304" width="981" height="106" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="326" class="t-dim" font-size="10" font-weight="600">03 / POST /embed/*</text>
+        <text x="54" y="326" class="t-dim" font-size="10" font-weight="600">03 / POST /embed/image</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-3" x="40" y="430" width="981" height="106" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="452" class="t-dim" font-size="10" font-weight="600">04 / POST /ocr/*</text>
+        <text x="54" y="452" class="t-dim" font-size="10" font-weight="600">04 / POST /ocr/predict</text>
 
         <!-- Phase headers -->
 
@@ -5082,8 +5082,8 @@
         <text data-detail="fine" x="296" y="142" class="t-cloud" font-size="7" text-anchor="middle">GPU NMS</text>
         </g>
 
-        <g id="node-faces_route" data-node-id="faces_route" data-node-label="Decode + resize" tabindex="0" role="button" aria-label="Focus Decode + resize, 640x640, POST /faces/*" aria-pressed="false" data-node-kind="backend" data-node-sublabel="640x640" data-node-context="POST /faces/*">
-          <title>Decode + resize · 640x640 · POST /faces/*</title>
+        <g id="node-faces_route" data-node-id="faces_route" data-node-label="Decode + resize" tabindex="0" role="button" aria-label="Focus Decode + resize, 640x640, POST /faces/recognize" aria-pressed="false" data-node-kind="backend" data-node-sublabel="640x640" data-node-context="POST /faces/*">
+          <title>Decode + resize · 640x640 · POST /faces/recognize</title>
           <rect x="48" y="220" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="48" y="220" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(54 226) scale(0.6875)">
@@ -5093,8 +5093,8 @@
           <text data-detail="context" x="118" y="258" class="t-muted" font-size="8" text-anchor="middle">640x640</text>
         </g>
 
-        <g id="node-scrfd" data-node-id="scrfd" data-node-label="SCRFD-10G" tabindex="0" role="button" aria-label="Focus SCRFD-10G, boxes + landmarks, POST /faces/*" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="boxes + landmarks" data-node-context="POST /faces/*">
-          <title>SCRFD-10G · boxes + landmarks · POST /faces/*</title>
+        <g id="node-scrfd" data-node-id="scrfd" data-node-label="SCRFD-10G" tabindex="0" role="button" aria-label="Focus SCRFD-10G, boxes + landmarks, POST /faces/recognize" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="boxes + landmarks" data-node-context="POST /faces/*">
+          <title>SCRFD-10G · boxes + landmarks · POST /faces/recognize</title>
           <rect x="226" y="220" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="226" y="220" width="140" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(232 226) scale(0.6875)">
@@ -5104,8 +5104,8 @@
           <text data-detail="context" x="296" y="258" class="t-muted" font-size="8" text-anchor="middle">boxes + landmarks</text>
         </g>
 
-        <g id="node-align" data-node-id="align" data-node-label="Align (CPU)" tabindex="0" role="button" aria-label="Focus Align (CPU), Umeyama 112x112, POST /faces/*" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Umeyama 112x112" data-node-context="POST /faces/*">
-          <title>Align (CPU) · Umeyama 112x112 · POST /faces/*</title>
+        <g id="node-align" data-node-id="align" data-node-label="Align (CPU)" tabindex="0" role="button" aria-label="Focus Align (CPU), Umeyama 112x112, POST /faces/recognize" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Umeyama 112x112" data-node-context="POST /faces/*">
+          <title>Align (CPU) · Umeyama 112x112 · POST /faces/recognize</title>
           <rect x="441.6" y="220" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="441.6" y="220" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(447.6 226) scale(0.6875)">
@@ -5115,8 +5115,8 @@
           <text data-detail="context" x="511.6" y="258" class="t-muted" font-size="8" text-anchor="middle">Umeyama 112x112</text>
         </g>
 
-        <g id="node-arcface" data-node-id="arcface" data-node-label="ArcFace" tabindex="0" role="button" aria-label="Focus ArcFace, 512-dim, POST /faces/*" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="512-dim" data-node-context="POST /faces/*">
-          <title>ArcFace · 512-dim · POST /faces/*</title>
+        <g id="node-arcface" data-node-id="arcface" data-node-label="ArcFace" tabindex="0" role="button" aria-label="Focus ArcFace, 512-dim, POST /faces/recognize" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="512-dim" data-node-context="POST /faces/*">
+          <title>ArcFace · 512-dim · POST /faces/recognize</title>
           <rect x="652.4000000000001" y="220" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="652.4000000000001" y="220" width="140" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(658.4000000000001 226) scale(0.6875)">
@@ -5126,8 +5126,8 @@
           <text data-detail="context" x="722.4000000000001" y="258" class="t-muted" font-size="8" text-anchor="middle">512-dim</text>
         </g>
 
-        <g id="node-embed_route" data-node-id="embed_route" data-node-label="Preprocess" tabindex="0" role="button" aria-label="Focus Preprocess, image or tokens, POST /embed/*" aria-pressed="false" data-node-kind="backend" data-node-sublabel="image or tokens" data-node-context="POST /embed/*">
-          <title>Preprocess · image or tokens · POST /embed/*</title>
+        <g id="node-embed_route" data-node-id="embed_route" data-node-label="Preprocess" tabindex="0" role="button" aria-label="Focus Preprocess, image or tokens, POST /embed/image" aria-pressed="false" data-node-kind="backend" data-node-sublabel="image or tokens" data-node-context="POST /embed/*">
+          <title>Preprocess · image or tokens · POST /embed/image</title>
           <rect x="48" y="346" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="48" y="346" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(54 352) scale(0.6875)">
@@ -5137,8 +5137,8 @@
           <text data-detail="context" x="118" y="384" class="t-muted" font-size="8" text-anchor="middle">image or tokens</text>
         </g>
 
-        <g id="node-clip" data-node-id="clip" data-node-label="MobileCLIP2-S2" tabindex="0" role="button" aria-label="Focus MobileCLIP2-S2, image / text, 512-dim, POST /embed/*" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="image / text, 512-dim" data-node-context="POST /embed/*">
-          <title>MobileCLIP2-S2 · image / text, 512-dim · POST /embed/*</title>
+        <g id="node-clip" data-node-id="clip" data-node-label="MobileCLIP2-S2" tabindex="0" role="button" aria-label="Focus MobileCLIP2-S2, image / text, 512-dim, POST /embed/image" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="image / text, 512-dim" data-node-context="POST /embed/*">
+          <title>MobileCLIP2-S2 · image / text, 512-dim · POST /embed/image</title>
           <rect x="226" y="346" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="226" y="346" width="140" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(232 352) scale(0.6875)">
@@ -5148,8 +5148,8 @@
           <text data-detail="context" x="296" y="384" class="t-muted" font-size="8" text-anchor="middle">image / text, 512-dim</text>
         </g>
 
-        <g id="node-ocr_route" data-node-id="ocr_route" data-node-label="Preprocess" tabindex="0" role="button" aria-label="Focus Preprocess, OCR input, POST /ocr/*" aria-pressed="false" data-node-kind="backend" data-node-sublabel="OCR input" data-node-context="POST /ocr/*">
-          <title>Preprocess · OCR input · POST /ocr/*</title>
+        <g id="node-ocr_route" data-node-id="ocr_route" data-node-label="Preprocess" tabindex="0" role="button" aria-label="Focus Preprocess, OCR input, POST /ocr/predict" aria-pressed="false" data-node-kind="backend" data-node-sublabel="OCR input" data-node-context="POST /ocr/*">
+          <title>Preprocess · OCR input · POST /ocr/predict</title>
           <rect x="48" y="472" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="48" y="472" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(54 478) scale(0.6875)">
@@ -5159,8 +5159,8 @@
           <text data-detail="context" x="118" y="510" class="t-muted" font-size="8" text-anchor="middle">OCR input</text>
         </g>
 
-        <g id="node-ocr_bls" data-node-id="ocr_bls" data-node-label="ocr_pipeline" tabindex="0" role="button" aria-label="Focus ocr_pipeline, Python BLS, POST /ocr/*" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="Python BLS" data-node-context="POST /ocr/*">
-          <title>ocr_pipeline · Python BLS · POST /ocr/*</title>
+        <g id="node-ocr_bls" data-node-id="ocr_bls" data-node-label="ocr_pipeline" tabindex="0" role="button" aria-label="Focus ocr_pipeline, Python BLS, POST /ocr/predict" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="Python BLS" data-node-context="POST /ocr/*">
+          <title>ocr_pipeline · Python BLS · POST /ocr/predict</title>
           <rect x="226" y="472" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="226" y="472" width="140" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(232 478) scale(0.6875)">
@@ -5170,8 +5170,8 @@
           <text data-detail="context" x="296" y="510" class="t-muted" font-size="8" text-anchor="middle">Python BLS</text>
         </g>
 
-        <g id="node-ocr_det" data-node-id="ocr_det" data-node-label="PP-OCRv5 det" tabindex="0" role="button" aria-label="Focus PP-OCRv5 det, text regions, POST /ocr/*" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="text regions" data-node-context="POST /ocr/*">
-          <title>PP-OCRv5 det · text regions · POST /ocr/*</title>
+        <g id="node-ocr_det" data-node-id="ocr_det" data-node-label="PP-OCRv5 det" tabindex="0" role="button" aria-label="Focus PP-OCRv5 det, text regions, POST /ocr/predict" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="text regions" data-node-context="POST /ocr/*">
+          <title>PP-OCRv5 det · text regions · POST /ocr/predict</title>
           <rect x="441.6" y="472" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="441.6" y="472" width="140" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(447.6 478) scale(0.6875)">
@@ -5181,8 +5181,8 @@
           <text data-detail="context" x="511.6" y="510" class="t-muted" font-size="8" text-anchor="middle">text regions</text>
         </g>
 
-        <g id="node-ocr_rec" data-node-id="ocr_rec" data-node-label="PP-OCRv5 rec" tabindex="0" role="button" aria-label="Focus PP-OCRv5 rec, CTC decode, POST /ocr/*" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="CTC decode" data-node-context="POST /ocr/*">
-          <title>PP-OCRv5 rec · CTC decode · POST /ocr/*</title>
+        <g id="node-ocr_rec" data-node-id="ocr_rec" data-node-label="PP-OCRv5 rec" tabindex="0" role="button" aria-label="Focus PP-OCRv5 rec, CTC decode, POST /ocr/predict" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="CTC decode" data-node-context="POST /ocr/*">
+          <title>PP-OCRv5 rec · CTC decode · POST /ocr/predict</title>
           <rect x="652.4000000000001" y="472" width="140" height="52" rx="6" class="c-mask"/>
           <rect x="652.4000000000001" y="472" width="140" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(658.4000000000001 478) scale(0.6875)">
@@ -5455,6 +5455,7 @@
         <ul>
           <li>&bull; Triton runs in explicit model-control mode</li>
           <li>&bull; ?model_name= selects any loaded detector; POST /models/{name}/load|unload</li>
+          <li>&bull; Models a curation project promotes load the same way, as {slug}__name</li>
         </ul>
       </div>
     </div>

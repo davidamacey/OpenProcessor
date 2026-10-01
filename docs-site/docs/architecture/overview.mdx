@@ -5,26 +5,32 @@ title: Architecture
 
 # Architecture
 
-The interactive diagrams live on the **[Architecture](pathname:///architecture)**
+The interactive diagrams live on the **[Architecture](/architecture)**
 page. Each one is drawn from the current code, and each has views that
 highlight one part of it.
 
 | Group | Diagram | What it shows |
 | --- | --- | --- |
-| System | System overview | Every compose service and profile: clients, `yolo-api`, Triton, OpenSearch, the shared job volumes, curation workers, segmenter, VLM, trainer, evaluator, MLflow and monitoring. |
-| System | Backend modules | `src/main.py`, the core and curation routers, the FastAPI-free services under `src/services/`, the clients, `src/config/`, and the workers that import the same services. |
-| System | Data model | The curation indexes and class registry, and the separate visual-search indexes the core `/ingest` route writes. |
+| System | System overview | Every compose service and profile: clients, `yolo-api`, Triton, OpenSearch, the shared job volumes, the multi-project curation workers, segmenter, VLM endpoints, trainer, evaluator, MLflow and monitoring. |
+| System | Backend modules | `src/main.py`, the core and curation routers (project-scoped), the FastAPI-free services under `src/services/` (projects, config store, dataset import, reprocess, combine), the clients, `src/config/`, and the workers that import the same services. |
+| System | Data model | The per-project curation indexes (images, items with their `region_boxes`, classes, UMAP state and the `configs` store), the global project and config indexes, the project's files, and the separate visual-search indexes. |
 | Workflows | Core inference | `/detect`, `/faces`, `/embed` and `/ocr`: CPU preprocessing in the API, TensorRT models in Triton, and the `ocr_pipeline` BLS model. |
-| Workflows | Curation pipeline | Ingest, embed, cluster, VLM suggest, human review, export, train, bake-off, promote, and probe predictions back into review. |
-| Workflows | Region cascade | The detection worker's legs (region detector, segmenter, OCR text hint), VLM verify and text read, and the terminal statuses. |
-| Sequences | Training and promote | The job-file protocol between the API and the trainer, the GPU arbiter, and the gated promote into Triton. |
+| Workflows | Curation pipeline | Create a project, ingest or import, embed, cluster, VLM suggest, human review, reprocess, export, train, bake-off, promote, and probe predictions back into review. |
+| Workflows | Region cascade | The detection worker's legs (region detector, segmenter, OCR text hint) over a per-project profile, candidate selection up to `max_regions_per_item`, one numbered VLM verify per item, per-box verdicts and text, and the terminal statuses. |
+| Sequences | Training and promote | The job-file protocol between the API and the trainer for one project, the GPU arbiter, and the gated promote into Triton. |
 
-:::note[Region stage: changes coming soon]
-The region-cascade diagram shows the code as it is today: one active
-detection profile per worker process, with its prompts set in configuration.
-Multi-region support and editable prompts/profiles are coming soon, and the
-diagram will be updated when they land.
-:::
+The curation parts of these diagrams share three ideas:
+
+- A **project** owns its indexes, files and settings. Requests bind one
+  project through the route; workers visit every active project in turn.
+  See [Projects](../guides/projects.mdx).
+- The **config store** holds each project's prompt packs, region profiles,
+  active VLM endpoint, keymap and settings, with revisions. Workers
+  re-read it at quiesce points. The VLM endpoint registry is the one
+  global store. See [Settings and config store](../guides/settings-and-config.mdx).
+- A **region** is a list of boxes on an item (`region_boxes`), each with
+  its own state, text, cluster and embedding. See
+  [Multi-box regions](../guides/multi-box-regions.mdx).
 
 ## Related pages
 

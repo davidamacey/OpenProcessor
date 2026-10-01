@@ -7,14 +7,18 @@ title: Training, bake-off and promote
 
 <Screenshot
   name="train-1600.png"
-  alt="Training setup driven by /curation/train/*, captured from Cropwright, a frontend for this backend"
-  caption="Training setup over /curation/train/* (captured from Cropwright, a frontend for this backend)"
+  alt="Training setup driven by the train routes, captured from Cropwright, a frontend for this backend"
+  caption="Training setup over the train routes (captured from Cropwright, a frontend for this backend)"
 />
 
 ## The file protocol
 
-`/curation/train/*` is a control plane over files on the shared `/jobs`
-volume; the API never calls the trainer:
+`/curation/projects/{project}/train/*` is a control plane over files on the
+shared `/jobs` volume; the API never calls the trainer. Routes in this
+page are project-scoped; the prefix is omitted. Each project's job files
+live in its own directory, `/jobs/projects/<slug>/`, and the one trainer
+serves every project (it scans each project's directory for jobs). A run
+trains on, and is promoted from, one project's export.
 
 | File | Written by | Meaning |
 |---|---|---|
@@ -33,14 +37,15 @@ replace it.
 
 ```bash
 docker compose --profile training up -d          # trainer + MLflow
-curl -s -X POST "$API/curation/train/preflight" -H 'content-type: application/json' -d '{}'
-curl -s "$API/curation/train/profiles"           # hyperparameter tables per family/size/profile
-curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
+T="$API/curation/projects/$P/train"
+curl -s -X POST "$T/preflight" -H 'content-type: application/json' -d '{}'
+curl -s "$T/profiles"                            # hyperparameter tables per family/size/profile
+curl -s -X POST "$T/start" -H 'content-type: application/json' -d '{
   "model_family": "yolo26", "model_size": "s", "profile": "small",
   "cuda_visible_devices": "0",
   "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"}
 }'
-curl -s "$API/curation/train/status"
+curl -s "$T/status"
 ```
 
 - **Profiles are not merged into the request.** `GET /train/profiles`
@@ -115,20 +120,24 @@ model version registered under `OP_MLFLOW_MODEL_NAME` (default
 
 <Screenshot
   name="bakeoff-1600.png"
-  alt="Model comparison setup driven by /curation/bakeoff/*, captured from Cropwright, a frontend for this backend"
-  caption="Bake-off setup over /curation/bakeoff/* (captured from Cropwright, a frontend for this backend)"
+  alt="Model comparison setup driven by the bakeoff routes, captured from Cropwright, a frontend for this backend"
+  caption="Bake-off setup over the bakeoff routes (captured from Cropwright, a frontend for this backend)"
 />
 
 The evaluator (`curation-evaluator`, `--profile curation`) scores trained
-runs and baseline models **per class** on the test split of any export,
-or on frozen external sets under `OP_BAKEOFF_EVAL_ROOT`.
+runs and baseline models **per class** on the test split of any of the
+project's exports, or on frozen external sets under the project's
+`bakeoff_eval` directory (`{OP_PROJECTS_DATA_ROOT}/{slug}/bakeoff_eval/`,
+with `curated`, `public` and `sample` subdirectories). Each project queues
+its own jobs; the evaluator watches every project's queue.
 
 1. `GET /bakeoff/eval_datasets` lists what can be scored (exports with a
    labeled test split and external sets), with class lists and SHAs.
 2. `GET /bakeoff/trained_models`, `GET /bakeoff/baseline_models` and
    `GET /bakeoff/profiles` list candidates and scoring profiles (the
    generic profile scores every class present in the eval split).
-3. `POST /bakeoff/run` queues a job file for the evaluator.
+3. `POST /bakeoff/run` queues a job file for the evaluator, in the
+   project's own queue.
 4. `GET /bakeoff/status/{job_id}`, `/results/{job_id}` and
    `/matrix/{job_id}` return the per-class comparison and the model x
    dataset matrix (schema v2; older result files answer `409`).
@@ -138,10 +147,18 @@ also claims its GPU through the arbiter, like training.
 
 ## Promote
 
-`POST /curation/train/promote/{job_id}` takes a finished run's ONNX
-export, writes it into the Triton model repository
+`POST /curation/projects/{project}/train/promote/{job_id}` takes a finished
+run's ONNX export, writes it into the Triton model repository
 (`models/<name>/1/model.onnx` plus a YOLO26 single-output `config.pbtxt`
 and a `labels.txt`), and asks Triton to load it.
+
+The Triton model is named `{slug}__<triton_name>` (the `default` project's
+models have no prefix), so two projects can promote the same name without
+colliding. A requested name may not itself contain `__` (`422
+triton_name_reserved_separator`). A promoted model belongs to its project:
+`GET .../models/{model_name}/class_mapping` shows how its classes map onto
+a project's classes by name, and `PUT .../models/{model_name}/sharing`
+opts it into use by other projects (for example as a region detector).
 
 It is gated on the run's `eval` block:
 
@@ -168,14 +185,14 @@ them again.
 
 :::note[Promoted models and ingest]
 A promoted YOLO26 engine has one `[300, 6]` output. It serves fine through
-`POST /detect?model_name=<promoted>`, but doesn't yet fit either ingest
+`POST /detect?model_name=<promoted>` (use the prefixed Triton name), but doesn't yet fit either ingest
 detector contract, so don't point `OP_INGEST_PRIMARY_DETECTOR_MODEL` or
 `OP_INGEST_SECONDARY_DETECTOR_MODEL` at it.
 :::
 
 ## Closing the loop
 
-`POST /curation/probe/run` runs the active-learning probe over the item
+`POST /curation/projects/{project}/probe/run` runs the active-learning probe over the item
 pool and stores its prediction, confidence and entropy per item. The
 `model_disagreements` review queue then shows items where the model and
 the human label disagree, and `uncertainty` sorts by entropy. A

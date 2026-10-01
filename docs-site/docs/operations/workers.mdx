@@ -6,9 +6,18 @@ title: Workers and heartbeats
 # Workers and heartbeats
 
 The synchronous curation API (browse, label, cluster, export) works with no
-workers at all. The workers keep a dataset moving without a person driving
+workers at all. The workers keep datasets moving without a person driving
 every step. They run the same `openprocessor` image as the API with a
 different entrypoint, so none of them needs an image rebuild.
+
+**One set of workers serves every project.** A worker is not bound to one
+project: each cycle it lists the active projects, skips paused ones, and
+binds each project only around that project's own work, so a project's
+queries and writes only ever touch its own indexes. `--project <slug>`
+narrows a worker to one project. The detection worker splits each fetch
+between projects round-robin (equal quota, leftover capacity to projects
+that filled theirs), caps each project's in-flight items so no project
+starves the others, and backs idle projects off from 5 s to 60 s.
 
 ```bash
 docker compose --profile curation up -d        # or: make curation-up
@@ -21,11 +30,11 @@ make curation-down
 
 | Service | Entrypoint | What it does |
 |---|---|---|
-| `curation-detection-worker` | `python -m scripts.curation.worker --continuous` | Pulls `pending_detection` / `pending_verification` items and runs the active region profile's cascade: detector, optional segmenter leg, VLM verification, text reading. Idles when no region profile is active. |
-| `curation-vlm-worker` | `python -m scripts.curation.vlm_worker --continuous` | Continuously asks the VLM for class suggestions on unvalidated items that have a `pe_embedding`, on its own schedule. |
-| `curation-auto-label-worker` | `scripts.curation.auto_label_worker` | Claims jobs queued by `POST /curation/pipeline/auto_label/start` from the shared `/jobs` volume and runs them: clustering, and VLM labeling only when the job says `run_vlm=true`. Can also trigger a centroid retrain when the pool has grown. |
-| `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls the items index (every 2 minutes by default) and calls `POST /curation/clusters/auto_promote` once it has grown by the threshold (1000 new items by default); optional incremental auto-label. |
-| `curation-evaluator` | its own image | Watches `OP_BAKEOFF_JOBS_DIR` and runs model comparisons. Long-lived: start with `up -d`, not `run --rm`. |
+| `curation-detection-worker` | `python -m scripts.curation.worker --continuous` | Pulls `pending_detection` / `pending_verification` items and runs each project's active region profile's cascade: detector, optional segmenter leg, VLM verification, per-box text reading. Idles for a project with no active profile. Follows a project's config at quiesce points: a newly activated profile, prompt pack or VLM endpoint takes effect once the queues drain. |
+| `curation-vlm-worker` | `python -m scripts.curation.vlm_worker --continuous` | Continuously asks each project's active VLM for class suggestions on unvalidated items that have a `pe_embedding`, on its own schedule. |
+| `curation-auto-label-worker` | `scripts.curation.auto_label_worker` | Claims jobs queued by `POST /curation/projects/{project}/pipeline/auto_label/start` from the shared `/jobs` volume and runs them one at a time across projects, oldest first: clustering, and VLM labeling only when the job says `run_vlm=true`. Can also trigger a centroid retrain when a project's pool has grown. |
+| `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls each project's items index (every 2 minutes by default) and calls that project's `POST /curation/projects/{project}/clusters/auto_promote` once it has grown by the threshold (1000 new items by default); optional incremental auto-label. |
+| `curation-evaluator` | its own image | Watches each project's `bakeoff_jobs` directory and runs model comparisons. Long-lived: start with `up -d`, not `run --rm`. |
 
 The detection worker and `yolo-api` must mount the **same** source
 directory at the same container path (`OP_SOURCE_ROOT_HOST` →
@@ -62,14 +71,21 @@ shared `/jobs` volume, which the API reads for training preflight (see
 
 ## Pausing
 
-The VLM worker idles while its pause sentinel file exists
-(`OP_PAUSE_SENTINEL` / `OP_WORKER_PAUSE_SENTINEL`, default
-`/var/lib/openprocessor/vlm_worker/pause.sentinel`). The GPU arbiter
-creates it before a single-GPU training run so the worker doesn't compete
-with the trainer; for a multi-GPU claim the arbiter stops configured
-containers instead (`OP_GPU_ARBITER_CONTAINERS`). You can create and
-remove the file by hand to pause and resume without stopping the
-container.
+There are two independent pauses.
+
+- **Per project.** `POST /curation/projects/{project}/pause` makes every
+  worker skip that project's work (the flag is
+  `<project state dir>/pipeline_paused.flag`); `POST .../resume` clears it
+  and `GET .../pause` reports `paused` and `paused_by`. Other projects keep
+  running.
+- **Global.** The VLM worker idles while its pause sentinel file exists
+  (`OP_PAUSE_SENTINEL` / `OP_WORKER_PAUSE_SENTINEL`, default
+  `/var/lib/openprocessor/vlm_worker/pause.sentinel`). The GPU arbiter
+  creates it before a single-GPU training run so the worker doesn't compete
+  with the trainer, and `openprocessor vlm use` creates it while it swaps
+  the model. For a multi-GPU claim the arbiter stops configured containers
+  instead (`OP_GPU_ARBITER_CONTAINERS`). You can create and remove the file
+  by hand to pause and resume everything without stopping the container.
 
 ## Multi-process state
 
@@ -80,18 +96,23 @@ memory:
 
 | Job | Directory (default) |
 |---|---|
-| Training | `/jobs` (`OP_TRAIN_JOBS_DIR`) |
-| Auto-label | `/jobs/auto_label` |
+| Training | `/jobs` (`OP_TRAIN_JOBS_DIR`), nested per project |
+| Auto-label | `/jobs/auto_label`, nested per project |
 | Probe | `/jobs/probe` |
 | Scores | `/jobs/scores` |
 | Diverse selection | `/jobs/select` |
 | Visualization | `/jobs/viz` |
 | Region drain streak | `/jobs/region_drain` |
+| Reprocess | `/jobs/reprocess` |
+| Dataset import | `/jobs/imports` |
+| Combine | `/jobs/combine` |
 
 Events work the same way: with `OP_EVENT_BUS=file` (the default) every
 uvicorn process tails one shared, rotated JSONL log, so a client on
 `GET /curation/events` sees events published by any process, including
-the detection worker's `POST /curation/events/publish` calls.
+the detection worker's `POST /curation/projects/{project}/events/publish`
+calls. Events are stamped with their project: a project's stream delivers
+only its own, and `GET /curation/events` delivers the global ones.
 
 ## Worker metrics
 

@@ -56,7 +56,7 @@
       "id": "api",
       "type": "backend",
       "label": "yolo-api",
-      "sublabel": "/curation/train/*"
+      "sublabel": "{project}/train/*"
     },
     {
       "id": "arbiter",
@@ -132,7 +132,7 @@
       "from": "api",
       "to": "jobs",
       "y": 340,
-      "label": "write job.json",
+      "label": "write job.json (project dir)",
       "variant": "emphasis"
     },
     {
@@ -199,7 +199,7 @@
       "from": "api",
       "to": "triton",
       "y": 772,
-      "label": "write repo + load",
+      "label": "write {slug}__name + load",
       "variant": "emphasis"
     },
     {
@@ -254,8 +254,8 @@
       "dot": "cyan",
       "title": "Files, not RPC",
       "items": [
-        "job.json in; status.json, run.log and manifest.json out",
-        "Any trainer speaking this protocol can replace the shipped one"
+        "job.json in; status.json, run.log and manifest.json out, in /jobs/projects/<slug>/",
+        "One trainer serves every project; any trainer speaking this protocol can replace it"
       ]
     },
     {

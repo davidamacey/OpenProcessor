@@ -26,7 +26,7 @@ It is licensed **AGPL-3.0-or-later** (see [Licenses](../reference/licenses.mdx))
 | OCR | `/ocr/predict`, `/ocr/batch` | PP-OCRv5 detection + recognition, orchestrated by a Triton Python-backend (BLS) model |
 | Combined analysis | `/analyze`, `/analyze/batch` | All of the above on one image |
 | Ingest | `/ingest`, `/ingest/batch`, `/ingest/directory` | Indexes global, face, object and OCR documents into OpenSearch |
-| Curation (experimental) | everything under `/curation` | PE-Core embeddings, your own detector, an optional VLM, segmenter and trainer |
+| Curation (experimental) | everything under `/curation`; data routes under `/curation/projects/{project}` | PE-Core embeddings, your own detector, an optional VLM, segmenter and trainer |
 
 Every core route is also mounted under `/v1` (for example `/v1/detect`).
 The `/curation` surface has a single, unversioned prefix. See the
@@ -39,8 +39,8 @@ The `/curation` surface has a single, unversioned prefix. See the
 - **`yolo-api`** does request validation, preprocessing, orchestration and
   response shaping, and talks to Triton over one shared gRPC client so
   concurrent requests reach Triton's dynamic batcher together.
-- **`opensearch`** stores vectors and metadata for search, and the curation
-  item, class, cluster and settings indexes.
+- **`opensearch`** stores vectors and metadata for search, and each
+  curation project's image, item, class and config indexes.
 - **Opt-in compose profiles** add the curation workers, a SAM 3 segmenter,
   an in-compose vLLM VLM, a trainer with MLflow, and a monitoring stack.
 
@@ -48,18 +48,44 @@ Which services each compose profile starts is on
 [Compose profiles](./compose-profiles.mdx); the diagrams of how they fit
 together are on the [Architecture](../architecture/overview.mdx) page.
 
-## The curation subsystem in one paragraph
+## The curation subsystem
 
-The curation subsystem is **domain-agnostic**: nothing about "what a
-region of interest is" is hardcoded. A deployment configures its domain
-through four dataclasses (`CurationConfig`, `RegionFields`,
-`DetectionProfile`, `RegionStatus`), mostly via `OP_*` environment
-variables. It is **bring-your-own-model**: you supply the item detector,
-and optionally a VLM, a region detector and training data. It ships
-**opt-in** behind the `curation` compose profile, is **experimental** in
-v0.3.0 (no backward-compatibility guarantee yet), and — like the rest of
-the API — has **no authentication**. See
-[Curation workflow](../operations/curation-workflow.mdx).
+The curation subsystem is **domain-agnostic**: nothing about "what an item
+or a region of interest is" is hardcoded. It is **bring-your-own-model**:
+you supply the item detector, and optionally a VLM, a region detector and
+training data. It ships **opt-in** behind the `curation` compose profile, is
+**experimental** in v0.1.0 (no backward-compatibility guarantee yet), and,
+like the rest of the API, has **no authentication**.
+
+What a deployment configures, and where:
+
+- **Projects** are isolated dataset workspaces. Each has its own classes,
+  items, settings, exports and job state, and all curation data routes are
+  under `/curation/projects/{project}/`. A project can be archived, cloned
+  for its settings, and combined with others. See
+  [Projects](../guides/projects.mdx).
+- **Per-project configuration** is stored with revisions and rollback:
+  [prompt packs](../guides/prompt-packs.mdx), [region profiles](../guides/region-profiles.mdx),
+  the active VLM endpoint, [keymaps](../guides/keymaps.mdx) and strategy
+  defaults. See [Settings and config store](../guides/settings-and-config.mdx).
+- **Regions** are sub-objects inside an item. An item carries a list of
+  boxes, each with its own state, text and embedding. See
+  [Multi-box regions](../guides/multi-box-regions.mdx).
+- **VLM endpoints** are registered once per deployment and activated per
+  project, including a local model catalog. See
+  [VLM selection](../guides/vlm-selection.mdx).
+- **Existing data** comes in through [dataset import](../guides/dataset-import.mdx)
+  (YOLO, COCO, or an OpenProcessor export), and one
+  [`/reprocess`](../api-reference/curation.mdx#reprocess) route re-runs
+  stages over it.
+- **Deployment settings** (ports, GPUs, model names, mounts) are
+  environment variables; see [Configuration](../configuration/basic.mdx).
+
+The [wheel example](../guides/wheel-example.mdx) walks the whole path on
+public data, and [Use your own domain](../guides/use-your-own-domain.mdx)
+shows what to change for yours. See also
+[Vision and goals](../about/vision-and-goals.mdx) and the
+[curation workflow](../operations/curation-workflow.mdx).
 
 ## Frontends
 

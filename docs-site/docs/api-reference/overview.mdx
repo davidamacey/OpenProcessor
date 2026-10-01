@@ -11,7 +11,7 @@ Everything is served by one FastAPI service on port **4603** (host port
 | Surface | Prefix | Versioned twin | Contract |
 |---|---|---|---|
 | [Core inference and search](./core.mdx) | `/detect`, `/faces`, `/persons`, `/embed`, `/search`, `/ingest`, `/analyze`, `/ocr`, `/clusters`, `/query`, `/models` | Yes: every core router is also mounted under `/v1` | FastAPI's live schema at `/docs` and `/openapi.json` |
-| [Curation](./curation.mdx) (experimental) | `/curation` (`OP_API_PREFIX`) | No `/v1` twin | `contracts/openapi/curation.json` (generated) and `docs/design/curation_api_contract.md` (hand-written) |
+| [Curation](./curation.mdx) (experimental) | `/curation` (`OP_API_PREFIX`); data routes are `/curation/projects/{project}/...` | No `/v1` twin | `contracts/openapi/curation.json` (generated) and `docs/design/curation_api_contract.md` (hand-written) |
 
 Health and metrics routes (`/`, `/live`, `/ready`, `/health`,
 `/health/pe_text`, `/metrics`, `/connection_pool_info`) sit at the root
@@ -47,16 +47,33 @@ the item wire format, class sources and region statuses are generated
 next to it under `contracts/ts/`. Point any OpenAPI client generator at
 that file.
 
+The item wire shape is also exported as `contracts/json/item_wire.json`
+and `contracts/ts/itemWire.ts`, and the keymap action registry as
+`contracts/json/keymap_actions.json`.
+
 The hand-written contract (`docs/design/curation_api_contract.md`) adds the
 parts a schema can't express: which names are frozen, the one-vocabulary
 wire rule, undo semantics, error behavior, and breaking-change notes for
 consumers.
 
-The single most important rule: **the wire vocabulary is generic and
-fixed.** Region attributes always go out as `region_<attr>`, VLM output
-as `vlm_*`, classifier output as `classifier_*`, whatever storage field
-names a deployment configured. Every item-returning endpoint emits the
-same item shape from one serializer, so a client parses one shape.
+Three rules apply to every curation route:
+
+- **Projects scope the data.** Every route that touches data is under
+  `/curation/projects/{project}/`. The only routes outside a project are
+  project lifecycle and combine, the VLM endpoint registry and catalog,
+  `GET /curation/health` and `GET /curation/events`. See
+  [Curation routes](./curation.mdx#projects-and-scoping).
+- **The wire vocabulary is generic and fixed.** Item-level region summary
+  fields go out as `region_<attr>`, VLM output as `vlm_*`, classifier
+  output as `classifier_*`, whatever storage field names a deployment
+  configured. A region's own data (geometry, score, state, text, cluster,
+  thumbnail URL) is an element of the item's `region_boxes` list. Every
+  item-returning endpoint emits the same item shape from one serializer,
+  so a client parses one shape.
+- **Class identity is the name.** Class ids belong to one project's
+  registry. Datasets, combined projects and promoted models are matched to
+  classes by name, never by number.
 
 Read endpoints **fail closed**: a backend error is an HTTP error, never a
-silently empty result.
+silently empty result. Project, config and import routes answer errors as
+`{"detail": {"error": "<code>", "message": "..."}}`.

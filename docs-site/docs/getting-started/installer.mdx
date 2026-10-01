@@ -74,7 +74,7 @@ Other common flags: `--all` (every tier), `--version vX.Y.Z` (pin a release),
 ## Verify the download yourself
 
 ```bash
-V=v0.3.0   # the release you want
+V=vX.Y.Z   # the release you want
 curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/setup-openprocessor.sh
 curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/SHA256SUMS
 grep ' setup-openprocessor.sh$' SHA256SUMS | sha256sum -c -
@@ -110,6 +110,27 @@ everything on 127.0.0.1.
 
 See [Security](../deployment/security.mdx).
 
+## Local VLM management
+
+With the `vlm` tier installed, the `openprocessor` CLI in the install
+directory switches the model the in-compose vLLM serves and stores keys for
+remote endpoints:
+
+```bash
+./openprocessor vlm list                 # the local model catalog
+./openprocessor vlm status               # catalog id, served and desired model
+./openprocessor vlm use <id> [--force] [--yes]
+./openprocessor vlm apply                # apply a model chosen through the API
+./openprocessor vlm probe                # re-probe the in-compose endpoint
+./openprocessor vlm key set <slug>       # store an API key as secrets/vlm/<slug>
+./openprocessor train-mode on|off        # stop/start the VLM around training
+```
+
+`vlm use` checks the model fits the card, refuses while a training run
+holds the GPUs, pauses the workers, rewrites the `VLM_*` keys in `.env` (restoring them if
+anything fails), recreates the container, waits until the new model is
+served and probes it. See [VLM selection](../guides/vlm-selection.mdx).
+
 ## OpenSearch heap sizing
 
 The installer sets `OPENSEARCH_HEAP` from host RAM:
@@ -124,9 +145,10 @@ The installer sets `OPENSEARCH_HEAP` from host RAM:
 | 40-63 GiB | 5g-7g | 100-140 |
 | 64 GiB and up | 8g (cap) | 160 |
 
-A heap you set in `.env` is never overwritten. The soft shard budget is heap
-GB times `OP_SHARDS_PER_HEAP_GB` (advanced, default 20); going past it only
-warns. The installer summary prints both. For more room, raise
+A heap you set in `.env` is never overwritten. Every [project](../guides/projects.mdx)
+adds shards, so the budget bounds how many projects fit. The soft shard
+budget is heap GB times `OP_SHARDS_PER_HEAP_GB` (advanced, default 20); going
+past it only warns when a project is created. The installer summary prints both. For more room, raise
 `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and restart `opensearch`.
 
 ## Upgrade, repair, rollback, uninstall

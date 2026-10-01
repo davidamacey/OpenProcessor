@@ -5,11 +5,18 @@ title: Configuration (basic)
 
 # Configuration: the basics
 
-All configuration is environment variables in `.env`, created from
+Deployment configuration is environment variables in `.env`, created from
 `env.template` (`cp env.template .env`, or by `scripts/setup.sh`).
 `env.template` is the authoritative, commented list; this page covers the
 variables most deployments touch. Everything else is on
 [Advanced configuration](./advanced.mdx).
+
+Environment variables describe the **deployment**: ports, GPUs, model
+names, mounts, limits. Anything that belongs to one dataset is not an
+environment variable: classes, keymaps, prompt packs, region profiles, VLM
+endpoint choice and strategy defaults are stored per
+[project](../guides/projects.mdx) and edited through the API. See
+[Where configuration lives](#where-configuration-lives).
 
 :::note[Two readers of `.env`]
 `docker compose` interpolates `.env` into `docker-compose.yml` (ports, GPU
@@ -19,11 +26,30 @@ values are **not** shell-expanded, so one variable can't reference
 another.
 :::
 
-:::warning[`OP_*` variables are read at import time]
-Curation routers build their prefix and index names when `src.main` is
-imported. Changing any `OP_*` variable needs a container recreate
-(`docker compose up -d --force-recreate yolo-api`), not just a reload.
+:::warning[`OP_*` variables are read at process start]
+Curation routers build their prefix when `src.main` is imported, and
+workers read their settings once at startup. Changing any `OP_*` variable
+needs a container recreate (`docker compose up -d --force-recreate yolo-api`),
+not just a reload.
 :::
+
+## Where configuration lives
+
+| Layer | Holds | Edited with |
+|---|---|---|
+| `.env` (this page and [Advanced](./advanced.mdx)) | Ports, GPU ids, model names, source mounts, limits, the paths projects are created under | A text editor, then recreate the container |
+| Project record | A project's OpenSearch index names, class registry, export root, upload root, bake-off roots and job directories. Fixed when the project is created | `POST /curation/projects` |
+| Project config store (a `configs` index per project) | Prompt packs, region profiles, the active VLM endpoint, the keymap, strategy defaults, with revisions and rollback | `/curation/projects/{project}/prompt_packs`, `/region_profiles`, `/vlm/endpoints`, `/keymap`, `/settings` |
+| Global config store (`op_global_configs`) | The VLM endpoint registry, shared by every project | `/curation/vlm/endpoints` |
+
+A project's paths are resolved once, at creation, from the variables in
+[Projects](./advanced.mdx#projects) and stored in its record. Changing
+those variables later does not move an existing project. There are no
+environment variables for individual index names, the class registry file,
+the export root or the upload root: every project owns
+`{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` indexes and its own directories.
+Details are on [Projects](../guides/projects.mdx) and
+[Settings and config store](../guides/settings-and-config.mdx).
 
 ## GPU profile and performance
 
@@ -41,7 +67,7 @@ values by hand.
 | `TRITON_WORKERS` | `16` | uvicorn workers for the API (recommended 8 / 16 / 32 per profile) |
 | `MAX_BATCH_SIZE` | `32` | Inference batch size for generated model configs (16 / 32 / 64) |
 | `SHM_SIZE` | `6g` | Container shared memory (4g / 6g / 8g) |
-| `OPENSEARCH_HEAP` | `2g` | OpenSearch JVM heap (1g / 2g / 4g) |
+| `OPENSEARCH_HEAP` | `2g` | OpenSearch JVM heap. The installer sets it from host RAM (RAM/8, 1-8 GB) and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 
 If a generated `docker-compose.override.yml` exists, its GPU pinning for
 `triton-server` and `yolo-api` wins over the `*_GPU_ID` variables below.
@@ -60,7 +86,7 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 | `VLM_GPU_ID` | `0` | `vlm` |
 | `OP_TRAIN_GPU_ORDER` | `0` | `curation-trainer` (drives both its `device_ids` and its host-to-local id mapping) |
 
-## Ports
+## Ports and bind address
 
 | Variable | Default | Service |
 |---|---|---|
@@ -73,13 +99,14 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 | `MLFLOW_PORT` | `4609` | MLflow (training profile) |
 | `SEGMENTER_PORT` | `4611` | Segmenter (segmenter profile) |
 | `VLM_PORT` | `4612` | In-compose VLM (vlm profile) |
+| `OP_BIND_ADDRESS` | `127.0.0.1` | Address every published port binds to. The API has no authentication, so set `0.0.0.0` (or a non-loopback address) only behind a reverse proxy that does; see [Security](../deployment/security.mdx) |
 
 ## Stack isolation
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `COMPOSE_PROJECT_NAME` | `openprocessor` | Project name: container names, network and volumes |
-| `OP_IMAGE_REPO` / `OP_IMAGE_TAG` | published repo / `latest` | Image names for every built service; give a second clone its own tag |
+| `COMPOSE_PROJECT_NAME` | `openprocessor` | Compose project name: container names, network and volumes. Not the same thing as a curation project |
+| `OP_IMAGE_REPO` / `OP_IMAGE_TAG` | published repo / the checkout's `VERSION` | Image names for every built service; give a second clone its own tag |
 
 See [Running a second, isolated stack](../getting-started/second-stack.mdx).
 
@@ -96,6 +123,10 @@ See [Running a second, isolated stack](../getting-started/second-stack.mdx).
 |---|---|
 | `YOLO_MODEL` | Default detector for `/detect` and `/analyze`, e.g. `yolo26_small_trt` (any request can still pass `model_name`) |
 
+The other Triton model names (`FACE_DETECT_MODEL`, `ARCFACE_MODEL`,
+`CLIP_*_MODEL`, `OCR_*_MODEL`, `PE_*_MODEL`) are on
+[Advanced configuration](./advanced.mdx#triton-model-names).
+
 ## The minimum for curation
 
 Everything curation-related is optional, and unset variables fall back to
@@ -108,12 +139,20 @@ curation deployment actually sets:
 | `OP_INGEST_PRIMARY_CLASS_IDS` | Comma list of the detector's class ids that become items; unset means all of them |
 | `OP_INGEST_PRIMARY_ASSIGNS_CLASS` | `false` (default): detections are unlabeled proposals. `true` only if the detector was trained on your class registry |
 | `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in `yolo-api` and the detection worker (default `./data/source`) |
-| `OP_REGISTRY_PATH` | Class registry JSON (default `./data/class_registry.json`) |
-| `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | Any OpenAI-compatible `/v1/chat/completions` endpoint. `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. |
+| `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | An OpenAI-compatible `/v1/chat/completions` endpoint. This defines the built-in `env` VLM endpoint; `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. More endpoints are registered through the API; see [VLM selection](../guides/vlm-selection.mdx) |
 | `OP_SEGMENTER_URL` | e.g. `http://segmenter:8000`; empty makes the cascade's segmenter leg a clean no-op |
 | `HF_TOKEN` | Needed by the segmenter (gated SAM 3 weights) and for gated VLM weights |
 | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_SCORES_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_VIZ_PROJECTION_ENABLED` | Feature flags, off by default (set to `1`) |
 | `OP_MLFLOW_PUBLIC_URL` | Browser-reachable MLflow URL, so served run links work |
 
-A region detection profile, prompt packs, clustering and training knobs
-are on [Advanced configuration](./advanced.mdx).
+Classes are not set here. Each project has its own class registry, created
+empty; add classes with `POST /curation/projects/{project}/classes` (see the
+[Quick start](../getting-started/quick-start.mdx)) or import a labeled
+dataset.
+
+Region detection profiles, prompt packs and the active VLM are stored per
+project and managed through the API, not through `.env`. The
+`OP_REGION_PROFILE_PATH` and `OP_PROMPT_PACK_PATH` variables only supply
+the deployment default a project uses until it activates its own; see
+[Advanced configuration](./advanced.mdx#region-detection-profile).
+Clustering and training knobs are there too.

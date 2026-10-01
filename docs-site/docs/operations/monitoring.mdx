@@ -139,10 +139,13 @@ before relying on Loki.
 ## OpenSearch Dashboards
 
 OpenSearch Dashboards (port 4608) is in the same profile. Its **Index
-Management** page lists the curation indexes (`op_images`, `op_items`,
-`op_classes`, `op_labels_confirmed` and the settings/projection state)
-with document counts and sizes, and **Discover** can browse them once you
-add an index pattern.
+Management** page lists the curation indexes with document counts and
+sizes, and **Discover** can browse them once you add an index pattern. Each
+project owns its own set, named `op_prj_<slug>__<role>` (`images`, `items`,
+`classes`, `labels_confirmed`, `umap_state`, `configs`), next to the global
+`op_projects` and `op_global_configs` indexes. Every project adds shards, so
+watch the shard count against the heap budget (see
+[OpenSearch heap sizing](../getting-started/installer.mdx#opensearch-heap-sizing)).
 
 <Screenshot
   name="backend-opensearch-indices.png"
@@ -164,5 +167,6 @@ curl -s http://localhost:4603/models/ | jq -c '.models[] | {name, status, backen
   caption="GET /models/ on a public-sample-data stack. Models listed as UNKNOWN are in the model repository but not loaded (Triton runs in explicit model-control mode)"
 />
 
-`GET /curation/models/status` adds the curation roles (item proposer,
-region detector, segmenter, VLM), inference counts and average latency.
+`GET /curation/projects/{project}/models/status` adds the curation roles
+(item proposer, region detector, segmenter, one row per VLM endpoint),
+inference counts and average latency.

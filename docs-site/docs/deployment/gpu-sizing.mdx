@@ -71,12 +71,22 @@ of its GPU (default `0.4`). The shipped default model measured about
 above. Example budget from `env.template`: a 48 GB card running Triton
 (~10 GB) plus the segmenter (~4 GB) plus the VLM at `0.30` (~14 GB) leaves
 headroom; a 12-24 GB card should run a smaller or quantized model
-instead. Any OpenAI-compatible endpoint works, so the VLM can also live
-on another host entirely (`OP_VLM_URL`).
+instead.
+
+The local model catalog (`examples/vlm/catalog.tsv`) lists each model's
+VRAM need. `openprocessor vlm list` shows it, and `GET /curation/vlm/catalog`
+marks which entries `fit` the card (`VLM_GPU_TOTAL_MIB`).
+`openprocessor vlm use <id>` refuses a model that does not fit unless you
+pass `--force`. See [VLM selection](../guides/vlm-selection.mdx).
+
+Any OpenAI-compatible endpoint works, so a project's VLM can also live on
+another host entirely: register it as an endpoint, or point `OP_VLM_URL` at
+it.
 
 ## Training
 
-A training run holds its GPU(s) for hours. `curation-trainer` is pinned by
+A training run holds its GPU(s) for hours, and one trainer serves every
+project. `curation-trainer` is pinned by
 `OP_TRAIN_GPU_ORDER` (default `0`); training/bake-off jobs may only target
 ids in `OP_GPU_ALLOWED_IDS` (empty means any). If training shares a card
 with GPU-resident services, `OP_GPU_ARBITER_CONTAINERS` can stop and

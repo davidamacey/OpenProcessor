@@ -5,26 +5,79 @@ title: Configuration (advanced)
 
 # Configuration: advanced
 
-Grouped by area, in the order `env.template` lists them. Every variable
-is optional; defaults are shown where `env.template` states one.
-`env.template`'s inline comments carry the full detail. Retired
-vendor- or company-prefixed names are rejected loudly at startup (see
+Grouped by area, in roughly the order `env.template` lists them. Every
+variable is optional; defaults are shown where `env.template` states one.
+`env.template`'s inline comments carry the full detail. Retired vendor- or
+company-prefixed names are rejected loudly at startup (see
 `src/config/retired_env.py`), as is the old `OP_DETECTION_*` prefix.
 
-## OpenSearch indexes
+The common variables are on [Basic configuration](./basic.mdx).
 
-| Variable | Default |
+## Projects
+
+A [project](../guides/projects.mdx) is an isolated dataset workspace. The
+variables below are read when a project is **created** and persisted in its
+record; changing them later does not move an existing project. The
+`default` project is created at first boot like any other.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OP_PROJECTS_INDEX` | `op_projects` | Index holding the project records |
+| `OP_PROJECT_INDEX_PREFIX` | `op_prj_` | Prefix of every project index |
+| `OP_PROJECTS_DATA_ROOT` | `./data/projects` | Parent of each project's class registry, exports and bake-off eval sets |
+| `OP_SHARDS_PER_HEAP_GB` | `20` | Shards per GB of OpenSearch heap, for the soft shard budget. Past the budget, creating a project only warns; it is not a cap |
+| `OP_CURATION_PROJECT` | `default` | The project a worker or script binds when it has no `--project`. Not meant to be set for the API server |
+
+What a project owns, resolved from those variables and the roots below:
+
+| Resource | Location |
 |---|---|
-| `OP_IMAGES_INDEX` | `op_images` |
-| `OP_ITEMS_INDEX` | `op_items` |
-| `OP_LABELS_CONFIRMED_INDEX` | `op_labels_confirmed` |
-| `OP_CLASSES_INDEX` | `op_classes` |
-| `OP_CLUSTERS_INDEX` | `op_clusters` |
-| `OP_SETTINGS_INDEX` | `op_curation_settings` |
-| `OP_UMAP_STATE_INDEX` / `OP_UMAP_VIZ_STATE_INDEX` | `op_umap_state` / `op_umap_viz_state` (two deliberately distinct indexes: the clustering reducer's cache and the visualization's run metadata) |
+| OpenSearch indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` for `images`, `items`, `labels_confirmed`, `classes`, `umap_state` and `configs`. Settings and projection state share the `configs` index |
+| Class registry | `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` |
+| Exports | `{OP_PROJECTS_DATA_ROOT}/{slug}/exports/` |
+| Bake-off eval sets | `{OP_PROJECTS_DATA_ROOT}/{slug}/bakeoff_eval/{curated,public,sample}` |
+| Uploads, state, bake-off job queue | `{OP_STATE_DIR}/projects/{slug}/` (`uploads/`, `bakeoff_jobs/`) |
+| Training job files | `{OP_TRAIN_JOBS_DIR}/projects/{slug}/` |
+| Auto-label job state | `{OP_AUTO_LABEL_STATE_DIR}/projects/{slug}/` |
+| MLflow experiment | `openprocessor-{slug}` |
+| Promoted-model prefix | `{slug}__` (empty for `default`) |
 
-Indexes are created automatically at API startup; there is no manual
-migration step.
+There are no variables for individual index names, the class registry file,
+the export root, the upload root or the eval root. Indexes are created
+automatically; there is no manual migration step.
+
+## Config store
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OP_CONFIG_POLL_S` | `5` | Seconds between checks each uvicorn worker and the detection worker make for a config activation made by another process |
+| `OP_GLOBAL_CONFIGS_INDEX` | `op_global_configs` | The one config index scoped to no project. Holds the VLM endpoint registry |
+
+Per-project prompt packs, region profiles, activations and the keymap live
+in each project's own `configs` index, not in an environment variable. See
+[Settings and config store](../guides/settings-and-config.mdx).
+
+## Triton model names
+
+Swap a served model without a code change, for example a retrained ArcFace
+under a different Triton model name. Leave them unset for the stock names.
+
+| Variable | Stock value |
+|---|---|
+| `YOLO_MODEL` | `yolov11_small_trt_end2end` |
+| `FACE_DETECT_MODEL` | `scrfd_10g_bnkps` |
+| `ARCFACE_MODEL` | `arcface_w600k_r50` |
+| `CLIP_IMAGE_MODEL` / `CLIP_TEXT_MODEL` | `mobileclip2_s2_image_encoder` / `mobileclip2_s2_text_encoder` |
+| `OCR_DET_MODEL` / `OCR_REC_MODEL` / `OCR_PIPELINE_MODEL` | `paddleocr_det_trt` / `paddleocr_rec_trt` / `ocr_pipeline` |
+| `PE_IMAGE_MODEL` / `PE_TEXT_MODEL` | `pe_image_encoder` / `pe_text_encoder` |
+
+## Image names
+
+`OP_IMAGE_REPO` and `OP_IMAGE_TAG` are on the basic page. Each built
+service also has an override that wins over both: `OP_API_IMAGE`,
+`OP_TRITON_IMAGE`, `OP_EVALUATOR_IMAGE`, `OP_SEGMENTER_IMAGE` and
+`OP_TRAINER_IMAGE`. The installer sets them to digest-pinned references; a
+checkout rarely needs them.
 
 ## Filesystem roots and caches
 
@@ -32,14 +85,11 @@ migration step.
 |---|---|---|
 | `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on `yolo-api` and the detection worker |
 | `OP_SOURCE_ROOT_HOST` | `./data/source` | Host side of that mount |
-| `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /images/root/{alias}` |
-| `OP_REGISTRY_PATH` | `./data/class_registry.json` | Class registry |
-| `OP_EXPORT_ROOT` | `./data/exports` | Dataset exports |
-| `OP_EXPORT_KEEP_LAST` | `5` | Keep-last retention for auto-named exports; `0` keeps all |
-| `OP_STATE_DIR` | `/var/lib/openprocessor` | Persistent state |
+| `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /curation/projects/{project}/images/root/{alias}` |
+| `OP_EXPORT_KEEP_LAST` | `5` | Keep-last retention for auto-named exports under each project's exports directory; `0` keeps all |
+| `OP_STATE_DIR` | `/var/lib/openprocessor` | Persistent state; projects nest under it |
 | `OP_CROP_CACHE_DIR` | `/dev/shm/openprocessor_crops` | Crop cache (compose points it at a dedicated volume) |
 | `OP_CROP_CACHE_MAX_BYTES` | `3221225472` | Prune back toward 90% of this once exceeded; `0` disables |
-| `OP_UPLOAD_ROOT` | `/var/lib/openprocessor/uploads` | Where `POST /ingest/upload` persists bytes |
 
 ## Ingest limits and region drain
 
@@ -54,7 +104,7 @@ migration step.
 | `OP_REGION_DRAIN_STABLE_POLLS` | `3` (consecutive zero readings before `drained` is true) |
 | `OP_REGION_DRAIN_STATE_DIR` | `/jobs/region_drain` (shared, so every uvicorn worker sees one streak) |
 
-All of these are served back on `GET /curation/ingest/config`.
+All of these are served back on `GET /curation/projects/{project}/ingest/config`.
 
 ## Ingest item detectors
 
@@ -62,7 +112,8 @@ All of these are served back on `GET /curation/ingest/config`.
 already-NMS'd proposer); `OP_INGEST_SECONDARY_<FIELD>` an optional
 raw-output detector whose IoU-matched hits override the primary's class.
 Field names come from the `DetectionProfile` dataclass; tuple fields take
-a comma-separated value.
+a comma-separated value. These are deployment settings shared by every
+project.
 
 | Variable | Example / default |
 |---|---|
@@ -79,25 +130,37 @@ a comma-separated value.
 
 ## Region detection profile
 
-Off by default: with none of these set, no region profile is active,
-`GET /curation/methods` advertises no detection profile, and the
-detection worker idles. No profile ships built in.
+Off by default: with none of these set and no profile activated in a
+project, no region profile is active, `GET /curation/projects/{project}/methods`
+advertises no detection profile, and the detection worker idles for that
+project. No profile ships built in.
+
+These variables define the **deployment default**. A project replaces it
+by activating a stored profile
+(`POST /curation/projects/{project}/region_profiles/{name}/activate`); see
+[Region profiles](../guides/region-profiles.mdx). `PUT .../settings` with
+`defaults.detection_profile` delegates to the same activation (`off`
+deactivates).
 
 | Variable | Meaning |
 |---|---|
-| `OP_REGION_PROFILE_PATH` | Load a profile JSON. This is a **container** path; compose mounts `./examples` at `/app/examples` read-only, and `examples/region_profiles/` holds a worked example |
+| `OP_REGION_PROFILE_PATH` | Load a profile JSON. This is a **container** path; compose mounts `./examples` at `/app/examples` read-only. `examples/region_profiles/` holds worked examples, including `vehicle_wheel.json` |
 | `OP_REGION_PROFILE` | Select a profile your own startup code registered by name (an unknown name fails at startup) |
 | `OP_REGION_DETECTION_<FIELD>` | Per-field overrides, e.g. `_NAME`, `_DETECTOR_MODEL`, `_SEGMENTER_TEXT_PROMPT`, `_SECONDARY_SHAPE_GROUPS` |
-| `OP_REGION_DETECTION_TEXT_READER` | `vlm`, `ocr`, `vlm_then_ocr` (default) or `both` |
+| `OP_REGION_DETECTION_TEXT_READER` | `vlm`, `ocr`, `vlm_then_ocr` (default), `both`, or `none` for a text-free region |
 | `OP_REGION_DETECTION_TEXT_*` | Dominant-text rules: `_MIN_HEIGHT_RATIO`, `_BORDER_MARGIN`, `_CHARSET`, `_STOPWORDS`, `_FORMAT`, `_PLACEHOLDERS`, `_REJECT_SEQUENCES` |
-| `OP_ITEM_TEXT_ENABLED` / `OP_ITEM_TEXT_MIN_CONFIDENCE` | Store OCR lines read on the item crop for `GET /crops?item_text=` (`true` / `0.5`) |
-| `OP_REGION_EMBED_ENABLED` | `true`: the worker writes region embeddings at flush time (auto-disables if `pe_image_encoder` isn't ready) |
+| `OP_ITEM_TEXT_ENABLED` / `OP_ITEM_TEXT_MIN_CONFIDENCE` | Store OCR lines read on the item crop for `GET /crops?item_text=` (`true` / `0.5`). Effective only when the profile names an OCR pipeline model |
+| `OP_REGION_EMBED_ENABLED` | `true`: the worker writes a PE embedding per accepted or false-positive box at flush time (auto-disables if `pe_image_encoder` isn't ready) |
+| `OP_REGION_MAX_BOXES_PER_WRITE` | `500`. Abuse guard on the number of boxes in one human region write request. Served as `region_profile.limits.max_boxes_per_write` |
 
-The segmenter leg also needs a non-empty `SEGMENTER_TEXT_PROMPT` field;
-without one it is disabled even when `OP_SEGMENTER_URL` is set.
-Enabling a profile on a deployment that already has items: backfill them
-once with `python3 scripts/curation/requeue_regions.py --missing-status`
-(dry run) and then `--missing-status --apply`.
+The segmenter leg also needs a non-empty `segmenter_text_prompt`; without
+one it is disabled even when `OP_SEGMENTER_URL` is set. How many boxes an
+item may carry is the profile's `max_regions_per_item` (default `1`); see
+[Multi-box regions](../guides/multi-box-regions.mdx).
+
+To run a newly activated profile over items that already exist, use
+`POST /curation/projects/{project}/reprocess` (see
+[Reprocess](../operations/health-and-stalls.mdx#reprocessing)).
 
 ## Storage field-name overrides
 
@@ -111,31 +174,34 @@ never change.
 
 | Variable | Meaning |
 |---|---|
-| `OP_PROMPT_PACK_PATH` | Default VLM prompt pack (unset = the built-in generic pack) |
-| `OP_PROMPT_PACK_PATHS` | Extra selectable packs, comma-separated; chosen per auto-label run or via settings |
+| `OP_PROMPT_PACK_PATH` | Deployment-default VLM prompt pack, used until a project activates its own (unset = the built-in generic pack) |
+| `OP_PROMPT_PACK_PATHS` | Extra selectable packs, comma-separated JSON files, advertised on `GET .../methods` and chosen per auto-label run or via settings |
 | `OP_NEW_CLASS_GENERIC_TERMS` | Whole-name matches flagged instead of offered as a new class (e.g. `vehicle,object`) |
 | `OP_NEW_CLASS_NON_OBJECT_TERMS` | Not-an-object terms (e.g. `blur,blurry,empty,scene`) |
+
+Stored per-project packs are managed through the API; see
+[Prompt packs](../guides/prompt-packs.mdx).
 
 ## API surface and embeddings
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_API_PREFIX` | `/curation` | Mount prefix for the whole curation surface |
+| `OP_API_PREFIX` | `/curation` | Mount prefix for the whole curation surface. Every project route is `{prefix}/projects/{project}/...` |
 | `OP_API_TAG` | `Curation` | OpenAPI tag |
 | `OP_EMBEDDING_DIM` | `512` | |
 | `OP_ENCODER_EMBEDDING_DIM` | `1024` | PE-Core embedding size |
-| `OP_BACKBONE_EMBEDDING_DIM` | `1024` | Only applied when the items index is created |
+| `OP_BACKBONE_EMBEDDING_DIM` | `1024` | Only applied when a project's items index is created |
 | `OP_HNSW_EF_CONSTRUCTION` / `OP_HNSW_M` | `512` / `16` | k-NN index build parameters |
 
 ## PE text encoder and feature flags
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_PE_TEXT_BACKEND` | `auto` | `auto`, `onnx`, `triton`, `torch`. `auto` prefers Triton's shared CPU instance, then in-process PyTorch. `onnx` is opt-in: one ONNX Runtime session per uvicorn worker adds a lot of RSS. |
+| `OP_PE_TEXT_BACKEND` | `auto` | `auto`, `onnx`, `triton`, `torch`. `auto` uses in-process ONNX Runtime when `OP_PE_TEXT_ONNX_PATH` exists, else Triton's `OP_PE_TEXT_TRITON_MODEL` if ready, else PyTorch. One ONNX Runtime session per uvicorn worker adds a lot of RSS |
 | `OP_PE_TEXT_ONNX_PATH` | `/app/pytorch_models/pe_text_encoder.onnx` | |
 | `OP_PE_TEXT_TRITON_MODEL` | `pe_text_encoder` | |
 | `OP_PE_TEXT_ORT_THREADS` | ORT default | |
-| `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` | off | Feature flags (`1` to enable) |
+| `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` | off | Feature flags (`1` to enable). Served as `flags` on `GET .../methods` |
 
 ## Scores, probe, selection, clustering
 
@@ -144,17 +210,32 @@ never change.
 | Item scores | `OP_SCORES_KNN_K` (10), `OP_SCORES_NPROBE` (8), `OP_SCORES_STATE_DIR` (`/jobs/scores`), `OP_CROP_DUP_THRESHOLD` (0.98), `OP_FIELD_COVERAGE_TTL_S` (60) |
 | Active-learning probe | `OP_PROBE_JOBS_DIR` (`/jobs/probe`), `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (0.5: a disagreeing probe below this confidence is never offered as a one-click fix) |
 | Diverse selection | `OP_SELECT_JOBS_DIR` (`/jobs/select`), `OP_SELECT_JOB_MAX_N` (200000), `OP_SELECT_MAX_N` (20000), `OP_SELECT_SYNC_MAX_OPS` (3000000), `OP_SELECT_CACHE_TTL_S` (600) |
-| Clustering / IVF | `OP_IVF_RETRAIN_CHECK_S` (1800), `OP_IVF_RETRAIN_GROWTH` (1.5), `OP_IVF_RETRAIN_MIN_INTERVAL_S` (86400), `OP_MAX_REFINE_MEMBERS` (8000), `OP_OUTLIER_CACHE_TTL_S` (600), `OP_OUTLIER_MAX_MEMBERS` (20000), `OP_RESIDUAL_EMBEDDING_FIELD` (`pe_embedding`), `OP_REGION_CLUSTER_JOB_FILE`, `OP_REGION_FP_JOB_FILE`, `OP_REGION_PARTITION_MARKER`, `OP_REGION_REFINE_MARKER` |
+| Clustering / IVF | `OP_IVF_RETRAIN_CHECK_S` (1800), `OP_IVF_RETRAIN_GROWTH` (1.5), `OP_IVF_RETRAIN_MIN_INTERVAL_S` (86400), `OP_MAX_REFINE_MEMBERS` (8000), `OP_OUTLIER_CACHE_TTL_S` (600), `OP_OUTLIER_MAX_MEMBERS` (20000), `OP_RESIDUAL_EMBEDDING_FIELD` (`pe_embedding`) |
+
+## Reprocess, dataset import and combine
+
+All three keep their job state in files under the shared `/jobs` volume, so
+every uvicorn worker sees the same job.
+
+| Group | Variables (defaults) |
+|---|---|
+| Reprocess (`POST .../reprocess`) | `OP_REPROCESS_JOBS_DIR` (`/jobs/reprocess`), `OP_REPROCESS_SYNC_MAX` (20: `detect` or `embed` over more images than this runs as a job) |
+| Dataset import (`.../datasets/imports`) | `OP_DATASET_IMPORTS_DIR` (`/jobs/imports`), `OP_DATASET_IMPORT_CHUNK` (64), `OP_DATASET_IMPORT_MAX_PENDING` (2000: region-worker backpressure), `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` (5), `OP_DATASET_PREVIEW_MAX_FILES` (500000) |
+| Dataset upload (`.../datasets/uploads`) | `OP_DATASET_UPLOAD_MAX_BYTES` (2147483648), `OP_DATASET_UPLOAD_MAX_FILES` (200000), `OP_DATASET_UPLOAD_TTL_H` (72: extracted uploads are swept after this) |
+| Combine (`/curation/projects/combine*`) | `OP_COMBINE_JOBS_DIR` (`/jobs/combine`), `OP_COMBINE_PAGE_SIZE` (200) |
+
+See [Dataset import](../guides/dataset-import.mdx) and
+[Combine projects](../guides/combine-projects.mdx).
 
 ## Training and model repository
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_TRAIN_JOBS_DIR` | `/jobs` | Shared job-file directory |
+| `OP_TRAIN_JOBS_DIR` | `/jobs` | Shared job-file directory; each project's jobs nest under `projects/{slug}` |
 | `OP_TRAIN_RUNS_ROOT` | `/var/lib/openprocessor/training_runs` | Must be the same absolute path in the API and trainer |
 | `OP_TRAIN_STAGING` | `/var/lib/openprocessor/training_staging` | |
 | `OP_PREFLIGHT_SCAN_CAP` | `200000` | |
-| `OP_TRAIN_PRESETS_PATH` | unset | Extra class-subset presets for `GET /train/presets` |
+| `OP_TRAIN_PRESETS_PATH` | unset | Extra class-subset presets for `GET .../train/presets` |
 | `OP_TRAIN_TMP_ROOT` | `/tmp` | Trainer scratch (tmpfs in the container) |
 | `OP_TRAIN_TEXT_CLASS_NAMES` | unset | Orientation-sensitive classes; disables horizontal flip for runs that train one |
 | `OP_TRAIN_INCUMBENT_MODELS` | unset | Triton models to compare a finished run against (first READY wins) |
@@ -163,7 +244,7 @@ never change.
 | `OP_TRITON_HTTP_URL` | `http://triton-server:8000` | |
 | `OP_API_BASE_URL` | `http://yolo-api:8000` | Where the trainer posts a campaign's auto-promote |
 | `OP_TRAIN_LOG_LEVEL` | `INFO` | |
-| `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME`, `OP_MLFLOW_MODEL_NAME`, `OP_MLFLOW_CONFUSION_MATRIX_EVERY` | | MLflow; every hook degrades to a warning when unreachable |
+| `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME`, `OP_MLFLOW_MODEL_NAME`, `OP_MLFLOW_CONFUSION_MATRIX_EVERY` | | MLflow; every hook degrades to a warning when unreachable. A project's runs use the experiment `openprocessor-{slug}` |
 | `OP_MLFLOW_PUBLIC_URL` | unset | Browser-reachable MLflow base for served `mlflow_run_url` |
 
 ## GPU arbiter
@@ -173,7 +254,7 @@ never change.
 | `OP_GPU_ALLOWED_IDS` | GPU ids training/bake-off jobs may target; empty = any |
 | `OP_GPU_ARBITER_CONTAINERS` | Containers stopped while a run holds GPUs and restarted after: `name` (only on multi-GPU claims) or `name@ids` with `/`-separated ids (e.g. `segmenter@0`) |
 | `OP_GPU_ARBITER_TRAINER_CONTAINER` | Trainer probed by preflight; defaults to `<project>-trainer`. Empty string skips the probe |
-| `OP_GPU_LABELS` | `id=label` pairs for `GET /train/gpus` |
+| `OP_GPU_LABELS` | `id=label` pairs for `GET .../train/gpus` |
 | `OP_TRAIN_DEFAULT_GPUS` | Default `cuda_visible_devices` for new specs |
 | `OP_BAKEOFF_HOST_GPUS` | Host GPU ids the evaluator uses, to scope which containers a bake-off stops |
 
@@ -183,43 +264,61 @@ are logged no-ops. See [Security](../deployment/security.mdx).
 
 ## Export and bake-off
 
+Each project queues bake-off jobs in its own `bakeoff_jobs` directory and
+reads eval sets from its own `bakeoff_eval` directory (see
+[Projects](#projects)). The evaluator must see the state directory and
+`./data` at the same paths as the API.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `OP_BUILD_SHA` | build arg | Overrides the baked commit recorded in manifests |
-| `OP_BAKEOFF_JOBS_DIR` | `$OP_STATE_DIR/bakeoff_jobs` | Job queue the API writes and the evaluator watches |
-| `OP_BAKEOFF_OUT_DIR` | `/var/lib/openprocessor/bakeoff_out` | |
-| `OP_BAKEOFF_EVAL_ROOT` | `./data/bakeoff_eval` | Frozen external eval sets (`curated`, `public`, `sample`) |
+| `OP_BAKEOFF_JOBS_DIR` | `/var/lib/openprocessor/bakeoff_jobs` | One more directory for the GPU arbiter to watch for queued jobs |
 | `OP_BAKEOFF_CONCURRENCY` / `OP_BAKEOFF_GPUS` | `4` / `0` | Evaluator parallelism and container-local GPU ids |
 | `OP_BAKEOFF_BASELINES_PATH` | empty registry | External baseline models |
-| `OP_BAKEOFF_PROFILE` / `OP_BAKEOFF_PROFILE_<FIELD>` | generic | Default comparison profile and per-field overrides |
+| `OP_BAKEOFF_PROFILE` / `OP_BAKEOFF_PROFILE_<FIELD>` | generic | Default comparison profile (a registered name or a profile `.json` path) and per-field overrides such as `_CLASS_FILTER` and `_CONTEXT_CLASS_IDS` |
 
 ## Workers and events
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `OP_API` | `http://localhost:4603` | API base for worker scripts |
-| `OP_AUTO_LABEL_STATE_DIR` | `/jobs/auto_label` | |
+| `OP_AUTO_LABEL_STATE_DIR` | `/jobs/auto_label` | Parent of each project's auto-label job state |
 | `OP_EVENT_API_URL` | falls back to `OP_API_BASE_URL`, then `OP_API` | Where the detection worker publishes events |
 | `OP_EVENT_BUS` | `file` | `file` shares events across uvicorn workers; `process` keeps them in-process |
 | `OP_EVENT_LOG_MAX_BYTES` | `8388608` | Rotation size of the shared event log |
 | `OP_HEARTBEAT_DIR` | `/tmp/openprocessor_heartbeat` | Worker heartbeat files (container-local) |
-| `OP_ITEMS_INDEX_OVERRIDE` | | |
-| `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL` | `.../vlm_worker/pause.sentinel` | Pause files |
+| `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL` | `.../vlm_worker/pause.sentinel` | Global pause files (the GPU arbiter's). A project pauses itself with `POST .../pause` |
 | `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` | `/jobs/viz`, `20000` | |
 | `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS` | library default | Cap BLAS threads for the auto-label worker on shared hosts |
 
 ## VLM and segmenter
 
-Client side (the API and workers):
+### VLM endpoints
+
+`OP_VLM_URL` and `OP_VLM_MODEL` define the built-in, read-only `env` VLM
+endpoint: the default a project runs until it activates another. More
+endpoints (a remote vLLM, a hosted OpenAI-compatible API, a model served on
+the host) are registered through `POST /curation/vlm/endpoints` and
+activated per project; see [VLM selection](../guides/vlm-selection.mdx).
+Keys are never put in `.env` or sent to the API: `openprocessor vlm key set <slug>`
+writes `secrets/vlm/<slug>` and an endpoint references it as `secret:<slug>`.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `OP_VLM_URL` | unset | OpenAI-compatible base, e.g. `http://vlm:8000/v1` (in-compose) or `http://host.docker.internal:<port>/v1` (a VLM on the host) |
 | `OP_VLM_MODEL` | none | Required whenever `OP_VLM_URL` is set |
-| `OP_VLM_API_KEY` | `EMPTY` | |
-| `OP_VLM_MAX_IMAGES_PER_CALL` | `8` | Per-request image cap; **must equal the server's** `VLM_LIMIT_MM_IMAGES` |
+| `OP_VLM_API_KEY` | `EMPTY` | Key for the `env` endpoint |
+| `OP_VLM_EXTERNAL_POLICY` | `ack` | Whether crops may be sent to an endpoint outside this deployment. `ack`: allowed once the operator acknowledges the warning when registering and activating it. `deny`: refused outright |
+| `OP_VLM_SECRETS_DIR` | `/run/secrets/op_vlm` | Where `secret:<slug>` references resolve; a read-only mount of `./secrets/vlm` |
+| `OP_LOCAL_VLM_ENDPOINT` | empty | Name of the registered endpoint that reaches the in-compose vLLM (the installer writes `env`). Empty means there is no in-compose VLM to switch |
+| `OP_VLM_MAX_IMAGES_PER_CALL` | `8` | Per-request image cap for the `env` endpoint; **must equal the server's** `VLM_LIMIT_MM_IMAGES`. A registered endpoint carries its own `max_images_per_call` |
 | `OP_VLM_OPEN_IMAGES_PER_CALL` | `3` | Open-vocabulary chunk size |
 | `OP_VLM_HTTPX_MAX_CONNECTIONS` / `_KEEPALIVE` | `512` / `128` | |
+
+### Detection worker and segmenter client
+
+| Variable | Default | Meaning |
+|---|---|---|
 | `OP_REGION_WORKER_VLM_CONCURRENCY` / `_VISIBLE_CONCURRENCY` | `16` / `8` | Detection-worker stage concurrency |
 | `OP_REGION_WORKER_METRICS_PORT` | `4609` | The worker's own `/metrics` |
 | `OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` | `3` | VLM replies with no verdict before the worker stops retrying an item |
@@ -227,7 +326,11 @@ Client side (the API and workers):
 | `OP_SEGMENTER_URL` / `OP_SEGMENTER_URLS` | unset | One segmenter, or a comma list to load-balance |
 | `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS` / `_KEEPALIVE` | `512` / `128` | |
 
-In-compose VLM (`--profile vlm`, read by compose only):
+### In-compose VLM (`--profile vlm`)
+
+Read by compose only. `openprocessor vlm use <id>` rewrites the
+`VLM_CATALOG_ID`, `VLM_MODEL`, `VLM_IMAGE`, `VLM_GPU_MEMORY_UTILIZATION`
+and parser fields for you (see [VLM selection](../guides/vlm-selection.mdx)).
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -236,8 +339,12 @@ In-compose VLM (`--profile vlm`, read by compose only):
 | `VLM_DTYPE` / `VLM_MAX_MODEL_LEN` | `bfloat16` / `8192` | |
 | `VLM_GPU_MEMORY_UTILIZATION` | `0.4` | Fraction of the GPU vLLM may claim |
 | `VLM_LIMIT_MM_IMAGES` | `8` | Server-side image cap; keep equal to `OP_VLM_MAX_IMAGES_PER_CALL` |
+| `VLM_REASONING_PARSER` / `VLM_CHAT_TEMPLATE` | model-specific | Unset keeps the compose default; set but empty drops the flag |
+| `VLM_EXTRA_ARGS` | empty | Extra vLLM arguments, appended as written |
+| `VLM_CATALOG_ID` | see `env.template` | The catalog entry the in-compose vLLM serves (informational; the CLI sets it) |
+| `VLM_GPU_TOTAL_MIB` | empty | Total VRAM of the VLM's card, so the API can show which catalog models fit |
 
-Segmenter server (`--profile segmenter`):
+### Segmenter server (`--profile segmenter`)
 
 | Variable | Default | Meaning |
 |---|---|---|

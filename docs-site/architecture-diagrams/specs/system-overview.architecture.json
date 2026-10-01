@@ -18,6 +18,17 @@
         "note": "The core services: the API calls Triton over gRPC and indexes into OpenSearch."
       },
       {
+        "id": "projects",
+        "label": "Projects",
+        "focus": [
+          "api",
+          "opensearch",
+          "jobs",
+          "workers"
+        ],
+        "note": "Each request binds one project. Every project has its own indexes and job directories; workers visit them in turn."
+      },
+      {
         "id": "curation-workers",
         "label": "Curation workers",
         "focus": [
@@ -27,7 +38,7 @@
           "segmenter",
           "vlm"
         ],
-        "note": "Workers read and write the same OpenSearch items, calling Triton, the segmenter and the VLM."
+        "note": "One set of workers visits every active project, reading and writing its items, using its active profile, pack and VLM endpoint."
       },
       {
         "id": "training",
@@ -41,6 +52,17 @@
           "triton"
         ],
         "note": "The API writes job files; trainer and evaluator pick them up. Promote loads the run into Triton."
+      },
+      {
+        "id": "vlm-select",
+        "label": "VLM selection",
+        "focus": [
+          "cli",
+          "api",
+          "vlm",
+          "workers"
+        ],
+        "note": "The API records the desired local model; the host CLI recreates the vLLM container. Projects activate registered endpoints."
       }
     ]
   },
@@ -49,7 +71,7 @@
       "id": "client",
       "type": "external",
       "label": "Clients",
-      "sublabel": "curl / SDK / Cropwright",
+      "sublabel": "curl / Cropwright",
       "pos": [
         40,
         250
@@ -136,7 +158,7 @@
       "id": "workers",
       "type": "backend",
       "label": "Curation workers",
-      "sublabel": "detection / VLM / auto-label",
+      "sublabel": "all active projects",
       "pos": [
         800,
         250
@@ -165,8 +187,8 @@
     {
       "id": "vlm",
       "type": "external",
-      "label": "VLM",
-      "sublabel": "OpenAI-compatible",
+      "label": "VLM endpoints",
+      "sublabel": "per-project choice",
       "pos": [
         1060,
         330
@@ -221,6 +243,21 @@
         64
       ],
       "tag": "profile: training"
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "openprocessor CLI",
+      "sublabel": "vlm use / key set",
+      "pos": [
+        280,
+        410
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "host"
     }
   ],
   "connections": [
@@ -244,7 +281,7 @@
       "id": "api-opensearch",
       "from": "api",
       "to": "opensearch",
-      "label": "index + k-NN"
+      "label": "index + k-NN + config"
     },
     {
       "id": "api-jobs",
@@ -264,7 +301,7 @@
       "id": "workers-opensearch",
       "from": "workers",
       "to": "opensearch",
-      "label": "items"
+      "label": "items per project"
     },
     {
       "id": "workers-triton",
@@ -285,7 +322,7 @@
       "id": "workers-vlm",
       "from": "workers",
       "to": "vlm",
-      "label": "chat/completions",
+      "label": "active endpoint",
       "variant": "dashed"
     },
     {
@@ -306,6 +343,15 @@
       "to": "mlflow",
       "label": "metrics",
       "variant": "dashed"
+    },
+    {
+      "id": "cli-api",
+      "from": "cli",
+      "to": "api",
+      "label": "vlm select + probe",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
     }
   ],
   "cards": [
@@ -322,18 +368,18 @@
       "dot": "emerald",
       "title": "Opt-in profiles",
       "items": [
-        "curation: detection, VLM, auto-label and cluster-refresh workers plus the evaluator",
+        "curation: detection, VLM, auto-label and cluster-refresh workers plus the evaluator, shared by all projects",
         "segmenter, vlm and training each start their own GPU service",
-        "The API also calls the VLM directly for /curation/vlm/* routes"
+        "The API also calls the VLM directly for /curation/projects/{project}/vlm/* routes"
       ]
     },
     {
       "dot": "orange",
       "title": "File protocols",
       "items": [
-        "Training: job.json in, status.json / run.log / manifest.json out",
-        "Bake-off jobs are files the evaluator watches",
-        "Promote writes the model repository and asks Triton to load it"
+        "Training: job.json in, status.json / run.log / manifest.json out, per project",
+        "Bake-off jobs are files the evaluator watches, per project",
+        "Promote writes the model repository as {slug}__name and asks Triton to load it"
       ]
     }
   ]

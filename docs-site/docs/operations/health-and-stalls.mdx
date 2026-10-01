@@ -22,26 +22,39 @@ wrap these for the terminal.
 
 ## Curation health
 
-`GET /curation/health` summarizes the curation dependencies:
+Two routes report on curation:
+
+- `GET /curation/health` is global: deployment facts only (`status`,
+  `triton`, `opensearch` reachability, `vlm`, versions, `mlflow_public_url`).
+  Use it for a screen with no project selected.
+- `GET /curation/projects/{project}/health` adds the project's own facts:
+  `project`, per-index existence, `registry` and the active `region_profile`.
 
 | `status` | When |
 |---|---|
-| `ok` | Triton and OpenSearch reachable, the class registry exists, and the VLM is reachable |
-| `degraded` | OpenSearch is reachable but something else isn't: Triton down, no registry yet (a fresh install until the first class is created), or the VLM unreachable |
+| `ok` | Triton and OpenSearch reachable, the project's class registry exists, and the active VLM is reachable |
+| `degraded` | OpenSearch is reachable but something else isn't: Triton down, no registry yet (a new project until its first class is created), or the VLM unreachable |
 | `down` | OpenSearch unreachable |
 
-The body also carries `triton`, `opensearch` (with per-index existence),
-`vlm` (reachability, model, last error), `registry` (existence, mtime),
-the active `region_profile`, and `mlflow_public_url`. A deployment with
-no VLM configured therefore reads `degraded`, by design.
+The `vlm` block reports the project's active endpoint (reachability,
+model, last error). A deployment with no VLM configured therefore reads
+`degraded`, by design.
 
-`GET /curation/models/status` lists every model the pipeline depends on
-(item detector, region detector, OCR, PE encoders, promoted models) with
-Triton's state, plus the external VLM and segmenter services.
+`GET /curation/projects/{project}/models/status` lists every model the
+pipeline depends on (item detector, region detector, OCR, PE encoders,
+promoted models) with Triton's state, plus one row per registered VLM
+endpoint (`kind: "vlm"`, with `active`) and the segmenter service.
+
+A project that is `archived` is read-only (`409 project_read_only` on
+writes), and a `building`, `deleting` or `failed` project refuses requests;
+`GET /curation/projects/{project}` serves the `status` and a typed `error`.
+A live job (import, combine, training, delete drain) makes a project busy,
+and lifecycle operations on it answer `409 project_busy` with the jobs that
+hold it.
 
 ## Why isn't the region queue shrinking?
 
-`GET /curation/ingest/region_drain` is the single place to look. It
+`GET /curation/projects/{project}/ingest/region_drain` is the single place to look. It
 returns the pending counts, a stability verdict, the state of every
 dependency the active region profile needs, and a human-readable
 `stall_reason`:
@@ -68,50 +81,87 @@ dependency the active region profile needs, and a human-readable
   configured (the neutral case, not a stall).
 - `stall_reason` is `null` when nothing is pending, or when every
   dependency is ready (the worker just hasn't caught up yet).
-- `GET /curation/stats/dataset` mirrors the same computation as
-  `in_progress.region_stall_reason`.
+- `GET /curation/projects/{project}/stats/dataset` mirrors the same
+  computation as `in_progress.region_stall_reason`.
 
 **Items never go terminal because a dependency is down.** The detection
 worker writes a terminal region status only for a real verdict; on an
 infrastructure failure the item stays `pending_detection` and is picked up
 again as soon as the dependency recovers. No requeue is needed.
 
-## Terminal statuses and requeueing
+## Region statuses
 
-The region state machine (`RegionStatus`, `src/config/region_state.py`):
+An item's region status is derived from its boxes (see
+[Multi-box regions](../guides/multi-box-regions.mdx)). The state machine
+(`RegionStatus`, `src/config/region_state.py`):
 
-- `pending_detection` resolves to `detected`, `verify_rejected` or
-  `no_region_box`.
+- `pending_detection` resolves to `detected` (at least one accepted box),
+  `verify_rejected` (only rejected boxes) or `no_region_box`.
 - `pending_verification` resolves to `detected` or `no_region_visible`.
 - Any path can end in `detection_failed` (for example
   `reason=image_unavailable` when the worker can't read the source image;
   check that the detection worker mounts the same source directory as
   `yolo-api`).
-- A human can set `false_positive`, which keeps the box as a hard
+- A human can set a box to `false_positive`, which keeps it as a hard
   negative for training.
 
-To retry items after fixing a model, threshold or mount, use
-`scripts/curation/requeue_regions.py` (dry run by default):
+## Reprocessing
+
+The [Reprocess guide](../guides/reprocess.mdx) covers the workflow; this
+section is the operator summary. To retry items after fixing a model, threshold, mount, profile or prompt
+pack, use `POST /curation/projects/{project}/reprocess`. It re-runs one or
+more scopes (`detect`, `region`, `vlm`, `embed`) over image ids, crop ids or
+a filter. `dry_run` defaults to `true`, so the first call only reports what
+would run; send `"dry_run": false` to apply.
 
 ```bash
-python3 scripts/curation/requeue_regions.py --status detection_failed
-python3 scripts/curation/requeue_regions.py --status detection_failed --apply
+curl -s -X POST "$API/curation/projects/$P/reprocess" -H 'content-type: application/json' -d '{
+  "targets": {"filter": {"region_status": ["detection_failed"]}},
+  "scopes": ["region"], "region_mode": "redetect", "dry_run": true
+}'
+```
+
+- `region_mode: "redetect"` (default) removes every unlocked machine box,
+  keeps locked ones, and queues the item as `pending_detection` so the
+  worker proposes again around them. `"reverify"` turns unlocked
+  `rejected` boxes back into `proposed` and queues `pending_verification`.
+  A region set a human validated is never touched.
+- **Locked items and boxes are never written.** A human label, a human
+  box, a validated import and a holdout item are counted as
+  `locked_skipped`.
+- `detect` and `embed` over more than `OP_REPROCESS_SYNC_MAX` images (default
+  20) run as a job: poll `GET .../reprocess/jobs/{job_id}`, cancel with
+  `POST .../reprocess/jobs/{job_id}/cancel`. One job per project at a time
+  (`409 reprocess_busy`).
+- The filter also selects by provenance (`profile_not`,
+  `profile_revision_below`, `detector`, `reason`, `missing_provenance`,
+  `missing_status`). After activating a region profile,
+  `GET .../region_profiles/active/impact` returns a ready-made
+  `suggested_reprocess` request.
+- `POST .../images/{image_id}/reprocess` and
+  `POST .../crops/{crop_id}/reprocess` are the one-target forms.
+
+`scripts/curation/requeue_regions.py` is a client of this route (dry run by
+default):
+
+```bash
+python3 scripts/curation/requeue_regions.py --project $P --status detection_failed
+python3 scripts/curation/requeue_regions.py --project $P --status detection_failed --apply
 # filters: --reason, --detector, --missing-provenance, --to pending_verification
-# (re-verify only). The script is a client of POST /reprocess; a from-scratch
-# re-detect is {"scopes": ["detect"], ...} on that route.
-python3 scripts/curation/requeue_regions.py --missing-status --apply   # items that predate the region profile
+# (re-verify only)
+python3 scripts/curation/requeue_regions.py --project $P --missing-status --apply   # items that predate the region profile
 ```
 
 A VLM that keeps answering with no verdict does not loop forever: after
 `OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3) replies, the
 combined stage writes `verify_rejected` with reason `verifier_no_verdict`
-and keeps the candidate for human review. Requeue those with
+and keeps the candidate for human review. Reprocess those with
 `--reason verifier_no_verdict`. VLM transport failures never count
 towards the limit.
 
 ## Training reachability
 
-`POST /curation/train/preflight` checks `trainer_reachable` before a job
+`POST /curation/projects/{project}/train/preflight` checks `trainer_reachable` before a job
 can queue forever. Its primary signal is the trainer's own heartbeat file
 (`.trainer_capabilities.json` on the shared `/jobs` volume, refreshed
 about every 30 s). A fresh heartbeat reports `ok`; a missing or stale one
