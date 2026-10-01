@@ -17891,7 +17891,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/region_thumbnail": {
       "get": {
-        "description": "128px JPEG thumbnail of one region box of the crop.\n\nUsed by the region-verification UI in the labeler. ``box_id`` names\nthe box (422 ``box_id_required`` without it, 404 ``unknown_box_id``\nfor a box the crop does not hold); any state renders, a rejected box\nincluded, since a rejected box is still reviewable. The cache key\nincludes the box's own coordinates\n(``ThumbnailCache.get_or_compute``), so a later edit or re-detection\nthat changes the box never serves a stale image -- it's a different\ncache key.",
+        "description": "128px JPEG thumbnail of one region box of the crop.\n\nUsed by the region-verification UI in the labeler. ``box_id`` names\nthe box (422 ``box_id_required`` without it, 404 ``unknown_box_id``\nfor a box the crop does not hold); any state renders, a rejected box\nincluded, since a rejected box is still reviewable. The cache key\nand the ``ETag`` include the box's own coordinates\n(``ThumbnailCache.get_or_compute``), so a later edit or re-detection\nthat changes the box never serves a stale image; the response is\n``no-cache`` and a matching ``If-None-Match`` gets a 304.",
         "operationId": "crop_region_thumbnail_curation_projects__project__crops__crop_id__region_thumbnail_get",
         "parameters": [
           {

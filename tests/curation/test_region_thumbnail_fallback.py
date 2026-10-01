@@ -113,6 +113,10 @@ def _get(client: TestClient, crop_id: str, **params: str) -> Any:
     return client.get(f'/curation/projects/default/crops/{crop_id}/region_thumbnail', params=params)
 
 
+def _docs_behind(client: TestClient, module: Any) -> dict[str, dict[str, Any]]:
+    return client.app.dependency_overrides[module._raw_opensearch_dep]()._docs
+
+
 def test_region_thumbnail_renders_a_rejected_box(app_client: TestClient) -> None:
     r = _get(app_client, 'rejected_only', box_id='b1')
     assert r.status_code == 200, r.text
@@ -147,3 +151,38 @@ def test_region_thumbnail_404s_for_a_crop_with_no_boxes(app_client: TestClient) 
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+def test_region_thumbnail_is_revalidated_not_cached_for_an_hour(app_client: TestClient) -> None:
+    r = _get(app_client, 'detected', box_id='b1')
+
+    assert r.status_code == 200
+    assert r.headers['cache-control'] == 'no-cache'
+    etag = r.headers['etag']
+    same = app_client.get(
+        '/curation/projects/default/crops/detected/region_thumbnail',
+        params={'box_id': 'b1'},
+        headers={'If-None-Match': etag},
+    )
+    assert same.status_code == 304
+    assert same.content == b''
+    assert _get(app_client, 'detected', box_id='b2').headers['etag'] != etag
+
+
+def test_region_thumbnail_etag_changes_when_the_box_moves(
+    app_client: TestClient,
+) -> None:
+    from src.routers import curation_images
+
+    before = _get(app_client, 'detected', box_id='b1').headers['etag']
+    docs = _docs_behind(app_client, curation_images)
+    docs['detected'][F.boxes][0]['bbox_norm'] = [0.25, 0.25, 0.65, 0.65]
+
+    moved = app_client.get(
+        '/curation/projects/default/crops/detected/region_thumbnail',
+        params={'box_id': 'b1'},
+        headers={'If-None-Match': before},
+    )
+
+    assert moved.status_code == 200
+    assert moved.headers['etag'] != before
