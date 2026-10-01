@@ -49,8 +49,9 @@ healthcheck probes the flag rather than the socket.
   "crop_jpeg_b64": "<base64 jpeg>",  // data: prefix tolerated
   "text_prompt": "shipping label",    // REQUIRED — no default
   "max_candidates": 4,                // optional, top-K by score, 1-128
-  "min_score": 0.4                    // optional score floor for this call;
+  "min_score": 0.4,                   // optional score floor for this call;
                                        // omit for the processor default (GET /health)
+  "return_masks": false               // optional: also return each candidate's mask_polygon
 }
 ```
 
@@ -62,7 +63,10 @@ Returns:
     {
       "bbox_norm": [0.51, 0.62, 0.58, 0.67],   // crop-frame normalized
       "score": 0.88,
-      "mask_iou": 0.92                          // rectangularity, null if masks disabled
+      "mask_iou": 0.92,                         // rectangularity, null if masks disabled
+      "mask_polygon": null                      // [[x, y], ...] (<= 256 points, crop-frame
+                                                // normalized) only with return_masks=true;
+                                                // null if masks disabled
     }
   ],
   "elapsed_ms": 2937.4,

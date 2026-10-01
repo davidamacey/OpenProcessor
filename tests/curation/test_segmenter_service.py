@@ -632,3 +632,112 @@ class TestProcessorPool:
         with pytest.raises(RuntimeError, match='empty'):
             async with pool.acquire():
                 pass  # pragma: no cover
+
+
+# =============================================================================
+# W5: opt-in mask polygons
+# =============================================================================
+
+
+def _disc_mask(h: int = 64, w: int = 96) -> np.ndarray:
+    """A filled circle in the left half of an h x w mask, plus a small blob
+    elsewhere (the polygon must be the LARGEST external contour)."""
+    yy, xx = np.mgrid[0:h, 0:w]
+    mask = ((yy - 32) ** 2 + (xx - 24) ** 2 <= 20**2).astype(np.float32)
+    mask[58:62, 80:90] = 1.0
+    return mask[None]
+
+
+async def _segment(http: httpx.AsyncClient, **extra: Any) -> dict[str, Any]:
+    resp = await http.post(
+        '/segment',
+        json={
+            'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
+            'text_prompt': _PROMPT,
+            **extra,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+class TestMaskPolygons:
+    @pytest.mark.asyncio
+    async def test_return_masks_serves_a_normalized_bounded_polygon(self) -> None:
+        proc = _FakeProcessor(boxes=[[0.1, 0.2, 0.5, 0.8]], scores=[0.9], masks=_disc_mask())
+        previous = segmenter._pool
+        segmenter._pool = sam3_backend.ProcessorPool([proc])
+        try:
+            async with _asgi_client() as http:
+                body = await _segment(http, return_masks=True)
+        finally:
+            segmenter._pool = previous
+
+        polygon = body['candidates'][0]['mask_polygon']
+        assert 3 <= len(polygon) <= 256
+        xs = [p[0] for p in polygon]
+        ys = [p[1] for p in polygon]
+        assert all(0.0 <= v <= 1.0 for v in xs + ys)
+        # The disc (centre 24/96, 32/64; radius 20px) and not the small blob
+        # at x ~ 0.9: the largest external contour only.
+        assert min(xs) == pytest.approx(4 / 96, abs=0.03)
+        assert max(xs) == pytest.approx(44 / 96, abs=0.03)
+        assert max(xs) < 0.6
+        assert min(ys) == pytest.approx(12 / 64, abs=0.03)
+        assert max(ys) == pytest.approx(52 / 64, abs=0.03)
+
+    @pytest.mark.asyncio
+    async def test_the_polygon_is_not_computed_unless_asked_for(self) -> None:
+        proc = _FakeProcessor(boxes=[[0.1, 0.2, 0.5, 0.8]], scores=[0.9], masks=_disc_mask())
+        previous = segmenter._pool
+        segmenter._pool = sam3_backend.ProcessorPool([proc])
+        try:
+            async with _asgi_client() as http:
+                body = await _segment(http)
+        finally:
+            segmenter._pool = previous
+
+        cand = body['candidates'][0]
+        assert cand['mask_polygon'] is None
+        assert cand['mask_iou'] is not None  # the rectangularity is unaffected
+
+    @pytest.mark.asyncio
+    async def test_return_masks_with_the_mask_head_off_is_null_not_fabricated(self) -> None:
+        proc = _FakeProcessor(boxes=[[0.1, 0.2, 0.5, 0.8]], scores=[0.9], masks=None)
+        previous = segmenter._pool
+        segmenter._pool = sam3_backend.ProcessorPool([proc])
+        try:
+            async with _asgi_client() as http:
+                body = await _segment(http, return_masks=True)
+        finally:
+            segmenter._pool = previous
+
+        assert body['candidates'][0]['mask_polygon'] is None
+
+    def test_a_ragged_mask_is_coarsened_to_the_point_ceiling_never_truncated(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        h, w = 400, 400
+        yy, xx = np.mgrid[0:h, 0:w]
+        theta = np.arctan2(yy - 200, xx - 200)
+        radius = 120 + 60 * np.sin(37 * theta)
+        mask = (np.hypot(yy - 200, xx - 200) <= radius).astype(np.float32)[None]
+
+        detailed = sam3_backend.mask_polygon(mask)
+        assert detailed is not None
+        assert len(detailed) > 40, 'the fixture must need more points than the ceiling below'
+        monkeypatch.setattr(sam3_backend, '_POLYGON_MAX_POINTS', 24)
+
+        coarse = sam3_backend.mask_polygon(mask)
+
+        assert coarse is not None
+        assert 3 <= len(coarse) <= 24
+        # Coarsened, not cut off: it still spans the whole star.
+        xs = [p[0] for p in coarse]
+        assert max(xs) - min(xs) > 0.5
+
+    def test_the_shipped_ceiling_is_256(self) -> None:
+        assert sam3_backend._POLYGON_MAX_POINTS == 256
+
+    def test_an_empty_mask_has_no_polygon(self) -> None:
+        assert sam3_backend.mask_polygon(np.zeros((1, 8, 8), dtype=np.float32)) is None

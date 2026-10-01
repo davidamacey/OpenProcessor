@@ -75,11 +75,16 @@ class Candidate:
         mask_iou: Rectangularity (mask area / mask-bbox area), or
             ``None`` when the mask head is disabled. ``~1.0`` means the
             mask fills its bounding box.
+        mask_polygon: The mask's largest external contour, simplified,
+            as ``(x, y)`` points normalized to the submitted image; only
+            computed when the request asks for it, and ``None`` when the
+            mask head is disabled.
     """
 
     bbox_norm: tuple[float, float, float, float]
     score: float
     mask_iou: float | None = None
+    mask_polygon: tuple[tuple[float, float], ...] | None = None
 
 
 def _env_flag(name: str, default: str = '0') -> bool:
@@ -471,6 +476,46 @@ def _rectangularity(mask: np.ndarray) -> float:
     return float(mask_bin.sum()) / bbox_area
 
 
+#: Simplification tolerance (fraction of the contour perimeter) and the
+#: point ceiling for ``mask_polygon``.
+_POLYGON_EPSILON = 0.005
+_POLYGON_MAX_POINTS = 256
+
+
+def mask_polygon(mask: np.ndarray) -> tuple[tuple[float, float], ...] | None:
+    """The largest external contour of ``mask``, simplified to at most
+    :data:`_POLYGON_MAX_POINTS` points, normalized to the mask's own frame.
+
+    ``None`` when the mask is empty or its contour degenerates below a
+    triangle. The tolerance starts at :data:`_POLYGON_EPSILON` of the
+    perimeter and doubles until the point ceiling holds, so a ragged mask
+    is coarsened, never truncated.
+    """
+    import cv2
+    import numpy as np
+
+    if mask.ndim == 3:
+        mask = mask[0]
+    height, width = mask.shape
+    binary = (mask > 0.5).astype(np.uint8)
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    contour = max(contours, key=cv2.contourArea)
+    perimeter = cv2.arcLength(contour, True)
+    epsilon = _POLYGON_EPSILON * perimeter
+    approx = cv2.approxPolyDP(contour, epsilon, True)
+    while len(approx) > _POLYGON_MAX_POINTS:
+        epsilon *= 2.0
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+    if len(approx) < 3:
+        return None
+    return tuple(
+        (min(max(float(x) / width, 0.0), 1.0), min(max(float(y) / height, 0.0), 1.0))
+        for x, y in approx.reshape(-1, 2)
+    )
+
+
 def _forward_with_cached_prompt(processor: Any, state: dict, prompt: str) -> dict:
     """``Sam3Processor.set_text_prompt`` with a per-processor prompt cache.
 
@@ -515,8 +560,14 @@ def _candidates_from_output(
     width: int,
     height: int,
     max_candidates: int,
+    *,
+    return_masks: bool = False,
 ) -> list[Candidate]:
-    """Turn one raw grounding output into sorted, normalized candidates."""
+    """Turn one raw grounding output into sorted, normalized candidates.
+
+    ``return_masks`` also extracts each kept candidate's mask polygon
+    (:func:`mask_polygon`); off, the mask is only used for ``mask_iou``.
+    """
     import numpy as np
 
     boxes = output.get('boxes', [])
@@ -539,12 +590,18 @@ def _candidates_from_output(
             # Degenerate box; skip rather than emit a zero-area candidate.
             continue
         mask_iou: float | None = None
+        polygon: tuple[tuple[float, float], ...] | None = None
         if masks is not None and len(masks) > i:
             mask = masks[i]
             if hasattr(mask, 'cpu'):
                 mask = mask.cpu().numpy()
-            mask_iou = _rectangularity(np.asarray(mask))
-        candidates.append(Candidate(bbox_norm=bbox_norm, score=score, mask_iou=mask_iou))
+            mask = np.asarray(mask)
+            mask_iou = _rectangularity(mask)
+            if return_masks:
+                polygon = mask_polygon(mask)
+        candidates.append(
+            Candidate(bbox_norm=bbox_norm, score=score, mask_iou=mask_iou, mask_polygon=polygon)
+        )
 
     candidates.sort(key=lambda c: c.score, reverse=True)
     return candidates[:max_candidates]
@@ -555,6 +612,8 @@ def segment_images(
     images: Sequence[Image.Image],
     prompt: str,
     max_candidates: int,
+    *,
+    return_masks: bool = False,
 ) -> list[list[Candidate]]:
     """Run promptable segmentation over N images. Blocking — call in a thread.
 
@@ -571,6 +630,7 @@ def segment_images(
             default — the concept being segmented is a deployment
             decision, not a property of this server.
         max_candidates: Top-K per image, by score descending.
+        return_masks: Also return each candidate's mask polygon.
 
     Returns:
         One candidate list per input image, aligned by index.
@@ -583,7 +643,11 @@ def segment_images(
             width, height = image.size
             state = processor.set_image(image)
             output = _forward_with_cached_prompt(processor, state, prompt)
-            out.append(_candidates_from_output(output, width, height, max_candidates))
+            out.append(
+                _candidates_from_output(
+                    output, width, height, max_candidates, return_masks=return_masks
+                )
+            )
     return out
 
 
@@ -595,5 +659,6 @@ __all__ = [
     'device_name',
     'load_one_instance',
     'load_processors',
+    'mask_polygon',
     'segment_images',
 ]
