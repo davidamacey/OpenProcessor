@@ -289,16 +289,18 @@ def test_patch_region_box_stale_revision_is_409(
 def test_batch_box_state_flips_only_named_boxes(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    # b1 is accepted and b2 proposed; rejecting b1 must leave b2 proposed.
     resp = app_client.post(
         '/curation/projects/default/regions/batch_box_state',
-        json={'targets': [{'crop_id': 'crop-1', 'box_id': 'b2'}], 'state': 'accepted'},
+        json={'targets': [{'crop_id': 'crop-1', 'box_id': 'b1'}], 'state': 'rejected'},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['updated'] == 1
     stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
-    assert stored['b2']['state'] == 'accepted'
-    assert stored['b1']['state'] == 'accepted'
+    assert stored['b1']['state'] == 'rejected'
+    assert stored['b2']['state'] == 'proposed'
+    assert stored['b2'].get('rejection_reason') is None
 
 
 def test_batch_box_state_serves_one_row_per_targeted_box(app_client: TestClient) -> None:

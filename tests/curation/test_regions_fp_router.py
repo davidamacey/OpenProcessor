@@ -185,6 +185,20 @@ def test_cluster_cards_serve_representative_rows_with_their_box_ids() -> None:
     assert cards[4]['representative_box_ids'] == ['b2']
 
 
+def test_cluster_representatives_are_the_boxes_nearest_the_centroid() -> None:
+    docs = {
+        f'c{i}': _item(f'c{i}', [(_box('b1', cluster_id=9, cluster_distance=d), A)])
+        for i, d in enumerate([0.9, 0.1, 0.5, 0.3])
+    }
+    # An unmeasured box (no distance) must sort after every measured one.
+    docs['unmeasured'] = _item('unmeasured', [(_box('b1', cluster_id=9), A)])
+    client = _client(QueryFakeOpenSearch({ITEMS: docs}))
+
+    card = client.get(f'{PREFIX}/regions/clusters', params={'per_cluster': 3}).json()['clusters'][0]
+
+    assert card['representative_crop_ids'] == ['c1', 'c3', 'c2']
+
+
 def test_cluster_cards_ignore_rejected_and_unclustered_boxes() -> None:
     docs = {
         'rej': _item('rej', [(_box('b1', 'rejected', cluster_id=5), A)]),

@@ -16,6 +16,7 @@ import pytest
 
 from curation.occ_fakes import FakeOccOpenSearch, make_bulk_response, make_bulk_update_item
 from src.clients.occ import occ_skip_on_conflict_bulk
+from src.config import get_region_fields
 
 
 def _noop_merger(_doc_id: str, _source: dict[str, Any]) -> dict[str, Any]:
@@ -163,6 +164,20 @@ class TestEmptyInput:
         }
         client.mget.assert_not_awaited()
         client.bulk.assert_not_awaited()
+
+
+class TestMgetPayload:
+    @pytest.mark.asyncio
+    async def test_the_batched_mget_leaves_out_every_embedding_field(self) -> None:
+        client = AsyncMock()
+        client.mget.return_value = {'docs': []}
+
+        await occ_skip_on_conflict_bulk(client, doc_ids=['a'], merger=_noop_merger)
+
+        (doc,) = client.mget.await_args.kwargs['body']['docs']
+        excludes = doc['_source']['excludes']
+        assert get_region_fields().box_embeddings in excludes
+        assert {'pe_embedding', 'backbone_embedding'} <= set(excludes)
 
 
 if __name__ == '__main__':

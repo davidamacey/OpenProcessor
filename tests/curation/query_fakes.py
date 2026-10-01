@@ -197,6 +197,24 @@ def _nested_clauses_with_inner_hits(query: Any) -> list[dict[str, Any]]:
     return found
 
 
+def _sorted_by(
+    docs: list[dict[str, Any]], sort: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
+    """``docs`` ordered by an OpenSearch ``sort`` list (the first key only;
+    ``missing: _last`` / ``_first`` honoured, ``_last`` by default). Without a
+    sort the order is the fake's insertion order, which is what an unsorted
+    ``top_hits`` would not guarantee."""
+    if not sort:
+        return docs
+    ((field, opts),) = sort[0].items()
+    descending = (opts.get('order', 'asc') if isinstance(opts, dict) else opts) == 'desc'
+    missing_first = isinstance(opts, dict) and opts.get('missing') == '_first'
+    present = [d for d in docs if _values(d, field)]
+    absent = [d for d in docs if not _values(d, field)]
+    present.sort(key=lambda d: _values(d, field)[0], reverse=descending)
+    return [*absent, *present] if missing_first else [*present, *absent]
+
+
 def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, spec in aggs.items():
@@ -222,7 +240,8 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             continue
         if 'top_hits' in spec:
             size = spec['top_hits'].get('size', 3)
-            out[name] = {'hits': {'hits': [_top_hit(d, spec['top_hits']) for d in docs[:size]]}}
+            ordered = _sorted_by(docs, spec['top_hits'].get('sort'))
+            out[name] = {'hits': {'hits': [_top_hit(d, spec['top_hits']) for d in ordered[:size]]}}
             continue
         if 'composite' in spec:
             csize = spec['composite'].get('size', 10)
