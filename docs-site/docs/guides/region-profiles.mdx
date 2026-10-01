@@ -1,0 +1,259 @@
+---
+sidebar_position: 8
+title: Region profiles
+---
+
+# Region profiles
+
+A region profile defines what counts as a region of interest inside an
+item: which detector and segmenter find candidates, how many boxes an item
+may carry, which items get the region stage, and whether text is read from
+the region. A car crop with wheels, a plate on a vehicle, a defect on a
+part: each is one profile. The configuration is data, not code. It is
+editable per project, versioned and revertible.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Concepts
+
+- **Item and region.** An item is a crop from the primary detector. The
+  region stage looks for sub-regions inside an item. With no active profile,
+  region detection is off.
+- **Legs.** Candidates come from a detector leg (a Triton model named by
+  `detector_model`) and a segmenter leg (a text prompt for the segmenter,
+  `segmenter_text_prompt`). A profile needs at least one. With the segmenter
+  as the only leg, the prompt is mandatory.
+- **Scope.** `parent_classes` lists the item class names that get the region
+  stage. Empty means every item.
+- **Count.** `max_regions_per_item` (1 to 64) is the most boxes kept per
+  item after selection. The default 1 is single-box. See
+  [Multi-box regions](./multi-box-regions.mdx).
+- **Text.** `text_reader` is `none` (a text-free region), `vlm`, `ocr`,
+  `vlm_then_ocr` (OCR when the VLM read nothing) or `both` (store both
+  readings and flag a disagreement). The `text_*` fields tune
+  normalization and validity rules.
+- **Display.** `display_name` and `display_name_singular` are the labels a
+  frontend shows ("Wheels", "Wheel"). `region_class_name` is the registry
+  class name the profile's detections are treated as.
+- **Sources and revisions.** Same model as prompt packs: `builtin`, `file`
+  (from `OP_REGION_PROFILE_PATH`), `template` (shipped under
+  `examples/region_profiles/`) and `stored`. Only stored profiles are
+  editable. Each save is a numbered revision.
+- **Activation.** One profile is active per project, and it can be switched
+  off. Activation passes a gate that pairs it with the active prompt pack
+  and VLM. Activation never rewrites existing items. The impact route counts
+  what is stale and suggests an explicit reprocess.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects/{project}/region_profiles` | List profiles; `include_templates=true` adds shipped templates |
+| `POST /curation/projects/{project}/region_profiles` | Create a stored profile |
+| `GET /curation/projects/{project}/region_profiles/schema` | Field list with ranges and choice sources |
+| `POST /curation/projects/{project}/region_profiles/validate` | Validate a draft; never writes |
+| `POST /curation/projects/{project}/region_profiles/validate_segmenter_prompt` | Check one segmenter prompt |
+| `POST /curation/projects/{project}/region_profiles/test` | Dry run on a crop, see [Test on a crop](./test-on-crop.mdx) |
+| `GET /curation/projects/{project}/region_profiles/active` | The active profile and what workers applied |
+| `GET /curation/projects/{project}/region_profiles/active/impact` | What activation means for existing items |
+| `POST /curation/projects/{project}/region_profiles/active/rollback` | Re-activate the previous profile |
+| `POST /curation/projects/{project}/region_profiles/deactivate` | Switch region detection off |
+| `GET /curation/projects/{project}/region_profiles/{name}` | One profile |
+| `PUT /curation/projects/{project}/region_profiles/{name}` | Save a new revision |
+| `DELETE /curation/projects/{project}/region_profiles/{name}` | Delete a stored profile |
+| `POST /curation/projects/{project}/region_profiles/{name}/activate` | Activate |
+| `POST /curation/projects/{project}/region_profiles/{name}/clone` | Copy into a new stored profile |
+| `GET /curation/projects/{project}/region_profiles/{name}/revisions` | Revision history |
+| `GET /curation/projects/{project}/region_profiles/{name}/revisions/{revision}` | One past revision |
+
+## List and inspect
+
+```bash
+curl -s "$API/curation/projects/cars/region_profiles?include_templates=true"
+curl -s "$API/curation/projects/cars/region_profiles/vehicle_wheel"
+```
+
+The list has `profiles` (`name`, `detector_model`, `segmenter_text_prompt`,
+`parent_classes`, `max_regions_per_item`, `text_reader`, `reads_text`,
+`region_class_name`, `display_name`, `read_only`, `revision`, `active`),
+`templates`, `active` and `config_revision`. A profile document adds
+`body` (every field), `description`, `etag`, `cloned_from` and
+`effective`. `effective` states which `legs` run, whether the segmenter is
+enabled, whether text is read, and whether the OCR text-hint re-pass is
+active.
+
+## Profile fields
+
+Defaults are in parentheses. The full list with ranges is returned by the
+schema route. Field names with no default listed here are tuning values
+whose defaults are in `src/config/detection_profile.py`.
+
+| Group | Fields |
+|---|---|
+| Identity and scope | `display_name`, `display_name_singular`, `region_class_name`, `parent_classes` |
+| Detector leg | `detector_model` (empty = none), `detector_version`, `input_size` (640), `confidence_floor` (0.4), `batch_limit` (16), `letterbox_fill`, `class_ids` |
+| Segmenter leg | `segmenter_name` (`sam3`), `segmenter_version`, `segmenter_text_prompt` (empty = off) |
+| Selection | `max_regions_per_item` (1), `region_nms_iou` (0.5), `aspect_min`, `aspect_max`, `auto_confirm_aspect`, `auto_confirm_area_frac` |
+| Text reading | `text_reader` (`vlm_then_ocr`), `text_pattern`, `text_format`, `text_charset`, `text_uppercase`, `text_join`, `text_len_min`, `text_len_max`, `text_stopwords`, `text_min_confidence`, `text_placeholders`, `text_reject_sequences`, `text_crop_margin`, `text_crop_min_height`, `text_min_height_ratio`, `text_border_margin` |
+| OCR models | `ocr_pipeline_model`, `ocr_det_model`, `ocr_rec_model`, versions, `ocr_det_input_size`, `ocr_det_prob_floor` |
+| OCR text hint | `text_hint_enabled` (true), `text_hint_aspect_min`, `text_hint_aspect_max`, `text_hint_len_min`, `text_hint_len_max`, `text_hint_rec_floor`, `text_hint_require_letters_and_digits` |
+| Other | `human_detector_name`, `human_detector_version`, `feature_output`, `secondary_shape_groups`, `assigns_class`, `labels_path` |
+
+The segmenter prompt is plain text. At most 200 characters, at most 8
+phrases separated by commas, one line.
+
+## Validate
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/region_profiles/validate?for_activation=true" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "name": "vehicle_wheel_v2",
+        "body": {
+          "segmenter_text_prompt": "wheel",
+          "parent_classes": ["car"],
+          "max_regions_per_item": 4,
+          "text_reader": "none",
+          "text_hint_enabled": false,
+          "ocr_pipeline_model": "",
+          "region_class_name": "wheel",
+          "display_name": "Wheels",
+          "display_name_singular": "Wheel"
+        }
+      }'
+```
+
+The body may be partial; missing fields take their defaults. With
+`for_activation=true` the unreachable and not-ready dependency checks are
+errors instead of warnings, which is what an activation would see. The
+response is `{ok, errors, warnings, force_allowed}`.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `profile_name_invalid`, `profile_name_reserved` | error | Name must match `^[a-z0-9][a-z0-9_.-]{1,63}$`; `off`, `none` and `default` are reserved |
+| `name_conflict` | error | Name already used |
+| `profile_field_unknown`, `profile_field_type`, `profile_field_range` | error | Unknown field, wrong type, or value out of range. `input_size` and `ocr_det_input_size` must be multiples of 32 |
+| `region_class_name_invalid` | error | Not a valid class name |
+| `text_reader_invalid`, `text_regex_invalid` | error | Unknown reader mode, or a bad regular expression |
+| `no_candidate_source` | error | Neither a detector model nor a segmenter prompt |
+| `segmenter_prompt_empty` | error when the segmenter is the only leg, else warning | Empty prompt |
+| `segmenter_prompt_too_long`, `segmenter_prompt_too_many_phrases`, `segmenter_prompt_multiline` | error | Prompt over the limits above |
+| `detector_model_not_found` | error | Model is not in the Triton repository |
+| `detector_model_not_ready` | warning, error for activation; bypassable | Model is not READY |
+| `detector_model_not_shared`, `detector_model_other_project` | error, warning | The model belongs to another project and is not shared, or is shared |
+| `detector_model_classes_unmapped` | warning | A shared model has classes with no match by name in this project |
+| `triton_unreachable`, `segmenter_unreachable`, `ocr_model_not_ready` | warning, error for activation; bypassable | Dependency down |
+| `segmenter_not_configured` | warning | `OP_SEGMENTER_URL` is not set |
+| `ocr_model_not_found` | error | OCR model not in Triton |
+| `vlm_not_configured` | warning | A text mode needs a VLM and none is configured; it falls back to OCR |
+| `text_fields_ignored` | warning | `text_reader` is `none` and text fields were changed |
+| `text_hint_inactive_no_ocr` | warning | Text hint on with no OCR pipeline |
+| `display_name_missing` | warning | The UI will say "Regions" and "Region" |
+| `parent_class_unknown` | warning | The class is not in the registry (a proposal name is allowed) |
+| `pack_multi_region_keys_missing` | error on activation | The active prompt pack lacks the per-box reply keys |
+
+Check a segmenter prompt alone:
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/region_profiles/validate_segmenter_prompt" \
+  -H 'Content-Type: application/json' \
+  -d '{"text_prompt": "wheel", "sole_leg": true}'
+```
+
+## Create, edit, clone
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/region_profiles/vehicle_wheel/clone" \
+  -H 'Content-Type: application/json' \
+  -d '{"new_name": "cars_wheels", "description": "Wheels on car crops"}'
+
+curl -s -X POST "$API/curation/projects/cars/region_profiles" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "cars_wheels", "description": "", "body": { ...fields... }}'
+
+curl -s -X PUT "$API/curation/projects/cars/region_profiles/cars_wheels" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 1, "description": "allow 6 wheels", "body": { ...fields... }}'
+```
+
+Clone takes optional `revision` and `from_project`. Create and save answer
+with the profile document and `validation`. They refuse a profile with
+validation errors with 422. Warnings do not block.
+
+## Activate, impact, roll back, deactivate
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/region_profiles/cars_wheels/activate" \
+  -H 'Content-Type: application/json' \
+  -d '{"revision": null, "force": false, "expected_active": null}'
+
+curl -s "$API/curation/projects/cars/region_profiles/active/impact"
+
+curl -s -X POST "$API/curation/projects/cars/region_profiles/active/rollback" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+
+curl -s -X POST "$API/curation/projects/cars/region_profiles/deactivate" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+```
+
+`force` bypasses only the bypassable codes in the table (a dependency that
+is down or not ready). It never bypasses a structural error. The activate
+response has the same fields as for prompt packs (`active`, `previous`,
+`applied`) plus `impact` and `validation`.
+
+`impact` has:
+
+| Field | Meaning |
+|---|---|
+| `items_total` | Items in the project |
+| `by_profile` | Item counts per profile name and revision that produced their regions |
+| `validated_items` | Items with human-validated regions |
+| `unseeded_items` | Items with no region profile stamp |
+| `pending_items`, `pending_not_matching` | Items waiting for detection, and those outside the new profile's scope |
+| `stale_items` | Machine-written items the active profile revision did not produce |
+| `suggested_reprocess` | A dry-run reprocess request that selects the stale items, or null |
+
+Nothing is rewritten by activation. To apply the new profile to old items,
+post `suggested_reprocess` to the reprocess route; see
+[Reprocess](./reprocess.mdx). Workers switch to a newly activated profile at
+a quiet point.
+
+## Revisions
+
+```bash
+curl -s "$API/curation/projects/cars/region_profiles/cars_wheels/revisions"
+curl -s "$API/curation/projects/cars/region_profiles/cars_wheels/revisions/1"
+curl -s -X DELETE "$API/curation/projects/cars/region_profiles/cars_wheels?expected_revision=2"
+```
+
+Delete answers 204 and is refused while the profile is active.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 404 | `not_found` | Unknown or not-stored profile |
+| 404 | `unknown_revision` | No such revision |
+| 403 | `read_only` | Save or delete of a built-in, file or template profile |
+| 409 | `name_conflict` | Create or clone onto a used name |
+| 409 | `revision_conflict` | `expected_revision` is stale |
+| 409 | `in_use` | Delete of the active profile |
+| 409 | `active_conflict` | Another writer changed the activation; `current` is returned |
+| 409 | `no_previous`, `previous_deleted` | Nothing to roll back to |
+| 422 | `validation_failed` | Validation errors; `report` lists them |
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the region profile editor with grouped
+fields, the segmenter prompt check, the activation impact summary and the
+revision history).
+:::
+
+## See also
+
+- [Prompt packs](./prompt-packs.mdx)
+- [Multi-box regions](./multi-box-regions.mdx)
+- [Test on a crop](./test-on-crop.mdx)
+- [Reprocess](./reprocess.mdx)
+- [Wheel example](./wheel-example.mdx)

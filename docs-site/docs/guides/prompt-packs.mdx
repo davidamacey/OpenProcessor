@@ -1,0 +1,217 @@
+---
+sidebar_position: 7
+title: Prompt packs
+---
+
+# Prompt packs
+
+A prompt pack holds every instruction the VLM receives: how to classify an
+item, how to verify a region, and how to answer. The text is data, not
+code. Packs are editable per project, versioned, and can be rolled back.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Concepts
+
+- **Fields.** A pack has 14 text fields and two maps. Fields come in
+  system and user pairs, one pair per VLM call:
+
+  | Call | Fields |
+  |---|---|
+  | `classify` | `class_system`, `class_user_template` |
+  | `open_classify` | `open_class_system`, `open_class_user_template` |
+  | `combined` | `combined_system`, `combined_user_template` |
+  | `combined_batch` | `combined_batch_system`, `combined_batch_rules` |
+  | `region_verify` | `region_system`, `region_user` |
+  | `region_verify_batch` | `region_batch_system`, `region_batch_user` |
+  | `region_visible` | `region_visible_system`, `region_visible_user` |
+
+  The maps are `class_descriptions` (class name to a short description for
+  the model) and `synonyms` (a label the model may answer, mapped to the registry class
+  name it stands for; matching tries the space and underscore forms).
+- **Placeholders.** Only three fields are formatted with `str.format`:
+  `class_user_template` and `open_class_user_template` accept
+  `class_names_csv`; `combined_user_template` accepts `class_block` and
+  `region_block`. Each formatted field must use all of its placeholders and
+  no others. A literal brace in those fields is written doubled. Every other
+  field is sent verbatim, and a placeholder in it is an error.
+- **Reply keys.** The worker parses the model's JSON reply. Each call has
+  required keys that the pack text must name, for example `is_region` and
+  `confidence` for `region_verify`. `GET .../prompt_packs/schema` lists
+  them per field.
+- **Sources.** `builtin` (the shipped generic packs), `file` (loaded from
+  `OP_PROMPT_PACK_PATH` or `OP_PROMPT_PACK_PATHS`), `template` (shipped under
+  `examples/prompt_packs/`) and `stored` (saved in the project). Only
+  `stored` packs are editable. The others are read-only; clone them to edit.
+- **Revisions.** Every save of a stored pack is a new numbered revision.
+  Old revisions stay readable and can be activated again.
+- **Activation.** One pack is active per project. Activation passes a gate
+  that pairs the pack with the active region profile and VLM. A change to
+  the pack takes effect only when it is activated.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects/{project}/prompt_packs` | List packs, templates and the active one |
+| `POST /curation/projects/{project}/prompt_packs` | Create a stored pack |
+| `GET /curation/projects/{project}/prompt_packs/schema` | Field, call and placeholder specs |
+| `POST /curation/projects/{project}/prompt_packs/validate` | Validate a draft; never writes |
+| `POST /curation/projects/{project}/prompt_packs/test` | Dry run against crops, see [Test on a crop](./test-on-crop.mdx) |
+| `GET /curation/projects/{project}/prompt_packs/active` | The active pack and what workers applied |
+| `POST /curation/projects/{project}/prompt_packs/active/rollback` | Re-activate the previous pack |
+| `GET /curation/projects/{project}/prompt_packs/{name}` | One pack |
+| `PUT /curation/projects/{project}/prompt_packs/{name}` | Save a new revision |
+| `DELETE /curation/projects/{project}/prompt_packs/{name}` | Delete a stored pack |
+| `POST /curation/projects/{project}/prompt_packs/{name}/activate` | Activate |
+| `POST /curation/projects/{project}/prompt_packs/{name}/clone` | Copy into a new stored pack |
+| `GET /curation/projects/{project}/prompt_packs/{name}/revisions` | Revision history |
+| `GET /curation/projects/{project}/prompt_packs/{name}/revisions/{revision}` | One past revision |
+
+## List and inspect
+
+```bash
+curl -s "$API/curation/projects/cars/prompt_packs"
+curl -s "$API/curation/projects/cars/prompt_packs/schema"
+curl -s "$API/curation/projects/cars/prompt_packs/vehicle_wheel"
+```
+
+The list response has `packs` (each with `name`, `source`, `read_only`,
+`revision`, `active`, `active_revision`, `asks_region_text`, `etag`),
+`templates`, `active` (`{name, revision}`) and `config_revision`.
+A pack document has `body` (the fields), `description`, `revision`,
+`cloned_from`, `created_at`, `updated_at`, `etag` and, after a write,
+`validation`.
+
+## Validate
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/prompt_packs/validate?profile=vehicle_wheel" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "cars_v1", "body": {"region_system": "You verify a wheel.", "region_user": "Reply as JSON with is_region and confidence."}}'
+```
+
+The body may be partial. Missing content is reported as issues, not as an
+HTTP error. The optional `profile` query parameter pairs the pack with a
+named region profile (default: the active one). The response is
+`{ok, errors, warnings, force_allowed}`. Each issue has `code`, `severity`,
+`field`, `message` and `detail`.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `pack_name_invalid`, `pack_name_reserved` | error | Name must match `^[a-z0-9][a-z0-9_.-]{1,63}$`; `off`, `none` and `default` are reserved |
+| `name_conflict` | error | Name already used |
+| `pack_field_missing`, `pack_field_empty` | error | A text field is absent or blank |
+| `pack_field_too_long` | error | A field over 20000 characters, or a map over 500 entries |
+| `pack_template_format_error` | error | The field cannot be formatted (for example a single brace) |
+| `pack_placeholder_missing`, `pack_placeholder_unknown` | error | A formatted field lacks a required placeholder or uses another |
+| `pack_placeholder_in_verbatim_field` | error | A placeholder in a field that is not formatted |
+| `pack_reply_key_missing` | error | The text does not name a reply key the call needs |
+| `pack_multi_region_keys_missing` | warning on validate, error on activation | The profile allows more than one box per item and the combined prompts do not name the per-box keys |
+| `pack_asks_text_profile_text_free` | warning | The pack asks for region text and the profile reads none |
+| `pack_no_text_profile_reads_text` | warning | The profile reads text through the VLM and the pack never asks |
+| `pack_synonym_target_unknown`, `pack_description_class_unknown` | warning | A map names a class that is not in the registry |
+| `pack_example_values` | info | Quoted example values the model may echo back; they are rejected as text |
+
+## Create, edit, clone
+
+The simplest start is to clone a template or built-in pack:
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/prompt_packs/vehicle_wheel/clone" \
+  -H 'Content-Type: application/json' \
+  -d '{"new_name": "cars_v1", "description": "My wheel prompts", "source": "template"}'
+```
+
+`source` is one of `builtin`, `file`, `template`, `stored` and picks which
+copy of the name to clone when the name exists in several places.
+`revision` picks a stored revision. `from_project` clones a stored pack from
+another project. The answer is 201 with the new pack document.
+
+Create from scratch with every text field set (see
+`examples/prompt_packs/vehicle_wheel.json` for a full body):
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/prompt_packs" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "cars_v1", "description": "", "body": { ...all fields... }}'
+```
+
+Save a new revision of a stored pack. `expected_revision` is the revision
+you read:
+
+```bash
+curl -s -X PUT "$API/curation/projects/cars/prompt_packs/cars_v1" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 1, "description": "tighter wording", "body": { ...all fields... }}'
+```
+
+Both calls refuse a pack that has validation errors with 422. Warnings are
+returned in `validation` and do not block.
+
+## Activate, roll back, delete
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/prompt_packs/cars_v1/activate" \
+  -H 'Content-Type: application/json' \
+  -d '{"revision": null, "force": false, "expected_active": null}'
+
+curl -s -X POST "$API/curation/projects/cars/prompt_packs/active/rollback" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+
+curl -s -X DELETE "$API/curation/projects/cars/prompt_packs/cars_v1?expected_revision=2"
+```
+
+`revision` null activates the latest. `expected_active` (an object with `name` and `revision`) makes the call fail with 409 if another writer activated first.
+`force` does not bypass any pack error: pack validation has no bypassable
+codes. Activation re-runs the pairing checks with the active region profile
+and VLM and answers 422 `validation_failed` with the report when they fail.
+The response has `active`, `previous`, `source`, `activated_at`, `applied`
+(per worker: which pack revision it runs, and `lagging`) and `validation`.
+
+Rollback re-activates the previous pack through the same gate. Delete
+answers 204.
+
+## Revisions
+
+```bash
+curl -s "$API/curation/projects/cars/prompt_packs/cars_v1/revisions"
+curl -s "$API/curation/projects/cars/prompt_packs/cars_v1/revisions/1"
+```
+
+## Loading packs from files
+
+A deployment can ship packs as JSON files. `OP_PROMPT_PACK_PATH` names the
+default pack file, and `OP_PROMPT_PACK_PATHS` lists more, comma separated.
+Both appear with `source` `file` and are read-only. The generic built-in
+packs are always listed.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 404 | `not_found` | Unknown pack, or no pack of that source |
+| 404 | `unknown_revision` | The pack has no such revision |
+| 403 | `read_only` | Save or delete of a built-in, file or template pack |
+| 409 | `name_conflict` | Create or clone onto a used name |
+| 409 | `revision_conflict` | `expected_revision` is stale; `current_revision` is returned |
+| 409 | `in_use` | Delete of the active pack |
+| 409 | `active_conflict` | Another writer changed the activation; `current` is returned |
+| 409 | `no_previous`, `previous_deleted` | Nothing to roll back to |
+| 422 | `validation_failed` | Validation errors; `report` lists them |
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the prompt pack editor with placeholder help
+and reply-key hints, the validation report, and the revision history with
+rollback).
+:::
+
+## See also
+
+- [Test on a crop](./test-on-crop.mdx)
+- [Region profiles](./region-profiles.mdx)
+- [VLM selection](./vlm-selection.mdx)
+- [Multi-box regions](./multi-box-regions.mdx)
+- [Wheel example](./wheel-example.mdx)

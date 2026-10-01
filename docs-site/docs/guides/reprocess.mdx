@@ -1,0 +1,168 @@
+---
+sidebar_position: 11
+title: Reprocess
+---
+
+# Reprocess
+
+Reprocess re-runs part of the pipeline on images or items that already
+exist: after a new region profile or prompt pack is activated, after a
+detector is promoted, or to retry failures. One route covers every case.
+It is a dry run by default.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Concepts
+
+- **Scopes.** What to regenerate. A request lists one or more.
+
+  | Scope | Unit | What it regenerates |
+  |---|---|---|
+  | `detect` | image | Machine items from the ingest detectors. New proposals are merged with existing items |
+  | `region` | item | Machine region boxes |
+  | `vlm` | item | The VLM's class answer, so the VLM worker selects the item again |
+  | `embed` | image | The PE vectors: item crop, whole frame, and one per accepted or false-positive region box |
+
+  Scopes run in the order detect, region, vlm, embed.
+- **Lock rule.** Only machine output is regenerated. Human and imported
+  labels and boxes are locked and never written. A locked item that has
+  nothing to regenerate is reported as `locked_skipped`. `detect` never
+  writes, replaces or deletes a locked item. A validated region set (set by a
+  person, including a human "no region visible") is not redone by the
+  `region` scope. `embed` also covers locked items, because vectors are
+  derived data.
+- **Region mode.** `redetect` (default) removes unlocked machine boxes,
+  keeps locked ones and queues the item as `pending_detection`.
+  `reverify` turns unlocked `rejected` boxes back into `proposed` and
+  queues the item as `pending_verification`. A `detected` set cannot be
+  re-verified.
+- **Targets.** Exactly one of `crop_ids`, `image_ids` or `filter`. Up to
+  5000 ids. An empty filter is refused, since it would mean every item.
+- **Sync or job.** `region` and `vlm` run inside the call. `detect` and
+  `embed` run inside the call for a few images and as a background job above
+  `OP_REPROCESS_SYNC_MAX` images (default 20). One live job per project.
+  Job state is kept under `OP_REPROCESS_JOBS_DIR`.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `POST /curation/projects/{project}/reprocess` | Unified reprocess over ids or a filter |
+| `GET /curation/projects/{project}/reprocess/jobs/{job_id}` | Job status |
+| `POST /curation/projects/{project}/reprocess/jobs/{job_id}/cancel` | Stop a job after its current chunk |
+| `POST /curation/projects/{project}/crops/{crop_id}/reprocess` | One item; applies by default |
+| `POST /curation/projects/{project}/images/{image_id}/reprocess` | One image; applies by default |
+
+## Filter
+
+All fields are optional but at least one must be set.
+
+| Field | Meaning |
+|---|---|
+| `region_status` | Region statuses to select (list) |
+| `missing_status` | Items with no region status at all. Exclusive with `region_status` |
+| `detector`, `reason` | Select by the detector or rejection reason that produced the status |
+| `profile_not`, `profile_revision_below` | Items not produced by that region profile, or by a revision below the number. Given together: not produced by exactly that profile at that revision |
+| `include_detected` | Widen the region scope to `detected` items. Only valid with a profile selector |
+| `missing_provenance` | Items with no recorded detector |
+| `import_id` | Items from one dataset import |
+| `source`, `class_id`, `dataset_split` | Narrow by item source, class or split |
+
+The region scope needs `region_status`, `missing_status` or a profile
+selector. With only a profile selector it selects `detection_failed`,
+`verify_rejected`, `no_region_box` and `no_region_visible` items (and
+`detected` ones with `include_detected`).
+
+## Dry run, then apply
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/reprocess" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "targets": {"filter": {"profile_not": "vehicle_wheel", "include_detected": true}},
+        "scopes": ["region"],
+        "region_mode": "redetect",
+        "dry_run": true
+      }'
+```
+
+The response has `dry_run`, `scopes` and `job`. Each scope result has
+`selected`, `locked_skipped`, `queued`, `not_found`, `failed`, `breakdown`
+(rows of `detector`, `reason`, `count`) and `detail` (scope counters such as
+`no_box`).
+
+Run it for real by sending the same body with `"dry_run": false`.
+
+The region impact route of the active profile returns this request ready to
+post as `suggested_reprocess`; see [Region profiles](./region-profiles.mdx).
+
+Other targets:
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/reprocess" \
+  -H 'Content-Type: application/json' \
+  -d '{"targets": {"image_ids": ["IMG_A", "IMG_B"]}, "scopes": ["detect", "embed"], "dry_run": false}'
+
+curl -s -X POST "$API/curation/projects/cars/reprocess" \
+  -H 'Content-Type: application/json' \
+  -d '{"targets": {"crop_ids": ["CROP_A"]}, "scopes": ["vlm"], "dry_run": false}'
+```
+
+## One item or one image
+
+The per-target routes use the path as the target and apply by default
+(`dry_run` false):
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/crops/CROP_ID/reprocess" \
+  -H 'Content-Type: application/json' \
+  -d '{"scopes": ["region"], "region_mode": "redetect", "dry_run": false}'
+
+curl -s -X POST "$API/curation/projects/cars/images/IMAGE_ID/reprocess" \
+  -H 'Content-Type: application/json' \
+  -d '{"scopes": ["detect"]}'
+```
+
+The response is the same shape as above and also carries `items`: the item
+or the image's items as written, so a client can adopt them. A locked set
+with nothing to regenerate answers `locked_skipped: 1` and `queued: 0`.
+
+## Jobs
+
+When `detect` or `embed` covers more images than the sync limit, the
+response carries `job`.
+
+```bash
+curl -s "$API/curation/projects/cars/reprocess/jobs/JOB_ID"
+curl -s -X POST "$API/curation/projects/cars/reprocess/jobs/JOB_ID/cancel"
+```
+
+A job has `job_id`, `status` (`queued`, `running`, `completed`,
+`completed_with_errors`, `cancelled`, `failed`), `scopes`, `images_total`,
+`images_done`, `images_failed`, `results` (per scope, when finished),
+`started_at`, `updated_at`, `finished_at`, `error` and `poll_after_s`
+(present while the job is active). Cancel stops the job after its current
+chunk.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 404 | `not_found` | Unknown crop or job |
+| 404 | `image_not_found` | Unknown image |
+| 409 | `reprocess_busy` | A job is already running for this project |
+| 422 | `reprocess_targets_invalid` | Not exactly one target form, an empty id list, more than 5000 ids, an empty filter, a region selection without a status or profile selector, `include_detected` without a profile selector, `detected` with `reverify`, or an unknown region status |
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the reprocess dialog with the dry-run
+counts and skipped locked items, and the job progress bar).
+:::
+
+## See also
+
+- [Region profiles](./region-profiles.mdx)
+- [Multi-box regions](./multi-box-regions.mdx)
+- [Dataset import](./dataset-import.mdx)
+- [Test on a crop](./test-on-crop.mdx)

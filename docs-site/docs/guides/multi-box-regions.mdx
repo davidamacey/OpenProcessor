@@ -1,0 +1,230 @@
+---
+sidebar_position: 9
+title: Multi-box regions
+---
+
+# Multi-box regions
+
+An item can have zero, one or many regions. A car crop can hold four
+wheels. Each box is found, verified, embedded, clustered and labeled on its
+own. Every item stores its regions as one list, `region_boxes`. An item
+with one region has a list of one. There are no single-box fields on the
+item.
+
+`API=http://localhost:4603` and project `cars` are assumed. Boxes are
+`[x1, y1, x2, y2]`, normalized to 0..1.
+
+## Concepts
+
+- **Box.** An element of `region_boxes`. Fields: `box_id`, `bbox_norm`,
+  `bbox_in_parent`, `state`, `score`, `detector`, `detector_version`,
+  `source`, `bbox_correct`, `confidence`, `rejection_reason`, `locked`,
+  `thumbnail_url`, `detected_at`, text fields (`text`, `text_raw`,
+  `text_source`, `text_confidence`, `text_vlm`, `text_ocr`, `text_choice`,
+  `text_disagreement`, `text_vlm_invalid`, `text_engine_version`) when the
+  profile reads text, and `cluster_id`, `cluster_subid`, `cluster_distance`.
+- **`box_id`.** Stable within an item. An id is never reused after a box is
+  deleted. Ids are per item, so the same id on two items is two boxes.
+- **Frames.** `bbox_norm` is in the source image frame. `bbox_in_parent` is
+  the same box in the item crop frame. A write may send `frame: "parent"`
+  and the server projects it into the source frame.
+- **Box state.** `proposed` (awaiting verification), `accepted`,
+  `rejected` and `false_positive`. Only accepted boxes are exported as
+  positives. A `false_positive` box is kept as a hard negative for detector
+  training. `GET /curation/projects/{project}/regions/statuses` serves the
+  vocabulary, including which states each write route accepts.
+- **Item status.** Derived from the boxes with a fixed precedence: any
+  accepted box makes the item `detected`, then `false_positive`, then
+  `proposed`, then `rejected`, then empty. A sibling accepted box keeps an
+  item `detected` when another box is flipped to false positive.
+- **Item summary fields.** `region_count`, `region_rejected_count`,
+  `region_max_score`, `region_set_complete` (false when the VLM reported
+  that visible regions are missing from the list), `region_revision`
+  (an optimistic-concurrency counter).
+- **Locked box.** A box a human created, verdicted or edited, or one
+  imported from a labeled dataset, is `locked`. Automated stages never
+  touch it, and reprocessing leaves it alone.
+- **Per-item cap.** `max_regions_per_item` in the region profile (default
+  1, up to 64) limits how many candidates are kept after the score floor
+  and NMS. See [Region profiles](./region-profiles.mdx).
+- **Per-write cap.** One write may carry at most
+  `OP_REGION_MAX_BOXES_PER_WRITE` boxes (default 500).
+
+## How boxes are produced
+
+1. The region stage collects candidates from the detector leg and the
+   segmenter leg of the active profile, applies the score floor, class
+   agnostic NMS and the `max_regions_per_item` cap.
+2. The VLM sees the crop with each candidate drawn and numbered. It returns
+   one verdict per box, plus whether a region is visible at all. A pack must
+   name the per-box reply keys (`region_boxes`, `box`, and the correct and
+   confidence keys) when the profile allows more than one box. See
+   [Prompt packs](./prompt-packs.mdx).
+3. Verified boxes become `accepted`, the rest `rejected`. When the profile
+   reads text, the text is stored per box.
+4. The embed stage writes one embedding per accepted or false-positive box
+   to `region_box_embeddings`. A box a human moved is re-embedded because
+   the stored vector records the geometry it was computed from.
+5. Region clustering groups boxes, not items. `cluster_id` and
+   `cluster_subid` live on each box.
+
+## Human edits
+
+Replace the whole list. The list is in display order. An element with only
+`box_id` leaves that box untouched. `box_id` with `bbox_norm` moves it (a
+moved box is human geometry; the state is kept). `box_id` with `state`
+changes the state. `box_id: null` with `bbox_norm` adds a box, default state
+`accepted`. A stored box that is omitted is deleted. An empty list is the
+human answer "no region visible".
+
+```bash
+curl -s -X PUT "$API/curation/projects/cars/crops/CROP_ID/regions" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "boxes": [
+          {"box_id": "b1"},
+          {"box_id": "b2", "state": "rejected"},
+          {"box_id": "b3", "bbox_norm": [0.10, 0.55, 0.30, 0.90]},
+          {"box_id": null, "bbox_norm": [0.60, 0.55, 0.80, 0.90], "state": "accepted"}
+        ],
+        "frame": "source",
+        "expected_region_revision": 3,
+        "region_label_source": "human",
+        "region_status": null
+      }'
+```
+
+`region_status` applies a whole-set status in the same write. The values a
+human may write are `detected` (accepts every `proposed` box; fails when
+that leaves no accepted box), `false_positive` (flips every box),
+`verify_rejected` (rejects every box) and `no_region_visible` (clears the
+list; contradictory with a non-empty `boxes`). The response is the item
+after the write.
+
+Edit one box. Siblings are untouched:
+
+```bash
+curl -s -X PATCH "$API/curation/projects/cars/crops/CROP_ID/regions/b2" \
+  -H 'Content-Type: application/json' \
+  -d '{"state": "accepted", "text": null, "expected_region_revision": 4}'
+```
+
+`text` is accepted only when the profile reads text.
+
+Item-level metadata, without touching box geometry:
+
+```bash
+curl -s -X PATCH "$API/curation/projects/cars/crops/CROP_ID/region_meta" \
+  -H 'Content-Type: application/json' \
+  -d '{"region_status": "verify_rejected", "region_rejection_reason": "human"}'
+```
+
+The response has `updated_fields` and `item`. Box text and geometry are not
+accepted here.
+
+Many items at once:
+
+```bash
+# same new boxes on each crop; [] means none visible. box_id must be null.
+curl -s -X PUT "$API/curation/projects/cars/crops/batch_regions" \
+  -H 'Content-Type: application/json' \
+  -d '{"crop_ids": ["CROP_A", "CROP_B"], "boxes": [], "region_status": null}'
+
+# one state on named boxes across items, siblings untouched
+curl -s -X POST "$API/curation/projects/cars/regions/batch_box_state" \
+  -H 'Content-Type: application/json' \
+  -d '{"state": "false_positive", "targets": [{"crop_id": "CROP_A", "box_id": "b1"}], "expected_region_revisions": {"CROP_A": 4}}'
+
+# one item-level status on every box of many items (max 5000 crops)
+curl -s -X POST "$API/curation/projects/cars/regions/batch_status" \
+  -H 'Content-Type: application/json' \
+  -d '{"crop_ids": ["CROP_A", "CROP_B"], "region_status": "false_positive"}'
+```
+
+The batch responses list `updated`, `conflicts` and `invalid` ids and the
+post-write rows in `items`. A row is the full item plus `region_box_id`
+(null for an item-level row).
+
+Region thumbnail of one box (128 pixels by default, 32 to 512):
+
+```bash
+curl -s -o box.jpg "$API/curation/projects/cars/crops/CROP_ID/region_thumbnail?box_id=b1&size=128"
+```
+
+## Undo
+
+Each human region write can be undone. Calls step back through successive
+writes.
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/crops/CROP_ID/region/undo"
+
+curl -s -X POST "$API/curation/projects/cars/crops/region/undo_batch" \
+  -H 'Content-Type: application/json' -d '{"crop_ids": ["CROP_A", "CROP_B"]}'
+```
+
+The single call returns the restored item. The batch call returns `items`,
+`undone`, and the id lists `nothing_to_undo`, `conflicts` and `not_found`.
+
+## Browse, cluster, false positives
+
+All box routes return rows. One row per matching box, with `region_box_id`.
+All box filters apply to the same box.
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects/{project}/regions` | Browse rows. Filters: `detector`, `min_score`, `max_score`, `text`, `region_cluster_id`, `region_cluster_subid`, `box_state`, `status`, `class_id`, `verified`, `max_rank` |
+| `GET /curation/projects/{project}/regions/statuses` | Item statuses, box states and the states each write route accepts |
+| `GET /curation/projects/{project}/regions/vocabulary` | Region vocabulary and write limits |
+| `POST /curation/projects/{project}/regions/cluster` | Cluster accepted boxes as a background job |
+| `GET /curation/projects/{project}/regions/cluster/status` | Job status |
+| `GET /curation/projects/{project}/regions/clusters` | Cluster cards: `size` (items), `box_count` (boxes), representatives |
+| `POST /curation/projects/{project}/regions/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
+| `POST /curation/projects/{project}/regions/fp_centroids/build` | Build false-positive centroids from `false_positive` boxes |
+| `GET /curation/projects/{project}/regions/fp_centroids/status` | Build status |
+| `GET /curation/projects/{project}/regions/suspected_false_positives` | Boxes ranked by distance to a false-positive sub-centroid |
+| `GET /curation/projects/{project}/regions/training_candidates` | Training cohorts. `mode` is `detector_blind_spots`, `low_conf_correct`, `disagreement`, `human_corrected` or `false_positives` |
+
+A page has `items`, `page`, `page_size`, `total` (items) and `total_rows`
+(rows). `rows_truncated` is true when an item matched more boxes than the
+index returns per item.
+
+```bash
+curl -s "$API/curation/projects/cars/regions?box_state=accepted&min_score=0.5&page_size=50"
+curl -s -X POST "$API/curation/projects/cars/regions/cluster?auto_fp_threshold=0.2"
+curl -s "$API/curation/projects/cars/regions/cluster/status"
+```
+
+Clustering rebuilds false-positive sub-centroids, flips tight matches to
+`false_positive` (and re-derives the item status), then partitions the good
+boxes. Human-final items and locked boxes are never changed by these
+automated steps. After marking more false positives, rebuild the centroids
+with the build call.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 409 | `region_conflict` | `expected_region_revision` is stale. The body has `current_region_revision`, `current_box_ids` and the current `item` |
+| 409 | (undo) | The crop has no human region write left to undo |
+| 422 | `too_many_boxes` | More than `OP_REGION_MAX_BOXES_PER_WRITE` boxes; `limit` and `requested` returned |
+| 422 | `region_text_disabled` | A `text` value on a profile that reads no text |
+| 422 | `box_id_in_batch` | A batch element with a `box_id` |
+| 422 | `box_id_required`, 404 `unknown_box_id` | Thumbnail without a `box_id`, or an id the crop does not hold |
+| 422 | (message) | `bbox_norm` out of range or degenerate, a new box without `bbox_norm`, an unknown `box_id`, a state the route does not accept, `no_boxes` or `no_accepted_box` for a whole-set `detected` |
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the region review panel with numbered boxes
+on a car crop, per-box accept and reject, the box editor, and the region
+gallery with false-positive triage).
+:::
+
+## See also
+
+- [Region profiles](./region-profiles.mdx)
+- [Prompt packs](./prompt-packs.mdx)
+- [Reprocess](./reprocess.mdx)
+- [Keymaps](./keymaps.mdx)
+- [Wheel example](./wheel-example.mdx)

@@ -1,0 +1,169 @@
+---
+sidebar_position: 5
+title: Keymaps
+---
+
+# Keymaps
+
+Every project has its own keyboard shortcut map for the review UI. The
+backend holds the action registry, validates changes and stores overrides.
+A frontend such as Cropwright reads the map and binds keys from it.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Concepts
+
+- **Action.** One bindable operation, with an id such as
+  `review.queue.confirm`. Each action has a `context`, a `default` list of
+  combos, a `modifiable` flag and `available`. An action is `available` set to false when it cannot apply to the project yet. The per-box region
+  actions are unavailable on a project with no region profile.
+- **Context.** Where an action is live: `global`, `review`,
+  `review.queue`, `review.region`, `box_edit`, `cluster`,
+  `clusters_search`, `region_gallery`. A context includes others, so a key
+  bound in `global` collides with the same key in any context that
+  includes it.
+- **Combo.** A key, optionally with modifiers (`ctrl`, `meta`, `alt`,
+  `shift`), written like `shift+enter`. At most 3 combos per action.
+- **Override map.** Only actions that differ from the default are stored.
+  A project with no stored document serves the defaults (`is_default` is true).
+- **Locked.** `escape`, `enter` and the four arrow keys are locked keys.
+  Actions marked `modifiable: false` (for example closing the overlay)
+  cannot be rebound.
+- **Class hotkeys.** A class can carry a single-letter `hotkey_letter`. A
+  keymap combo that is a bare letter in a context where class hotkeys are
+  live cannot reuse a class letter.
+- **Revision.** Each write bumps `revision`. Writes must say which revision
+  they were based on.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects/{project}/keymap` | Registry, effective keys and stored overrides |
+| `PUT /curation/projects/{project}/keymap` | Replace the whole override map |
+| `POST /curation/projects/{project}/keymap/validate` | Dry run, always 200 |
+| `POST /curation/projects/{project}/keymap/reset` | Drop all overrides, or only listed actions |
+
+## Read
+
+```bash
+curl -s "$API/curation/projects/cars/keymap"
+```
+
+The response has:
+
+| Field | Content |
+|---|---|
+| `actions` | Every action with `id`, `context`, `group`, `label`, `description`, `default`, `keys` (effective), `locked_keys`, `modifiable`, `available` |
+| `contexts` | `id`, `label`, `includes`, `class_hotkeys_live` |
+| `grammar` | `modifiers`, `named_keys`, `printable`, `locked_keys`, `browser_reserved`, `max_combos_per_action` |
+| `overrides` | The stored map, action id to list of combos |
+| `reserved_hotkeys` | Single letters class hotkeys may not use |
+| `revision`, `etag` | `etag` is `keymap:<revision>` |
+| `is_default` | True when nothing is stored |
+| `issues` | Existing problems, for example a class hotkey shadowed by a binding |
+
+## Validate
+
+`validate` uses the same replace semantics as `PUT`. The body is the whole
+proposed map, not a patch. A body that validates clean here also passes the
+real write.
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/keymap/validate" \
+  -H 'Content-Type: application/json' \
+  -d '{"overrides": {"review.queue.discard": ["x"], "review.skip": ["s"]}}'
+```
+
+The response has `ok`, `errors`, `warnings`, `force_allowed`, `resolved`
+(effective combos per action), `reserved_hotkeys` and `class_conflicts`.
+Each issue has `code`, `severity`, `field`, `message` and `detail`.
+
+Issue codes:
+
+| Code | Meaning |
+|---|---|
+| `keymap_unknown_action` | Action id does not exist |
+| `keymap_action_locked` | Action is not modifiable |
+| `keymap_combo_invalid` | Combo is malformed, or repeated within an action |
+| `keymap_too_many_combos` | More than 3 combos |
+| `keymap_key_locked` | A locked key used elsewhere, or removed from the action that owns it |
+| `keymap_browser_reserved` | Combo the browser keeps, such as `ctrl+w` |
+| `keymap_focus_key` | Combo that shadows focus navigation outside box editing |
+| `keymap_context_collision` | Same combo bound twice in one context |
+| `keymap_overlay_unbound` | The shortcuts overlay must keep at least one key |
+| `keymap_context_no_confirm` | Warning: a context has no key for its confirm action |
+| `keymap_class_hotkey_shadowed` | A class letter is shared with an action |
+| `keymap_class_hotkey_conflict` | A combo is bound to a class in this project |
+
+## Write
+
+`PUT` replaces the override map. An action missing from the body goes back
+to its default. The revision comes from `expected_revision` in the body or
+from an `If-Match: "keymap:<revision>"` header. If both are given they must
+agree.
+
+```bash
+curl -s -X PUT "$API/curation/projects/cars/keymap" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "expected_revision": 0,
+        "overrides": {"review.queue.discard": ["x"]},
+        "unbind_conflicting_class_hotkeys": false
+      }'
+```
+
+The response is the same shape as `GET`, plus `unbound_class_hotkeys`
+(classes whose hotkey was cleared in this write).
+
+If a combo clashes with a class hotkey, the write is refused with 409
+`class_hotkey_conflict` and `class_conflicts` listing the classes. Set
+`unbind_conflicting_class_hotkeys` to true to clear those class hotkeys in
+the same write. They are reported back and never cleared silently.
+
+## Reset
+
+```bash
+# all overrides
+curl -s -X POST "$API/curation/projects/cars/keymap/reset" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 1}'
+
+# only some actions
+curl -s -X POST "$API/curation/projects/cars/keymap/reset" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 2, "action_ids": ["review.queue.discard"]}'
+```
+
+`action_ids` omitted or null resets everything. The response is the same as
+`PUT`.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 422 | `validation_failed` | Validation errors (`report` lists them), a missing revision, a malformed `If-Match`, or body and header disagree |
+| 409 | `revision_conflict` | The stored revision differs; `current_revision` is returned |
+| 409 | `class_hotkey_conflict` | Combo collides with a class hotkey and unbinding was not requested |
+| 409 | `project_archived` | The project is archived |
+| 404 | `project_not_found` | Unknown project |
+
+## Cloning
+
+`clone_settings` with the `keymap` axis copies the overrides. A combo that
+collides with a class hotkey in the target is dropped from the copy and
+reported in `keymap_clone_conflicts`. See
+[Settings and configuration](./settings-and-config.mdx).
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the shortcuts overlay and the keymap editor
+with conflict messages and the unbind-class-hotkeys confirmation).
+:::
+
+## See also
+
+- [Settings and configuration](./settings-and-config.mdx)
+- [Multi-box regions](./multi-box-regions.mdx)
+- [Projects](./projects.mdx)

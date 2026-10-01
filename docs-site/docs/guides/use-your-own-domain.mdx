@@ -1,0 +1,240 @@
+---
+sidebar_position: 3
+title: Use your own domain
+---
+
+# Use your own domain
+
+OpenProcessor is not tied to one image domain. Vehicles, medical imaging,
+biology, wildlife and industrial inspection use the same pipeline. You
+configure it with classes, a region profile, a prompt pack and a VLM
+endpoint instead of changing code. This page is the whole path for a new
+domain. The [wheel example](./wheel-example.mdx) is the same path with real
+files, and this page uses it for its snippets. Replace the names with yours.
+
+`API=http://localhost:4603/curation/projects/<project>` is assumed in the
+calls below, with the project you create in step 1.
+
+## Before you start
+
+You bring the models. At a minimum:
+
+- An item detector in Triton that proposes the objects you curate. A stock
+  80-class COCO YOLO works to start. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
+  See [Model export](../getting-started/model-export.mdx).
+- The PE image encoder (`make export-pe`). Without it, ingest writes no
+  embeddings, and search, near-duplicate detection and clustering have
+  nothing to work on.
+- Optional, for a region stage: the segmenter service (`OP_SEGMENTER_URL`),
+  or a region detector you train yourself.
+- Optional: a VLM for verification and labeling.
+
+## 1. Create a project
+
+```bash
+curl -s -X POST http://localhost:4603/curation/projects \
+  -H 'Content-Type: application/json' \
+  -d '{"slug": "wheels", "display_name": "Wheels"}'
+API=http://localhost:4603/curation/projects/wheels
+```
+
+Add `clone_settings_from` (and `clone_axes`) to start from another
+project's settings. See [Projects](./projects.mdx).
+
+## 2. Define classes
+
+Items are classed by name. Add only the classes you care about. A name
+matches `^[a-z0-9_]+$`, and a duplicate is a 409.
+
+```bash
+for name in car wheel; do
+  curl -s -X POST "$API/classes" -H 'Content-Type: application/json' \
+    -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
+done
+curl -s "$API/classes"
+```
+
+Each class entry reports `class_id`, `kind` (`item` or `region`),
+`sample_count`, `validated_count` and `trainable`. A class can carry a
+`hotkey_letter` for the review UI; see [Keymaps](./keymaps.mdx).
+`scripts/curation/seed_class_registry.py --model <detector.onnx>` seeds
+the registry from a detector's own label space when you want all of it.
+A class is its name everywhere: import, combine, export, train and promote
+never carry a raw class index across a boundary.
+
+## 3. Write a region profile (optional)
+
+Skip this step if your items are the whole object and need no sub-regions.
+A region profile says where to look inside an item. Start from
+`examples/region_profiles/vehicle_wheel.json`. Its key fields:
+
+| Field | Wheel example | Meaning |
+|---|---|---|
+| `parent_classes` | `["car"]` | The region stage runs only on items of these class names |
+| `segmenter_text_prompt` | `wheel` | What the segmenter is asked to find |
+| `detector_model` | empty | No detector leg until you train and promote one |
+| `max_regions_per_item` | 4 | The box cap per item |
+| `text_reader` | `none` | A text-free region |
+| `region_class_name` | `wheel` | The class name used on export |
+
+Validate a draft, save it, and activate it:
+
+```bash
+BODY=$(jq '{name: "wheel_example", body: del(._comment, .name)}' \
+  examples/region_profiles/vehicle_wheel.json)
+curl -s -X POST "$API/region_profiles/validate" -H 'Content-Type: application/json' -d "$BODY"
+curl -s -X POST "$API/region_profiles" -H 'Content-Type: application/json' -d "$BODY"
+curl -s -X POST "$API/region_profiles/wheel_example/activate" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+```
+
+See [Region profiles](./region-profiles.mdx) and
+[Multi-box regions](./multi-box-regions.mdx).
+
+## 4. Write a prompt pack
+
+The pack holds what the VLM is told to look for and how to answer. Start
+from `examples/prompt_packs/vehicle_wheel.json`, or from the built-in
+generic packs. The reply keys the pack must keep are listed by
+`GET /curation/projects/{project}/prompt_packs/schema`.
+
+```bash
+BODY=$(jq '{name: "wheel_example", body: del(._comment, .name)}' \
+  examples/prompt_packs/vehicle_wheel.json)
+curl -s -X POST "$API/prompt_packs" -H 'Content-Type: application/json' -d "$BODY"
+curl -s -X POST "$API/prompt_packs/wheel_example/activate" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+```
+
+Before activating, try the pack on a few stored crops without writing
+anything. See [Prompt packs](./prompt-packs.mdx) and
+[Test on a crop](./test-on-crop.mdx).
+
+## 5. Choose a VLM endpoint
+
+Register one, probe it, and activate it for the project. Without an active
+endpoint the worker keeps the segmenter's boxes unverified.
+
+```bash
+curl -s -X POST http://localhost:4603/curation/vlm/endpoints \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "host-vlm", "body": {"base_url": "http://host.docker.internal:8012/v1", "model": "my-vision-model"}}'
+curl -s -X POST http://localhost:4603/curation/vlm/endpoints/host-vlm/probe
+curl -s -X POST "$API/vlm/endpoints/host-vlm/activate" \
+  -H 'Content-Type: application/json' -d '{}'
+```
+
+The built-in `env` endpoint (`OP_VLM_URL`, `OP_VLM_MODEL`) is the default a
+new project runs. See [VLM selection](./vlm-selection.mdx).
+
+## 6. Ingest or import
+
+Put images where the API and the detection worker can read them. Both
+mount `OP_SOURCE_ROOT_HOST` at `/data/source`.
+
+```bash
+curl -s -X POST "$API/ingest/batch" -H 'Content-Type: application/json' \
+  -d '{"items": [{"path": "/data/source/my_images/001.jpg", "source": "my_images"}]}'
+curl -s "$API/ingest/region_drain"     # repeat until "drained" is true
+```
+
+`GET /curation/projects/{project}/ingest/config` lists the accepted
+source roots. `scripts/curation/ingest_walker.py` ingests a whole folder.
+
+If you already have a labeled YOLO or COCO dataset, or an OpenProcessor
+export, import it instead. Classes are mapped by name. See
+[Dataset import](./dataset-import.mdx). To merge several projects, see
+[Combine projects](./combine-projects.mdx).
+
+After you change a profile or pack, apply it to existing items with
+[Reprocess](./reprocess.mdx).
+
+## 7. Review
+
+Open the project in a frontend such as Cropwright, or use the routes:
+
+```bash
+curl -s "$API/review/tabs"
+curl -s "$API/review/<tab>?page_size=50"
+curl -s -X PUT "$API/crops/CROP_ID/label" -H 'Content-Type: application/json' \
+  -d '{"class_id": 0}'
+```
+
+`GET /curation/projects/{project}/review/tabs` lists every tab with its
+filters. Confirm, move, add or reject region boxes with the
+[multi-box region routes](./multi-box-regions.mdx). Cluster the items to label
+many at once, and mark false positives. Every human edit is locked:
+automated stages never overwrite it.
+
+## 8. Export and train
+
+Freeze a test holdout first, so models are scored on items they never train
+on:
+
+```bash
+curl -s -X POST "$API/test_holdout/freeze" -H 'Content-Type: application/json' \
+  -d '{"percent": 10}'
+```
+
+Then export. A multi-class dataset:
+
+```bash
+curl -s -X POST "$API/export/yolo" -H 'Content-Type: application/json' -d '{}'
+```
+
+Or one class or a subset. For a region class, positives are the accepted
+region boxes, cropped to their parent item:
+
+```bash
+curl -s -X POST "$API/export/single_class" -H 'Content-Type: application/json' \
+  -d '{"profile_name": "wheels", "box_source": "region", "region_class_name": "wheel",
+       "image_mode": "item_crop", "class_ids": []}'
+```
+
+Train with the trainer service (`docker compose --profile training up -d
+curation-trainer`), after a preflight check:
+
+```bash
+curl -s -X POST "$API/train/preflight" -H 'Content-Type: application/json' -d '{}'
+curl -s -X POST "$API/train/start" -H 'Content-Type: application/json' -d '{
+  "model_family": "yolo26", "model_size": "s", "profile": "small",
+  "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16}
+}'
+curl -s "$API/train/runs"
+```
+
+`start` returns 201 with `job_id` and the preflight report. A blocking
+preflight check is a 422 unless `force=true`. Copy the profile defaults
+from `GET /curation/projects/{project}/train/profiles` into
+`hyperparameters`. When the run finishes, promote it to Triton:
+
+```bash
+curl -s -X POST "$API/train/promote/JOB_ID" -H 'Content-Type: application/json' \
+  -d '{"triton_name": "wheel_detector", "force": false}'
+```
+
+Promote is gated on the run's metrics. A subset or single-class run needs its
+class remap, and promote refuses rather than serve the full registry as if it
+were the trained subset. After promoting a region detector, set
+`detector_model` in the region profile to its Triton name, then reprocess.
+To compare detectors, use the bake-off routes under
+`/curation/projects/{project}/bakeoff/`. See
+[Training and promote](../operations/training-and-promote.mdx) and
+[Curation workflow](../operations/curation-workflow.mdx).
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the new-project flow, the class list, the
+review grid, and the export and training pages).
+:::
+
+## See also
+
+- [Worked example: wheels on cars](./wheel-example.mdx)
+- [Projects](./projects.mdx)
+- [Settings and configuration](./settings-and-config.mdx)
+- [Region profiles](./region-profiles.mdx)
+- [Prompt packs](./prompt-packs.mdx)
+- [VLM selection](./vlm-selection.mdx)
+- [Dataset import](./dataset-import.mdx)
