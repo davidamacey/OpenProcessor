@@ -1852,6 +1852,478 @@
         "title": "CocoAnnotationFileSpec",
         "type": "object"
       },
+      "CombineInclude": {
+        "additionalProperties": false,
+        "properties": {
+          "label_states": {
+            "default": "all",
+            "enum": [
+              "all",
+              "validated_only"
+            ],
+            "title": "Label States",
+            "type": "string"
+          }
+        },
+        "title": "CombineInclude",
+        "type": "object"
+      },
+      "CombineIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "severity": {
+            "default": "error",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "CombineIssue",
+        "type": "object"
+      },
+      "CombineJobResponse": {
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "next_steps": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "report": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Report",
+            "type": "object"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "CombineJobResponse",
+        "type": "object"
+      },
+      "CombinePreview": {
+        "properties": {
+          "bytes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Bytes",
+            "type": "object"
+          },
+          "dedup": {
+            "additionalProperties": true,
+            "title": "Dedup",
+            "type": "object"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/CombineIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "preview_sha": {
+            "title": "Preview Sha",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "suggested_mapping": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClassMappingEntry"
+              },
+              "type": "array"
+            },
+            "title": "Suggested Mapping",
+            "type": "object"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/CombineIssue"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "errors",
+          "warnings",
+          "preview_sha",
+          "suggested_mapping",
+          "sources",
+          "target",
+          "dedup",
+          "bytes"
+        ],
+        "title": "CombinePreview",
+        "type": "object"
+      },
+      "CombineRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "class_mapping": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClassMappingEntry"
+              },
+              "type": "array"
+            },
+            "title": "Class Mapping",
+            "type": "object"
+          },
+          "dedup": {
+            "default": "content_hash",
+            "enum": [
+              "content_hash",
+              "none"
+            ],
+            "title": "Dedup",
+            "type": "string"
+          },
+          "dedup_iou": {
+            "default": 0.9,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "holdout": {
+            "default": "preserve_union",
+            "enum": [
+              "preserve_union",
+              "recompute",
+              "none"
+            ],
+            "title": "Holdout",
+            "type": "string"
+          },
+          "settings_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings From"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CombineSource"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CombineTarget"
+          },
+          "target_classes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Classes"
+          }
+        },
+        "required": [
+          "target",
+          "sources"
+        ],
+        "title": "CombineRequest",
+        "type": "object"
+      },
+      "CombineSource": {
+        "additionalProperties": false,
+        "properties": {
+          "include": {
+            "$ref": "#/components/schemas/CombineInclude"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "CombineSource",
+        "type": "object"
+      },
+      "CombineStartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "class_mapping": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClassMappingEntry"
+              },
+              "type": "array"
+            },
+            "title": "Class Mapping",
+            "type": "object"
+          },
+          "dedup": {
+            "default": "content_hash",
+            "enum": [
+              "content_hash",
+              "none"
+            ],
+            "title": "Dedup",
+            "type": "string"
+          },
+          "dedup_iou": {
+            "default": 0.9,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "expected_preview_sha": {
+            "title": "Expected Preview Sha",
+            "type": "string"
+          },
+          "holdout": {
+            "default": "preserve_union",
+            "enum": [
+              "preserve_union",
+              "recompute",
+              "none"
+            ],
+            "title": "Holdout",
+            "type": "string"
+          },
+          "settings_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings From"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CombineSource"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CombineTarget"
+          },
+          "target_classes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Classes"
+          }
+        },
+        "required": [
+          "target",
+          "sources",
+          "expected_preview_sha"
+        ],
+        "title": "CombineStartRequest",
+        "type": "object"
+      },
+      "CombineStartResponse": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "target"
+        ],
+        "title": "CombineStartResponse",
+        "type": "object"
+      },
+      "CombineTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "title": "CombineTarget",
+        "type": "object"
+      },
       "CommonMetricBlock": {
         "description": "The same metrics restricted to the comparison's common_classes.",
         "properties": {
@@ -2354,7 +2826,9 @@
               "class_mapping_invalid",
               "archive_invalid",
               "reprocess_targets_invalid",
-              "region_profile_required"
+              "region_profile_required",
+              "combine_not_found",
+              "combine_not_resumable"
             ],
             "title": "Error",
             "type": "string"
@@ -15093,7 +15567,23 @@
               "text_hint_inactive_no_ocr",
               "text_fields_ignored",
               "display_name_missing",
-              "parent_class_unknown"
+              "parent_class_unknown",
+              "unmapped_class",
+              "mapping_target_invalid",
+              "source_not_found",
+              "source_busy",
+              "source_not_ready",
+              "slug_taken",
+              "slug_retired",
+              "slug_invalid",
+              "shard_budget_exceeded",
+              "shard_budget_high",
+              "too_many_sources",
+              "duplicate_source",
+              "target_is_source",
+              "label_conflicts",
+              "holdout_recompute_contamination",
+              "class_mapping_invalid"
             ],
             "title": "Code",
             "type": "string"
@@ -16235,6 +16725,315 @@
           }
         },
         "summary": "Create Project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine": {
+      "post": {
+        "operationId": "combine_start_curation_projects_combine_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CombineStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Start",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/preview": {
+      "post": {
+        "description": "Dry run: what a combine would do. Writes nothing.",
+        "operationId": "combine_preview_curation_projects_combine_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CombineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombinePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Preview",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/{job_id}": {
+      "get": {
+        "operationId": "combine_status_curation_projects_combine__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Status",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/{job_id}/cancel": {
+      "post": {
+        "operationId": "combine_cancel_curation_projects_combine__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Cancel",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/curation/projects/combine/{job_id}/resume": {
+      "post": {
+        "operationId": "combine_resume_curation_projects_combine__job_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CombineJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Combine Resume",
         "tags": [
           "Projects"
         ]
@@ -27207,6 +28006,18 @@
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }
+          },
+          {
+            "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+            "in": "query",
+            "name": "combine_conflict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+              "title": "Combine Conflict",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -27494,6 +28305,18 @@
               ],
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
+            }
+          },
+          {
+            "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+            "in": "query",
+            "name": "combine_conflict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+              "title": "Combine Conflict",
+              "type": "boolean"
             }
           }
         ],

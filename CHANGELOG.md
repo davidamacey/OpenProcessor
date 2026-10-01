@@ -262,6 +262,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — zero call sites) were left in place; see the handback report.
 
 ### Added
+- **P4 combine projects: `POST /projects/combine` builds a new project from
+  1 to 8 existing ones.** `/projects/combine/preview` (writes nothing; returns
+  errors, warnings, `suggested_mapping`, counts, duplicate and conflict
+  numbers, bytes to link and a `preview_sha`), `/projects/combine` (start,
+  `expected_preview_sha`, `202 {job_id, target}`), `/projects/combine/{job_id}`
+  and `/cancel`, `/resume`; progress is also published as `combine.progress`.
+  The sources are only read (bound read-only); the target is `building` while
+  it fills, then `active` (`failed` on an error; deleting it is a complete
+  undo). `src/services/projects/combine/` plus
+  `dataset_import/project_source.py`, W10's project reader (a source project
+  as a `ScanEntry` stream).
+  - Class identity: each source class maps to a target class BY NAME with
+    W10's `map` / `create` / `skip` / `region` rows and completeness rule
+    (`unmapped_class`, `mapping_target_invalid`); the target owns its ids and
+    nothing numbered in a source (class ids, class-id history, clusters)
+    crosses. `tests/integration/test_class_identity_combine.py` extends the
+    identity E2E through combine, export, remap, promote and predict.
+  - Dedup by content: byte-identical images (imohash candidate, full sha256
+    confirmed) are copied once from the first-listed source; boxes of the
+    other copy merge by IoU and target class (human > import > VLM > model;
+    ties keep the priority source), and a box with a different class keeps the
+    priority label and is flagged `combine_conflict` (new
+    `GET /review/*?combine_conflict=true` filter; the `all` tab includes them).
+  - Provenance: `import_ids` = the job, `origin_project` / `origin_item_id` /
+    `origin_image_id`, `label_source` preserved; upload files are hard-linked
+    into the target. Frozen test splits are kept by union
+    (`holdout: preserve_union`, with a freeze record) or recomputed (warns).
+  - Jobs are file-backed under `OP_COMBINE_JOBS_DIR`, chunked
+    (`OP_COMBINE_PAGE_SIZE`), reconciled to `interrupted` on startup and
+    resumable from the persisted plan; a live combine marks its source and
+    target projects busy.
+  - `create_project` gains `origin` and `activate=False`, and a public
+    `finish_building`.
 - **W10 dataset import: `/datasets/imports` (preview, start, status, cancel,
   list, resume, undo), archive uploads and the OpenProcessor-export reader.**
   A chunked, persisted, resumable importer on the shared jobs volume

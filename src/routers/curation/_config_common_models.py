@@ -101,6 +101,9 @@ ErrorCode = Literal[
     'archive_invalid',
     'reprocess_targets_invalid',
     'region_profile_required',
+    # P4: combine projects.
+    'combine_not_found',
+    'combine_not_resumable',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
@@ -167,6 +170,23 @@ ValidationCode = Literal[
     'text_fields_ignored',
     'display_name_missing',
     'parent_class_unknown',
+    # P4: combine-projects preview / start validation.
+    'unmapped_class',
+    'mapping_target_invalid',
+    'source_not_found',
+    'source_busy',
+    'source_not_ready',
+    'slug_taken',
+    'slug_retired',
+    'slug_invalid',
+    'shard_budget_exceeded',
+    'shard_budget_high',
+    'too_many_sources',
+    'duplicate_source',
+    'target_is_source',
+    'label_conflicts',
+    'holdout_recompute_contamination',
+    'class_mapping_invalid',
 ]
 
 

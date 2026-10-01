@@ -239,6 +239,7 @@ def _filters(
     conf_min: float | None,
     conf_max: float | None,
     region_status: str | None,
+    combine_conflict: bool,
 ) -> ReviewFilters:
     return ReviewFilters(
         include_test=include_test,
@@ -252,6 +253,7 @@ def _filters(
         conf_min=conf_min,
         conf_max=conf_max,
         region_status=region_status,
+        combine_conflict=combine_conflict,
     )
 
 
@@ -286,6 +288,15 @@ RegionStatusQ = Annotated[
             'accepted-but-unvalidated boxes plus a verifier-rejected '
             "candidate that still has a box), 'detected', 'verify_rejected'. "
             'See GET /review/tabs filter_specs (param region_status).'
+        )
+    ),
+]
+CombineConflictQ = Annotated[
+    bool,
+    Query(
+        description=(
+            'Only items a project combine flagged: sources disagreed on the box and the '
+            "first-listed source's label was kept (combine_conflict)."
         )
     ),
 ]
@@ -343,6 +354,7 @@ async def review_queue(
     conf_max: ConfQ = None,
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
+    combine_conflict: CombineConflictQ = False,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
 
@@ -368,6 +380,7 @@ async def review_queue(
         conf_min,
         conf_max,
         region_status,
+        combine_conflict,
     )
     guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
@@ -451,6 +464,7 @@ async def review_locate(
     conf_max: ConfQ = None,
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
+    combine_conflict: CombineConflictQ = False,
 ) -> dict[str, Any]:
     """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
     for the same filters and sort.
@@ -474,6 +488,7 @@ async def review_locate(
         conf_min,
         conf_max,
         region_status,
+        combine_conflict,
     )
     req = await _request(tab, filters, sort, opensearch)
     out: dict[str, Any] = {

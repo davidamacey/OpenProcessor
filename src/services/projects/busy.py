@@ -313,6 +313,18 @@ def _dataset_import_jobs(record: ProjectRecord) -> list[JobRef]:
         ]
 
 
+def _combine_jobs(record: ProjectRecord) -> list[JobRef]:
+    """Live combine jobs that read or write this project (as a source or as
+    the target being built); a combine is global, so its jobs dir is not
+    nested under a project."""
+    from src.services.projects.combine.store import running_jobs_for
+
+    return [
+        JobRef(kind='combine', job_id=job_id, started_at=_iso_or_none(started_at))
+        for job_id, started_at in running_jobs_for(record.slug)
+    ]
+
+
 def running_jobs(record: ProjectRecord) -> list[JobRef]:
     """Every busy job for ``record``'s project, across every source.
 
@@ -330,6 +342,7 @@ def running_jobs(record: ProjectRecord) -> list[JobRef]:
     jobs.extend(_reprocess_jobs(record))
     jobs.extend(_detection_worker_inflight(record))
     jobs.extend(_dataset_import_jobs(record))
+    jobs.extend(_combine_jobs(record))
     return jobs
 
 

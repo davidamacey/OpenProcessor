@@ -89,6 +89,7 @@ COMMON_FILTERS: tuple[str, ...] = (
     'source',
     'conf_min',
     'conf_max',
+    'combine_conflict',
 )
 # Tab-only filters, on top of COMMON_FILTERS.
 TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text', 'region_status')}
@@ -328,6 +329,9 @@ def build_tab_query(
                     'should': [
                         {'term': {'class_source': 'vlm_unmatched'}},
                         {'term': {'class_source': 'vlm_new_class_pending'}},
+                        # A project combine kept one source's label where another
+                        # disagreed (owner D6): a human decides.
+                        {'term': {'combine_conflict': True}},
                         # The VLM was asked and gave no class.
                         {'exists': {'field': VLM_CLASS_EMPTY_REASON_FIELD}},
                         {'terms': {'vlm_confidence': ['medium', 'low']}},

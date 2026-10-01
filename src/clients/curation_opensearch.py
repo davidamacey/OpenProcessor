@@ -173,8 +173,24 @@ _IMPORT_COMMON_MAPPING: dict[str, Any] = {
     'import_hard_negative': {'type': 'boolean'},
 }
 
+# Combine provenance (projects plan section 6): where a copied doc came from.
+_COMBINE_IMAGES_MAPPING: dict[str, Any] = {
+    'origin_project': {'type': 'keyword'},
+    'origin_image_id': {'type': 'keyword'},
+    'origin_split': {'type': 'keyword'},
+}
+
+_COMBINE_ITEMS_MAPPING: dict[str, Any] = {
+    **_COMBINE_IMAGES_MAPPING,
+    'origin_item_id': {'type': 'keyword'},
+    'combine_conflict': {'type': 'boolean'},
+    'combine_conflict_origins': {'type': 'keyword'},
+    'combine_merged_origins': {'type': 'keyword'},
+}
+
 _IMAGES_IMPORT_MAPPING: dict[str, Any] = {
     **_IMPORT_COMMON_MAPPING,
+    **_COMBINE_IMAGES_MAPPING,
     # A reviewed negative says "none of THESE classes" (W10.8).
     'import_label_state': {'type': 'keyword'},
     'negative_for': {'type': 'keyword'},
@@ -182,6 +198,7 @@ _IMAGES_IMPORT_MAPPING: dict[str, Any] = {
 
 _ITEMS_IMPORT_MAPPING: dict[str, Any] = {
     **_IMPORT_COMMON_MAPPING,
+    **_COMBINE_ITEMS_MAPPING,
     'imported_at': {'type': 'date'},
     'import_dataset_name': {'type': 'keyword'},
     'import_dataset_sha': {'type': 'keyword'},

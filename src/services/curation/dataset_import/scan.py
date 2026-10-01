@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 LabelState = Literal['labeled', 'negative', 'unlabeled']
-DatasetFormat = Literal['yolo', 'coco', 'openprocessor_export']
+DatasetFormat = Literal['yolo', 'coco', 'openprocessor_export', 'project']
 
 
 class FormatUndetectedError(Exception):

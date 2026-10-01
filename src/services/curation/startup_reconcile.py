@@ -28,6 +28,7 @@ JOB_MODULES = (
 
 def reconcile_all_jobs() -> None:
     from src.services.projects.bootstrap import for_each_project
+    from src.services.projects.combine.store import reconcile_orphaned_jobs
 
     for name in JOB_MODULES:
         module = importlib.import_module(name)
@@ -39,3 +40,9 @@ def reconcile_all_jobs() -> None:
                 logger.warning(
                     'orphaned_job_reconcile_skipped', module=name, project=slug, error=str(exc)
                 )
+    # Combine jobs are global (not nested under one project), so once.
+    try:
+        if reconcile_orphaned_jobs():
+            logger.warning('orphaned_combine_jobs_reconciled')
+    except Exception as exc:
+        logger.warning('orphaned_combine_reconcile_skipped', error=str(exc))
