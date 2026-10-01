@@ -252,7 +252,9 @@ def test_shell_and_cli_callers_use_scoped_curation_paths() -> None:
         repo / 'setup-openprocessor.sh',
         repo / 'Makefile',
     ]
-    allowed = re.compile(r'/curation/(projects(/|\b)|health\b|events\b|vlm/(endpoints|local)\b)')
+    allowed = re.compile(
+        r'/curation/(projects(/|\b)|health\b|events\b|vlm/(endpoints/[^/]+/probe|local)\b)'
+    )
     offenders = [
         f'{path.relative_to(repo)}:{lineno}: {line.strip()}'
         for path in files

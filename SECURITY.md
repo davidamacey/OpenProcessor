@@ -88,9 +88,16 @@ your private network (a router, a NAS, an internal admin page) is a valid
 VLM endpoint as far as the API can tell, so a caller who can reach the API
 can make it send synthetic probe requests and OpenAI-shaped chat requests
 there. DNS is checked when an endpoint is saved, tested, activated and
-built, not at every request, so a name that changes its answer later is
-caught at the next of those points, not mid-call. Put the API behind your
-own network controls, as the rest of this document already says.
+built, and again by every labeler before it sends, at most every 30 seconds
+(a refusal is immediate and stays until the host is acceptable again). So a
+name that changes its answer is caught within about 30 seconds, but a
+request already sent, or sent inside that window, goes to whatever the name
+resolved to then; the connection itself is not pinned to the checked
+address. The probe of an endpoint outside the deployment is only made once
+the endpoint carries `allow_external`, because the probe sends its key. A
+credential written into `OP_VLM_URL` is dropped, never served or logged.
+Put the API behind your own network controls, as the rest of this document
+already says.
 
 None of this is a bug to be reported — it's the current, deliberate
 state of the project, tracked internally as follow-up work.

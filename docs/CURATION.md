@@ -461,6 +461,38 @@ Three ways to get a VLM behind `OP_VLM_URL` (`src/services/labeling/vlm_client.p
 whichever is smaller gets a `400`. Keep them numerically equal — this is
 the most common "VLM labeling returns 400s in the worker logs" cause.
 
+### Choosing a VLM
+
+The three options above set the `env` built-in endpoint. Beyond it, the VLM
+is a registry of endpoints and each project runs one of them:
+
+- **Register** an endpoint (`POST /curation/vlm/endpoints`: URL, served model
+  alias, optional `api_key_ref`, image cap, JSON mode). A key is never typed
+  into the API: write it on the host with `openprocessor vlm key set <slug>`
+  and reference it as `secret:<slug>`. Every save is a new immutable
+  revision; saving never changes what a project runs.
+- **Test** it (`POST .../{name}/probe`, or `validate?probe=true` for an
+  unsaved draft). The probe sends synthetic images only and records the
+  served model root, context length, image cap and JSON-mode support for
+  that exact revision. An endpoint outside this deployment is probed only
+  once it carries `allow_external`, because the probe sends its key.
+- **Activate** it for a project (`.../vlm/endpoints/{name}/activate`, or
+  `defaults.vlm` in `PUT /settings`); roll back or deactivate the same way.
+  An endpoint that sends crops outside this deployment needs an explicit
+  acknowledgement, recorded per `name@revision`;
+  `OP_VLM_EXTERNAL_POLICY=deny` refuses them outright. The detection worker
+  switches at its next quiesce point. A per-run `?vlm=` on the VLM and
+  pipeline routes uses another endpoint for that run only.
+- **Local models**: `openprocessor vlm list|status|use <id>` switches the
+  in-compose `vlm` service to a model from `examples/vlm/catalog.tsv`
+  (fit check, `.env` rewrite with restore on failure, probe).
+
+A host's DNS can change after it was validated, so every labeler re-checks
+its endpoint at most every 30 seconds before sending and refuses (fail
+closed) once the host resolves to a denied address, to an address outside
+the deployment without an acknowledgement, or is denied by policy. See
+`SECURITY.md` for the residual risk.
+
 ## GPU arbiter container coordination
 
 `OP_GPU_ARBITER_CONTAINERS` (see the ["New-deployment env

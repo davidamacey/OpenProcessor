@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W9 review fixes (VLM model selection).**
+  - A probe is stored per `name@revision`: probing a new revision no longer
+    erases the running revision's probe (which flipped its JSON mode and
+    provenance stamps), and rolling back to the previous revision of the same
+    endpoint works. The worker's rebuild marker reads the same key.
+  - `POST /vlm/endpoints/validate?probe=true` and `.../{name}/probe` refuse to
+    contact (or resolve a key for) an endpoint outside the deployment that has
+    no `allow_external`, one denied by `OP_VLM_EXTERNAL_POLICY`, or a body
+    with an out-of-range field (a huge `max_images_per_call` built the
+    request on the event loop); the probe also clamps the cap itself. A draft
+    named `env` with the `env:` key reference is a validation error, not a
+    500, and a draft's probe is recorded only for the revision it equals.
+  - A credential in `OP_VLM_URL` is dropped when the `env` endpoint is built,
+    so no route, log line or labeler sees it (use `OP_VLM_API_KEY`).
+  - Profile validation asks the endpoint registry whether a VLM is
+    configured, not `OP_VLM_URL`.
+  - Every labeler re-checks its endpoint (never-allowed addresses,
+    `OP_VLM_EXTERNAL_POLICY`, `allow_external`) when built and before sending,
+    at most every 30 s, and fails closed; this covers the worker's long-lived
+    labeler and cached ones. The connection itself is still not pinned to the
+    checked address (`SECURITY.md`).
+  - URL policy: 6to4 (`2002:...`) addresses are judged by the IPv4 address
+    they carry, and host names are NFKC-folded (full-width names).
+  - Tests: `tests/test_compose_contract.py` is restored to its 41 contract
+    tests plus the vlm argv tests (the VLM change had replaced the file);
+    new tests cover the per-run acknowledgement and the clone refusal, which
+    no test failed without.
+  - Docs: "Choosing a VLM" in `docs/CURATION.md`, the VLM routes in
+    `docs/design/curation_api_contract.md`, the catalog in `ATTRIBUTION.md`.
 - **W10 dataset-import foundation fix pass (post-review).** An
   independent review of the W10 foundation slice below found 4 majors;
   all fixed before any route is wired to `import_dataset()`:
@@ -272,8 +301,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `POST .../{name}/clone`, `POST .../{name}/probe`. Every save is a new
     immutable revision (numbers are never reused); a probe (synthetic
     images only) records the served model root, context length, image
-    cost, image cap and JSON-mode support, and belongs to the body it
-    tested. The `env` built-in (`OP_VLM_URL`/`OP_VLM_MODEL`) is listed
+    cost, image cap and JSON-mode support, and belongs to the revision and
+    body it tested. The `env` built-in (`OP_VLM_URL`/`OP_VLM_MODEL`) is listed
     first, read-only.
   - **Activation per project** (`/curation/projects/{project}/vlm/endpoints/
     active`, `.../{name}/activate`, `.../active/rollback`, `.../deactivate`),

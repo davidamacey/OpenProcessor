@@ -280,7 +280,11 @@ _vlm_use() {
 
     # 4. .env, with a backup to restore on failure
     local backup targets
-    backup="$(_vlm_env_backup)"
+    backup="$(_vlm_env_backup)" || {
+        log_error "cannot back up .env; nothing was changed"
+        (( created_pause == 1 )) && _vlm_in_api pause-remove
+        return 1
+    }
     _vlm_write_env "$id" "$hf_repo" "$image" "$gpu_id" "$total_mib" "$migrate" || {
         _vlm_fail "$backup" "$created_pause" "$migrate"
         return 1

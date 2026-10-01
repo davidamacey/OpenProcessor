@@ -391,6 +391,7 @@ propagates to the combined work.
 | PP-OCRv5 det/rec (`paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline`) | PaddleOCR (via third-party ONNX repackaging) | Apache-2.0 | Yes |
 | SAM 3 (segmenter) | `facebook/sam3` (HF, gated, needs `HF_TOKEN`) | SAM License | Yes, with the SAM License attached, but gated |
 | VLM (labeling assist, BYO -- see `OP_VLM_URL`/`OP_VLM_MODEL`) | Whatever OpenAI-compatible model you configure | Depends on your chosen model/quant | Verify the model card you deploy |
+| Local VLM catalog (`examples/vlm/catalog.tsv`, selected with `openprocessor vlm use`) | The catalog's `hf_repo` column | Each row's model card (the catalog marks which rows are tested) | Models are downloaded from their publisher at runtime, never redistributed here; check each model's license before use |
 
 **Note:** The use of AGPL-3.0 licensed code (ultralytics fork) may impose obligations on derivative works. Consult the AGPL-3.0 license for details: https://www.gnu.org/licenses/agpl-3.0.en.html
 

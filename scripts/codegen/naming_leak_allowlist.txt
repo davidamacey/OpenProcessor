@@ -35,10 +35,10 @@ scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard it
 # image that serves it.
 images.lock:gemma # public, Apache-2.0 VLM catalog entry (installer plan section 2.2), not a leak
 scripts/lib/image_keys.sh:gemma # shared images.lock key table (release script + installer); public vlm_gemma4 key and the public vllm/vllm-openai:gemma4 image tag, not a leak
-tests/curation/test_vlm_catalog.py # asserts the shipped catalog's public default entry (gemma-4-e4b, Apache-2.0, ungated; any-domain plan W9.7) and its parser/template columns, not a leak
-tests/curation/test_vlm_local_select.py # exercises POST /vlm/local/select against the public catalog entries (gemma-4-e4b default, W9.7), not a leak
-tests/installer/test_cli_vlm.py # exercises `openprocessor vlm status|use` against the public catalog default (gemma-4-e4b, W9.7), not a leak
-tests/test_compose_contract.py # pins the vlm service's pre-W9 argv, which is the public gemma-4-e4b command line (W9.7), not a leak
+tests/curation/test_vlm_catalog.py:gemma # asserts the shipped catalog's public default entry (gemma-4-e4b, Apache-2.0, ungated; any-domain plan W9.7) and its parser/template columns, not a leak
+tests/curation/test_vlm_local_select.py:gemma # exercises POST /vlm/local/select against the public catalog entries (gemma-4-e4b default, W9.7), not a leak
+tests/installer/test_cli_vlm.py:gemma # exercises `openprocessor vlm status|use` against the public catalog default (gemma-4-e4b, W9.7), not a leak
+tests/test_compose_contract.py:gemma # pins the vlm service's pre-W9 argv, which is the public gemma-4-e4b command line (W9.7), not a leak
 tests/installer/test_vlm_catalog.py # exercises examples/vlm/catalog.tsv's public gemma-4-e4b row (installer plan section 2.2), not a leak
 tests/installer/installer_harness.py:gemma # fake images.lock for the installer tests uses the release's public vlm_gemma4 image key (installer plan 3.1), not a leak
 tests/installer/shims/docker:gemma # test double echoes the compose file's public vLLM gemma4 image default, not a leak

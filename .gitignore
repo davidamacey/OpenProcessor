@@ -181,6 +181,7 @@ docker-compose.*.yml
 .env
 .env.local
 .env.*.local
+.env.vlm-backup.*
 
 # ============================================================================
 # Python
