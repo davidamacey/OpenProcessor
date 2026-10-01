@@ -198,6 +198,7 @@ async def _import_one(
         'rel_path': entry.rel_path,
         'split': entry.split,
         'label_state': entry.label_state,
+        'froze_test': bool(ctx.freeze_test and entry.split == 'test'),
     }
     entry = _resolve_stem(ctx, entry)
     boxes = _split_boxes(ctx, entry)

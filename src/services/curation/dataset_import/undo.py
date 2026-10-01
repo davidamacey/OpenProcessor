@@ -177,7 +177,7 @@ def _region_fields_after(
 
 
 def decide_created(
-    doc: dict[str, Any], ctx: UndoContext, ledger_boxes: list[dict[str, Any]], action: str
+    doc: dict[str, Any], ctx: UndoContext, entry: dict[str, Any], ledger_boxes: list[dict[str, Any]]
 ) -> Decision:
     """An item the import created: delete it unless a human (or another
     import) also owns part of it."""
@@ -197,7 +197,11 @@ def decide_created(
             'update', _without_import(doc, ctx.import_id), {**counts, 'items_kept_shared': 1}
         )
     if not (human_class or human_box or edited):
-        key = 'proposals_deleted' if action in ('proposal', 'parent') else 'items_deleted'
+        key = (
+            'proposals_deleted'
+            if entry.get('action') in ('proposal', 'parent')
+            else 'items_deleted'
+        )
         return Decision('delete', counts={**counts, key: 1})
     fields = _without_import(doc, ctx.import_id)
     if _class_is_import_owned(doc):
@@ -206,7 +210,7 @@ def decide_created(
         counts['class_labels_removed'] = 1
     if mine:
         fields.update(_region_fields_after(doc, mine, F, ctx.writer, created=True))
-    if doc.get('test_holdout'):
+    if doc.get('test_holdout') and entry.get('import_froze_holdout'):
         fields['test_holdout'] = False
         counts['holdout_flags_cleared'] = 1
     counts['items_kept_human_edited'] = 1
@@ -234,7 +238,11 @@ def decide_updated(
         counts['class_labels_removed'] = 1
     elif snap_idx is not None:
         counts['items_kept_human_edited'] = 1
-    if entry.get('holdout_prior') is False and doc.get('test_holdout'):
+    if (
+        entry.get('holdout_prior') is False
+        and entry.get('import_froze_holdout')
+        and doc.get('test_holdout')
+    ):
         fields['test_holdout'] = False
         counts['holdout_flags_cleared'] = 1
     stored = read_boxes(doc, F)
@@ -258,7 +266,7 @@ def _decide(
 ) -> Decision:
     action = entry.get('action')
     if action in ('created', 'standalone', 'parent', 'proposal'):
-        return decide_created(doc, ctx, ledger_boxes, action)
+        return decide_created(doc, ctx, entry, ledger_boxes)
     if action == 'updated':
         return decide_updated(doc, ctx, entry, ledger_boxes)
     if action == 'noop':
@@ -304,7 +312,8 @@ async def undo_import(
     for row in store.ledger_rows():
         if row.get('status') == 'failed':
             continue
-        entries = row.get('items') or []
+        froze = bool(row.get('froze_test'))
+        entries = [{**e, 'import_froze_holdout': froze} for e in row.get('items') or []]
         boxes_by_crop: dict[str, list[dict[str, Any]]] = {}
         for b in row.get('boxes') or []:
             boxes_by_crop.setdefault(b['crop_id'], []).append(b)
