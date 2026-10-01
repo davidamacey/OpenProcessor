@@ -197,8 +197,7 @@ def test_undo_dry_run_then_apply(
     root = _dataset(tmp_path)
     import_id = client.post(f'{BASE}/imports', json=_body(root)).json()['import_id']
     _wait(client, import_id, until={'completed'})
-    n_items = len(next(iter(fake_os.store.values())))  # smoke: store populated
-    assert n_items
+    assert sum(len(docs) for docs in fake_os.store.values()) > 0  # the import wrote something
     dry = client.post(f'{BASE}/imports/{import_id}/undo', json={'dry_run': True})
     assert dry.status_code == 200, dry.text
     assert dry.json()['items_deleted'] == 2

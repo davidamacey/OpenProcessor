@@ -8,6 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
+  - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
+    path: it re-reads each document, asks the caller whether it is still
+    deletable, and deletes with `if_seq_no`/`if_primary_term` (retrying on a
+    version conflict), reporting `skipped` ids. Import undo (items and the
+    images it created), reprocess `detect` and reconcile use it, so a human edit
+    made after the decision is no longer destroyed. Undo applies its update
+    path to a skipped item.
+  - **YAML alias bomb.** `data.yaml` is parsed by `safe_yaml.load_bounded_yaml`,
+    which rejects every alias and caps nodes (50,000) and depth (32); class
+    names and split entries must be scalars. A hostile file is a
+    `data_yaml_invalid` issue. Only the dataset-import reader changed; the
+    operator scripts under `scripts/curation` still use `yaml.safe_load`.
+  - **Stale imports.** `FileJob.repair_if_stale` lazily rewrites a job whose
+    heartbeat aged out to `interrupted`; imports (on open and list), the resume
+    check, `job_wire`, reprocess jobs and combine jobs use it, so a stale
+    `running` import is resumable and undoable.
+  - **Undo vs import.** Undo claims the import under the project start lock and
+    returns 409 `import_busy` while another import is live (dry runs only check
+    that the import is undoable).
+  - **Combine resume** takes a per-job claim (a second concurrent resume is
+    409), runs the same `resolve_sources` gate as preview and start, and
+    refuses with 409 `preview_stale` when a source changed since the preview.
+    The duplicate-hash scan and the file copy run off the event loop.
+  - **Combine duplicates.** A duplicate image's region boxes are attached to the
+    target copy instead of dropped; a box the copy already holds is not added
+    twice, and a validated region set is never rewritten (the box becomes a
+    standalone region item). The same rule now applies to a first copy.
+  - **Archive upload.** Tar and zip directory members count against the member
+    cap and nesting is capped at 64; the sweep removes `.incoming` leftovers
+    idle for an hour; a re-upload restarts the TTL; two uploads of one archive
+    no longer remove each other's extraction; `__MACOSX` no longer hides a
+    single root folder. The COCO annotation cap is 128 MiB (was 1 GiB).
+  - **Smaller fixes.** Combine resolves a stored image path before judging it
+    against the upload root (a `..` could hard-link outside it). Undo clears
+    only a holdout flag the import set (the ledger row records `froze_test`).
+    A reprocess of `detect` over more than `OP_REPROCESS_SYNC_MAX` images
+    together with `region` or `vlm` is a 422 instead of reordering them.
+    `is_human_marker` is public; the region requeue uses `region_locked_clause`
+    and `region_set_locked`.
+  - **Project dir marker.** Import, upload and reprocess-job dirs carry a
+    `.project` marker; a dir marked as another project's raises
+    `ProjectDirMismatchError`.
+  - **Tests** now fail when removed: undo of a human verdict on an untouched
+    import box, combine embedding-dimension mismatch (`embeddings_dropped`) and
+    unclassed items.
+  - Not changed: `images_already_indexed`, the `near_duplicate_pairs_estimate`
+    stub, sequential detector calls in `propose`, the read-time export-root
+    check in `image_load.stored_path`, and pruning of combine job dirs.
 - **W10 dataset-import foundation fix pass (post-review).** An
   independent review of the W10 foundation slice below found 4 majors;
   all fixed before any route is wired to `import_dataset()`:
@@ -262,6 +311,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — zero call sites) were left in place; see the handback report.
 
 ### Added
+- **W10.11 reconcile.** Importing a different dataset version over images an
+  earlier import labeled removes the earlier import's items the new version no
+  longer has, unless a human or a holdout freeze touched them, a box the
+  dataset still has (even one mapped to `skip`) matches them, or the frame has
+  no label file. The whole document is kept in the new import's ledger row and
+  undoing that import reinstates it. Region boxes written by an earlier import
+  are not reconciled. Wire: `items_reconciled_removed` on the import report and
+  `items_reinstated` on the undo report (`contracts/openapi/curation.json`).
+
 - **P4 combine projects: `POST /projects/combine` builds a new project from
   1 to 8 existing ones.** `/projects/combine/preview` (writes nothing; returns
   errors, warnings, `suggested_mapping`, counts, duplicate and conflict
