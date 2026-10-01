@@ -37,6 +37,8 @@ _ZIP_MAGIC = b'PK\x03\x04'
 _GZIP_MAGIC = b'\x1f\x8b'
 _EXPANSION_FACTOR = 4
 _MAX_RATIO = 250
+_MAX_DEPTH = 64
+_INCOMING_STALE_S = 3600
 
 
 class ArchiveInvalidError(Exception):
@@ -75,15 +77,23 @@ class _Budget:
     """Running count of files and bytes written to disk."""
 
     def __init__(self) -> None:
+        self.members = 0
         self.files = 0
         self.bytes = 0
         self.max_files = limits.upload_max_files()
         self.max_bytes = _EXPANSION_FACTOR * limits.upload_max_bytes()
 
+    def add_member(self, depth: int) -> None:
+        """Count one archive member (a directory header too: it is an inode
+        however small) and bound how deep it nests."""
+        self.members += 1
+        if self.members > self.max_files:
+            raise ArchiveInvalidError(f'more than {self.max_files} members')
+        if depth > _MAX_DEPTH:
+            raise ArchiveInvalidError(f'nested deeper than {_MAX_DEPTH} directories')
+
     def add_file(self) -> None:
         self.files += 1
-        if self.files > self.max_files:
-            raise ArchiveInvalidError(f'more than {self.max_files} members')
 
     def add_bytes(self, n: int) -> None:
         self.bytes += n
@@ -127,6 +137,7 @@ def _extract_zip(archive: Path, dest: Path, budget: _Budget) -> None:
             if stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR):
                 raise ArchiveInvalidError(f'non-regular member: {info.filename[:80]!r}')
             target = _target(dest, info.filename)
+            budget.add_member(len(target.relative_to(dest.resolve()).parts))
             if info.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
                 continue
@@ -147,6 +158,7 @@ def _extract_tar(archive: Path, dest: Path, budget: _Budget) -> None:
             if not (member.isreg() or member.isdir()):
                 raise ArchiveInvalidError(f'non-regular member: {member.name[:80]!r}')
             target = _target(dest, member.name)
+            budget.add_member(len(target.relative_to(dest.resolve()).parts))
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
                 continue
@@ -184,12 +196,29 @@ def safe_extract(archive: Path, dest: Path) -> tuple[int, int]:
     return budget.files, budget.bytes
 
 
+def _is_archive_noise(name: str) -> bool:
+    """A dotfile, or the ``__MACOSX`` resource-fork folder macOS zips add."""
+    return name.startswith('.') or name == '__MACOSX'
+
+
 def _single_root(path: Path) -> Path:
     """An archive wrapping everything in one folder imports from that folder."""
-    children = [p for p in path.iterdir() if not p.name.startswith('.')]
+    children = [p for p in path.iterdir() if not _is_archive_noise(p.name)]
     if len(children) == 1 and children[0].is_dir():
         return children[0]
     return path
+
+
+def _populated(path: Path) -> bool:
+    return path.is_dir() and any(path.iterdir())
+
+
+def _existing_upload(final: Path, upload_id: str, size: int) -> UploadResult:
+    """A re-upload of an archive already extracted. Its mtime is refreshed so
+    the sweep's TTL counts from this upload, not the first."""
+    os.utime(final)
+    files = sum(1 for p in final.rglob('*') if p.is_file())
+    return UploadResult(upload_id, _single_root(final), size, files)
 
 
 async def receive_archive(stream: AsyncIterator[bytes], *, upload_root: Path) -> UploadResult:
@@ -216,16 +245,19 @@ async def receive_archive(stream: AsyncIterator[bytes], *, upload_root: Path) ->
                 fh.write(chunk)
         upload_id = digest.hexdigest()[:16]
         final = root / upload_id
-        if final.is_dir() and any(final.iterdir()):
-            files = sum(1 for p in final.rglob('*') if p.is_file())
-            return UploadResult(upload_id, _single_root(final), size, files)
+        if _populated(final):
+            return _existing_upload(final, upload_id, size)
         staging = incoming / f'{uuid.uuid4().hex}.dir'
         try:
             files, _written = safe_extract(tmp, staging)
-            final.parent.mkdir(parents=True, exist_ok=True)
-            if final.exists():
-                shutil.rmtree(final, ignore_errors=True)
-            staging.replace(final)
+            try:
+                staging.replace(final)
+            except OSError:
+                # A concurrent upload of the same archive finished first: its
+                # extraction is identical, and must not be removed under it.
+                if not _populated(final):
+                    raise
+                return _existing_upload(final, upload_id, size)
         finally:
             shutil.rmtree(staging, ignore_errors=True)
         return UploadResult(upload_id, _single_root(final), size, files)
@@ -237,12 +269,22 @@ def sweep_uploads(
     upload_root: Path, *, referenced: set[str], now: float | None = None
 ) -> list[str]:
     """Remove uploads older than ``OP_DATASET_UPLOAD_TTL_H`` that no import
-    references. Returns the removed upload ids."""
+    references, and ``.incoming`` leftovers (a crashed upload's ``.part`` or
+    ``.dir``) idle for an hour. Returns the removed upload ids."""
     root = datasets_root(upload_root)
     if not root.is_dir():
         return []
     cutoff = (now if now is not None else time.time()) - limits.upload_ttl_hours() * 3600
     removed = []
+    incoming = root / '.incoming'
+    if incoming.is_dir():
+        for leftover in incoming.iterdir():
+            if (
+                leftover.stat().st_mtime
+                < (now if now is not None else time.time()) - _INCOMING_STALE_S
+            ):
+                shutil.rmtree(leftover, ignore_errors=True)
+                leftover.unlink(missing_ok=True)
     for path in root.iterdir():
         if path.name.startswith('.') or not path.is_dir() or path.name in referenced:
             continue

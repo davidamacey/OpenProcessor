@@ -58,7 +58,10 @@ def reprocess_sync_max() -> int:
 # refused, not parsed: the scan holds one in memory.
 MAX_YAML_BYTES = 1 * 1024**2
 MAX_LABEL_FILE_BYTES = 8 * 1024**2
-MAX_COCO_JSON_BYTES = 1024 * 1024**2
+# ``json`` parses the whole file into Python objects, several times its size, so
+# this cap is what bounds memory per request (128 MiB is on the order of a
+# million annotations).
+MAX_COCO_JSON_BYTES = 128 * 1024**2
 MAX_MANIFEST_BYTES = 16 * 1024**2
 # A real ``data.yaml`` is a few thousand nodes and a few levels deep.
 MAX_YAML_NODES = 50_000
