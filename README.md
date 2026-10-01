@@ -1,14 +1,71 @@
-# Visual AI API
+# OpenProcessor
 
-**High-performance visual analysis API with NVIDIA Triton Inference Server.**
+**A backend for computer-vision dataset curation and training, with a fast
+inference API underneath.** Ingest images, detect and crop regions, label them
+with people and a vision-language model, import and combine datasets, export,
+train and promote models. It works for any image domain, not one built-in use
+case.
 
-Object detection, face recognition, visual search, OCR, and embeddings - all through a unified REST API with TensorRT acceleration.
+Underneath is a unified REST API on NVIDIA Triton Inference Server with
+TensorRT engines: object detection, face recognition, visual search, OCR and
+embeddings.
 
-OpenProcessor also includes a full dataset-curation subsystem — ingest,
-detect, review and label, import/export datasets, train and promote models
-— designed to work for *any* image domain, not just the built-in
-capabilities above. See [`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md)
-for the project's full vision, feature scope, and standards.
+The optional web UI, **Cropwright**, is a separate frontend for the curation
+API. Every route also works from `curl`, `httpx` or the generated OpenAPI
+client. See [`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md) for the
+project's scope and standards.
+
+> Screenshot pending: Cropwright (project list with per-project counts and a review grid showing items with several region boxes)
+
+---
+
+## Features
+
+**Inference API** (port 4603, `/v1` twin for the core routes)
+
+- Object detection (YOLO11 and YOLO26 side by side), batch up to 64 images.
+- Face detection, ArcFace embeddings, 1:1 verify, search and 1:N identify.
+- MobileCLIP image and text embeddings, visual search over OpenSearch k-NN.
+- PP-OCRv5 text detection and recognition.
+- Combined analysis, ingest into the visual-search indexes, FAISS clustering
+  and albums.
+
+**Curation and training** (`/curation`, all project scoped)
+
+- **Isolated projects.** Each project has its own indexes, directories, class
+  registry, settings and jobs. Create, archive, unarchive and delete through
+  the API. Isolation is enforced at the OpenSearch transport layer.
+- **Per-project settings and config store.** Shared defaults per axis
+  (cluster method, sort, prompt pack, region profile, VLM), a vocabulary
+  endpoint for editors, and clone-settings between projects.
+- **Prompt packs.** What the VLM is asked and how it answers is versioned
+  data: create, edit, activate, roll back, test on stored crops.
+- **Region profiles.** The region stage (detector, segmenter prompt, text
+  reading, thresholds) is versioned data with an impact report on activation,
+  rollback and a test-on-crop route.
+- **One or many regions per item.** `region_boxes` is always a list. A single
+  region is a list of one. Each box has its own id, state, verdict, text,
+  cluster and embedding. `max_regions_per_item` in the profile sets the cap.
+- **Keymaps.** Per-project keyboard shortcuts for the review UI, validated
+  server side.
+- **VLM endpoint selection.** A deployment-wide registry of OpenAI-compatible
+  endpoints with a local model catalog. Each project activates one. Remote
+  endpoints need an explicit acknowledgement because crops leave the host.
+- **Dataset import.** YOLO, COCO and OpenProcessor-export layouts, with
+  preview, by-name class mapping, undo and resume.
+- **Unified reprocess.** One route re-runs detect, region, VLM and embed scopes
+  over selected items, with a dry run by default.
+- **Combine projects.** Merge up to eight projects into a new one with class
+  mapping, dedup and holdout handling.
+- **Class identity by name.** Import, combine, export, train, promote and
+  model sharing map classes by name, never by index.
+- **The lock rule.** A human-set or import-validated label or box, and
+  anything in the frozen test holdout, is never overwritten by an automated
+  writer.
+- Ingest, clustering, review queues, scoring, diverse selection, semantic
+  search, export, training jobs, bake-off model comparison and promotion.
+- A public example: cars from COCO, wheels as regions
+  (`examples/region_profiles/vehicle_wheel.json`).
 
 ---
 
@@ -63,7 +120,7 @@ running any. All flags: [INSTALLATION.md](INSTALLATION.md#installer-flags).
 ### Verify the download yourself
 
 ```bash
-V=v0.3.0   # the release you want
+V=vX.Y.Z   # the release you want
 curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/setup-openprocessor.sh
 curl -fsSLO https://github.com/davidamacey/OpenProcessor/releases/download/$V/SHA256SUMS
 grep ' setup-openprocessor.sh$' SHA256SUMS | sha256sum -c -
@@ -97,6 +154,7 @@ cd openprocessor
 ./openprocessor status            # services and health
 ./openprocessor logs yolo-api -f  # live logs
 ./openprocessor sample coco       # fetch a public COCO sample (200 images)
+./openprocessor vlm list          # the local VLM catalog
 ./openprocessor upgrade           # to the latest release (backs up first)
 ./setup-openprocessor.sh --repair | --rollback | --uninstall
 ```
@@ -106,9 +164,10 @@ curl http://127.0.0.1:4603/health
 curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
 ```
 
-The installer sizes the OpenSearch heap from your RAM (RAM/8, 1-8 GB) and
-prints it in the summary; see
-[INSTALLATION.md](INSTALLATION.md#opensearch-heap-sizing).
+Every subcommand of the `openprocessor` CLI is listed in
+[INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli). The installer sizes
+the OpenSearch heap from your RAM (RAM/8, 1-8 GB) and prints it in the summary;
+see [INSTALLATION.md](INSTALLATION.md#opensearch-heap-sizing).
 
 ### Install from source
 
@@ -121,18 +180,204 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor &
 `scripts/setup.sh` detects your GPU, picks a profile, downloads the models,
 exports them to TensorRT and starts the services. Add `--yes` for no prompts,
 or `--profile=standard --gpu=0 --yes` to choose explicitly. Manage a checkout
-with `./scripts/openprocessor.sh status|logs|restart|help`. See
+with `./scripts/openprocessor.sh status|logs|restart|help` (it forwards to the
+`openprocessor` CLI and adds the dev overlay `docker-compose.dev.yml`). See
 [INSTALLATION.md](INSTALLATION.md#install-from-source) for manual steps.
 
-## Docker Hub
+### Docker Hub
 
 Images are published on Docker Hub under versioned tags. The installer never
 uses `:latest`; it runs the digests in the release's `images.lock`:
 
 ```bash
-docker pull davidamacey/openprocessor:0.3.0         # FastAPI service
-docker pull davidamacey/openprocessor-triton:0.3.0  # Triton server
+docker pull davidamacey/openprocessor:<version>         # FastAPI service
+docker pull davidamacey/openprocessor-triton:<version>  # Triton server
 ```
+
+`<version>` is the release number without the leading `v` (the `VERSION` file).
+
+---
+
+## Your first project
+
+Curation routes live under `/curation/projects/{project}/...`. The `default`
+project exists after the first start; create more with
+`POST /curation/projects`. The slug is 2-32 characters: lowercase letters,
+digits and single hyphens, starting with a letter.
+
+```bash
+API=http://127.0.0.1:4603/curation
+
+# 1. create a project (slug is permanent; display_name is editable)
+curl -X POST $API/projects -H 'Content-Type: application/json' \
+  -d '{"slug": "cars", "display_name": "Cars"}'
+
+# 2. list projects, then read this project's counts
+curl $API/projects
+curl $API/projects/cars/stats
+
+# 3. add classes (class identity is the name)
+curl -X POST $API/projects/cars/classes -H 'Content-Type: application/json' \
+  -d '{"name": "car"}'
+```
+
+Then ingest images (below), activate a region profile and a VLM endpoint if
+you want regions or automatic labels, and review. The route for each step:
+
+| Step | Routes |
+|---|---|
+| Classes | `GET /curation/projects/{project}/classes`, `POST /curation/projects/{project}/classes` |
+| Ingest | `POST /curation/projects/{project}/ingest/batch`, `POST /curation/projects/{project}/ingest/upload` |
+| Import a labeled dataset | `POST /curation/projects/{project}/datasets/preview`, `POST /curation/projects/{project}/datasets/imports` |
+| Region profile | `POST /curation/projects/{project}/region_profiles`, `POST /curation/projects/{project}/region_profiles/{name}/activate` |
+| Prompt pack | `POST /curation/projects/{project}/prompt_packs`, `POST /curation/projects/{project}/prompt_packs/{name}/activate` |
+| VLM endpoint | `POST /curation/vlm/endpoints`, `POST /curation/projects/{project}/vlm/endpoints/{name}/activate` |
+| Review | `GET /curation/projects/{project}/review/tabs`, `GET /curation/projects/{project}/review/{tab}` |
+| Export and train | `POST /curation/projects/{project}/export/yolo`, `POST /curation/projects/{project}/train/preflight`, `POST /curation/projects/{project}/train/start` |
+
+Try it with a public sample. No dataset ships in this repo (nothing
+proprietary is bundled anywhere). Fetch a small, license-filtered COCO 2017
+subset instead:
+
+```bash
+make sample-coco-readme   # 200 images, 20 per class, ~1-2 min on a fast link
+# or, from an installed deployment: ./openprocessor sample coco
+```
+
+This writes `data/samples/coco_va_readme/` (images + `ATTRIBUTION.csv` +
+`coco_gt.json`), gitignored, from a pinned, deterministic selection filtered to
+Flickr licenses safe to redistribute crops of (Attribution,
+Attribution-ShareAlike, "No known copyright restrictions", "United States
+Government Work"; never NonCommercial or NoDerivs). Then:
+
+```bash
+# 1. Create classes in your project (see docs/CURATION.md).
+# 2. Narrow ingest to those classes with OP_INGEST_PRIMARY_CLASS_IDS in .env
+#    (2,3,5,7 = car/motorcycle/bus/truck for COCO). Unset, a stock
+#    detector proposes items for its whole label space (all 80 COCO classes).
+#    OP_INGEST_PRIMARY_DETECTOR_MODEL picks the detector.
+# 3. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount
+#    target is fixed at /data/source):
+echo 'OP_SOURCE_ROOT_HOST=./data/samples' >> .env
+docker compose up -d --force-recreate yolo-api
+# 4. --root is a container path under the /data/source mount, not a
+#    host-relative one:
+docker compose exec yolo-api python scripts/curation/ingest_walker.py \
+  --root /data/source/coco_va_readme/images --project cars \
+  --api-base http://localhost:8000/curation
+```
+
+In a source checkout use `make up` and `make` targets, which add the dev
+overlay; in an installed directory run `./openprocessor restart yolo-api` after
+editing `.env`. `make sample-coco` (800 images plus side sets),
+`make sample-plates` (300 Open Images V7 images) and `make sample-clean` use
+the same tool. See
+[docs/CURATION.md](docs/CURATION.md) for the walkthrough and every flag.
+
+### Example: cars and wheels
+
+`examples/` holds a complete, public, multi-region example: the primary
+detector finds cars, then the region stage finds the wheels on each car.
+
+```bash
+make sample-coco-cars      # 60 CC BY car images into data/samples/coco_car
+.venv/bin/python scripts/examples/wheel_example_live.py \
+  --api http://localhost:4603 --project wheels \
+  --container-dir /data/source/coco_car/images
+```
+
+The script creates the project, creates and activates
+`examples/region_profiles/vehicle_wheel.json` (`max_regions_per_item: 4`,
+text-free) and `examples/prompt_packs/vehicle_wheel.json`, ingests the images,
+waits for the detection worker and exports the wheel boxes. It needs the live
+stack with the segmenter and an activated VLM. The same walk runs offline in
+`tests/integration/test_wheel_example_e2e.py`.
+
+---
+
+## The curation model in brief
+
+Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+[docs/CURATION.md](docs/CURATION.md) and
+[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md).
+
+**Projects.** Every project owns six OpenSearch indexes named
+`{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` (default prefix `op_prj_`; roles
+`images`, `items`, `labels_confirmed`, `classes`, `umap_state`, `configs`),
+a class registry and exports under `OP_PROJECTS_DATA_ROOT/{slug}/`, and its
+own upload, job and training directories. A project is `building`, `active`,
+`archived`, `deleting`, `deleted` or `failed`. `default` can be archived but
+not deleted. Delete is a dry run first (`?dry_run=true`), then needs
+`?confirm=<slug>` and answers 202.
+
+| Lifecycle | Route |
+|---|---|
+| List, create | `GET /curation/projects`, `POST /curation/projects` |
+| Read, rename, delete | `GET /curation/projects/{project}`, `PATCH /curation/projects/{project}`, `DELETE /curation/projects/{project}` |
+| Archive, restore | `POST /curation/projects/{project}/archive`, `POST /curation/projects/{project}/unarchive` |
+| Copy settings | `POST /curation/projects/{project}/clone_settings` |
+| Combine | `POST /curation/projects/combine/preview`, `POST /curation/projects/combine`, `GET /curation/projects/combine/{job_id}` |
+
+**Items and regions.** The primary detector proposes **items** (crops) at
+ingest. When the active region profile names `parent_classes`, only items of
+those classes (matched by name) get the region stage. The detection worker
+runs the profile's detector and segmenter legs, merges candidates, keeps up to
+`max_regions_per_item`, and writes them as the item's `region_boxes` list. The
+VLM verifies each box, a text reader fills `text` when the profile asks for
+it, each box is embedded and clustered on its own, and humans edit per box.
+Box states are `proposed`, `accepted`, `rejected` and `false_positive`; the
+item's `region_status` is derived from them.
+
+| Per-box operation | Route |
+|---|---|
+| List boxes with filters | `GET /curation/projects/{project}/regions` |
+| Replace an item's box set | `PUT /curation/projects/{project}/crops/{crop_id}/regions` |
+| Change one box | `PATCH /curation/projects/{project}/crops/{crop_id}/regions/{box_id}` |
+| Set many boxes' state | `POST /curation/projects/{project}/regions/batch_box_state` |
+| Cluster boxes | `POST /curation/projects/{project}/regions/cluster` |
+
+**Config store.** Prompt packs, region profiles and VLM activations are
+revisioned documents. Saving writes a new revision, activating applies one to
+the running workers, and rollback reactivates the previous one. Activation
+takes `expected_active` so two editors cannot overwrite each other.
+
+| Config | Routes |
+|---|---|
+| Prompt packs | `GET /curation/projects/{project}/prompt_packs`, `POST /curation/projects/{project}/prompt_packs/{name}/activate`, `POST /curation/projects/{project}/prompt_packs/active/rollback`, `POST /curation/projects/{project}/prompt_packs/test` |
+| Region profiles | `GET /curation/projects/{project}/region_profiles`, `POST /curation/projects/{project}/region_profiles/{name}/activate`, `GET /curation/projects/{project}/region_profiles/active/impact`, `POST /curation/projects/{project}/region_profiles/active/rollback`, `POST /curation/projects/{project}/region_profiles/test` |
+| Settings and vocabulary | `GET /curation/projects/{project}/settings`, `PUT /curation/projects/{project}/settings`, `GET /curation/projects/{project}/config/vocabulary` |
+| Keymap | `GET /curation/projects/{project}/keymap`, `PUT /curation/projects/{project}/keymap`, `POST /curation/projects/{project}/keymap/validate`, `POST /curation/projects/{project}/keymap/reset` |
+
+> Screenshot pending: Cropwright (the region-profile editor with the activation impact panel)
+
+**VLM endpoints.** The endpoint registry is deployment-wide
+(`GET /curation/vlm/endpoints`); the activation is per project
+(`GET /curation/projects/{project}/vlm/endpoints/active`). The local catalog
+(`GET /curation/vlm/catalog`) lists models the in-compose vLLM can serve. The
+API records the wanted model (`POST /curation/vlm/local/select`) and the host
+applies it with `./openprocessor vlm use <id>`. API keys are never served:
+store one with `./openprocessor vlm key set <slug>` and reference it as
+`secret:<slug>`. Run-time overrides take `?vlm=<name>` on the labeling routes.
+
+**Datasets and reprocess.**
+
+| Operation | Route |
+|---|---|
+| Supported formats and limits | `GET /curation/projects/{project}/datasets/formats` |
+| Upload a zip or tar | `POST /curation/projects/{project}/datasets/uploads` |
+| Preview, with class suggestions | `POST /curation/projects/{project}/datasets/preview` |
+| Start, read, undo | `POST /curation/projects/{project}/datasets/imports`, `GET /curation/projects/{project}/datasets/imports/{import_id}`, `POST /curation/projects/{project}/datasets/imports/{import_id}/undo` |
+| Re-run scopes on items | `POST /curation/projects/{project}/reprocess`, `GET /curation/projects/{project}/reprocess/jobs/{job_id}` |
+
+Every dataset class that has boxes needs a mapping decision (`map`, `create`,
+`skip` or `region`); mapping is by class name. A COCO layout must say
+`"format": "coco"`. `scripts/curation/import_labeled_dataset.py` is a client
+of these routes.
+
+The curation surface is large (more than 230 operations). The generated schema in
+[`contracts/openapi/curation.json`](contracts/openapi/curation.json) is the
+source of truth, and [`contracts/`](contracts/) also has the TypeScript item
+types.
 
 ---
 
@@ -144,65 +389,38 @@ docker pull davidamacey/openprocessor-triton:0.3.0  # Triton server
 | standard | 12-24GB | RTX 3080, RTX 4090 | ~15 RPS |
 | full | 48GB+ | A6000, A100 | ~50 RPS |
 
-Switch profiles: `./scripts/openprocessor.sh profile <name>`
+Switch profiles in a checkout: `./scripts/openprocessor.sh profile <name>`,
+or pass `--profile` to the installer. Figures are rough; measure on your
+hardware ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)).
 
----
+First-time setup is dominated by one-time TensorRT compilation (about 30
+minutes on a 48 GB card, 45-60 minutes on 8-12 GB cards). Engines are cached,
+so later starts take seconds to a minute.
 
-## Setup Timing (RTX A6000, 48GB)
+**Dual YOLO families.** One Triton instance and one API serve YOLO11 and
+YOLO26.
 
-First-time setup is dominated by one-time TensorRT model compilation.
-Subsequent starts take only seconds since compiled engines are cached.
-
-| Step | Time | Notes |
-|------|------|-------|
-| Model downloads | ~16s | 5 models, ~500MB from HuggingFace/GitHub |
-| Docker image pull | ~30s | Pre-built from Docker Hub (~32GB total) |
-| **TensorRT exports** | **~31 min** | **One-time only, cached after first run** |
-| Service startup | ~33s | Triton loads cached TRT engines |
-| **Total first run** | **~32 min** | |
-| **Subsequent starts** | **~30s** | Just `docker compose up -d` |
-
-**TensorRT Export Breakdown:**
-
-| Model | Export Time | Engine Size |
-|-------|-----------|-------------|
-| YOLO11 detection | ~8 min | ~45 MB |
-| YOLO26 detection (optional) | ~6 min | ~40 MB |
-| SCRFD face detection | ~2 min | ~20 MB |
-| ArcFace embeddings | ~2 min | ~86 MB |
-| MobileCLIP image encoder | ~4 min | ~35 MB |
-| MobileCLIP text encoder | ~1 min | ~125 MB |
-| PaddleOCR (det + rec) | ~15 min | ~15 MB |
-
-Times vary by GPU. Faster GPUs with more CUDA cores export faster.
-Lower VRAM GPUs (8-12GB) may take 45-60 minutes total.
-
-**Dual YOLO families — YOLO11 and YOLO26 side by side.** One Triton
-instance and one API serve both:
-
-- **YOLO11** exports through the EfficientNMS end2end toolchain
-  (`export/export_models.py`, GPU-NMS 4-tensor engines — the proven
-  default path).
-- **YOLO26** exports through the stock ultralytics native toolchain
-  (`export/export_yolo26.py`, natively NMS-free single-tensor engines —
-  no plugin required):
+- YOLO11 exports through the EfficientNMS end2end toolchain
+  (`export/export_models.py`, GPU-NMS engines, the default path).
+- YOLO26 exports through the stock Ultralytics toolchain
+  (`export/export_yolo26.py`, natively NMS-free engines):
 
   ```bash
   docker compose exec yolo-api python /app/export/export_yolo26.py --models small
   curl -X POST http://localhost:4603/models/yolo26_small_trt/load
   ```
 
-- The API resolves each model's output format from **Triton metadata**,
-  so `/detect?model_name=yolo26_small_trt` and the YOLO11 default work
-  interchangeably; set `YOLO_MODEL=yolo26_small_trt` to switch the
-  default detector. Models load/unload at runtime via
-  `POST /models/{name}/load` / `POST /models/{name}/unload`.
+- The API reads each model's output format from Triton metadata, so
+  `/detect?model_name=yolo26_small_trt` and the YOLO11 default work
+  interchangeably. Set `YOLO_MODEL=yolo26_small_trt` to change the default
+  detector. Models load and unload at runtime with `POST /models/{name}/load`
+  and `POST /models/{name}/unload`.
 
 ---
 
 ## API Endpoints
 
-All endpoints available on port **4603**.
+All endpoints are on port **4603**. The routes below are also under `/v1`.
 
 ### Object Detection
 
@@ -284,128 +502,46 @@ All endpoints available on port **4603**.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Service health check |
-| `/ready` | GET | Readiness probe — Triton + OpenSearch reachability (no separate `/health/models` route exists) |
+| `/ready` | GET | Readiness probe: Triton + OpenSearch reachability |
 
----
+The `/curation` routes are **not** mounted under `/v1`; they exist only at
+`/curation` (the prefix is `OP_API_PREFIX`).
 
-### Curation & Active Learning
+### Curation route groups
 
-**Experimental for v0.3.0.** A generic, domain-agnostic active-learning
-curation subsystem: ingest images, detect and crop regions of interest,
-cluster and browse them, label by hand or via an OpenAI-compatible VLM,
-track class registries and review queues, export labeled datasets, and
-drive a training loop through a documented file-based protocol.
+Everything below is under `/curation/projects/{project}/` unless marked
+global. The full table is in
+[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md).
 
-It's real, working, and tested — 25 route groups, 109 routes under
-`/curation` as of this release (verify the live count with
-`python -c "from src.main import app; print(len([r for r in app.routes if r.path.startswith('/curation')]))"`)
-— but it's new, still evolving, ships opt-in behind the `curation`
-Docker Compose profile, and is disabled by default:
+| Group | What it covers |
+|---|---|
+| `classes`, `class_sources` | Class registry: create, edit, merge, deprecate, restore |
+| `crops`, `images` | Items: browse, label, move, exclude, discard, undo; image and thumbnail serving |
+| `regions`, `crops/{crop_id}/regions` | Per-box list, edit, state, text, clustering, false-positive pull |
+| `clusters` | Cluster cards, representatives, refine, auto-promote |
+| `review` | Review tabs, queues, new-class proposals |
+| `scores`, `select`, `search/text` | Mistakenness and uniqueness scores, diverse selection, semantic search |
+| `vlm` | Class labeling, region verification, endpoint activation |
+| `ingest`, `datasets`, `reprocess` | Ingest, labeled-dataset import, re-running pipeline scopes |
+| `prompt_packs`, `region_profiles`, `settings`, `keymap`, `config` | Config store |
+| `pipeline/auto_label`, `probe`, `pause`, `resume` | Auto-label jobs and pipeline control |
+| `export`, `train`, `models`, `bakeoff`, `test_holdout` | Export, training, promotion, model comparison, frozen test set |
+| `events`, `stats`, `health`, `methods` | SSE stream, counts, capability discovery |
+| global: `projects`, `vlm/endpoints`, `vlm/catalog`, `vlm/local`, `events` | Registry and cross-project routes |
 
-```bash
-docker compose --profile curation up -d
-```
-
-**Rebuild the image before running any curation model-export target.**
-The Docker Hub `:latest` tag (pulled by `./scripts/setup.sh` and by a
-plain `docker compose up -d`) can predate the source checkout it's
-paired with. If `make export-pe` (or any curation export target that
-imports `perception_models`) fails with
-`ModuleNotFoundError: No module named 'core'`, the running `yolo-api`
-container is still on a stale pulled image that never installed that
-dependency — rebuild from this checkout first:
-
-```bash
-docker compose build yolo-api
-docker compose up -d --force-recreate yolo-api
-```
-
-then re-run the export target. Pulling a release tag that matches your
-checked-out SHA (instead of `:latest`) avoids this entirely.
-
-**Try it with a public sample.** No dataset ships in this repo (nothing
-proprietary is bundled anywhere) -- fetch a small, license-filtered COCO
-2017 subset instead:
-
-```bash
-make sample-coco-readme   # 200 images, 20 per class, ~1-2 min on a fast link
-```
-
-This writes `data/samples/coco_va_readme/` (images + `ATTRIBUTION.csv` +
-`coco_gt.json`), gitignored, from a pinned, deterministic selection
-(`scripts/datasets/manifests/coco_va_200.json`) filtered to Flickr
-licenses safe to redistribute crops of (Attribution,
-Attribution-ShareAlike, "No known copyright restrictions", "United
-States Government Work" -- explicitly not NonCommercial/NoDerivs). Then:
-
-```bash
-# 1. Create a few classes (see docs/CURATION.md "Create classes from zero")
-# 2. Set OP_INGEST_PRIMARY_DETECTOR_MODEL, and narrow ingest to the classes
-#    you just created with OP_INGEST_PRIMARY_CLASS_IDS (otherwise a stock
-#    detector's full label space -- all 80 COCO classes -- becomes item
-#    proposals; e.g. 2,3,5,7 for car/motorcycle/bus/truck).
-# 3. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount
-#    target is fixed at /data/source -- data/samples/coco_va_readme/images
-#    is NOT under the default ./data/source, so a walker --root pointed
-#    straight at the samples dir 404s every image as unservable_path):
-echo 'OP_SOURCE_ROOT_HOST=./data/samples' >> .env
-docker compose up -d --force-recreate yolo-api
-# 4. --root is a container path under the /data/source mount, not a
-#    host-relative one:
-docker compose exec yolo-api python scripts/curation/ingest_walker.py \
-  --root /data/source/coco_va_readme/images --api-base http://localhost:8000/curation
-```
-
-`make sample-coco` (the larger 800-image + 12-image upload + 24-image
-re-ingest side-set default) and `make sample-plates` (300-image Open
-Images V7 "Vehicle registration plate" region set) are the same tool at
-a bigger scale — see [docs/CURATION.md](docs/CURATION.md#seed--bootstrap-path-for-a-fresh-install)
-and `python scripts/datasets/fetch_coco_subset.py --help` /
-`python scripts/datasets/fetch_openimages_plates.py --help` for every
-flag. `make sample-clean` removes everything fetched.
-
-See **[docs/CURATION.md](docs/CURATION.md)** for the full user guide —
-what's required (you supply your own detector/VLM/trainer models), the
-class-registry schema with a non-vehicle worked example, the complete
-`OP_*` environment variable table, and the known gaps stated up front.
-See **[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md)**
-for the hand-written wire-level API contract, or the generated,
-always-current schema under **[contracts/](contracts/)**
-(`contracts/openapi/curation.json` plus generated TypeScript types) —
-and **[SECURITY.md](SECURITY.md)**: the curation surface has no
-authentication, same as the rest of this API.
-
-**Cropwright** (a separate, optional SvelteKit frontend) is one
-consumer of the `/curation` API — a labeling UI for the cascade above.
-It is not required: every curation route works from `curl`/`httpx`/the
-generated OpenAPI client too. Cropwright is not published in this
-repo; if you build one, wire it up like this:
-
-- **Docker network:** join the compose network this stack created —
-  `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` (e.g.
-  `openprocessor_triton_net` with an unset `COMPOSE_PROJECT_NAME`; see
-  `docker network ls` after `docker compose up`).
-- **API upstream:** `API_UPSTREAM=http://op-api:8000`. `yolo-api` carries a
-  network alias `op-api` specifically so a frontend's out-of-the-box
-  default (many default to `op-api`, not this repo's `yolo-api` service
-  name) resolves without extra configuration — `http://yolo-api:8000`
-  works identically if your frontend's default is the service name
-  instead.
-- **API prefix:** `PUBLIC_API_PREFIX=/curation` (must equal this API's
-  `OP_API_PREFIX`, default `/curation`).
-
-See `docs/CURATION.md` "Wiring up Cropwright" for the full env var list.
+**Status:** the curation subsystem is complete for this release and tested
+offline end to end, but it has no authentication (see below), and it ships
+opt-in behind the `curation` compose profile.
 
 ### Security: local tool, no authentication
 
-**This service — core API and curation subsystem alike — has no
-authentication, authorization, or rate limiting.** It is built to run
-on a trusted machine or private network behind your own reverse proxy,
-never exposed directly to a network you don't trust (and never to the
-public internet). See **[SECURITY.md](SECURITY.md)** for the full list
-of routes that are dangerous without access control and the other
-default-open components (Grafana, OpenSearch) you should lock down
-before wider deployment.
+**This service, the core API and the curation subsystem alike, has no
+authentication, authorization, or rate limiting.** It is built to run on a
+trusted machine or private network behind your own reverse proxy, never
+exposed directly to a network you don't trust (and never to the public
+internet). See **[SECURITY.md](SECURITY.md)** for the routes that are dangerous
+without access control and the other default-open components (Grafana,
+OpenSearch) you should lock down before wider deployment.
 
 ---
 
@@ -555,6 +691,30 @@ curl -X POST http://localhost:4603/ingest \
 }
 ```
 
+### Curation item (region boxes)
+
+Every item-returning curation route emits the same item shape
+(`contracts/json/item_wire.json`). Region data is a list:
+
+```json
+{
+  "crop_id": "c_123",
+  "class_name": "car",
+  "region_status": "detected",
+  "region_count": 2,
+  "region_revision": 4,
+  "region_boxes": [
+    {"box_id": "b1", "bbox_norm": [0.10, 0.60, 0.30, 0.90], "state": "accepted", "score": 0.91, "detector": "sam3"},
+    {"box_id": "b2", "bbox_norm": [0.62, 0.60, 0.82, 0.90], "state": "proposed", "score": 0.77, "detector": "sam3"}
+  ],
+  "label_locked": false
+}
+```
+
+The example shows a subset of the keys. A box also carries `text*`,
+`cluster_id`, `cluster_subid`, `cluster_distance`, `rejection_reason` and
+`locked`. `bbox_norm` is `[x1, y1, x2, y2]` in the item crop's frame.
+
 ---
 
 ## Architecture
@@ -563,22 +723,32 @@ curl -X POST http://localhost:4603/ingest \
 Client (Port 4603)
        |
        v
-  +----------+
-  | yolo-api |  FastAPI service (all endpoints)
-  +----------+
-       |
-       v
+  +----------+     +-----------------------------+
+  | yolo-api |---->| curation workers (profile)  |
+  +----------+     | detection, VLM, auto-label, |
+       |           | cluster refresh, evaluator  |
+       v           +-----------------------------+
   +--------------+     +------------+
   | triton-server|     | opensearch |
   | (GPU)        |     | (k-NN)     |
   +--------------+     +------------+
 ```
 
-**Services:**
-- `yolo-api` (port 4603): FastAPI service handling all requests
-- `triton-server` (ports 4600-4602): NVIDIA Triton Inference Server with TensorRT models
-- `opensearch` (port 4607): Vector database for similarity search
-- `prometheus/grafana` (ports 4604/4605): Monitoring stack (opt-in — `docker compose --profile monitoring up -d` / `make up-monitoring`; not started by `make up`)
+**Services** (compose profile in brackets):
+
+- `yolo-api` (4603): FastAPI service handling all requests.
+- `triton-server` (4600-4602): Triton with TensorRT models.
+- `opensearch` (4607): vector database and the curation datastore.
+- `curation-detection-worker`, `curation-vlm-worker`,
+  `curation-auto-label-worker`, `curation-cluster-refresh`,
+  `curation-evaluator` [`curation`].
+- `segmenter` (4611) [`segmenter`], `vlm` (4612) [`vlm`].
+- `curation-trainer`, `curation-mlflow` (4609) [`training`].
+- Prometheus (4604), Grafana (4605), Loki (4606), OpenSearch Dashboards (4608),
+  DCGM exporter (4610), Alloy [`monitoring`]. Opt in with `make up-monitoring`
+  or `--with-monitoring`; `make up` does not start them.
+
+More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -586,32 +756,16 @@ Client (Port 4603)
 
 | Model | Purpose | Backend |
 |-------|---------|---------|
-| YOLO11 | Object detection | TensorRT End2End |
+| YOLO11 / YOLO26 | Object detection | TensorRT |
 | SCRFD-10G | Face detection + landmarks | TensorRT |
 | ArcFace | Face embeddings (512-dim) | TensorRT |
 | MobileCLIP | Image/text embeddings (512-dim) | TensorRT |
 | PP-OCRv5 | Text detection + recognition | TensorRT |
+| PE-Core-L14-336 | Curation embeddings (1024-dim, image and text) | TensorRT image, Triton CPU text |
+| Segmenter | Region proposals from a text prompt (optional) | HTTP service |
+| VLM | Class labels and region verdicts (optional) | OpenAI-compatible endpoint |
 
-All models use FP16 precision with dynamic batching for optimal throughput.
-
----
-
-## Performance
-
-**Measured Latency (single request):**
-| Operation | Time | Throughput |
-|-----------|------|------------|
-| Object Detection | 140-170ms | ~6-7 RPS |
-| Face Detection | 100-150ms | ~7-10 RPS |
-| Face Recognition | 105-130ms | ~8-9 RPS |
-| Image Embedding (CLIP) | 6-8ms | ~120 RPS |
-| Text Embedding (CLIP) | 5-17ms | ~60-200 RPS |
-| OCR Prediction | 170-350ms | ~3-6 RPS |
-| Full Analyze | 280-430ms | ~2-3 RPS |
-| Single Image Ingest | 750-950ms | ~1-1.3 RPS |
-| **Batch Ingest (50 images)** | **7.3s total** | **~6.8 images/sec** |
-
-**Batch processing** provides ~2-3x throughput improvement over sequential single-image processing.
+Core models use FP16 with dynamic batching. Export steps: [export/README.md](export/README.md).
 
 ---
 
@@ -631,120 +785,71 @@ All models use FP16 precision with dynamic batching for optimal throughput.
 
 ## Configuration
 
-### Worker Count
+Every setting is in `.env` (template: [`env.template`](env.template)). The
+"Curation quick-config" block lists the keys the curation tiers need.
 
-```yaml
-# docker-compose.yml
-command: --workers=64  # Production
-command: --workers=2   # Development
-```
+### GPU placement
 
-### GPU Selection
+`TRITON_GPU_ID`, `API_GPU_ID`, `SEGMENTER_GPU_ID`, `EVALUATOR_GPU_ID` and
+`VLM_GPU_ID` pick a GPU per service. `./openprocessor gpu plan` prints them.
+The installer chooses a placement and `--gpu-plan` overrides it.
 
-```yaml
-# docker-compose.yml
-device_ids: ['0', '2']  # Use GPUs 0 and 2
-```
+### Triton model loadout
 
-### GPU sizing — default core Triton loadout
+The default Triton instance counts are small: face detection, face embeddings,
+the MobileCLIP image encoder and the PE image encoder run one instance each;
+`paddleocr_det_trt`, the YOLO models and `mobileclip2_s2_text_encoder` run
+two. `pe_text_encoder` is a CPU instance and uses no VRAM. Raise a count in
+the model's `config.pbtxt` when a hot path needs it and the card has room.
+Check `nvidia-smi` after loading.
 
-Measured on a 48 GB card (fresh-start E2E run, 2026-09-25) by unloading
-each model in turn via `POST /v2/repository/models/<name>/unload`. The
-stock `models/*/config.pbtxt` loadout came to **~25.2 GB** at its
-previous default instance counts — with the VLM service alone measured
-at ~23 GB in that same run, that left no room for the segmenter or a
-training run on the same card.
+### Segmenter VRAM
 
-| Model | Instance count | Approx. VRAM (measured) | Notes |
-|---|---:|---:|---|
-| `scrfd_10g_bnkps` | 4 (old) → 1 (default) | 6.8 GB → ~1.7 GB | Face detection |
-| `mobileclip2_s2_image_encoder` | 2 (old) → 1 (default) | 3.4 GB → ~1.7 GB | FP32 build (no FP16 baked into this export yet) |
-| `arcface_w600k_r50` | 4 (old) → 1 (default) | 2.75 GB → ~0.7 GB | Face embeddings |
-| `mobileclip2_s2_text_encoder` | 1 | 0.7 GB | Unchanged |
-| yolo11/PE/OCR set (remaining core models) | as shipped | ~11.65 GB | Not reduced by this pass — no per-model breakdown measured yet |
+`SEGMENTER_INSTANCES` (default 2) and `SEGMENTER_SHARED_WEIGHTS` (default 1)
+trade VRAM for throughput. With shared weights the instances share one copy of
+the model and each pays only for its own activations. Measure with
+`nvidia-smi` after the segmenter's `/health` reports loaded.
 
-The shipped defaults now use `count: 1` for the three over-provisioned
-models above, bringing the core loadout down to roughly 16-17 GB — a
-meaningful cut from 25.2 GB, though still above a strict 12-14 GB target
-if you also need the segmenter/VLM/trainer on the same card (the
-remaining ~11.65 GB yolo/PE/OCR set hasn't been broken down
-per-model yet). Raise any
-instance count back up (`config.pbtxt`, or re-export with
-`export/export_scrfd.py` / `export/export_face_recognition.py`) on a
-card with headroom to spare — hot-path models (face detection under
-heavy face-search load, for example) benefit most from more instances.
-Curation-only deployments that don't need the core face/vehicle path at
-all can `unload` those 3 models entirely instead of exporting them.
+### Workers
 
-`pe_text_encoder` (semantic-search query embeddings, added to the default
-load list alongside `pe_image_encoder`) is `KIND_CPU` with one instance —
-it adds **0 GB of GPU VRAM**, only host RAM, and is what
-`OP_PE_TEXT_BACKEND=auto` now prefers over loading its own copy in every
-uvicorn worker (see `export/README.md#pe-core-encoders-curation-embeddings`).
-
-### GPU sizing — segmenter (curation region cascade)
-
-The optional `segmenter` service (`--profile segmenter`) is the single
-biggest curation VRAM line item after Triton. Two knobs trade VRAM for
-throughput (`SEGMENTER_INSTANCES`, `SEGMENTER_SHARED_WEIGHTS` in
-`.env` — see `env.template`):
-
-| `SEGMENTER_INSTANCES` | `SEGMENTER_SHARED_WEIGHTS` | Approx. VRAM | Notes |
-|---|---|---|---|
-| 1 | 0 or 1 | ~2 GB | Fits a 12GB card alongside Triton |
-| 2 | 1 (recommended) | ~4 GB | One weight copy, per-instance activations only |
-| 2 | 0 | ~4-6 GB | Each instance loads its own weight copy — no benefit over shared, higher VRAM |
-| 4 | 1 | ~7-8 GB | 48GB-class cards (A6000/A100) with headroom for training too |
-
-`SEGMENTER_SHARED_WEIGHTS=1` is recommended whenever more than one
-instance is configured: instances share one copy of the model weights and
-only pay per-instance activation memory, instead of each loading its own
-full copy. Measure your actual footprint with `nvidia-smi` after the
-service reports `"loaded":true` on its `/health` endpoint — the numbers
-above are a starting point, not a guarantee, and depend on image
-resolution and batch size.
+The API runs `uvicorn --workers=32` by default (see `docker-compose.yml`).
+Lower it on small hosts.
 
 ---
 
 ## Testing
 
-Run comprehensive test suite to verify all functionality. `test_full_system.py`
-and `validate_visual_results.py` hit the running stack over HTTP, so they read
-their target ports from the environment (`API_PORT`, `TRITON_HTTP_PORT`,
-`OPENSEARCH_PORT` — same names as `.env`/`docker-compose.yml`; default to
-4603/4600/4607 if unset, so this is a no-op unless you remapped ports):
+Run the offline suite (no Docker, no GPU needed):
 
 ```bash
-# Full system test (32 tests covering all endpoints) — host venv path
+.venv/bin/python -m pytest tests/ -q
+```
+
+`tests/test_full_system.py` and `tests/validate_visual_results.py` hit the
+running stack over HTTP, so they read their target ports from the environment
+(`API_PORT`, `TRITON_HTTP_PORT`, `OPENSEARCH_PORT`; defaults 4603/4600/4607):
+
+```bash
+# Full system test (all endpoints) — host venv path
 .venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
 
 # Visual validation (draws bounding boxes on test images)
 .venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
-
-# View annotated test images
-ls test_results/*.jpg
-
-# Full offline pytest suite (see docs/CURATION.md for the curation-only suite)
-.venv/bin/python -m pytest tests/ -q
 ```
 
-**Docker-only path** (F-21/F-31) — the production `yolo-api` image installs
-only `requirements.txt` (no `pytest`, no `requirements-test.txt`), so a bare
+**Docker-only path.** The production `yolo-api` image installs only
+`requirements.txt` (no `pytest`, no `requirements-test.txt`), so a bare
 `docker compose exec yolo-api pytest ...` fails with `executable file not
-found`. Install the test deps into the running container first (not
-persisted across a recreate):
+found`. Install the test deps into the running container first (not persisted
+across a recreate):
 
 ```bash
 docker compose exec yolo-api pip install -r requirements-test.txt
 docker compose exec yolo-api python -m pytest tests/ -q --ignore=tests/live
 ```
 
-**Test Coverage:**
-- ✅ All ML model endpoints (detection, faces, CLIP, OCR)
-- ✅ Single and batch processing
-- ✅ Directory ingest pipeline (50+ images)
-- ✅ OpenSearch indexing and search
-- ✅ Visual validation with bounding boxes
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the live write-path harness and the
+pre-commit hooks.
 
 ---
 
@@ -757,25 +862,30 @@ cd benchmarks
 ./triton_bench --mode full     # Full benchmark
 ```
 
-See [benchmarks/README.md](benchmarks/README.md) for detailed benchmarking guide.
+See [benchmarks/README.md](benchmarks/README.md) and
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ---
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)**: AI assistant instructions and detailed architecture
-- **[docs/](docs/)**: Technical documentation
-  - [docs/CURATION.md](docs/CURATION.md): Curation & active-learning subsystem user guide (experimental)
-  - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): Component and runtime topology
+- **[docs/](docs/README.md)**: documentation index
+  - [docs/CURATION.md](docs/CURATION.md): curation user guide
+  - [docs/design/curation_api_contract.md](docs/design/curation_api_contract.md): route and wire-model reference
+  - [docs/VISION_AND_GOALS.md](docs/VISION_AND_GOALS.md): scope and standards
+  - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data model, runtime topology
   - [docs/OCR.md](docs/OCR.md): OCR model setup
-  - [docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md): Face recognition details
-  - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): Vector search schema
-- **[contracts/](contracts/)**: Generated, always-current API schema — OpenAPI (`contracts/openapi/curation.json`) and TypeScript types, regenerated by `scripts/codegen/generate_contracts.py`
-- **[export/README.md](export/README.md)**: Model export documentation
-- **[benchmarks/README.md](benchmarks/README.md)**: Benchmark tool guide
-- **[SECURITY.md](SECURITY.md)**: Security policy — read this before exposing the API beyond a trusted network
-- **[CONTRIBUTING.md](CONTRIBUTING.md)**: Dev setup, test suites, and commit conventions
-- **[CHANGELOG.md](CHANGELOG.md)**: Release history
+  - [docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md): face recognition details
+  - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): index schemas
+- **[contracts/](contracts/)**: generated API schema (OpenAPI and TypeScript types), regenerated by `scripts/codegen/generate_contracts.py`
+- **[INSTALLATION.md](INSTALLATION.md)**: installer, CLI and source install
+- **[export/README.md](export/README.md)**: model export
+- **[scripts/README.md](scripts/README.md)**: scripts and curation tooling
+- **[benchmarks/README.md](benchmarks/README.md)**: benchmark tool
+- **[SECURITY.md](SECURITY.md)**: read before exposing the API beyond a trusted network
+- **[CONTRIBUTING.md](CONTRIBUTING.md)**: dev setup, tests, commit conventions
+- **[CLAUDE.md](CLAUDE.md)**: orientation for AI coding agents
+- **[CHANGELOG.md](CHANGELOG.md)**: release history
 
 ---
 
@@ -799,13 +909,8 @@ See [ATTRIBUTION.md](ATTRIBUTION.md) for complete licensing information.
 ## License
 
 This project is licensed under the **GNU Affero General Public License
-v3.0 or later (AGPL-3.0-or-later)** — see [LICENSE](LICENSE). It was
-previously MIT-badged; it is re-badged AGPL-3.0-or-later because it
-vendors an AGPL-3.0 Ultralytics fork (`src/ultralytics_patches/`) whose
-copyleft terms propagate to the combined work. Third-party components
-retain their own licenses (BSD, Apache-2.0, MIT, and others) — see
+v3.0 or later (AGPL-3.0-or-later)** — see [LICENSE](LICENSE). It vendors an
+AGPL-3.0 Ultralytics fork (`src/ultralytics_patches/`) whose copyleft terms
+propagate to the combined work. Third-party components retain their own
+licenses (BSD, Apache-2.0, MIT, and others) — see
 [ATTRIBUTION.md](ATTRIBUTION.md) for the full per-component table.
-
----
-
-**Built for maximum throughput** - Process 100K+ images in minutes, visual search in milliseconds.

@@ -11,6 +11,7 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 | Script | Purpose | Output |
 |--------|---------|--------|
 | `export_models.py` | YOLO11 object detection with end2end NMS | TensorRT engine |
+| `export_yolo26.py` | YOLO26 (NMS-free, single output tensor), stock Ultralytics toolchain | ONNX + TensorRT engine |
 | `export_detector_dual_head.py` | Any YOLO-family detector, re-exported with a backbone feature-map output | ONNX + TensorRT engine |
 | `export_detector_dual_head.sh` | `trtexec` engine build + model-repo install for the above | TensorRT engine |
 | `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
@@ -38,13 +39,16 @@ pytorch_models/
 ├── mobileclip2_s2_image_encoder.onnx   # MobileCLIP image encoder ONNX
 ├── mobileclip2_s2_text_encoder.onnx    # MobileCLIP text encoder ONNX
 ├── pe_image_encoder.onnx               # PE-Core-L14-336 image encoder ONNX
-└── pe_text_encoder.onnx                # PE-Core-L14-336 text encoder ONNX (API loads in-process)
+└── pe_text_encoder.onnx                # PE-Core-L14-336 text encoder ONNX (installed into Triton by make pe-export-text-triton)
 
 models/
 ├── yolov11_small_trt/                  # YOLO11 TensorRT (standard)
 │   ├── 1/model.plan
 │   └── config.pbtxt
 ├── yolov11_small_trt_end2end/          # YOLO11 TensorRT with GPU NMS
+│   ├── 1/model.plan
+│   └── config.pbtxt
+├── yolo26_small_trt/                   # YOLO26 TensorRT (NMS-free)
 │   ├── 1/model.plan
 │   └── config.pbtxt
 ├── scrfd_10g_bnkps/                    # SCRFD-10G face detection TensorRT
@@ -66,11 +70,13 @@ models/
 ├── pe_text_encoder/                    # PE-Core-L14-336 text encoder (optional)
 │   ├── 1/model.onnx                    #   --install-triton
 │   └── config.pbtxt                    #   onnxruntime_onnx, KIND_CPU
-├── ppocr_det_v5/                       # PP-OCRv5 detection
+├── paddleocr_det_trt/                  # PP-OCRv5 detection
 │   ├── 1/model.plan
 │   └── config.pbtxt
-└── ppocr_rec_v5/                       # PP-OCRv5 recognition
-    ├── 1/model.plan
+├── paddleocr_rec_trt/                  # PP-OCRv5 recognition
+│   ├── 1/model.plan
+│   └── config.pbtxt
+└── ocr_pipeline/                       # OCR BLS pipeline (calls the two above)
     └── config.pbtxt
 ```
 
@@ -181,7 +187,7 @@ Encoder) provides both towers of one shared 1024-d embedding space:
 | Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`) |
 |-------|----------|---------|-----------------------------------------------------|
 | Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` FP32 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
-| Text  | `PEEncoder.encode_text` → `GET /curation/search/text` queries | **Triton `pe_text_encoder`** (preferred: one shared CPU instance for every uvicorn worker), lazily-loaded in-process PyTorch fallback; in-process ONNX Runtime is an explicit opt-in only | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
+| Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** (preferred: one shared CPU instance for every uvicorn worker), lazily-loaded in-process PyTorch fallback; in-process ONNX Runtime is an explicit opt-in only | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
 
 Both embeddings come out L2-normalized. See
 [`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
@@ -307,8 +313,8 @@ loaded host — treat as relative; median ms per call, typical queries):
 
 | Backend | Batch 1, full (T=32) | Batch 1, trimmed (T=9) | Batch 8, full | Batch 8, trimmed (T=9) | Warm-up | RSS |
 |---|---:|---:|---:|---:|---:|---:|
-| PyTorch eager (previous path: full) | 113.6 | 69.3 | 603.4 | 186.6 | 12.0 s | 6.1 GB |
-| ONNX Runtime CPU (new default: trimmed) | 94.2 | 48.0 | 536.5 | 205.4 | 4.3 s | 2.8 GB |
+| PyTorch eager (full) | 113.6 | 69.3 | 603.4 | 186.6 | 12.0 s | 6.1 GB |
+| ONNX Runtime CPU (trimmed) | 94.2 | 48.0 | 536.5 | 205.4 | 4.3 s | 2.8 GB |
 
 Net effect for a single query: ~114 ms → ~48 ms, half the memory, a third
 of the warm-up. At batch 8 both backends are within noise once trimmed —
@@ -320,7 +326,7 @@ takes no VRAM; `--kind gpu --gpus N` for GPU):
 ```bash
 docker compose exec yolo-api python /app/export/export_pe_text_encoder.py \
     --install-triton --models-dir /app/models      # = make pe-export-text-triton
-# then add --load-model=pe_text_encoder to the triton-server command
+# pe_text_encoder is already in the default --load-model list of docker-compose.yml
 ```
 
 `models/pe_text_encoder/config.pbtxt` (committed) is the rendered default
@@ -411,8 +417,9 @@ docker compose exec yolo-api python /app/export/export_paddleocr_rec.py
 - Input: `text_tokens` `[B, T]` INT64, `T <= 32` — PE `SimpleTokenizer` ids,
   trimmed after the batch's last EOT by the client
 - Output: `text_embeddings` `[B, 1024]` FP32, L2-normalized
-- Served in-process by ONNX Runtime (default) or Triton `onnxruntime_onnx`
-  (optional, max batch 32)
+- Served by Triton `pe_text_encoder` (`onnxruntime_onnx`, CPU, max batch 32,
+  preferred), else a lazily loaded in-process PyTorch fallback; in-process ONNX
+  Runtime only with `OP_PE_TEXT_BACKEND=onnx`
 
 ### PP-OCRv5 Detection
 - Input: `[B, 3, H, W]` FP32, dynamic size
@@ -434,7 +441,7 @@ All exports use these common settings:
 ### "Model file not found"
 Download PyTorch models first:
 ```bash
-make download-pytorch
+make download-models
 ```
 
 ### "Failed to build TensorRT engine"

@@ -1,197 +1,149 @@
 # Documentation Index
 
-Technical documentation for the Visual AI API.
+Documentation for OpenProcessor: the inference API and the curation subsystem.
 
 ---
 
-## Quick Links
+## Start here
 
-- **[Main README](../README.md)** - Project overview, API endpoints, quick start
-- **[CLAUDE.md](../CLAUDE.md)** - Project instructions for AI assistants
-- **[CURATION.md](CURATION.md)** - Curation & active-learning subsystem user guide (experimental)
-- **[Benchmarks Guide](../benchmarks/README.md)** - Performance testing with triton_bench
-- **[Model Export](../export/README.md)** - TensorRT model export documentation
-- **[Attribution](../ATTRIBUTION.md)** - Third-party code attribution and licensing
-- **[SECURITY.md](../SECURITY.md)** - Security policy — no authentication, do not expose to the internet
-- **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Dev setup, test suites, commit conventions
-
----
-
-## Core Documentation
-
-### System Architecture
-
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, production patterns, thread safety, scaling strategies |
-
-### Capabilities
-
-| Document | Description |
-|----------|-------------|
-| [OCR.md](OCR.md) | PP-OCRv5 text detection and recognition - setup, deployment, usage |
-| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | SCRFD face detection and ArcFace embeddings |
-
-### Performance
-
-| Document | Description |
-|----------|-------------|
-| [PERFORMANCE.md](PERFORMANCE.md) | FastAPI optimizations, gRPC connection management, benchmarking, profiling |
-
-### Vector Search
-
-| Document | Description |
-|----------|-------------|
-| [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch index design |
-
-### Curation / Labeling (experimental)
-
-| Document | Description |
-|----------|-------------|
-| [CURATION.md](CURATION.md) | User guide — what it is, required models, class-registry schema, workers, seed path, known gaps |
-| [design/curation_design_rationale.md](design/curation_design_rationale.md) | Design rationale — the four config dataclasses, frozen wire contract, pre-commit ratchet |
-| [design/curation_api_contract.md](design/curation_api_contract.md) | `/curation` HTTP wire contract — Pydantic model field names, frozen vs. configurable, capability discovery (`/methods`) |
+| Document | What it covers |
+|---|---|
+| [README.md](../README.md) | Overview, feature list, quick start, first project, the cars and wheels example |
+| [INSTALLATION.md](../INSTALLATION.md) | The one-line installer, every flag, the `openprocessor` CLI, VLM selection, install from source |
+| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.1.0 scope and the standards the code is held to |
+| [SECURITY.md](../SECURITY.md) | No authentication, LAN exposure, VLM URL policy, reporting |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Dev setup, tests, contracts, doc checks, commit conventions |
+| [CLAUDE.md](../CLAUDE.md) | Orientation for AI coding agents working in the repo |
 
 ---
 
-## API Reference
+## Curation and labeling
 
-The API provides these endpoint groups (all on port 4603):
+| Document | What it covers |
+|---|---|
+| [CURATION.md](CURATION.md) | User guide: projects, ingest, region profiles, prompt packs, VLM endpoints, import, combine, export, training |
+| [design/curation_api_contract.md](design/curation_api_contract.md) | Route table and wire models for `/curation` |
+| [design/curation_design_rationale.md](design/curation_design_rationale.md) | Why the subsystem is built the way it is |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Services, project isolation, data model, the multi-box region cascade, config store, workers |
+| [opensearch_schema_design.md](opensearch_schema_design.md) | Global and per-project index schemas, `region_boxes`, clustering |
+| [../contracts/README.md](../contracts/README.md) | Generated OpenAPI and TypeScript contracts |
 
-| Prefix | Description | Key Endpoints |
-|--------|-------------|---------------|
-| `/detect` | YOLO object detection | Single, batch |
-| `/faces` | Face detection and recognition | detect, recognize, verify, search, identify |
-| `/embed` | CLIP embeddings | image, text, batch, boxes |
-| `/search` | Visual similarity search | image, text, face, ocr, object |
-| `/ingest` | Data ingestion | single, batch, directory |
-| `/ocr` | Text extraction | predict, batch |
-| `/analyze` | Combined analysis | All models in one call |
-| `/clusters` | FAISS clustering | train, stats, albums |
-| `/query` | Data retrieval | image, stats, duplicates |
-| `/health` | Monitoring | Service health, model status |
-| `/curation` | Curation + active-learning labeling subsystem | classes, crops, regions, clusters, review, scores, select, VLM labeling, training, export, pipeline — see [curation_api_contract.md](design/curation_api_contract.md) |
+The generated schema, [`contracts/openapi/curation.json`](../contracts/openapi/curation.json),
+is the source of truth for routes and models.
 
 ---
 
-## Project Structure
+## Inference and models
+
+| Document | What it covers |
+|---|---|
+| [OCR.md](OCR.md) | PP-OCRv5 detection and recognition setup |
+| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | SCRFD and ArcFace |
+| [../export/README.md](../export/README.md) | Exporting models to TensorRT, PE-Core encoders, dual-head detectors |
+| [MIGRATION_TRITON_26.md](MIGRATION_TRITON_26.md) | Re-exporting engines for Triton 26.06 and TensorRT 11 |
+| [PERFORMANCE.md](PERFORMANCE.md) | FastAPI and gRPC tuning, profiling |
+| [Technical/TRITON_BEST_PRACTICES.md](Technical/TRITON_BEST_PRACTICES.md) | Triton batching, instance groups, tuning |
+| [security/triton_cve_hardening.md](security/triton_cve_hardening.md) | Triton image CVE posture |
+| [../benchmarks/README.md](../benchmarks/README.md) | The `triton_bench` tool |
+
+---
+
+## Scripts and tooling
+
+| Document | What it covers |
+|---|---|
+| [../scripts/README.md](../scripts/README.md) | Setup, CLI, release, dataset, example and curation scripts |
+| [../ATTRIBUTION.md](../ATTRIBUTION.md) | Third-party code and licenses |
+| [../CHANGELOG.md](../CHANGELOG.md) | Release history |
+
+---
+
+## API surface
+
+All routes are on one port (4603 by default).
+
+| Prefix | Description |
+|---|---|
+| `/detect`, `/faces`, `/embed`, `/search`, `/ingest`, `/ocr`, `/analyze`, `/clusters`, `/query`, `/models`, `/health` | Inference and visual search; also under `/v1` |
+| `/curation/projects` | Project registry: list, create, combine |
+| `/curation/projects/{project}/...` | Everything project scoped: classes, crops, regions, clusters, review, scores, VLM, prompt packs, region profiles, settings, keymap, datasets, reprocess, ingest, export, training |
+| `/curation/vlm/...` | Deployment-wide VLM endpoint registry, catalog and local model selection |
+| `/curation/events` | Global event stream |
+
+---
+
+## Repository layout
 
 ```
 OpenProcessor/
-├── README.md                 # Main project documentation
-├── CLAUDE.md                 # AI assistant instructions
-├── ATTRIBUTION.md            # Third-party code attribution
-├── Makefile                  # Development commands
-├── docker-compose.yml        # Services orchestration
+├── README.md, INSTALLATION.md, SECURITY.md, CONTRIBUTING.md, CLAUDE.md
+├── openprocessor              # management CLI (bash)
+├── setup-openprocessor.sh     # one-line installer
+├── docker-compose.yml         # deploy-safe stack
+├── docker-compose.dev.yml     # checkout overlay: local builds, hot reload
+├── docker-compose.gpu-arbiter.yml  # opt-in overlay
+├── env.template               # every setting
+├── Makefile
 │
-├── src/                      # FastAPI service
-│   ├── main.py               # Application entry point
-│   ├── routers/              # API endpoints
-│   │   ├── detect.py         # /detect endpoints
-│   │   ├── faces.py          # /faces endpoints
-│   │   ├── embed.py          # /embed endpoints
-│   │   ├── search.py         # /search endpoints
-│   │   ├── ingest.py         # /ingest endpoints
-│   │   ├── ocr.py            # /ocr endpoints
-│   │   ├── analyze.py        # /analyze endpoints
-│   │   ├── clusters.py       # /clusters endpoints
-│   │   ├── query.py          # /query endpoints
-│   │   ├── health.py         # /health endpoints
-│   │   └── curation/         # /curation endpoints (classes, crops, regions,
-│   │                         #   clusters, review, scores, select, vlm, ...)
-│   ├── services/             # Business logic
-│   │   ├── curation/         # Curation subsystem services (clustering, scoring,
-│   │   │                     #   selection, event hub, semantic search, export)
-│   │   ├── detection/         # Detection cascade primitives
-│   │   ├── labeling/          # VLM client/labeler/prompts
-│   │   └── training/          # Training pipeline (jobs, profiles, promote)
-│   ├── clients/              # Triton and OpenSearch clients
-│   └── schemas/              # Pydantic models
+├── src/
+│   ├── main.py                # FastAPI app
+│   ├── routers/               # core routers; routers/curation/ for /curation
+│   ├── services/              # curation/, config_store/, projects/, labeling/,
+│   │                          #   detection/, training/ and the core services
+│   ├── clients/               # Triton, OpenSearch, OCC helpers, PE encoder
+│   ├── config/                # CurationConfig, RegionFields, projects, retired env
+│   └── schemas/               # Pydantic models
 │
-├── scripts/curation/         # Curation worker entry points (vlm_worker.py,
-│                             #   auto_label_worker.py, cluster_refresh_daemon.py,
-│                             #   detection worker package)
-├── export/                   # Model export scripts
-├── models/                   # Triton model repository
-├── benchmarks/               # Performance testing
-├── docs/                     # This directory
-└── monitoring/               # Prometheus and Grafana
+├── scripts/                   # setup, lib/, release/, codegen/, datasets/, docs/,
+│   └── curation/              #   examples/; curation/ has workers and tools
+├── models/                    # Triton model repository
+├── export/                    # model export scripts
+├── docker/                    # segmenter, trainer, evaluator, test harness
+├── examples/                  # region profiles, prompt packs, bake-off, VLM catalog
+├── contracts/                 # generated API contracts
+├── benchmarks/                # triton_bench (Go)
+├── docs/, docs-site/          # documentation, Docusaurus site
+├── monitoring/                # Prometheus, Grafana, Loki configuration
+└── tests/                     # offline suite; tests/live needs the harness
 ```
 
 ---
 
-## Common Tasks
-
-### Start Services
+## Common tasks
 
 ```bash
-docker compose up -d
+make up                    # start the core stack
+make curation-up           # start the curation workers
 curl http://localhost:4603/health
+make test                  # offline pytest suite
+make contracts             # regenerate contracts/ after an API change
+.venv/bin/python scripts/docs/check_docs_vs_code.py   # check docs against code
 ```
 
-### Download Test Images
+Model exports:
 
 ```bash
-# Auto-downloads bus.jpg and zidane.jpg from Ultralytics
-make download-test-images
+make export-models         # YOLO TensorRT
+make export-mobileclip     # MobileCLIP encoders
+make setup-face-pipeline   # SCRFD + ArcFace
+make setup-ocr             # PP-OCRv5
+make export-pe             # PE-Core encoders (curation)
 ```
 
-### Run Tests
+Check model status:
 
 ```bash
-# Full pytest suite (1000+ tests, offline — this is what CI runs)
-make test
-# equivalent to: .venv/bin/python -m pytest tests/ -q
-
-# Endpoint integration tests (auto-downloads test images)
-make test-endpoints
-
-# Comprehensive smoke-test script
-.venv/bin/python tests/test_full_system.py
-
-# Individual endpoint tests
-make test-faces           # Face detection + recognition
-make test-detect          # Object detection
-make test-embed           # CLIP embeddings
-make test-ocr             # Text extraction
-```
-
-### Run Benchmarks
-
-```bash
-cd benchmarks
-./build.sh
-./triton_bench --mode quick
-```
-
-### Export Models
-
-```bash
-make export-models           # YOLO TensorRT
-make export-mobileclip       # MobileCLIP encoders
-make setup-face-pipeline     # SCRFD + ArcFace
-make setup-ocr               # PP-OCRv5 models
-```
-
-### Check Model Status
-
-```bash
-curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
+make models-list           # or: ./openprocessor models
 ```
 
 ---
 
-## External Resources
+## External resources
 
 - [NVIDIA Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/)
 - [NVIDIA TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/)
-- [OpenSearch Documentation](https://opensearch.org/docs/latest/)
+- [OpenSearch documentation](https://opensearch.org/docs/latest/)
 - [FAISS](https://github.com/facebookresearch/faiss)
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
 - [InsightFace](https://github.com/deepinsight/insightface)
 - [Ultralytics YOLO](https://docs.ultralytics.com/)
-
----
-
-**Last Updated:** 2026-09-21
-**Version:** 0.3.0 - Curation subsystem, CI, and OSS furniture added

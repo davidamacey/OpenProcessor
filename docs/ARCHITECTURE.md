@@ -1,746 +1,535 @@
-# System Architecture Guide
+# System Architecture
 
-Production-grade architecture for high-performance visual AI inference at scale.
+How OpenProcessor is built: the services, the inference path, the curation
+data model (projects, items, region boxes, the config store) and the runtime
+topology. For the user-facing guide see [CURATION.md](CURATION.md); for the
+wire contract see [design/curation_api_contract.md](design/curation_api_contract.md).
 
 ---
 
 ## Table of Contents
 
-1. [Architecture Overview](#architecture-overview)
-2. [Curation Subsystem](#curation-subsystem)
-3. [Production Deployment Patterns](#production-deployment-patterns)
-4. [Thread Safety and Concurrency](#thread-safety-and-concurrency)
-5. [Best Practices](#best-practices)
-6. [Scaling Strategies](#scaling-strategies)
+1. [Overview](#overview)
+2. [Services and compose profiles](#services-and-compose-profiles)
+3. [Inference path](#inference-path)
+4. [Curation subsystem](#curation-subsystem)
+5. [Projects and isolation](#projects-and-isolation)
+6. [Data model](#data-model)
+7. [Regions: the multi-box cascade](#regions-the-multi-box-cascade)
+8. [Config store](#config-store)
+9. [VLM endpoints](#vlm-endpoints)
+10. [Datasets, reprocess and combine](#datasets-reprocess-and-combine)
+11. [Workers, jobs and events](#workers-jobs-and-events)
+12. [Concurrency and the lock rule](#concurrency-and-the-lock-rule)
+13. [Export, training and promotion](#export-training-and-promotion)
+14. [Contracts](#contracts)
+15. [Security boundary](#security-boundary)
+16. [Scaling notes](#scaling-notes)
 
 ---
 
-## Architecture Overview
-
-### System Layers
+## Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 1: Load Balancer (NGINX/Envoy/Cloud LB)             │
-│  - SSL termination                                          │
-│  - Request routing                                          │
-│  - Rate limiting                                            │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 2: API Gateway (FastAPI) - Multiple Instances       │
-│  - Authentication/Authorization                             │
-│  - Input validation                                         │
-│  - Request preprocessing                                    │
-│  - Response formatting                                      │
-│  - Shared Triton gRPC client pool                          │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼ (gRPC, persistent connections)
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 3: Triton Inference Server - Multiple Instances     │
-│  - Model serving                                            │
-│  - Dynamic batching                                         │
-│  - GPU execution                                            │
-│  - Metrics export                                           │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 4: Model Repository (S3/NFS/Local)                  │
-│  - Version control                                          │
-│  - Model artifacts                                          │
-└─────────────────────────────────────────────────────────────┘
+ Client / Cropwright
+        |
+        v  :4603
+  +-----------+  gRPC   +----------------+
+  | yolo-api  |-------->| triton-server  |  TensorRT engines (GPU)
+  | (FastAPI) |         +----------------+
+  |           |  HTTP   +----------------+
+  |           |-------->| opensearch     |  k-NN + curation datastore
+  +-----------+         +----------------+
+        ^   files (/jobs, state volume)
+        |
+  +---------------------------------------------+
+  | curation workers (profile `curation`)       |
+  |  detection, VLM, auto-label, cluster refresh|
+  |  evaluator                                  |
+  +---------------------------------------------+
+        |  HTTP                      |  HTTP / files
+        v                            v
+  segmenter (profile `segmenter`)   vlm (profile `vlm`) or any remote
+  trainer + MLflow (profile `training`)  OpenAI-compatible endpoint
 ```
 
-### Service Components
+Two surfaces share one process:
 
-The system uses Docker Compose to orchestrate three core services:
+- The **inference API** (`/detect`, `/faces`, `/embed`, `/search`, `/ingest`,
+  `/ocr`, `/analyze`, `/clusters`, `/query`, `/models`, `/health`), also
+  mounted under `/v1`. It writes to the global `visual_search_*` indexes.
+- The **curation API** (`/curation`, no `/v1` twin). Everything project scoped
+  lives under `/curation/projects/{project}/`. Project-bound code can only see
+  that project's indexes and directories.
 
-1. **triton-server**: NVIDIA Triton Inference Server
-   - GPU inference backend (device_ids: [`0`])
-   - Ports: 4600 (HTTP), 4601 (gRPC), 4602 (metrics)
-   - Serves TensorRT models with dynamic batching
-   - Max batch size: 128
-
-2. **yolo-api**: FastAPI Service
-   - Python 3.12 with async support
-   - Port: **4603** (all API endpoints)
-   - Workers: 2 (dev) or 64 (production)
-   - Located in `src/main.py`
-
-3. **opensearch**: Vector Database
-   - OpenSearch 3.0+ with k-NN plugin
-   - Port: **4607** (REST API)
-   - Indexes: images, faces, objects, ocr
+The service layer (`src/services/`) has no FastAPI dependency. Routers under
+`src/routers/` and `src/routers/curation/` are thin HTTP adapters over it.
 
 ---
 
-## Curation Subsystem
+## Services and compose profiles
 
-**Experimental for this release** — see
-[`docs/CURATION.md`](CURATION.md) for the user-facing guide. A generic
-active-learning curation and labeling stack, mounted under a single
-configurable prefix (`CurationConfig.api_prefix`, default `/curation`)
-alongside the core detection/face/embed/OCR routers. Its design
-rationale (the config dataclasses, the storage/wire-contract split, the
-pre-commit ratchet exemptions, and known gaps) is documented in
-[`docs/design/curation_design_rationale.md`](design/curation_design_rationale.md).
-The generic wire contract (Cropwright's labeler frontend is one
-consumer among anticipated others) is documented in
-[`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
+`docker-compose.yml` is deploy-safe by itself (no `build:`, no source mounts).
+`docker-compose.dev.yml` adds local builds and hot-reload mounts for a
+checkout. GPU placement comes from `.env` keys, not from the compose files.
 
-### Design principles
+| Service | Profile | Port | Role |
+|---|---|---|---|
+| `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | Serves the TensorRT models. Explicit model control; loads the list in the compose command; a missing engine leaves that model unloaded instead of killing the server |
+| `yolo-api` | none | 4603 | FastAPI, uvicorn with 32 worker processes |
+| `opensearch` | none | 4607 | k-NN indexes and every curation document |
+| `curation-detection-worker` | `curation` | | Region cascade over pending items, every active project in turn |
+| `curation-vlm-worker` | `curation` | | VLM class and verification loop |
+| `curation-auto-label-worker` | `curation` | | Drives the auto-label job protocol |
+| `curation-cluster-refresh` | `curation` | | Periodic residual-clustering refresh |
+| `curation-evaluator` | `curation` | | Runs bake-off job specs |
+| `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt, `docker/segmenter/` |
+| `curation-trainer` | `training` | | Runs training jobs from `job.json` files, `docker/trainer/` |
+| `curation-mlflow` | `training` | 4609 | Experiment tracking, optional |
+| `vlm` | `vlm` | 4612 | Local vLLM serving one catalog model |
+| Prometheus, Grafana, Loki, Alloy, DCGM exporter, node exporter, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4608 | Opt in only |
+| `triton-sdk` | `benchmark` | | Benchmark client |
 
-- **Config-driven genericity, not a rewrite.** Four dataclasses carry
-  everything that was previously hardcoded for one domain:
-  - `CurationConfig` (`src/config/curation.py`) — OpenSearch index
-    names, filesystem roots, API prefix, embedding dimensions.
-  - `RegionFields` (`src/config/region_fields.py`) — the OpenSearch
-    document field names for a per-item "region of interest"
-    sub-annotation (e.g. a defect region on an item crop). Defaults
-    to `region_*` names; an existing deployment with data under
-    different names constructs its own instance — a rename is a config
-    flip, never a reindex.
-  - `DetectionProfile` (`src/config/detection_profile.py`) — detector
-    model names, aspect/area heuristics, and OCR wiring for one
-    detectable region type. A deployment with a different region type
-    constructs its own profile instead of forking the cascade code.
-  - `RegionStatus` (`src/config/region_state.py`) — the canonical
-    region-of-interest status state machine
-    (`pending_detection`/`pending_verification` → `detected` /
-    `verify_rejected` / `no_region_box` / `no_region_visible` /
-    `detection_failed`, plus a human-settable `false_positive`).
-- **HTTP wire contract is independent of backend storage field names.**
-  The wire uses one generic vocabulary (`region_<attr>` for every
-  `RegionFields` attribute, `vlm_*`, `classifier_*`), fixed regardless
-  of any `OP_REGION_FIELD_*` storage override; one serializer
-  (`src/services/curation/wire.py`) translates storage→wire at the
-  boundary. See `curation_api_contract.md`.
-- **Services before routers, leaves before trunks.** The service layer
-  (`src/services/curation/`, `src/services/detection/`,
-  `src/services/labeling/`, `src/services/training/`) has no FastAPI
-  dependency and is independently testable; routers under
-  `src/routers/curation/` are thin HTTP adapters over it.
+Named volumes: `openprocessor-state` (state dir, job files, events),
+`openprocessor-jobs` (training and auto-label jobs), `openprocessor-crop-cache`.
+Per-project class registries, exports and bake-off data live under
+`./data/projects/<slug>/`.
 
-### Component map
+`docker-compose.gpu-arbiter.yml` is an opt-in overlay that mounts the Docker
+socket into `yolo-api` so the GPU arbiter can stop and restart sibling
+containers around a training run. It gives that container control of the Docker
+host; read its header before using it.
+
+---
+
+## Inference path
+
+- **Triton models** (`models/`): `yolov11_small_trt_end2end` (GPU NMS),
+  `yolo26_small_trt` (NMS-free), `scrfd_10g_bnkps`, `arcface_w600k_r50`,
+  `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder`,
+  `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline) and
+  the curation encoders `pe_image_encoder` (TensorRT) and `pe_text_encoder`
+  (CPU). Dynamic batching is on; preferred sizes and instance counts are in each
+  `config.pbtxt`. The API reads a detector's output format from Triton
+  metadata, so YOLO11 and YOLO26 are interchangeable at `/detect`.
+- **One shared gRPC client pool** (`src/clients/triton_pool.py`) per process.
+  Opening a connection per request defeats Triton's dynamic batching, so route
+  code takes the shared client, never builds its own.
+- **Preprocessing** (letterbox, normalization) runs in the API on CPU before
+  the request. Keep the API layer to validation and decoding; the models own the
+  rest.
+- **Thread safety.** Ultralytics model objects keep internal state. The code
+  creates a thin client wrapper per request rather than sharing one instance
+  across threads. The wrapper is only a gRPC front, not a loaded model.
+- **PE-Core text** embeddings (`OP_PE_TEXT_BACKEND`, default `auto`) prefer the
+  Triton `pe_text_encoder` so all uvicorn workers share one CPU instance, then
+  fall back to an in-process PyTorch load. See
+  [export/README.md](../export/README.md#pe-core-encoders-curation-embeddings).
+
+---
+
+## Curation subsystem
+
+A generic active-learning stack for building a labeled image dataset in any
+domain. A domain is configured with data (class registry, region profile,
+prompt pack, VLM endpoint), not by forking code. Four dataclasses carry the
+deployment-specific parts: `CurationConfig` (roots, prefixes, dimensions),
+`RegionFields` (storage names of the region fields), `DetectionProfile` (the
+region stage as data) and `RegionStatus` (the pipeline state machine). The
+design rationale is in
+[design/curation_design_rationale.md](design/curation_design_rationale.md).
 
 | Area | Path | Responsibility |
 |---|---|---|
-| Config | `src/config/{curation,region_fields,detection_profile}.py` | Deployment-specific names/roots/thresholds as data |
-| OpenSearch client | `src/clients/curation_opensearch.py` | Index bodies, class registry, per-item CRUD helpers |
-| OCC | `src/clients/occ.py` | Optimistic-concurrency update/bulk helpers shared by every writer; human-label preservation on ingest |
-| Clustering | `src/services/curation/clustering/` | FAISS/IVF + AHC/HDBSCAN residual clustering, auto-promote, embedding reduction |
-| Scoring + selection | `src/services/curation/item_scores/`, `selection/` | Mistakenness/uniqueness/near-dup scores; k-center-greedy diverse sampling |
-| Review | `src/services/curation/{review_queries,review_sorts,holdout}.py` | `/review` tab query construction, sort strategies, frozen test-holdout |
-| Semantic search | `src/services/curation/semantic_search.py` | PE-Core kNN text→image search over the items index |
-| PE-Core embeddings | `src/clients/pe_encoder.py`, `src/services/detection/pe_preprocess.py` | Triton `pe_image_encoder` (images) + in-process CPU text encoder (ONNX Runtime over `pe_text_encoder.onnx`, else PyTorch; optional Triton `pe_text_encoder`). Weights via `export/download_pe_weights.py`; build with `export/export_pe_image_encoder.py` + `export/build_pe_trt.sh` (or `build_pe_ort_fallback.sh`) and `export/export_pe_text_encoder.py` — see [`export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings) |
-| Auto-label pipeline | `src/services/curation/autolabel/` | File-backed job dispatch to the long-lived auto-label worker |
-| Export | `src/services/curation/export.py` | Generic YOLO-format dataset export (deterministic split, manifest checksum) |
-| Detection cascade | `src/services/detection/` | Crop quality, frame dedup, PE preprocessing, ensemble NMS, region lean, FP store, cascade orchestration |
-| VLM labeling | `src/services/labeling/{vlm_client,vlm_labeler,vlm_prompts}.py` | VLM transport/retry, class-resolution + region-verify orchestration, prompt/vocabulary packs |
-| Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote |
-| Model comparison (bake-off) | `src/services/curation/{eval_datasets,bakeoff_jobs}.py`, `scripts/curation/bakeoff/` | Eval datasets (exports + frozen external sets), run/baseline resolution and per-class class mapping into job spec v2; the harness the evaluator runs (multi-class COCO metrics, comparison, matrix) |
-| Routers | `src/routers/curation/` (23 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `curation_api_contract.md` for the full route table |
-| Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,region_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
+| Config | `src/config/` | Curation config, region fields, detection profile, project records and context, retired-env guard |
+| Projects | `src/services/projects/` | Registry, lifecycle, the OpenSearch guard, clone, combine, capacity |
+| Config store | `src/services/config_store/` | Prompt packs, region profiles, activations, VLM endpoint registry |
+| OpenSearch client | `src/clients/curation_opensearch.py` | Index bodies, class registry, item helpers |
+| OCC | `src/clients/occ.py`, `occ_locks.py` | Optimistic-concurrency writes, the lock rule |
+| Ingest and import | `src/services/curation/ingest*.py`, `dataset_import/` | Item creation, duplicate detection, labeled-dataset import |
+| Regions | `src/services/curation/region_*.py`, `src/services/detection/` | Box list, edits, verification, text, embeddings, detector and segmenter cascade |
+| Clustering | `src/services/curation/clustering/` | FAISS/IVF and AHC clustering, per-box clustering, auto-promote |
+| Scoring, selection, search | `src/services/curation/item_scores/`, `selection/`, `semantic_search.py` | Mistakenness and uniqueness, diverse sampling, PE-Core text-to-image search |
+| Review | `src/services/curation/review_*.py`, `holdout.py` | Queue queries, sorts, the frozen test set |
+| VLM | `src/services/labeling/` | Transport, endpoints and probes, prompts, class and region labelers |
+| Reprocess | `src/services/curation/reprocess*.py` | One selection and lock rule behind every re-run |
+| Export and training | `src/services/curation/export*.py`, `src/services/training/` | YOLO export, job lifecycle, preflight, promotion |
+| Routers | `src/routers/curation/`, `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface |
+| Workers | `scripts/curation/` | Detection, VLM, auto-label, cluster refresh, evaluator |
 
-### Runtime-companion topology
+The wire uses one vocabulary (`region_*`, `vlm_*`, ...) that does not change
+with storage names; one serializer, `src/services/curation/wire.py`, maps
+storage to wire.
 
-The synchronous HTTP API works standalone; a set of long-lived async
-workers keeps the dataset moving without a human driving every step,
-and ships as its own opt-in Docker Compose profile:
+---
 
-```bash
-docker compose --profile curation up -d
-```
+## Projects and isolation
 
-| Service | Role |
+A project is a named, isolated dataset workspace. The registry is the
+`op_projects` index (`OP_PROJECTS_INDEX`).
+
+| Resource | Where |
 |---|---|
-| `curation-detection-worker` | Runs the detection cascade continuously over `pending_detection` items. |
-| `curation-vlm-worker` | Verifies/labels items via the configured VLM. |
-| `curation-auto-label-worker` | Long-lived driver for the `/curation/pipeline/auto_label` protocol. |
-| `curation-cluster-refresh` | Periodically retrains/refreshes residual clustering. |
-| `curation-evaluator` (run on demand) | Model-comparison (bake-off) harness — `docker compose --profile curation run --rm curation-evaluator`. Watches the bake-off job dir the API writes; reads exports via a read-only `./data` mount. |
+| Indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`, default prefix `op_prj_`, roles `images`, `items`, `labels_confirmed`, `classes`, `umap_state`, `configs` |
+| Settings and UMAP view state | folded into the project's `configs` index, by fixed document id |
+| Class registry, exports, bake-off eval sets | `OP_PROJECTS_DATA_ROOT/<slug>/` (default `./data/projects/<slug>/`) |
+| Uploads, bake-off jobs, pause flag | `OP_STATE_DIR/projects/<slug>/` |
+| Training and auto-label jobs | `projects/<slug>/` under the job roots |
+| MLflow experiment | `openprocessor-<slug>` |
+| Promoted Triton models | prefixed `<slug>__` (the `default` project has no prefix) |
 
-None of these workers requires the base API image to be rebuilt — they
-run the same `davidamacey/openprocessor` image with a different
-entrypoint (see `docker-compose.yml`'s `curation-*` service
-definitions).
+Names are computed once when the project is created and stored in the record;
+a later env change never remaps a live project.
 
-Two further services sit behind their own `--profile training`, because a
-training run takes a GPU for hours and starting one should be an explicit
-act:
+**Slugs** are 2-32 characters: lowercase letters, digits and single hyphens,
+starting with a letter. `combine`, `new`, `all`, `none`, `projects`, `global`,
+`settings`, `vlm` and `health` are reserved, and a deleted slug cannot be reused
+(`slug_retired`).
 
-| Service | Role |
+**Lifecycle.** Statuses: `building`, `active`, `archived`, `deleting`,
+`deleted`, `failed`.
+
+| Action | Route | Notes |
+|---|---|---|
+| Create | `POST /curation/projects` | Optional `clone_settings_from` and `clone_axes` copy settings in one step |
+| Rename, describe | `PATCH /curation/projects/{project}` | Needs `expected_revision`; the slug is immutable |
+| Archive, unarchive | `POST /curation/projects/{project}/archive`, `POST /curation/projects/{project}/unarchive` | An archived project refuses writes (`project_archived`); workers skip it |
+| Copy settings | `POST /curation/projects/{project}/clone_settings` | Axes: `settings_defaults`, `classes`, `activations`, `keymap`, `prompt_packs`, `vlm_activation` |
+| Delete | `DELETE /curation/projects/{project}` | `?dry_run=true` reports what would go; a real delete needs `?confirm=<slug>` and answers 202 while it drains and removes indexes and directories. `default` cannot be deleted |
+
+**The guard.** Every OpenSearch client is wrapped by a transport-level guard
+(`src/services/projects/guard.py`). It allows only request shapes the code
+really sends, aimed at the bound project's concrete index names. Index-less
+searches, wildcards, `_all`, aliases, `_reindex`, `_sql`, snapshots and any
+request that names another project's index raise `CrossProjectAccess`. Unbound
+code can touch only indexes no project owns (the `visual_search_*` set).
+Workers are not bound to one project: each cycle they list active projects,
+skip paused ones and bind one project around that project's work. Scripts bind
+with `--project`.
+
+**Combine.** `POST /curation/projects/combine/preview` checks one to eight
+source projects and returns a mapping suggestion; `POST /curation/projects/combine`
+starts a job that builds a new target project (status `building` while it fills,
+then `active`). Sources are not modified. Class mapping is by name, duplicate
+images are merged by content hash with their boxes attached, and the holdout can
+be preserved as a union, recomputed or dropped. Progress arrives on the global
+event stream and at `GET /curation/projects/combine/{job_id}`; a job can be
+cancelled and resumed. Undoing a combine is deleting the target project.
+
+---
+
+## Data model
+
+| Index role | Holds | Key fields |
+|---|---|---|
+| `images` | One document per ingested source image | `image_id`, `image_path`, `imohash`, `phash`, `embedding` (512-d), `pe_embedding` (1024-d) |
+| `items` | One document per crop (item) | see below |
+| `labels_confirmed` | Mapping kept, nothing writes it in this release | `label_id`, `crop_id`, `class_id`, `class_name`, `confirmed_at` |
+| `classes` | The class registry mirror | `class_id`, `class_name`, `group`, `deprecated`, `sample_count`, `validated_count` |
+| `umap_state` | Fitted reducer cache for clustering | `state_id`, `reducer_b64` |
+| `configs` | Config store plus folded settings and projection state | `doc_type`, `kind`, `name`, `revision`, `body` |
+
+**Items** carry the class (`class_id`, `class_name`, `class_source`,
+`class_validated`), the crop `bbox_norm` in the source frame, cluster placement
+(`cluster_id`, `cluster_subid`, distances), quality and score fields, VLM
+provenance (`vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`), import and combine
+provenance, and the region fields described next. The exact wire keys are in
+[`contracts/json/item_wire.json`](../contracts/json/item_wire.json).
+
+**Class identity is the name.** The class registry
+(`class_registry.json` per project) assigns indexes, but every boundary maps by
+name: dataset import and export, combine, training, promotion and sharing a
+trained model with another project. An index is only a position inside one
+registry at one moment.
+
+The global indexes (`visual_search_global`, `_vehicles`, `_people`, `_faces`,
+`_ocr`) belong to the inference API and are described in
+[opensearch_schema_design.md](opensearch_schema_design.md).
+
+---
+
+## Regions: the multi-box cascade
+
+A **region** is a sub-annotation of an item: a wheel on a car crop, text on a
+sign. Regions are always a list.
+
+```
+ingest -> primary detector -> items (crops)
+       -> region stage (items in the profile's parent_classes)
+            detector leg  +  segmenter leg   -> candidates
+            merge + NMS, keep up to max_regions_per_item
+            VLM verifies each box -> per-box verdict
+            optional text read -> per-box text
+            embed + cluster each box
+       -> review: per-box accept / reject / false positive / edit
+```
+
+**Storage.** `region_boxes` is a `nested` field on the item, so a query such as
+"a box with detector X and state accepted" means one box. N=1 is a list of one
+box; there is no second code path. Element keys are fixed: `box_id` (`b1`, `b2`,
+never reused inside an item), `bbox_norm`, `state`, `score`, `detector`,
+`detector_version`, `source`, `rejection_reason`, `text`, `text_raw`,
+`text_source`, `text_confidence`, `cluster_id`, `cluster_subid`,
+`cluster_distance`, `detected_at` and more. Per-box vectors are in the sibling
+nested field `region_box_embeddings` (`box_id`, `bbox_norm`, `embedding`), so
+an edit that rewrites the box list cannot silently delete embeddings. A vector
+whose box moved since it was computed is stale and dropped.
+
+**Item summary fields**: `region_status`, `region_count`, `region_rejected_count`,
+`region_max_score`, `region_set_complete`, `region_revision` (bumped by any
+write that changes a box's state, geometry or text; cluster-only writes do not
+bump it), plus the profile stamps `region_profile` and `region_profile_revision`.
+
+**Box states**: `proposed`, `accepted`, `rejected`, `false_positive`. The item
+`region_status` is derived: any accepted box gives `detected`, else any
+false-positive box gives `false_positive`, else any proposed box gives
+`pending_verification`, else any rejected box gives `verify_rejected`. Pipeline
+statuses `pending_detection`, `no_region_box`, `no_region_visible` and
+`detection_failed` cover items with no boxes.
+
+**Which items.** The profile's `parent_classes` (matched by name, case
+insensitive, against `class_name` or the detector's own label `proposal_name`)
+select items for the region stage; an empty list means every item. The profile's
+`max_regions_per_item` (default 1) caps the boxes kept.
+
+**Human edits** go through four routes and are the only writers of box geometry
+and state:
+
+| Route | Use |
 |---|---|
-| `curation-trainer` | Watches `/jobs/` and runs each `job.json` through Ultralytics — the trainer half of the file protocol (`docker/trainer/`). Its own image, built from `docker/trainer/Dockerfile`. |
-| `curation-mlflow` | Optional experiment tracking for those runs (port 4609). Every tracking hook degrades to a warning when it is unreachable. |
+| `PUT /curation/projects/{project}/crops/{crop_id}/regions` | Replace or extend an item's boxes; a box named by `box_id` alone is left untouched; takes `expected_region_revision` |
+| `PATCH /curation/projects/{project}/crops/{crop_id}/regions/{box_id}` | Change one box |
+| `PUT /curation/projects/{project}/crops/batch_regions` | The same over many items |
+| `POST /curation/projects/{project}/regions/batch_box_state` | Set many boxes' state |
 
-A segmentation-service container is still **not** shipped; the API
-implements only the control-plane side of that protocol (a generic HTTP
-segment-request/response shape) — see
-[`docs/CURATION.md`](CURATION.md) for what a deployment supplies to make
-those routes do something.
-
-### What's intentionally thinner than a bespoke pipeline
-
-`POST /curation/ingest/image` and `/ingest/batch` exist and create items
-(duplicate detection, a quality gate, crop-cache population, bulk
-indexing). YOLO-format label import is a **planned** `POST
-/datasets/imports` route (not built yet) — the removed per-image
-`/import_labels(/batch)` routes are gone. What is deliberately not
-included: any single-class /
-domain-specific dataset export (a proprietary single-class export has no
-generic equivalent — a single-class exporter is inherently domain-shaped), a
-fixed class allowlist, or a region-status assignment policy tuned to
-one domain. The **backbone-embedding** (`backbone_embedding`) chain is also
-only half-wired: the producer side exists
-(`export/export_detector_dual_head.py` re-exports any YOLO-family
-detector with a `sppf_feat` feature-map output, and
-`src/services/detection/geometry.py:roi_pool_sppf` pools it per
-detection), but ingest still requests only `output0` from the detector,
-so nothing writes the field yet. Every reader treats it as optional and
-residual clustering defaults to `pe_embedding`
-(`OP_RESIDUAL_EMBEDDING_FIELD`). Only one `DetectionProfile`/VLM `PromptPack` is active per
-process — there's no per-request selection among several registered
-profiles yet. These are known, accepted gaps — the most likely first
-follow-ups after this subsystem graduates out of experimental status.
+`POST /curation/projects/{project}/crops/{crop_id}/region/undo` reverts the last
+region write. `GET /curation/projects/{project}/regions` lists boxes (one row
+per box) with filters that all apply to the same box.
 
 ---
 
-## Production Deployment Patterns
+## Config store
 
-### Preprocessing Strategy
+Prompt packs, region profiles and the VLM activation are **versioned data**,
+stored per project in the `configs` index (VLM endpoints are deployment-wide in
+`op_global_configs`).
 
-**Client-Side (Browser/Mobile App):**
-```javascript
-✅ Image compression (JPEG quality 85-90%)
-✅ Max resolution enforcement (e.g., 4K max)
-✅ Format validation (reject unsupported formats)
-❌ NO resizing/letterbox (server does this for accuracy)
-❌ NO normalization (model-specific, server handles)
-```
+- **Revisions.** Saving a named pack or profile writes a new revision; old
+  revisions stay readable.
+- **Activation.** Exactly one pack, one profile and one VLM endpoint is active
+  per project. Activating applies it to the API and to the workers, which poll
+  the store every `OP_CONFIG_POLL_S` seconds. Activation takes
+  `expected_active` so a stale editor gets a 409 instead of overwriting.
+- **Impact.** `GET /curation/projects/{project}/region_profiles/active/impact`
+  reports how many items a profile change touches and the explicit
+  `POST /curation/projects/{project}/reprocess` request that re-runs the
+  unlocked ones. Activation never reprocesses anything by itself.
+- **Rollback.** `POST /curation/projects/{project}/region_profiles/active/rollback`
+  and `POST /curation/projects/{project}/prompt_packs/active/rollback` reactivate
+  the previous revision.
+- **Test on crop.** `POST /curation/projects/{project}/prompt_packs/test` runs a
+  pack against stored crops through the real VLM path and returns the prompt,
+  the raw reply, parsed results and a preview item.
+  `POST /curation/projects/{project}/region_profiles/test` runs a profile's
+  detector and segmenter legs (and optionally verification) on one stored crop
+  and returns every candidate with its selection or drop reason. Neither writes
+  anything.
+- **Validation.** Both have `validate` routes that return a report without
+  saving, and `schema` routes that describe the editor fields.
+- **Settings.** `GET /curation/projects/{project}/settings` and
+  `PUT /curation/projects/{project}/settings` hold shared defaults per axis
+  (`cluster`, `sort`, `prompt_pack`, `detection_profile`, `vlm`).
+  `GET /curation/projects/{project}/config/vocabulary` serves the enum choices
+  the editors render (detectors, segmenters, OCR models, registry classes, text
+  reader modes, VLM endpoints).
+- **Keymap.** `GET /curation/projects/{project}/keymap` and `PUT` hold per-project
+  shortcut overrides on top of the server's action table
+  (`contracts/json/keymap_actions.json`); `POST .../keymap/validate` and
+  `.../keymap/reset` check and restore.
 
-**Why?**
-- Reduces bandwidth (5MB → 500KB)
-- Faster uploads
-- But server still controls model-specific preprocessing
-
-**API Layer (FastAPI):**
-```python
-✅ Fast validation (file size, format, dimensions)
-✅ Image decoding (OpenCV/Pillow)
-✅ Error handling and retries
-✅ Request batching/aggregation (advanced)
-❌ NO heavy preprocessing (defeats GPU pipeline)
-```
-
-**Triton Layer:**
-```
-✅ Model-specific preprocessing (letterbox, normalize)
-✅ CPU preprocessing (OpenCV letterbox + normalize)
-✅ Batch processing
-```
-
-### Production Configuration
-
-#### FastAPI (docker-compose.yml)
-
-```yaml
-yolo-api:
-  command:
-    - uvicorn
-    - src.main:app
-    - --host=0.0.0.0
-    - --port=4603
-    # Workers: (2 × CPU cores) + 1
-    - --workers=32
-
-    # Concurrency: requests per worker
-    # 512 × 32 workers = 16,384 total capacity
-    - --limit-concurrency=512
-
-    # Connection settings
-    - --backlog=8192              # Socket queue (was 4096)
-    - --timeout-keep-alive=120    # Reuse connections (was 75)
-
-    # Memory management
-    - --limit-max-requests=50000  # Recycle workers (was 10000)
-    - --limit-max-requests-jitter=5000  # Spread recycling
-
-    # Performance
-    - --loop=uvloop               # 2-3x faster event loop
-    - --http=httptools            # Faster HTTP parsing
-
-  environment:
-    # gRPC settings for Triton
-    GRPC_ENABLE_FORK_SUPPORT: "1"
-    GRPC_POLL_STRATEGY: "epoll1"  # Linux-optimized
-
-  deploy:
-    resources:
-      limits:
-        memory: 16G
-      reservations:
-        memory: 8G
-```
-
-#### Triton Server (docker-compose.yml)
-
-```yaml
-triton-server:
-  command:
-    - tritonserver
-    - --model-store=/models
-
-    # Batching configuration
-    - --backend-config=default-max-batch-size=128
-
-    # Thread pool (CPU cores × 2)
-    - --backend-config=tensorflow,version=2
-    - --backend-config=python,shm-default-byte-size=16777216
-
-    # HTTP/gRPC settings
-    - --grpc-keepalive-time=7200000        # 2 hours
-    - --grpc-keepalive-timeout=20000       # 20 seconds
-    - --grpc-keepalive-permit-without-calls=1
-    - --grpc-http2-max-pings-without-data=2
-
-    # Performance
-    - --model-control-mode=explicit
-    - --strict-model-config=false
-    - --log-verbose=1
-
-  deploy:
-    resources:
-      limits:
-        memory: 32G
-      reservations:
-        memory: 16G
-```
-
-### Shared Triton Client Architecture
-
-**CRITICAL**: Use shared gRPC client pool to enable dynamic batching.
-
-**Current Architecture (BROKEN):**
-```python
-# ❌ WRONG - Creates new connection per request
-@app.post("/detect")
-def detect(image: UploadFile):
-    client = TritonEnd2EndClient(...)  # NEW CONNECTION!
-    result = client.infer(image)
-    return result
-
-# Result: 1000 requests → 1000 gRPC connections → NO BATCHING
-```
-
-**Production Architecture (CORRECT):**
-```python
-# ✅ RIGHT - Shared connection pool
-
-# Global client pool (singleton)
-from src.utils.triton_shared_client import get_triton_client
-
-# At startup
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Create shared client ONCE
-    global triton_client
-    triton_client = get_triton_client("triton-server:8001")
-
-    # Configure gRPC connection
-    # - Keep-alive to prevent connection drops
-    # - Connection pooling for throughput
-
-    yield
-
-    # Cleanup on shutdown
-    triton_client.close()
-
-# In endpoint
-@app.post("/detect")
-async def detect(image: UploadFile):
-    # Reuse shared client
-    client = TritonEnd2EndClient(
-        triton_url=TRITON_URL,
-        model_name=model_name,
-        shared_grpc_client=triton_client  # SHARED!
-    )
-    result = client.infer(image)
-    return result
-
-# Result: 1000 requests → 1 gRPC connection → BATCHING WORKS!
-```
+Packs and profiles can also be loaded from files at startup
+(`OP_PROMPT_PACK_PATH`, `OP_PROMPT_PACK_PATHS`, `OP_REGION_PROFILE_PATH`); the
+examples live in `examples/`.
 
 ---
 
-## Thread Safety and Concurrency
+## VLM endpoints
 
-### The Thread Safety Problem
+A VLM endpoint is an OpenAI-compatible chat URL plus a model name, limits and a
+key reference. Endpoints are a **deployment-wide registry** (any project sees
+them), activation is **per project**.
 
-When using async/await with `asyncio.to_thread()`, blocking operations run in a ThreadPoolExecutor. This creates potential thread safety issues with shared resources.
-
-### YOLO Model Thread Safety
-
-**The Problem:**
-
-From [Ultralytics documentation](https://docs.ultralytics.com/guides/yolo-thread-safe-inference/):
-
-> YOLO models contain internal state that can be corrupted when accessed by multiple threads simultaneously.
-
-**Threading Architecture:**
-- 32 worker **processes** (uvicorn --workers=32)
-- Each process has **async event loop** + **ThreadPoolExecutor**
-- `asyncio.to_thread()` → Runs blocking I/O in thread pool
-- Multiple concurrent requests → **Multiple threads accessing same instance** → **RACE CONDITIONS**
-
-**WRONG Approach (Cached, Unsafe):**
-```python
-@lru_cache(maxsize=32)  # ❌ Creates shared instance
-def get_triton_yolo_client(model_url: str):
-    return YOLO(model_url, task="detect")
-
-# Request 1 (Thread A) → calls model(img1)
-# Request 2 (Thread B) → calls model(img2) simultaneously
-# Both threads modify same YOLO instance → CORRUPTION!
-```
-
-**CORRECT Approach (Per-Request, Safe):**
-```python
-def create_triton_yolo_client(model_url: str):
-    """
-    Create a new YOLO Triton client instance
-
-    NOTE: Creates per-request for thread safety. Lightweight (no model loading).
-    """
-    return YOLO(model_url, task="detect")
-
-# Each request gets its own client instance
-# No shared state between threads
-# No race conditions
-```
-
-### Performance Impact Analysis
-
-**Before (Cached, Unsafe):**
-```
-First request:  2ms (create) + 20ms (inference) = 22ms
-Second request: 0ms (cached)  + 20ms (inference) = 20ms ✅ 2ms saved
-                                                         ❌ BUT UNSAFE!
-```
-
-**After (Per-Request, Safe):**
-```
-First request:  2ms (create) + 20ms (inference) = 22ms
-Second request: 2ms (create) + 20ms (inference) = 22ms ✅ SAFE!
-                                                        ⚠️  2ms slower
-```
-
-**Trade-off**: We lose 2ms per request (9% overhead), but gain **correctness and safety**.
-
-### Why Triton Clients Are Lightweight
-
-- `YOLO("grpc://triton-server:8001/...")` doesn't load PyTorch model
-- It's just a gRPC client wrapper (~1-2ms creation overhead)
-- No heavy model weights in memory
-- Creation overhead is ~5-10% of total request time
-- **Safety > marginal performance gain**
-
-### Concurrency Best Practices
-
-1. **Performance optimizations must preserve correctness**
-   - Fast but wrong ❌
-   - Reasonably fast + correct ✅
-
-2. **Thread safety is non-negotiable**
-   - Race conditions are hard to debug
-   - Intermittent failures are worse than consistent slowness
-   - Always check library thread-safety docs
-
-3. **Measure before optimizing**
-   - Don't cache things that are cheap to create
-   - Profile to identify real bottlenecks
+- Sources: the built-in `env` endpoint (from `OP_VLM_URL` and `OP_VLM_MODEL`),
+  endpoints saved through `POST /curation/vlm/endpoints`, and the in-compose
+  local `vlm` service.
+- A **probe** (`POST /curation/vlm/endpoints/{name}/probe`) checks reachability,
+  vision, JSON mode, image limits and context size and records the result per
+  `name@revision`. Activation can bypass only a missing or failed probe and a
+  small context, and only with `force`.
+- **Keys** are never served. An endpoint holds `api_key_ref` (`secret:<slug>`),
+  read from `secrets/vlm/` on the host (`./openprocessor vlm key set <slug>`).
+- **External endpoints.** A URL outside this deployment sends crops off the
+  host. It needs `allow_external` on the endpoint and an acknowledgement at
+  activation or per run. `OP_VLM_EXTERNAL_POLICY=deny` refuses them outright.
+  This stack's own services, link-local and metadata addresses are always
+  refused. See [SECURITY.md](../SECURITY.md#vlm-endpoints-and-server-side-requests).
+- **Local catalog.** `GET /curation/vlm/catalog` lists the models in
+  `examples/vlm/catalog.tsv` with whether each fits the GPU. The API records the
+  wanted model (`POST /curation/vlm/local/select`) and reports
+  `restart_required`; the host applies it with `./openprocessor vlm use <id>`.
+- **Provenance.** Items record `vlm_endpoint` (`name@revision`), `vlm_model` and
+  `vlm_prompt_pack` for the answer that wrote them.
+- **Per-run selection.** Labeling and verification routes and the auto-label
+  job take `?vlm=<name|name@revision>`; unknown names answer 422, a project with
+  the VLM off answers 409.
 
 ---
 
-## Best Practices
+## Datasets, reprocess and combine
 
-### Health Checks and Circuit Breakers
+**Dataset import** (`/datasets/*`): upload an archive
+(`POST /curation/projects/{project}/datasets/uploads`) or name a server path,
+preview it (`POST /curation/projects/{project}/datasets/preview`), then start a
+job (`POST /curation/projects/{project}/datasets/imports`). Formats: YOLO, COCO
+and the OpenProcessor export (which round-trips labels, splits and the frozen
+test set). The mapping is a list of `{dataset_class, action}` with `action` one
+of `map`, `create`, `skip`, `region`; matching is by name, and every class that
+has boxes needs a decision. Options include `label_trust` (`validated` or
+`suggestion`), `processing` (`none` or `propose`), `missing_label` and
+`freeze_test_split`. An import can be cancelled, resumed and undone; undo keeps
+anything a human has since edited. The import report counts images, items,
+labels, regions, negatives and the labels a human lock refused.
 
-```python
-# Health check endpoint
-@app.get("/health")
-async def health():
-    """Comprehensive health check."""
-    checks = {
-        "api": "healthy",
-        "triton": await check_triton_health(),
-        "gpu": check_gpu_availability(),
-        "memory": check_memory_usage()
-    }
-
-    # Fail if Triton is down
-    if checks["triton"] != "healthy":
-        raise HTTPException(status_code=503, detail="Triton unavailable")
-
-    return checks
-
-async def check_triton_health():
-    """Check Triton is responding."""
-    try:
-        client = get_triton_client(TRITON_URL)
-        if client.is_server_live():
-            return "healthy"
-        return "unhealthy"
-    except:
-        return "unavailable"
-
-# Circuit breaker pattern
-from circuitbreaker import circuit
-
-@circuit(failure_threshold=5, recovery_timeout=30)
-async def call_triton_with_circuit_breaker(model_name, image):
-    """Automatic fallback if Triton fails repeatedly."""
-    client = TritonEnd2EndClient(...)
-    return await client.infer(image)
-```
-
-### Monitoring and Metrics
-
-```python
-# Prometheus metrics
-from prometheus_client import Counter, Histogram, Gauge
-
-# Request metrics
-requests_total = Counter('api_requests_total', 'Total requests', ['endpoint', 'status'])
-request_duration = Histogram('api_request_duration_seconds', 'Request duration')
-active_requests = Gauge('api_active_requests', 'Active requests')
-
-# Triton metrics
-triton_batch_size = Histogram('triton_batch_size', 'Triton batch sizes')
-triton_queue_time = Histogram('triton_queue_time_ms', 'Time in Triton queue')
-triton_inference_time = Histogram('triton_inference_time_ms', 'Triton inference time')
-
-# Track in middleware
-@app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
-    active_requests.inc()
-    start = time.time()
-
-    try:
-        response = await call_next(request)
-        requests_total.labels(request.url.path, response.status_code).inc()
-        return response
-    finally:
-        request_duration.observe(time.time() - start)
-        active_requests.dec()
-```
-
-**Grafana Dashboards:**
-1. Request rate (RPS)
-2. Latency percentiles (P50, P95, P99)
-3. Triton batch sizes (should be >1!)
-4. GPU utilization
-5. Error rates
+**Reprocess** (`POST /curation/projects/{project}/reprocess`) re-runs pipeline
+scopes over chosen targets (`image_ids`, `crop_ids` or a `filter`). Scopes:
+`detect`, `region`, `vlm`, `embed`; region mode is `redetect` or `reverify`.
+`dry_run` defaults to true. Locked items and boxes are never written and are
+reported as `locked_skipped`. Large detect or embed runs become a job
+(`GET /curation/projects/{project}/reprocess/jobs/{job_id}`); only one runs at a
+time. Single-target forms:
+`POST /curation/projects/{project}/crops/{crop_id}/reprocess` and
+`POST /curation/projects/{project}/images/{image_id}/reprocess`.
 
 ---
 
-## Scaling Strategies
+## Workers, jobs and events
 
-### Single GPU (Current Setup)
-
-**Capacity:** ~500-1000 RPS (with batching fixed)
-
-```
-Load Balancer
-     │
-     ▼
-FastAPI (1 instance, 32 workers)
-     │
-     ▼
-Triton (1 instance, 1 GPU)
-```
-
-### Multi-GPU (Single Node)
-
-**Capacity:** ~2000-4000 RPS
-
-```
-Load Balancer
-     │
-     ├─▶ FastAPI (1 instance, 32 workers)
-     │        │
-     │        ├─▶ Triton GPU:0 (models A-C)
-     │        └─▶ Triton GPU:1 (models D-F)
-```
-
-### Production Scale (Multi-Node)
-
-**Capacity:** 10,000+ RPS
-
-```
-Cloud Load Balancer (AWS ALB/GCP LB)
-     │
-     ├─▶ FastAPI Pod 1 (K8s)
-     │        └─▶ Triton Pod 1 (GPU Node 1)
-     │
-     ├─▶ FastAPI Pod 2 (K8s)
-     │        └─▶ Triton Pod 2 (GPU Node 2)
-     │
-     ├─▶ FastAPI Pod 3 (K8s)
-     │        └─▶ Triton Pod 3 (GPU Node 3)
-     │
-     └─▶ ... (autoscaling 3-20 pods)
-```
-
-### Deployment Options
-
-1. **Docker Compose** (1-4 GPUs, single node) ← Current
-2. **Docker Swarm** (4-16 GPUs, 2-4 nodes)
-3. **Kubernetes** (16+ GPUs, 4+ nodes) ← Fortune 500 scale
-
-### Request Aggregation (Advanced)
-
-For **MAXIMUM** throughput, add client-side batching:
-
-```python
-# src/utils/request_aggregator.py
-class RequestAggregator:
-    """
-    Collects individual requests and sends them as batches.
-
-    Config:
-    - max_batch_size: 32 (matches Triton preferred_batch_size)
-    - max_wait_ms: 10 (balance latency vs throughput)
-    """
-
-    def __init__(self, max_batch_size=32, max_wait_ms=10):
-        self.max_batch_size = max_batch_size
-        self.max_wait_ms = max_wait_ms / 1000.0
-        self.queue = []
-        self.lock = asyncio.Lock()
-        self.processing = False
-
-    async def submit(self, image_bytes: bytes):
-        """Submit request and wait for batch processing."""
-        future = asyncio.Future()
-
-        async with self.lock:
-            self.queue.append((image_bytes, future))
-
-            # Start batch processor if needed
-            if not self.processing:
-                self.processing = True
-                asyncio.create_task(self._process_batches())
-
-            # Flush immediately if full
-            if len(self.queue) >= self.max_batch_size:
-                await self._flush()
-
-        return await future
-
-    async def _process_batches(self):
-        """Background task to flush batches."""
-        while True:
-            await asyncio.sleep(self.max_wait_ms)
-
-            async with self.lock:
-                if self.queue:
-                    await self._flush()
-                else:
-                    self.processing = False
-                    break
-
-    async def _flush(self):
-        """Send accumulated requests as batch."""
-        batch = self.queue[:self.max_batch_size]
-        self.queue = self.queue[self.max_batch_size:]
-
-        # Process batch
-        try:
-            images = [req[0] for req in batch]
-            results = await self._infer_batch(images)
-
-            # Complete futures
-            for (_, future), result in zip(batch, results):
-                future.set_result(result)
-        except Exception as e:
-            for _, future in batch:
-                future.set_exception(e)
-```
-
-**When to use:**
-- High-throughput scenarios (1000+ RPS)
-- Batch workloads (offline video processing)
-- GPU utilization optimization
-
-**When NOT to use:**
-- Real-time streaming (adds latency)
-- Low request rate (<100 RPS)
+- **File protocols.** The API and the workers share the state volumes. Training
+  and auto-label jobs are JSON files the API writes and the long-lived worker
+  claims; status flows back as files. A heartbeat marks a live claim; a job
+  whose heartbeat is stale is reported `interrupted` and can be resumed.
+- **Detection worker** (`scripts/curation/region_worker_main.py`, package
+  `scripts/curation/worker/`): fetches pending items, runs the cascade, writes
+  boxes in an OCC merge, and skips any document a human changed meanwhile.
+- **Pause and resume.** `POST /curation/projects/{project}/pause` and
+  `.../resume` write and remove a flag file; workers skip a paused project and
+  keep serving the others.
+- **Events.** `GET /curation/events` (global) and
+  `GET /curation/projects/{project}/events` are Server-Sent Events. Producers
+  append to a shared JSONL log in the state dir and every uvicorn worker tails
+  it, so a client on one worker sees events published by another
+  (`OP_EVENT_BUS=process` restores in-process fan-out for single-worker
+  setups). Events are advisory, not a durable feed. Examples: project lifecycle,
+  `combine.progress`, `config.changed`, `vlm.changed`.
+- **GPU sharing during training.** The optional GPU arbiter
+  (`docker-compose.gpu-arbiter.yml`, `OP_GPU_ARBITER_CONTAINERS`) stops
+  configured sibling containers around a training run and restarts them after.
+  Without it, `./openprocessor train-mode on|off` stops and starts the VLM (and
+  a segmenter on the training GPU) by hand.
 
 ---
 
-## Reference Architectures
+## Concurrency and the lock rule
 
-### Uber's ML Platform
+The item has many writers: humans, ingest, the detection worker, the VLM worker,
+auto-label, clustering, import and reprocess. All use optimistic concurrency
+(`src/clients/occ.py`): read with the sequence number, write with
+`if_seq_no` and `if_primary_term`, and on conflict re-read and re-merge. Human
+routes surface a final conflict as 409; workers skip a conflicting document and
+see the new state on the next pass, so a worker never overwrites a human.
 
-```
-API Gateway (FastAPI)
-   └─▶ Request Router
-       └─▶ Model Server (Triton)
-           └─▶ Feature Store (Redis)
-```
+**The lock rule** (`src/clients/occ_locks.py`): an automated writer never
+changes
 
-### Netflix Recommendation System
+- a class a human set or confirmed, or a validated imported label;
+- any item frozen into the test holdout;
+- a box a human created, gave a verdict, or transcribed, or one that came from
+  an import and is not a mere suggestion.
 
-```
-Zuul API Gateway
-   └─▶ Microservices (Spring Boot/FastAPI)
-       └─▶ TensorFlow Serving / Triton
-           └─▶ Model Registry (S3)
-```
+The item wire carries `label_locked`, and box elements carry `locked`.
+Reprocess, reconcile, import undo and the delete paths re-check the lock at
+write time.
 
-### Current System (Production-Ready)
-
-```
-NGINX Load Balancer
-   └─▶ FastAPI (3 instances, shared Triton client)
-       └─▶ Triton (2 instances, 2 GPUs)
-           └─▶ Model Repository (Local/NFS)
-           └─▶ Prometheus/Grafana (monitoring)
-```
+Cluster writes (partition, refine, false-positive sub-typing) merge into the
+live box list and retry a few times on conflict; a model fit that finished
+after a human moved a box cannot overwrite it.
 
 ---
 
-## Summary
+## Export, training and promotion
 
-### Critical Architecture Decisions
-
-1. ✅ **Shared Triton gRPC client** (enables dynamic batching)
-2. ✅ **Per-request model instances** (thread safety)
-3. ✅ **Production hardening** (health checks, metrics)
-4. ✅ **Horizontal scaling** (when >1000 RPS)
-
-### Current Stack is Production-Grade
-
-- FastAPI ✅ (Netflix, Uber use this)
-- Triton ✅ (NVIDIA's official solution)
-- Docker Compose ✅ (Good for 1-4 GPUs)
-
-**Next step:** Kubernetes when you need 10+ GPUs across multiple nodes.
-
----
-
-## Further Reading
-
-- [FastAPI Concurrency and async/await](https://fastapi.tiangolo.com/async/)
-- [Ultralytics Thread-Safe Inference Guide](https://docs.ultralytics.com/guides/yolo-thread-safe-inference/)
-- [NVIDIA Triton Optimization Guide](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/optimization.html)
-- [gRPC Performance Best Practices](https://grpc.io/docs/guides/performance/)
+- **Export.** `POST /curation/projects/{project}/export/yolo` writes a YOLO
+  dataset with a deterministic split and a manifest checksum;
+  `POST /curation/projects/{project}/export/single_class` exports one class or a
+  subset. Frozen artifacts
+  (`class_registry.json`, `data.yaml`, `manifest.json`, `label_stats.json`) are
+  served by `GET /curation/projects/{project}/export/registry/{artifact}`.
+- **Training.** `POST /curation/projects/{project}/train/preflight` validates
+  the dataset and spec, `POST /curation/projects/{project}/train/start` submits a
+  job, `GET /curation/projects/{project}/train/status/{job_id}` reads progress.
+  The trainer writes checkpoints and a manifest with lineage (dataset hash, code
+  versions, evaluation).
+- **Promotion.** `POST /curation/projects/{project}/train/promote/{job_id}`
+  installs the run into Triton under `<slug>__<name>`, with a `labels.txt` and,
+  for a class-subset run, the class remap. A subset run with no resolvable
+  remap is refused. Another project can use the model through
+  `PUT /curation/projects/{project}/models/{model_name}/sharing`; classes map
+  by name.
+- **Bake-off.** `POST /curation/projects/{project}/bakeoff/run` compares models
+  per class on an eval dataset's test split; the evaluator worker runs the job.
 
 ---
 
-**Last Updated**: 2026-01-26
-**Version**: 2.0 (Consolidated documentation)
+## Contracts
+
+`contracts/openapi/curation.json` is generated from the FastAPI app and is the
+source of truth for curation routes and schemas. `contracts/ts/` and
+`contracts/json/` carry the item wire types and the keymap action table. One
+serializer (`src/services/curation/wire.py`) maps storage names to the fixed
+wire names, so a storage field override never changes the wire. After any route
+or model change run `make contracts`; pre-commit rejects a stale contract.
+
+---
+
+## Security boundary
+
+There is no authentication, authorization or rate limiting. The API is meant
+for a trusted machine or network behind your own reverse proxy. Backend ports
+bind to `OP_BIND_ADDRESS` (default `127.0.0.1`). Cropwright can be reachable on
+the LAN; see [SECURITY.md](../SECURITY.md). The OpenSearch guard protects
+project isolation against code bugs, not against a caller of the API.
+
+---
+
+## Scaling notes
+
+- One GPU runs Triton, the segmenter and a local VLM only when VRAM allows;
+  `.env` GPU keys place each service. Instance counts per Triton model are in
+  the `config.pbtxt` files; raise them for hot paths when VRAM is free.
+- The API scales by uvicorn workers (`--workers`, default 32) within one host.
+  All workers share the Triton pool settings per process and the file-backed
+  event bus.
+- OpenSearch heap is sized from RAM by the installer (RAM/8, 1-8 GB). Each
+  project adds six indexes, so watch the shard budget
+  ([INSTALLATION.md](../INSTALLATION.md#opensearch-heap-sizing)); creating a
+  project past the capacity limit answers 409 with the capacity figures.
+- Scaling past one host is not a supported topology today: the workers and the
+  API share local volumes and the file-backed job protocol.
+
+---
+
+## Further reading
+
+- [FastAPI concurrency](https://fastapi.tiangolo.com/async/)
+- [Ultralytics thread-safe inference](https://docs.ultralytics.com/guides/yolo-thread-safe-inference/)
+- [NVIDIA Triton optimization guide](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/optimization.html)
