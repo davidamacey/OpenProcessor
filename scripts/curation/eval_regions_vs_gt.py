@@ -193,10 +193,10 @@ def cohort_from_import(
     """Frames of an import: ground truth from the dataset's label file at each
     entry's ``rel_path``; the index join from the entry's own ``image_id`` /
     ``image_path`` (so a frame the import reused from another path still
-    resolves). Entries that did not write (``status != 'ok'``) are skipped."""
+    resolves). Entries without an ``image_id`` are skipped."""
     cohort = []
     for e in entries:
-        if e.get('status') != 'ok' or not e.get('image_id'):
+        if not e.get('image_id'):
             continue
         cohort.append(
             _entry(

@@ -253,9 +253,7 @@ def _annotation_split(first_id: int, *, with_cars: int, empty: int, person_only:
 def test_select_negatives_excludes_target_class_frames_and_bad_licenses() -> None:
     images, anns = _annotation_split(1, with_cars=2, empty=6, person_only=2)
     lic = {lic['id']: lic['name'] for lic in _LICENSES}
-    out = f.select_negatives(
-        images, anns, {3}, lic, {'Attribution License'}, 'val2017', 10, 7, set()
-    )
+    out = f.select_negatives(images, anns, {3}, lic, {'Attribution License'}, 'val2017', 10, 7)
     ids = {r['image_id'] for r in out}
     # cars 1-2 carry the target class; person-only frames 3-4 do not, so they
     # are negatives for ``car`` (full annotations kept); of empties 5..10 only
@@ -272,9 +270,9 @@ def test_select_negatives_is_seeded_and_capped() -> None:
         'license_id_to_name': lic,
         'allowed_license_names': {'Attribution License'},
     }
-    a = f.select_negatives(images, anns, split='val2017', n=5, seed=3, exclude_ids=set(), **kw)
-    b = f.select_negatives(images, anns, split='val2017', n=5, seed=3, exclude_ids=set(), **kw)
-    c = f.select_negatives(images, anns, split='val2017', n=5, seed=4, exclude_ids=set(), **kw)
+    a = f.select_negatives(images, anns, split='val2017', n=5, seed=3, **kw)
+    b = f.select_negatives(images, anns, split='val2017', n=5, seed=3, **kw)
+    c = f.select_negatives(images, anns, split='val2017', n=5, seed=4, **kw)
     assert a == b
     assert len(a) == 5
     assert a != c
@@ -343,3 +341,18 @@ def test_run_negatives_written_with_attribution_and_pinned(
     assert not [a for a in gt['annotations'] if a['image_id'] in neg_ids and a['category_id'] == 3]
     # a second run with the same seed must verify cleanly against the pin
     f.run(_args(tmp_path, '--val-only', '--negatives', '2', '--manifest', str(manifest)))
+
+
+def test_download_images_refuses_a_file_name_with_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts.datasets._common import FetchError
+
+    fetched: list[str] = []
+    monkeypatch.setattr(f, 'download', lambda url, _dest: fetched.append(url))
+
+    with pytest.raises(FetchError, match='non-basename'):
+        f.download_images(
+            [{'split': 'val2017', 'file_name': '../../evil.jpg', 'image_id': 1}], tmp_path
+        )
+    assert fetched == []

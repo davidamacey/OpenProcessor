@@ -49,6 +49,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.datasets._common import require_basename  # noqa: E402
+
+
 TARGETS = ('car', 'truck', 'bus')
 SPLITS = ('train', 'val', 'test')
 # 70/15/15 by sha1 of the COCO image id.
@@ -143,6 +146,8 @@ def build_variants(
     cat_name = {c['id']: c['name'] for c in annotations['categories']}
     negative_ids = set(images_meta.get('negative_image_ids', []))
     images = sorted((im for im in annotations['images']), key=lambda im: im['id'])
+    for im in images:
+        require_basename(im['file_name'])
     by_image: dict[int, list[dict[str, Any]]] = {}
     for ann in annotations['annotations']:
         if cat_name.get(ann['category_id']) in TARGETS:

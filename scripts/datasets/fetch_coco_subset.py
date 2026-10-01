@@ -81,6 +81,7 @@ from scripts.datasets._common import (
     FetchError,
     download,
     load_pinned_manifest,
+    require_basename,
     seeded_sample,
     sha256_file,
     write_csv,
@@ -264,7 +265,6 @@ def select_negatives(
     split: str,
     n: int,
     seed: int,
-    exclude_ids: set[int],
 ) -> list[dict[str, Any]]:
     """Seeded sample of allowed-license images with no box (crowd included)
     of any target class. Their other-category annotations are kept in
@@ -272,7 +272,7 @@ def select_negatives(
     annotated = {a['image_id'] for a in annotations if a['category_id'] in target_class_ids}
     pool = []
     for im in images:
-        if im['id'] in annotated or im['id'] in exclude_ids:
+        if im['id'] in annotated:
             continue
         lic_name = license_id_to_name.get(im['license'])
         if lic_name not in allowed_license_names:
@@ -347,7 +347,7 @@ def ensure_annotations(cache_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
 def download_images(rows: list[dict[str, Any]], images_dir: Path) -> None:
     for row in rows:
         url = IMAGE_URL_TMPL[row['split']].format(file_name=row['file_name'])
-        dest = images_dir / row['file_name']
+        dest = images_dir / require_basename(row['file_name'])
         download(url, dest)
         row['sha256'] = sha256_file(dest)
 
@@ -490,7 +490,6 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             'val2017',
             args.negatives,
             args.seed,
-            {r['image_id'] for r in selected},
         )
         if len(negatives) < args.negatives:
             logger.warning('only %d/%d negative images available', len(negatives), args.negatives)

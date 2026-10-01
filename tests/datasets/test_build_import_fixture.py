@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -20,9 +20,6 @@ from src.services.curation.dataset_import.options import DatasetSource
 from src.services.curation.dataset_import.regions import ParentCandidate, attach_region_boxes
 from src.services.curation.dataset_import.scan import scan_dataset
 
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 CATS = [
     {'id': 1, 'name': 'person'},
@@ -212,3 +209,50 @@ def test_only_tall_cars_get_wheels_and_wheel_count_is_exact(built: tuple[Path, d
     spec = fixture['variants']['yolo_region']
     assert spec['attachments'] == 2 * len(tall)
     assert spec['expected_report']['boxes_per_class']['wheel'] == 2 * len(tall) + spec['standalone']
+
+
+#: What a COCO category must be called in the YOLO variant, written out here
+#: rather than derived from the builder's own name table.
+EXPECTED_YOLO_NAMES = {'truck': {'truck'}, 'bus': {'bus'}, 'car': {'Car', 'automobile'}}
+
+
+def test_coco_class_names_land_on_the_matching_yolo_names(built: tuple[Path, dict]) -> None:
+    out, fixture = built
+    names: dict[int, str] = {}
+    for line in (out / 'yolo/data.yaml').read_text().splitlines():
+        key, _, value = line.strip().partition(':')
+        if key.isdigit():
+            names[int(key)] = value.strip().strip('\'"')
+    assert set(names.values()) == {'truck', 'Car', 'automobile', 'bus'}
+    damaged = {
+        Path(v).stem
+        for k, v in fixture['variants']['yolo']['injected'].items()
+        if k != 'orphan_label'
+    }
+    coco_name = {1: 'truck', 2: 'bus'}  # image id % 4; every other id carries only cars
+    checked: Counter[str] = Counter()
+    for image_id in range(1, N_POSITIVE + 1):
+        stem = f'{image_id:012d}'
+        if stem in damaged:
+            continue
+        label = next((out / 'yolo/labels').glob(f'*/{stem}.txt'))
+        wanted = EXPECTED_YOLO_NAMES[coco_name.get(image_id % 4, 'car')]
+        for row in label.read_text().splitlines():
+            assert names[int(row.split()[0])] in wanted, (image_id, row)
+            checked[coco_name.get(image_id % 4, 'car')] += 1
+    assert all(checked[c] > 0 for c in EXPECTED_YOLO_NAMES), checked
+
+
+def test_a_file_name_with_a_path_is_refused(tmp_path: Path) -> None:
+    annotations, meta = _annotations()
+    annotations['images'][0]['file_name'] = '../../evil.jpg'
+    written: list[Path] = []
+
+    def writer(_name: str, dest: Path, _w: int, _h: int) -> None:
+        written.append(dest)
+
+    from scripts.datasets._common import FetchError
+
+    with pytest.raises(FetchError, match='non-basename'):
+        b.build_variants(annotations, meta, tmp_path / 'out', writer)
+    assert written == []
