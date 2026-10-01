@@ -1325,6 +1325,19 @@ def leak_env(
     }.items():
         monkeypatch.setenv(f'OP_{name}', str(tmp_path / sub))
     monkeypatch.setenv('OP_EVENT_BUS', 'process')
+    # `ensure_fresh` skips the config read while the snapshot is under a
+    # second old, so how many `configs` operations a route issues would
+    # depend on how fast the previous route ran, and the sweep compares
+    # those counts between projects. Pin the window to zero: every route
+    # reads, for every project, in every run.
+    from src.services.config_store.store import ConfigStore
+
+    real_ensure_fresh = ConfigStore.ensure_fresh
+
+    async def ensure_fresh_always(self: Any, client: Any, max_age_s: float = 1.0) -> Any:
+        return await real_ensure_fresh(self, client, max_age_s=0.0)
+
+    monkeypatch.setattr(ConfigStore, 'ensure_fresh', ensure_fresh_always)
     for flag in ('SCORES_ENABLED', 'SELECT_DIVERSE_ENABLED', 'VIZ_PROJECTION_ENABLED'):
         monkeypatch.setenv(f'OP_{flag}', '1')
     # Diverse selection over the job path (the one that writes); the

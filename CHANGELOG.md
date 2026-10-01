@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `YamlTooComplexError`. A COCO or OpenProcessor-export JSON nested past the
     interpreter stack is a clean issue / an absent file, not a
     `RecursionError` (one shared `loads_json`).
+  - **Tests: the cross-project leak sweep is deterministic.** `ConfigStore.
+    ensure_fresh` skips the config read while a snapshot is under a second
+    old, so the number of `configs` operations a route issued (which the sweep
+    compares between projects) depended on wall-clock speed. The sweep
+    fixture pins the window to zero; nothing it asserts changed. (Red under a
+    clock that jumps 0 or 2 s per reading, green with the pin.)
 - **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
   - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
     path: it re-reads each document, asks the caller whether it is still
