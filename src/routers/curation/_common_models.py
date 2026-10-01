@@ -473,7 +473,7 @@ class _PublishEvent(BaseModel):
     class_name: str | None = None
     class_source: str | None = None
     region_status: str | None = None
-    region_text: str | None = None
+    region_count: int | None = None
     image_path: str | None = None
     topic: str | None = None
     extra: dict[str, Any] | None = None

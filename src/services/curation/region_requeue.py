@@ -182,46 +182,22 @@ def requeue_query(sel: RequeueSelection, fields: RegionFields | None = None) -> 
 
 
 def detection_fields(fields: RegionFields | None = None) -> tuple[str, ...]:
-    """Every field a fresh ``pending_detection`` item would not carry yet."""
+    """Every item-level field a fresh ``pending_detection`` item would not
+    carry yet. The per-box detection, verdict and text state lives on the
+    boxes themselves, which :func:`apply_requeue` drops with
+    ``clear_detection``."""
     F = fields or get_region_fields()
     return (
-        F.bbox_norm,
-        F.bbox_frame,
-        F.bbox_correct,
-        F.score,
-        F.confidence,
         F.reason,
-        F.source,
         F.verified,
         F.verified_at,
         F.verifier,
         F.verifier_version,
         F.auto_confirmed,
         F.visible,
-        F.detector,
-        F.detector_version,
         F.detector_chain,
         F.detected_at,
         F.skip_verify,
-        F.candidate_bbox_norm,
-        F.candidate_score,
-        F.candidate_detector,
-        F.candidate_detector_version,
-        F.candidate_source,
-        F.text,
-        F.text_raw,
-        F.text_confidence,
-        F.text_source,
-        F.text_engine_version,
-        F.text_vlm,
-        F.text_ocr,
-        F.text_disagreement,
-        F.text_choice,
-        F.text_vlm_invalid,
-        F.embedding,
-        F.cluster_id,
-        F.cluster_subid,
-        F.cluster_distance,
     )
 
 
@@ -334,7 +310,7 @@ async def apply_requeue(
     Args:
         opensearch: AsyncOpenSearch client.
         sel: The cohort to requeue.
-        clear_detection: Null every detection/verify/text/embedding field
+        clear_detection: Null every item-level detection/verify field
             (:func:`detection_fields`) AND drop every non-human-owned box
             from ``region_boxes`` (see :func:`~src.services.curation.
             region_boxes.is_human_owned`) so the cascade starts from

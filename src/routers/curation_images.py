@@ -32,6 +32,7 @@ from src.services.curation.image_serving import (
     resolve_safe_path,
     serve_source_image,
 )
+from src.services.curation.region_boxes import read_boxes
 
 
 if TYPE_CHECKING:
@@ -195,27 +196,28 @@ async def crop_full_image(
 async def crop_region_thumbnail(
     crop_id: str,
     opensearch: OpenSearchDep,
+    box_id: Annotated[str | None, Query(description='The region box to render (required).')] = None,
     size: Annotated[int, Query(ge=32, le=512, description='Square thumbnail size')] = 128,
 ) -> Response:
-    """128px JPEG thumbnail of the crop's region-of-interest sub-bbox.
+    """128px JPEG thumbnail of one region box of the crop.
 
-    Used by the region-verification UI in the labeler. Falls back to the
-    verifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)
-    when there is no accepted region box (``RegionFields.bbox_norm``) --
-    a ``verify_rejected`` item never has the latter, so this route used to
-    404 for every one of them even though the item is still reviewable
-    404 only when the crop has neither box. The cache
-    key includes the box's own coordinates (``ThumbnailCache.get_or_compute``),
-    so a later promotion or re-detection that changes the box never
-    serves a stale image -- it's a different cache key.
+    Used by the region-verification UI in the labeler. ``box_id`` names
+    the box (422 ``box_id_required`` without it, 404 ``unknown_box_id``
+    for a box the crop does not hold); any state renders, a rejected box
+    included, since a rejected box is still reviewable. The cache key
+    includes the box's own coordinates
+    (``ThumbnailCache.get_or_compute``), so a later edit or re-detection
+    that changes the box never serves a stale image -- it's a different
+    cache key.
     """
+    if not box_id:
+        raise HTTPException(status_code=422, detail={'error': 'box_id_required'})
     crop = await _fetch_crop(crop_id, opensearch)
-    fields = get_region_fields()
-    region_bbox = crop.get(fields.bbox_norm)
-    if not region_bbox or len(region_bbox) != 4:
-        region_bbox = crop.get(fields.candidate_bbox_norm)
-    if not region_bbox or len(region_bbox) != 4:
-        raise HTTPException(status_code=404, detail='crop has no region bbox')
+    region_bbox = next(
+        (b.bbox_norm for b in read_boxes(crop, get_region_fields()) if b.box_id == box_id), None
+    )
+    if region_bbox is None:
+        raise HTTPException(status_code=404, detail={'error': 'unknown_box_id'})
 
     image_path = _resolve_image_for_crop(crop)
 

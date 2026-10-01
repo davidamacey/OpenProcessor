@@ -231,6 +231,58 @@ def _region_bbox_for(index: int) -> list[float]:
     return [round(x1, 4), round(y1, 4), round(x1 + 0.10, 4), round(y1 + 0.06, 4)]
 
 
+def _region_fields(
+    fields: Any,
+    region: str,
+    *,
+    global_index: int,
+    local_idx: int,
+    vector: Any,
+    now: datetime,
+) -> dict[str, Any]:
+    """The region side of a seeded item: a list of one to three boxes, each
+    with its own embedding (a false-positive cohort item holds one FP
+    box in the permanent FP cluster)."""
+    import numpy as np
+
+    from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
+    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+
+    is_fp = region == RegionStatus.FALSE_POSITIVE
+    n_boxes = 1 if is_fp else 1 + (global_index % 3)
+    boxes: list[RegionBox] = []
+    embeddings: list[dict[str, Any]] = []
+    for k in range(n_boxes):
+        box_id = f'b{k + 1}'
+        bbox = _region_bbox_for(global_index + k * 5)
+        boxes.append(
+            RegionBox(
+                box_id=box_id,
+                bbox_norm=tuple(bbox),  # type: ignore[arg-type]
+                state=RegionStatus.FALSE_POSITIVE.value if is_fp else 'accepted',
+                score=round(0.35 + ((global_index + k) % 60) / 100.0, 3),
+                detector='fake_detector',
+                detector_version='1',
+                source='detector',
+                cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID if is_fp else 1,
+                cluster_distance=0.0 if is_fp else round(0.05 + (local_idx % 10) / 100.0, 4),
+                detected_at=now.isoformat(),
+            )
+        )
+        embeddings.append(
+            {'box_id': box_id, 'embedding': _round_vec(np.roll(vector, k) if k else vector)}
+        )
+    return {
+        **boxes_write_fields(boxes, current_src={}),
+        fields.box_embeddings: embeddings,
+        fields.detector_chain: ['fake_detector:hit'],
+        fields.detected_at: now.isoformat(),
+        fields.validated: False,
+        fields.status: RegionStatus.FALSE_POSITIVE if is_fp else RegionStatus.DETECTED,
+        fields.verified: not is_fp,
+    }
+
+
 def _build_items(
     cfg: Any,
     fields: Any,
@@ -316,25 +368,16 @@ def _build_items(
                     doc['excluded_by'] = 'seed'
                     doc['excluded_reason'] = 'ignore'
                 if cohort.region:
-                    doc[fields.bbox_norm] = _region_bbox_for(global_index)
-                    doc[fields.score] = round(0.35 + (global_index % 60) / 100.0, 3)
-                    doc[fields.detector] = 'fake_detector'
-                    doc[fields.detector_version] = '1'
-                    doc[fields.detector_chain] = ['fake_detector:hit']
-                    doc[fields.bbox_frame] = 'source'
-                    doc[fields.detected_at] = now.isoformat()
-                    doc[fields.embedding] = _round_vec(region_vectors[local_idx])
-                    doc[fields.validated] = False
-                    if cohort.region == RegionStatus.FALSE_POSITIVE:
-                        doc[fields.status] = RegionStatus.FALSE_POSITIVE
-                        doc[fields.verified] = False
-                        doc[fields.cluster_id] = -100
-                        doc[fields.cluster_distance] = 0.0
-                    else:
-                        doc[fields.status] = RegionStatus.DETECTED
-                        doc[fields.verified] = True
-                        doc[fields.cluster_id] = 1
-                        doc[fields.cluster_distance] = round(0.05 + (local_idx % 10) / 100.0, 4)
+                    doc.update(
+                        _region_fields(
+                            fields,
+                            cohort.region,
+                            global_index=global_index,
+                            local_idx=local_idx,
+                            vector=region_vectors[local_idx],
+                            now=now,
+                        )
+                    )
                 docs.append(doc)
                 member_index += 1
                 global_index += 1

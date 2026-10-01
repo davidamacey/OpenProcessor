@@ -41,6 +41,7 @@ from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
@@ -80,8 +81,6 @@ def _make_task(
     group: str = 'cars',
     class_name: str = 'audi',
     item_bbox: tuple[float, float, float, float] = (0.1, 0.1, 0.5, 0.5),
-    detector_region_in_source: tuple[float, float, float, float] | None = None,
-    detector_score: float = 0.0,
     crop_jpeg: bytes | None = None,
 ) -> worker._ItemTask:
     """Build a fully populated ``_ItemTask`` for the (non-cascade)
@@ -94,10 +93,23 @@ def _make_task(
         region_status=status,
         class_name=class_name,
         group=group,
-        detector_region_in_source=detector_region_in_source,
-        detector_score=detector_score,
         crop_jpeg=crop_jpeg if crop_jpeg is not None else _make_jpeg(),
     )
+
+
+def _proposed_box_fields(bbox: tuple[float, float, float, float], score: float) -> dict[str, Any]:
+    """The stored fields of an item carrying one ``proposed`` box (what a
+    ``pending_verification`` item holds), built the way every writer
+    builds them."""
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=bbox,
+        state='proposed',
+        score=score,
+        detector='det_model',
+        source='detector',
+    )
+    return boxes_write_fields([box], current_src={})
 
 
 def _item_with(**over: Any) -> dict[str, Any]:
@@ -216,7 +228,7 @@ class TestRouting:
     async def test_pending_verify_accepted_writes_detected(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Primary-detector candidate verified by the VLM -> status='detected',
+        """A stored proposed box verified by the VLM -> status='detected',
         the existing bbox is kept (round-tripped through crop/source
         frames)."""
         F = get_region_fields()
@@ -225,7 +237,7 @@ class TestRouting:
             {
                 'c1': _item_with(
                     status='pending_verification',
-                    **{F.bbox_norm: list(detector_region_in_source), F.score: 0.91},
+                    **_proposed_box_fields(detector_region_in_source, 0.91),
                 )
             },
             search_delay=0.0,
@@ -261,7 +273,7 @@ class TestRouting:
             {
                 'c1': _item_with(
                     status='pending_verification',
-                    **{F.bbox_norm: [0.2, 0.2, 0.3, 0.22], F.score: 0.7},
+                    **_proposed_box_fields((0.2, 0.2, 0.3, 0.22), 0.7),
                 )
             },
             search_delay=0.0,
@@ -486,7 +498,7 @@ class TestNoVerdictLeavesItemPending:
             {
                 'c1': _item_with(
                     status='pending_verification',
-                    **{F.bbox_norm: [0.2, 0.2, 0.3, 0.22], F.score: 0.7},
+                    **_proposed_box_fields((0.2, 0.2, 0.3, 0.22), 0.7),
                 )
             },
             search_delay=0.0,

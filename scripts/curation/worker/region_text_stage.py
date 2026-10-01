@@ -59,7 +59,7 @@ from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 
 if TYPE_CHECKING:
     from scripts.curation.worker.state import _ItemTask
-    from src.config import DetectionProfile, RegionFields
+    from src.config import DetectionProfile
     from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
 
 
@@ -141,9 +141,8 @@ _TEXT_ATTRS = (
 
 
 def _drop_region_text(doc: dict[str, Any]) -> None:
-    F = get_region_fields()
     for attr in _TEXT_ATTRS:
-        doc.pop(getattr(F, attr), None)
+        doc.pop(attr, None)
 
 
 async def apply_region_text(
@@ -159,8 +158,9 @@ async def apply_region_text(
     vlm_available: bool,
     rules: RegionTextRules | None = None,
 ) -> None:
-    """Replace ``doc``'s region text fields with the profile's text-reader
-    verdict for this region (see :func:`resolve_region_text`).
+    """Replace ``doc``'s region text attributes (keyed by ``RegionBox``
+    attribute name) with the profile's text-reader verdict for this region
+    (see :func:`resolve_region_text`).
 
     ``rules`` (default: the profile's, with the resolved prompt pack's
     examples) decide which readings are text at all; a VLM reading they
@@ -189,9 +189,7 @@ async def apply_region_text(
         rules=rules,
     )
     _drop_region_text(doc)
-    F = get_region_fields()
-    for attr, value in fields.items():
-        doc[getattr(F, attr)] = value
+    doc.update(fields)
 
 
 _TEXT_BOX_ATTRS = (
@@ -208,24 +206,21 @@ _TEXT_BOX_ATTRS = (
 )
 
 
-def _box_with_resolved_text(box: RegionBox, doc: dict[str, Any], F: RegionFields) -> RegionBox:
+def _box_with_resolved_text(box: RegionBox, doc: dict[str, Any]) -> RegionBox:
     """Replace one box's text-ish attributes with :func:`apply_region_text`'s
     verdict, whatever it decided (including nothing at all).
 
-    ``doc`` is keyed by the storage field name (``F.text`` etc); ``box``'s
-    own attributes use the bare name (``text``). Every text attribute is
-    reset to ``None`` first, then overwritten with whatever ``doc``
-    supplies -- ``apply_region_text`` is authoritative here (mirrors its
-    own ``_drop_region_text`` + fresh-set behavior on the legacy flat
-    doc), so a text-free profile's empty ``doc`` clears any text
+    ``doc`` is keyed by ``RegionBox`` attribute name (``text`` etc). Every
+    text attribute is reset to ``None`` first, then overwritten with
+    whatever ``doc`` supplies -- ``apply_region_text`` is authoritative
+    here (its own ``_drop_region_text`` + fresh-set behavior), so a
+    text-free profile's empty ``doc`` clears any text
     :func:`~scripts.curation.worker.verify.verdicts_to_boxes` had
     provisionally set on the box from the raw VLM verdict, rather than
     leaving it in place.
     """
     updates: dict[str, Any] = dict.fromkeys(_TEXT_BOX_ATTRS)
-    updates.update(
-        {attr: doc.get(getattr(F, attr)) for attr in _TEXT_BOX_ATTRS if getattr(F, attr) in doc}
-    )
+    updates.update({attr: doc[attr] for attr in _TEXT_BOX_ATTRS if attr in doc})
     return dataclasses.replace(box, **updates)
 
 
@@ -233,7 +228,6 @@ def resolve_rejected_box_text(
     box: RegionBox,
     *,
     profile: DetectionProfile,
-    F: RegionFields,
     rules: RegionTextRules | None = None,
 ) -> RegionBox:
     """W8 M6 fix: a non-accepted box must never carry a raw, unvalidated
@@ -250,7 +244,7 @@ def resolve_rejected_box_text(
     .region_text_rules` an accepted box's VLM reading is held to.
     """
     if not profile.reads_text:
-        return _box_with_resolved_text(box, {}, F)
+        return _box_with_resolved_text(box, {})
     if box.text is None:
         return box
     rules = rules or region_text_rules(profile)
@@ -346,7 +340,7 @@ async def accept_without_vlm(
         vlm_available=False,
         rules=rules,
     )
-    box = _box_with_resolved_text(box, text_doc, F)
+    box = _box_with_resolved_text(box, text_doc)
     t.pending_boxes = [box]
     t.pending_empty_status = RegionStatus.DETECTED
     t.update_doc = {
@@ -371,20 +365,20 @@ def apply_text_hint_fallback(
     rules: RegionTextRules,
 ) -> None:
     """Forward the item-crop OCR text that seeded a text-hint box when the
-    region itself got no text -- if that text passes ``rules``."""
+    region itself got no text -- if that text passes ``rules``. ``doc`` is
+    keyed by ``RegionBox`` attribute name, like :func:`apply_region_text`'s."""
     if not profile.reads_text:
         _drop_region_text(doc)
         return
-    F = get_region_fields()
-    if doc.get(F.text) or not text or rules.invalid_reason(text) is not None:
+    if doc.get('text') or not text or rules.invalid_reason(text) is not None:
         return
-    doc[F.text] = text
-    doc[F.text_raw] = text
-    doc[F.text_source] = TEXT_SOURCE_OCR
-    doc[F.text_engine_version] = ocr_engine_id(profile)
-    doc[F.text_confidence] = confidence
-    doc[F.text_choice] = (
-        TEXT_CHOICE_VLM_INVALID if doc.get(F.text_vlm_invalid) else TEXT_CHOICE_OCR_ONLY
+    doc['text'] = text
+    doc['text_raw'] = text
+    doc['text_source'] = TEXT_SOURCE_OCR
+    doc['text_engine_version'] = ocr_engine_id(profile)
+    doc['text_confidence'] = confidence
+    doc['text_choice'] = (
+        TEXT_CHOICE_VLM_INVALID if doc.get('text_vlm_invalid') else TEXT_CHOICE_OCR_ONLY
     )
 
 

@@ -378,13 +378,13 @@ def test_publish_endpoint_carries_region_status(monkeypatch: pytest.MonkeyPatch)
     with _client(monkeypatch, _OVERRIDE_STORAGE) as client:
         r = client.post(
             f'{_common.config.api_prefix}/projects/default/events/publish',
-            json=wire.region_event_payload('crop-1', region_status='detected', region_text='AB'),
+            json=wire.region_event_payload('crop-1', region_status='detected', region_count=2),
         )
     assert r.status_code == 200, r.text
     (event,) = hub.events
     assert event['type'] == 'crop.region_verified'
     assert event['region_status'] == 'detected'
-    assert event['region_text'] == 'AB'
+    assert event['region_count'] == 2
     assert _event_data_keys(event) <= ITEM_WIRE_KEYS
 
 
@@ -440,10 +440,10 @@ async def test_worker_region_events_reach_subscribers_with_status(
     monkeypatch.setattr(bulk_writer, '_EVENT_CLIENT', _ForwardingClient())
     task = _ItemTask.__new__(_ItemTask)
     task.crop_id = 'crop-1'
-    task.update_doc = {_OVERRIDE_STORAGE.status: 'detected', _OVERRIDE_STORAGE.text: 'AB'}
+    task.update_doc = {_OVERRIDE_STORAGE.status: 'detected', _OVERRIDE_STORAGE.count: 2}
     await bulk_writer._publish_region_events([task])
 
     (event,) = hub.events
     assert event['type'] == 'crop.region_verified'
     assert event['region_status'] == 'detected'
-    assert event['region_text'] == 'AB'
+    assert event['region_count'] == 2

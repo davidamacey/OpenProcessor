@@ -99,8 +99,13 @@ def test_box_verdicts_list_shape() -> None:
     F = RegionFields()
     entry = {
         F.boxes: [
-            {'box': 1, F.bbox_correct: True, F.confidence: 'high', F.text: 'ABC'},
-            {'box': 2, F.bbox_correct: False, F.confidence: 'low'},
+            {
+                'box': 1,
+                'region_bbox_correct': True,
+                'region_confidence': 'high',
+                'region_text': 'ABC',
+            },
+            {'box': 2, 'region_bbox_correct': False, 'region_confidence': 'low'},
         ]
     }
     verdicts = box_verdicts(entry, 3, F)
@@ -118,9 +123,9 @@ def test_box_verdicts_out_of_range_and_duplicate_ignored() -> None:
     F = RegionFields()
     entry = {
         F.boxes: [
-            {'box': 1, F.bbox_correct: True},
-            {'box': 1, F.bbox_correct: False},  # duplicate -- first wins
-            {'box': 99, F.bbox_correct: True},  # out of range -- ignored
+            {'box': 1, 'region_bbox_correct': True},
+            {'box': 1, 'region_bbox_correct': False},  # duplicate -- first wins
+            {'box': 99, 'region_bbox_correct': True},  # out of range -- ignored
         ]
     }
     verdicts = box_verdicts(entry, 1, F)
@@ -130,7 +135,7 @@ def test_box_verdicts_out_of_range_and_duplicate_ignored() -> None:
 
 def test_box_verdicts_string_box_number_accepted() -> None:
     F = RegionFields()
-    entry = {F.boxes: [{'box': 'box 2', F.bbox_correct: True}]}
+    entry = {F.boxes: [{'box': 'box 2', 'region_bbox_correct': True}]}
     verdicts = box_verdicts(entry, 2, F)
     assert verdicts[1].bbox_correct is True
 
@@ -138,7 +143,7 @@ def test_box_verdicts_string_box_number_accepted() -> None:
 def test_box_verdicts_missing_list_key_raises_pack_multi_region_keys_missing() -> None:
     F = RegionFields()
     with pytest.raises(MultiRegionKeysMissingError) as exc_info:
-        box_verdicts({F.bbox_correct: True}, 1, F)
+        box_verdicts({'region_bbox_correct': True}, 1, F)
     assert exc_info.value.code == 'pack_multi_region_keys_missing'
 
 

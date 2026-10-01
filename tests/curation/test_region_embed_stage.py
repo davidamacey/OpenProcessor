@@ -2,7 +2,9 @@
 
 Every task is a full `_ItemTask` (mirrors `_make_task` in
 test_region_worker.py); the crop JPEG is real so `_crop_region_jpeg` runs
-for real, and the PE encoder is a stub returning fixed unit vectors.
+for real, and the PE encoder is a stub returning fixed unit vectors. The
+stage embeds each ACCEPTED box of ``pending_boxes`` and keys the vector by
+the box's pre-merge id.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from PIL import Image
 
 import scripts.curation.worker.region_embed_stage as stage
 from scripts.curation.worker.state import _ItemTask
-from src.config import get_region_fields
+from src.services.curation.region_boxes import RegionBox
 
 
 def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
@@ -24,25 +26,25 @@ def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
     return buf.getvalue()
 
 
+def _box(box_id: str, state: str = 'accepted', x: float = 0.1) -> RegionBox:
+    return RegionBox(box_id=box_id, bbox_norm=(x, 0.1, x + 0.2, 0.4), state=state)
+
+
 def _make_task(
     *,
     crop_id: str = 'crop-1',
-    status: str | None = None,
-    candidate_in_crop: tuple[float, float, float, float] | None = (0.1, 0.1, 0.5, 0.5),
+    boxes: list[RegionBox] | None = None,
     crop_jpeg: bytes | None = None,
 ) -> _ItemTask:
-    F = get_region_fields()
     t = _ItemTask(
         crop_id=crop_id,
         image_path='/dev/null/never-read',
         item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status='pending',
         class_name='',
-        candidate_in_crop=candidate_in_crop,
         crop_jpeg=crop_jpeg if crop_jpeg is not None else _make_jpeg(),
     )
-    if status is not None:
-        t.update_doc = {F.status: status}
+    t.pending_boxes = boxes
     return t
 
 
@@ -61,51 +63,73 @@ class _FakePE:
 
 @pytest.mark.asyncio
 class TestEmbedWrittenRegions:
-    async def test_detected_task_gets_a_unit_norm_vector(self) -> None:
-        F = get_region_fields()
-        t = _make_task(status='detected')
+    async def test_every_accepted_box_gets_its_own_unit_norm_vector(self) -> None:
+        t = _make_task(boxes=[_box('b1'), _box('b2', x=0.5)])
         pe = _FakePE()
 
         await stage.embed_written_regions([t], pe)
 
-        vec = t.update_doc[F.embedding]
-        assert len(vec) == 3
-        assert np.linalg.norm(vec) == pytest.approx(1.0, abs=1e-6)
+        assert set(t.box_vectors) == {'b1', 'b2'}
+        for vec in t.box_vectors.values():
+            assert len(vec) == 3
+            assert np.linalg.norm(vec) == pytest.approx(1.0, abs=1e-6)
+        assert pe.calls == [2]
+
+    async def test_only_accepted_boxes_are_embedded(self) -> None:
+        t = _make_task(boxes=[_box('b1'), _box('b2', 'rejected', 0.4), _box('b3', 'proposed', 0.6)])
+        pe = _FakePE()
+
+        await stage.embed_written_regions([t], pe)
+
+        assert set(t.box_vectors) == {'b1'}
         assert pe.calls == [1]
 
-    async def test_rejected_task_gets_nothing(self) -> None:
-        F = get_region_fields()
-        t = _make_task(status='no_region_box')
+    async def test_each_box_is_cropped_from_its_own_geometry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: list[tuple[float, float, float, float]] = []
+        real = stage._crop_region_jpeg
+
+        def _recording(jpeg: bytes, region_in_crop: tuple[float, float, float, float]) -> bytes:
+            seen.append(region_in_crop)
+            return real(jpeg, region_in_crop)
+
+        monkeypatch.setattr(stage, '_crop_region_jpeg', _recording)
+        t = _make_task(boxes=[_box('b1', x=0.1), _box('b2', x=0.5)])
+
+        await stage.embed_written_regions([t], _FakePE())
+
+        assert seen == [pytest.approx((0.1, 0.1, 0.3, 0.4)), pytest.approx((0.5, 0.1, 0.7, 0.4))]
+
+    async def test_task_with_no_boxes_gets_nothing(self) -> None:
+        t = _make_task(boxes=None)  # e.g. a stale-skip with no box write
         pe = _FakePE()
 
         await stage.embed_written_regions([t], pe)
 
-        assert F.embedding not in t.update_doc
+        assert t.box_vectors == {}
         assert pe.calls == []
 
-    async def test_task_with_no_update_gets_nothing(self) -> None:
-        F = get_region_fields()
-        t = _make_task(status=None)  # empty update_doc, e.g. a stale-skip
+    async def test_task_without_a_loaded_crop_gets_nothing(self) -> None:
+        t = _make_task(boxes=[_box('b1')])
+        t.crop_jpeg = None
         pe = _FakePE()
 
         await stage.embed_written_regions([t], pe)
 
-        assert F.embedding not in t.update_doc
+        assert t.box_vectors == {}
         assert pe.calls == []
 
-    async def test_encoder_exception_leaves_docs_untouched_and_does_not_raise(self) -> None:
-        F = get_region_fields()
-        t = _make_task(status='detected')
-        pe = _FakePE(fail=True)
+    async def test_encoder_exception_leaves_tasks_untouched_and_does_not_raise(self) -> None:
+        t = _make_task(boxes=[_box('b1')])
 
-        await stage.embed_written_regions([t], pe)
+        await stage.embed_written_regions([t], _FakePE(fail=True))
 
-        assert F.embedding not in t.update_doc
+        assert t.box_vectors == {}
 
-    async def test_batches_at_encode_batch_size(self) -> None:
-        F = get_region_fields()
+    async def test_batches_at_encode_batch_size_across_tasks(self) -> None:
         tasks = [
-            _make_task(crop_id=f'c{i}', status='detected') for i in range(stage.ENCODE_BATCH + 5)
+            _make_task(crop_id=f'c{i}', boxes=[_box('b1')]) for i in range(stage.ENCODE_BATCH + 5)
         ]
         pe = _FakePE()
 
@@ -113,14 +137,4 @@ class TestEmbedWrittenRegions:
 
         assert pe.calls == [stage.ENCODE_BATCH, 5]
         for t in tasks:
-            assert F.embedding in t.update_doc
-
-    async def test_no_candidate_in_crop_is_skipped(self) -> None:
-        F = get_region_fields()
-        t = _make_task(status='detected', candidate_in_crop=None)
-        pe = _FakePE()
-
-        await stage.embed_written_regions([t], pe)
-
-        assert F.embedding not in t.update_doc
-        assert pe.calls == []
+            assert 'b1' in t.box_vectors

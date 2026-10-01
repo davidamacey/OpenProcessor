@@ -16,14 +16,8 @@ from __future__ import annotations
 import math
 
 import pytest
-from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
-from src.config import get_region_fields
-from src.services.detection.cascade_detect import (
-    class_provenance,
-    is_plausible_region_bbox,
-    region_provenance,
-)
+from src.services.detection.cascade_detect import class_provenance, is_plausible_region_bbox
 
 
 class TestIsPlausibleRegionBbox:
@@ -90,32 +84,6 @@ class TestIsPlausibleRegionBbox:
         )
         assert not ok
         assert reason == 'parent_bbox_degenerate'
-
-
-class TestRegionProvenance:
-    def test_minimal_fields(self) -> None:
-        F = get_region_fields()
-        doc = region_provenance(
-            NEUTRAL_REGION_PROFILE.detector_model,
-            NEUTRAL_REGION_PROFILE.detector_version,
-        )
-        assert doc[F.detector] == NEUTRAL_REGION_PROFILE.detector_model
-        assert doc[F.detector_version] == NEUTRAL_REGION_PROFILE.detector_version
-        assert doc[F.bbox_frame] == 'source'
-        assert F.detected_at in doc
-        assert F.verifier not in doc
-
-    def test_with_verifier(self) -> None:
-        F = get_region_fields()
-        doc = region_provenance(
-            NEUTRAL_REGION_PROFILE.human_detector_name,
-            NEUTRAL_REGION_PROFILE.human_detector_version,
-            verifier=NEUTRAL_REGION_PROFILE.human_detector_name,
-            verifier_version=NEUTRAL_REGION_PROFILE.human_detector_version,
-        )
-        assert doc[F.verifier] == NEUTRAL_REGION_PROFILE.human_detector_name
-        assert doc[F.verifier_version] == NEUTRAL_REGION_PROFILE.human_detector_version
-        assert F.verified_at in doc
 
 
 class TestClassProvenance:

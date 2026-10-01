@@ -539,6 +539,9 @@ def _items_body() -> dict[str, Any]:
                     'type': 'nested',
                     'properties': {
                         'box_id': {'type': 'keyword'},
+                        # The geometry the vector was computed from: a box
+                        # moved since then has a stale vector.
+                        'bbox_norm': {'type': 'float', 'index': False},
                         'embedding': _knn_field(dim=config.encoder_embedding_dim),
                     },
                 },

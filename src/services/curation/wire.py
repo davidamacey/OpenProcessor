@@ -433,16 +433,16 @@ SEARCH_EXTRA_KEYS = frozenset({'semantic_score'})
 
 
 def region_event_payload(
-    crop_id: str, *, region_status: str | None, region_text: str | None = None
+    crop_id: str, *, region_status: str | None, region_count: int | None = None
 ) -> dict[str, Any]:
     """``crop.region_verified`` SSE payload. Keys are wire names, same as
-    the item's."""
+    the item's: the item status and how many accepted boxes it now holds."""
     return {
         'type': 'crop.region_verified',
-        'topic': region_wire_key('status'),
+        'topic': 'region_status',
         'crop_id': crop_id,
-        region_wire_key('status'): region_status,
-        region_wire_key('text'): region_text,
+        'region_status': region_status,
+        'region_count': region_count,
     }
 
 

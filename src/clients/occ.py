@@ -369,15 +369,7 @@ def strip_class_write_fields(update: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in update.items() if k not in CLASS_WRITE_FIELDS}
 
 
-# Companion fields preserved alongside a guard whenever the guard fires.
-# When RegionFields.text_source says human, the matching
-# RegionFields.text value was also human-set and must be preserved.
-# Keep the map narrow — the guards themselves are the source of truth.
-_HUMAN_GUARD_COMPANIONS: dict[str, tuple[str, ...]] = {
-    get_region_fields().text_source: (get_region_fields().text,),
-}
-
-# Stricter than a companion: when the guard fires, the incoming value is
+# When a guard fires, the incoming value is
 # never applied — the existing value is kept, or the field is left absent
 # if the human-owned doc never had it. Class provenance describes who
 # produced the *preserved* class_source, so an ingest detector's
@@ -672,10 +664,6 @@ def _merge_preserving_human(
         if fires:
             merged[field] = existing_val
             preserved.append(field)
-            for companion in _HUMAN_GUARD_COMPANIONS.get(field, ()):
-                companion_val = existing.get(companion)
-                if companion_val not in (None, '', [], {}):
-                    merged[companion] = companion_val
             for owned in _HUMAN_GUARD_OWNED.get(field, ()):
                 if owned in existing:
                     merged[owned] = existing[owned]

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Re-derive each item's chosen ``region_text`` under the region-text rules.
+"""Re-derive each box's chosen ``text`` under the region-text rules.
 
-Re-runs the text chooser on every item's *stored* readings
-(``region_text_vlm`` / a VLM-sourced ``region_text`` and
-``region_text_ocr``) with the active region profile's validity rules, so a
-VLM reading that is not text -- the prompt's example value or a truncation
+Re-runs the text chooser on every box's *stored* readings
+(``text_vlm`` / a VLM-sourced ``text`` and ``text_ocr``) with the active
+region profile's validity rules, so a VLM reading that is not text -- the prompt's example value or a truncation
 of it, a "can't read it" word, a stock run like "999" -- stops being the
 chosen text and a valid OCR reading takes its place (see
 ``src/services/curation/region_text_repair.py``). Human-typed text is never
@@ -73,8 +72,8 @@ async def run(args: argparse.Namespace, client: object) -> int:
         client, index=args.index, profile=profile, rules=rules, page_size=args.page_size
     )
     print(
-        f'{plan.scanned} item(s) with region text; {plan.human_skipped} human (untouched); '
-        f'{len(plan.changes)} would change, {sum(plan.text_changed.values())} of them '
+        f'{plan.scanned} item(s) with box text; {plan.human_skipped} human box(es) (untouched); '
+        f'{len(plan.changes)} item(s) would change, {sum(plan.text_changed.values())} box(es) '
         'change the chosen text'
     )
     for name, counts in (

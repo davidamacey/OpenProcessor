@@ -4,14 +4,14 @@ Reproduces the review's exact scenario (docs/design/openprocessor_internal/
 w8_pipeline_review_2026-09-27.md, finding B1): a human proposes a box via
 the real ``PUT /crops/{crop_id}/regions`` route (W8a), which -- with no
 ``region_status`` in the request -- derives ``pending_verification``. The
-streaming worker's Path 1 must read that stored ``proposed`` box (never the
-legacy scalar, which this item never had), re-verify it through the VLM,
+streaming worker's Path 1 must read that stored ``proposed`` box (never a
+single-box scalar, which this item never had), re-verify it through the VLM,
 and merge the result back into the item's ``region_boxes`` list WITHOUT
 discarding the untouched rejected sibling the human's PUT also carried
 forward.
 
-Before the B1 fix: Path 1 fired only on the legacy scalar
-(``detector_region_in_source``), which this item never populated, so the
+Before the B1 fix: Path 1 fired only on the legacy single-box scalar,
+which this item never populated, so the
 worker ran the segmenter cold and wrote a brand-new single-box list --
 silently destroying both the human's proposed box and its sibling.
 """

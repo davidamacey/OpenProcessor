@@ -1,25 +1,24 @@
 """Re-derive stored region text under the region-text validity rules.
 
-Rows written before :mod:`src.services.detection.region_text_rules`
-existed can carry a VLM reading that is not text as their chosen
-``region_text`` -- the prompt's example value ("ABC123"), a "can't read
-it" word, a stock run ("999") -- even where the OCR reader stored a valid
-reading. This re-runs the chooser
+A box can carry a VLM reading that is not text as its chosen ``text`` --
+the prompt's example value ("ABC123"), a "can't read it" word, a stock run
+("999") -- when the profile's text rules changed after it was read, even
+where the OCR reader stored a valid reading. This re-runs the chooser
 (:func:`~src.services.detection.region_text.resolve_region_text`) on each
-row's *stored* readings -- ``region_text_vlm`` (or, for rows written
-before per-reader fields, a VLM-sourced ``region_text``) and
-``region_text_ocr`` -- with the deployment's rules, and rewrites the
-chosen-text fields (:data:`MANAGED_ATTRS`). The per-reader readings and
-``region_text_raw`` are never changed, so the repair is re-runnable.
+box's *stored* readings -- ``text_vlm`` (or a VLM-sourced ``text``) and
+``text_ocr`` -- with the deployment's current rules, and rewrites the
+chosen-text attributes (:data:`MANAGED_ATTRS`) of that box. The per-reader
+readings and ``text_raw`` are never changed, so the repair is re-runnable.
 
-Human-typed text (``region_text_source='human'``) is never touched.
-An OCR reading's own confidence isn't stored separately, so an OCR
-reading newly chosen here gets ``region_text_confidence=null``; a choice
-that doesn't change keeps its stored confidence and engine.
+Human-typed text (``text_source='human'``) is never touched. An OCR
+reading's own confidence isn't stored separately, so an OCR reading newly
+chosen here gets ``text_confidence=null``; a choice that doesn't change
+keeps its stored confidence and engine.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -27,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
+from src.services.curation.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
 from src.services.detection.region_text import (
     TEXT_SOURCE_OCR,
     TEXT_SOURCE_VLM,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 REPAIR_WRITER = 'operator:rederive_region_text'
 HUMAN_TEXT_SOURCE = 'human'
 
-# RegionFields attributes of the chosen reading, rewritten by the repair.
+# RegionBox attributes of the chosen reading, rewritten by the repair.
 MANAGED_ATTRS: tuple[str, ...] = (
     'text',
     'text_source',
@@ -63,34 +63,38 @@ def _is_vlm_source(source: Any) -> bool:
     return bool(source) and source not in (TEXT_SOURCE_OCR, HUMAN_TEXT_SOURCE)
 
 
-def stored_vlm_reading(doc: dict[str, Any]) -> str | None:
+def _view(box: RegionBox) -> dict[str, Any]:
+    """The text attributes of ``box`` (plus its raw reading) by bare name."""
+    return {a: getattr(box, a) for a in (*MANAGED_ATTRS, 'text_vlm', 'text_ocr', 'text_raw')}
+
+
+def stored_vlm_reading(view: dict[str, Any]) -> str | None:
     """The VLM's stored reading: ``text_vlm``, else a VLM-sourced ``text``."""
-    F = get_region_fields()
-    vlm = doc.get(F.text_vlm)
-    if not vlm and _is_vlm_source(doc.get(F.text_source)):
-        vlm = doc.get(F.text)
+    vlm = view.get('text_vlm')
+    if not vlm and _is_vlm_source(view.get('text_source')):
+        vlm = view.get('text')
     return str(vlm) if vlm else None
 
 
 def rederive(
-    doc: dict[str, Any], *, profile: DetectionProfile, rules: RegionTextRules
+    box: RegionBox, *, profile: DetectionProfile, rules: RegionTextRules
 ) -> dict[str, Any] | None:
-    """Target values (storage keys) of :data:`MANAGED_ATTRS` for ``doc``, or
-    ``None`` when the row holds human text or no stored reading at all, or
-    the profile does not read text (a text-free profile has no chooser to
-    re-run, and stored text is left as it is)."""
+    """Target values (by attribute name) of :data:`MANAGED_ATTRS` for
+    ``box``, or ``None`` when it holds human text or no stored reading at
+    all, or the profile does not read text (a text-free profile has no
+    chooser to re-run, and stored text is left as it is)."""
     if not profile.reads_text:
         return None
-    F = get_region_fields()
-    stored_source = doc.get(F.text_source)
+    view = _view(box)
+    stored_source = view['text_source']
     if stored_source == HUMAN_TEXT_SOURCE:
         return None
-    vlm = stored_vlm_reading(doc)
-    ocr_text = doc.get(F.text_ocr)
+    vlm = stored_vlm_reading(view)
+    ocr_text = view['text_ocr']
     if not vlm and not ocr_text:
         return None
     ocr = (
-        DominantTextReading(str(ocr_text), str(doc.get(F.text_raw) or ''), None, None, (), 'ok')
+        DominantTextReading(str(ocr_text), str(view['text_raw'] or ''), None, None, (), 'ok')
         if ocr_text
         else None
     )
@@ -104,7 +108,7 @@ def rederive(
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
         rules=rules,
     )
-    target = {getattr(F, a): out.get(a) for a in MANAGED_ATTRS}
+    target = {a: out.get(a) for a in MANAGED_ATTRS}
     chosen = out.get('text_source')
     same_reader = (chosen == TEXT_SOURCE_VLM and _is_vlm_source(stored_source)) or (
         chosen == TEXT_SOURCE_OCR and stored_source == TEXT_SOURCE_OCR
@@ -112,47 +116,57 @@ def rederive(
     if same_reader:
         # The same reader's reading still wins: keep its stored confidence,
         # engine and source spelling.
-        target[F.text_source] = stored_source
-        target[F.text_confidence] = doc.get(F.text_confidence)
-        target[F.text_engine_version] = doc.get(F.text_engine_version)
+        target['text_source'] = stored_source
+        target['text_confidence'] = view['text_confidence']
+        target['text_engine_version'] = view['text_engine_version']
     return target
 
 
-def changed_fields(doc: dict[str, Any], target: dict[str, Any]) -> dict[str, Any]:
-    """The subset of ``target`` that differs from ``doc`` (absent == null)."""
-    return {k: v for k, v in target.items() if doc.get(k) != v}
+def changed_fields(box: RegionBox, target: dict[str, Any]) -> dict[str, Any]:
+    """The subset of ``target`` that differs from ``box`` (absent == null)."""
+    return {k: v for k, v in target.items() if getattr(box, k) != v}
 
 
 @dataclass
 class RegionTextRepairPlan:
-    """What a repair would change, for the dry-run report."""
+    """What a repair would change, for the dry-run report. ``changes`` maps
+    ``crop_id`` to ``{box_id: changed attributes}``."""
 
     scanned: int = 0
     human_skipped: int = 0
-    changes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    changes: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
     text_changed: Counter[str] = field(default_factory=Counter)
     choice: Counter[str] = field(default_factory=Counter)
     vlm_invalid: Counter[str] = field(default_factory=Counter)
     examples: dict[str, list[str]] = field(default_factory=dict)
 
 
-def _transition(doc: dict[str, Any], target: dict[str, Any]) -> str:
-    F = get_region_fields()
-    before = 'vlm' if _is_vlm_source(doc.get(F.text_source)) else doc.get(F.text_source)
-    after = 'vlm' if _is_vlm_source(target.get(F.text_source)) else target.get(F.text_source)
+def _transition(box: RegionBox, target: dict[str, Any]) -> str:
+    before = 'vlm' if _is_vlm_source(box.text_source) else box.text_source
+    after = 'vlm' if _is_vlm_source(target.get('text_source')) else target.get('text_source')
     return f'{before or "none"} -> {after or "none"}'
 
 
 def candidate_query() -> dict[str, Any]:
+    """Items holding at least one box with a stored reading."""
     F = get_region_fields()
     return {
         'bool': {
-            'should': [
-                {'exists': {'field': F.text}},
-                {'exists': {'field': F.text_vlm}},
-                {'exists': {'field': F.text_ocr}},
-            ],
-            'minimum_should_match': 1,
+            'filter': [
+                box_query(
+                    {
+                        'bool': {
+                            'should': [
+                                {'exists': {'field': f'{F.boxes}.text'}},
+                                {'exists': {'field': f'{F.boxes}.text_vlm'}},
+                                {'exists': {'field': f'{F.boxes}.text_ocr'}},
+                            ],
+                            'minimum_should_match': 1,
+                        }
+                    },
+                    F,
+                )
+            ]
         }
     }
 
@@ -166,8 +180,8 @@ async def plan_region_text_repair(
     page_size: int = 500,
     max_examples: int = 5,
 ) -> RegionTextRepairPlan:
-    """Scan ``index`` (read-only) and plan every row whose chosen text
-    fields would change. A text-free profile plans nothing."""
+    """Scan ``index`` (read-only) and plan every box whose chosen text
+    attributes would change. A text-free profile plans nothing."""
     F = get_region_fields()
     plan = RegionTextRepairPlan()
     if not profile.reads_text:
@@ -178,12 +192,7 @@ async def plan_region_text_repair(
             'size': page_size,
             'query': candidate_query(),
             'sort': [{'crop_id': 'asc'}],
-            '_source': {
-                'includes': [
-                    'crop_id',
-                    *(getattr(F, a) for a in (*MANAGED_ATTRS, 'text_vlm', 'text_ocr', 'text_raw')),
-                ]
-            },
+            '_source': {'includes': ['crop_id', F.boxes]},
         }
         if cursor is not None:
             body['search_after'] = cursor
@@ -194,28 +203,31 @@ async def plan_region_text_repair(
         cursor = hits[-1].get('sort')
         for h in hits:
             plan.scanned += 1
-            doc = h.get('_source') or {}
-            target = rederive(doc, profile=profile, rules=rules)
-            if target is None:
-                if doc.get(F.text_source) == HUMAN_TEXT_SOURCE:
-                    plan.human_skipped += 1
-                continue
-            plan.choice[str(target.get(F.text_choice))] += 1
-            if target.get(F.text_vlm_invalid):
-                plan.vlm_invalid[str(target[F.text_vlm_invalid])] += 1
-            diff = changed_fields(doc, target)
-            if not diff:
-                continue
-            plan.changes[h['_id']] = diff
-            if F.text in diff:
-                key = _transition(doc, target)
-                plan.text_changed[key] += 1
-                shown = plan.examples.setdefault(key, [])
-                if len(shown) < max_examples:
-                    shown.append(
-                        f'{h["_id"]}: {doc.get(F.text)!r} -> {target.get(F.text)!r} '
-                        f'(vlm={stored_vlm_reading(doc)!r}, ocr={doc.get(F.text_ocr)!r})'
-                    )
+            per_box: dict[str, dict[str, Any]] = {}
+            for box in read_boxes(h.get('_source') or {}, F):
+                target = rederive(box, profile=profile, rules=rules)
+                if target is None:
+                    if box.text_source == HUMAN_TEXT_SOURCE:
+                        plan.human_skipped += 1
+                    continue
+                plan.choice[str(target.get('text_choice'))] += 1
+                if target.get('text_vlm_invalid'):
+                    plan.vlm_invalid[str(target['text_vlm_invalid'])] += 1
+                diff = changed_fields(box, target)
+                if not diff:
+                    continue
+                per_box[box.box_id] = diff
+                if 'text' in diff:
+                    key = _transition(box, target)
+                    plan.text_changed[key] += 1
+                    shown = plan.examples.setdefault(key, [])
+                    if len(shown) < max_examples:
+                        shown.append(
+                            f'{h["_id"]}/{box.box_id}: {box.text!r} -> {target.get("text")!r} '
+                            f'(vlm={stored_vlm_reading(_view(box))!r}, ocr={box.text_ocr!r})'
+                        )
+            if per_box:
+                plan.changes[h['_id']] = per_box
         if len(hits) < page_size or cursor is None:
             break
     return plan
@@ -229,15 +241,25 @@ async def apply_region_text_repair(
     profile: DetectionProfile,
     rules: RegionTextRules,
 ) -> dict[str, Any]:
-    """Rewrite the planned rows under OCC, re-deriving from each row's
-    current state (a row that changed since planning is re-judged; human
-    text is left alone)."""
+    """Rewrite the planned items under OCC, re-deriving each box from its
+    current state (a box that changed since planning is re-judged; human
+    text is left alone). The box list is written through
+    :func:`~src.services.curation.region_boxes.boxes_write_fields`."""
+    F = get_region_fields()
     now = datetime.now(UTC).isoformat()
 
     def _merge(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-        target = rederive(current, profile=profile, rules=rules)
-        diff = changed_fields(current, target) if target is not None else {}
-        return {**diff, 'updated_at': now} if diff else {}
+        boxes: list[RegionBox] = []
+        changed = False
+        for box in read_boxes(current, F):
+            target = rederive(box, profile=profile, rules=rules)
+            diff = changed_fields(box, target) if target is not None else {}
+            if diff:
+                changed = True
+            boxes.append(dataclasses.replace(box, **diff) if diff else box)
+        if not changed:
+            return {}
+        return {**boxes_write_fields(boxes, current_src=current, F=F), 'updated_at': now}
 
     if not plan.changes:
         return {'updated': 0, 'skipped_due_to_conflict': 0, 'errors': []}

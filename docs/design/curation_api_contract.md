@@ -1377,9 +1377,7 @@ or rejected the region. The detection worker never sets it. When the
 worker's auto-confirm policy accepts a box (detector and verifier agree
 strongly enough) it sets `region_auto_confirmed=true` instead: the region
 is accepted (`detected`, exported as a positive) but unreviewed, so it stays
-in the `regions` review tab. Rows an older worker stamped
-`region_validated=true` without a human are re-labelled by
-`scripts/curation/repair_region_validation.py` (dry run by default).
+in the `regions` review tab.
 `thumbnail_url` / `region_thumbnail_url` are built from the configured
 `api_prefix` (`{prefix}/crops/{crop_id}/thumbnail` and
 `…/region_thumbnail`), so `OP_API_PREFIX` and the frontend's proxy prefix
@@ -1444,7 +1442,7 @@ outside the profile's normalization, `text_len_min`..`text_len_max`, or the
 optional `text_format` regex. A rejected VLM reading counts as no reading,
 so the OCR reader's valid reading is chosen (and `vlm_then_ocr` runs OCR).
 `scripts/curation/rederive_region_text.py` re-applies these rules to stored
-rows (dry run by default).
+box text (dry run by default).
 
 The OCR reader keeps the region's dominant text: lines at least
 `text_min_height_ratio` × the tallest line's height, not centered in the

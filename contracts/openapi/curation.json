@@ -13186,6 +13186,17 @@
             ],
             "title": "Image Path"
           },
+          "region_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Count"
+          },
           "region_status": {
             "anyOf": [
               {
@@ -13196,17 +13207,6 @@
               }
             ],
             "title": "Region Status"
-          },
-          "region_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text"
           },
           "topic": {
             "anyOf": [
@@ -17271,7 +17271,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/region_thumbnail": {
       "get": {
-        "description": "128px JPEG thumbnail of the crop's region-of-interest sub-bbox.\n\nUsed by the region-verification UI in the labeler. Falls back to the\nverifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)\nwhen there is no accepted region box (``RegionFields.bbox_norm``) --\na ``verify_rejected`` item never has the latter, so this route used to\n404 for every one of them even though the item is still reviewable\n404 only when the crop has neither box. The cache\nkey includes the box's own coordinates (``ThumbnailCache.get_or_compute``),\nso a later promotion or re-detection that changes the box never\nserves a stale image -- it's a different cache key.",
+        "description": "128px JPEG thumbnail of one region box of the crop.\n\nUsed by the region-verification UI in the labeler. ``box_id`` names\nthe box (422 ``box_id_required`` without it, 404 ``unknown_box_id``\nfor a box the crop does not hold); any state renders, a rejected box\nincluded, since a rejected box is still reviewable. The cache key\nincludes the box's own coordinates\n(``ThumbnailCache.get_or_compute``), so a later edit or re-detection\nthat changes the box never serves a stale image -- it's a different\ncache key.",
         "operationId": "crop_region_thumbnail_curation_projects__project__crops__crop_id__region_thumbnail_get",
         "parameters": [
           {
@@ -17290,6 +17290,24 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "The region box to render (required).",
+            "in": "query",
+            "name": "box_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The region box to render (required).",
+              "title": "Box Id"
             }
           },
           {
@@ -26410,7 +26428,7 @@
     },
     "/curation/projects/{project}/vlm/verify_regions": {
       "post": {
-        "description": "Verify whether each crop's region-of-interest contains a real region.\n\nA crop the VLM gave no usable answer for (upstream failure, empty or\nunparseable reply) is skipped entirely -- its verify state is left\nuntouched for a later retry rather than written as ``verified=False``,\na verdict the VLM never actually gave.",
+        "description": "Verify, box by box, whether each crop's regions contain a real region.\n\nOne region crop is sent per stored box still open to a machine verdict\n(``proposed`` or ``accepted``, never a human- or import-owned box);\neach verdict lands on its own box and the item status is re-derived\n(:func:`~src.services.curation.region_verify.verify_regions_update`).\nA box the VLM gave no usable answer for (upstream failure, empty or\nunparseable reply) is skipped entirely -- its state is left untouched\nfor a later retry rather than written as rejected, a verdict the VLM\nnever actually gave. ``verified`` counts the VLM verdicts obtained.",
         "operationId": "vlm_verify_regions_curation_projects__project__vlm_verify_regions_post",
         "parameters": [
           {

@@ -240,6 +240,14 @@ def _coerce_box_number(value: Any) -> int | None:
     return None
 
 
+# The per-box keys of the VLM reply: the protocol the prompt packs ask for
+# (``vlm_prompts.py``), fixed whatever storage names a deployment maps the
+# box attributes to.
+REPLY_BBOX_CORRECT_KEY = 'region_bbox_correct'
+REPLY_CONFIDENCE_KEY = 'region_confidence'
+REPLY_TEXT_KEY = 'region_text'
+
+
 def box_verdicts(
     entry: dict[str, Any],
     n: int,
@@ -251,8 +259,8 @@ def box_verdicts(
 
     ``entry[fields.boxes]`` must be a list (D-B: no flat-shape fallback)
     -- each element's ``box`` (1-based; accepts ``1``, ``"1"``, ``"box
-    1"``), ``fields.bbox_correct``, ``fields.confidence`` and
-    ``fields.text`` are read. An out-of-range or duplicate ``box`` is
+    1"``), :data:`REPLY_BBOX_CORRECT_KEY`, :data:`REPLY_CONFIDENCE_KEY` and
+    :data:`REPLY_TEXT_KEY` are read. An out-of-range or duplicate ``box`` is
     ignored (first wins), logged ``vlm_box_index_invalid``. A number with
     no matching element gets ``bbox_correct=None`` (no verdict).
 
@@ -291,15 +299,18 @@ def box_verdicts(
         verdicts.append(
             VlmBoxVerdict(
                 box=i,
-                bbox_correct=_coerce_bool(element.get(fields.bbox_correct)),
-                confidence=_normalize_confidence(element.get(fields.confidence)),
-                text_reply=_clean_text_reply(element.get(fields.text), echoes=echoes),
+                bbox_correct=_coerce_bool(element.get(REPLY_BBOX_CORRECT_KEY)),
+                confidence=_normalize_confidence(element.get(REPLY_CONFIDENCE_KEY)),
+                text_reply=_clean_text_reply(element.get(REPLY_TEXT_KEY), echoes=echoes),
             )
         )
     return verdicts
 
 
 __all__ = [
+    'REPLY_BBOX_CORRECT_KEY',
+    'REPLY_CONFIDENCE_KEY',
+    'REPLY_TEXT_KEY',
     'MultiRegionKeysMissingError',
     'VlmBoxVerdict',
     'box_verdicts',

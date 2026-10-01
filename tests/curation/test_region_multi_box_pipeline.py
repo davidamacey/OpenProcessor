@@ -8,8 +8,9 @@ resetting the box-list revision at every write all survived the FULL
 test suite. This module drives the real runner with 2-3 raw candidates
 per leg and asserts PER-BOX outcomes distinctly.
 
-Also covers M3: the region-embedding source must come from an ACCEPTED
-box, never the top-scored (but possibly-rejected) one.
+Also covers the per-box embeddings: every ACCEPTED box gets its own vector
+in ``region_box_embeddings`` (keyed by its final id and the geometry it was
+computed from), never a rejected one.
 """
 
 from __future__ import annotations
@@ -20,10 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from scripts.curation.worker import runner as runner_mod
-from scripts.curation.worker.state import _ItemTask
-from scripts.curation.worker.verify import TaskBoxInput
 from src.config import get_region_fields
-from src.services.curation.region_boxes import RegionBox
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
@@ -198,77 +196,25 @@ class TestCombinedVerdictAlignment:
         assert boxes[source_c]['state'] == 'rejected'
 
 
-class TestM3EmbeddingSourceIsAcceptedBox:
-    def test_sync_accepted_candidate_prefers_accepted_over_top_scored(self) -> None:
-        """Unit-level: `_sync_accepted_candidate` is the exact function
-        the M3 fix added. `t.candidates[0]` (score 0.9, the top-scored
-        raw candidate) is REJECTED; `t.candidates[1]` (score 0.7) is
-        ACCEPTED. The region-embedding source (and the legacy singular
-        candidate_* mirror) must point at the accepted one."""
-        t = _ItemTask(
-            crop_id='c1',
-            image_path='',
-            item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
-            region_status='pending_detection',
-            class_name='',
-        )
-        rejected = TaskBoxInput(
-            bbox_in_crop=(0.1, 0.1, 0.2, 0.2),
-            bbox_in_source=(0.1, 0.1, 0.2, 0.2),
-            score=0.9,
-            detector='det',
-            detector_version='1',
-            source='det',
-        )
-        accepted = TaskBoxInput(
-            bbox_in_crop=(0.5, 0.5, 0.6, 0.6),
-            bbox_in_source=(0.5, 0.5, 0.6, 0.6),
-            score=0.7,
-            detector='det',
-            detector_version='1',
-            source='det',
-        )
-        t.candidates = [rejected, accepted]
-        # _sync_singular_candidate (the pre-M3 behaviour) would mirror
-        # `rejected` here -- the bug this fix targets.
-        runner_mod._sync_singular_candidate(t)
-        assert t.candidate_in_crop == rejected.bbox_in_crop
-
-        boxes = [
-            RegionBox(box_id='b1', bbox_norm=rejected.bbox_in_source, state='rejected'),
-            RegionBox(box_id='b2', bbox_norm=accepted.bbox_in_source, state='accepted'),
-        ]
-        runner_mod._sync_accepted_candidate(t, boxes)
-        assert t.candidate_in_crop == accepted.bbox_in_crop
-        assert t.candidate_in_source == accepted.bbox_in_source
-        assert t.candidate_score == accepted.score
-        assert t.candidate_source == accepted.source
-
+class TestPerBoxEmbeddings:
     @pytest.mark.asyncio
     async def test_embedding_and_region_verified_event_are_written_end_to_end(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """R-M1 fix gate (2026-09-27 re-review): this used to spy on
-        `_sync_accepted_candidate` (an internal helper) instead of
-        asserting the real written output -- which is exactly why the
-        R-M1 regression (moving status-writing into `bulk_writer._merge`
-        silently stopped `region_embed_stage._eligible_tasks` and
-        `bulk_writer._publish_region_events` from ever seeing a
-        `DETECTED` status, so NO region embedding and NO
-        `crop.region_verified` event were ever produced for ANY output,
-        including the single-box N=1 case that worked before this pass)
-        shipped undetected: the embed stage is disabled by default in
-        `_drive_worker` (a bare `MagicMock` pool fails the readiness
-        probe), so a spy on an internal helper proved nothing about the
-        real write.
+        """R-M1 fix gate (2026-09-27 re-review): assert the real written
+        output, not an internal helper -- moving status-writing into
+        `bulk_writer._merge` once silently stopped the embed stage and
+        `bulk_writer._publish_region_events` from seeing a `DETECTED`
+        status, so no embedding and no `crop.region_verified` event were
+        produced for any output.
 
         Drives the real runner with the embed stage genuinely enabled
         (``region_embed_ready=True`` + a stubbed ``PEEncoder``) and event
         publishing genuinely enabled (a stubbed event client), then
-        asserts directly on the item doc's ``F.embedding`` and the
-        published event body -- plus (M3's own concern) that the embedded
-        crop came from the ACCEPTED box, never the top-scored
-        (``candidates[0]``, here rejected) one.
+        asserts directly on the item doc's ``region_box_embeddings`` and
+        the published event body: ONLY the accepted box (the lower-scored
+        second candidate here; the first is rejected) carries a vector,
+        keyed by its final box id and the geometry it was cropped from.
         """
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         rejected_cand = RegionCandidate(bbox_norm=BOX_A, score=0.9, source='det')
@@ -294,9 +240,7 @@ class TestM3EmbeddingSourceIsAcceptedBox:
 
         monkeypatch.setattr(pe_encoder_mod, 'PEEncoder', MagicMock(return_value=_FakePE()))
 
-        # Which crop-frame bbox the embed stage actually cropped -- the
-        # real consumer of the M3 fix's accepted-box mirror, not a spy on
-        # the mirror-writing helper itself.
+        # Which crop-frame bbox the embed stage actually cropped.
         crop_calls: list[tuple[float, float, float, float]] = []
         real_crop_region_jpeg = region_embed_stage_mod._crop_region_jpeg
 
@@ -329,15 +273,20 @@ class TestM3EmbeddingSourceIsAcceptedBox:
         doc = fake_os.live['c1']
         assert doc[F.status] == 'detected'
 
-        # The real written embedding -- absent entirely under R-M1.
-        assert F.embedding in doc, 'no region embedding was written (R-M1 regression)'
-        assert list(doc[F.embedding][:3]) == pytest.approx([0.0, 1.0, 0.0])
+        # The real written per-box embedding -- absent entirely under R-M1.
+        assert doc.get(F.box_embeddings), 'no box embedding was written (R-M1 regression)'
+        by_geometry = {tuple(b['bbox_norm']): b for b in doc[F.boxes]}
+        source_b = tuple(runner_mod.crop_norm_to_source_norm(BOX_B, _item()['bbox_norm']))
+        accepted_box = by_geometry[source_b]
+        assert accepted_box['state'] == 'accepted'
+        (entry,) = doc[F.box_embeddings]
+        assert entry['box_id'] == accepted_box['box_id']
+        assert entry['bbox_norm'] == pytest.approx(list(source_b))
+        assert list(entry['embedding'][:3]) == pytest.approx([0.0, 1.0, 0.0])
 
-        # M3: embedded from the ACCEPTED box's crop, never the rejected
-        # (higher-scored, candidates[0]) one's.
-        assert crop_calls, 'the embed stage never extracted a region crop'
-        assert crop_calls[-1] == BOX_B
-        assert crop_calls[-1] != BOX_A
+        # Embedded from the ACCEPTED box's crop only: the rejected
+        # (higher-scored) candidate is never cropped for an embedding.
+        assert crop_calls == [pytest.approx(BOX_B)]
 
         # The real published event -- absent entirely under R-M1.
         assert published, 'crop.region_verified event was never published (R-M1 regression)'
