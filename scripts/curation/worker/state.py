@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from src.config import DetectionProfile
     from src.services.curation.region_boxes import RegionBox
     from src.services.detection.region_text import OcrLine
+    from src.services.labeling.vlm_client import VlmIdentity
 
 
 logger = get_logger('curation_worker')
@@ -45,7 +46,6 @@ DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
 # the parallelism across GPUs adds up. OP_SEGMENTER_URL is the
 # single-URL fallback when OP_SEGMENTER_URLS is unset.
 DEFAULT_SEGMENTER_URLS = os.environ.get('OP_SEGMENTER_URLS', '').strip()
-DEFAULT_VLM_URL = os.environ.get('OP_VLM_URL', '')
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',
@@ -268,6 +268,18 @@ class _ItemTask:
     # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never
     # gets a stamp implying a VLM ran.
     vlm_called: bool = False
+    # Who answered (W9.3): the identity of the runtime whose VLM this task's
+    # call went to, stamped as `vlm_endpoint` / `vlm_model` on the write.
+    # Per TASK, not read from the store at write time: a swap between the
+    # call and the flush must not relabel an answer.
+    vlm_identity: VlmIdentity | None = None
+
+    def mark_vlm_called(self, identity: VlmIdentity | None) -> None:
+        """A VLM round trip happened for this task (whatever the verdict):
+        any write it produces this pass is stamped with the pack and with
+        WHO answered."""
+        self.vlm_called = True
+        self.vlm_identity = identity
 
 
 def bind_task_project(task: _ItemTask) -> None:

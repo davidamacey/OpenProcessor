@@ -27,6 +27,7 @@ source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/gpu.sh"
 source "${SCRIPT_DIR}/lib/ports.sh"
 source "${SCRIPT_DIR}/lib/vlm_catalog.sh"
+source "${SCRIPT_DIR}/lib/vlm_switch.sh"
 
 # Installer plan section 5.1: every compose call goes through dc(), which
 # always passes -p, --env-file and --project-directory. Section 5.5:
@@ -735,7 +736,7 @@ Deploy:
   sample coco [--full]  Fetch the public COCO sample (inside the API image)
   config show           Print .env with every secret redacted
   gpu plan              Show the GPU placement from .env
-  vlm list|key set <slug>
+  vlm list|status|use <id> [--force] [--yes]|apply|probe|key set <slug>
   train-mode on|off     Stop/start the VLM (and a co-located segmenter) for training
 
 Setup:
@@ -819,10 +820,10 @@ cmd_vlm() {
                 printf '%-20s %-10s %-8s %-10s\n' "$id" "$licence" "$vram" "$status"
             done < <(vlm_catalog_rows)
             ;;
-        status|use|apply|probe)
-            log_error "'vlm $sub' requires the model-selection API (any-domain W9, cutover/model-selection), which has not merged yet."
-            return 3
-            ;;
+        status) _vlm_status ;;
+        use) _vlm_use "$@" ;;
+        apply) _vlm_apply "$@" ;;
+        probe) _vlm_probe ;;
         key)
             local action="${1:-}" slug="${2:-}"
             if [[ "$action" != "set" || -z "$slug" ]]; then

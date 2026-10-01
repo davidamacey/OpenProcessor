@@ -33,7 +33,6 @@ from src.services.detection.cascade_detect import (
 from src.services.detection.profile_registry import region_profile_or_neutral
 from src.services.detection.region_text import TEXT_CHOICE_NONE, TEXT_CHOICE_VLM_ONLY
 from src.services.detection.region_text_rules import region_text_rules
-from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
 
 
@@ -87,7 +86,7 @@ async def _verify_with_vlm(
     verdict = await vlm.verify_region(
         RegionCrop(crop_id=task.crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
     )
-    task.vlm_called = True
+    task.mark_vlm_called(vlm.identity)
     if verdict is None:
         return None
     accepted = bool(verdict.is_region) and verdict.confidence != 'low'
@@ -165,7 +164,7 @@ def _region_write_doc(
     region_status: str = RegionStatus.DETECTED,
     region_verified: bool = True,
     auto_confirmed: bool = False,
-    verifier: str | None = VLM_MODEL_ID,
+    verifier: str | None,
     verifier_version: str | None = '1',
     region_text_reply: str | None = None,
     region_text_confidence: str | None = None,
@@ -226,7 +225,7 @@ def _region_write_doc(
     elif region_text_reply:
         doc[F.text] = region_text_reply
         doc[F.text_raw] = region_text_reply
-        doc[F.text_source] = region_text_source or VLM_MODEL_ID
+        doc[F.text_source] = region_text_source or verifier
         doc[F.text_engine_version] = '1'
         doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
         if region_text_confidence:
@@ -324,10 +323,16 @@ def _combined_class_update(
     reply: VlmCombinedReply,
     class_names: list[str] | None,
     *,
+    vlm_model: str | None,
     now: str | None = None,
     name_to_id: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Build the class-side update dict from a combined VLM reply.
+
+    ``vlm_model`` is the resolved model of the endpoint that produced
+    ``reply`` (the runtime's ``vlm_identity.model``): it is the class
+    ``detector`` / ``labeler`` provenance, so a hot switch never leaves a
+    stale process-wide model id on a write.
 
     Always-applicable fields (make/model/region_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
@@ -360,6 +365,9 @@ def _combined_class_update(
         # the index only if the name isn't in the registry (shouldn't
         # happen when names is built from reg.classes).
         cid = (name_to_id or {}).get(cname, int(reply.class_id))
+        if vlm_model is None:
+            msg = 'a class was resolved from a VLM reply but the answering model is unknown'
+            raise ValueError(msg)
         update.update(
             {
                 'class_id': cid,
@@ -378,9 +386,9 @@ def _combined_class_update(
                 'vlm_confidence': reply.class_confidence or 'low',
                 'vlm_raw_label': cname,
                 **class_provenance(
-                    detector=VLM_MODEL_ID,
+                    detector=vlm_model,
                     detector_version='1',
-                    labeler=VLM_MODEL_ID,
+                    labeler=vlm_model,
                     labeled_at=ts,
                 ),
             }
@@ -594,6 +602,7 @@ def verdicts_to_boxes(
 def item_verification_fields(
     *,
     verified: bool,
+    verifier: str | None,
     auto_confirmed: bool = False,
     now: str | None = None,
 ) -> dict[str, Any]:
@@ -611,7 +620,7 @@ def item_verification_fields(
         F.validated: False,
         F.auto_confirmed: auto_confirmed,
         F.verified: verified,
-        F.verifier: VLM_MODEL_ID if verified else None,
+        F.verifier: verifier if verified else None,
         F.verifier_version: '1' if verified else None,
     }
     if verified:

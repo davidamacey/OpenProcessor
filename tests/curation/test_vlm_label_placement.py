@@ -20,6 +20,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config.curation import base_curation_config
 from src.services.curation.clustering.id_normalize import class_cluster_placement
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
@@ -29,6 +30,9 @@ if TYPE_CHECKING:
 
 
 ITEMS = base_curation_config().items_index
+
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
@@ -77,6 +81,7 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     )
 
     class _Labeler:
+        identity = VlmIdentity('env@None', 'test-vlm')
         _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
@@ -127,10 +132,13 @@ async def test_label_batch_with_no_classes_is_a_409_not_a_500(
     reg = ClassRegistry(path=tmp_path / 'class_registry.json')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
-    def _no_labeler(*_a: Any, **_k: Any) -> Any:
-        raise AssertionError('the VLM must not be called with no classes')
+    class _NeverCalled:
+        identity = VlmIdentity('env@None', 'test-vlm')
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', _no_labeler)
+        async def label_or_propose_batch(self, *_a: Any, **_k: Any) -> Any:
+            raise AssertionError('the VLM must not be called with no classes')
+
+    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
     fake = QueryFakeOpenSearch({ITEMS: {'a': _item('a')}})
 
     with pytest.raises(HTTPException) as exc_info:

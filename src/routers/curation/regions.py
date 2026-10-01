@@ -9,6 +9,7 @@ human-edit endpoints that set, clear and patch the sub-bbox live in
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from fastapi import HTTPException, Query
@@ -30,6 +31,7 @@ from src.services.curation.review_queries import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.detection.profile_registry import region_profile_or_neutral
+from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
 
 _TRAINING_CANDIDATE_MODES = tuple(TRAINING_CANDIDATE_MODES)
@@ -455,9 +457,15 @@ async def regions_vocabulary() -> dict[str, Any]:
     text_choices, rejection_reasons: [{id, label, kind, match,
     label_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /
     ``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from
-    the active region profile / ingest profiles / ``OP_VLM_MODEL`` --
+    the active region profile / ingest profiles / the VLM endpoint registry --
     never a hardcoded model id. ``filterable`` marks the values that can
     appear in stored ``region_detector`` (the detector filter's exact
     option list). The frontend renders this instead of hardcoding a
     label/palette map keyed on private model ids."""
+    with contextlib.suppress(Exception):
+        # Best-effort: the verifier entries come from the endpoint registry;
+        # an unreachable store just leaves them out.
+        from src.services.projects.guard import make_curation_opensearch
+
+        await refresh_vlm_state(await make_curation_opensearch())
     return region_vocabulary_catalog()

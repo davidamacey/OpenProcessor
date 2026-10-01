@@ -83,7 +83,10 @@ by router module; every path is relative to the configured
 | `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `GET /pipeline/auto_label/status/{job_id}`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
 | `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
-| `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
+| `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` (each also takes `?vlm=<endpoint>` and `acknowledge_external`) |
+| `vlm_endpoints.py` (global) | `GET,POST /vlm/endpoints`, `GET /vlm/endpoints/schema`, `POST /vlm/endpoints/validate`, `GET,PUT,DELETE /vlm/endpoints/{name}`, `GET /vlm/endpoints/{name}/revisions[/{revision}]`, `POST /vlm/endpoints/{name}/clone`, `POST /vlm/endpoints/{name}/probe` |
+| `vlm_activation.py` | `GET /vlm/endpoints/active`, `POST /vlm/endpoints/{name}/activate`, `POST /vlm/endpoints/active/rollback`, `POST /vlm/endpoints/deactivate` (project scoped) |
+| `vlm_catalog.py` (global) | `GET /vlm/catalog`, `GET /vlm/local`, `POST,DELETE /vlm/local/select` |
 | `bakeoff.py` | `GET /bakeoff/{eval_datasets,trained_models,profiles,baseline_models,runs}`, `POST /bakeoff/run`, `GET /bakeoff/{status,results,matrix}/{job_id}` (typed, schema v2; see "Model comparison" below) |
 | `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
 

@@ -247,6 +247,7 @@ class TestTextFreeWriteHelpers:
             chain=['seg:hit'],
             region_text_reply='ABC1234',
             region_text_confidence='high',
+            verifier='vlm-model',
         )
         assert doc[get_region_fields().status] == 'detected'
         assert _text_keys(doc) == []

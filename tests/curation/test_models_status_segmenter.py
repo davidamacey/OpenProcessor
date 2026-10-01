@@ -141,6 +141,7 @@ async def test_no_url_configured_reports_not_configured(monkeypatch: pytest.Monk
     assert entry['last_error']
 
 
+@pytest.mark.usefixtures('vlm_env')
 async def test_models_status_routes_segmenter_to_external_not_triton(
     monkeypatch: pytest.MonkeyPatch,
     reference_region_profile: None,
@@ -191,8 +192,8 @@ async def test_models_status_routes_segmenter_to_external_not_triton(
     # "everything else is Triton" check below isn't confused by it. With
     # no OP_VLM_URL configured its health probe fails fast (no network
     # call), so it's still 'unavailable' regardless.
-    vlm_name = models_mod._get_vlm_labeler().model
-    assert models_by_name[vlm_name]['kind'] == 'external'
+    vlm_name = 'env'  # the vlm_env endpoint's registry name
+    assert models_by_name[vlm_name]['kind'] == 'vlm'
     assert models_by_name[vlm_name]['unloadable'] is False
 
     # Every other roster entry (region detector, OCR det/rec, CLIP, PE

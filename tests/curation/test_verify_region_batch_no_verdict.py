@@ -9,13 +9,19 @@ from typing import Any
 
 import pytest
 
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmRegionVerdict
+
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 _IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()
 
 
 class _Labeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
+
     def __init__(self, verdicts: list[VlmRegionVerdict]) -> None:
         self._verdicts = verdicts
 
@@ -36,7 +42,10 @@ def _setup(monkeypatch: pytest.MonkeyPatch, labeler: _Labeler) -> None:
 @pytest.mark.asyncio
 async def test_no_verdict_crop_is_omitted_not_a_reject(monkeypatch: pytest.MonkeyPatch) -> None:
     import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmVerifyRegionBatchItem, VlmVerifyRegionBatchRequest
+    from src.routers.curation._vlm_route_models import (
+        VlmVerifyRegionBatchItem,
+        VlmVerifyRegionBatchRequest,
+    )
 
     _setup(
         monkeypatch,
@@ -62,7 +71,10 @@ async def test_no_verdict_crop_is_omitted_not_a_reject(monkeypatch: pytest.Monke
 @pytest.mark.asyncio
 async def test_all_no_verdict_returns_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
     import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmVerifyRegionBatchItem, VlmVerifyRegionBatchRequest
+    from src.routers.curation._vlm_route_models import (
+        VlmVerifyRegionBatchItem,
+        VlmVerifyRegionBatchRequest,
+    )
 
     _setup(monkeypatch, _Labeler([]))
 

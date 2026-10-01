@@ -39,6 +39,7 @@ def test_region_write_doc_sets_confidence_field() -> None:
         detector_version='1',
         chain=[],
         confidence='high',
+        verifier='vlm-model',
     )
     assert doc[F.confidence] == 'high'
 
@@ -50,5 +51,6 @@ def test_region_write_doc_omits_confidence_when_not_given() -> None:
         detector='det_model',
         detector_version='1',
         chain=[],
+        verifier='vlm-model',
     )
     assert F.confidence not in doc

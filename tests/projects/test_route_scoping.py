@@ -37,6 +37,23 @@ GLOBAL_ROUTES = frozenset(
         ('GET', f'{API}/projects/{{project}}/stats'),
         ('GET', f'{API}/health'),
         ('GET', f'{API}/events'),
+        # W9: the VLM endpoint registry and local model catalog are
+        # deployment-wide; only the per-project activation is scoped.
+        ('GET', f'{API}/vlm/catalog'),
+        ('GET', f'{API}/vlm/local'),
+        ('POST', f'{API}/vlm/local/select'),
+        ('DELETE', f'{API}/vlm/local/select'),
+        ('GET', f'{API}/vlm/endpoints'),
+        ('GET', f'{API}/vlm/endpoints/schema'),
+        ('POST', f'{API}/vlm/endpoints/validate'),
+        ('GET', f'{API}/vlm/endpoints/{{name}}'),
+        ('GET', f'{API}/vlm/endpoints/{{name}}/revisions'),
+        ('GET', f'{API}/vlm/endpoints/{{name}}/revisions/{{revision}}'),
+        ('POST', f'{API}/vlm/endpoints'),
+        ('POST', f'{API}/vlm/endpoints/{{name}}/clone'),
+        ('PUT', f'{API}/vlm/endpoints/{{name}}'),
+        ('DELETE', f'{API}/vlm/endpoints/{{name}}'),
+        ('POST', f'{API}/vlm/endpoints/{{name}}/probe'),
     }
 )
 
@@ -235,7 +252,9 @@ def test_shell_and_cli_callers_use_scoped_curation_paths() -> None:
         repo / 'setup-openprocessor.sh',
         repo / 'Makefile',
     ]
-    allowed = re.compile(r'/curation/(projects(/|\b)|health\b|events\b)')
+    allowed = re.compile(
+        r'/curation/(projects(/|\b)|health\b|events\b|vlm/(endpoints/[^/]+/probe|local)\b)'
+    )
     offenders = [
         f'{path.relative_to(repo)}:{lineno}: {line.strip()}'
         for path in files

@@ -48,6 +48,7 @@ def _patch_async_client(monkeypatch: pytest.MonkeyPatch, models_mod, handler) ->
     monkeypatch.setattr(models_mod.httpx, 'AsyncClient', _FakeAsyncClient)
 
 
+@pytest.mark.usefixtures('vlm_env')
 async def test_detector_missing_from_index_with_segmenter_is_optional_not_installed(
     monkeypatch: pytest.MonkeyPatch,
     reference_region_profile: None,
@@ -94,7 +95,7 @@ async def test_detector_missing_from_index_with_segmenter_is_optional_not_instal
     assert ocr_rec_entry['status'] == 'ready'  # sanity: our mock lists it READY
 
     # Every non-detector, non-segmenter, non-VLM entry stays optional=False.
-    vlm_name = models_mod._get_vlm_labeler().model
+    vlm_name = 'env'  # the vlm_env endpoint's registry name
     for name, entry in models_by_name.items():
         if name in ('license_plate_detector', 'sam3', vlm_name):
             continue

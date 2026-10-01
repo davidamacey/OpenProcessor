@@ -30,6 +30,7 @@ from src.routers.curation.pipeline_params import (
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
 )
+from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 
 
@@ -76,6 +77,8 @@ async def pipeline_auto_label(
     cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end, synchronously (no job):
 
@@ -116,6 +119,9 @@ async def pipeline_auto_label(
         prompt_pack=prompt_pack,
         prompt_pack_revision=None,
         prompt_pack_resolved=False,
+        vlm=vlm,
+        acknowledge_external=acknowledge_external,
+        vlm_resolved=False,
     )
 
 

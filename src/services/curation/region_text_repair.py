@@ -35,7 +35,6 @@ from src.services.detection.region_text import (
     ocr_engine_id,
     resolve_region_text,
 )
-from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 
 
 if TYPE_CHECKING:
@@ -98,7 +97,10 @@ def rederive(
         profile.text_reader,
         vlm_text=vlm,
         vlm_confidence=None,
-        vlm_engine=VLM_MODEL_ID,
+        # The repair re-derives from readings already stored: the engine of
+        # a VLM reading is the model that made it (stamped on the item at
+        # write time), not whatever this process is configured with.
+        vlm_engine=str(doc.get('vlm_model') or ''),
         ocr=ocr,
         ocr_engine=ocr_engine_id(profile),
         normalizer=DominantTextConfig.from_profile(profile).normalizer,

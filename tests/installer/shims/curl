@@ -8,7 +8,10 @@
 #   https://api.github.com/.../commits/<b>     -> {"sha": "$SHIM_BRANCH_SHA"}
 #   https://huggingface.co/api/models/<repo>   -> HTTP $(cat $SHIM_STATE/hf_code) (200)
 #   http://127.0.0.1:<port>/...                -> canned healthy responses
-#                                                 ($SHIM_STATE/health_down: refused,
+#                                                 ($SHIM_STATE/vlm_local.json: GET /curation/vlm/local,
+#                                                  probe_fail: POST .../probe answers 422,
+#                                                  $SHIM_VLM_ROOT: the vLLM root at /v1/models,
+#                                                  $SHIM_STATE/health_down: refused,
 #                                                  monitoring_bad: Prometheus has no config)
 set -u
 printf 'curl %s\n' "$*" >> "${SHIM_LOG:?}"
@@ -45,6 +48,11 @@ case "$url" in
             /v1/models) body="{\"data\": [{\"id\": \"local-vlm\", \"root\": \"${SHIM_VLM_ROOT:-}\"}]}" ;;
             /health) body='{"status": "ready", "loaded": true}' ;;
             /curation/health) body='{"status": "ok"}' ;;
+            /curation/vlm/local) body="$(cat "${state}/vlm_local.json" 2>/dev/null || echo '{}')" ;;
+            /curation/vlm/endpoints/*/probe)
+                if [[ -e "${state}/probe_fail" ]]; then code=422; body='{"detail":"probe failed"}'
+                else body='{"ok":true,"issues":[{"code":"vlm_multi_box_unverified","severity":"warning","message":"Multi-box regions have not been verified on this model."}]}'; fi ;;
+            /curation/vlm/local/select) body='{}' ;;
             /api/v1/status/config)
                 if [[ -e "${state}/monitoring_bad" ]]; then code=503; body='{}'
                 else body='{"status":"success","data":{"yaml":"scrape_configs:\n- job_name: triton\n"}}'; fi ;;

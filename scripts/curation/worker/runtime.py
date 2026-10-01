@@ -1,5 +1,6 @@
 """The detection worker's hot-reloadable runtime (W2, any_domain_plan.md
-sec 4.5; per-project per projects_plan.md sec 11 W2).
+sec 4.5; per-project per projects_plan.md sec 11 W2; the VLM endpoint joined
+the swap in W9).
 
 :func:`build_runtime` is the extracted build block that used to live
 inline in ``runner.py`` (``runner.py:227-331`` pre-W2): given a Triton
@@ -30,15 +31,24 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.services.labeling.vlm_endpoints import ENV_ENDPOINT_NAME, probe_key
 
 
 if TYPE_CHECKING:
     import argparse
     import asyncio
+    from collections.abc import Callable
 
     from src.config import DetectionProfile
-    from src.services.config_store.store import AxisRef, ConfigStore
+    from src.services.config_store.store import AxisRef, ConfigSnapshot, ConfigStore
+    from src.services.labeling.vlm_client import VlmIdentity
+    from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack
+
+#: What a runtime was built from: the project's ``(profile, pack, vlm)``
+#: activation refs plus the active VLM endpoint's probe marker (a re-probe --
+#: new ``json_mode``, model root, or a rotated key -- changes it and swaps).
+Want = tuple['AxisRef', 'AxisRef', 'AxisRef', str | None]
 
 
 logger = get_logger('curation_worker')
@@ -60,6 +70,9 @@ class RegionRuntime:
     ocr_recognizer: Any
     text_rules: Any
     vlm: Any
+    #: The endpoint ``vlm`` was built from (``None`` = no VLM: regions are
+    #: accepted without verification, exactly as with no ``OP_VLM_URL``).
+    vlm_endpoint: VlmEndpoint | None
     item_text_enabled: bool
     item_text_min_conf: float
     #: True when this profile/deployment has a VLM URL configured. Per
@@ -72,17 +85,44 @@ class RegionRuntime:
     #: text-hint settings must not keep running the old gate.
     text_hint_on: bool
 
+    @property
+    def vlm_identity(self) -> VlmIdentity | None:
+        """Who answers for this runtime: stamped on every write its VLM
+        calls produce (``vlm_endpoint``, ``vlm_model`` and the verifier /
+        engine fields)."""
+        return self.vlm.identity if self.vlm is not None else None
 
-def config_wants_swap(store: ConfigStore, current_refs: tuple[AxisRef, AxisRef] | None) -> bool:
-    """``True`` when the store's served active ``(profile, pack)`` refs
-    differ from ``current_refs`` -- the producer loop's per-cycle check
-    (sec 4.5 step 2). B2: reads ``pending_snapshot`` when one is staged
-    (pinned mode after a ``refresh()``, before the next ``pin_active()``)
-    so this agrees with :func:`maybe_hot_reload`'s own check; falls back
-    to ``current`` (live mode, or pinned with nothing pending)."""
-    snapshot = store.pending_snapshot if store.pending_snapshot is not None else store.current
-    want = (snapshot.active_profile, snapshot.active_pack)
-    return want != current_refs
+    @property
+    def vlm_model(self) -> str | None:
+        identity = self.vlm_identity
+        return identity.model if identity is not None else None
+
+
+def _latest(store: ConfigStore) -> ConfigSnapshot:
+    """The freshest snapshot: ``pending_snapshot`` when one is staged
+    (pinned mode after a ``refresh()``, before the next ``pin_active()``),
+    else ``current``. B2: every "did anything change" check reads this."""
+    return store.pending_snapshot if store.pending_snapshot is not None else store.current
+
+
+def current_want(store: ConfigStore, registry: ConfigStore) -> Want:
+    """What the stores now serve for ``store``'s project: its
+    ``(profile, pack, vlm)`` activation refs and the probe marker of the VLM
+    endpoint it resolves to (the registry is deployment-wide, the activation
+    is the project's). Compared against what the runtime was last built
+    from -- never against the runtime's own refs (see :class:`RuntimeHolder`)."""
+    project = _latest(store)
+    ref = project.active_vlm
+    key = (
+        probe_key(ENV_ENDPOINT_NAME, None)
+        if ref is None
+        else probe_key(*ref)
+        if isinstance(ref, tuple)
+        else None
+    )
+    probe = _latest(registry).vlm_probes.get(key) if key else None
+    marker = ((probe or {}).get('record') or {}).get('probed_at')
+    return (project.active_profile, project.active_pack, ref, marker)
 
 
 async def build_runtime(
@@ -94,11 +134,12 @@ async def build_runtime(
     region_detector_cls: Any,
     ocr_recognizer_cls: Any,
     segmenter_cls: Any,
-    vlm_cls: Any,
+    build_vlm: Callable[[VlmEndpoint, PromptPack], Any],
+    vlm_endpoint: VlmEndpoint | None,
     profile_revision: int | None = None,
     pack_revision: int | None = None,
 ) -> RegionRuntime:
-    """Build one :class:`RegionRuntime` for ``(profile, pack)``.
+    """Build one :class:`RegionRuntime` for ``(profile, pack, vlm_endpoint)``.
 
     Extracted, byte-for-byte, from the build block ``runner.py`` used to
     run inline at module-startup time (pre-W2) so it can be re-run at a
@@ -106,10 +147,10 @@ async def build_runtime(
     touches OpenSearch or the OS-level pause sentinel -- those stay in
     ``runner.py``'s own startup path.
 
-    The four heavy-IO constructors are passed in by the caller rather
+    The heavy-IO constructors are passed in by the caller rather
     than imported fresh here: ``runner.py`` resolves them through its
     own module globals / the ``region_worker_main`` shim
-    (``_wkr.SegmenterClient``, ``_wkr.VlmLabeler``, module-level
+    (``_wkr.SegmenterClient``, ``_wkr.build_vlm_labeler``, module-level
     ``RegionDetector``/``PaddleOcrTextRecognizer``) specifically so that
     ``tests/curation/test_region_worker.py`` /
     ``test_region_text_worker.py``'s ``monkeypatch.setattr(...)`` calls
@@ -141,8 +182,6 @@ async def build_runtime(
     )
 
     text_rules = region_text_rules(profile, pack)
-    vlm_url = getattr(args, 'vlm_url', '') or ''
-    vlm_available = bool(vlm_url.strip())
     validate_text_reader(profile.text_reader)
     text_hint_on = profile.text_hint_active(segmenter_enabled=bool(segmenter.enabled))
 
@@ -151,7 +190,8 @@ async def build_runtime(
     _cfg = get_curation_config()
     item_text_enabled = _cfg.item_text_enabled and bool(profile.ocr_pipeline_model)
     item_text_min_conf = _cfg.item_text_min_confidence
-    vlm = vlm_cls(base_url=vlm_url, pack=pack) if vlm_available else None
+    vlm = build_vlm(vlm_endpoint, pack) if vlm_endpoint is not None else None
+    vlm_available = vlm is not None
 
     return RegionRuntime(
         profile=profile,
@@ -163,6 +203,7 @@ async def build_runtime(
         ocr_recognizer=ocr_recognizer,
         text_rules=text_rules,
         vlm=vlm,
+        vlm_endpoint=vlm_endpoint,
         item_text_enabled=item_text_enabled,
         item_text_min_conf=item_text_min_conf,
         vlm_available=vlm_available,
@@ -187,7 +228,7 @@ class RuntimeHolder:
     """
 
     _runtimes: dict[str, RegionRuntime] = field(default_factory=dict)
-    _synced_refs: dict[str, tuple[AxisRef, AxisRef]] = field(default_factory=dict)
+    _synced_refs: dict[str, Want] = field(default_factory=dict)
 
     def get(self, slug: str) -> RegionRuntime | None:
         return self._runtimes.get(slug)
@@ -199,10 +240,10 @@ class RuntimeHolder:
         self._runtimes.pop(slug, None)
         self._synced_refs.pop(slug, None)
 
-    def get_synced_refs(self, slug: str) -> tuple[AxisRef, AxisRef] | None:
+    def get_synced_refs(self, slug: str) -> Want | None:
         return self._synced_refs.get(slug)
 
-    def set_synced_refs(self, slug: str, refs: tuple[AxisRef, AxisRef]) -> None:
+    def set_synced_refs(self, slug: str, refs: Want) -> None:
         self._synced_refs[slug] = refs
 
     @property
@@ -228,15 +269,17 @@ async def quiesce_and_swap(
     holder: RuntimeHolder,
     slug: str,
     store: ConfigStore,
+    registry: ConfigStore,
     pool: Any,
     args: argparse.Namespace,
-    want: tuple[AxisRef, AxisRef],
+    want: Want,
     get_active_profile: Any,
     get_active_pack: Any,
+    get_active_vlm: Callable[[], VlmEndpoint | None],
     region_detector_cls: Any,
     ocr_recognizer_cls: Any,
     segmenter_cls: Any,
-    vlm_cls: Any,
+    build_vlm: Callable[[VlmEndpoint, PromptPack], Any],
 ) -> RegionRuntime | None:
     """Drain every queue (sec 4.5 step 2.2 -- in-flight items finish on
     the *old* runtime, stamped with its own refs since the writer's
@@ -252,13 +295,19 @@ async def quiesce_and_swap(
     for q in queues:
         await q.join()
     store.pin_active()
+    registry.pin_active()
 
     new_profile = get_active_profile()
     if new_profile is None:
         return None
     new_pack = get_active_pack()
+    # Resolved from the just-pinned snapshots. An activation that names an
+    # endpoint revision that cannot be resolved raises here (fail closed):
+    # the old runtime keeps running and this project retries next cycle --
+    # it never quietly falls back to another endpoint or to "no VLM".
+    new_vlm_endpoint = get_active_vlm()
 
-    profile_ref, pack_ref = want
+    profile_ref, pack_ref, _vlm_ref, _marker = want
     old = holder.get(slug)
     new_runtime = await build_runtime(
         pool,
@@ -268,7 +317,8 @@ async def quiesce_and_swap(
         region_detector_cls=region_detector_cls,
         ocr_recognizer_cls=ocr_recognizer_cls,
         segmenter_cls=segmenter_cls,
-        vlm_cls=vlm_cls,
+        build_vlm=build_vlm,
+        vlm_endpoint=new_vlm_endpoint,
         profile_revision=_revision_for(profile_ref, resolved_name=new_profile.name),
         pack_revision=_revision_for(pack_ref, resolved_name=new_pack.name),
     )
@@ -284,6 +334,7 @@ async def quiesce_and_swap(
         project=slug,
         profile=new_runtime.profile_ref,
         pack=new_runtime.pack_ref,
+        vlm=new_runtime.vlm_identity.endpoint_ref if new_runtime.vlm_identity else None,
     )
     return new_runtime
 
@@ -291,6 +342,7 @@ async def quiesce_and_swap(
 async def maybe_hot_reload(
     *,
     store: ConfigStore,
+    registry: ConfigStore,
     opensearch: Any,
     holder: RuntimeHolder,
     slug: str,
@@ -299,10 +351,11 @@ async def maybe_hot_reload(
     queues: list[asyncio.Queue[Any]],
     get_active_profile: Any,
     get_active_pack: Any,
+    get_active_vlm: Callable[[], VlmEndpoint | None],
     region_detector_cls: Any,
     ocr_recognizer_cls: Any,
     segmenter_cls: Any,
-    vlm_cls: Any,
+    build_vlm: Callable[[VlmEndpoint, PromptPack], Any],
 ) -> RegionRuntime | None:
     """The producer loop's per-cycle hot-reload check (sec 4.5 step 2),
     as one call: refresh ``slug``'s store, compare what it now *serves*
@@ -322,8 +375,8 @@ async def maybe_hot_reload(
     no active profile either (nothing to run yet).
     """
     await store.refresh(opensearch)
-    snapshot = store.pending_snapshot if store.pending_snapshot is not None else store.current
-    want: tuple[AxisRef, AxisRef] = (snapshot.active_profile, snapshot.active_pack)
+    await registry.refresh(opensearch)
+    want = current_want(store, registry)
     last = holder.get_synced_refs(slug)
     if last is not None and want == last:
         return holder.get(slug)
@@ -333,15 +386,17 @@ async def maybe_hot_reload(
         holder=holder,
         slug=slug,
         store=store,
+        registry=registry,
         pool=pool,
         args=args,
         want=want,
         get_active_profile=get_active_profile,
         get_active_pack=get_active_pack,
+        get_active_vlm=get_active_vlm,
         region_detector_cls=region_detector_cls,
         ocr_recognizer_cls=ocr_recognizer_cls,
         segmenter_cls=segmenter_cls,
-        vlm_cls=vlm_cls,
+        build_vlm=build_vlm,
     )
     holder.set_synced_refs(slug, want)
     if new_runtime is None:
@@ -376,5 +431,7 @@ async def upsert_project_runtime_doc(
             'profile_revision': runtime.profile_ref[1],
             'pack': runtime.pack_ref[0],
             'pack_revision': runtime.pack_ref[1],
+            'vlm': runtime.vlm_endpoint.name if runtime.vlm_endpoint else None,
+            'vlm_revision': runtime.vlm_endpoint.revision if runtime.vlm_endpoint else None,
         },
     )

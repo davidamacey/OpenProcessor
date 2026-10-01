@@ -31,6 +31,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from curation._vlm_test_support import empty_registry_reads
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from scripts.curation.worker.runner import _should_classify
 from scripts.curation.worker.state import _ItemTask
@@ -38,6 +39,7 @@ from scripts.curation.worker.verify import _combined_class_update
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
@@ -130,7 +132,9 @@ class TestShouldClassifyHoldoutGuard:
 class TestCombinedClassUpdateResetsProvenance:
     def test_resolved_class_resets_label_source_and_validated(self) -> None:
         reply = VlmCombinedReply(img_id='crop-1', class_id=0, class_confidence='high')
-        update = _combined_class_update(reply, ['adventurebike'], name_to_id={'adventurebike': 1})
+        update = _combined_class_update(
+            reply, ['adventurebike'], name_to_id={'adventurebike': 1}, vlm_model='vlm-model'
+        )
         assert update['class_source'] == 'vlm'
         assert update['label_source'] == 'vlm'
         assert update['class_validated'] is False
@@ -141,7 +145,7 @@ class TestCombinedClassUpdateResetsProvenance:
         reply = VlmCombinedReply(
             img_id='crop-1', class_id=None, class_raw='hoverbike', class_confidence='low'
         )
-        update = _combined_class_update(reply, ['adventurebike'])
+        update = _combined_class_update(reply, ['adventurebike'], vlm_model='vlm-model')
         assert update['class_source'] == 'vlm_unmatched'
         assert update['label_source'] == 'vlm'
         assert update['class_validated'] is False
@@ -153,7 +157,7 @@ class TestCombinedClassUpdateResetsProvenance:
         # class_validated key should appear at all, so the existing doc
         # is untouched.
         reply = VlmCombinedReply(img_id='crop-1', class_id=0, class_confidence='high')
-        update = _combined_class_update(reply, None)
+        update = _combined_class_update(reply, None, vlm_model='vlm-model')
         assert 'class_source' not in update
         assert 'label_source' not in update
         assert 'class_validated' not in update
@@ -170,7 +174,7 @@ class TestCombinedClassUpdateResetsProvenance:
             make='Acme',
             model='X100',
         )
-        update = _combined_class_update(reply, None)
+        update = _combined_class_update(reply, None, vlm_model='vlm-model')
         assert update[get_region_fields().visible] is True
         assert update['vlm_item_make'] == 'Acme'
         assert update['vlm_item_model'] == 'X100'
@@ -393,6 +397,7 @@ class TestVlmLabelBatchHumanGuard:
         from src.routers.curation.vlm import VlmLabelBatchRequest
 
         fake_labeler = AsyncMock()
+        fake_labeler.identity = VlmIdentity('env@None', 'test-vlm')
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])
         monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: fake_labeler)
 
@@ -404,7 +409,7 @@ class TestVlmLabelBatchHumanGuard:
         )
         monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: fake_reg)
 
-        fake_os = AsyncMock()
+        fake_os = empty_registry_reads(AsyncMock())
         fake_os.mget = AsyncMock(
             return_value={
                 'docs': [

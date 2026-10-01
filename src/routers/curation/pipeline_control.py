@@ -14,6 +14,7 @@ from fastapi import HTTPException, Query
 
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import PROMPT_PACK_DESC
+from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
 
 
 @router.get('/pipeline/auto_label/status')
@@ -54,6 +55,8 @@ async def vlm_label_cluster(
     cluster_id: int,
     opensearch: OpenSearchDep,
     prompt_pack: Annotated[str | None, Query(description=PROMPT_PACK_DESC)] = None,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> dict[str, Any]:
     """VLM-label every unvalidated member of one cluster, as a background job.
 
@@ -74,4 +77,6 @@ async def vlm_label_cluster(
         max_vlm_crops=0,
         cluster_id=cluster_id,
         prompt_pack=prompt_pack,
+        vlm=vlm,
+        acknowledge_external=acknowledge_external,
     )

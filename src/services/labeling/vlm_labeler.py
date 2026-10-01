@@ -75,6 +75,7 @@ from src.services.labeling.vlm_client import (
     DEFAULT_MODEL,
     DEFAULT_OPEN_IMAGES_PER_CALL,
     DEFAULT_REQUESTS_PER_SECOND,
+    VlmIdentity,
     _TokenBucket,
     build_auth_headers,
     build_http_client,
@@ -86,6 +87,8 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import httpx
 
 
@@ -697,6 +700,12 @@ class VlmLabeler:
         client: httpx.AsyncClient | None = None,
         pack: PromptPack = GENERIC_ITEM_PACK,
         fields: RegionFields | None = None,
+        *,
+        hard_cap: int | None = None,
+        json_mode: bool = True,
+        open_images_per_call: int | None = None,
+        identity: VlmIdentity | None = None,
+        egress_check: Callable[[], None] | None = None,
     ) -> None:
         if base_url and not model:
             raise ValueError(
@@ -705,22 +714,30 @@ class VlmLabeler:
             )
         if max_images_per_call < 1:
             raise ValueError('max_images_per_call must be >= 1')
-        # Hard cap = the deployment's configured upstream limit
+        # Hard cap = the endpoint's own per-prompt image limit (W9:
+        # ``labeler_for`` passes the registered endpoint's
+        # ``max_images_per_call``); ``None`` keeps the deployment env cap
         # (OP_VLM_MAX_IMAGES_PER_CALL), so even an explicit caller value
         # can't exceed what the serving engine accepts per prompt.
-        _max_hard = DEFAULT_MAX_IMAGES_PER_CALL
+        _max_hard = DEFAULT_MAX_IMAGES_PER_CALL if hard_cap is None else hard_cap
         if max_images_per_call > _max_hard:
             logger.warning(
                 'vlm_labeler.max_images_clamped',
                 requested=max_images_per_call,
                 clamped_to=_max_hard,
                 reason=(
-                    f'vlm_labeler hard cap is {_max_hard} (OP_VLM_MAX_IMAGES_PER_CALL); '
+                    f'vlm_labeler hard cap is {_max_hard} (the endpoint image limit); '
                     "align it with your VLM deployment's per-prompt image limit."
                 ),
             )
             max_images_per_call = _max_hard
 
+        self._egress_check = egress_check
+        self.json_mode = json_mode
+        self.open_images_per_call = (
+            DEFAULT_OPEN_IMAGES_PER_CALL if open_images_per_call is None else open_images_per_call
+        )
+        self.identity = identity or VlmIdentity(endpoint_ref='', model=model)
         self.base_url = base_url.rstrip('/')
         self.model = model
         self.api_key = api_key
@@ -759,13 +776,23 @@ class VlmLabeler:
 
     # ----- HTTP plumbing -----
 
+    def _json_mode_kwargs(self) -> dict[str, Any]:
+        """``response_format: json_object`` for every payload, unless the
+        endpoint rejects it (W9: some OpenAI-compatible servers 400 on it).
+        The one place that key is added."""
+        return {'response_format': {'type': 'json_object'}} if self.json_mode else {}
+
     @property
     def _headers(self) -> dict[str, str]:
         return build_auth_headers(self.api_key)
 
     async def _post_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """POST /chat/completions with retry on 5xx + connection errors."""
+        """POST /chat/completions with retry on 5xx + connection errors.
+        ``egress_check`` (the factory's) runs first and raises to refuse the
+        send: a host's DNS can change after the endpoint was validated."""
 
+        if self._egress_check is not None:
+            self._egress_check()
         url = f'{self.base_url}/chat/completions'
         return await post_chat_with_retry(self._client, url, self._headers, payload, self._bucket)
 
@@ -863,7 +890,7 @@ class VlmLabeler:
             # Same grammar constraint as the combined call: without it a
             # server-side reasoning parser can route the whole answer to
             # the reasoning channel and leave ``content`` empty.
-            'response_format': {'type': 'json_object'},
+            **self._json_mode_kwargs(),
         }
 
         try:
@@ -1048,7 +1075,7 @@ class VlmLabeler:
         if images_per_call is not None:
             per_call = images_per_call
         else:
-            per_call = DEFAULT_OPEN_IMAGES_PER_CALL
+            per_call = self.open_images_per_call
         per_call = max(1, min(per_call, self.max_images_per_call))
         chunks = [crops[i : i + per_call] for i in range(0, len(crops), per_call)]
         chunk_results_list = await asyncio.gather(
@@ -1115,7 +1142,7 @@ class VlmLabeler:
             ],
             'temperature': 0.0,
             'max_tokens': 768,
-            'response_format': {'type': 'json_object'},
+            **self._json_mode_kwargs(),
         }
         try:
             response = await self._post_chat(payload)
@@ -1276,7 +1303,7 @@ class VlmLabeler:
             # hence the results-envelope line appended to the prompt
             # above rather than the bare array the pack's template asks
             # for on its own.
-            'response_format': {'type': 'json_object'},
+            **self._json_mode_kwargs(),
         }
 
         try:
@@ -1384,7 +1411,7 @@ class VlmLabeler:
             ],
             'temperature': 0.0,
             'max_tokens': 256,
-            'response_format': {'type': 'json_object'},
+            **self._json_mode_kwargs(),
         }
 
         try:
@@ -1569,7 +1596,7 @@ class VlmLabeler:
             # grammar only covers objects (not bare arrays), which is
             # why ``combined_batch_system`` asks for
             # ``{"results": [...]}`` rather than a top-level array.
-            'response_format': {'type': 'json_object'},
+            **self._json_mode_kwargs(),
         }
 
         try:
@@ -1882,7 +1909,7 @@ class VlmLabeler:
             # ``label_combined_batch``; the prompt asks for
             # ``{"results": [...]}`` since the json_object grammar only
             # covers top-level objects.
-            'response_format': {'type': 'json_object'},
+            **self._json_mode_kwargs(),
         }
 
         try:

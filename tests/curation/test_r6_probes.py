@@ -22,6 +22,9 @@ from curation.test_r5_probes import (  # noqa: F401 - fixtures
 )
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 def _live_pair():
     from src.services.detection.profile_registry import get_active_region_profile
     from src.services.labeling.vlm_prompts import active_prompt_pack

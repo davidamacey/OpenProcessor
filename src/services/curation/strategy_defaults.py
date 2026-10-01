@@ -59,6 +59,10 @@ def _hardcoded_default_for_axis(axis: str) -> str | None:
         from src.services.labeling.vlm_prompts import active_prompt_pack
 
         return active_prompt_pack().name
+    if axis == 'vlm':
+        from src.services.curation.vlm_strategies import active_default_id
+
+        return active_default_id()
     return None
 
 
@@ -90,6 +94,10 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
         from src.services.labeling.vlm_prompts import available_prompt_packs
 
         return frozenset(available_prompt_packs())
+    if axis == 'vlm':
+        from src.services.curation.vlm_strategies import advertised_ids
+
+        return advertised_ids()
     return frozenset()
 
 
@@ -104,6 +112,8 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # 7, §9 W2): the detection worker now hot-reloads its active profile via
 # the config store's quiesce-and-swap (§4.5) instead of only reading
 # OP_REGION_PROFILE at startup, so a PUT here actually changes what runs.
+# 'vlm' (W9) is the third config-store axis: an endpoint activation per
+# project (``src.services.config_store.vlm_activation``).
 # 'prompt_pack' and 'detection_profile' are special-cased in
 # ``src.routers.curation.settings`` -- their PUT delegates to
 # ``store.activate_axis`` (the config store's activation, §3.6/§3.7)
@@ -112,7 +122,7 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # store (``active_prompt_pack`` / ``get_active_region_profile``), so the
 # settings-doc override branch below never actually fires for them.
 SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset(
-    {'cluster', 'sort', 'prompt_pack', 'detection_profile'}
+    {'cluster', 'sort', 'prompt_pack', 'detection_profile', 'vlm'}
 )
 
 

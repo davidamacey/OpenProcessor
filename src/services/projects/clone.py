@@ -268,6 +268,15 @@ async def _validate_clone(
                 source_active_refs=source_active_refs,
                 activation_axes=activation_axes,
             )
+    if 'vlm_activation' in resolved_axes:
+        from src.services.projects.clone_vlm import validate_vlm_activation_clone
+
+        target_activations['vlm'] = await validate_vlm_activation_clone(
+            client,
+            source=source,
+            target_record=target_record,
+            with_activations='activations' in resolved_axes,
+        )
     return source, resolved_axes, target_activations
 
 
@@ -407,6 +416,17 @@ async def _apply_clone(
             source=source,
             written_packs=written_packs,
             target_activations=target_activations or {},
+        )
+
+    if 'vlm_activation' in axes:
+        from src.services.projects.clone_vlm import apply_vlm_activation_clone
+
+        await apply_vlm_activation_clone(
+            client,
+            source=source,
+            target_record=target_record,
+            expected_active=(target_activations or {}).get('vlm'),
+            with_activations='activations' in axes,
         )
 
     return conflicts

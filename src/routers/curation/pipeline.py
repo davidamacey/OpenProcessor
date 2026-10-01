@@ -28,7 +28,8 @@ from src.routers.curation.pipeline_params import (
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
-from src.routers.curation.vlm import _get_vlm_labeler
+from src.routers.curation.pipeline_vlm import job_endpoint, resolve_run_vlm
+from src.routers.curation.vlm import _get_vlm_labeler, _resolve_pack, _vlm_stamp
 from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
@@ -94,47 +95,25 @@ async def _run_auto_label(
     cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
-    # R4-3 fix (W3/W4 round-4 review): `/start` calls `resolve_run_prompt_pack`
-    # once at request time and puts BOTH the resolved name and its revision
-    # into the background job's trigger args. The worker then calls this
-    # function directly with those trigger args as kwargs
-    # (`pipeline_fn(opensearch=, progress=, **trigger_args)`) -- until this
-    # param existed, that raised `TypeError: unexpected keyword argument
-    # 'prompt_pack_revision'`, so EVERY `/start` job crashed.
-    #
-    # R6-m1 fix (Minor, W3/W4 round-6 review): this function is no longer
-    # the HTTP route handler (see `pipeline_auto_label` below) -- these two
-    # params used to be `Query(include_in_schema=False)`, which hides them
-    # from the OpenAPI docs but does NOT stop a client from setting them on
-    # the wire (`?prompt_pack=nope&prompt_pack_resolved=true` skipped the
-    # unknown-pack 422 below). Splitting the internal implementation
-    # (called directly by the worker, and by `/start`'s own resolved pin)
-    # from the public route (which always forces `prompt_pack_resolved=
-    # False`, `prompt_pack_revision=None`) makes that no longer reachable
-    # from any request at all, internal-only for real this time.
+    # Internal (never an HTTP param; the public route forces the defaults):
+    # `/start` resolves `prompt_pack` once at request time and hands the
+    # resolved pin here (R4-3). `prompt_pack_revision` is that pin.
     prompt_pack_revision: int | None = None,
-    # R5-2 fix (W3/W4 round-5 review, Blocker): whether `/start` already
-    # called `resolve_run_prompt_pack` for THIS request -- distinct from
-    # "the resolution pinned a revision" (`prompt_pack_revision is not
-    # None`), which `/start`'s truly-omitted-pack path never does on
-    # purpose (see below). The public route always calls this with
-    # `False`, so an explicit-but-unvalidated `prompt_pack` (e.g. an
-    # unknown name) still gets resolved-and-422'd here, same as before
-    # this fix.
+    # `/start` already ran `resolve_run_prompt_pack` (R5-2): do not re-pin.
     prompt_pack_resolved: bool = False,
-    # R6-1b fix (Blocker, W3/W4 round-6 review): whether the ORIGINAL
-    # request omitted `prompt_pack` entirely -- distinct from `prompt_pack`
-    # /`prompt_pack_revision`, which keep echoing the RESOLVED name for
-    # `summary`/job-status display. The echoed name can go stale between
-    # `/start` and the VLM stage actually running (`get_prompt_pack(name,
-    # revision=None)` only redirects to the pinned body while `name` is
-    # STILL the active pack; round-1 B1, reachable again once R6-1a warms
-    # a separate process's snapshot). When `True`, `labeler_resolution_
-    # args` below uses `None` instead, always re-deriving "whatever is
-    # active right now". `/start` sets this from the raw query param
-    # before resolution; a direct call (`prompt_pack_resolved=False`)
-    # computes it itself, same way, a few lines down.
+    # The ORIGINAL request omitted `prompt_pack` (R6-1b): resolve the
+    # labeler against "whatever is active now", not the echoed name, which
+    # can go stale before the VLM stage runs.
     prompt_pack_omitted: bool = False,
+    # W9: the run's VLM endpoint. The public route passes the raw `vlm` /
+    # `acknowledge_external` (resolved and gated here); `/start` resolves
+    # and gates at request time and hands the PINNED `(name, revision)`
+    # with `vlm_resolved=True`, which the public route can never set.
+    vlm: str | None = None,
+    acknowledge_external: bool = False,
+    vlm_endpoint: str | None = None,
+    vlm_endpoint_revision: int | None = None,
+    vlm_resolved: bool = False,
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -162,6 +141,9 @@ async def _run_auto_label(
     from src.services.labeling.vlm_labeler import ItemCrop
 
     reject_detection_profile(detection_profile)
+    if isinstance(vlm, str) and not vlm_resolved and not run_vlm:
+        # Refused even when this run has no VLM stage, as /start does.
+        await resolve_run_vlm(opensearch, vlm, pack=None, acknowledge_external=acknowledge_external)
     if opensearch is not None and prompt_pack_resolved:
         # R6-1a fix (Blocker, W3/W4 round-6 review): auto_label_worker runs
         # this in its OWN container/process, with its own config-store
@@ -444,7 +426,16 @@ async def _run_auto_label(
     _labeler_pack, _labeler_revision = labeler_resolution_args(
         prompt_pack, prompt_pack_revision, prompt_pack_omitted=prompt_pack_omitted
     )
-    labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision)
+    endpoint = await job_endpoint(
+        opensearch,
+        vlm=vlm,
+        acknowledge_external=acknowledge_external,
+        pack=_resolve_pack(_labeler_pack, _labeler_revision),
+        pinned_name=vlm_endpoint,
+        pinned_revision=vlm_endpoint_revision,
+        resolved=vlm_resolved,
+    )
+    labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision, endpoint=endpoint)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
@@ -522,9 +513,9 @@ async def _run_auto_label(
         from src.services.detection.cascade_detect import class_provenance as _class_prov
 
         _vlm_class_prov = _class_prov(
-            detector=labeler.model,
+            detector=labeler.identity.model,
             detector_version='1',
-            labeler=labeler.model,
+            labeler=labeler.identity.model,
             labeled_at=now,
         )
         for p in preds:
@@ -549,6 +540,7 @@ async def _run_auto_label(
             if update is None:
                 continue
             update['vlm_prompt_pack'] = _pack_stamp
+            update.update(_vlm_stamp(labeler))
             if proposal is not None:
                 proposals.append(proposal)
             updates_by_id[p.img_id] = update

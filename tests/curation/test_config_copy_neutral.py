@@ -83,3 +83,40 @@ def test_config_vocabulary_is_domain_neutral(app_client: TestClient) -> None:
     r = app_client.get('/curation/projects/default/config/vocabulary')
     assert r.status_code == 200, r.text
     _assert_no_leak(r.json())
+
+
+def test_vlm_endpoint_surfaces_are_domain_neutral(vlm_api) -> None:
+    """W9: the endpoint form schema, the listing (labels, warnings, choices),
+    the local catalog, the ``vlm`` strategies on ``/methods`` and the model
+    status rows are generic copy: no private domain named anywhere."""
+    vlm_api.ready('alpha')
+    vlm_api.ready('ext', base_url='https://api.example.com/v1', allow_external=True)
+    scoped = '/curation/projects/default'
+    for path in (
+        '/curation/vlm/endpoints/schema',
+        '/curation/vlm/endpoints',
+        '/curation/vlm/endpoints/alpha',
+        '/curation/vlm/endpoints/ext',
+        '/curation/vlm/catalog',
+        '/curation/vlm/local',
+        f'{scoped}/vlm/endpoints/active',
+        f'{scoped}/methods',
+        f'{scoped}/models/status',
+        f'{scoped}/config/vocabulary',
+    ):
+        response = vlm_api.client.get(path)
+        assert response.status_code == 200, (path, response.text)
+        _assert_no_leak(response.json())
+
+
+def test_vlm_validation_messages_are_domain_neutral(vlm_api) -> None:
+    for body in (
+        vlm_api.body(base_url='ftp://x'),
+        vlm_api.body(base_url='http://169.254.169.254/v1'),
+        vlm_api.body(base_url='http://opensearch:9200/v1'),
+        vlm_api.body(base_url='https://api.example.com/v1'),
+        vlm_api.body(api_key_ref='not-a-ref', max_images_per_call=0, timeout_s=0),
+    ):
+        response = vlm_api.client.post('/curation/vlm/endpoints/validate', json={'body': body})
+        assert response.status_code == 200, response.text
+        _assert_no_leak(response.json())
