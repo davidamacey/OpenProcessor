@@ -724,7 +724,7 @@ be changed at runtime once the app has started.
 | VLM prompt pack | `OP_PROMPT_PACK_PATH` (default pack), `OP_PROMPT_PACK_PATHS` (extra selectable packs, comma-separated) |
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
-| Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BBOX_NORM`) — see `RegionFields` for the full attribute list |
+| Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BOXES`) — see `RegionFields` for the full attribute list |
 | Ingest item detectors | `OP_INGEST_PRIMARY_<FIELD>` (e.g. `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_INPUT_SIZE`, `OP_INGEST_PRIMARY_CLASS_IDS`), optional secondary `OP_INGEST_SECONDARY_<FIELD>` (e.g. `OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_NAME`) — tuple/frozenset fields take a comma-separated value. Replaces the retired `OP_DETECTION_*` |
 | Region detection profile (off by default; no profile ships built in) | `OP_REGION_PROFILE_PATH` (load a profile file, e.g. `examples/region_profiles/license_plate.json`), `OP_REGION_PROFILE` (select a profile a deployment registered by name), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
 | Ingest | `OP_MAX_INGEST_CONCURRENCY` |
