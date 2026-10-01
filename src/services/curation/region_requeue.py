@@ -58,6 +58,7 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import CurationConfig, RegionStatus, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.region_box_embeddings import prune_box_embeddings
 from src.services.curation.region_boxes import (
     box_query,
     boxes_write_fields,
@@ -418,6 +419,10 @@ async def apply_requeue(
             refresh=False,
             writer_id='region_requeue',
         )
+        if clear_detection:
+            await prune_box_embeddings(
+                opensearch, index=cfg.items_index, crop_ids=[h['_id'] for h in hits]
+            )
         totals['updated'] += int(result.get('updated', 0))
         totals['skipped'] += int(result.get('skipped_due_to_conflict', 0))
         totals['errors'] += len(result.get('errors') or [])

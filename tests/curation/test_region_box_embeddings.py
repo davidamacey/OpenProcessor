@@ -40,26 +40,25 @@ def _doc(boxes: list[RegionBox], entries: list[dict[str, Any]] | None = None) ->
     return doc
 
 
-def test_merge_replaces_prunes_orphans_and_keeps_the_rest() -> None:
+def test_merge_replaces_prunes_orphans_and_stale_entries_and_keeps_the_rest() -> None:
+    b1, b2, b3, moved = _box('b1'), _box('b2', x=0.5), _box('b3', x=0.6), _box('b4', x=0.7)
     existing = [
-        {'box_id': 'b1', 'embedding': [1.0]},
-        {'box_id': 'b2', 'embedding': [2.0]},
-        {'box_id': 'gone', 'embedding': [9.0]},
+        entry_for(b1, [1.0]),
+        entry_for(b2, [2.0]),
+        entry_for(_box('gone', x=0.9), [9.0]),
+        entry_for(_box('b4', x=0.1), [4.0]),  # b4 has since moved
     ]
-    new = [{'box_id': 'b2', 'embedding': [22.0]}, {'box_id': 'b3', 'embedding': [3.0]}]
+    new = [entry_for(b2, [22.0]), entry_for(b3, [3.0])]
 
-    merged = merge_box_embeddings(existing, new, live_ids={'b1', 'b2', 'b3'})
+    merged = merge_box_embeddings(existing, new, live=[b1, b2, b3, moved])
 
-    assert merged == [
-        {'box_id': 'b1', 'embedding': [1.0]},
-        {'box_id': 'b2', 'embedding': [22.0]},
-        {'box_id': 'b3', 'embedding': [3.0]},
-    ]
+    assert merged == [entry_for(b1, [1.0]), entry_for(b2, [22.0]), entry_for(b3, [3.0])]
 
 
-def test_merge_never_stores_a_new_entry_for_a_box_that_is_not_live() -> None:
-    merged = merge_box_embeddings(None, [{'box_id': 'b9', 'embedding': [1.0]}], live_ids={'b1'})
-    assert merged == []
+def test_merge_never_stores_a_new_entry_for_a_box_that_is_gone_or_moved() -> None:
+    live = _box('b1', x=0.3)
+    stale = entry_for(_box('b1', x=0.1), [1.0])
+    assert merge_box_embeddings(None, [entry_for(_box('b9'), [1.0]), stale], live=[live]) == []
 
 
 def test_current_vectors_skips_orphans_and_stale_entries() -> None:
@@ -111,7 +110,7 @@ async def test_write_merges_with_stored_entries_and_never_touches_the_box_list()
 
     counts = await write_box_embeddings(client, index=INDEX, by_crop={'c1': [entry_for(b2, [2.0])]})
 
-    assert counts == {'written': 1, 'skipped': 0, 'errors': 0}
+    assert counts == {'written': 1, 'unchanged': 0, 'skipped': 0, 'errors': 0}
     stored = client._docs['c1']
     assert [e['box_id'] for e in stored[F.box_embeddings]] == ['b1', 'b2']
     assert stored[F.boxes] == boxes_before
@@ -160,4 +159,42 @@ async def test_write_for_a_missing_item_is_skipped() -> None:
     counts = await write_box_embeddings(
         client, index=INDEX, by_crop={'nope': [entry_for(_box('b1'), [1.0])]}
     )
-    assert counts == {'written': 0, 'skipped': 1, 'errors': 0}
+    assert counts == {'written': 0, 'unchanged': 0, 'skipped': 1, 'errors': 0}
+
+
+@pytest.mark.asyncio
+async def test_prune_drops_the_entry_of_a_moved_and_of_a_deleted_box() -> None:
+    from src.services.curation.region_box_embeddings import prune_box_embeddings
+
+    old1, b2, b3 = _box('b1'), _box('b2', x=0.5), _box('b3', x=0.7)
+    moved1 = _box('b1', x=0.2)
+    doc = _doc([moved1, b2], [entry_for(old1, [1.0]), entry_for(b2, [2.0]), entry_for(b3, [3.0])])
+    client = _FakeRegionOS({'c1': doc})
+
+    await prune_box_embeddings(client, index=INDEX, crop_ids=['c1'])
+
+    assert [e['box_id'] for e in client._docs['c1'][F.box_embeddings]] == ['b2']
+
+
+@pytest.mark.asyncio
+async def test_prune_with_nothing_to_drop_writes_nothing() -> None:
+    from src.services.curation.region_box_embeddings import prune_box_embeddings
+
+    b1 = _box('b1')
+    client = _FakeRegionOS({'c1': _doc([b1], [entry_for(b1, [1.0])])})
+    seq = dict(client._seq)
+
+    await prune_box_embeddings(client, index=INDEX, crop_ids=['c1'])
+
+    assert client._seq == seq
+
+
+@pytest.mark.asyncio
+async def test_prune_failure_is_logged_not_raised() -> None:
+    from src.services.curation.region_box_embeddings import prune_box_embeddings
+
+    class _Boom:
+        async def mget(self, **_kw: Any) -> dict[str, Any]:
+            raise RuntimeError('down')
+
+    await prune_box_embeddings(_Boom(), index=INDEX, crop_ids=['c1'])

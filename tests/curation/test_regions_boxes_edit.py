@@ -107,6 +107,43 @@ def test_put_regions_omitting_a_box_deletes_it(
     assert fake_os._docs['crop-1'][F.count] == 1
 
 
+def test_put_regions_prunes_the_embedding_of_a_moved_and_of_a_deleted_box(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    from src.services.curation.region_box_embeddings import entry_for
+    from src.services.curation.region_boxes import read_boxes
+
+    doc = fake_os._docs['crop-1']
+    doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
+
+    # Move b1, omit (delete) b2.
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.25, 0.25]}]},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert fake_os._docs['crop-1'][F.box_embeddings] == []
+
+
+def test_put_regions_keeps_the_embedding_of_a_box_it_leaves_alone(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    from src.services.curation.region_box_embeddings import entry_for
+    from src.services.curation.region_boxes import read_boxes
+
+    doc = fake_os._docs['crop-1']
+    doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
+
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1'}, {'box_id': 'b2'}]},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert [e['box_id'] for e in fake_os._docs['crop-1'][F.box_embeddings]] == ['b1', 'b2']
+
+
 def test_put_regions_new_box_defaults_to_accepted(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:

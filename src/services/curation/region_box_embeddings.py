@@ -10,8 +10,9 @@ stage and the backfill script write it, through :func:`write_box_embeddings`.
 
 Readers join the two lists by ``box_id`` (:func:`join_box_vectors`); an
 entry whose box is gone, or whose box moved since the vector was computed,
-is ignored there, and the next write for that item prunes or replaces it
-(:func:`merge_box_embeddings`).
+is ignored there, and any later embedding write for that item prunes or
+replaces it (:func:`merge_box_embeddings`). A human edit that deletes or
+moves a box prunes right away (:func:`prune_box_embeddings`).
 
 Which boxes are embedded: ``accepted`` (the clustering pool) and
 ``false_positive`` (the FP matcher's input); never ``rejected`` or
@@ -54,6 +55,12 @@ def entry_for(box: RegionBox, vector: Sequence[float]) -> dict[str, Any]:
     return {'box_id': box.box_id, 'bbox_norm': list(box.bbox_norm), 'embedding': list(vector)}
 
 
+def is_current(entry: dict[str, Any], box: RegionBox) -> bool:
+    """True when ``entry`` is ``box``'s vector, computed from the box's
+    present geometry: the one staleness rule for readers and writers."""
+    return entry.get('box_id') == box.box_id and same_box(entry.get('bbox_norm'), box.bbox_norm)
+
+
 def current_vectors(src: dict[str, Any], F: RegionFields | None = None) -> dict[str, list[float]]:
     """``{box_id: vector}`` for every box of ``src`` whose stored vector is
     still valid: the entry exists and was computed from the box's present
@@ -70,7 +77,7 @@ def current_vectors(src: dict[str, Any], F: RegionFields | None = None) -> dict[
     out: dict[str, list[float]] = {}
     for box in read_boxes(src, F):
         entry = entries.get(box.box_id)
-        if entry is not None and same_box(entry.get('bbox_norm'), box.bbox_norm):
+        if entry is not None and is_current(entry, box):
             out[box.box_id] = entry.get('embedding')  # type: ignore[assignment]
     return out
 
@@ -85,18 +92,24 @@ def missing_boxes(src: dict[str, Any], F: RegionFields | None = None) -> list[Re
 def merge_box_embeddings(
     existing: Sequence[dict[str, Any]] | None,
     new: Sequence[dict[str, Any]],
-    live_ids: set[str],
+    live: Iterable[RegionBox],
 ) -> list[dict[str, Any]]:
-    """The stored list after writing ``new`` entries: an entry for a box id
-    in ``new`` is replaced, an entry whose box is no longer in ``live_ids``
-    is dropped (orphan pruning), the rest are kept, in order."""
+    """The stored list after writing ``new`` entries against the ``live``
+    boxes: an entry for a box id in ``new`` is replaced; an entry whose box
+    is gone or has moved since its vector was computed (:func:`is_current`)
+    is dropped; the rest are kept, in order. A new entry for a box that is
+    gone or moved is dropped too."""
+    boxes = {b.box_id: b for b in live}
+
+    def valid(entry: Any) -> bool:
+        if not isinstance(entry, dict):
+            return False
+        box = boxes.get(str(entry.get('box_id')))
+        return box is not None and is_current(entry, box)
+
     replaced = {e['box_id'] for e in new}
-    kept = [
-        e
-        for e in existing or []
-        if isinstance(e, dict) and e.get('box_id') in live_ids and e.get('box_id') not in replaced
-    ]
-    return [*kept, *(e for e in new if e['box_id'] in live_ids)]
+    kept = [e for e in existing or [] if valid(e) and e['box_id'] not in replaced]
+    return [*kept, *(e for e in new if valid(e))]
 
 
 def join_box_vectors(
@@ -123,17 +136,19 @@ async def write_box_embeddings(
 
     Each item is read with its box list and current entries, merged with
     :func:`merge_box_embeddings` against the boxes that exist *now* (so an
-    entry for a box that was deleted or never landed is dropped, and a
-    race with a box write can never leave a vector for a box that is not
-    there), and written back conditionally. A version conflict re-reads and
-    retries; the box list itself is never written. Returns
-    ``{'written', 'skipped', 'errors'}``.
+    entry for a box that was deleted, moved or never landed is dropped, and
+    a race with a box write can never leave a vector for a box that is not
+    there), and written back conditionally when the merge changed the
+    stored list. A version conflict re-reads and retries; the box list
+    itself is never written. Returns item counts ``{'written', 'unchanged',
+    'skipped', 'errors'}`` (``skipped``: item missing or a conflict that
+    outlasted the retries).
     """
     from src.clients.curation_opensearch import mget_crops
 
     F = get_region_fields()
     pending = dict(by_crop)
-    counts = {'written': 0, 'skipped': 0, 'errors': 0}
+    counts = {'written': 0, 'unchanged': 0, 'skipped': 0, 'errors': 0}
     for attempt in range(_WRITE_ATTEMPTS):
         if not pending:
             break
@@ -148,8 +163,11 @@ async def write_box_embeddings(
                 counts['skipped'] += 1
                 continue
             src = doc.get('_source') or {}
-            live = {b.box_id for b in read_boxes(src, F)}
-            merged = merge_box_embeddings(src.get(F.box_embeddings), entries, live)
+            stored = src.get(F.box_embeddings) or []
+            merged = merge_box_embeddings(stored, entries, read_boxes(src, F))
+            if merged == stored:
+                counts['unchanged'] += 1
+                continue
             body.append(
                 {
                     'update': {
@@ -188,13 +206,30 @@ async def write_box_embeddings(
     return counts
 
 
+async def prune_box_embeddings(
+    client: AsyncOpenSearch, *, index: str, crop_ids: Iterable[str]
+) -> None:
+    """Drop the entries of ``crop_ids`` whose box a human just deleted or
+    moved. Hygiene, not correctness (readers already ignore such an entry),
+    so a failure is logged and never fails the edit that triggered it."""
+    ids = list(crop_ids)
+    if not ids:
+        return
+    try:
+        await write_box_embeddings(client, index=index, by_crop={c: [] for c in ids})
+    except Exception as exc:
+        logger.warning('box_embeddings_prune_failed', error=str(exc), n=len(ids))
+
+
 __all__ = [
     'EMBEDDED_BOX_STATES',
     'current_vectors',
     'embeddable',
     'entry_for',
+    'is_current',
     'join_box_vectors',
     'merge_box_embeddings',
     'missing_boxes',
+    'prune_box_embeddings',
     'write_box_embeddings',
 ]

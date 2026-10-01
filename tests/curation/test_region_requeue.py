@@ -240,6 +240,28 @@ async def test_clear_detection_drops_machine_boxes_but_keeps_a_human_ones():
 
 
 @pytest.mark.asyncio
+async def test_clear_detection_prunes_the_embedding_of_the_dropped_box():
+    from src.services.curation.region_box_embeddings import entry_for
+    from src.services.curation.region_boxes import read_boxes
+
+    fake = _fake()
+    doc = fake.docs(ITEMS)['f1']
+    doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
+    assert doc[F.box_embeddings]
+
+    await apply_requeue(
+        fake,
+        RequeueSelection(FAILED, detectors=('det_a',), reasons=('aspect',)),
+        clear_detection=True,
+        config=CFG,
+    )
+
+    f1 = fake.docs(ITEMS)['f1']
+    assert _box_ids(f1) == []
+    assert f1[F.box_embeddings] == []
+
+
+@pytest.mark.asyncio
 async def test_clear_detection_protects_a_human_reject_action_on_a_machine_box():
     """W8c M3 fix: `source == 'human'` alone only protects a box a human
     CREATED. A human's per-box REJECT action on a MACHINE-created box
