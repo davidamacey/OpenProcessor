@@ -723,6 +723,47 @@ sample-clean` removes everything fetched.
    check reports a `warn` (no heartbeat file yet) instead of blocking
    silently or forever queuing the job.
 
+## Worked example: wheels on cars (public COCO images)
+
+A text-free region example: find the wheels on car crops. COCO has no wheel
+labels, so the output is machine-proposed wheel boxes for a human to review,
+which is the point. Everything needed ships in the repo:
+`examples/region_profiles/vehicle_wheel.json` (SAM3 text prompt `wheel`, no
+detector leg, no text reading), `examples/prompt_packs/vehicle_wheel.json`, and
+`examples/bakeoff/vehicle_wheel/profile.json` (to compare wheel detectors you
+train later; set its `triton_model`).
+
+```bash
+make sample-coco-cars      # 60 CC BY car images, pinned manifest, into data/samples/coco_car
+.venv/bin/python scripts/examples/wheel_example_live.py \
+    --api http://localhost:4603 --project wheels \
+    --container-dir /data/source/coco_car/images
+```
+
+The script creates the project, creates and activates the example profile and
+pack through the config routes, ingests the images (the primary detector
+proposes the cars), waits for the detection worker, and exports the wheel
+boxes cropped to their car. It needs the live stack: an activated VLM endpoint
+(or accept unverified boxes), the segmenter, and `data/samples/coco_car`
+mounted for the API container (see "Mounting your image source").
+
+Items are chosen for the region stage by class NAME: the profile's
+`parent_classes` (`car`) matches an item's `class_name` or its detector's own
+label (`proposal_name`), never a class index. The same walk runs offline in CI
+with fakes at the OpenSearch, Triton, segmenter and VLM boundaries, over a
+project created through `POST /curation/projects`:
+`tests/integration/test_wheel_example_e2e.py`.
+
+**A labeled-dataset import fixture** (`make sample-coco-import`, 96 CC BY val2017
+images: car, truck, bus, and frames with none of them) builds four layouts of
+the same data (`yolo/`, `coco/`, `yolo_region/`, `yolo_region_only/`) plus a
+`FIXTURE.json` of expected counts. The YOLO layout deliberately numbers classes
+unlike any registry, spells `Car` differently and adds a synonym (`automobile`),
+and injects six label problems; the wheel boxes in the `yolo_region*` layouts are
+synthetic geometry derived from car boxes, not wheel annotations. A COCO-layout
+import must name its format (`"format": "coco"`): `images/` next to
+`annotations/` is not auto-detected.
+
 ## Environment variables
 
 All `OP_*` curation vars are optional; unset vars fall back to the

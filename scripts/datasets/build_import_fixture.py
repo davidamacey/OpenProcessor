@@ -263,8 +263,9 @@ def build_variants(
             json.dumps({**per_split[split], 'categories': coco_categories}),
         )
     fixture['variants']['coco'] = {
-        # detect_format() sees ``images/`` first and answers yolo, so a COCO
-        # import must name its format explicitly.
+        # detect_format() sees ``images/`` first and answers yolo, which then
+        # finds no split (422 format_undetected): a COCO import must name its
+        # format explicitly.
         'source_format': 'coco',
         'names': {str(c['id']): c['name'] for c in coco_categories},
         'expected_report': _tally(layout),
