@@ -60,6 +60,9 @@ MAX_YAML_BYTES = 1 * 1024**2
 MAX_LABEL_FILE_BYTES = 8 * 1024**2
 MAX_COCO_JSON_BYTES = 1024 * 1024**2
 MAX_MANIFEST_BYTES = 16 * 1024**2
+# A real ``data.yaml`` is a few thousand nodes and a few levels deep.
+MAX_YAML_NODES = 50_000
+MAX_YAML_DEPTH = 32
 
 
 __all__ = [
@@ -67,6 +70,8 @@ __all__ = [
     'MAX_LABEL_FILE_BYTES',
     'MAX_MANIFEST_BYTES',
     'MAX_YAML_BYTES',
+    'MAX_YAML_DEPTH',
+    'MAX_YAML_NODES',
     'import_chunk_size',
     'import_max_failed_chunks',
     'import_max_pending',

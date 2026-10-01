@@ -27,6 +27,7 @@ from src.services.curation.dataset_import.limits import (
     preview_max_files,
 )
 from src.services.curation.dataset_import.paths import DatasetPathNotAllowedError, PathGuard
+from src.services.curation.dataset_import.safe_yaml import YamlTooComplexError, load_bounded_yaml
 from src.services.curation.dataset_import.scan import (
     DatasetScan,
     FormatUndetectedError,
@@ -40,6 +41,12 @@ from src.services.curation.dataset_import.scan import (
 IMAGE_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.bmp', '.webp'})
 _SPLIT_KEYS = ('train', 'val', 'valid', 'test')
 _CLAMP_TOLERANCE = 1e-3
+
+
+def _scalar_name(value: Any) -> str:
+    if isinstance(value, (list, dict, set)):
+        raise ValueError('a class name must be a scalar')
+    return str(value)
 
 
 def _names_map(raw: Any) -> dict[int, str] | None:
@@ -58,10 +65,10 @@ def _names_map(raw: Any) -> dict[int, str] | None:
     if raw is None:
         return None
     if isinstance(raw, list):
-        return {i: str(n) for i, n in enumerate(raw)}
+        return {i: _scalar_name(n) for i, n in enumerate(raw)}
     if not isinstance(raw, dict):
         raise ValueError('names must be a list or a mapping')
-    out = {int(k): str(v) for k, v in raw.items()}
+    out = {int(k): _scalar_name(v) for k, v in raw.items()}
     if any(k < 0 for k in out):
         raise ValueError('names has a negative index')
     return out
@@ -128,8 +135,8 @@ def _load_data_yaml(yaml_path: Path, issues: IssueCollector) -> dict[str, Any] |
         issues.add('data_yaml_invalid', file=name, detail={'reason': 'unreadable or too large'})
         return None
     try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
+        data = load_bounded_yaml(text)
+    except (yaml.YAMLError, YamlTooComplexError, RecursionError) as exc:
         issues.add(
             'data_yaml_invalid', file=name, detail={'reason': f'not valid YAML: {exc}'[:200]}
         )
@@ -201,6 +208,7 @@ def discover_yolo(
             detail={'present': sorted(names)},
         )
 
+    root_field = data.get('path') if isinstance(data.get('path'), str) else None
     splits: dict[str, list[Path]] = {}
     for key in _SPLIT_KEYS:
         value = data.get(key)
@@ -210,7 +218,14 @@ def discover_yolo(
         entries = value if isinstance(value, list) else [value]
         images: list[Path] = []
         for entry in entries:
-            resolved = _resolve_entry(str(entry), yaml_path.parent, data.get('path'))
+            if not isinstance(entry, str):
+                issues.add(
+                    'data_yaml_invalid',
+                    file=yaml_path.name,
+                    detail={'reason': f'{key}: an entry is not a path string'},
+                )
+                continue
+            resolved = _resolve_entry(entry, yaml_path.parent, root_field)
             if resolved is None:
                 issues.add('split_dir_missing', file=str(entry))
                 continue
