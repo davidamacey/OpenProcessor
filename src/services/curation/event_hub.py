@@ -121,9 +121,11 @@ GLOBAL_STREAM: None = None
 # The ``topic`` global lifecycle events carry.
 GLOBAL_EVENT_TOPIC = 'project'
 
-# The only event families allowed on the global stream: project lifecycle
-# and the combine job that builds a new project (its ``target``).
-GLOBAL_EVENT_PREFIXES: tuple[str, ...] = ('project.', 'combine.')
+# The only event families allowed on the global stream: project lifecycle,
+# the combine job that builds a new project (its ``target``) and the
+# deployment-wide VLM registry (``vlm.changed``: an endpoint edit, a probe or
+# the desired local model changed; ``topic: "vlm"``).
+GLOBAL_EVENT_PREFIXES: tuple[str, ...] = ('project.', 'combine.', 'vlm.')
 
 
 class EventProjectMismatchError(ValueError):
@@ -529,19 +531,24 @@ def publish_region_verified(
     crop_id: str,
     *,
     region_status: str,
-    region_text: str | None = None,
+    region_count: int | None = None,
 ) -> None:
     """Convenience wrapper for sam-worker region updates. Payload keys are
     the fixed wire names, never the storage field names."""
     get_event_hub().publish(
-        region_event_payload(crop_id, region_status=region_status, region_text=region_text)
+        region_event_payload(crop_id, region_status=region_status, region_count=region_count)
     )
 
 
 _GLOBAL_EVENT_RESERVED_KEYS = frozenset({'type', 'topic', 'project'})
 
 
-def publish_global_event(event_type: str, *, target: str | None = None, **fields: Any) -> None:
+def publish_global_event(
+    event_type: str,
+    *,
+    target: str | None = None,
+    **fields: Any,
+) -> None:
     """Publish a ``project: null`` event onto the global stream, whatever
     project (if any) is bound. Only the global families in
     :data:`GLOBAL_EVENT_PREFIXES` may go there, and ``fields`` can never
@@ -556,7 +563,8 @@ def publish_global_event(event_type: str, *, target: str | None = None, **fields
     event: dict[str, Any] = {
         **fields,
         'type': event_type,
-        'topic': GLOBAL_EVENT_TOPIC,
+        # Fixed per family, never caller-chosen.
+        'topic': 'vlm' if event_type.startswith('vlm.') else GLOBAL_EVENT_TOPIC,
         'project': None,
         'target': target,
     }

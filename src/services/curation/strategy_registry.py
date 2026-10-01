@@ -50,13 +50,14 @@ from typing import Any, Literal
 
 from src.core.logging import get_logger
 from src.services.curation.axis_copy import axis_copy, detection_profile_strategies
+from src.services.curation.vlm_strategies import vlm_strategies
 
 
 logger = get_logger(__name__)
 
 StrategyStatus = Literal['stable', 'experimental', 'shadow', 'disabled']
 StrategyAxis = Literal[
-    'cluster', 'score', 'sort', 'overlay', 'export', 'detection_profile', 'prompt_pack'
+    'cluster', 'score', 'sort', 'overlay', 'export', 'detection_profile', 'prompt_pack', 'vlm'
 ]
 
 
@@ -607,6 +608,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
         *_export_strategies(),
         *detection_profile_strategies(detection_profile_default),
         *_prompt_pack_strategies(prompt_pack_default),
+        *await vlm_strategies(opensearch),
     ]
 
     fields = frozenset(e['requires_field'] for e in strategies if e.get('requires_field'))

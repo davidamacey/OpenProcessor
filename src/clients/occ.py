@@ -68,7 +68,7 @@ OCC_BULK_PAGE_SIZE = int(os.environ.get('OCC_BULK_PAGE_SIZE', '500'))
 OCC_BULK_MGET_SOURCE_EXCLUDES = [
     ITEM_EMBEDDING_FIELD,
     BACKBONE_EMBEDDING_FIELD,
-    get_region_fields().embedding,
+    get_region_fields().box_embeddings,
 ]
 
 
@@ -232,7 +232,9 @@ async def occ_skip_on_conflict_bulk(
       unchanged (``True``/``False``/``'wait_for'``).
 
     Returns:
-        ``{updated: int, skipped_due_to_conflict: int, errors: list[dict]}``
+        ``{updated, skipped_due_to_conflict, skipped_ids, errors}`` --
+        ``skipped_ids`` names the docs a conflict skipped, for a caller
+        whose write must not be lost (it re-merges and retries them).
     """
     if index is None:
         index = items_index()
@@ -240,6 +242,7 @@ async def occ_skip_on_conflict_bulk(
 
     updated = 0
     skipped = 0
+    skipped_ids: list[str] = []
     errors: list[dict[str, Any]] = []
 
     page = page_size if page_size is not None else OCC_BULK_PAGE_SIZE
@@ -321,10 +324,16 @@ async def occ_skip_on_conflict_bulk(
                     human_region_validated=source.get(get_region_fields().validated),
                 )
                 skipped += 1
+                skipped_ids.append(doc_id)
                 continue
             errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(error or action)})
 
-    return {'updated': updated, 'skipped_due_to_conflict': skipped, 'errors': errors}
+    return {
+        'updated': updated,
+        'skipped_due_to_conflict': skipped,
+        'skipped_ids': skipped_ids,
+        'errors': errors,
+    }
 
 
 # is_locked_class / _is_locked_marker / is_locked_box / is_locked_item /
@@ -370,22 +379,11 @@ def strip_class_write_fields(update: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in update.items() if k not in CLASS_WRITE_FIELDS}
 
 
-# Companion fields preserved alongside a guard whenever the guard fires.
-# When RegionFields.text_source says human, the matching
-# RegionFields.text value was also human-set and must be preserved.
-# Keep the map narrow — the guards themselves are the source of truth.
-_HUMAN_GUARD_COMPANIONS: dict[str, tuple[str, ...]] = {
-    get_region_fields().text_source: (get_region_fields().text,),
-}
-
-# Stricter than a companion: when the guard fires, the incoming value is
-# never applied -- the existing value is kept, or the field is left absent
-# if the locked doc never had it. A locked class is one unit: the value
-# (class_id/class_name/validated/cluster), the provenance describing who
-# produced it, and the holdout freeze. Preserving only the provenance (the
-# pre-#31 behaviour) left ``class_source`` describing a class the item no
-# longer had, and the fresh ingest doc's ``test_holdout: false`` unfroze a
-# holdout item.
+# When a guard fires, the incoming value is
+# never applied — the existing value is kept, or the field is left absent
+# if the human-owned doc never had it. Class provenance describes who
+# produced the *preserved* class_source, so an ingest detector's
+# provenance must not land on (or be invented for) a human-owned row.
 _HUMAN_GUARD_OWNED: dict[str, tuple[str, ...]] = {
     'class_source': (*CLASS_STATE_FIELDS, 'test_holdout'),
 }
@@ -671,10 +669,6 @@ def _merge_preserving_human(
         if fires:
             merged[field] = existing_val
             preserved.append(field)
-            for companion in _HUMAN_GUARD_COMPANIONS.get(field, ()):
-                companion_val = existing.get(companion)
-                if companion_val not in (None, '', [], {}):
-                    merged[companion] = companion_val
             for owned in _HUMAN_GUARD_OWNED.get(field, ()):
                 if owned in existing:
                     merged[owned] = existing[owned]

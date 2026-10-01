@@ -302,7 +302,9 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
         task.update_doc = {
             F.status: status,
             **boxes_write_fields(boxes),
-            **_combined_class_update(reply, class_names, name_to_id=name_to_id),
+            **_combined_class_update(
+                reply, class_names, name_to_id=name_to_id, vlm_model='vlm-model'
+            ),
         }
 
     # Interleave the two projects' items across concurrent consumers.

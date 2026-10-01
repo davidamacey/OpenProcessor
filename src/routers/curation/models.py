@@ -30,7 +30,10 @@ from src.routers.curation._models_class_mapping import (
     listing_fields,
 )
 from src.routers.curation._models_segmenter import build_segmenter_entry
-from src.routers.curation.vlm import _get_vlm_labeler
+from src.routers.curation._models_vlm import (
+    external_service_names as external_vlm_names,
+    vlm_status_rows,
+)
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.training.promoted_models import (
     _core_models,
@@ -130,8 +133,8 @@ def _external_service_model_names() -> frozenset[str]:
     if region is not None and region.segmenter_name:
         names.add(region.segmenter_name)
     with contextlib.suppress(Exception):
-        # Best-effort; an unresolvable VLM pack just skips this entry.
-        names.add(_get_vlm_labeler().model)
+        # Best-effort; an unresolvable registry just skips these entries.
+        names |= external_vlm_names()
     return frozenset(names)
 
 
@@ -335,37 +338,7 @@ async def models_status(
             for shared in discover_foreign_shared_models()
         )
 
-    vlm_status: str = 'unavailable'
-    vlm_error: str | None = None
-    vlm_model_name = 'vlm'
-    try:
-        labeler = _get_vlm_labeler()
-        vlm_model_name = labeler.model
-        h = await labeler.health()
-        vlm_status = 'ready' if h.reachable else 'unavailable'
-        vlm_error = h.last_error
-    except Exception as exc:
-        vlm_error = str(exc)
-
-    models.append(
-        {
-            'name': vlm_model_name,
-            'friendly_name': f'VLM ({vlm_model_name})',
-            'role': 'Open-vocabulary labeling and region verification',
-            'kind': 'external',
-            'model_type': 'Vision-Language Model (vLLM)',
-            'status': vlm_status,
-            'version': None,
-            'inference_count': None,
-            'exec_count': None,
-            'inference_failed': None,
-            'avg_latency_ms': None,
-            'last_error': vlm_error,
-            'endpoint': os.environ.get('OP_VLM_URL', ''),
-            'unloadable': False,
-            'optional': False,
-        }
-    )
+    models.extend(await vlm_status_rows())
 
     # External services (segmenter, VLM) belong to no project and have no
     # class list of their own.

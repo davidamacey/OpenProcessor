@@ -20,27 +20,13 @@ buys an item ``cap`` more attempts per restart -- still bounded, and it
 needs no extra index field, mapping change or write per attempt. The
 streaming runner owns one counter per stage (``visible_no_verdict`` /
 ``combined_no_verdict`` in ``runner.py``).
-
-W8: the per-crop cascade (``cascade._process_crop``) that used to share
-:func:`cascade_counter` / :func:`cascade_no_verdict` was deleted (dead
-code -- the streaming runner is the only production pipeline). Both
-module-level counters below are kept, unused from production, as a
-documented follow-up cleanup rather than deleted in this pass.
 """
 
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
 
-from scripts.curation.worker.verify import candidate_reject_doc
-from src.config import get_region_fields
-from src.config.region_rejection import REJECT_REASON_NO_VERDICT
 from src.core.logging import get_logger
-
-
-if TYPE_CHECKING:
-    from scripts.curation.worker.state import _ItemTask
 
 
 logger = get_logger('curation_worker')
@@ -100,104 +86,8 @@ class NoVerdictCounter:
         return len(self._counts)
 
 
-_cascade_counter: NoVerdictCounter | None = None
-
-
-def cascade_counter() -> NoVerdictCounter:
-    """The process-wide count for the per-crop cascade (``_process_crop``),
-    created on first use with the configured cap."""
-    global _cascade_counter  # noqa: PLW0603 - one lazily-built process counter
-    if _cascade_counter is None:
-        _cascade_counter = NoVerdictCounter(max_no_verdict_attempts())
-    return _cascade_counter
-
-
-def reset_cascade_counter() -> None:
-    """Drop the process-wide cascade count (tests; a config reload)."""
-    global _cascade_counter  # noqa: PLW0603
-    _cascade_counter = None
-
-
-def no_verdict_reject_doc(
-    t: _ItemTask,
-    *,
-    actor: str,
-    detector_version: str,
-    class_update: dict[str, Any] | None,
-    event: str = 'combined_verify_reject',
-) -> dict[str, Any]:
-    """The capped combined no-verdict write: a reviewable rejected candidate.
-
-    Same shape as a verifier reject (the box kept in the ``candidate_*``
-    fields, so a human confirm promotes it and a requeue by reason retries
-    it) but ``bbox_correct`` is written null -- the verifier never gave a
-    box verdict -- and the reason is :data:`REJECT_REASON_NO_VERDICT`.
-    ``class_update`` is the reply's class side, when a reply exists;
-    ``event`` names the verify call in the detector-chain entry.
-    """
-    F = get_region_fields()
-    t.detection_trace.append(f'{actor}:{event}:{REJECT_REASON_NO_VERDICT}')
-    doc = candidate_reject_doc(
-        candidate_in_source=t.candidate_in_source,
-        candidate_score=t.candidate_score,
-        detector=actor,
-        detector_version=detector_version,
-        candidate_source=t.candidate_source,
-        reason=REJECT_REASON_NO_VERDICT,
-        chain=t.detection_trace,
-    )
-    # Explicit null: an earlier pass's verdict must not outlive this one.
-    doc[F.bbox_correct] = None
-    if class_update:
-        doc.update(class_update)
-    return doc
-
-
-def cascade_no_verdict(
-    t: _ItemTask,
-    *,
-    actor: str,
-    detector_version: str,
-    candidate_in_source: tuple[float, float, float, float] | None,
-    candidate_score: float,
-    candidate_source: str,
-    event: str,
-    class_update: dict[str, Any] | None = None,
-) -> None:
-    """One no-verdict pass of the per-crop cascade on a candidate box.
-
-    Below the cap ``t.update_doc`` is left empty (nothing is written, the
-    item stays pending); at the cap it becomes the
-    :func:`no_verdict_reject_doc` for this candidate.
-    """
-    t.update_doc = {}
-    counter = cascade_counter()
-    if not counter.record(t.crop_id):
-        return
-    logger.warning(
-        'region_worker_no_verdict_cap',
-        stage='cascade',
-        crop_id=t.crop_id,
-        attempts=counter.cap,
-    )
-    t.candidate_in_source = candidate_in_source
-    t.candidate_score = candidate_score
-    t.candidate_source = candidate_source
-    t.update_doc = no_verdict_reject_doc(
-        t,
-        actor=actor,
-        detector_version=detector_version,
-        class_update=class_update,
-        event=event,
-    )
-
-
 __all__ = [
     'DEFAULT_MAX_NO_VERDICT_ATTEMPTS',
     'NoVerdictCounter',
-    'cascade_counter',
-    'cascade_no_verdict',
     'max_no_verdict_attempts',
-    'no_verdict_reject_doc',
-    'reset_cascade_counter',
 ]

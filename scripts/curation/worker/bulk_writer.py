@@ -20,7 +20,10 @@ from src.core.logging import get_logger
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_allowed
 from src.services.curation.history import merge_region_chain, record_class_snapshot
+from src.services.curation.region_box_edits import same_box
+from src.services.curation.region_box_embeddings import entry_for, write_box_embeddings
 from src.services.curation.region_boxes import (
+    RegionBox,
     boxes_write_fields,
     derive_status,
     finalize_box_ids,
@@ -211,9 +214,11 @@ async def _bulk_update_one_project(
                 merged = [*keep, *task.pending_boxes]
             else:
                 merged = list(task.pending_boxes)
-            merged = finalize_box_ids(
+            finalized = finalize_box_ids(
                 merged, existing=stored_now, seq=int(current.get(F.box_seq) or 0)
             )
+            task.box_embedding_entries = _vector_entries(task, merged, finalized)
+            merged = finalized
             if task.pending_status is not None:
                 update[F.status] = task.pending_status
             else:
@@ -234,6 +239,7 @@ async def _bulk_update_one_project(
             # ``task.update_doc`` AFTER this merge, so give it the
             # accurate value instead of the provisional one.
             task.update_doc[F.status] = update[F.status]
+            task.update_doc[F.count] = update[F.count]
         # Item text read this pass rides on the region write; it is not
         # class data, so the human-label guard below leaves it alone.
         update.update(task.item_text_update)
@@ -299,6 +305,12 @@ async def _bulk_update_one_project(
             # would claim a VLM ran when it didn't.
             if pack_stamp is not None and task.vlm_called:
                 update['vlm_prompt_pack'] = pack_stamp
+            # Who answered: the identity the call actually went to (kept on
+            # the task), never read from the store at write time -- a swap
+            # between the call and this flush must not relabel the answer.
+            if task.vlm_called and task.vlm_identity is not None:
+                update['vlm_endpoint'] = task.vlm_identity.endpoint_ref
+                update['vlm_model'] = task.vlm_identity.model
         return update
 
     result = await occ_skip_on_conflict_bulk(
@@ -327,8 +339,51 @@ async def _bulk_update_one_project(
     # there were conflicts, we still publish optimistically for the
     # cases that did write (advisory events).
     if n_written:
+        await _write_box_embeddings(opensearch, eligible)
         await _publish_region_events(eligible)
     return n_written, n_skipped_empty + n_skipped_conflict
+
+
+def _vector_entries(
+    task: _ItemTask, merged: list[RegionBox], finalized: list[RegionBox]
+) -> list[dict[str, Any]]:
+    """The ``region_box_embeddings`` entries to write for ``task``, keyed
+    onto the final box ids.
+
+    ``merged`` and ``finalized`` are the same list before / after
+    :func:`finalize_box_ids` minted real ids, so they align by position. A
+    vector is attached only to a box that is still an accepted box with the
+    geometry the vector was computed from: a box a human moved while this
+    pass was in flight (the merge keeps the human's box) must not inherit a
+    vector of the old crop.
+    """
+    pending = {b.box_id: b for b in task.pending_boxes or []}
+    entries: list[dict[str, Any]] = []
+    for before, after in zip(merged, finalized, strict=True):
+        vector = task.box_vectors.get(before.box_id)
+        computed_from = pending.get(before.box_id)
+        if (
+            vector is not None
+            and after.state == 'accepted'
+            and computed_from is not None
+            and same_box(after.bbox_norm, computed_from.bbox_norm)
+        ):
+            entries.append(entry_for(after, vector))
+    return entries
+
+
+async def _write_box_embeddings(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> None:
+    """Write the per-box vectors of the tasks whose box list was just
+    written. Best-effort like the embed stage itself: a failure leaves those
+    boxes without a vector (the backfill picks them up) and never fails the
+    flush."""
+    by_crop = {t.crop_id: t.box_embedding_entries for t in tasks if t.box_embedding_entries}
+    if not by_crop:
+        return
+    try:
+        await write_box_embeddings(opensearch, index=items_index(), by_crop=by_crop)
+    except Exception as exc:
+        logger.warning('region_box_embeddings_write_failed', error=str(exc), n=len(by_crop))
 
 
 # Task #92 — module-level lazy client for the publish endpoint. Reused
@@ -367,7 +422,7 @@ async def _publish_region_events(written: list[_ItemTask]) -> None:
         # (_PublishEvent.region_status) — posting the storage key made the
         # API drop the status whenever the two differed.
         body = region_event_payload(
-            t.crop_id, region_status=region_status, region_text=(t.update_doc or {}).get(F.text)
+            t.crop_id, region_status=region_status, region_count=(t.update_doc or {}).get(F.count)
         )
         with contextlib.suppress(Exception):  # nosec B110 — advisory; never fail the worker
             await _EVENT_CLIENT.post(url, json=body, timeout=2.0)

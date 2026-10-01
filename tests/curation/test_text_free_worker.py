@@ -34,8 +34,8 @@ VLM_URL = 'http://vlm.invalid:8000'
 
 
 def _text_keys(doc: dict[str, Any]) -> list[str]:
-    prefix = get_region_fields().text
-    return [k for k in doc if k.startswith(prefix)]
+    """Item-level (flat) text keys -- there must be none: text lives on boxes."""
+    return [k for k in doc if k.startswith('region_text')]
 
 
 _BOX_TEXT_ATTRS = (
@@ -235,28 +235,11 @@ class TestTextFreeWriteHelpers:
         register_profile(profile, default=True)
         return profile
 
-    @pytest.mark.usefixtures('text_free')
-    def test_region_write_doc_drops_vlm_text(self) -> None:
-        from scripts.curation.worker.verify import _region_write_doc
-
-        doc = _region_write_doc(
-            region_in_source=(0.1, 0.1, 0.2, 0.2),
-            score=0.9,
-            detector='seg',
-            detector_version='1',
-            chain=['seg:hit'],
-            region_text_reply='ABC1234',
-            region_text_confidence='high',
-        )
-        assert doc[get_region_fields().status] == 'detected'
-        assert _text_keys(doc) == []
-
     def test_text_hint_fallback_is_a_no_op(self, text_free: Any) -> None:
         from scripts.curation.worker.region_text_stage import apply_text_hint_fallback
         from src.services.detection.region_text_rules import region_text_rules
 
-        F = get_region_fields()
-        doc: dict[str, Any] = {F.status: 'detected', F.text_vlm: 'stale'}
+        doc: dict[str, Any] = {'text_choice': 'vlm_invalid', 'text_vlm': 'stale'}
         apply_text_hint_fallback(
             doc,
             text='ABC1234',
@@ -264,7 +247,7 @@ class TestTextFreeWriteHelpers:
             profile=text_free,
             rules=region_text_rules(text_free),
         )
-        assert doc == {F.status: 'detected'}
+        assert doc == {}
 
 
 class TestLegacyCascade:

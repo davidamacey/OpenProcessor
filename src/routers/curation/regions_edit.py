@@ -1,11 +1,13 @@
-"""Curation router sub-module — human region-of-interest edit endpoints.
+"""Curation router sub-module — whole-set human region edit endpoints.
 
-``PUT /crops/{id}/region`` (+ the batch form), ``PATCH
-/crops/{id}/region_meta`` and ``POST /regions/batch_status``. Every write
-builds its update document in :mod:`src.services.curation.region_writes`
-(so the region lifecycle invariants hold whichever writer a client picks)
-and snapshots the pre-write region state into the item's edit history,
-which ``POST /crops/{id}/region/undo`` restores. Split from
+``PATCH /crops/{id}/region_meta`` and ``POST /regions/batch_status``, plus
+the shared OCC write plumbing (:class:`_Recorder`, :func:`_write_one`,
+:func:`_batch_write`) the per-box routes in
+:mod:`src.routers.curation.regions_boxes_edit` reuse. Every write builds
+its update document in :mod:`src.services.curation.region_writes` (so the
+region lifecycle invariants hold whichever writer a client picks) and
+snapshots the pre-write region state into the item's edit history, which
+``POST /crops/{id}/region/undo`` restores. Split from
 :mod:`src.routers.curation.regions` (browse) so each module holds one
 concern.
 """
@@ -21,9 +23,7 @@ from src.config import get_region_fields
 from src.routers.curation._common import (
     HUMAN_REGION_STATUS_VALUES,
     CropBatchStatusRequest,
-    ItemBatchRegionRequest,
     ItemRegionMetaRequest,
-    ItemRegionRequest,
     OpenSearchDep,
     RegionProfileDep,
     _now_iso,
@@ -33,19 +33,15 @@ from src.routers.curation._common import (
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.region_boxes import RegionBoxWriteError
+from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
-    RegionWriteError,
     human_status_box_write,
-    parent_to_source_bbox,
     post_write_item,
     reason_only_box_write,
-    region_box_write,
-    validate_bbox_norm,
 )
-from src.services.curation.wire import region_wire_key
 
 
-def _write_error(exc: RegionWriteError | RegionBoxWriteError) -> HTTPException:
+def _write_error(exc: RegionBoxWriteError) -> HTTPException:
     return HTTPException(status_code=422, detail=str(exc))
 
 
@@ -87,67 +83,17 @@ class _Recorder:
 async def _write_one(
     opensearch: Any, crop_id: str, rec: _Recorder, writer_id: str, **kw: Any
 ) -> None:
-    """One OCC write; RegionWriteError -> 422, a missing doc -> 404."""
+    """One OCC write; RegionBoxWriteError -> 422, a missing doc -> 404."""
     try:
         await occ_update_one(
             opensearch, doc_id=crop_id, merger=rec, refresh='wait_for', writer_id=writer_id, **kw
         )
     except OCCFinalConflictError:
         raise
-    except (RegionWriteError, RegionBoxWriteError) as exc:
+    except RegionBoxWriteError as exc:
         raise _write_error(exc) from exc
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
-
-
-def _box_builder(payload: ItemRegionRequest | ItemBatchRegionRequest) -> Any:
-    """Merger body for a box write. Range errors are a 400 up front; a
-    parent-frame box is projected per item inside the merger, and a box
-    equal to the stored one is a confirmation (detector provenance kept)."""
-    box = None if payload.region_bbox_norm is None else list(payload.region_bbox_norm)
-    if box is not None:
-        try:
-            validate_bbox_norm(box)
-        except RegionWriteError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-    now = _now_iso()
-    source = payload.region_label_source
-
-    def _build(current: dict[str, Any]) -> dict[str, Any]:
-        target = box
-        if box is not None and payload.frame != 'source':
-            target = parent_to_source_bbox(box, current.get('bbox_norm'))
-        return region_box_write(current, target, label_source=source, now=now)
-
-    return _build
-
-
-@router.put('/crops/{crop_id}/region')
-async def set_crop_region(
-    crop_id: str,
-    payload: ItemRegionRequest,
-    opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
-) -> dict[str, Any]:
-    """Set or clear the region sub-bbox on a single crop.
-
-    ``region_bbox_norm`` is in ``frame`` (``source`` default, or
-    ``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop
-    ``region_status='no_region_visible'``. A box equal to the stored one
-    (within float noise) confirms the region: status, verified, validated
-    and verifier are written, the detector / version / score / detection
-    time are kept. A different box is human geometry (detector = human,
-    score 1.0). Returns ``item``, the post-write wire item.
-    """
-    F = get_region_fields()
-    rec = _Recorder(_box_builder(payload), 'human:set_crop_region')
-    await _write_one(opensearch, crop_id, rec, 'human:set_crop_region')
-    return {
-        'crop_id': crop_id,
-        region_wire_key('bbox_norm'): rec.update[F.bbox_norm],
-        region_wire_key('status'): rec.update[F.status],
-        'item': rec.item(crop_id),
-    }
 
 
 @router.patch('/crops/{crop_id}/region_meta')
@@ -233,7 +179,7 @@ async def _batch_write(
     helper's merge_fn contract only distinguishes "wrote" vs "nothing to
     write" (a falsy return is a documented noop counted as updated), but
     a region-batch write needs a third outcome (``invalid``, a
-    :class:`RegionWriteError` from ``build``) that must never be reported
+    :class:`RegionBoxWriteError` from ``build``) that must never be reported
     as updated. ``refresh`` is attached only to the final bulk call of
     the final retry round — no forced ``indices.refresh`` per call.
     """
@@ -273,7 +219,7 @@ async def _batch_write(
                 rec = _Recorder(build, writer_id)
                 try:
                     update_doc = rec(source)
-                except (RegionWriteError, RegionBoxWriteError) as exc:
+                except RegionBoxWriteError as exc:
                     invalid.append({'crop_id': crop_id, 'detail': str(exc)})
                     continue
                 pending.append((crop_id, update_doc, rec))
@@ -312,7 +258,7 @@ async def _batch_write(
                 status = action.get('status')
                 if status in (200, 201):
                     updated += 1
-                    items.append(rec.item(crop_id))
+                    items.append(as_row(rec.item(crop_id), None))
                     continue
                 error = action.get('error') or {}
                 is_conflict = status == 409 or 'version_conflict' in error.get('type', '')
@@ -325,25 +271,6 @@ async def _batch_write(
         pending_ids = next_round
 
     return {'updated': updated, 'conflicts': conflicts, 'invalid': invalid, 'items': items}
-
-
-@router.put('/crops/batch_region')
-async def batch_set_crop_region(
-    payload: ItemBatchRegionRequest,
-    opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
-) -> dict[str, Any]:
-    """Bulk variant of ``PUT /crops/{crop_id}/region`` (typically
-    ``region_bbox_norm=null``: "no region visible on these N crops").
-
-    Returns ``updated``, ``conflicts``, ``invalid`` and ``items`` (the
-    post-write wire items of the updated crops).
-    """
-    if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
-    return await _batch_write(
-        opensearch, payload.crop_ids, _box_builder(payload), 'human:batch_set_crop_region'
-    )
 
 
 @router.post('/regions/batch_status')
@@ -359,7 +286,8 @@ async def batch_set_region_status(
     status (a request's ``region_verified`` is ignored), ``detected``
     without a box lands in ``invalid``. Human edits are terminal
     (``region_validated=True``). Returns ``updated``, ``conflicts``,
-    ``invalid`` and ``items`` (post-write wire items).
+    ``invalid`` and ``items`` (post-write rows: the wire item plus
+    ``region_box_id: null``, a whole-set write being item-level).
     """
     F = get_region_fields()
     if not payload.crop_ids:

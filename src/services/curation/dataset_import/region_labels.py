@@ -21,6 +21,7 @@ from src.services.curation.dataset_import.item_labels import human_owned, import
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.item_doc import DetectedItem
+from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_boxes import (
     RegionBox,
     boxes_write_fields,
@@ -29,7 +30,6 @@ from src.services.curation.region_boxes import (
     next_box_id,
     read_boxes,
 )
-from src.services.curation.region_writes import same_box
 
 
 if TYPE_CHECKING:

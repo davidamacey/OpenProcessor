@@ -26,7 +26,6 @@ from scripts.curation.worker.state import (
     DEFAULT_SEGMENTER_URL,
     DEFAULT_SEGMENTER_URLS,
     DEFAULT_TRITON,
-    DEFAULT_VLM_URL,
 )
 
 
@@ -47,11 +46,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             'different GPUs (env OP_SEGMENTER_URLS=http://segmenter-gpu0:8000,'
             'http://segmenter-gpu1:8000).'
         ),
-    )
-    p.add_argument(
-        '--vlm-url',
-        default=DEFAULT_VLM_URL,
-        help='VLM base URL. Empty → use VlmLabeler defaults.',
     )
     p.add_argument(
         '--pause-sentinel',

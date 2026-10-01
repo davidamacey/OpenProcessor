@@ -28,6 +28,11 @@ from pathlib import Path
 from typing import Any
 
 from src.core.logging import get_logger
+from src.services.labeling.region_overlay import (
+    REPLY_BBOX_CORRECT_KEY,
+    REPLY_CONFIDENCE_KEY,
+    REPLY_TEXT_KEY,
+)
 
 
 logger = get_logger(__name__)
@@ -444,14 +449,14 @@ REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
             'class_id',
             'class_confidence',
             'region_visible',
-            'region_bbox_correct',
-            'region_confidence',
+            REPLY_BBOX_CORRECT_KEY,
+            REPLY_CONFIDENCE_KEY,
         ],
-        'optional': ['region_text'],
+        'optional': [REPLY_TEXT_KEY],
         # W8: the list-shaped per-box verdict keys -- required whenever the
         # active/given profile's max_regions_per_item > 1 (D-B, list shape
         # only; see pack_validation.pack_multi_region_keys_missing).
-        'multi_region': ['region_boxes', 'box', 'region_bbox_correct', 'region_confidence'],
+        'multi_region': ['region_boxes', 'box', REPLY_BBOX_CORRECT_KEY, REPLY_CONFIDENCE_KEY],
     },
     'combined_batch': {
         'fields': ['combined_batch_system', 'combined_batch_rules'],
@@ -461,11 +466,11 @@ REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
             'class_id',
             'class_confidence',
             'region_visible',
-            'region_bbox_correct',
-            'region_confidence',
+            REPLY_BBOX_CORRECT_KEY,
+            REPLY_CONFIDENCE_KEY,
         ],
-        'optional': ['region_text'],
-        'multi_region': ['region_boxes', 'box', 'region_bbox_correct', 'region_confidence'],
+        'optional': [REPLY_TEXT_KEY],
+        'multi_region': ['region_boxes', 'box', REPLY_BBOX_CORRECT_KEY, REPLY_CONFIDENCE_KEY],
     },
     'region_verify': {
         'fields': ['region_system', 'region_user'],

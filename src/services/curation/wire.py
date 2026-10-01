@@ -49,9 +49,6 @@ WIRE_REGION_FIELDS = RegionFields()
 _NON_WIRE_REGION_ATTRS = frozenset(
     {
         'prefix',
-        'embedding',
-        'bbox_norm_legacy',
-        'score_legacy',
         'status_legacy',
         'boxes',
         'boxes_state',
@@ -87,7 +84,7 @@ def item_source_excludes(storage: RegionFields | None = None) -> list[str]:
     """``_source.excludes`` list for any item search/get that feeds
     :func:`serialize_item`."""
     f = storage or get_region_fields()
-    return [*_EMBEDDING_SOURCE_EXCLUDES, f.embedding]
+    return [*_EMBEDDING_SOURCE_EXCLUDES, f.box_embeddings]
 
 
 def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
@@ -111,9 +108,6 @@ def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> 
     return {region_wire_key(a): src.get(getattr(f, a)) for a in REGION_WIRE_ATTRS}
 
 
-_CROP_FRAMES = frozenset({'crop', 'item', 'parent'})
-
-
 def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
     if not isinstance(value, list | tuple) or len(value) != 4:
         return None
@@ -124,28 +118,6 @@ def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
     if x2 <= x1 or y2 <= y1:
         return None
     return x1, y1, x2, y2
-
-
-def region_bbox_in_parent(src: dict[str, Any], storage: RegionFields | None = None) -> Any:
-    """The stored region box in the item-crop frame (xyxy, clamped to
-    ``[0, 1]``), or ``None`` when there is no region or no usable item box."""
-    f = storage or get_region_fields()
-    region = _xyxy(src.get(f.bbox_norm))
-    if region is None:
-        return None
-    if src.get(f.bbox_frame) in _CROP_FRAMES:
-        return list(region)
-    return _source_to_parent(src, region)
-
-
-def region_candidate_bbox_in_parent(
-    src: dict[str, Any], storage: RegionFields | None = None
-) -> Any:
-    """The verifier-rejected candidate box (always source frame) in the
-    item-crop frame, or ``None`` when there is no candidate."""
-    f = storage or get_region_fields()
-    region = _xyxy(src.get(f.candidate_bbox_norm))
-    return None if region is None else _source_to_parent(src, region)
 
 
 def _source_to_parent(src: dict[str, Any], region: tuple[float, float, float, float]) -> Any:
@@ -289,6 +261,11 @@ def serialize_item(
         'class_labeler': src.get('class_labeler'),
         # Categorical VLM confidence (high/medium/low).
         'vlm_confidence': src.get('vlm_confidence'),
+        # Provenance of the VLM's most recent write: prompt pack, and which
+        # endpoint / model answered.
+        'vlm_prompt_pack': src.get('vlm_prompt_pack'),
+        'vlm_endpoint': src.get('vlm_endpoint'),
+        'vlm_model': src.get('vlm_model'),
         # Last VLM class attempt, and why it gave no class (null = it did).
         'vlm_class_attempted_at': src.get('vlm_class_attempted_at'),
         'vlm_class_empty_reason': src.get('vlm_class_empty_reason'),
@@ -390,15 +367,18 @@ def serialize_item(
         'dup_is_representative': src.get('dup_is_representative'),
         'updated_at': src.get('updated_at') or '',
         'thumbnail_url': f'{prefix}/crops/{crop_id}/thumbnail',
-        'region_thumbnail_url': f'{prefix}/crops/{crop_id}/region_thumbnail',
         # Every OCR line on the item crop; [] when none / not yet read.
         'item_text_lines': item_text_lines_to_wire(src.get(ITEM_TEXT_LINES_FIELD)),
     }
     item.update(region_to_wire(src, f))
-    item['region_bbox_in_parent'] = region_bbox_in_parent(src, f)
-    item['region_candidate_bbox_in_parent'] = region_candidate_bbox_in_parent(src, f)
     item.update(region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix))
     return item
+
+
+def box_thumbnail_url(prefix: str, crop_id: str, box_id: str) -> str:
+    """The region close-up of one box (``GET /crops/{id}/region_thumbnail``
+    needs its ``box_id``): the one place that URL is built."""
+    return f'{prefix}/crops/{crop_id}/region_thumbnail?box_id={box_id}'
 
 
 def region_boxes_to_wire(
@@ -423,9 +403,7 @@ def region_boxes_to_wire(
         doc = box.to_doc()
         doc['locked'] = is_locked_box(box)
         doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
-        doc['thumbnail_url'] = (
-            f'{prefix}/crops/{crop_id}/region_thumbnail?box_id={box.box_id}' if crop_id else None
-        )
+        doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None
         boxes.append(doc)
     return {
         'region_boxes': boxes,
@@ -442,38 +420,40 @@ ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''
 # Endpoint-specific keys layered on top of the shared item. Everything
 # else is identical across endpoints.
 REVIEW_EXTRA_KEYS = frozenset({'reason'})
-TRAINING_CANDIDATE_EXTRA_KEYS = frozenset({'selection_reason'})
+# A region row is the item plus the box it is about (``None`` for an item row).
+REGION_ROW_EXTRA_KEYS = frozenset({'region_box_id'})
+TRAINING_CANDIDATE_EXTRA_KEYS = REGION_ROW_EXTRA_KEYS | {'selection_reason'}
 SEARCH_EXTRA_KEYS = frozenset({'semantic_score'})
 
 
 def region_event_payload(
-    crop_id: str, *, region_status: str | None, region_text: str | None = None
+    crop_id: str, *, region_status: str | None, region_count: int | None = None
 ) -> dict[str, Any]:
     """``crop.region_verified`` SSE payload. Keys are wire names, same as
-    the item's."""
+    the item's: the item status and how many accepted boxes it now holds."""
     return {
         'type': 'crop.region_verified',
-        'topic': region_wire_key('status'),
+        'topic': 'region_status',
         'crop_id': crop_id,
-        region_wire_key('status'): region_status,
-        region_wire_key('text'): region_text,
+        'region_status': region_status,
+        'region_count': region_count,
     }
 
 
 __all__ = [
     'ITEM_WIRE_KEYS',
+    'REGION_ROW_EXTRA_KEYS',
     'REGION_WIRE_ATTRS',
     'REGION_WIRE_KEYS',
     'REVIEW_EXTRA_KEYS',
     'SEARCH_EXTRA_KEYS',
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
+    'box_thumbnail_url',
     'current_cluster_distance',
     'item_list_source_excludes',
     'item_source_excludes',
-    'region_bbox_in_parent',
     'region_boxes_to_wire',
-    'region_candidate_bbox_in_parent',
     'region_event_payload',
     'region_to_wire',
     'region_wire_key',

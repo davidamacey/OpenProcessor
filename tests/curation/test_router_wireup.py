@@ -24,16 +24,25 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from opensearchpy.exceptions import NotFoundError
+
+from src.services.labeling.vlm_client import VlmIdentity
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 @pytest.fixture
 def fake_opensearch() -> AsyncMock:
     """An AsyncMock standing in for AsyncOpenSearch used by the router."""
     fake = AsyncMock()
+    # The health route unwraps ``.client`` when present; an AsyncMock would
+    # invent one, and the registry reads would then hit that stand-in.
+    fake.client = None
     # ``indices.exists`` and ``indices.create`` are called by the lazy
     # index bootstrap; default both to no-op success.
     fake.indices = AsyncMock()
@@ -45,7 +54,7 @@ def fake_opensearch() -> AsyncMock:
     fake.bulk = AsyncMock(return_value={'errors': False, 'items': []})
     fake.update = AsyncMock(return_value={'result': 'updated'})
     fake.update_by_query = AsyncMock(return_value={'updated': 0})
-    fake.get = AsyncMock(return_value={'_source': {}})
+    fake.get = AsyncMock(side_effect=NotFoundError(404, 'not_found', {}))
     fake.index = AsyncMock(return_value={'result': 'created'})
     fake.msearch = AsyncMock(return_value={'responses': []})
     return fake
@@ -421,6 +430,7 @@ def test_health_reports_degraded_when_vlm_down(
     fake_triton_pool.health_check = AsyncMock(return_value=True)
 
     fake_vlm = MagicMock()
+    fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(
         return_value=MagicMock(reachable=False, model='vlm-x', last_error='timeout')
     )
@@ -441,6 +451,7 @@ def test_health_reports_down_when_opensearch_unreachable(
     fake_opensearch.indices.exists = AsyncMock(side_effect=RuntimeError('connection refused'))
     fake_triton_pool.health_check = AsyncMock(return_value=True)
     fake_vlm = MagicMock()
+    fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=False, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
@@ -466,6 +477,7 @@ def test_health_mlflow_public_url_is_null_when_unset(
     )
     fake_triton_pool.health_check = AsyncMock(return_value=True)
     fake_vlm = MagicMock()
+    fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
@@ -488,6 +500,7 @@ def test_health_mlflow_public_url_reflects_config(
     )
     fake_triton_pool.health_check = AsyncMock(return_value=True)
     fake_vlm = MagicMock()
+    fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
@@ -500,6 +513,7 @@ def test_health_region_profile_is_null_without_an_active_profile(
 ) -> None:
     fake_triton_pool.health_check = AsyncMock(return_value=True)
     fake_vlm = MagicMock()
+    fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
@@ -515,6 +529,7 @@ def test_health_region_profile_reflects_the_active_profile(
 ) -> None:
     fake_triton_pool.health_check = AsyncMock(return_value=True)
     fake_vlm = MagicMock()
+    fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
     with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')

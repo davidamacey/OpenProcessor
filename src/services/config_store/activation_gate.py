@@ -48,6 +48,7 @@ async def run_activation_gate(
     force: bool = False,
     client: Any = None,
     pending_sibling: Any = _UNSET,
+    pending_vlm: Any = _UNSET,
     body: dict[str, Any] | None = None,
 ) -> ValidationReport:
     """Run the exact `for_activation` validation the dedicated `/activate`
@@ -79,6 +80,11 @@ async def run_activation_gate(
     deactivation). When ``axis == 'detection_profile'``, it is the
     pending active ``PromptPack`` (never ``None`` -- a pack axis always
     resolves to *some* pack, env/file default included).
+
+    ``pending_vlm`` (W9): the same idea for the VLM axis -- the endpoint a
+    combined ``PUT /settings`` is about to activate (``None`` = about to be
+    switched off). Left unset, the pack/profile is paired with the
+    project's stored active VLM.
 
     ``body`` (R5-3 fix, W3/W4 round-5 review, Major -- project clone):
     when supplied, skips the ``build_record``/``get_revision_record``
@@ -124,6 +130,8 @@ async def run_activation_gate(
         else:
             pack_body = body
         profile = _resolve_profile(None) if pending_sibling is _UNSET else pending_sibling
+        paired_profile = profile
+        paired_pack = _decode_pack(name, pack_body)
         report = validate_pack(
             None,
             pack_body,
@@ -156,6 +164,8 @@ async def run_activation_gate(
         else:
             profile_body = body
         active_pack = active_prompt_pack() if pending_sibling is _UNSET else pending_sibling
+        paired_pack = active_pack
+        paired_profile = _decode_profile(name, profile_body)
         report = await validate_profile(
             None,
             profile_body,
@@ -166,7 +176,34 @@ async def run_activation_gate(
             project_slug=_project_slug(),
         )
 
-    blocking = [e for e in report.errors if not (force and e.code in BYPASSABLE_CODES)]
+    # W9.5: a change to one side of the pack <-> profile <-> VLM triple is
+    # checked against the active VLM here, in the one gate every activation
+    # path calls (never a per-route copy).
+    from src.routers.curation._config_common_models import ValidationReport
+    from src.services.config_store.vlm_gate import active_vlm_pairing_issues
+    from src.services.config_store.vlm_validation import BYPASSABLE_CODES as VLM_BYPASSABLE
+
+    vlm_issues = await active_vlm_pairing_issues(
+        client,
+        paired_pack,
+        paired_profile,
+        **({} if pending_vlm is _UNSET else {'pending_vlm': pending_vlm}),
+    )
+    vlm_errors = [i for i in vlm_issues if i.severity == 'error']
+    if vlm_issues:
+        errors = [*report.errors, *vlm_errors]
+        report = ValidationReport(
+            ok=not errors,
+            errors=errors,
+            warnings=[*report.warnings, *[i for i in vlm_issues if i.severity != 'error']],
+            force_allowed=bool(errors)
+            and all(e.code in {*BYPASSABLE_CODES, *VLM_BYPASSABLE} for e in errors),
+        )
+    blocking = [
+        e
+        for e in report.errors
+        if not (force and e.code in (VLM_BYPASSABLE if e in vlm_errors else BYPASSABLE_CODES))
+    ]
     if blocking:
         raise api_error(
             422,
@@ -175,6 +212,26 @@ async def run_activation_gate(
             report=report,
         )
     return report
+
+
+def _decode_pack(name: str, body: dict[str, Any]) -> Any:
+    """The body as a :class:`PromptPack`, or ``None`` when it does not decode
+    (the pack validator already reports that)."""
+    from src.services.labeling.vlm_prompts import PromptPack
+
+    try:
+        return PromptPack.from_dict({**body, 'name': name})
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def _decode_profile(name: str, body: dict[str, Any]) -> Any:
+    from src.services.detection.profile_registry import region_profile_from_dict
+
+    try:
+        return region_profile_from_dict({**body, 'name': name}, source='validate')
+    except (TypeError, ValueError, KeyError):
+        return None
 
 
 __all__ = ['run_activation_gate']

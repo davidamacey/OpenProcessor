@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_rejection import REJECT_REASON_HUMAN
-from src.config.region_state import BOX_STATE_ROUTES, RegionStatus
+from src.config.region_state import RegionStatus
 
 
 if TYPE_CHECKING:
@@ -299,25 +299,10 @@ def _best(boxes: Sequence[RegionBox]) -> RegionBox | None:
     return max(boxes, key=lambda b: b.score if b.score is not None else -1.0)
 
 
-def _mirror_representative(boxes: Sequence[RegionBox]) -> RegionBox | None:
-    """The box the legacy ``bbox_norm``/``score``/``detector``/... mirror
-    fields describe (W8-cleanup M2c): the best *accepted* box if one
-    exists, else the highest-scoring ``false_positive`` box -- an
-    accepted box always outranks an FP box regardless of relative score
-    (W8-cleanup N2), because an accepted box is the real region and an
-    FP box is only a fallback representative when there is no real one.
-
-    Deliberately never a rejected box: :mod:`region_fields`'s module
-    docstring (see ``region_fields.py``) says a box in
-    ``candidate_bbox_norm`` (rejected) is NOT ``bbox_norm``, because
-    ``bbox_norm`` is an accepted region to every reader (browse, export,
-    clustering). Falling back to a rejected box's coordinates here would
-    make a rejected box look accepted to all of them.
-    """
-    accepted = _best([b for b in boxes if b.state == 'accepted'])
-    if accepted is not None:
-        return accepted
-    return _best([b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value])
+def without_cluster(box: RegionBox) -> RegionBox:
+    """``box`` minus its server-owned cluster placement: what is left is
+    the box state a human sees and edits."""
+    return dataclasses.replace(box, cluster_id=None, cluster_subid=None, cluster_distance=None)
 
 
 def boxes_write_fields(
@@ -326,22 +311,20 @@ def boxes_write_fields(
     current_src: dict[str, Any] | None = None,
     F: RegionFields | None = None,
     set_complete: Any = _UNCHANGED,
+    bump_revision: bool = True,
 ) -> dict[str, Any]:
     """The update-doc fields every box writer sets.
 
     ``current_src`` is the OCC-read ``_source`` every writer already
     holds; it supplies the current ``region_revision`` / ``region_box_seq``
-    high-water marks (both default to 0 when absent).
+    high-water marks (both default to 0 when absent). ``region_revision``
+    advances unless ``bump_revision`` is false: it is the token an open
+    editor's ``expected_region_revision`` is checked against, so a write
+    that changes nothing the editor sees (a re-cluster) must not advance it.
 
-    Also (re)computes the legacy per-item mirror fields (``bbox_norm``,
-    ``score``, ``detector``, ``detector_version``, ``source``,
-    ``bbox_frame``, ``rejection_reason``) from :func:`_mirror_representative`
-    on *every* call, and clears the retired ``candidate_*`` fields --
-    W8-cleanup M2's fix for the mirror going stale on any writer that
-    isn't ``human_status_box_write`` (per-box PATCH, ``PUT
-    .../regions``, ``POST regions/batch_box_state``, requeue, the
-    worker). A caller with nothing left to mirror (empty box list) gets
-    every mirror field cleared to ``None``.
+    Also (re)computes the item-level ``rejection_reason`` on *every* call
+    (see below), so it can't go stale on any writer: per-box PATCH, ``PUT
+    .../regions``, ``POST regions/batch_box_state``, requeue, the worker.
     """
     F = F or get_region_fields()
     current_src = current_src or {}
@@ -361,44 +344,19 @@ def boxes_write_fields(
         F.count: sum(1 for b in boxes if b.state == 'accepted'),
         F.rejected_count: sum(1 for b in boxes if b.state == 'rejected'),
         F.max_score: max(scores) if scores else None,
-        F.revision: int(current_src.get(F.revision) or 0) + 1,
+        F.revision: int(current_src.get(F.revision) or 0) + int(bump_revision),
         F.box_seq: max(current_seq, max_id_seen),
     }
-    rep = _mirror_representative(boxes)
-    if rep is not None:
-        doc[F.bbox_norm] = list(rep.bbox_norm)
-        doc[F.score] = rep.score
-        doc[F.detector] = rep.detector
-        doc[F.detector_version] = rep.detector_version
-        doc[F.source] = rep.source
-        doc[F.bbox_frame] = 'source'
-    else:
-        doc[F.bbox_norm] = None
-        doc[F.score] = None
-        doc[F.detector] = None
-        doc[F.detector_version] = None
-        doc[F.source] = None
-    # `rejection_reason` mirrors the highest-scoring REJECTED box, but
-    # only when there is no accepted-or-FP representative (W8-cleanup
-    # N1): once an item has a real region (`rep` above), it is
-    # `detected`/`false_positive`, not rejected, and must not carry a
-    # rejection reason from a rejected sibling box -- that would make
-    # the labeler render a red "Rejection" row on an item that actually
-    # needs human confirmation.
+    # `rejection_reason` mirrors the highest-scoring REJECTED box, but only
+    # when the item has no accepted or false_positive box (W8-cleanup N1):
+    # such an item is `detected`/`false_positive`, not rejected, and must not
+    # carry a rejection reason from a rejected sibling box -- that would
+    # make the labeler render a red "Rejection" row on an item that
+    # actually needs human confirmation.
+    has_live_box = any(b.state in ('accepted', RegionStatus.FALSE_POSITIVE.value) for b in boxes)
     rejected_rep = _best([b for b in boxes if b.state == 'rejected'])
     doc[F.rejection_reason] = (
-        rejected_rep.rejection_reason if (rep is None and rejected_rep) else None
-    )
-    doc.update(
-        dict.fromkeys(
-            (
-                F.candidate_bbox_norm,
-                F.candidate_score,
-                F.candidate_detector,
-                F.candidate_detector_version,
-                F.candidate_source,
-            )
-        )
+        rejected_rep.rejection_reason if (not has_live_box and rejected_rep) else None
     )
     if set_complete is not _UNCHANGED:
         doc[F.set_complete] = set_complete
@@ -407,143 +365,6 @@ def boxes_write_fields(
 
 class RegionBoxWriteError(ValueError):
     """A human box write the request can't satisfy (422)."""
-
-
-_BOX_STATE_ROUTES_BY_NAME = {r.route: r.states for r in BOX_STATE_ROUTES}
-
-
-def validate_box_state(route: str, state: str | None) -> None:
-    """W8c: enforce ``BOX_STATE_ROUTES`` (``src/config/region_state.py``) on
-    write, not just serve it on ``GET .../regions/statuses``.
-
-    ``route`` is the exact ``BoxStateRoute.route`` string (e.g. ``'PATCH
-    /crops/{crop_id}/regions/{box_id}'``); a route this table doesn't know
-    about is a programming error (``ValueError``), never a client-facing
-    422. ``state=None`` (untouched / no state in this write) is always
-    fine -- the caller may not be setting a state at all.
-    """
-    if state is None:
-        return
-    try:
-        allowed = _BOX_STATE_ROUTES_BY_NAME[route]
-    except KeyError as exc:
-        msg = f'no BOX_STATE_ROUTES entry for route {route!r}'
-        raise ValueError(msg) from exc
-    if state not in allowed:
-        msg = f'state must be one of {sorted(allowed)} for {route}; got {state!r}'
-        raise RegionBoxWriteError(msg)
-
-
-def apply_put_boxes(
-    current: dict[str, Any],
-    requested: Sequence[dict[str, Any]],
-    *,
-    frame: str,
-    F: RegionFields | None = None,
-    project_parent_to_source: Any = None,
-) -> list[RegionBox]:
-    """Sibling-preserving merge for ``PUT /crops/{crop_id}/regions``.
-
-    ``requested`` is the full list, in display order (any_domain_plan.md
-    §7.7 wire-write table): an element with only ``box_id`` keeps its
-    stored box untouched; one with ``box_id`` plus other keys patches
-    just those keys onto the stored box; ``box_id: None`` (or omitted)
-    is a new box, assigned the next id and defaulting to ``accepted``
-    when ``state`` is omitted (W8 pin 2). Omitting a stored box from
-    ``requested`` deletes it.
-
-    ``project_parent_to_source(bbox, item_bbox_norm) -> list[float]`` is
-    supplied by the caller for ``frame == 'parent'`` (W8 pin 1); this
-    module stays pure and does no geometry itself.
-    """
-    F = F or get_region_fields()
-    existing = {b.box_id: b for b in read_boxes(current, F)}
-    seq = int(current.get(F.box_seq) or 0)
-    result: list[RegionBox] = []
-
-    for element in requested:
-        box_id = element.get('box_id')
-        bbox = element.get('bbox_norm')
-        if bbox is not None and frame == 'parent':
-            if project_parent_to_source is None:
-                msg = "frame='parent' requires project_parent_to_source"
-                raise RegionBoxWriteError(msg)
-            bbox = project_parent_to_source(bbox, current.get(F.bbox_norm))
-        if box_id is None:
-            new_id = next_box_id([*existing.values(), *result], seq=seq)
-            state = element.get('state') or 'accepted'
-            result.append(
-                RegionBox(
-                    box_id=new_id,
-                    bbox_norm=tuple(bbox) if bbox is not None else (0.0, 0.0, 0.0, 0.0),
-                    state=state,
-                    score=1.0,
-                    detector='human',
-                    source='human',
-                    text=element.get('text'),
-                )
-            )
-            continue
-        stored = existing.get(box_id)
-        if stored is None:
-            msg = f'unknown box_id: {box_id!r}'
-            raise RegionBoxWriteError(msg)
-        patch: dict[str, Any] = {}
-        if bbox is not None:
-            patch['bbox_norm'] = tuple(bbox)
-        if 'state' in element and element['state'] is not None:
-            patch['state'] = element['state']
-            if element['state'] == 'rejected':
-                # W8c M3: a human REJECTING a machine-created box via PUT
-                # (not just creating one) must also be recognized as
-                # human-owned (is_human_owned) -- source/detector stay
-                # whatever the machine wrote, so the reason is the only
-                # trace, matching boxes_with_status's whole-set path.
-                patch['rejection_reason'] = REJECT_REASON_HUMAN
-        if 'text' in element and element['text'] is not None:
-            patch['text'] = element['text']
-        result.append(stored if not patch else _replace(stored, **patch))
-
-    return result
-
-
-def _replace(box: RegionBox, **kwargs: Any) -> RegionBox:
-    doc = box.to_doc()
-    doc.update(kwargs)
-    if 'bbox_norm' in kwargs:
-        doc['bbox_norm'] = list(kwargs['bbox_norm'])
-    return RegionBox.from_doc(doc)
-
-
-def boxes_with_status(status: str, boxes: Sequence[RegionBox]) -> list[RegionBox]:
-    """Whole-set human status transition over the list (W8.7 table).
-
-    A whole-set confirm never overrides a per-box decision that already
-    settled a box; it only settles the undecided ones.
-    """
-    if status == RegionStatus.DETECTED.value:
-        if not boxes:
-            msg = 'no_boxes'
-            raise RegionBoxWriteError(msg)
-        result = [_replace(b, state='accepted') if b.state == 'proposed' else b for b in boxes]
-        if not any(b.state == 'accepted' for b in result):
-            # W8-cleanup M3 note: a CONFIRM after a whole-set HUMAN reject
-            # now 422s here (pre-W8 it returned 200), because M3's allow-
-            # list only reopens verifier/no-verdict rejections, never a
-            # `human` one -- a per-box human reject and a whole-set human
-            # reject share the same reason and can't be told apart, and
-            # `POST .../region/undo` is the documented way back. Intentional.
-            msg = 'no_accepted_box'
-            raise RegionBoxWriteError(msg)
-        return result
-    if status == RegionStatus.FALSE_POSITIVE.value:
-        return [_replace(b, state=RegionStatus.FALSE_POSITIVE.value) for b in boxes]
-    if status == RegionStatus.VERIFY_REJECTED.value:
-        return [_replace(b, state='rejected', rejection_reason=REJECT_REASON_HUMAN) for b in boxes]
-    if status == RegionStatus.NO_REGION_VISIBLE.value:
-        return []
-    msg = f'unsupported whole-set status: {status!r}'
-    raise RegionBoxWriteError(msg)
 
 
 def box_query(clause: dict[str, Any], F: RegionFields | None = None) -> dict[str, Any]:
@@ -571,9 +392,7 @@ __all__ = [
     'RegionBox',
     'RegionBoxWriteError',
     'accepted',
-    'apply_put_boxes',
     'box_query',
-    'boxes_with_status',
     'boxes_write_fields',
     'derive_status',
     'finalize_box_ids',
@@ -583,5 +402,4 @@ __all__ = [
     'new_box_placeholder',
     'next_box_id',
     'read_boxes',
-    'validate_box_state',
 ]

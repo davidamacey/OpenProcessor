@@ -18,14 +18,13 @@ import pytest
 from src.config.region_fields import RegionFields
 from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.config.region_state import RegionStatus
+from src.services.curation.region_box_edits import apply_put_boxes, boxes_with_status
 from src.services.curation.region_boxes import (
     BOX_STATES,
     RegionBox,
     RegionBoxWriteError,
     accepted,
-    apply_put_boxes,
     box_query,
-    boxes_with_status,
     boxes_write_fields,
     derive_status,
     has_any_box_query,
@@ -113,16 +112,27 @@ def test_boxes_write_fields_all_rejected_keeps_item_level_reason() -> None:
     assert doc[F.rejection_reason] == 'blurry'
 
 
-def test_boxes_write_fields_mirror_prefers_accepted_over_higher_scoring_fp() -> None:
-    # W8-cleanup N2 regression: an accepted box must win the mirror even
-    # when a false_positive sibling scores higher.
+def test_boxes_write_fields_carries_the_list_and_item_summary_only() -> None:
+    """A box's geometry / score / detector / source live in its list entry;
+    the write never mirrors them onto the item (no legacy per-box scalar),
+    so a reader of the item can only see the list."""
     boxes = [
         RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.2, 0.2), state='false_positive', score=0.95),
         RegionBox(box_id='b2', bbox_norm=(0.5, 0.5, 0.6, 0.6), state='accepted', score=0.4),
     ]
+
     doc = boxes_write_fields(boxes, current_src={})
-    assert doc[F.bbox_norm] == [0.5, 0.5, 0.6, 0.6]
-    assert doc[F.score] == 0.4
+
+    assert set(doc) == {
+        F.boxes,
+        F.count,
+        F.rejected_count,
+        F.max_score,
+        F.revision,
+        F.box_seq,
+        F.rejection_reason,
+    }
+    assert doc[F.max_score] == 0.95
 
 
 def test_boxes_write_fields_empty_list() -> None:
@@ -335,6 +345,13 @@ def test_boxes_with_status_detected_no_accepted_result_raises() -> None:
     boxes = [RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='rejected', score=0.9)]
     with pytest.raises(RegionBoxWriteError):
         boxes_with_status('detected', boxes)
+
+
+def test_confirming_a_false_positive_only_item_points_at_the_per_box_route() -> None:
+    boxes = [RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='false_positive', score=0.9)]
+    with pytest.raises(RegionBoxWriteError, match=r'no_accepted_box.*PATCH /crops/') as exc:
+        boxes_with_status('detected', boxes)
+    assert '{"state": "accepted"}' in str(exc.value)
 
 
 def test_boxes_with_status_false_positive_flips_every_box() -> None:

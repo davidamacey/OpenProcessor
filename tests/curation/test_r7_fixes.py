@@ -48,6 +48,9 @@ if str(SCRIPTS_DIR) not in sys.path:
 # =============================================================================
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 def test_r7_ivf_pipeline_path_accepts_worker_call_shape() -> None:
     """auto_label_worker._run_one always calls
     ``pipeline_fn(opensearch=..., progress=..., **args)``

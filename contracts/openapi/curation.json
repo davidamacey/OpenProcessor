@@ -144,6 +144,58 @@
         "title": "ApiErrorResponse",
         "type": "object"
       },
+      "AppliedRuntime": {
+        "description": "One worker process's \"what did I actually apply\" record (any_domain_plan.md\n§4.5/§7.3), served under ``ActiveConfigResponse.applied[]`` from\n``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``,\nW2). ``lagging`` is ``true`` when ``applied_config_revision`` is\nbehind the axis's current ``config_revision`` for longer than the\ndrain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a\nmomentary swap in progress.",
+        "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "applied_config_revision": {
+            "title": "Applied Config Revision",
+            "type": "integer"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "lagging": {
+            "default": false,
+            "title": "Lagging",
+            "type": "boolean"
+          },
+          "pack": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "process": {
+            "title": "Process",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/ActiveRef",
+            "default": {}
+          }
+        },
+        "required": [
+          "process",
+          "host",
+          "applied_config_revision",
+          "profile",
+          "pack"
+        ],
+        "title": "AppliedRuntime",
+        "type": "object"
+      },
       "ArchiveRequest": {
         "properties": {
           "expected_revision": {
@@ -1066,7 +1118,8 @@
         "type": "object"
       },
       "BatchBoxStateRequest": {
-        "description": "Body for ``POST /regions/batch_box_state`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``POST /regions/batch_box_state``.",
         "properties": {
           "expected_region_revisions": {
             "anyOf": [
@@ -1081,6 +1134,11 @@
               }
             ],
             "title": "Expected Region Revisions"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
+            "type": "string"
           },
           "state": {
             "title": "State",
@@ -1102,6 +1160,7 @@
         "type": "object"
       },
       "BatchBoxStateTarget": {
+        "additionalProperties": false,
         "properties": {
           "box_id": {
             "title": "Box Id",
@@ -1213,7 +1272,8 @@
         "type": "object"
       },
       "BoxPatchRequest": {
-        "description": "Body for ``PATCH /crops/{crop_id}/regions/{box_id}`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``PATCH /crops/{crop_id}/regions/{box_id}``.",
         "properties": {
           "expected_region_revision": {
             "anyOf": [
@@ -1225,6 +1285,11 @@
               }
             ],
             "title": "Expected Region Revision"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
+            "type": "string"
           },
           "state": {
             "anyOf": [
@@ -1253,6 +1318,7 @@
         "type": "object"
       },
       "BoxWriteElement": {
+        "additionalProperties": false,
         "description": "One element of a ``PUT /crops/{crop_id}/regions`` boxes list.\n\n``box_id: None`` (or omitted) is a new box; a stored box referenced by\n``box_id`` alone (no other keys) is left untouched (sibling-preserving,\nany_domain_plan.md §7.7).",
         "properties": {
           "bbox_norm": {
@@ -1401,24 +1467,6 @@
           "job_id"
         ],
         "title": "CancelResponse",
-        "type": "object"
-      },
-      "Choice": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "Choice",
         "type": "object"
       },
       "ClassCreateRequest": {
@@ -2674,6 +2722,17 @@
             ],
             "title": "Actions"
           },
+          "activate_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activate Via"
+          },
           "active_shards": {
             "anyOf": [
               {
@@ -2764,6 +2823,17 @@
             ],
             "title": "Current Revision"
           },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
           "error": {
             "enum": [
               "project_not_found",
@@ -2828,7 +2898,15 @@
               "reprocess_targets_invalid",
               "region_profile_required",
               "combine_not_found",
-              "combine_not_resumable"
+              "combine_not_resumable",
+              "unknown_vlm",
+              "vlm_external_not_acknowledged",
+              "vlm_not_configured",
+              "vlm_endpoint_unavailable",
+              "no_local_vlm",
+              "unknown_catalog_id",
+              "vlm_catalog_does_not_fit",
+              "probe_busy"
             ],
             "title": "Error",
             "type": "string"
@@ -2966,6 +3044,17 @@
               }
             ]
           },
+          "requested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested"
+          },
           "soft_limit": {
             "anyOf": [
               {
@@ -3042,8 +3131,7 @@
           },
           "model_choices": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ModelChoice"
             },
             "title": "Model Choices",
             "type": "array"
@@ -5256,7 +5344,7 @@
         "additionalProperties": true,
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "job_id": {
             "anyOf": [
@@ -6746,69 +6834,9 @@
         "title": "IngestUploadConfig",
         "type": "object"
       },
-      "ItemBatchRegionRequest": {
-        "additionalProperties": false,
-        "description": "Bulk variant of ItemRegionRequest (e.g. \"mark these N items as no\nregion present\").",
-        "properties": {
-          "crop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 5000,
-            "title": "Crop Ids",
-            "type": "array"
-          },
-          "frame": {
-            "default": "source",
-            "enum": [
-              "source",
-              "parent"
-            ],
-            "title": "Frame",
-            "type": "string"
-          },
-          "region_bbox_norm": {
-            "anyOf": [
-              {
-                "maxItems": 4,
-                "minItems": 4,
-                "prefixItems": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Norm"
-          },
-          "region_label_source": {
-            "default": "human",
-            "title": "Region Label Source",
-            "type": "string"
-          }
-        },
-        "required": [
-          "crop_ids",
-          "region_bbox_norm"
-        ],
-        "title": "ItemBatchRegionRequest",
-        "type": "object"
-      },
       "ItemBatchRegionsRequest": {
-        "description": "Body for ``PUT /crops/batch_regions`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``PUT /crops/batch_regions``.",
         "properties": {
           "boxes": {
             "items": {
@@ -6823,6 +6851,11 @@
             },
             "title": "Crop Ids",
             "type": "array"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
+            "type": "string"
           },
           "region_status": {
             "anyOf": [
@@ -7405,56 +7438,6 @@
             ],
             "title": "Region Auto Confirmed"
           },
-          "region_bbox_correct": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Correct"
-          },
-          "region_bbox_frame": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Frame"
-          },
-          "region_bbox_in_parent": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox In Parent"
-          },
-          "region_bbox_norm": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Norm"
-          },
           "region_boxes": {
             "items": {
               "additionalProperties": true,
@@ -7462,78 +7445,6 @@
             },
             "title": "Region Boxes",
             "type": "array"
-          },
-          "region_candidate_bbox_in_parent": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Bbox In Parent"
-          },
-          "region_candidate_bbox_norm": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Bbox Norm"
-          },
-          "region_candidate_detector": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Detector"
-          },
-          "region_candidate_detector_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Detector Version"
-          },
-          "region_candidate_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Score"
-          },
-          "region_candidate_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Source"
           },
           "region_class_id": {
             "anyOf": [
@@ -7545,42 +7456,6 @@
               }
             ],
             "title": "Region Class Id"
-          },
-          "region_cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Cluster Distance"
-          },
-          "region_cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Cluster Id"
-          },
-          "region_cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Cluster Subid"
-          },
-          "region_confidence": {
-            "title": "Region Confidence"
           },
           "region_count": {
             "default": 0,
@@ -7598,17 +7473,6 @@
             ],
             "title": "Region Detected At"
           },
-          "region_detector": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Detector"
-          },
           "region_detector_chain": {
             "anyOf": [
               {
@@ -7622,17 +7486,6 @@
               }
             ],
             "title": "Region Detector Chain"
-          },
-          "region_detector_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Detector Version"
           },
           "region_label_source": {
             "anyOf": [
@@ -7713,17 +7566,6 @@
             "title": "Region Revision",
             "type": "integer"
           },
-          "region_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Score"
-          },
           "region_set_complete": {
             "anyOf": [
               {
@@ -7746,17 +7588,6 @@
             ],
             "title": "Region Skip Verify"
           },
-          "region_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Source"
-          },
           "region_status": {
             "anyOf": [
               {
@@ -7767,121 +7598,6 @@
               }
             ],
             "title": "Region Status"
-          },
-          "region_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text"
-          },
-          "region_text_choice": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Choice"
-          },
-          "region_text_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Confidence"
-          },
-          "region_text_disagreement": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Disagreement"
-          },
-          "region_text_engine_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Engine Version"
-          },
-          "region_text_ocr": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Ocr"
-          },
-          "region_text_raw": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Raw"
-          },
-          "region_text_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Source"
-          },
-          "region_text_vlm": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Vlm"
-          },
-          "region_text_vlm_invalid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Vlm Invalid"
-          },
-          "region_thumbnail_url": {
-            "default": "",
-            "title": "Region Thumbnail Url",
-            "type": "string"
           },
           "region_validated": {
             "anyOf": [
@@ -8029,6 +7745,39 @@
             ],
             "title": "Vlm Confidence"
           },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          },
+          "vlm_prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Prompt Pack"
+          },
           "vlm_proposed_class_id": {
             "anyOf": [
               {
@@ -8105,60 +7854,9 @@
         "title": "ItemRegionMetaRequest",
         "type": "object"
       },
-      "ItemRegionRequest": {
-        "additionalProperties": false,
-        "description": "Set or clear the region-of-interest sub-bbox on a single item.\n\n``frame`` says which frame ``region_bbox_norm`` is in: ``'source'``\n(the source image, the stored frame) or ``'parent'`` (the item crop;\nthe server projects it through the item's own ``bbox_norm``).\n``None`` clears the box and marks the item\n``region_status='no_region_visible'`` (a deliberate human decision,\ndistinct from \"not yet detected\").",
-        "properties": {
-          "frame": {
-            "default": "source",
-            "enum": [
-              "source",
-              "parent"
-            ],
-            "title": "Frame",
-            "type": "string"
-          },
-          "region_bbox_norm": {
-            "anyOf": [
-              {
-                "maxItems": 4,
-                "minItems": 4,
-                "prefixItems": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Norm"
-          },
-          "region_label_source": {
-            "default": "human",
-            "title": "Region Label Source",
-            "type": "string"
-          }
-        },
-        "required": [
-          "region_bbox_norm"
-        ],
-        "title": "ItemRegionRequest",
-        "type": "object"
-      },
       "ItemRegionsRequest": {
-        "description": "Body for ``PUT /crops/{crop_id}/regions`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``PUT /crops/{crop_id}/regions``.",
         "properties": {
           "boxes": {
             "items": {
@@ -8185,6 +7883,11 @@
               "parent"
             ],
             "title": "Frame",
+            "type": "string"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
             "type": "string"
           },
           "region_status": {
@@ -9372,6 +9075,95 @@
         "title": "MetricBlock",
         "type": "object"
       },
+      "ModelChoice": {
+        "description": "One row of the \"every model choice\" table (W9.8, §7.8.4).",
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "dims": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dims"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "per_request",
+              "per_run",
+              "region_profile",
+              "config_store",
+              "deployment"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "settable": {
+            "title": "Settable",
+            "type": "boolean"
+          },
+          "settable_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settable Via"
+          }
+        },
+        "required": [
+          "role",
+          "label",
+          "scope",
+          "current",
+          "choices",
+          "settable"
+        ],
+        "title": "ModelChoice",
+        "type": "object"
+      },
       "ModelClassMappingEntry": {
         "properties": {
           "class_id": {
@@ -9659,7 +9451,7 @@
       "OcrModelEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "configured": {
             "default": false,
@@ -10556,7 +10348,8 @@
               "classes",
               "activations",
               "keymap",
-              "prompt_packs"
+              "prompt_packs",
+              "vlm_activation"
             ],
             "items": {
               "type": "string"
@@ -12962,6 +12755,1044 @@
         "title": "RegionProfileValidateRequest",
         "type": "object"
       },
+      "RegionRow": {
+        "description": "A full wire item plus the box the row is about.\n\nKey a row by ``(crop_id, region_box_id)``. The route-specific keys are\npresent only on that route's rows.",
+        "properties": {
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "blur_lap_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blur Lap Ratio"
+          },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_confidence_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vlm",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence Source"
+          },
+          "class_detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector"
+          },
+          "class_detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector Version"
+          },
+          "class_excluded": {
+            "default": false,
+            "title": "Class Excluded",
+            "type": "boolean"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_labeled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeled At"
+          },
+          "class_labeler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeler"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Name"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Source"
+          },
+          "class_validated": {
+            "default": false,
+            "title": "Class Validated",
+            "type": "boolean"
+          },
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Distance"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "cluster_is_core": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Is Core"
+          },
+          "cluster_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "class",
+                  "candidate",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Kind"
+          },
+          "cluster_nearest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Nearest Id"
+          },
+          "cluster_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Similarity"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "crop_area_norm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Area Norm"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "crop_rank_in_image": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Rank In Image"
+          },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
+          "dup_group_id": {
+            "title": "Dup Group Id"
+          },
+          "dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Group Size"
+          },
+          "dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Is Representative"
+          },
+          "excluded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded At"
+          },
+          "excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "default": "",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "default": "",
+            "title": "Image Path",
+            "type": "string"
+          },
+          "import_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Import Ids",
+            "type": "array"
+          },
+          "import_standalone_region": {
+            "default": false,
+            "title": "Import Standalone Region",
+            "type": "boolean"
+          },
+          "imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          },
+          "item_text_lines": {
+            "items": {
+              "$ref": "#/components/schemas/ItemTextLine"
+            },
+            "title": "Item Text Lines",
+            "type": "array"
+          },
+          "label_locked": {
+            "default": false,
+            "title": "Label Locked",
+            "type": "boolean"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Label Source"
+          },
+          "label_validated": {
+            "default": false,
+            "title": "Label Validated",
+            "type": "boolean"
+          },
+          "mistakenness_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Method"
+          },
+          "mistakenness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Score"
+          },
+          "mistakenness_scored_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Scored At"
+          },
+          "mistakenness_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Version"
+          },
+          "nearest_fp_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "suspected_false_positives: the nearest FP sub-type id.",
+            "title": "Nearest Fp Subid"
+          },
+          "needs_new_class": {
+            "default": false,
+            "title": "Needs New Class",
+            "type": "boolean"
+          },
+          "needs_new_class_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class Note"
+          },
+          "on_negative_frame": {
+            "default": false,
+            "title": "On Negative Frame",
+            "type": "boolean"
+          },
+          "probe_actionable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Actionable"
+          },
+          "probe_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Disagreement"
+          },
+          "probe_in_scope": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe In Scope"
+          },
+          "probe_model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Model Version"
+          },
+          "probe_pred_class": {
+            "title": "Probe Pred Class"
+          },
+          "probe_pred_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Class Id"
+          },
+          "probe_pred_entropy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Entropy"
+          },
+          "proposal_chain": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposal Chain",
+            "type": "array"
+          },
+          "proposal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Name"
+          },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
+          },
+          "proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Class Id"
+          },
+          "proposed_class_name": {
+            "default": "",
+            "title": "Proposed Class Name",
+            "type": "string"
+          },
+          "region_auto_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Auto Confirmed"
+          },
+          "region_box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The box this row is about; null for an item-level row (an item selected without a box predicate).",
+            "title": "Region Box Id"
+          },
+          "region_boxes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Region Boxes",
+            "type": "array"
+          },
+          "region_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Class Id"
+          },
+          "region_count": {
+            "default": 0,
+            "title": "Region Count",
+            "type": "integer"
+          },
+          "region_detected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detected At"
+          },
+          "region_detector_chain": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detector Chain"
+          },
+          "region_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Label Source"
+          },
+          "region_max_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Max Score"
+          },
+          "region_pairing": {
+            "title": "Region Pairing"
+          },
+          "region_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile"
+          },
+          "region_profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile Revision"
+          },
+          "region_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Reason"
+          },
+          "region_rejected_count": {
+            "default": 0,
+            "title": "Region Rejected Count",
+            "type": "integer"
+          },
+          "region_rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Rejection Reason"
+          },
+          "region_revision": {
+            "default": 0,
+            "title": "Region Revision",
+            "type": "integer"
+          },
+          "region_set_complete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Set Complete"
+          },
+          "region_skip_verify": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Skip Verify"
+          },
+          "region_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Status"
+          },
+          "region_validated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Validated"
+          },
+          "region_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified"
+          },
+          "region_verified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified At"
+          },
+          "region_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier"
+          },
+          "region_verifier_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier Version"
+          },
+          "region_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Visible"
+          },
+          "review_dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed At"
+          },
+          "selection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "training_candidates: why the row is in the cohort.",
+            "title": "Selection Reason"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_image_path": {
+            "default": "",
+            "title": "Source Image Path",
+            "type": "string"
+          },
+          "suspected_fp_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "suspected_false_positives: distance to the nearest FP sub-centroid.",
+            "title": "Suspected Fp Distance"
+          },
+          "test_holdout": {
+            "default": false,
+            "title": "Test Holdout",
+            "type": "boolean"
+          },
+          "thumbnail_url": {
+            "default": "",
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "uniqueness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uniqueness Score"
+          },
+          "updated_at": {
+            "default": "",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vlm_class_attempted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Attempted At"
+          },
+          "vlm_class_empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Empty Reason"
+          },
+          "vlm_confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Confidence"
+          },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          },
+          "vlm_prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Prompt Pack"
+          },
+          "vlm_proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Id"
+          },
+          "vlm_proposed_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Name"
+          },
+          "vlm_raw_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Raw Class"
+          }
+        },
+        "required": [
+          "id",
+          "crop_id"
+        ],
+        "title": "RegionRow",
+        "type": "object"
+      },
+      "RegionRowPage": {
+        "description": "``GET /regions``, ``/regions/training_candidates`` and\n``/regions/suspected_false_positives``.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegionRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "description": "Items per page (suspected_false_positives: rows).",
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "rows_truncated": {
+            "default": false,
+            "description": "True when an item on this page matched more boxes than the index reports per item (index.max_inner_result_window), so some of its rows are missing; total_rows still counts them.",
+            "title": "Rows Truncated",
+            "type": "boolean"
+          },
+          "total": {
+            "description": "Items matching (page math: hasMore = page * page_size < total). suspected_false_positives pages rows directly, so there total == total_rows.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_rows": {
+            "description": "Rows matching (boxes when the request selects boxes).",
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "total_rows",
+          "page",
+          "page_size"
+        ],
+        "title": "RegionRowPage",
+        "type": "object"
+      },
       "RegionVocabularyResponse": {
         "properties": {
           "chain_actors": {
@@ -14044,10 +14875,32 @@
         "title": "ScoresComputeRequest",
         "type": "object"
       },
+      "SecretRef": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "present",
+          "choice"
+        ],
+        "title": "SecretRef",
+        "type": "object"
+      },
       "SegmenterEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "default_min_score": {
             "anyOf": [
@@ -14238,6 +15091,45 @@
             "title": "Default",
             "type": "boolean"
           },
+          "default_ack_recorded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Ack Recorded"
+          },
+          "endpoint_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ready",
+                  "unprobed",
+                  "probe_failed",
+                  "unreachable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Status"
+          },
+          "endpoint_status_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Status Label"
+          },
           "field_coverage": {
             "anyOf": [
               {
@@ -14268,6 +15160,17 @@
             "title": "Label",
             "type": "string"
           },
+          "per_run_ack_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Run Ack Required"
+          },
           "requires_field": {
             "anyOf": [
               {
@@ -14278,6 +15181,17 @@
               }
             ],
             "title": "Requires Field"
+          },
+          "sends_images_externally": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sends Images Externally"
           },
           "settable": {
             "anyOf": [
@@ -14299,6 +15213,17 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
           }
         },
         "required": [
@@ -14427,7 +15352,7 @@
       "TextReaderModeEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "id": {
             "title": "Id",
@@ -15593,7 +16518,37 @@
               "target_is_source",
               "label_conflicts",
               "holdout_recompute_contamination",
-              "class_mapping_invalid"
+              "class_mapping_invalid",
+              "vlm_name_invalid",
+              "vlm_name_reserved",
+              "vlm_field_range",
+              "vlm_url_invalid",
+              "vlm_url_denied_internal_service",
+              "vlm_url_denied_address",
+              "vlm_api_key_ref_invalid",
+              "vlm_api_key_unresolved",
+              "vlm_api_key_ref_dropped",
+              "vlm_external_not_acknowledged",
+              "vlm_external_denied",
+              "vlm_catalog_id_unknown",
+              "vlm_unreachable",
+              "vlm_timeout",
+              "vlm_auth_failed",
+              "vlm_http_error",
+              "vlm_models_endpoint_missing",
+              "vlm_model_not_listed",
+              "vlm_no_vision",
+              "vlm_vision_answer_wrong",
+              "vlm_json_mode_unsupported",
+              "vlm_max_images_exceeds_server",
+              "vlm_reply_unparseable",
+              "vlm_not_probed",
+              "vlm_probe_failed",
+              "vlm_context_too_small",
+              "vlm_multi_box_unverified",
+              "vlm_reads_text_unverified",
+              "vlm_json_mode_off",
+              "vlm_open_images_clamped"
             ],
             "title": "Code",
             "type": "string"
@@ -15672,6 +16627,44 @@
         "title": "ValidationReport",
         "type": "object"
       },
+      "VlmActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "VlmActivateRequest",
+        "type": "object"
+      },
       "VlmActiveRef": {
         "properties": {
           "name": {
@@ -15703,6 +16696,87 @@
         "title": "VlmActiveRef",
         "type": "object"
       },
+      "VlmActiveResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision"
+        ],
+        "title": "VlmActiveResponse",
+        "type": "object"
+      },
       "VlmBlock": {
         "properties": {
           "active": {
@@ -15721,6 +16795,530 @@
           "endpoints"
         ],
         "title": "VlmBlock",
+        "type": "object"
+      },
+      "VlmCatalogEntry": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+          },
+          "context_max": {
+            "title": "Context Max",
+            "type": "integer"
+          },
+          "desired": {
+            "title": "Desired",
+            "type": "boolean"
+          },
+          "disk_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Gb"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "fits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fits"
+          },
+          "gated": {
+            "title": "Gated",
+            "type": "boolean"
+          },
+          "hf_repo": {
+            "title": "Hf Repo",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "license_url": {
+            "title": "License Url",
+            "type": "string"
+          },
+          "max_images": {
+            "title": "Max Images",
+            "type": "integer"
+          },
+          "max_model_len": {
+            "title": "Max Model Len",
+            "type": "integer"
+          },
+          "multi_box_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multi Box Verified"
+          },
+          "params_b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params B"
+          },
+          "quantization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantization"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "serving": {
+            "title": "Serving",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "tested",
+              "to_verify"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text_reading_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Reading Verified"
+          },
+          "vram_gb": {
+            "title": "Vram Gb",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "choice",
+          "hf_repo",
+          "family",
+          "license",
+          "license_url",
+          "gated",
+          "params_b",
+          "quantization",
+          "context_max",
+          "max_model_len",
+          "max_images",
+          "vram_gb",
+          "disk_gb",
+          "status",
+          "rank",
+          "multi_box_verified",
+          "text_reading_verified",
+          "fits",
+          "serving",
+          "desired"
+        ],
+        "title": "VlmCatalogEntry",
+        "type": "object"
+      },
+      "VlmCatalogLabels": {
+        "properties": {
+          "status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Status",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "VlmCatalogLabels",
+        "type": "object"
+      },
+      "VlmCatalogResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/VlmCatalogEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/VlmCatalogLabels"
+          },
+          "local": {
+            "$ref": "#/components/schemas/VlmLocalStatus"
+          }
+        },
+        "required": [
+          "entries",
+          "local",
+          "labels"
+        ],
+        "title": "VlmCatalogResponse",
+        "type": "object"
+      },
+      "VlmDeactivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "VlmDeactivateRequest",
+        "type": "object"
+      },
+      "VlmEndpointBody": {
+        "additionalProperties": false,
+        "description": "What is stored for an endpoint. The API key itself is never part of\nit: ``api_key_ref`` only names where to find it (W9.9).",
+        "properties": {
+          "allow_external": {
+            "default": false,
+            "title": "Allow External",
+            "type": "boolean"
+          },
+          "api_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Ref"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "json_mode": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ],
+            "title": "Json Mode",
+            "type": "string"
+          },
+          "max_images_per_call": {
+            "default": 8,
+            "title": "Max Images Per Call",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "open_images_per_call": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 3,
+            "title": "Open Images Per Call"
+          },
+          "requests_per_second": {
+            "default": 500.0,
+            "title": "Requests Per Second",
+            "type": "number"
+          },
+          "timeout_s": {
+            "default": 240.0,
+            "title": "Timeout S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "base_url",
+          "model"
+        ],
+        "title": "VlmEndpointBody",
+        "type": "object"
+      },
+      "VlmEndpointCloneRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "VlmEndpointCloneRequest",
+        "type": "object"
+      },
+      "VlmEndpointCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "VlmEndpointCreate",
+        "type": "object"
+      },
+      "VlmEndpointDoc": {
+        "properties": {
+          "active_in": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Active In",
+            "type": "array"
+          },
+          "api_key_present": {
+            "title": "Api Key Present",
+            "type": "boolean"
+          },
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "last_probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmProbeResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "compose",
+                  "host",
+                  "private",
+                  "external",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body",
+          "api_key_present",
+          "locality",
+          "sends_images_externally",
+          "warning"
+        ],
+        "title": "VlmEndpointDoc",
         "type": "object"
       },
       "VlmEndpointEntry": {
@@ -15774,6 +17372,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
           }
         },
         "required": [
@@ -15786,6 +17395,432 @@
           "active"
         ],
         "title": "VlmEndpointEntry",
+        "type": "object"
+      },
+      "VlmEndpointFieldSchema": {
+        "properties": {
+          "advanced": {
+            "default": false,
+            "title": "Advanced",
+            "type": "boolean"
+          },
+          "choices_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "secret_refs",
+                  "vlm_catalog"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices From"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "empty_choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enum": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enum"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "help": {
+            "default": "",
+            "title": "Help",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "int",
+              "float",
+              "bool",
+              "enum"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "group",
+          "type",
+          "default"
+        ],
+        "title": "VlmEndpointFieldSchema",
+        "type": "object"
+      },
+      "VlmEndpointGroup": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "VlmEndpointGroup",
+        "type": "object"
+      },
+      "VlmEndpointLabels": {
+        "properties": {
+          "locality": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Locality",
+            "type": "object"
+          },
+          "source": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source",
+            "type": "object"
+          },
+          "status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Status",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "locality",
+          "source"
+        ],
+        "title": "VlmEndpointLabels",
+        "type": "object"
+      },
+      "VlmEndpointList": {
+        "properties": {
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointSummary"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          },
+          "external_policy": {
+            "enum": [
+              "ack",
+              "deny"
+            ],
+            "title": "External Policy",
+            "type": "string"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/VlmEndpointLabels"
+          },
+          "secret_refs": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRef"
+            },
+            "title": "Secret Refs",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "endpoints",
+          "config_revision",
+          "external_policy",
+          "secret_refs",
+          "labels"
+        ],
+        "title": "VlmEndpointList",
+        "type": "object"
+      },
+      "VlmEndpointSaveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "VlmEndpointSaveRequest",
+        "type": "object"
+      },
+      "VlmEndpointSchema": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields",
+          "groups"
+        ],
+        "title": "VlmEndpointSchema",
+        "type": "object"
+      },
+      "VlmEndpointSummary": {
+        "properties": {
+          "active_in": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Active In",
+            "type": "array"
+          },
+          "api_key_present": {
+            "title": "Api Key Present",
+            "type": "boolean"
+          },
+          "api_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Ref"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "last_probe_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Probe At"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "compose",
+                  "host",
+                  "private",
+                  "external",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "unprobed",
+              "probe_failed",
+              "unreachable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "base_url",
+          "model",
+          "catalog_id",
+          "locality",
+          "sends_images_externally",
+          "warning",
+          "api_key_ref",
+          "api_key_present",
+          "status",
+          "last_probe_at"
+        ],
+        "title": "VlmEndpointSummary",
         "type": "object"
       },
       "VlmLabelBatchRequest": {
@@ -15805,6 +17840,330 @@
           "crop_ids"
         ],
         "title": "VlmLabelBatchRequest",
+        "type": "object"
+      },
+      "VlmLocalDesired": {
+        "properties": {
+          "catalog_id": {
+            "title": "Catalog Id",
+            "type": "string"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          }
+        },
+        "required": [
+          "catalog_id",
+          "requested_at",
+          "command"
+        ],
+        "title": "VlmLocalDesired",
+        "type": "object"
+      },
+      "VlmLocalSelectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_id": {
+            "title": "Catalog Id",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "catalog_id"
+        ],
+        "title": "VlmLocalSelectRequest",
+        "type": "object"
+      },
+      "VlmLocalServed": {
+        "properties": {
+          "catalog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "max_model_len": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Len"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          }
+        },
+        "required": [
+          "model",
+          "root",
+          "catalog_id",
+          "max_model_len"
+        ],
+        "title": "VlmLocalServed",
+        "type": "object"
+      },
+      "VlmLocalStatus": {
+        "properties": {
+          "can_restart_from_api": {
+            "title": "Can Restart From Api",
+            "type": "boolean"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "desired": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmLocalDesired"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "gpu_total_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Total Gb"
+          },
+          "poll_after_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After S"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "restart_required": {
+            "title": "Restart Required",
+            "type": "boolean"
+          },
+          "served": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmLocalServed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "configured",
+          "endpoint",
+          "served",
+          "desired",
+          "restart_required",
+          "poll_after_s",
+          "gpu_total_gb",
+          "can_restart_from_api",
+          "reason"
+        ],
+        "title": "VlmLocalStatus",
+        "type": "object"
+      },
+      "VlmProbeResult": {
+        "properties": {
+          "image_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Tokens"
+          },
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "json_mode_supported": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Mode Supported"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "max_images_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Images Ok"
+          },
+          "max_model_len": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Len"
+          },
+          "model_listed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Listed"
+          },
+          "models_listed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Listed",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "probed_at": {
+            "title": "Probed At",
+            "type": "string"
+          },
+          "reasoning_channel": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Channel"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          },
+          "vision_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision Ok"
+          }
+        },
+        "required": [
+          "ok",
+          "probed_at"
+        ],
+        "title": "VlmProbeResult",
         "type": "object"
       },
       "VlmRegionVisibleBatchItem": {
@@ -15860,6 +18219,156 @@
           "visible"
         ],
         "title": "VlmRegionVisibleBatchResponse",
+        "type": "object"
+      },
+      "VlmRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "VlmRevisionSummary",
+        "type": "object"
+      },
+      "VlmRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/VlmRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "VlmRevisionsResponse",
+        "type": "object"
+      },
+      "VlmRollbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "VlmRollbackRequest",
+        "type": "object"
+      },
+      "VlmValidateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "VlmValidateRequest",
+        "type": "object"
+      },
+      "VlmValidateResponse": {
+        "properties": {
+          "locality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "compose",
+                  "host",
+                  "private",
+                  "external",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmProbeResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "validation",
+          "locality",
+          "sends_images_externally"
+        ],
+        "title": "VlmValidateResponse",
         "type": "object"
       },
       "VlmVerifyRegionBatchItem": {
@@ -15991,7 +18500,7 @@
       "VocabularyDetector": {
         "properties": {
           "filterable": {
-            "description": "True for values that can appear in stored region_detector.",
+            "description": "True for values that can appear as a stored box detector.",
             "title": "Filterable",
             "type": "boolean"
           },
@@ -16159,6 +18668,17 @@
             ],
             "title": "Image Path"
           },
+          "region_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Count"
+          },
           "region_status": {
             "anyOf": [
               {
@@ -16169,17 +18689,6 @@
               }
             ],
             "title": "Region Status"
-          },
-          "region_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text"
           },
           "topic": {
             "anyOf": [
@@ -16475,10 +18984,53 @@
         "title": "RegionProfileSummary",
         "type": "object"
       },
+      "src__routers__curation___vlm_endpoint_models__Choice": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
+      "src__routers__curation__config_vocabulary__Choice": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
       "src__routers__curation__config_vocabulary__RegistryClassEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "class_id": {
             "title": "Class Id",
@@ -19584,64 +22136,9 @@
         ]
       }
     },
-    "/curation/projects/{project}/crops/batch_region": {
-      "put": {
-        "description": "Bulk variant of ``PUT /crops/{crop_id}/region`` (typically\n``region_bbox_norm=null``: \"no region visible on these N crops\").\n\nReturns ``updated``, ``conflicts``, ``invalid`` and ``items`` (the\npost-write wire items of the updated crops).",
-        "operationId": "batch_set_crop_region_curation_projects__project__crops_batch_region_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ItemBatchRegionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Set Crop Region Curation Projects  Project  Crops Batch Region Put",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Batch Set Crop Region",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/crops/batch_regions": {
       "put": {
-        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"), W8a. Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A\n``text`` element on a text-free profile is 422 ``region_text_disabled``.",
+        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"). Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A\n``text`` element on a text-free profile is 422 ``region_text_disabled``.",
         "operationId": "batch_set_crop_regions_curation_projects__project__crops_batch_regions_put",
         "parameters": [
           {
@@ -20488,70 +22985,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/crops/{crop_id}/region": {
-      "put": {
-        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. A box equal to the stored one\n(within float noise) confirms the region: status, verified, validated\nand verifier are written, the detector / version / score / detection\ntime are kept. A different box is human geometry (detector = human,\nscore 1.0). Returns ``item``, the post-write wire item.",
-        "operationId": "set_crop_region_curation_projects__project__crops__crop_id__region_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "crop_id",
-            "required": true,
-            "schema": {
-              "title": "Crop Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ItemRegionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Set Crop Region Curation Projects  Project  Crops  Crop Id  Region Put",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Set Crop Region",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/crops/{crop_id}/region/undo": {
       "post": {
         "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",
@@ -20672,7 +23105,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/region_thumbnail": {
       "get": {
-        "description": "128px JPEG thumbnail of the crop's region-of-interest sub-bbox.\n\nUsed by the region-verification UI in the labeler. Falls back to the\nverifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)\nwhen there is no accepted region box (``RegionFields.bbox_norm``) --\na ``verify_rejected`` item never has the latter, so this route used to\n404 for every one of them even though the item is still reviewable\n404 only when the crop has neither box. The cache\nkey includes the box's own coordinates (``ThumbnailCache.get_or_compute``),\nso a later promotion or re-detection that changes the box never\nserves a stale image -- it's a different cache key.",
+        "description": "128px JPEG thumbnail of one region box of the crop.\n\nUsed by the region-verification UI in the labeler. ``box_id`` names\nthe box (422 ``box_id_required`` without it, 404 ``unknown_box_id``\nfor a box the crop does not hold); any state renders, a rejected box\nincluded, since a rejected box is still reviewable. The cache key\nand the ``ETag`` include the box's own coordinates\n(``ThumbnailCache.get_or_compute``), so a later edit or re-detection\nthat changes the box never serves a stale image; the response is\n``no-cache`` and a matching ``If-None-Match`` gets a 304.",
         "operationId": "crop_region_thumbnail_curation_projects__project__crops__crop_id__region_thumbnail_get",
         "parameters": [
           {
@@ -20691,6 +23124,24 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "The region box to render (required).",
+            "in": "query",
+            "name": "box_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The region box to render (required).",
+              "title": "Box Id"
             }
           },
           {
@@ -20736,7 +23187,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions": {
       "put": {
-        "description": "Set the full per-item box list (W8a).\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3).\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``. A ``text`` element on a text-free profile is 422\n``region_text_disabled``.",
+        "description": "Set the full per-item box list.\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state; a moved box is human\ngeometry, an unmoved one a confirmation), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3);\nan empty list is the human \"no region visible\".\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``. A ``text`` element on a text-free profile is 422\n``region_text_disabled``. An out-of-range or degenerate ``bbox_norm``\nis 422.",
         "operationId": "set_crop_regions_curation_projects__project__crops__crop_id__regions_put",
         "parameters": [
           {
@@ -20800,7 +23251,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions/{box_id}": {
       "patch": {
-        "description": "Per-box state/text patch (W8a) -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently). ``text`` on a\ntext-free profile is 422 ``region_text_disabled``.",
+        "description": "Per-box state/text patch -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently). ``text`` on a\ntext-free profile is 422 ``region_text_disabled``.",
         "operationId": "patch_crop_region_box_curation_projects__project__crops__crop_id__regions__box_id__patch",
         "parameters": [
           {
@@ -23924,6 +26375,36 @@
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -24265,6 +26746,36 @@
               ],
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -26219,7 +28730,7 @@
     },
     "/curation/projects/{project}/regions": {
       "get": {
-        "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling. ``status`` selects one lifecycle status instead of\n\"has a box\" (a rejected or absent region has none).",
+        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``class_id``, ``cluster_id``, ``verified``, ``max_rank``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
         "operationId": "list_regions_curation_projects__project__regions_get",
         "parameters": [
           {
@@ -26271,6 +28782,7 @@
             }
           },
           {
+            "description": "Filter by the ITEM cluster.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -26283,11 +28795,12 @@
                   "type": "null"
                 }
               ],
+              "description": "Filter by the ITEM cluster.",
               "title": "Cluster Id"
             }
           },
           {
-            "description": "Filter by region_cluster_id bucket.",
+            "description": "Box filter: region cluster bucket.",
             "in": "query",
             "name": "region_cluster_id",
             "required": false,
@@ -26300,12 +28813,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by region_cluster_id bucket.",
+              "description": "Box filter: region cluster bucket.",
               "title": "Region Cluster Id"
             }
           },
           {
-            "description": "Filter by AHC region sub-cluster.",
+            "description": "Box filter: AHC sub-cluster.",
             "in": "query",
             "name": "region_cluster_subid",
             "required": false,
@@ -26318,18 +28831,18 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by AHC region sub-cluster.",
+              "description": "Box filter: AHC sub-cluster.",
               "title": "Region Cluster Subid"
             }
           },
           {
-            "description": "Within a bucket, order by region_cluster_subid so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
+            "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
             "in": "query",
             "name": "sort_by_subid",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Within a bucket, order by region_cluster_subid so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
+              "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
               "title": "Sort By Subid",
               "type": "boolean"
             }
@@ -26354,6 +28867,7 @@
             }
           },
           {
+            "description": "Box filter.",
             "in": "query",
             "name": "min_score",
             "required": false,
@@ -26368,10 +28882,12 @@
                   "type": "null"
                 }
               ],
+              "description": "Box filter.",
               "title": "Min Score"
             }
           },
           {
+            "description": "Box filter.",
             "in": "query",
             "name": "max_score",
             "required": false,
@@ -26386,6 +28902,7 @@
                   "type": "null"
                 }
               ],
+              "description": "Box filter.",
               "title": "Max Score"
             }
           },
@@ -26406,7 +28923,7 @@
             }
           },
           {
-            "description": "Filter by region_detector keyword.",
+            "description": "Box filter: the detector that found it.",
             "in": "query",
             "name": "detector",
             "required": false,
@@ -26419,12 +28936,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by region_detector keyword.",
+              "description": "Box filter: the detector that found it.",
               "title": "Detector"
             }
           },
           {
-            "description": "Substring search on region_text.",
+            "description": "Box filter: substring search on the box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -26437,12 +28954,30 @@
                   "type": "null"
                 }
               ],
-              "description": "Substring search on region_text.",
+              "description": "Box filter: substring search on the box text.",
               "title": "Text"
             }
           },
           {
-            "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+            "description": "Box filter: a box state (GET /regions/statuses box_states).",
+            "in": "query",
+            "name": "box_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box filter: a box state (GET /regions/statuses box_states).",
+              "title": "Box State"
+            }
+          },
+          {
+            "description": "Item filter: only items with this region_status (see GET /regions/statuses). Without it, and without a box filter, the rows are the accepted and false_positive boxes; with it every item in that status is listed (e.g. status=verify_rejected lists the verifier-rejected items) -- an item row has region_box_id null unless a box filter selects boxes too.",
             "in": "query",
             "name": "status",
             "required": false,
@@ -26455,7 +28990,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+              "description": "Item filter: only items with this region_status (see GET /regions/statuses). Without it, and without a box filter, the rows are the accepted and false_positive boxes; with it every item in that status is listed (e.g. status=verify_rejected lists the verifier-rejected items) -- an item row has region_box_id null unless a box filter selects boxes too.",
               "title": "Status"
             }
           },
@@ -26475,9 +29010,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Regions Curation Projects  Project  Regions Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionRowPage"
                 }
               }
             },
@@ -26502,7 +29035,7 @@
     },
     "/curation/projects/{project}/regions/batch_box_state": {
       "post": {
-        "description": "One state on many boxes across items (region-gallery triage,\nW8a). Flips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item).",
+        "description": "One state on many boxes across items (region-gallery triage).\nFlips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item). ``items`` are rows: the post-write wire item once\nper targeted box, with that box as ``region_box_id``.",
         "operationId": "batch_set_region_box_state_curation_projects__project__regions_batch_box_state_post",
         "parameters": [
           {
@@ -26557,7 +29090,7 @@
     },
     "/curation/projects/{project}/regions/batch_status": {
       "post": {
-        "description": "Bulk-set region status over many crops — the cluster-view triage op.\n\nApplies the same lifecycle invariants as ``PATCH region_meta``:\n``no_region_visible`` clears the box, ``region_verified`` follows the\nstatus (a request's ``region_verified`` is ignored), ``detected``\nwithout a box lands in ``invalid``. Human edits are terminal\n(``region_validated=True``). Returns ``updated``, ``conflicts``,\n``invalid`` and ``items`` (post-write wire items).",
+        "description": "Bulk-set region status over many crops — the cluster-view triage op.\n\nApplies the same lifecycle invariants as ``PATCH region_meta``:\n``no_region_visible`` clears the box, ``region_verified`` follows the\nstatus (a request's ``region_verified`` is ignored), ``detected``\nwithout a box lands in ``invalid``. Human edits are terminal\n(``region_validated=True``). Returns ``updated``, ``conflicts``,\n``invalid`` and ``items`` (post-write rows: the wire item plus\n``region_box_id: null``, a whole-set write being item-level).",
         "operationId": "batch_set_region_status_curation_projects__project__regions_batch_status_post",
         "parameters": [
           {
@@ -26759,7 +29292,7 @@
     },
     "/curation/projects/{project}/regions/clusters": {
       "get": {
-        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nMost cards are ``candidate`` (regions are one class); the permanent\nfalse-positive bucket is tagged ``cluster_kind='false_positive'`` and\npinned first. Reps are the regions closest to the centroid, shown as\nregion close-up thumbnails.",
+        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nClusters hold *boxes*: a card's ``size`` is the items with at least one\nbox in the cluster, ``box_count`` the boxes (rows) in it -- an item with\ntwo boxes in one cluster is ``size`` 1, ``box_count`` 2. Most cards are\n``candidate`` (regions are one class); the permanent false-positive\nbucket is tagged ``cluster_kind='false_positive'`` and pinned first.\n``representatives`` are rows for the boxes closest to the centroid\n(full wire item + ``region_box_id``), shown as region close-up\nthumbnails.",
         "operationId": "list_region_clusters_curation_projects__project__regions_clusters_get",
         "parameters": [
           {
@@ -26845,7 +29378,7 @@
     },
     "/curation/projects/{project}/regions/clusters/refine/{cluster_id}": {
       "post": {
-        "description": "Per-bucket AHC refine; writes RegionFields.cluster_subid so outliers split out.",
+        "description": "Per-bucket AHC refine over the bucket's boxes; writes each box's\n``cluster_subid`` so outliers split out.",
         "operationId": "refine_region_cluster_endpoint_curation_projects__project__regions_clusters_refine__cluster_id__post",
         "parameters": [
           {
@@ -27034,7 +29567,7 @@
     },
     "/curation/projects/{project}/regions/suspected_false_positives": {
       "get": {
-        "description": "Rank non-FP region crops by similarity to the known FP **sub-centroids**.\n\nEach candidate is matched against every FP sub-type centroid and scored by\nits nearest one (``nearest_fp_subid``), so a crop that resembles only one\nflavour of false positive (e.g. a bumper but not a sticker) is still caught.\nAssists auto-labeling: an operator reviews the nearest matches and\nbulk-confirms via ``POST {api_prefix}/regions/batch_status`` (which routes them into\nthe permanent FP bucket). Requires :func:`build_fp_centroids_endpoint` to\nhave run; otherwise returns an empty result with ``centroids_built=false``.",
+        "description": "Rank non-FP region **boxes** by similarity to the known FP **sub-centroids**.\n\nEach row is one candidate box (``region_box_id``), matched against every\nFP sub-type centroid and scored by its nearest one (``nearest_fp_subid``),\nso a box that resembles only one flavour of false positive (e.g. a\nbumper but not a sticker) is still caught. Assists auto-labeling: an\noperator reviews the nearest matches and flips them with ``POST\n{api_prefix}/regions/batch_box_state`` (``state: false_positive``, which\nparks each box in the permanent FP bucket). Requires\n:func:`build_fp_centroids_endpoint` to have run; otherwise returns an\nempty result with ``centroids_built=false``. Rows are scored in Python,\nso this route pages rows directly: ``total == total_rows`` and\n``page_size`` counts rows.",
         "operationId": "suspected_false_positives_curation_projects__project__regions_suspected_false_positives_get",
         "parameters": [
           {
@@ -27095,9 +29628,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Suspected False Positives Curation Projects  Project  Regions Suspected False Positives Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionRowPage"
                 }
               }
             },
@@ -27122,7 +29653,7 @@
     },
     "/curation/projects/{project}/regions/training_candidates": {
       "get": {
-        "description": "Return regions filtered for the next training cycle.\n\nPowers the /train cockpit's Training-cohort picker. ``mode`` selects\na curated slice of the items index (see :func:`_training_candidate_query`).",
+        "description": "Return regions filtered for the next training cycle.\n\nPowers the /train cockpit's Training-cohort picker. ``mode`` selects\na curated slice of the items index (see :func:`_training_candidate_query`):\nthe box-predicate modes return one row per matching box, the\nitem-predicate modes one row per item (``region_box_id: null``). Every\nrow carries ``selection_reason``.",
         "operationId": "training_candidates_curation_projects__project__regions_training_candidates_get",
         "parameters": [
           {
@@ -27190,9 +29721,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Training Candidates Curation Projects  Project  Regions Training Candidates Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionRowPage"
                 }
               }
             },
@@ -27217,7 +29746,7 @@
     },
     "/curation/projects/{project}/regions/vocabulary": {
       "get": {
-        "description": "The deployment-configured detector/segmenter/verifier vocabulary.\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
+        "description": "The deployment-configured detector/segmenter/verifier vocabulary.\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / the VLM endpoint registry --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
         "operationId": "regions_vocabulary_curation_projects__project__regions_vocabulary_get",
         "parameters": [
           {
@@ -27819,7 +30348,7 @@
             }
           },
           {
-            "description": "Regions tab only: case-insensitive substring search on region_text.",
+            "description": "Regions tab only: case-insensitive substring search on any box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -27832,7 +30361,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions tab only: case-insensitive substring search on region_text.",
+              "description": "Regions tab only: case-insensitive substring search on any box text.",
               "title": "Text"
             }
           },
@@ -28119,7 +30648,7 @@
             }
           },
           {
-            "description": "Regions tab only: case-insensitive substring search on region_text.",
+            "description": "Regions tab only: case-insensitive substring search on any box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -28132,7 +30661,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions tab only: case-insensitive substring search on region_text.",
+              "description": "Regions tab only: case-insensitive substring search on any box text.",
               "title": "Text"
             }
           },
@@ -30581,6 +33110,221 @@
         ]
       }
     },
+    "/curation/projects/{project}/vlm/endpoints/active": {
+      "get": {
+        "description": "This project's active VLM endpoint (``active.name: null`` = off).",
+        "operationId": "get_active_vlm_curation_projects__project__vlm_endpoints_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Vlm",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/endpoints/active/rollback": {
+      "post": {
+        "description": "Re-activate the previous endpoint through the same gate.",
+        "operationId": "rollback_active_vlm_curation_projects__project__vlm_endpoints_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Vlm",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/endpoints/deactivate": {
+      "post": {
+        "description": "VLM off for this project.",
+        "operationId": "deactivate_active_vlm_curation_projects__project__vlm_endpoints_deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate Active Vlm",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/endpoints/{name}/activate": {
+      "post": {
+        "description": "Activate ``name`` (at ``revision``, else its latest) for this project.\nAn endpoint outside this deployment needs ``acknowledge_external``.",
+        "operationId": "activate_vlm_endpoint_curation_projects__project__vlm_endpoints__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Vlm Endpoint",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
     "/curation/projects/{project}/vlm/label_batch": {
       "post": {
         "description": "Send up to 64 crops to the VLM — chunked at ``max_images_per_call``.",
@@ -30593,6 +33337,36 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -30676,6 +33450,36 @@
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -30720,6 +33524,36 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -30774,6 +33608,36 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -30816,7 +33680,7 @@
     },
     "/curation/projects/{project}/vlm/verify_regions": {
       "post": {
-        "description": "Verify whether each crop's region-of-interest contains a real region.\n\nA crop the VLM gave no usable answer for (upstream failure, empty or\nunparseable reply) is skipped entirely -- its verify state is left\nuntouched for a later retry rather than written as ``verified=False``,\na verdict the VLM never actually gave.",
+        "description": "Verify, box by box, whether each crop's regions contain a real region.\n\nOne region crop is sent per stored box still open to a machine verdict\n(``proposed`` or ``accepted``, never a human- or import-owned box);\neach verdict lands on its own box and the item status is re-derived\n(:func:`~src.services.curation.region_verify.verify_regions_update`).\nA box the VLM gave no usable answer for (upstream failure, empty or\nunparseable reply) is skipped entirely -- its state is left untouched\nfor a later retry rather than written as rejected, a verdict the VLM\nnever actually gave. ``verified`` counts the VLM verdicts obtained.",
         "operationId": "vlm_verify_regions_curation_projects__project__vlm_verify_regions_post",
         "parameters": [
           {
@@ -30826,6 +33690,36 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -30866,6 +33760,889 @@
         "summary": "Vlm Verify Regions",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/vlm/catalog": {
+      "get": {
+        "description": "The local catalog with ``fits`` / ``serving`` / ``desired`` per entry.",
+        "operationId": "get_vlm_catalog_curation_vlm_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmCatalogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Get Vlm Catalog",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints": {
+      "get": {
+        "description": "Every endpoint (the ``env`` built-in first), where each is in use,\nthe external-images policy and the secret references present.",
+        "operationId": "list_vlm_endpoints_curation_vlm_endpoints_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "List Vlm Endpoints",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "post": {
+        "operationId": "create_vlm_endpoint_curation_vlm_endpoints_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmEndpointCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/schema": {
+      "get": {
+        "description": "Field specs for the endpoint form.",
+        "operationId": "vlm_endpoint_form_schema_curation_vlm_endpoints_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Vlm Endpoint Form Schema",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/validate": {
+      "post": {
+        "description": "Validate a draft; never writes (except the probe record of an\nexisting ``name``, when ``probe=true``). Always 200: the report says what\nis wrong.",
+        "operationId": "validate_vlm_draft_curation_vlm_endpoints_validate_post",
+        "parameters": [
+          {
+            "description": "Also test the endpoint (synthetic images).",
+            "in": "query",
+            "name": "probe",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also test the endpoint (synthetic images).",
+              "title": "Probe",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Vlm Draft",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}": {
+      "delete": {
+        "description": "409 ``in_use`` while any project runs it (read live, so an unreadable\nproject blocks the delete rather than being skipped).",
+        "operationId": "delete_vlm_endpoint_curation_vlm_endpoints__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "get": {
+        "operationId": "get_vlm_endpoint_doc_curation_vlm_endpoints__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Vlm Endpoint Doc",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "put": {
+        "description": "A new revision. Does not change what any project runs until it is\nactivated there.",
+        "operationId": "update_vlm_endpoint_curation_vlm_endpoints__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmEndpointSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/clone": {
+      "post": {
+        "operationId": "clone_vlm_endpoint_curation_vlm_endpoints__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmEndpointCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/probe": {
+      "post": {
+        "description": "Test the saved endpoint with synthetic images and record the result\n(it also picks up a rotated key file). Never bumps the endpoint's\nrevision; bumps the config revision so every process and worker sees\nthe new ``json_mode`` / model facts.",
+        "operationId": "probe_vlm_endpoint_curation_vlm_endpoints__name__probe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmProbeResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/revisions": {
+      "get": {
+        "operationId": "list_vlm_endpoint_revisions_curation_vlm_endpoints__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Vlm Endpoint Revisions",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_vlm_endpoint_revision_curation_vlm_endpoints__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Vlm Endpoint Revision",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/local": {
+      "get": {
+        "operationId": "get_local_vlm_curation_vlm_local_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmLocalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Get Local Vlm",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/local/select": {
+      "delete": {
+        "description": "Clear the desired local model.",
+        "operationId": "clear_local_vlm_selection_curation_vlm_local_select_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmLocalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Clear Local Vlm Selection",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "post": {
+        "description": "Record the desired local model (202): the host applies it with\n``openprocessor vlm use <id>`` (``restart_required`` says so).",
+        "operationId": "select_local_vlm_curation_vlm_local_select_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmLocalSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmLocalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Local Vlm",
+        "tags": [
+          "Projects",
+          "VLM"
         ]
       }
     }

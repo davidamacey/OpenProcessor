@@ -395,6 +395,13 @@ def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
         assert not (writes & forbidden)
 
 
+def _coverage_search_count(client: TestClient) -> int:
+    """Coverage queries only: the config-store refreshes the route also does
+    (the VLM endpoint registry) search the configs indexes, not the pool."""
+    calls = client.fake_os.search.call_args_list  # type: ignore[attr-defined]
+    return sum(1 for c in calls if 'aggs' in (c.kwargs.get('body') or {}))
+
+
 def _fake_field_counts(*, total: int, per_field: dict[str, int] | None = None, default: int = 5):
     """Build an ``AsyncMock`` side_effect for the one-``_search``-per-field
     coverage query: ``size:0``/``track_total_hits:true`` for the
@@ -495,7 +502,7 @@ def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
     r1 = app_client.get('/curation/projects/default/methods')
     assert r1.status_code == 200
     n_entries = len(r1.json()['strategies'])
-    first_call_count = app_client.fake_os.search.call_count  # type: ignore[attr-defined]
+    first_call_count = _coverage_search_count(app_client)
     assert first_call_count == 1, (
         f'{first_call_count} queries for {n_entries} entries -- expected exactly one '
         '_search covering every distinct field via filter aggs'
@@ -503,7 +510,7 @@ def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
 
     r2 = app_client.get('/curation/projects/default/methods')
     assert r2.status_code == 200
-    assert app_client.fake_os.search.call_count == first_call_count, (  # type: ignore[attr-defined]
+    assert _coverage_search_count(app_client) == first_call_count, (
         'a second request inside the TTL window must be served from cache'
     )
 

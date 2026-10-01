@@ -62,7 +62,7 @@ def app_client(fake_opensearch: AsyncMock) -> Any:
 # active region profile.
 _GATED_ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ('get', '/curation/projects/default/regions', None),
-    ('put', '/curation/projects/default/crops/crop1/region', {'region_bbox_norm': None}),
+    ('put', '/curation/projects/default/crops/crop1/regions', {'boxes': []}),
     (
         'patch',
         '/curation/projects/default/crops/crop1/region_meta',
@@ -70,8 +70,8 @@ _GATED_ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ),
     (
         'put',
-        '/curation/projects/default/crops/batch_region',
-        {'crop_ids': ['crop1'], 'region_bbox_norm': None},
+        '/curation/projects/default/crops/batch_regions',
+        {'crop_ids': ['crop1'], 'boxes': []},
     ),
     (
         'post',

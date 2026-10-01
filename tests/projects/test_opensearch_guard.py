@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from datetime import UTC, datetime
 
 import pytest
@@ -10,13 +11,14 @@ import pytest
 from src.config.curation import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.config_store.store import global_configs_index
+from src.services.config_store.global_store import global_configs_index
 from src.services.projects.guard import (
     CrossProjectAccess,
     ProjectGuardedTransport,
     ProjectReadOnly,
     check_request,
     cross_project_access_count,
+    global_configs_read,
 )
 
 
@@ -89,6 +91,76 @@ def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
     check_request('PUT', f'/{index}/_doc/pack:local_vlm', {'a': 1}, snapshot)
     with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
         check_request('GET', f'/{index}/_doc/pack:local_vlm', None, snapshot)
+
+
+def test_a_bound_project_reads_the_global_registry_only_inside_the_config_store_block(
+    snapshot,
+) -> None:
+    """W9: a project-bound request resolves the deployment-wide VLM endpoints
+    through the config store, which enters ``global_configs_read`` for its own
+    reads. Outside that block the same read is still refused."""
+    index = global_configs_index()
+    with bind_project(snapshot['alpha']):
+        with pytest.raises(CrossProjectAccess):
+            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
+        with global_configs_read():
+            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
+            check_request('POST', f'/{index}/_search', {'query': {'match_all': {}}}, snapshot)
+        with pytest.raises(CrossProjectAccess):  # the allowance ended with the block
+            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
+
+
+@pytest.mark.parametrize('method', ['PUT', 'POST', 'DELETE'])
+def test_the_read_allowance_never_covers_a_write_to_the_global_registry(
+    snapshot, method: str
+) -> None:
+    index = global_configs_index()
+    with bind_project(snapshot['alpha']), global_configs_read():
+        with pytest.raises(CrossProjectAccess):
+            check_request(method, f'/{index}/_doc/vlm:x', {'a': 1}, snapshot)
+        with pytest.raises(CrossProjectAccess):
+            check_request('POST', f'/{index}/_update/vlm:x', {'doc': {'a': 1}}, snapshot)
+
+
+def test_the_read_allowance_opens_no_other_index(snapshot) -> None:
+    with bind_project(snapshot['alpha']), global_configs_read():
+        with pytest.raises(CrossProjectAccess):
+            check_request('GET', '/op_prj_beta__items/_doc/x', None, snapshot)
+        with pytest.raises(CrossProjectAccess):
+            check_request('GET', '/visual_search_global/_doc/x', None, snapshot)
+        with pytest.raises(CrossProjectAccess):
+            check_request('GET', '/_all/_search', None, snapshot)
+        with pytest.raises(CrossProjectAccess):
+            check_request(
+                'GET', f'/{global_configs_index()},op_prj_beta__items/_search', None, snapshot
+            )
+
+
+def test_the_read_allowance_does_not_leak_into_the_next_request(snapshot) -> None:
+    index = global_configs_index()
+    with bind_project(snapshot['alpha']):
+        with global_configs_read():
+            pass
+        with pytest.raises(CrossProjectAccess):
+            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
+
+
+def test_the_allowance_is_per_context_so_a_concurrent_task_never_inherits_it(snapshot) -> None:
+    index = global_configs_index()
+
+    async def other_task() -> None:
+        with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
+
+    async def main() -> None:
+        with global_configs_read():
+            # a task started elsewhere runs in its own copy of the context
+            # only if it was created outside the block
+            await asyncio.get_running_loop().create_task(
+                other_task(), context=contextvars.Context()
+            )
+
+    asyncio.run(main())
 
 
 def test_unbound_plus_project_index_raises_not_bound(snapshot) -> None:

@@ -14,6 +14,11 @@ instead, landing with the second commit.
 from __future__ import annotations
 
 from src.config import get_region_fields
+from src.services.labeling.region_overlay import (
+    REPLY_BBOX_CORRECT_KEY,
+    REPLY_CONFIDENCE_KEY,
+    REPLY_TEXT_KEY,
+)
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
 
@@ -74,6 +79,6 @@ def test_generic_item_pack_wire_keys_match_region_fields_defaults() -> None:
         GENERIC_ITEM_PACK.combined_batch_system,
     ):
         assert fields.visible in prompt_text
-        assert fields.bbox_correct in prompt_text
-        assert fields.text in prompt_text
-        assert fields.confidence in prompt_text
+        assert REPLY_BBOX_CORRECT_KEY in prompt_text
+        assert REPLY_TEXT_KEY in prompt_text
+        assert REPLY_CONFIDENCE_KEY in prompt_text

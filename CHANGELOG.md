@@ -57,6 +57,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Not changed: `images_already_indexed`, the `near_duplicate_pairs_estimate`
     stub, sequential detector calls in `propose`, the read-time export-root
     check in `image_load.stored_path`, and pruning of combine job dirs.
+- **W8-cleanup items 3-6 review fixes.**
+  - **Breaking (response keys):** every region clustering count names its
+    unit. `POST /regions/cluster` job result: `n_regions` -> `n_boxes`,
+    `assigned` -> `n_boxes_changed` (boxes whose cluster changed; `0` on a
+    re-run over unchanged data) plus `n_items_written`. Refine
+    (`POST /regions/clusters/refine/{id}` -> `n_boxes`, `n_boxes_updated`;
+    `POST /clusters/refine/{id}` -> `n_items`, `n_items_updated`; was
+    `n_members` / `n_updated`, which counted boxes and items respectively
+    under the same names). FP centroid build: `n_members` -> `n_boxes` (also in
+    the persisted centroid metadata and `GET /regions/fp_centroids/status`);
+    auto FP pull: `n_scanned` / `n_moved` -> `n_boxes_scanned` /
+    `n_boxes_moved`. `write_box_edits` reports `items_*` / `boxes_changed`, and
+    its `unchanged` tally no longer double counts conflict retries.
+  - `GET /regions*` pages carry `rows_truncated` (an item matched more boxes
+    than `index.max_inner_result_window`, so some of its rows are missing).
+  - Cluster-only box writes (partition, refine, FP sub-typing) no longer
+    advance `region_revision`, so a recluster no longer 409s an open editor;
+    any write that changes a box's state, geometry or text still does.
+  - `GET /crops/{id}/region_thumbnail` is `no-cache` with an `ETag` (a moved
+    box is no longer shown from a one-hour public cache; an unmoved one is a
+    304).
+  - A human move or delete of a box (`PUT .../regions`, `PUT
+    /crops/batch_regions`) and `requeue --clear-detection` prune that box's
+    `region_box_embeddings` entry immediately; a stale (moved-box) entry is
+    now dropped by every embedding write too.
+  - A whole-set confirm that no box can satisfy answers an actionable 422
+    (`no_accepted_box: ... accept ... one by one with PATCH
+    /crops/{crop_id}/regions/{box_id}`) instead of the bare code.
+  - Live harness: seeded `region_box_embeddings` entries carry `bbox_norm`
+    (built with the production `entry_for`), so the live clustering and FP
+    scenarios no longer see every vector as stale; the live region tests send
+    `region_label_source` (the request models forbid `label_source`) and
+    un-mark a false-positive item per box.
+  - Docs: dropped the deleted `OP_REGION_FIELD_BBOX_NORM` override and the
+    removed `region_text` meta field.
+- **W8-cleanup Items 4-6 fixes** (also the open minors from the Items 1-2
+  review):
+  - `GET /regions`: every box filter (`detector`, `min_score`,
+    `max_score`, `text`, `region_cluster_id`, `region_cluster_subid`,
+    `box_state`) now applies to the SAME box in one nested clause
+    (`m2`; before, each was its own nested query, so `detector=a` AND
+    `min_score=0.8` matched an item whose a-box scored 0.5 and whose
+    b-box scored 0.9).
+  - `region_eval` scores a rejected box whose reason is `sanity_reject:*`
+    as `detection_failed`, not `verify_rejected` (`m3`).
+  - A refine, FP sub-typing or auto FP pull can no longer overwrite a box
+    a human moved, re-stated or locked while the model was fitting: every
+    cluster write is an OCC merge over the live box list, re-merged on a
+    version conflict (up to 3 attempts) instead of dropped.
+  - `GET /crops/{id}/region_thumbnail` requires `?box_id=`
+    (`422 box_id_required`, `404 unknown_box_id`); it no longer serves "the"
+    item region.
+  - `/vlm/verify_regions` verifies every open (proposed/accepted, not
+    human-owned) box and writes each verdict onto its own box (it used to
+    read one item-level box); a verdict is dropped when its box moved or was
+    locked while the VLM call was in flight.
+  - `occ_skip_on_conflict_bulk` returns `skipped_ids` next to
+    `skipped_due_to_conflict`.
+  - `ensure_items_inner_result_window` reads `GET /{index}/_settings` (the
+    project guard allowlists that shape only).
+- **W8-cleanup Item 3: bugs the PUT-region test migration surfaced in the
+  box routes** (`region_box_edits.py`, new; shared by every human box
+  writer): a parent-frame box on `PUT /crops/{id}/regions` was projected
+  through the item's region box instead of the item crop's own
+  `bbox_norm`; a moved box kept the machine's detector/score instead of
+  becoming human geometry (and an unmoved one, within float noise, now
+  keeps its stored coordinates and provenance); a human "no region
+  visible" (`boxes: []`) wrote the pipeline status `no_region_box`
+  instead of `no_region_visible`; bbox range/degenerate validation, a
+  required `bbox_norm` on a new box and duplicate `box_id` are now 422s;
+  a box moved into / out of `false_positive` is parked in / released from
+  the FP cluster per box on every writer, and any state change clears a
+  stale per-box `rejection_reason` (review minor m5); `POST
+  /crops/{id}/region/undo` now bumps `region_revision` (a stale
+  `expected_region_revision` across an undo is a 409); the request bodies
+  are `extra='forbid'` and carry `region_label_source`.
+- **W9 review fixes (VLM model selection).**
+  - A probe is stored per `name@revision`: probing a new revision no longer
+    erases the running revision's probe (which flipped its JSON mode and
+    provenance stamps), and rolling back to the previous revision of the same
+    endpoint works. The worker's rebuild marker reads the same key.
+  - `POST /vlm/endpoints/validate?probe=true` and `.../{name}/probe` refuse to
+    contact (or resolve a key for) an endpoint outside the deployment that has
+    no `allow_external`, one denied by `OP_VLM_EXTERNAL_POLICY`, or a body
+    with an out-of-range field (a huge `max_images_per_call` built the
+    request on the event loop); the probe also clamps the cap itself. A draft
+    named `env` with the `env:` key reference is a validation error, not a
+    500, and a draft's probe is recorded only for the revision it equals.
+  - A credential in `OP_VLM_URL` is dropped when the `env` endpoint is built,
+    so no route, log line or labeler sees it (use `OP_VLM_API_KEY`).
+  - Profile validation asks the endpoint registry whether a VLM is
+    configured, not `OP_VLM_URL`.
+  - Every labeler re-checks its endpoint (never-allowed addresses,
+    `OP_VLM_EXTERNAL_POLICY`, `allow_external`) when built and before sending,
+    at most every 30 s, and fails closed; this covers the worker's long-lived
+    labeler and cached ones. The connection itself is still not pinned to the
+    checked address (`SECURITY.md`).
+  - URL policy: 6to4 (`2002:...`) addresses are judged by the IPv4 address
+    they carry, and host names are NFKC-folded (full-width names).
+  - Tests: `tests/test_compose_contract.py` is restored to its 41 contract
+    tests plus the vlm argv tests (the VLM change had replaced the file);
+    new tests cover the per-run acknowledgement and the clone refusal, which
+    no test failed without.
+  - Docs: "Choosing a VLM" in `docs/CURATION.md`, the VLM routes in
+    `docs/design/curation_api_contract.md`, the catalog in `ATTRIBUTION.md`.
 - **W10 dataset-import foundation fix pass (post-review).** An
   independent review of the W10 foundation slice below found 4 majors;
   all fixed before any route is wired to `import_dataset()`:
@@ -295,22 +400,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against these eight files regressing back to the scalars just removed
   from each.
 
-  **Not done this pass (W8-cleanup Item 3, deliberately deferred):**
-  `PUT /crops/{id}/region` / `PUT /crops/batch_region` and
-  `region_writes.py`'s single-box write chain (`region_box_write`,
-  `region_box_doc`, `region_confirm_doc`, `same_box`,
-  `candidate_promotion`, `human_status_fields`) are still live — deleting
-  them needs ~5 test files' PUT-region coverage (same-box confirm,
-  candidate-promotion reversal, parent-frame projection, degenerate-bbox
-  validation, undo) migrated to the W8a box routes first, which did not
-  fit this pass without rushing it. `wire.py`'s legacy per-item mirror
-  fields and two confirmed-dead pre-W8 write builders in
-  `scripts/curation/worker/verify.py` (`_region_write_doc`,
-  `_region_reject_doc` — zero call sites) / `no_verdict.py`
-  (`cascade_no_verdict` → `no_verdict_reject_doc` → `candidate_reject_doc`
-  — zero call sites) were left in place; see the handback report.
+  (The deletions this entry deferred, and the legacy mirror fields, landed in
+  the Items 3-6 entries below.)
 
 ### Added
+- **W8-cleanup Items 5-6: per-box embeddings, clustering and FP, and row
+  shapes** (`docs/design/openprocessor_internal/any_domain_plan.md`
+  W8.10 / W8.12):
+  - `region_box_embeddings` (nested sibling of `region_boxes`):
+    `[{box_id, bbox_norm, embedding}]`, one PE vector per accepted or
+    `false_positive` box; `bbox_norm` is the geometry the vector was
+    computed from, so a box a human moved is recognised as stale and
+    re-embedded. Written only by the worker embed stage (after the bulk
+    write, keyed to the final box ids) and `scripts/curation/
+    backfill_region_embeddings.py` (every missing box; resumable), through
+    `write_box_embeddings` (OCC; never touches the box list or revision).
+  - Region clustering is over boxes (`clustering/region_box_rows.py`,
+    `region_box_clustering.py`, `region_cluster_jobs.py`):
+    `cluster_id` / `cluster_subid` / `cluster_distance` live on each box;
+    the KMeans partition reads accepted boxes, `build_region_fp_centroids`
+    is fed by false-positive boxes only, `auto_assign_fp_from_centroids`
+    flips matching boxes to `false_positive` and re-derives the item
+    status (a sibling accepted box keeps the item `detected`). The AHC
+    core is shared with item refine (`refine_members`). The guard on
+    automated writers is one definition (`human_final_clauses`): a
+    human-final item (human label source / verifier, or validated) or a
+    locked box is never touched. Deviation from the plan: these writes are
+    Python OCC mergers over `boxes_write_fields`, not painless scripts, so
+    one `derive_status` stays the only status implementation.
+  - `ensure_items_region_boxes_fields` (one `_region_boxes_mapping()` behind
+    both the index body and the ensure step) and
+    `ensure_items_inner_result_window` (raises
+    `index.max_inner_result_window` to `limits.max_boxes_per_write`, never
+    lowers it).
+  - Row shapes (`region_rows.py`, `RegionRowPage`): `GET /regions`,
+    `/regions/training_candidates`, `/regions/suspected_false_positives`,
+    the representatives of `GET /regions/clusters` and the items of the
+    batch routes are rows — the full wire item plus `region_box_id` (`null`
+    for an item-level row). A box-selecting request is one row per matching
+    box (matched boxes are asked of OpenSearch via nested `inner_hits`);
+    `total` counts items, new `total_rows` counts rows. `GET /regions`
+    gains the `box_state` filter; cluster cards gain `size` (items),
+    `box_count` (boxes), `representatives` and `representative_box_ids`;
+    `POST /regions/batch_box_state` returns one row per targeted box.
+    The training modes `detector_blind_spots`, `low_conf_correct` and
+    `false_positives` are per box; `disagreement` and `human_corrected`
+    per item. The suspected-FP route scores and pages boxes.
+  - The review `regions` tab gains the `has_rejected_box` option
+    (`region_rejected_count >= 1`, whatever the item status); `verify_rejected`
+    is relabelled "Items with only rejected boxes".
+  - Export: the region stratum key is the first accepted (positive) or
+    `false_positive` (hard negative) box's cluster.
+
+- **W9 VLM model selection: a registry of VLM endpoints, a per-project `vlm`
+  axis, a local model catalog, and one place every model choice is served.**
+  See `docs/design/openprocessor_internal/any_domain_plan.md` W9.
+  - **Endpoint registry** (deployment-wide, stored in `op_global_configs`,
+    never per project): `GET/POST /curation/vlm/endpoints`,
+    `GET /vlm/endpoints/schema`, `POST /vlm/endpoints/validate`,
+    `GET/PUT/DELETE /vlm/endpoints/{name}`, `.../revisions[/{revision}]`,
+    `POST .../{name}/clone`, `POST .../{name}/probe`. Every save is a new
+    immutable revision (numbers are never reused); a probe (synthetic
+    images only) records the served model root, context length, image
+    cost, image cap and JSON-mode support, and belongs to the revision and
+    body it tested. The `env` built-in (`OP_VLM_URL`/`OP_VLM_MODEL`) is listed
+    first, read-only.
+  - **Activation per project** (`/curation/projects/{project}/vlm/endpoints/
+    active`, `.../{name}/activate`, `.../active/rollback`, `.../deactivate`),
+    `PUT /settings` `defaults.vlm`, and a per-run `?vlm=`
+    (+ `acknowledge_external`) on `/vlm/label_batch`, `/vlm/verify_regions`,
+    `/vlm/verify_region_batch`, `/vlm/region_visible_batch`,
+    `/vlm/label_cluster/{cluster_id}`, `/pipeline/auto_label` and
+    `/pipeline/auto_label/start`. All of them go through ONE gate
+    (`enforce_vlm_gate`); `tests/curation/test_vlm_selection_paths.py`
+    walks each with an input that must be refused. `/start` pins the
+    resolved `(name, revision)` into the job.
+  - **Hot switch**: the detection worker follows a project's VLM at its
+    quiesce points (queues drained) from one pinned registry store shared by
+    every project; an activation, a re-probe or a rollback swaps the
+    labeler, a new revision of the active endpoint changes nothing until it
+    is activated.
+  - **Safety**: URL policy (`vlm_url_policy`) refuses this stack's own
+    services, link-local / metadata / unspecified addresses in any notation,
+    for the literal host and every resolved address; keys are references
+    only (`secret:<slug>` files under `./secrets/vlm`, written by
+    `openprocessor vlm key set <slug>`), never stored, served or logged;
+    no client to an endpoint follows a redirect; an endpoint outside this
+    deployment needs an acknowledgement (`OP_VLM_EXTERNAL_POLICY=deny`
+    refuses them outright) that is recorded per `name@revision`.
+  - **Pairing** (`vlm_pairing_issues`): context-size estimate per labeler
+    call, the server's own image cap, multi-box and text-reading
+    verification, JSON mode; it runs on VLM activation, pack activation,
+    profile activation, per-run selection, and a combined `PUT /settings`
+    pairs with what the request will change (not what it replaces).
+  - **Local model catalog** `examples/vlm/catalog.tsv`, read by the
+    installer/CLI's bash and by `src/services/labeling/vlm_catalog.py`;
+    `GET /curation/vlm/catalog`, `GET /vlm/local`,
+    `POST /vlm/local/select` (records the DESIRED model; the API never
+    restarts vLLM), `DELETE /vlm/local/select`; and the host CLI
+    `openprocessor vlm status|use <id> [--force] [--yes]|apply|probe`
+    (fit check, training-lock and pause handling, `.env` rewrite with
+    restore on failure, wait for the new model, probe, unpause).
+  - `GET /config/vocabulary` serves a `model_choices` table
+    (`src/services/curation/model_choices.py`) and its `vlm` block comes
+    from the registry; `GET /methods` gains a `vlm` axis with each
+    endpoint's status, locality and acknowledgement flags;
+    `GET /regions/vocabulary` offers every endpoint's resolved model as a
+    verifier.
+  - Items gain `vlm_endpoint` and `vlm_model` (which endpoint and resolved
+    model answered), stamped per task at call time; `vlm_prompt_pack` is
+    now on the item wire.
+  - `clone_settings` gains the `vlm_activation` axis (an acknowledgement is
+    never copied); global SSE event `vlm.changed`.
+  - Compose: the `vlm` service is parameterised by `VLM_*` (defaults
+    reproduce the previous command argument for argument);
+    `yolo-api`, the detection worker and the auto-label worker mount
+    `./secrets/vlm` read-only; `SECURITY.md` records the SSRF residual risk.
 - **W10.11 reconcile.** Importing a different dataset version over images an
   earlier import labeled removes the earlier import's items the new version no
   longer has, unless a human or a holdout freeze touched them, a box the
@@ -408,6 +613,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     busy-inventory hook) reports a project's live import.
 
 ### Changed
+- **W9 (wire changes; see the Cropwright delta list).** `region_verifier`,
+  `text_engine_version` and the class `detector`/`labeler` provenance now
+  record the resolved model of the endpoint that ran (the probe's model
+  root), not the process's `OP_VLM_MODEL`. `GET /models/status` VLM rows are
+  one per registered endpoint with `kind: "vlm"` (was `external`), named by
+  endpoint, with `active` and `active_in` (the bound project only; other
+  projects' use is on `GET /vlm/endpoints`). The `vlm` compose service
+  starts through a shell entrypoint so one file serves every catalog model.
+  `POST /pipeline/auto_label` now also refuses a bad `?vlm=` when no VLM
+  stage runs, as `/start` does. `GET /health` and `/curation/health` report
+  the active endpoint.
 - `DetectedItem` (`item_doc.py`) gains an optional `label: ItemLabel`
   field; `build_item_doc()` applies `class_label_fields(item.label)` on
   top of the detector-class defaults when set (`None` is a no-op for
@@ -419,6 +635,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `nc == max + 1` is accepted.
 
 ### Removed
+- **W8-cleanup Items 4-6 (breaking, no back-compat): every item-level
+  per-box region scalar is gone** — from `RegionFields` (`bbox_norm`,
+  `bbox_frame`, `bbox_correct`, `score`, `confidence`, `source`, `detector`,
+  `detector_version`, `text*`, `candidate_*`, `embedding`, `cluster_id`,
+  `cluster_subid`, `cluster_distance`, `*_legacy` bbox/score), from the
+  items mapping, from `boxes_write_fields` (it no longer mirrors the
+  representative box onto the item; the item-level `rejection_reason`
+  mirror stays, only for an item with no accepted or false-positive box),
+  and from the wire: `region_bbox_norm`, `region_bbox_frame`,
+  `region_bbox_correct`, `region_score`, `region_confidence`,
+  `region_detector`, `region_detector_version`, `region_source`,
+  `region_text` / `region_text_raw` / `region_text_confidence` /
+  `region_text_source` / `region_text_engine_version` / `region_text_vlm` /
+  `region_text_ocr` / `region_text_disagreement` / `region_text_choice` /
+  `region_text_vlm_invalid`, `region_candidate_*`, `region_cluster_id` /
+  `region_cluster_subid` / `region_cluster_distance`,
+  `region_bbox_in_parent`, `region_candidate_bbox_in_parent` and the
+  item-level `region_thumbnail_url` (88 item keys now). Nothing in this
+  repository reads them: the data is an element of `region_boxes[]`
+  (`bbox_in_parent`, `thumbnail_url` per box). The `crop.region_verified`
+  event carries `region_count` instead of `region_text`. The worker no longer
+  mirrors a candidate onto the item, and its legacy detector fallback is
+  gone.
+- The legacy repair tools `region_provenance_restore` /
+  `scripts/curation/restore_region_provenance.py`, `region_validation_repair`
+  / `scripts/curation/repair_region_validation.py` and
+  `cascade_detect.region_provenance` (fresh build, nothing to repair);
+  `rederive_region_text.py` now re-derives per box.
+- The VLM reply keys `region_bbox_correct` / `region_confidence` /
+  `region_text` are unchanged: a fixed protocol of the prompt packs
+  (`REPLY_*_KEY`).
+- `tests/test_no_legacy_region_scalars.py` is now a full-repo guard over
+  `src/` and `scripts/` (AST: attribute access on any `RegionFields` value
+  including locals, parameters and inline `get_region_fields()`, plus
+  wire-name literals), with a two-entry allowlist: the VLM reply keys in
+  `region_overlay.py` and the served review-sort id `region_score`.
+- **W8-cleanup Item 3 (breaking, no back-compat): the legacy single-box
+  routes `PUT /crops/{id}/region` and `PUT /crops/batch_region` are
+  deleted outright (no 410), with their whole write chain in
+  `region_writes.py` (`region_box_write`, `region_box_doc`,
+  `region_confirm_doc`, `same_box`, `candidate_promotion`,
+  `human_status_fields`, the `candidate_*` helpers, `fp_cluster_fields`,
+  `RegionWriteError`) and the dead pre-W8 worker write builders
+  (`verify._region_write_doc` / `_region_reject_doc` /
+  `candidate_reject_doc` / `_verify_with_vlm`, `no_verdict.
+  cascade_no_verdict` / `no_verdict_reject_doc` and the process-wide
+  cascade counter). Box edits go through `PUT /crops/{id}/regions` /
+  `PUT /crops/batch_regions` / the per-box routes. `ItemRegionRequest` /
+  `ItemBatchRegionRequest` are removed from the OpenAPI contract.
+  The one-off same-box-confirm repair tool (`region_provenance_restore.py`
+  + `scripts/curation/restore_region_provenance.py`) is deleted with the
+  route whose bug it repaired: it only restored detector provenance on
+  legacy scalar docs, and a same-box confirm on the box routes now keeps
+  provenance (tested below); a fresh build has no such data to repair.
+  Coverage migrated, each test proven red against a mutation: same-box
+  confirm (provenance kept, stored coordinates kept, within float noise,
+  in the parent frame), a moved box is human geometry, accepting a
+  false-positive box, the rejected-box reversal (whole-set confirm and
+  per-box accept, provenance kept, undoable), parent-frame projection,
+  bbox validation, undo.
+- **W9: the detection worker's `--vlm-url` flag and the process-wide
+  `VlmLabeler` singleton** (`_get_vlm_labeler._insts`). The `env` built-in
+  endpoint (`OP_VLM_URL`) is the one remaining environment path; every
+  labeler is built by `vlm_factory`.
 - **W10 (breaking, no back-compat): `POST /import_labels` and
   `/import_labels/batch`, deleted outright (no 410).** Importing an
   already-labeled dataset is `POST /datasets/imports`. `src/services/curation/

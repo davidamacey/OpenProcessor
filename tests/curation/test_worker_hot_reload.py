@@ -20,6 +20,7 @@ from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project, current_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.services.config_store import get_global_config_store
 from src.services.config_store.index import activate, save_config
 from src.services.config_store.store import get_config_store, reset_config_stores
 from src.services.detection import profile_registry
@@ -68,11 +69,12 @@ async def test_alpha_activation_does_not_swap_beta() -> None:
     project's activation is tracked in its own, independently-refreshed
     ``ConfigStore`` (keyed by slug), so a change in one is invisible to
     the other."""
-    from scripts.curation.worker.runtime import config_wants_swap
+    from scripts.curation.worker.runtime import current_want
 
     client = FakeConfigOpenSearch()
     alpha = _record('alpha')
     beta = _record('beta')
+    registry = get_global_config_store(mode='pinned')
 
     with bind_project(alpha):
         alpha_store = get_config_store(mode='pinned')
@@ -80,11 +82,11 @@ async def test_alpha_activation_does_not_swap_beta() -> None:
     with bind_project(beta):
         beta_store = get_config_store(mode='pinned')
         await beta_store.refresh(client)
+    await registry.refresh(client)
 
-    # Neither has activated anything yet -- no swap wanted for either
-    # relative to a runtime baseline of "nothing active" (None, None).
-    assert config_wants_swap(alpha_store, (None, None)) is False
-    assert config_wants_swap(beta_store, (None, None)) is False
+    baseline_alpha = current_want(alpha_store, registry)
+    baseline_beta = current_want(beta_store, registry)
+    assert baseline_alpha[:2] == baseline_beta[:2] == (None, None)
 
     with bind_project(alpha):
         idx = alpha_store.index
@@ -103,10 +105,10 @@ async def test_alpha_activation_does_not_swap_beta() -> None:
         alpha_store.pin_active()
 
     # Alpha's own store now wants a swap...
-    assert config_wants_swap(alpha_store, (None, None)) is True
+    assert current_want(alpha_store, registry) != baseline_alpha
     # ...but beta's store, never refreshed against alpha's index, is untouched.
     await beta_store.refresh(client)
-    assert config_wants_swap(beta_store, (None, None)) is False
+    assert current_want(beta_store, registry) == baseline_beta
 
 
 # =============================================================================
@@ -117,7 +119,6 @@ async def test_alpha_activation_does_not_swap_beta() -> None:
 def _fake_args() -> Any:
     ns = MagicMock()
     ns.segmenter_url = ''
-    ns.vlm_url = ''
     return ns
 
 
@@ -130,7 +131,17 @@ def _fake_ctors() -> dict[str, Any]:
         'region_detector_cls': MagicMock(),
         'ocr_recognizer_cls': MagicMock(),
         'segmenter_cls': MagicMock(),
-        'vlm_cls': MagicMock(),
+        'build_vlm': MagicMock(),
+    }
+
+
+def _swap_kw() -> dict[str, Any]:
+    """The extra collaborators a swap needs: the pinned deployment-wide
+    registry store and the active-endpoint resolver (none active here)."""
+    return {
+        'registry': get_global_config_store(mode='pinned'),
+        'get_active_vlm': lambda: None,
+        **_fake_ctors(),
     }
 
 
@@ -151,19 +162,20 @@ async def test_build_runtime_returns_refs() -> None:
         args=_fake_args(),
         profile_revision=3,
         pack_revision=None,
+        vlm_endpoint=None,
         **_fake_ctors(),
     )
     assert rt.profile_ref == (profile.name, 3)
     assert rt.pack_ref == (pack.name, None)
     assert rt.detector is not None
-    assert rt.vlm is None  # no vlm_url
+    assert rt.vlm is None  # no active endpoint
 
 
 @pytest.mark.asyncio
 async def test_build_runtime_uses_the_passed_in_constructors_not_fresh_imports() -> None:
     """The monkeypatch-target fix: build_runtime must call the exact
     classes it was handed, never import its own copies of
-    RegionDetector/PaddleOcrTextRecognizer/SegmenterClient/VlmLabeler --
+    RegionDetector/PaddleOcrTextRecognizer/SegmenterClient/build_vlm_labeler --
     otherwise a test (or runner.py's producer loop rebuilding through a
     module-level name a test patched) silently keeps talking to the
     real, unpatched class."""
@@ -176,22 +188,25 @@ async def test_build_runtime_uses_the_passed_in_constructors_not_fresh_imports()
     pack = resolve_prompt_pack()
     ctors = _fake_ctors()
     args = _fake_args()
-    args.vlm_url = 'http://vlm.example'
+    endpoint = MagicMock()
     pool = MagicMock()
 
-    rt = await build_runtime(pool=pool, profile=profile, pack=pack, args=args, **ctors)
+    rt = await build_runtime(
+        pool=pool, profile=profile, pack=pack, args=args, vlm_endpoint=endpoint, **ctors
+    )
 
     ctors['region_detector_cls'].assert_called_once_with(pool, profile)
     ctors['ocr_recognizer_cls'].assert_called_once_with(pool, profile)
     ctors['segmenter_cls'].assert_called_once()
-    ctors['vlm_cls'].assert_called_once()
+    ctors['build_vlm'].assert_called_once_with(endpoint, pack)
     assert rt.detector is ctors['region_detector_cls'].return_value
-    assert rt.vlm is ctors['vlm_cls'].return_value
+    assert rt.vlm is ctors['build_vlm'].return_value
+    assert rt.vlm_endpoint is endpoint
 
 
 @pytest.mark.asyncio
 async def test_quiesce_and_swap_drains_queues_before_building() -> None:
-    from scripts.curation.worker.runtime import RuntimeHolder, quiesce_and_swap
+    from scripts.curation.worker.runtime import RuntimeHolder, current_want, quiesce_and_swap
 
     profile = profile_registry.get_active_region_profile()
     assert profile is not None
@@ -222,10 +237,10 @@ async def test_quiesce_and_swap_drains_queues_before_building() -> None:
             store=store,
             pool=MagicMock(),
             args=_fake_args(),
-            want=(store.current.active_profile, store.current.active_pack),
+            want=current_want(store, get_global_config_store(mode='pinned')),
             get_active_profile=lambda: profile,
             get_active_pack=lambda: pack,
-            **_fake_ctors(),
+            **_swap_kw(),
         )
     assert drained_before_build
     assert holder.get('alpha') is rt
@@ -238,7 +253,7 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
     build, so `get_active_profile`/`get_active_pack` (which read
     `store.current`) already see the newly-pinned snapshot -- not the
     stale one from before this cycle's refresh."""
-    from scripts.curation.worker.runtime import RuntimeHolder, quiesce_and_swap
+    from scripts.curation.worker.runtime import RuntimeHolder, current_want, quiesce_and_swap
 
     client = FakeConfigOpenSearch()
     project = _record('alpha')
@@ -277,10 +292,10 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
             store=store,
             pool=MagicMock(),
             args=_fake_args(),
-            want=(store.current.active_profile, store.current.active_pack),
+            want=current_want(store, get_global_config_store(mode='pinned')),
             get_active_profile=_get_active_profile,
             get_active_pack=lambda: profile_registry_pack(),
-            **_fake_ctors(),
+            **_swap_kw(),
         )
         # By the time get_active_profile() ran, the store had already
         # been pinned to the new activation.
@@ -314,7 +329,7 @@ async def test_maybe_hot_reload_never_swaps_when_activation_is_unchanged() -> No
     from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     pack = resolve_prompt_pack()
-    ctors = _fake_ctors()
+    ctors = _swap_kw()
 
     with bind_project(project):
         store = get_config_store(mode='pinned')
@@ -358,7 +373,7 @@ async def test_maybe_hot_reload_swaps_exactly_once_on_a_real_pinned_activation()
     from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     pack = resolve_prompt_pack()
-    ctors = _fake_ctors()
+    ctors = _swap_kw()
 
     with bind_project(project):
         store = get_config_store(mode='pinned')
@@ -426,7 +441,7 @@ async def test_build_uses_the_activated_pack_not_the_env_default() -> None:
     profile = profile_registry.get_active_region_profile()
     assert profile is not None
     env_pack = resolve_prompt_pack()
-    ctors = _fake_ctors()
+    ctors = _swap_kw()
 
     with bind_project(project):
         store = get_config_store(mode='pinned')
@@ -488,7 +503,7 @@ def _make_task(*, crop_id: str, status: str | None = 'pending') -> _ItemTask:
 async def test_bulk_write_stamps_region_profile_and_pack() -> None:
     F = get_region_fields()
     a = _make_task(crop_id='a')
-    a.update_doc = {F.status: 'detected', F.score: 0.9}
+    a.update_doc = {F.status: 'detected', F.max_score: 0.9}
     # Minor 5 (W2 review): the pack stamp is per-TASK, gated on whether a
     # VLM call actually contributed to this task's write this pass.
     a.vlm_called = True
@@ -529,7 +544,7 @@ async def test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened() -> Non
     ``vlm_prompt_pack`` -- that would claim a VLM ran when it didn't."""
     F = get_region_fields()
     a = _make_task(crop_id='a')
-    a.update_doc = {F.status: 'detected', F.score: 0.9}
+    a.update_doc = {F.status: 'detected', F.max_score: 0.9}
     assert a.vlm_called is False  # the default
 
     async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
@@ -590,7 +605,7 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
         store.pin_active()
 
         a = _make_task(crop_id='a')
-        a.update_doc = {F.status: 'detected', F.score: 0.9}
+        a.update_doc = {F.status: 'detected', F.max_score: 0.9}
 
         async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
             found = {d['_id']: {F.status: 'pending'} for d in body['docs']}

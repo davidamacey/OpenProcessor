@@ -25,6 +25,7 @@ from curation.reprocess_fixtures import (
     make_service,
     servable_root,
 )
+from src.services.curation.region_box_embeddings import current_vectors
 from src.services.curation.region_boxes import read_boxes
 from src.services.curation.reprocess import apply_reprocess, plan_reprocess
 from src.services.curation.reprocess_models import (
@@ -348,7 +349,10 @@ async def test_embed_rewrites_vectors_only_and_includes_locked_items(
     locked = item(
         'locked', RegionStatus.DETECTED.value, image_path=str(path), boxes=(accepted,),
         class_source='human', class_id=1, class_name='widget', class_validated=True,
-        pe_embedding=[9.0, 9.0, 9.0], **{F.embedding: [9.0, 9.0, 9.0]},
+        pe_embedding=[9.0, 9.0, 9.0],
+        **{F.box_embeddings: [
+            {'box_id': 'b1', 'bbox_norm': accepted['bbox_norm'], 'embedding': [9.0, 9.0, 9.0]}
+        ]},
     )  # fmt: skip
     plain = item('plain', image_path=str(path), bbox_norm=(0.2, 0.2, 0.6, 0.6))
     fake = make_fake([locked, plain], [{'image_id': 'img-1', 'image_path': str(path)}])
@@ -366,10 +370,10 @@ async def test_embed_rewrites_vectors_only_and_includes_locked_items(
     after = docs(fake)
     for cid in ('locked', 'plain'):
         changed = {k for k in after[cid] if after[cid][k] != before[cid].get(k)}
-        assert changed <= {'pe_embedding', F.embedding}, (cid, changed)
+        assert changed <= {'pe_embedding', F.box_embeddings}, (cid, changed)
         assert after[cid]['pe_embedding'] == [0.0, 0.0, 1.0]
-    assert F.embedding in after['locked']
-    assert F.embedding not in after['plain']  # no accepted/false-positive box to embed
+    assert current_vectors(after['locked']) == {'b1': pytest.approx([0.0, 0.0, 1.0])}
+    assert F.box_embeddings not in after['plain']  # no accepted/false-positive box to embed
     image_after = fake.docs(images_index())['img-1']
     assert image_after['pe_embedding'] == [0.0, 1.0, 0.0]
     assert {k for k in image_after if image_after[k] != image_before.get(k)} == {'pe_embedding'}

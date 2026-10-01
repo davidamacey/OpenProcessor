@@ -36,7 +36,16 @@ def _client(fake: Any) -> TestClient:
 
 def _fake() -> QueryFakeOpenSearch:
     return QueryFakeOpenSearch(
-        {ITEMS: {'r1': {'crop_id': 'r1', F.bbox_norm: [0.1, 0.1, 0.2, 0.2]}}}
+        {
+            ITEMS: {
+                'r1': {
+                    'crop_id': 'r1',
+                    F.boxes: [
+                        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+                    ],
+                }
+            }
+        }
     )
 
 

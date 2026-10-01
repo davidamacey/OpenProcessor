@@ -109,9 +109,7 @@ def transform_item(
     dimension the target cannot use). ``target_class`` is the target
     ``(class_id, class_name)``; ``None`` keeps the item unclassed."""
     doc = copy.deepcopy(item)
-    for name in (*_SOURCE_NUMBERED_FIELDS, fields.class_id, fields.cluster_id):
-        doc.pop(name, None)
-    for name in (fields.cluster_subid, fields.cluster_distance):
+    for name in (*_SOURCE_NUMBERED_FIELDS, fields.class_id):
         doc.pop(name, None)
     if fields.boxes in doc:
         doc[fields.boxes] = _clean_boxes(doc[fields.boxes])
@@ -121,6 +119,16 @@ def transform_item(
             if vector == 'pe_embedding':
                 dropped = True
             del doc[vector]
+    if fields.box_embeddings in doc:
+        entries = [
+            e
+            for e in doc[fields.box_embeddings] or []
+            if isinstance(e, dict) and keep_vector(e.get('embedding'), embedding_dim)
+        ]
+        if entries:
+            doc[fields.box_embeddings] = entries
+        else:
+            del doc[fields.box_embeddings]
     if target_class is None:
         doc.pop('class_id', None)
         doc.pop('class_name', None)

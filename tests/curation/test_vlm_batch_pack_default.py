@@ -13,12 +13,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._vlm_test_support import empty_registry_reads
 from src.config.curation import CurationConfig
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 @pytest.fixture
@@ -41,13 +46,15 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
     requested: list[Any] = []
 
     class _Labeler:
+        identity = VlmIdentity('env@None', 'test-vlm')
+
         async def verify_region_batch(self, _crops: list[Any]) -> list[Any]:
             return []
 
         async def region_visible_batch(self, crops: list[Any]) -> dict[str, bool]:
             return {c.crop_id: True for c in crops}
 
-    def _fake_get(pack_name: str | None = None) -> _Labeler:
+    def _fake_get(pack_name: str | None = None, **_kw: Any) -> _Labeler:
         requested.append(pack_name)
         return _Labeler()
 
@@ -56,7 +63,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: empty_registry_reads(AsyncMock())
     return TestClient(app), requested
 
 

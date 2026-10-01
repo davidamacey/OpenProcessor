@@ -100,8 +100,15 @@ def test_crop_image_context_carries_full_drawing_geometry_for_every_item() -> No
                     'image_id': 'img-a',
                     'crop_rank_in_image': 1,
                     'bbox_norm': [0.1, 0.1, 0.4, 0.4],
-                    'region_bbox_norm': [0.15, 0.15, 0.2, 0.2],
-                    'region_candidate_bbox_norm': [0.5, 0.5, 0.6, 0.6],
+                    'region_boxes': [
+                        {'box_id': 'b1', 'bbox_norm': [0.15, 0.15, 0.2, 0.2], 'state': 'accepted'},
+                        {
+                            'box_id': 'b2',
+                            'bbox_norm': [0.5, 0.5, 0.6, 0.6],
+                            'state': 'rejected',
+                            'rejection_reason': 'verifier_no_verdict',
+                        },
+                    ],
                     'class_id': 3,
                     'class_name': 'sedan',
                     'class_validated': True,
@@ -124,8 +131,10 @@ def test_crop_image_context_carries_full_drawing_geometry_for_every_item() -> No
     body = _client(fake).get('/curation/projects/default/crops/a1/context').json()
     item = body['items'][0]
     assert item['bbox_norm'] == [0.1, 0.1, 0.4, 0.4]
-    assert item['region_bbox_norm'] == [0.15, 0.15, 0.2, 0.2]
-    assert item['region_candidate_bbox_norm'] == [0.5, 0.5, 0.6, 0.6]
+    boxes = {b['box_id']: b for b in item['region_boxes']}
+    assert boxes['b1']['bbox_norm'] == [0.15, 0.15, 0.2, 0.2]
+    assert boxes['b2']['bbox_norm'] == [0.5, 0.5, 0.6, 0.6]
+    assert boxes['b2']['state'] == 'rejected'
     assert item['class_id'] == 3
     assert item['class_name'] == 'sedan'
     assert item['class_validated'] is True

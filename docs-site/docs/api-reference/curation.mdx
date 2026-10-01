@@ -96,7 +96,7 @@ any source as test; `recompute` picks a new split and warns.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/crops`, `/crops/{crop_id}` | Browse and filter items; one item |
-| GET | `/crops/{crop_id}/thumbnail`, `/image`, `/region_thumbnail`, `/context` | Item crop, full source image, region crop, and the other items on the same image |
+| GET | `/crops/{crop_id}/thumbnail`, `/image`, `/region_thumbnail?box_id=`, `/context` | Item crop, full source image, one region box's crop (`box_id` required), and the other items on the same image |
 | GET | `/crops/{crop_id}/history` | Label/edit history |
 | PUT, DELETE | `/crops/{crop_id}/label` | Set (`class_id`, `label_source` `human` or `human_confirmed`) or clear a human label |
 | PUT | `/crops/batch_label` | Label many; returns `updated_ids` and per-item `conflicts` |
@@ -174,13 +174,14 @@ Only meaningful with a region detection profile configured.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/regions`, `/regions/statuses`, `/regions/vocabulary` | Browse regions; the status catalog (which are human-writable); detector/segmenter vocabulary for the active profile |
-| PUT | `/crops/{crop_id}/region`, `/crops/batch_region` | Set or confirm a region box (`frame` `source` or `parent`), or `null` for "no region visible" |
-| PATCH | `/crops/{crop_id}/region_meta` | Edit `region_text`, `region_status`, rejection reason |
+| GET | `/regions`, `/regions/statuses`, `/regions/vocabulary` | Browse region rows (one per matching box, or per item; `total` counts items, `total_rows` rows); the status catalog (which are human-writable); detector/segmenter vocabulary for the active profile |
+| PUT | `/crops/{crop_id}/regions`, `/crops/batch_regions` | Set a crop's box list (`frame` `source` or `parent`); an empty list is "no region visible" |
+| PATCH, POST | `/crops/{crop_id}/regions/{box_id}`, `/regions/batch_box_state` | Per-box state / text edits |
+| PATCH | `/crops/{crop_id}/region_meta` | Edit `region_status` and the rejection reason (a box's text is edited with the per-box PATCH) |
 | POST | `/crops/{crop_id}/region/undo`, `/crops/region/undo_batch` | Undo region writes |
 | POST | `/regions/batch_status` | Set a human-writable status on many items |
-| POST, GET | `/regions/cluster`, `/regions/cluster/status`, `/regions/clusters`, `/regions/clusters/refine/{cluster_id}` | Cluster region crops |
-| POST, GET | `/regions/fp_centroids/build`, `/status`, `/regions/suspected_false_positives` | False-positive centroids and suspects |
+| POST, GET | `/regions/cluster`, `/regions/cluster/status`, `/regions/clusters`, `/regions/clusters/refine/{cluster_id}` | Cluster region boxes (a cluster card's `size` is items, `box_count` boxes) |
+| POST, GET | `/regions/fp_centroids/build`, `/status`, `/regions/suspected_false_positives` | False-positive centroids (built from false-positive boxes) and suspected-FP boxes, one row each |
 | GET | `/regions/training_candidates` | Curated cohorts for training the next region detector |
 
 ## Export

@@ -567,7 +567,7 @@ async def _drive_worker(
         or (lambda crops, **_kw: {} if visible is None else {c.crop_id: visible for c in crops})
     )
     vlm_cls = MagicMock(return_value=vlm)
-    monkeypatch.setattr(worker, 'VlmLabeler', vlm_cls)
+    monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
     # Registry load is best-effort; keep it out of the test.
     monkeypatch.setattr(
         'src.clients.curation_opensearch.ClassRegistry',
@@ -580,12 +580,12 @@ async def _drive_worker(
         'scripts.curation.worker.state._class_group', class_group or (lambda _name: None)
     )
 
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
     args = worker.parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--segmenter-url=http://seg.invalid:8000',
-            '--vlm-url=http://vlm.invalid:8000',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
@@ -661,7 +661,7 @@ class TestRunnerUsesDeploymentPromptPack:
             segmenter=None,
             reply=_accept(),
         )
-        assert mocks['vlm_cls'].call_args.kwargs['pack'] is pack
+        assert mocks['vlm_cls'].call_args.args[1] is pack
 
 
 # =============================================================================
@@ -734,7 +734,7 @@ class TestOnePassPerItem:
             class_name='sedan',
             group='cars',
         )
-        task.update_doc = {F.status: 'detected', F.text: 'AGAIN'}
+        task.update_doc = {F.status: 'detected', F.reason: 'again'}
         task.detection_trace = ['det:hit']
         n_written, _ = await worker._bulk_update(fake_os, [task])  # type: ignore[arg-type]
         assert n_written == 0
@@ -768,7 +768,7 @@ class TestChainFormatMatchesReaders:
         ]
         assert all(_CANONICAL.match(e) for e in chain), chain
 
-        query, _ = _training_candidate_query('detector_blind_spots', profile)
+        query, _box, _ = _training_candidate_query('detector_blind_spots', profile)
         chain_terms = [
             clause['term'][F.detector_chain]
             for clause in query['bool']['filter']
@@ -783,7 +783,7 @@ class TestChainFormatMatchesReaders:
 
         F = get_region_fields()
         profile = _profile()
-        query, _ = _training_candidate_query('disagreement', profile)
+        query, _box, _ = _training_candidate_query('disagreement', profile)
         terms = [
             c['term'][F.detector_chain]
             for c in query['bool']['filter']

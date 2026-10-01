@@ -122,8 +122,6 @@ async def _fetch_pending(
             'image_path',
             'bbox_norm',
             F.status,
-            F.bbox_norm,
-            F.score,
             F.revision,
             F.box_seq,
             F.boxes,
@@ -147,15 +145,6 @@ async def _fetch_pending(
         bbox = src.get('bbox_norm')
         if not bbox or len(bbox) != 4:
             continue
-        region_bbox = src.get(F.bbox_norm)
-        detector_region_in_source: tuple[float, float, float, float] | None = None
-        if isinstance(region_bbox, list) and len(region_bbox) == 4:
-            detector_region_in_source = (
-                float(region_bbox[0]),
-                float(region_bbox[1]),
-                float(region_bbox[2]),
-                float(region_bbox[3]),
-            )
         tasks.append(
             _ItemTask(
                 crop_id=h['_id'],
@@ -172,8 +161,6 @@ async def _fetch_pending(
                 class_confidence=float(src.get('confidence') or 0.0),
                 class_validated=bool(src.get('class_validated') or False),
                 test_holdout=bool(src.get('test_holdout') or False),
-                detector_region_in_source=detector_region_in_source,
-                detector_score=float(src.get(F.score) or 0.0),
                 stored_boxes=read_boxes(src, F),
                 region_revision=int(src.get(F.revision) or 0),
                 region_box_seq=int(src.get(F.box_seq) or 0),

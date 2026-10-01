@@ -25,7 +25,7 @@ from src.services.curation.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
-from src.services.curation.region_boxes import box_query
+from src.services.curation.region_boxes import box_query, read_boxes
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD, EmptyClassReason
 
@@ -107,13 +107,17 @@ TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
 # unreachable from the queue). ``'all'`` is the default -- today's
 # accepted-but-unvalidated boxes plus a rejected candidate that still has
 # a box to show. Served through ``FILTER_SPECS`` below.
+# Not a RegionStatus: it selects on the box list, whatever the item status
+# (a `detected` item can carry a rejected box beside its accepted ones).
+HAS_REJECTED_BOX = 'has_rejected_box'
 REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
-    {'value': 'all', 'label': 'All (accepted + rejected candidates)'},
+    {'value': 'all', 'label': 'All (accepted + rejected boxes)'},
     {'value': RegionStatus.DETECTED.value, 'label': 'Detected only'},
     {
         'value': RegionStatus.VERIFY_REJECTED.value,
-        'label': 'Verifier-rejected candidates only',
+        'label': 'Items with only rejected boxes',
     },
+    {'value': HAS_REJECTED_BOX, 'label': 'Items with any rejected box'},
 )
 REGION_STATUS_FILTER_VALUES: frozenset[str] = frozenset(
     o['value'] for o in REGION_STATUS_FILTER_OPTIONS
@@ -243,13 +247,12 @@ def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
 
     W8-cleanup: the rejection reason lives on the rejected box itself now
     (``region_boxes[].rejection_reason``), not an item-level scalar. The
-    first ``rejected`` box's reason is used -- a ``verify_rejected`` item
-    only ever carries one kept candidate box in practice.
+    first ``rejected`` box's reason is used (a ``verify_rejected`` item has
+    only rejected boxes, but may have several; the reviewer sees each box's
+    own reason on the box).
     """
     if src.get(fields.status) != RegionStatus.VERIFY_REJECTED.value:
         return default
-    from src.services.curation.region_boxes import read_boxes
-
     why = next(
         (
             b.rejection_reason
@@ -422,13 +425,13 @@ def build_tab_query(
         has_accepted_box = box_query(
             {'term': {f'{fields.boxes}.{fields.boxes_state}': 'accepted'}}, fields
         )
+        # `verify_rejected` is "every box rejected": the item status plus at
+        # least one rejected box (an item with no box at all never matches).
         rejected_candidate = {
             'bool': {
                 'filter': [
                     {'term': {fields.status: RegionStatus.VERIFY_REJECTED}},
-                    box_query(
-                        {'term': {f'{fields.boxes}.{fields.boxes_state}': 'rejected'}}, fields
-                    ),
+                    {'range': {fields.rejected_count: {'gte': 1}}},
                 ]
             }
         }
@@ -441,6 +444,9 @@ def build_tab_query(
         elif region_status_filter == RegionStatus.VERIFY_REJECTED.value:
             must.append(rejected_candidate)
             reason = 'verifier rejected this candidate — needs human review'
+        elif region_status_filter == HAS_REJECTED_BOX:
+            must.append({'range': {fields.rejected_count: {'gte': 1}}})
+            reason = 'a box was rejected — needs human review'
         else:
             # 'all': today's accepted-but-unvalidated boxes, plus a
             # rejected candidate that still has a box to show. A

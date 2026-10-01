@@ -17,6 +17,12 @@ from typing import Any, Literal
 
 RESIDUAL_CLUSTER_ID_OFFSET = 10000
 
+FALSE_POSITIVE_REGION_CLUSTER_ID = -100
+"""The permanent region false-positive bucket. Negative so it never
+collides with the flat KMeans namespace (0..K-1). A false-positive *box*
+(any writer) carries it as its ``cluster_id``; ``cluster_region_residuals``
+excludes those boxes so the good buckets' centroids stay clean."""
+
 ClusterKind = Literal['class', 'candidate', 'unassigned']
 
 CORE_SIMILARITY_MIN = 0.75
@@ -45,6 +51,7 @@ def cluster_similarity(cluster_distance: Any) -> float | None:
 
 __all__ = [
     'CORE_SIMILARITY_MIN',
+    'FALSE_POSITIVE_REGION_CLUSTER_ID',
     'RESIDUAL_CLUSTER_ID_OFFSET',
     'ClusterKind',
     'cluster_kind',

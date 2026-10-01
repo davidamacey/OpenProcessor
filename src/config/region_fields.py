@@ -43,36 +43,19 @@ class RegionFields:
     data under different names (e.g. ``roi_status``,
     ``roi_bbox_norm``, etc.) constructs an instance with the existing
     names instead — no reindex required.
+
+    Item-level fields only. A region's per-box data (geometry, score,
+    detector, state, text, cluster placement, ...) is an element of the
+    ``boxes`` list and is addressed by the fixed element keys of
+    :class:`~src.services.curation.region_boxes.RegionBox`, never through
+    this indirection.
     """
 
     prefix: str = 'region'
 
-    bbox_norm: str = 'region_bbox_norm'
-    bbox_frame: str = 'region_bbox_frame'
-    bbox_correct: str = 'region_bbox_correct'
     status: str = 'region_status'
-    score: str = 'region_score'
-    confidence: str = 'region_confidence'
     reason: str = 'region_reason'
     rejection_reason: str = 'region_rejection_reason'
-
-    text: str = 'region_text'
-    text_raw: str = 'region_text_raw'
-    text_confidence: str = 'region_text_confidence'
-    text_source: str = 'region_text_source'
-    text_engine_version: str = 'region_text_engine_version'
-    # Per-reader readings kept side by side (text_reader='both', or any
-    # mode where both readers ran), plus whether they disagree after
-    # normalization. ``text`` stays the chosen reading.
-    text_vlm: str = 'region_text_vlm'
-    text_ocr: str = 'region_text_ocr'
-    text_disagreement: str = 'region_text_disagreement'
-    # Why the chosen reading won (readers_agree / vlm_preferred / vlm_only /
-    # ocr_only / ocr_mode / vlm_invalid / no_valid_reading / human), and
-    # why the VLM's reading was rejected as not text (placeholder /
-    # no_reading / sequence / charset / too_short / too_long / format).
-    text_choice: str = 'region_text_choice'
-    text_vlm_invalid: str = 'region_text_vlm_invalid'
 
     # Human validation only: a human confirmed (or drew / rejected) the
     # region. Machine verdicts never set it.
@@ -87,8 +70,6 @@ class RegionFields:
     verifier_version: str = 'region_verifier_version'
     visible: str = 'region_visible'
 
-    detector: str = 'region_detector'
-    detector_version: str = 'region_detector_version'
     detector_chain: str = 'region_detector_chain'
     detected_at: str = 'region_detected_at'
 
@@ -98,22 +79,6 @@ class RegionFields:
     # 'config'`` docs.
     profile: str = 'region_profile'
     profile_revision: str = 'region_profile_revision'
-
-    # A detector box the verifier REJECTED (status ``verify_rejected``),
-    # kept for human review and reversal. Deliberately NOT ``bbox_norm``:
-    # a box there is an accepted region to every reader (browse, export,
-    # clustering). A human confirm promotes the candidate into
-    # ``bbox_norm``; the verifier's reason is ``rejection_reason``.
-    candidate_bbox_norm: str = 'region_candidate_bbox_norm'
-    candidate_score: str = 'region_candidate_score'
-    candidate_detector: str = 'region_candidate_detector'
-    candidate_detector_version: str = 'region_candidate_detector_version'
-    candidate_source: str = 'region_candidate_source'
-
-    embedding: str = 'region_embedding'
-    cluster_id: str = 'region_cluster_id'
-    cluster_subid: str = 'region_cluster_subid'
-    cluster_distance: str = 'region_cluster_distance'
 
     # W8 multi-box list. ``boxes`` is the indirected storage name of the
     # list itself; the element keys inside each list entry are FIXED
@@ -133,7 +98,6 @@ class RegionFields:
 
     class_id: str = 'region_class_id'
     label_source: str = 'region_label_source'
-    source: str = 'region_source'
     pairing: str = 'region_pairing'
     # Internal cascade flag: set when a detector's confidence was high
     # enough to skip the VLM verify round-trip entirely (see
@@ -144,8 +108,6 @@ class RegionFields:
     skip_verify: str = 'region_skip_verify'
 
     # Legacy-suffixed columns kept for rollback (e.g. roi_*_legacy).
-    bbox_norm_legacy: str = 'region_bbox_norm_legacy'
-    score_legacy: str = 'region_score_legacy'
     status_legacy: str = 'region_status_legacy'
 
     @classmethod

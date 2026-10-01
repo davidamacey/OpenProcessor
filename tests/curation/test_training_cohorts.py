@@ -97,5 +97,5 @@ def test_region_cohort_description_is_the_selection_reason() -> None:
     from src.routers.curation.regions import _training_candidate_query
 
     for mode, spec in TRAINING_CANDIDATE_MODES.items():
-        _query, reason = _training_candidate_query(mode)
+        _query, _box, reason = _training_candidate_query(mode)
         assert reason == spec.description

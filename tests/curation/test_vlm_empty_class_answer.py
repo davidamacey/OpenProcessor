@@ -35,6 +35,7 @@ from src.services.curation.vlm_class_attempt import (
     VLM_CLASS_ATTEMPTED_AT_FIELD as ATTEMPTED,
     VLM_CLASS_EMPTY_REASON_FIELD as REASON,
 )
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmClassPrediction, VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
@@ -60,6 +61,9 @@ CLASS_KEYS = {
 # ---------------------------------------------------------------- combined reply
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 class TestCombinedClassUpdate:
     NAMES = ['widget', 'gadget']
 
@@ -71,7 +75,9 @@ class TestCombinedClassUpdate:
         self, class_id: int | None, reason: str
     ) -> None:
         reply = VlmCombinedReply(img_id='c', class_id=class_id, class_confidence='low')
-        update = _combined_class_update(reply, self.NAMES, now='2026-09-24T12:00:00+00:00')
+        update = _combined_class_update(
+            reply, self.NAMES, now='2026-09-24T12:00:00+00:00', vlm_model='vlm-model'
+        )
         assert not CLASS_KEYS & update.keys()
         assert update[ATTEMPTED] == '2026-09-24T12:00:00+00:00'
         assert update[REASON] == reason
@@ -82,7 +88,7 @@ class TestCombinedClassUpdate:
         reply = VlmCombinedReply(
             img_id='c', class_id=None, class_raw='zeppelin', class_confidence='medium'
         )
-        update = _combined_class_update(reply, self.NAMES, now='t')
+        update = _combined_class_update(reply, self.NAMES, now='t', vlm_model='vlm-model')
         assert update['class_source'] == 'vlm_unmatched'
         assert update['vlm_raw_class'] == 'zeppelin'
         assert update['vlm_raw_label'] == 'zeppelin'
@@ -93,7 +99,11 @@ class TestCombinedClassUpdate:
     def test_resolved_class_clears_empty_reason(self) -> None:
         reply = VlmCombinedReply(img_id='c', class_id=1, class_confidence='high')
         update = _combined_class_update(
-            reply, self.NAMES, now='t', name_to_id={'widget': 10, 'gadget': 11}
+            reply,
+            self.NAMES,
+            now='t',
+            name_to_id={'widget': 10, 'gadget': 11},
+            vlm_model='vlm-model',
         )
         assert (update['class_id'], update['class_source']) == (11, 'vlm')
         assert update[REASON] is None
@@ -101,7 +111,7 @@ class TestCombinedClassUpdate:
 
     def test_classification_not_requested_records_no_attempt(self) -> None:
         reply = VlmCombinedReply(img_id='c', class_id=None)
-        update = _combined_class_update(reply, None, now='t')
+        update = _combined_class_update(reply, None, now='t', vlm_model='vlm-model')
         assert ATTEMPTED not in update
         assert REASON not in update
 
@@ -206,11 +216,12 @@ async def _run_label_batch(
     reg.add_class('widget')
     reg.add_class('gadget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=(None, None)))
+    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
     docs = {cid: (_proposal(cid) if cid.startswith('p') else _item(cid)) for cid in preds}
     fake = QueryFakeOpenSearch({ITEMS: docs})
 
     class _Labeler:
+        identity = VlmIdentity('env@None', 'test-vlm')
         _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
@@ -317,6 +328,7 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
     }
 
     class _Labeler:
+        identity = VlmIdentity('env@None', 'test-vlm')
         model = 'fake-vlm'
         _pack = GENERIC_ITEM_PACK
 
@@ -324,7 +336,7 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
             return [answers[c.img_id] for c in crops]
 
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda _pack=None, _rev=None: _Labeler())
+    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
     monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
     monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
     monkeypatch.setattr(

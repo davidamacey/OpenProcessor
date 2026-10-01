@@ -288,8 +288,6 @@ class RowCollector:
             *IMPORT_SOURCE_FIELDS,
             f.boxes,
             f.status,
-            f.cluster_id,
-            f.cluster_subid,
         ]
         wanted = sorted(POSITIVE_REGION_STATUSES | HARD_NEGATIVE_REGION_STATUSES)
         hits = await scroll_hits(
@@ -376,10 +374,14 @@ class RowCollector:
                         row.boxes.append((0, *box))
                         any_box = True
                 if any_box:
-                    cluster_keys[frame_key].append(f'pos:{self._region_cluster_key(src)}')
+                    cluster_keys[frame_key].append(
+                        f'pos:{self._region_cluster_key(src, "accepted")}'
+                    )
             elif status in HARD_NEGATIVE_REGION_STATUSES:
                 row.is_hard_negative = True
-                cluster_keys[frame_key].append(f'neg:{self._region_cluster_key(src)}')
+                cluster_keys[frame_key].append(
+                    f'neg:{self._region_cluster_key(src, RegionStatus.FALSE_POSITIVE.value)}'
+                )
             else:
                 cluster_keys[frame_key].append(f'bg:{src.get("cluster_id")}')
 
@@ -429,23 +431,29 @@ class RowCollector:
                         row.boxes.append((0, *box))
                 if not row.boxes:
                     continue  # no accepted box landed inside its own parent crop
-                row.stratum = f'pos:{self._region_cluster_key(src)}'
+                row.stratum = f'pos:{self._region_cluster_key(src, "accepted")}'
             elif status in HARD_NEGATIVE_REGION_STATUSES:
                 row.is_hard_negative = True
-                row.stratum = f'neg:{self._region_cluster_key(src)}'
+                row.stratum = (
+                    f'neg:{self._region_cluster_key(src, RegionStatus.FALSE_POSITIVE.value)}'
+                )
             else:
                 row.stratum = f'bg:{src.get("cluster_id")}'
             row.stratum = row.import_stratum or row.stratum
             rows.append(row)
         return rows
 
-    def _region_cluster_key(self, src: dict[str, Any]) -> str:
-        """Finest-grained region cluster id available, for stratification."""
-        subid = src.get(self.fields.cluster_subid)
-        if subid:
-            return str(subid)
-        cid = src.get(self.fields.cluster_id)
-        return str(cid) if cid is not None else 'none'
+    def _region_cluster_key(self, src: dict[str, Any], state: str) -> str:
+        """Finest-grained region cluster of the item's first ``state`` box
+        (accepted for a positive, false_positive for a hard negative), for
+        stratification: its sub-cluster, else its cluster id. The box order
+        is stable, so the key is deterministic."""
+        box = next((b for b in read_boxes(src, self.fields) if b.state == state), None)
+        if box is None:
+            return 'none'
+        if box.cluster_subid:
+            return str(box.cluster_subid)
+        return str(box.cluster_id) if box.cluster_id is not None else 'none'
 
     @staticmethod
     def _fallback_stratum(row: _FrameRow, cluster_ids: list[str]) -> str:

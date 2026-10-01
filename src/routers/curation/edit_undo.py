@@ -1,13 +1,14 @@
 """Curation router sub-module — undo of the human edits that aren't class
 writes: region writes and VLM-suggestion dismissals.
 
-Every human region writer (``PUT /crops/{id}/region``, ``PUT
-/crops/batch_region``, ``PATCH /crops/{id}/region_meta``, ``POST
+Every human region writer (``PUT /crops/{id}/regions``, ``PUT
+/crops/batch_regions``, ``PATCH /crops/{id}/regions/{box_id}``, ``POST
+/regions/batch_box_state``, ``PATCH /crops/{id}/region_meta``, ``POST
 /regions/batch_status``) snapshots the item's pre-write region state into
 its edit history (:mod:`src.services.curation.edit_history`). These routes
-put that state back — box, score, status, verified/validated flags,
-detector/verifier provenance, text and region-cluster placement — the
-same way ``POST /crops/{id}/label/undo`` does for class writes.
+put that state back — the whole box list, status, verified/validated
+flags and detector/verifier provenance — the same way ``POST
+/crops/{id}/label/undo`` does for class writes.
 ``POST /crops/{id}/vlm_dismiss`` snapshots the dismissal fields it
 replaces the same way, so ``POST /crops/{id}/vlm_dismiss/undo`` brings the
 dismissed suggestion back.
@@ -57,7 +58,7 @@ def edit_undo_merger(kind: EditKind, writer: str) -> Any:
             raise NothingToUndoError
         history = record_edit(current, kind=kind, writer=writer, restorable=False)
         return {
-            **restore_edit_state(entry, kind),
+            **restore_edit_state(entry, kind, current=current),
             EDIT_HISTORY_FIELD: history,
             'updated_at': _now_iso(),
         }

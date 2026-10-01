@@ -41,6 +41,7 @@ from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
@@ -80,8 +81,6 @@ def _make_task(
     group: str = 'cars',
     class_name: str = 'audi',
     item_bbox: tuple[float, float, float, float] = (0.1, 0.1, 0.5, 0.5),
-    detector_region_in_source: tuple[float, float, float, float] | None = None,
-    detector_score: float = 0.0,
     crop_jpeg: bytes | None = None,
 ) -> worker._ItemTask:
     """Build a fully populated ``_ItemTask`` for the (non-cascade)
@@ -94,10 +93,23 @@ def _make_task(
         region_status=status,
         class_name=class_name,
         group=group,
-        detector_region_in_source=detector_region_in_source,
-        detector_score=detector_score,
         crop_jpeg=crop_jpeg if crop_jpeg is not None else _make_jpeg(),
     )
+
+
+def _proposed_box_fields(bbox: tuple[float, float, float, float], score: float) -> dict[str, Any]:
+    """The stored fields of an item carrying one ``proposed`` box (what a
+    ``pending_verification`` item holds), built the way every writer
+    builds them."""
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=bbox,
+        state='proposed',
+        score=score,
+        detector='det_model',
+        source='detector',
+    )
+    return boxes_write_fields([box], current_src={})
 
 
 def _item_with(**over: Any) -> dict[str, Any]:
@@ -170,19 +182,19 @@ async def _drive_text_hint_rescue(
     vlm.region_visible_batch = AsyncMock(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
-    monkeypatch.setattr(worker, 'VlmLabeler', MagicMock(return_value=vlm))
+    monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
     monkeypatch.setattr(
         'src.clients.curation_opensearch.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
     args = worker.parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--segmenter-url=http://seg.invalid:8000',
-            '--vlm-url=http://vlm.invalid:8000',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
@@ -216,7 +228,7 @@ class TestRouting:
     async def test_pending_verify_accepted_writes_detected(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Primary-detector candidate verified by the VLM -> status='detected',
+        """A stored proposed box verified by the VLM -> status='detected',
         the existing bbox is kept (round-tripped through crop/source
         frames)."""
         F = get_region_fields()
@@ -225,7 +237,7 @@ class TestRouting:
             {
                 'c1': _item_with(
                     status='pending_verification',
-                    **{F.bbox_norm: list(detector_region_in_source), F.score: 0.91},
+                    **_proposed_box_fields(detector_region_in_source, 0.91),
                 )
             },
             search_delay=0.0,
@@ -261,7 +273,7 @@ class TestRouting:
             {
                 'c1': _item_with(
                     status='pending_verification',
-                    **{F.bbox_norm: [0.2, 0.2, 0.3, 0.22], F.score: 0.7},
+                    **_proposed_box_fields((0.2, 0.2, 0.3, 0.22), 0.7),
                 )
             },
             search_delay=0.0,
@@ -486,7 +498,7 @@ class TestNoVerdictLeavesItemPending:
             {
                 'c1': _item_with(
                     status='pending_verification',
-                    **{F.bbox_norm: [0.2, 0.2, 0.3, 0.22], F.score: 0.7},
+                    **_proposed_box_fields((0.2, 0.2, 0.3, 0.22), 0.7),
                 )
             },
             search_delay=0.0,
@@ -684,7 +696,7 @@ class TestBulkWrite:
         update doc never even reach the mget/bulk round trip."""
         F = get_region_fields()
         a = _make_task(crop_id='a')
-        a.update_doc = {F.status: 'detected', F.score: 0.9}
+        a.update_doc = {F.status: 'detected', F.max_score: 0.9}
         b = _make_task(crop_id='b')
         # No update — should be skipped.
         c = _make_task(crop_id='c')
@@ -959,7 +971,7 @@ class TestSignalHandling:
 
         vlm = MagicMock()
         vlm.aclose = AsyncMock()
-        monkeypatch.setattr(worker, 'VlmLabeler', MagicMock(return_value=vlm))
+        monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
 
         # Patch signal-handler installation away — adding signal handlers
         # in a non-main asyncio loop would raise here.
@@ -979,12 +991,12 @@ class TestSignalHandling:
         monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
         sentinel = tmp_path / 'pause.sentinel'  # absent
+        monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
         args = worker.parse_args(
             [
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
                 '--segmenter-url=http://segmenter.local:8000',
-                '--vlm-url=http://vlm.local:8000',
                 f'--pause-sentinel={sentinel}',
                 '--max-iterations=1',
             ]

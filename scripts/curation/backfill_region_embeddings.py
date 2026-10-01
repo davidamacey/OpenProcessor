@@ -1,36 +1,25 @@
 #!/usr/bin/env python3
-"""Backfill ``region_embedding`` for existing items.
+"""Backfill per-box ``region_box_embeddings`` for existing items.
 
-Nothing in ``main`` writes the per-item PE-Core region embedding yet
-(the legacy stack's plate-embedder loop has no equivalent here) --
-region-FP clustering and ``/regions/suspected_false_positives`` both
-key off it, so with 0 items carrying the field, those paths are
-completely inert. This script crops each item's already-accepted
-region box out of its source image, encodes it through the same
-``pe_image_encoder`` Triton model the rest of the curation stack uses
-(:class:`~src.clients.pe_encoder.PEEncoder`), L2-normalizes (the
-encoder already does this), and writes the vector back.
+Region clustering and ``/regions/suspected_false_positives`` key off the
+PE-Core vector of each region box. The detection worker writes it for the
+boxes it accepts (``scripts/curation/worker/region_embed_stage.py``); this
+script catches every embeddable box that has none -- a box a human drew,
+an item accepted before the stage existed, a box whose vector went stale
+because it was moved (:func:`~src.services.curation.region_box_embeddings.
+missing_boxes`). It crops each such box (``accepted`` or ``false_positive``;
+a false-positive box is the FP matcher's input) out of its source image,
+encodes it through the same ``pe_image_encoder`` Triton model the rest of
+the curation stack uses (:class:`~src.clients.pe_encoder.PEEncoder`), and
+writes the vectors back with
+:func:`~src.services.curation.region_box_embeddings.write_box_embeddings`,
+which never touches the box list.
 
-W8-cleanup port: selection and cropping now read the W8 ``region_boxes``
-list (:mod:`src.services.curation.region_boxes`) instead of the retired
-item-level ``region_bbox_norm`` scalar, which the current worker no
-longer writes. An item can carry more than one ``accepted`` box; this
-script still writes ONE item-level ``region_embedding`` (that field
-hasn't moved to per-box storage yet -- see Item 5 of the W8-cleanup
-plan), so it picks the highest-``score`` accepted box as the item's
-representative crop. Interim choice, not a semantic ranking of which
-box "matters most" -- a per-box embeddings replacement should embed
-every accepted box.
+Resumable by construction: the coverage check skips boxes that already
+carry a valid vector, so re-running only picks up what is still missing.
 
-Resumable by construction: the selection query excludes items that
-already carry the field, so re-running only picks up items ingested
-or accepted since the last pass. Land the region-FP centroid store
-distance-units fix before running this for real -- otherwise any
-FP-clustering pass over freshly-backfilled vectors would use the
-wrong thresholds.
-
-Defaults to dry-run: prints the eligible count and a source-image
-read failure sample. ``--apply`` writes.
+Defaults to dry-run: prints the eligible item and box counts. ``--apply``
+writes.
 
     # See what would be backfilled.
     python3 scripts/curation/backfill_region_embeddings.py
@@ -59,7 +48,7 @@ if str(_REPO_ROOT) not in sys.path:
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
-from src.config.region_state import RegionStatus
+from src.services.curation.region_box_embeddings import EMBEDDED_BOX_STATES, missing_boxes
 from src.services.curation.region_boxes import box_query
 from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
 from src.services.projects.guard import make_script_opensearch
@@ -82,58 +71,39 @@ logger = logging.getLogger('backfill_region_embeddings')
 
 
 def _selection_query() -> dict[str, Any]:
-    """Items still carrying a box worth embedding, that haven't been yet.
-
-    W8-cleanup M5 fix: ``state in ['accepted', 'false_positive']``, not
-    ``accepted`` alone. Pre-W8 selection was ``exists
-    region_bbox_norm``, and a false-positive item keeps its box (that's
-    the whole point of FP status -- it's a hard negative kept for
-    training/analysis), so FP items were always selected. The other
-    ported W8 readers (``regions.py``, ``regions_fp.py``, ``stats.py``)
-    all already treat FP the same way (``state in [accepted,
-    false_positive]``); this query silently narrowed to accepted-only
-    when it was ported, which starves ``build_region_fp_centroids``
-    (status=false_positive AND exists region_embedding) of its inputs --
-    the classic hard-negative case (VLM-rejected, human-marked-FP) never
-    gets embedded, since the worker's embed stage only runs at
-    DETECTED-write time.
-    """
+    """Items holding a box that may need a vector: ``accepted`` or
+    ``false_positive``. A false-positive box keeps its geometry (a hard
+    negative kept for training and for the FP centroid store), so it is
+    embedded like an accepted one; the per-box coverage check (which needs
+    the stored vectors' ids) runs in Python on the scrolled hits."""
     F = get_region_fields()
     return {
         'bool': {
             'must': [
-                box_query(
-                    {
-                        'terms': {
-                            f'{F.boxes}.{F.boxes_state}': [
-                                'accepted',
-                                RegionStatus.FALSE_POSITIVE.value,
-                            ],
-                        }
-                    },
-                    F,
-                )
+                box_query({'terms': {f'{F.boxes}.{F.boxes_state}': list(EMBEDDED_BOX_STATES)}}, F)
             ],
-            'must_not': [{'exists': {'field': F.embedding}}],
         },
     }
+
+
+def _source_fields() -> list[str]:
+    """``_source`` of a candidate hit: the box list plus only the ids and
+    geometry of the stored vectors (never the vectors themselves)."""
+    F = get_region_fields()
+    return ['image_path', F.boxes, f'{F.box_embeddings}.box_id', f'{F.box_embeddings}.bbox_norm']
 
 
 async def _scroll_candidates(
     client: AsyncOpenSearch, index: str, *, max_docs: int | None
 ) -> list[dict[str, Any]]:
-    F = get_region_fields()
-    body = {
-        'size': _SCROLL_PAGE,
-        'query': _selection_query(),
-        '_source': ['image_path', F.boxes],
-    }
+    """Items with at least one embeddable box that has no valid vector."""
+    body = {'size': _SCROLL_PAGE, 'query': _selection_query(), '_source': _source_fields()}
     out: list[dict[str, Any]] = []
     resp = await client.search(index=index, body=body, scroll='5m')
     scroll_id = resp.get('_scroll_id')
     hits = resp['hits']['hits']
     while hits:
-        out.extend(hits)
+        out.extend(h for h in hits if missing_boxes(h.get('_source') or {}))
         if max_docs is not None and len(out) >= max_docs:
             out = out[:max_docs]
             break
@@ -155,12 +125,12 @@ async def _run(
     apply: bool,
     max_docs: int | None,
 ) -> int:
-    F = get_region_fields()
     cfg = get_curation_config()
     client = make_script_opensearch([opensearch_url], use_ssl=False, timeout=300)
     try:
         hits = await _scroll_candidates(client, cfg.items_index, max_docs=max_docs)
-        print(f'\n{len(hits):,} items have a region box but no {F.embedding!r}.\n')
+        n_boxes = sum(len(missing_boxes(h.get('_source') or {})) for h in hits)
+        print(f'\n{len(hits):,} items have {n_boxes:,} region box(es) with no valid embedding.\n')
         if not hits:
             return 0
         if not apply:
@@ -183,7 +153,7 @@ async def _run(
             )
             target.items.append((h['_id'], source))
         counts = await reembed_items(
-            client, pe, list(by_path.values()), parts=frozenset({'region'})
+            client, pe, list(by_path.values()), parts=frozenset({'region'}), only_missing=True
         )
         n_written = counts['region_written']
         n_missing_image = counts['missing_image']

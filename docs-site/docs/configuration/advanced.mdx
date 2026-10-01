@@ -102,7 +102,7 @@ once with `python3 scripts/curation/requeue_regions.py --missing-status`
 ## Storage field-name overrides
 
 `OP_REGION_FIELD_<ATTR>` (for example `OP_REGION_FIELD_STATUS`,
-`OP_REGION_FIELD_BBOX_NORM`) maps a `RegionFields` attribute to a
+`OP_REGION_FIELD_BOXES`) maps a `RegionFields` attribute to a
 different OpenSearch field, for data that already lives under other
 names. A rename is a config flip, never a reindex, and the HTTP wire names
 never change.

@@ -20,6 +20,7 @@ from _region_profile_fixture import (
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._vlm_test_support import empty_registry_reads
 from src.config.region_source import CANDIDATE_SOURCES
 from src.services.curation.review_queries import KNOWN_TABS
 
@@ -34,7 +35,7 @@ def client() -> Any:
     mount_curation_routers(app, curation_router)
     # GET /review/tabs now also serves empty_state, which issues a
     # couple of `count` calls against opensearch.
-    fake = AsyncMock()
+    fake = empty_registry_reads(AsyncMock())
     fake.count = AsyncMock(return_value={'count': 0})
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as c:
@@ -66,6 +67,7 @@ def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient)
     assert body['rejection_reasons'] == []
 
 
+@pytest.mark.usefixtures('vlm_env')
 def test_regions_vocabulary_reflects_the_active_profile(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -87,10 +89,10 @@ def test_regions_vocabulary_reflects_the_active_profile(
         # never filterable.
         assert by_id['paddleocr_det_trt']['role'] == 'ocr'
         assert by_id['paddleocr_det_trt']['filterable'] is False
-        # VLM model comes from OP_VLM_MODEL (conftest.py sets it globally
-        # for the suite), never a hardcoded default.
-        assert by_id['test-vlm-model']['role'] == 'verifier'
-        assert by_id['test-vlm-model']['filterable'] is False
+        # The verifier is the resolved model of the registered VLM endpoint
+        # (here the env built-in from vlm_env), never a hardcoded default.
+        assert by_id['test-vlm']['role'] == 'verifier'
+        assert by_id['test-vlm']['filterable'] is False
     finally:
         profile_registry._reset_registry_for_tests()
 
@@ -233,7 +235,12 @@ def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> Non
     spec = specs['region_status']
     assert spec['kind'] == 'enum'
     assert spec['label']
-    assert {o['value'] for o in spec['options']} == {'all', 'detected', 'verify_rejected'}
+    assert {o['value'] for o in spec['options']} == {
+        'all',
+        'detected',
+        'verify_rejected',
+        'has_rejected_box',
+    }
     assert all(o['label'] for o in spec['options'])
     assert regions['filter_defaults']['region_status'] in {o['value'] for o in spec['options']}
     for tab_id, tab in by_id.items():

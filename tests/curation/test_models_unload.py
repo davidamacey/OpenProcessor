@@ -24,6 +24,9 @@ from fastapi.testclient import TestClient
 from src.services.training.triton_promote import ModelNotPromotedError, UnloadResult
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 @pytest.fixture
 def app_client():
     """Mount models.py's routes."""
@@ -328,16 +331,17 @@ def test_unload_refuses_the_segmenter(app_client, monkeypatch: pytest.MonkeyPatc
     mock.assert_not_awaited()
 
 
-def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.routers.curation.models as models_mod
-
-    vlm_name = models_mod._get_vlm_labeler().model
+@pytest.mark.usefixtures('vlm_env')
+@pytest.mark.parametrize('vlm_name', ['env', 'test-vlm'])
+def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch, vlm_name: str) -> None:
+    # An endpoint is refused by its registry name AND by its model id.
     mock = _mock_unload(monkeypatch)
     resp = app_client.delete(f'/curation/projects/default/models/{vlm_name}')
     assert resp.status_code == 400
     mock.assert_not_awaited()
 
 
+@pytest.mark.usefixtures('vlm_env')
 def test_external_service_model_names_includes_segmenter_and_vlm(
     monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
 ) -> None:
@@ -345,4 +349,4 @@ def test_external_service_model_names_includes_segmenter_and_vlm(
 
     names = models_mod._external_service_model_names()
     assert 'sam3' in names
-    assert models_mod._get_vlm_labeler().model in names
+    assert {'env', 'test-vlm'} <= names

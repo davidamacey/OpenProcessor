@@ -1,13 +1,11 @@
-"""``GET /crops/{id}/region_thumbnail`` falls back to the verifier-rejected
-candidate box (DQ-B2 follow-up).
+"""``GET /crops/{id}/region_thumbnail?box_id=`` renders one region box.
 
-Before this, a ``verify_rejected`` item -- which never has
-``region_bbox_norm``, only ``region_candidate_bbox_norm`` (see
-``src/config/region_fields.py``) -- 404'd on this route even though the
-item is still reviewable and reversible. This exercises the real FastAPI
-route (not just the lower-level ``image_serving`` helpers already covered
-by ``test_curation_images.py``), so the ``_fetch_crop`` source-includes
-list and the router's fallback branch are both proven together.
+A rejected box (a ``verify_rejected`` item's only box) is still reviewable,
+so it renders like any other state; the ``box_id`` is required and must
+name a box the crop holds. This exercises the real FastAPI route (not just
+the lower-level ``image_serving`` helpers already covered by
+``test_curation_images.py``), so the ``_fetch_crop`` source-includes list
+and the router's box lookup are proven together.
 """
 
 from __future__ import annotations
@@ -21,6 +19,7 @@ from PIL import Image
 
 from src.config import CurationConfig, get_region_fields
 from src.services.curation import image_serving
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
 
 if TYPE_CHECKING:
@@ -52,6 +51,8 @@ class _FakeOSClient:
 @pytest.fixture
 def sample_image(tmp_path: Path) -> Path:
     img = Image.new('RGB', (640, 480), color=(40, 80, 120))
+    # Two halves so boxes over different areas render differently.
+    img.paste((220, 40, 40), (0, 0, 320, 480))
     path = tmp_path / 'source.jpg'
     img.save(path, format='JPEG', quality=88)
     return path
@@ -71,13 +72,16 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sample_image: Pa
     monkeypatch.setattr(curation_images, 'THUMBNAIL_CACHE', image_serving.ThumbnailCache())
 
     docs = {
-        'candidate_only': {
+        'rejected_only': {
             'image_path': str(sample_image),
             'bbox_norm': [0.0, 0.0, 1.0, 1.0],
             F.status: 'verify_rejected',
-            F.candidate_bbox_norm: [0.1, 0.1, 0.4, 0.4],
+            **boxes_write_fields(
+                [RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.4, 0.4), state='rejected')],
+                current_src={},
+            ),
         },
-        'neither_box': {
+        'no_boxes': {
             'image_path': str(sample_image),
             'bbox_norm': [0.0, 0.0, 1.0, 1.0],
             F.status: 'no_region_visible',
@@ -86,7 +90,13 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sample_image: Pa
             'image_path': str(sample_image),
             'bbox_norm': [0.0, 0.0, 1.0, 1.0],
             F.status: 'detected',
-            F.bbox_norm: [0.2, 0.2, 0.6, 0.6],
+            **boxes_write_fields(
+                [
+                    RegionBox(box_id='b1', bbox_norm=(0.2, 0.2, 0.6, 0.6), state='accepted'),
+                    RegionBox(box_id='b2', bbox_norm=(0.5, 0.5, 0.9, 0.9), state='accepted'),
+                ],
+                current_src={},
+            ),
         },
     }
     fake_os = _FakeOSClient(docs)
@@ -99,26 +109,80 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sample_image: Pa
     return TestClient(app)
 
 
-def test_region_thumbnail_renders_from_candidate_box(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/crops/candidate_only/region_thumbnail')
+def _get(client: TestClient, crop_id: str, **params: str) -> Any:
+    return client.get(f'/curation/projects/default/crops/{crop_id}/region_thumbnail', params=params)
+
+
+def _docs_behind(client: TestClient, module: Any) -> dict[str, dict[str, Any]]:
+    return client.app.dependency_overrides[module._raw_opensearch_dep]()._docs
+
+
+def test_region_thumbnail_renders_a_rejected_box(app_client: TestClient) -> None:
+    r = _get(app_client, 'rejected_only', box_id='b1')
     assert r.status_code == 200, r.text
     assert r.content.startswith(b'\xff\xd8'), 'must be JPEG magic bytes'
 
 
-def test_region_thumbnail_404s_with_neither_box(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/crops/neither_box/region_thumbnail')
+def test_region_thumbnail_renders_the_named_box_not_the_first(app_client: TestClient) -> None:
+    """Each box renders from its own coordinates: two boxes of one crop
+    produce two different images."""
+    first = _get(app_client, 'detected', box_id='b1')
+    second = _get(app_client, 'detected', box_id='b2')
+    assert first.status_code == second.status_code == 200
+    assert first.content != second.content
+
+
+def test_region_thumbnail_requires_a_box_id(app_client: TestClient) -> None:
+    r = _get(app_client, 'detected')
+    assert r.status_code == 422
+    assert r.json()['detail']['error'] == 'box_id_required'
+
+
+def test_region_thumbnail_unknown_box_id_is_404(app_client: TestClient) -> None:
+    r = _get(app_client, 'detected', box_id='b9')
     assert r.status_code == 404
-    assert 'no region bbox' in r.json()['detail']
+    assert r.json()['detail']['error'] == 'unknown_box_id'
 
 
-def test_region_thumbnail_still_renders_from_accepted_box(app_client: TestClient) -> None:
-    """Unchanged behavior: an accepted region box still wins over any
-    (nonexistent, here) candidate -- the fallback only kicks in when
-    ``region_bbox_norm`` is absent."""
-    r = app_client.get('/curation/projects/default/crops/detected/region_thumbnail')
-    assert r.status_code == 200, r.text
-    assert r.content.startswith(b'\xff\xd8')
+def test_region_thumbnail_404s_for_a_crop_with_no_boxes(app_client: TestClient) -> None:
+    r = _get(app_client, 'no_boxes', box_id='b1')
+    assert r.status_code == 404
 
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+def test_region_thumbnail_is_revalidated_not_cached_for_an_hour(app_client: TestClient) -> None:
+    r = _get(app_client, 'detected', box_id='b1')
+
+    assert r.status_code == 200
+    assert r.headers['cache-control'] == 'no-cache'
+    etag = r.headers['etag']
+    same = app_client.get(
+        '/curation/projects/default/crops/detected/region_thumbnail',
+        params={'box_id': 'b1'},
+        headers={'If-None-Match': etag},
+    )
+    assert same.status_code == 304
+    assert same.content == b''
+    assert _get(app_client, 'detected', box_id='b2').headers['etag'] != etag
+
+
+def test_region_thumbnail_etag_changes_when_the_box_moves(
+    app_client: TestClient,
+) -> None:
+    from src.routers import curation_images
+
+    before = _get(app_client, 'detected', box_id='b1').headers['etag']
+    docs = _docs_behind(app_client, curation_images)
+    docs['detected'][F.boxes][0]['bbox_norm'] = [0.25, 0.25, 0.65, 0.65]
+
+    moved = app_client.get(
+        '/curation/projects/default/crops/detected/region_thumbnail',
+        params={'box_id': 'b1'},
+        headers={'If-None-Match': before},
+    )
+
+    assert moved.status_code == 200
+    assert moved.headers['etag'] != before

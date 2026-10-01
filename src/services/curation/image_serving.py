@@ -516,21 +516,14 @@ def _crop_source_includes() -> list[str]:
 
     Every field any ``crops_router`` route actually reads off the
     returned doc: ``image_path`` (all three routes), ``bbox_norm``
-    (``crop_thumbnail``), and the region-of-interest bbox field plus the
-    verifier-rejected candidate bbox (both ``crop_region_thumbnail`` --
-    the candidate bbox is its fallback for a ``verify_rejected`` item,
-    which never has the region bbox field). ``crop_full_image`` used
-    to also read ``bbox_norm``/``class_name``/the region bbox to draw a
-    server-side overlay; it now only resolves ``image_path`` and serves
-    the clean source, so ``class_name`` is no longer read by anything
-    here. Without this narrowed list, a bare ``.get()`` also decompresses
-    the item's embedding vectors + nested history JSON, none of which any
-    caller reads.
+    (``crop_thumbnail``), and the region box list (``crop_region_thumbnail``
+    renders one box by id). Without this narrowed list, a bare ``.get()``
+    also decompresses the item's embedding vectors + nested history JSON,
+    none of which any caller reads.
     """
     from src.config import get_region_fields
 
-    fields = get_region_fields()
-    return ['image_path', 'bbox_norm', fields.bbox_norm, fields.candidate_bbox_norm]
+    return ['image_path', 'bbox_norm', get_region_fields().boxes]
 
 
 async def _fetch_crop(

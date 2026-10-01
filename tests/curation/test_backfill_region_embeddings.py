@@ -1,8 +1,8 @@
-"""Tests for scripts/curation/backfill_region_embeddings.py.
+"""Tests for scripts/curation/backfill_region_embeddings.py (per-box vectors).
 
-No real Triton/OpenSearch/filesystem access — AsyncTritonPool, PEEncoder
-and the disk-crop helper are all monkeypatched to fakes local to this
-file, mirroring the pattern in test_revert_class_cluster_promotions.py.
+The OpenSearch fake is the shared query-semantics one (nested box queries,
+mget, conditional bulk); Triton, the PE encoder and the disk-crop helper
+are monkeypatched to fakes local to this file.
 """
 
 from __future__ import annotations
@@ -17,6 +17,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from curation.query_fakes import QueryFakeOpenSearch, matches
+from src.config import get_region_fields
+from src.services.curation import image_serving, reprocess_embed
+from src.services.curation.region_box_embeddings import current_vectors, entry_for
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / 'scripts' / 'curation'
 if str(SCRIPTS_DIR) not in sys.path:
@@ -24,7 +30,19 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import backfill_region_embeddings as backfill_script  # noqa: E402
 
-from src.services.curation.reprocess_embed import best_region_bbox  # noqa: E402
+
+F = get_region_fields()
+INDEX = 'items'
+
+
+class _OS(QueryFakeOpenSearch):
+    async def close(self) -> None:
+        return None
+
+    class indices:  # noqa: N801
+        @staticmethod
+        async def refresh(*, index: str) -> None:  # noqa: ARG004
+            return None
 
 
 class _FakeTritonPool:
@@ -40,38 +58,7 @@ class _FakePE:
 
     async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
         self.embed_crops_calls.append(len(crops))
-        return np.tile(np.array([1.0, 0.0, 0.0], dtype=np.float32), (len(crops), 1))
-
-
-class _FakeOSClient:
-    """Fake AsyncOpenSearch covering scroll + bulk for the backfill script."""
-
-    def __init__(self, hits: list[dict[str, Any]]) -> None:
-        self._hits = hits
-        self.bulk_calls: list[dict[str, Any]] = []
-        self.refreshed = False
-
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
-        return {'_scroll_id': 'scroll-1', 'hits': {'hits': self._hits}}
-
-    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
-        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
-
-    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
-        return {}
-
-    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
-        for action, doc in zip(body[0::2], body[1::2], strict=True):
-            self.bulk_calls.append({'id': action['update']['_id'], 'doc': doc['doc']})
-        return {'errors': False, 'items': []}
-
-    async def close(self) -> None:
-        return None
-
-    class indices:  # noqa: N801
-        @staticmethod
-        async def refresh(*, index: str) -> None:  # noqa: ARG004
-            return None
+        return np.tile(np.array([0.6, 0.8, 0.0], dtype=np.float32), (len(crops), 1))
 
 
 def _tiny_jpeg() -> bytes:
@@ -81,248 +68,121 @@ def _tiny_jpeg() -> bytes:
     return buf.getvalue()
 
 
-def _servable_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """The embed step reads an image only when its stored path is servable:
-    declare ``tmp_path`` a configured source root."""
-    from src.services.curation import image_serving
-
-    root = tmp_path.resolve()
-    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (root,))  # noqa: ARG005
-    return root
+def _box(box_id: str, state: str = 'accepted', x: float = 0.1) -> RegionBox:
+    return RegionBox(box_id=box_id, bbox_norm=(x, 0.1, x + 0.2, 0.4), state=state)
 
 
-def _write_image(root: Path, name: str) -> str:
-    path = root / name
-    path.write_bytes(_tiny_jpeg())
-    return str(path)
+def _item(crop_id: str, boxes: list[RegionBox], **extra: Any) -> dict[str, Any]:
+    return {
+        'crop_id': crop_id,
+        'image_path': f'/data/{crop_id}.jpg',
+        **boxes_write_fields(boxes, current_src={}),
+        **extra,
+    }
 
 
-def _hit(
-    doc_id: str,
-    *,
-    image_path: str | None,
-    bbox: list[float] | None,
-    score: float = 0.9,
-) -> dict[str, Any]:
-    source: dict[str, Any] = {}
-    if image_path is not None:
-        source['image_path'] = image_path
-    if bbox is not None:
-        source['region_boxes'] = [
-            {
-                'box_id': 'b1',
-                'bbox_norm': bbox,
-                'state': 'accepted',
-                'score': score,
-            }
-        ]
-    return {'_id': doc_id, '_source': source}
-
-
-@pytest.mark.asyncio
-async def test_dry_run_reports_count_and_does_not_touch_triton(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    hits = [_hit('crop-1', image_path='/data/a.jpg', bbox=[0.1, 0.1, 0.5, 0.5])]
-    client = _FakeOSClient(hits)
-    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
-    triton_pool_ctor = MagicMock(
-        side_effect=AssertionError('Triton must not be touched in dry-run')
-    )
-    monkeypatch.setattr(backfill_script, 'AsyncTritonPool', triton_pool_ctor)
-
-    rc = await backfill_script._run(
-        'http://fake:9200', 'fake-triton:8001', apply=False, max_docs=None
-    )
-
-    assert rc == 0
-    assert client.bulk_calls == []
-    triton_pool_ctor.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_apply_writes_normalized_embeddings_for_eligible_items(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    root = _servable_root(tmp_path, monkeypatch)
-    hits = [
-        _hit('crop-1', image_path=_write_image(root, 'a.jpg'), bbox=[0.1, 0.1, 0.5, 0.5]),
-        _hit('crop-2', image_path=_write_image(root, 'b.jpg'), bbox=[0.2, 0.2, 0.6, 0.6]),
-    ]
-    client = _FakeOSClient(hits)
+def _patch(monkeypatch: pytest.MonkeyPatch, client: _OS, *, root: Path | None) -> _FakePE:
+    """``root``: a servable source root holding every item's image, or
+    ``None`` to leave the stored paths unservable (unreadable images)."""
     fake_pe = _FakePE()
+    if root is not None:
+        resolved = root.resolve()
+        monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (resolved,))  # noqa: ARG005
+        for cid, doc in client.docs(INDEX).items():
+            (resolved / f'{cid}.jpg').write_bytes(_tiny_jpeg())
+            doc['image_path'] = str(resolved / f'{cid}.jpg')
     monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
+    monkeypatch.setattr(backfill_script, 'get_curation_config', lambda: _Cfg())
+    monkeypatch.setattr(reprocess_embed, 'get_curation_config', lambda: _Cfg())
+    return fake_pe
 
-    rc = await backfill_script._run(
-        'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
-    )
 
-    assert rc == 0
-    assert len(client.bulk_calls) == 2
-    written_ids = {c['id'] for c in client.bulk_calls}
-    assert written_ids == {'crop-1', 'crop-2'}
-    for call in client.bulk_calls:
-        vec = call['doc']['region_embedding']
-        assert len(vec) == 3
-        assert np.linalg.norm(vec) == pytest.approx(1.0, abs=1e-6)
+class _Cfg:
+    items_index = INDEX
+    images_index = 'images'
+
+
+async def _run(*, apply: bool) -> int:
+    return await backfill_script._run('http://fake:9200', 'fake:8001', apply=apply, max_docs=None)
 
 
 @pytest.mark.asyncio
-async def test_apply_skips_items_with_unreadable_source_image(
+async def test_dry_run_does_not_touch_triton_or_write(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    root = _servable_root(tmp_path, monkeypatch)
-    hits = [_hit('crop-missing', image_path=str(root / 'gone.jpg'), bbox=[0.1, 0.1, 0.5, 0.5])]
-    client = _FakeOSClient(hits)
-    fake_pe = _FakePE()
-    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
-    monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
-    monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
+    client = _OS({INDEX: {'c1': _item('c1', [_box('b1')])}})
+    _patch(monkeypatch, client, root=tmp_path)
+    ctor = MagicMock(side_effect=AssertionError('Triton must not be touched in dry-run'))
+    monkeypatch.setattr(backfill_script, 'AsyncTritonPool', ctor)
 
-    rc = await backfill_script._run(
-        'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
-    )
+    assert await _run(apply=False) == 0
 
-    assert rc == 0
-    assert client.bulk_calls == []
+    assert client.bulk_calls == 0
+    assert F.box_embeddings not in client.docs(INDEX)['c1']
+
+
+@pytest.mark.asyncio
+async def test_apply_embeds_every_missing_box_not_one_per_item(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    boxes = [_box('b1'), _box('b2', x=0.5), _box('b3', 'false_positive', x=0.7)]
+    client = _OS({INDEX: {'c1': _item('c1', boxes)}})
+    fake_pe = _patch(monkeypatch, client, root=tmp_path)
+
+    assert await _run(apply=True) == 0
+
+    doc = client.docs(INDEX)['c1']
+    vectors = current_vectors(doc)
+    assert set(vectors) == {'b1', 'b2', 'b3'}
+    assert fake_pe.embed_crops_calls == [3]
+    assert all(vec == pytest.approx([0.6, 0.8, 0.0]) for vec in vectors.values())
+    # The box list and revision are never written by the backfill.
+    assert doc[F.boxes] == _item('c1', boxes)[F.boxes]
+    assert doc[F.revision] == _item('c1', boxes)[F.revision]
+
+
+@pytest.mark.asyncio
+async def test_apply_is_resumable_and_re_embeds_a_moved_box(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    b1, b2 = _box('b1'), _box('b2', x=0.5)
+    moved_b2 = _box('b2', x=0.6)
+    stored = [entry_for(b1, [1.0, 0.0, 0.0]), entry_for(b2, [0.0, 1.0, 0.0])]
+    client = _OS({INDEX: {'c1': _item('c1', [b1, moved_b2], **{F.box_embeddings: stored})}})
+    fake_pe = _patch(monkeypatch, client, root=tmp_path)
+
+    assert await _run(apply=True) == 0
+
+    vectors = current_vectors(client.docs(INDEX)['c1'])
+    assert fake_pe.embed_crops_calls == [1]
+    assert vectors['b1'] == [1.0, 0.0, 0.0]
+    assert vectors['b2'] != [0.0, 1.0, 0.0]
+
+
+@pytest.mark.asyncio
+async def test_apply_skips_boxes_whose_source_image_is_unreadable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    client = _OS({INDEX: {'c1': _item('c1', [_box('b1')])}})
+    fake_pe = _patch(monkeypatch, client, root=None)
+
+    assert await _run(apply=True) == 0
+
+    assert client.bulk_calls == 0
     assert fake_pe.embed_crops_calls == []
 
 
-@pytest.mark.asyncio
-async def test_selection_query_excludes_items_that_already_have_the_field() -> None:
-    """Resumability: the query itself must exclude already-embedded items."""
+def test_selection_query_matches_only_items_with_an_embeddable_box() -> None:
+    """Rejected / proposed boxes carry no vector, so an item holding only
+    those is never selected. Asserted against the real nested-match
+    semantics, with the *same* box satisfying the state filter."""
+    docs = {
+        'fp-only': _item('fp-only', [_box('b1', 'false_positive')]),
+        'accepted': _item('accepted', [_box('b1')]),
+        'rejected-only': _item('rejected-only', [_box('b1', 'rejected')]),
+        'proposed-only': _item('proposed-only', [_box('b1', 'proposed')]),
+    }
     query = backfill_script._selection_query()
-    assert {
-        'nested': {
-            'path': 'region_boxes',
-            'query': {'terms': {'region_boxes.state': ['accepted', 'false_positive']}},
-        }
-    } in query['bool']['must']
-    assert {'exists': {'field': 'region_embedding'}} in query['bool']['must_not']
-
-
-def test_selection_query_matches_a_false_positive_only_item() -> None:
-    """W8-cleanup M5: the selection query used to silently narrow to
-    `accepted`-only, which starved `build_region_fp_centroids`
-    (status=false_positive AND exists region_embedding) of its inputs --
-    the classic hard-negative case (VLM-rejected, human-marked-FP) was
-    never selected for embedding. Exercise the query against the real
-    `region_boxes` nested-match semantics, not just its literal shape."""
-    from curation.query_fakes import QueryFakeOpenSearch, matches
-
-    fp_only = {
-        'crop_id': 'fp-only',
-        'region_boxes': [
-            {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'false_positive'}
-        ],
-    }
-    rejected_only = {
-        'crop_id': 'rejected-only',
-        'region_boxes': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'rejected'}],
-    }
-    already_embedded = {
-        'crop_id': 'already-embedded',
-        'region_boxes': [
-            {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'false_positive'}
-        ],
-        'region_embedding': [1.0, 0.0, 0.0],
-    }
-    fake = QueryFakeOpenSearch(
-        {
-            'items': {
-                'fp-only': fp_only,
-                'rejected-only': rejected_only,
-                'already-embedded': already_embedded,
-            }
-        }
-    )
-    query = backfill_script._selection_query()
-    matched = {doc_id for doc_id, doc in fake.docs('items').items() if matches(doc, query)}
-    assert matched == {'fp-only'}
-
-
-@pytest.mark.asyncio
-async def test_apply_writes_embeddings_for_a_false_positive_only_item(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    root = _servable_root(tmp_path, monkeypatch)
-    """M5: an FP-only item (no accepted box at all) must still get a
-    representative crop -- `best_region_bbox` falls back to the
-    highest-scoring false-positive box."""
-    hit = {
-        '_id': 'fp-crop',
-        '_source': {
-            'image_path': _write_image(root, 'a.jpg'),
-            'region_boxes': [
-                {
-                    'box_id': 'b1',
-                    'bbox_norm': [0.1, 0.1, 0.5, 0.5],
-                    'state': 'false_positive',
-                    'score': 0.7,
-                }
-            ],
-        },
-    }
-    client = _FakeOSClient([hit])
-    fake_pe = _FakePE()
-    monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
-    monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
-    monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
-
-    rc = await backfill_script._run(
-        'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
-    )
-
-    assert rc == 0
-    assert len(client.bulk_calls) == 1
-    assert client.bulk_calls[0]['id'] == 'fp-crop'
-
-
-def test_best_accepted_bbox_picks_the_highest_scoring_accepted_box() -> None:
-    from src.config import get_region_fields
-
-    source = {
-        'region_boxes': [
-            {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.99},
-            {'box_id': 'b2', 'bbox_norm': [0.2, 0.2, 0.3, 0.3], 'state': 'accepted', 'score': 0.4},
-            {'box_id': 'b3', 'bbox_norm': [0.4, 0.4, 0.5, 0.5], 'state': 'accepted', 'score': 0.8},
-        ]
-    }
-    assert best_region_bbox(source, get_region_fields()) == [0.4, 0.4, 0.5, 0.5]
-
-
-def test_best_accepted_bbox_falls_back_to_the_highest_scoring_fp_box() -> None:
-    """M5: an FP-only item (no accepted box) must still get a
-    representative crop."""
-    from src.config import get_region_fields
-
-    source = {
-        'region_boxes': [
-            {
-                'box_id': 'b1',
-                'bbox_norm': [0.0, 0.0, 0.1, 0.1],
-                'state': 'false_positive',
-                'score': 0.3,
-            },
-            {
-                'box_id': 'b2',
-                'bbox_norm': [0.2, 0.2, 0.3, 0.3],
-                'state': 'false_positive',
-                'score': 0.7,
-            },
-        ]
-    }
-    assert best_region_bbox(source, get_region_fields()) == [0.2, 0.2, 0.3, 0.3]
-
-
-def test_best_accepted_bbox_none_when_no_accepted_or_fp_box() -> None:
-    from src.config import get_region_fields
-
-    source = {
-        'region_boxes': [
-            {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.9},
-        ]
-    }
-    assert best_region_bbox(source, get_region_fields()) is None
+    assert {k for k, d in docs.items() if matches(d, query)} == {'fp-only', 'accepted'}

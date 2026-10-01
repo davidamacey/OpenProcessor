@@ -104,6 +104,15 @@ ErrorCode = Literal[
     # P4: combine projects.
     'combine_not_found',
     'combine_not_resumable',
+    # W9: VLM endpoint registry / selection
+    'unknown_vlm',
+    'vlm_external_not_acknowledged',
+    'vlm_not_configured',
+    'vlm_endpoint_unavailable',
+    'no_local_vlm',
+    'unknown_catalog_id',
+    'vlm_catalog_does_not_fit',
+    'probe_busy',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
@@ -187,6 +196,37 @@ ValidationCode = Literal[
     'label_conflicts',
     'holdout_recompute_contamination',
     'class_mapping_invalid',
+    # W9: VLM endpoint validation (any_domain_plan.md W9.4/W9.5)
+    'vlm_name_invalid',
+    'vlm_name_reserved',
+    'vlm_field_range',
+    'vlm_url_invalid',
+    'vlm_url_denied_internal_service',
+    'vlm_url_denied_address',
+    'vlm_api_key_ref_invalid',
+    'vlm_api_key_unresolved',
+    'vlm_api_key_ref_dropped',
+    'vlm_external_not_acknowledged',
+    'vlm_external_denied',
+    'vlm_catalog_id_unknown',
+    'vlm_unreachable',
+    'vlm_timeout',
+    'vlm_auth_failed',
+    'vlm_http_error',
+    'vlm_models_endpoint_missing',
+    'vlm_model_not_listed',
+    'vlm_no_vision',
+    'vlm_vision_answer_wrong',
+    'vlm_json_mode_unsupported',
+    'vlm_max_images_exceeds_server',
+    'vlm_reply_unparseable',
+    'vlm_not_probed',
+    'vlm_probe_failed',
+    'vlm_context_too_small',
+    'vlm_multi_box_unverified',
+    'vlm_reads_text_unverified',
+    'vlm_json_mode_off',
+    'vlm_open_images_clamped',
 ]
 
 
@@ -269,6 +309,11 @@ class ConfigErrorDetail(BaseModel):
     unmapped: list[str] | None = None
     import_id: str | None = None
     limit: int | None = None
+    # W9: unknown_vlm carries `requested`; a refused external endpoint names
+    # itself and where its acknowledgement is given.
+    requested: str | None = None
+    endpoint: str | None = None
+    activate_via: str | None = None
 
 
 class ApiErrorResponse(BaseModel):
@@ -328,6 +373,8 @@ class AppliedRuntime(BaseModel):
     applied_config_revision: int
     profile: ActiveRef
     pack: ActiveRef
+    # W9: the VLM endpoint this worker's runtime was built from.
+    vlm: ActiveRef = ActiveRef()
     applied_at: str | None = None
     lagging: bool = False
 
@@ -351,7 +398,7 @@ class ActiveConfigResponse(BaseModel):
     has ever applied anything, e.g. an API-only deployment.
     """
 
-    axis: Literal['prompt_pack', 'detection_profile']
+    axis: Literal['prompt_pack', 'detection_profile', 'vlm']
     active: ActiveRef
     source: Literal['stored', 'env', 'off']
     activated_at: str | None = None

@@ -41,18 +41,14 @@ Skip-rules:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from collections import Counter
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from src.config import get_region_fields
 from src.config.curation import items_index
-from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
 
@@ -63,6 +59,8 @@ from src.services.curation.clustering.id_normalize import run_update_by_query_po
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from opensearchpy import AsyncOpenSearch
 
     from src.services.clustering import ClusteringService
@@ -106,7 +104,7 @@ from src.services.curation.clustering.methods.ahc import (  # noqa: E402
 )
 
 
-def _subcluster_label(idx: int) -> str:
+def subcluster_label(idx: int) -> str:
     """Convert a sub-cluster index ``0,1,2,...`` into a label suffix ``a,b,c,...,aa,ab,...``."""
     if idx < 0:
         raise ValueError('subcluster index must be >= 0')
@@ -226,39 +224,6 @@ def _guarded_class_cluster_write(cid: int, dist: float | None) -> dict[str, Any]
     }
 
 
-def _region_write_guard_clauses(F: Any) -> list[GuardClause]:
-    """Region-write guard: mirrors :func:`fp_candidate_must_not`'s human
-    clauses (``F.label_source``/``F.verifier`` == ``'human'``) plus
-    ``F.validated`` -- a VLM-validated region is not ground truth (see
-    ``fp_candidate_must_not``'s docstring) but a *human*-validated one is
-    final and must never be reshuffled by an automated re-cluster."""
-    return [
-        (F.label_source, 'eq', 'human'),
-        (F.verifier, 'eq', 'human'),
-        (F.validated, 'eq', True),
-    ]
-
-
-def _guarded_region_write(F: Any, fields: dict[str, Any]) -> dict[str, Any]:
-    """Guarded bulk-update body for the region-cluster writers
-    (:func:`cluster_region_residuals`, :func:`auto_assign_fp_from_centroids`):
-    noop instead of overwriting a human-verified/validated region. A
-    ``None`` value in ``fields`` removes that field instead of nulling it."""
-    clauses = _region_write_guard_clauses(F)
-    params: dict[str, Any] = {}
-    stmts: list[str] = []
-    for i, (field, value) in enumerate(fields.items()):
-        if value is None:
-            stmts.append(f"ctx._source.remove('{field}')")
-        else:
-            pname = f'v{i}'
-            params[pname] = value
-            stmts.append(f"ctx._source['{field}'] = params.{pname}")
-    source = f'if ({_guard_condition_painless(clauses)}) {{' + " ctx.op = 'noop'; return; }"
-    source += ''.join(f' {s};' for s in stmts)
-    return {'script': {'lang': 'painless', 'params': params, 'source': source}}
-
-
 def _log_bulk_write_errors(op: str, resp: dict[str, Any]) -> None:
     """Log each failed bulk item (id + status + reason) at
     warning level instead of only a chunk-level 'errors: true' flag.
@@ -283,36 +248,25 @@ async def _fetch_cluster_members(
     *,
     page_size: int = 1000,
     index: str | None = None,
-    cluster_id_field: str = 'cluster_id',
-    embedding_field: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Pull every doc with ``<cluster_id_field> == cluster_id`` from ``index``.
+    """Pull every item with ``cluster_id == cluster_id`` from ``index``.
 
-    Reads ``embedding_field`` (default the item residual field
-    ``pe_embedding``; the region path passes ``RegionFields.embedding``),
-    1024x4B ≈ 4KB each, so MAX_REFINE_MEMBERS (default 8000) members ≈
-    32MB — safe to load into RAM. The
-    embedding is normalized to the ``'embedding'`` key so ``refine_cluster``
-    stays field-name-agnostic.
+    Reads the item residual embedding (``pe_embedding``), 1024x4B ~ 4KB
+    each, so MAX_REFINE_MEMBERS (default 8000) members ~ 32MB -- safe to
+    load into RAM. The embedding is normalized to the ``'embedding'`` key
+    so :func:`refine_members` stays field-name-agnostic.
     """
+    from src.services.curation.clustering.embedding_reduce import RESIDUAL_EMBEDDING_FIELD
+
     if index is None:
         index = items_index()
-    if embedding_field is None:
-        from src.services.curation.clustering.embedding_reduce import RESIDUAL_EMBEDDING_FIELD
-
-        embedding_field = RESIDUAL_EMBEDDING_FIELD
+    embedding_field = RESIDUAL_EMBEDDING_FIELD
 
     members: list[dict[str, Any]] = []
     body = {
         'size': page_size,
-        'query': {'term': {cluster_id_field: cluster_id}},
-        '_source': [
-            'crop_id',
-            'class_name',
-            'class_id',
-            'class_validated',
-            embedding_field,
-        ],
+        'query': {'term': {'cluster_id': cluster_id}},
+        '_source': ['crop_id', 'class_name', 'class_id', 'class_validated', embedding_field],
     }
     resp = await client.search(index=index, body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
@@ -344,26 +298,22 @@ async def _bulk_update_subids(
     updates: list[tuple[str, str]],
     *,
     index: str | None = None,
-    subid_field: str = 'cluster_subid',
-    cluster_id_field: str = 'cluster_id',
     expected_cluster_id: int | None = None,
     chunk_size: int = _SUBID_UPDATE_CHUNK,
 ) -> int:
-    """Bulk-update ``subid_field`` on the supplied (doc_id, subid) pairs.
+    """Bulk-update ``cluster_subid`` on the supplied (doc_id, subid) pairs.
 
-    When ``expected_cluster_id`` is given (refine's caller always
-    passes it -- the cluster being refined), the write is a guarded
-    painless script that noops if the doc's ``cluster_id_field`` no longer
-    equals ``expected_cluster_id``. Refine snapshots members, fits AHC
-    (can take seconds on a large cluster), then writes; a doc that moved to
-    a different cluster in that window (a human relabel, a move endpoint
-    call, another clustering job) must not have refine's now-stale
-    sub-cluster numbering stamped onto it.
+    When ``expected_cluster_id`` is given (refine's caller always passes it
+    -- the cluster being refined), the write is a guarded painless script
+    that noops if the doc's ``cluster_id`` no longer equals it. Refine
+    snapshots members, fits AHC (can take seconds on a large cluster), then
+    writes; a doc that moved to a different cluster in that window (a human
+    relabel, a move endpoint call, another clustering job) must not have
+    refine's now-stale sub-cluster numbering stamped onto it.
 
     Chunks into batches of ``chunk_size`` (<=1000) bulk actions with
     ``refresh=False`` per chunk, then issues one explicit index refresh at
-    the end -- avoids refreshing the index once per chunk on a large
-    refine.
+    the end -- avoids refreshing the index once per chunk on a large refine.
     """
     if index is None:
         index = items_index()
@@ -376,7 +326,7 @@ async def _bulk_update_subids(
         for doc_id, subid in chunk:
             body.append({'update': {'_index': index, '_id': doc_id}})
             if expected_cluster_id is None:
-                body.append({'doc': {subid_field: subid, 'updated_at': now}})
+                body.append({'doc': {'cluster_subid': subid, 'updated_at': now}})
             else:
                 body.append(
                     {
@@ -384,9 +334,9 @@ async def _bulk_update_subids(
                             'lang': 'painless',
                             'params': {'cid': expected_cluster_id, 'subid': subid, 'now': now},
                             'source': (
-                                f"if (ctx._source['{cluster_id_field}'] != params.cid)"
+                                "if (ctx._source['cluster_id'] != params.cid)"
                                 " { ctx.op = 'noop'; return; }"
-                                f" ctx._source['{subid_field}'] = params.subid;"
+                                " ctx._source['cluster_subid'] = params.subid;"
                                 ' ctx._source.updated_at = params.now;'
                             ),
                         }
@@ -412,51 +362,43 @@ def _compute_purity(class_names: list[str | None]) -> float:
     return top / len(labelled)
 
 
-async def refine_cluster(
-    client: AsyncOpenSearch,
+async def refine_members(
     cluster_id: int,
     *,
+    count_members: Callable[[], Awaitable[int]],
+    fetch_members: Callable[[], Awaitable[list[dict[str, Any]]]],
+    write_subids: Callable[[list[tuple[Any, str]]], Awaitable[int]],
+    unit: Literal['items', 'boxes'],
     distance_threshold: float = AHC_DISTANCE_THRESHOLD,
-    index: str | None = None,
-    cluster_id_field: str = 'cluster_id',
-    embedding_field: str | None = None,
-    subid_field: str = 'cluster_subid',
     max_members: int = MAX_REFINE_MEMBERS,
 ) -> dict[str, Any]:
-    """Run per-cluster AHC refinement on the supplied ``cluster_id``.
+    """The AHC refine core shared by item clusters and region-box clusters.
 
-    Steps:
-    1. Pull all crops in the cluster from ``index``.
+    ``unit`` is what a member is, and names the response counts
+    (``n_<unit>`` members, ``n_<unit>_updated`` members whose stored
+    sub-id ``write_subids`` reports changed).
+
+    ``fetch_members`` returns ``{'_id': <opaque key>, 'embedding': [...],
+    'class_name': ...}`` dicts; ``write_subids`` receives ``(_id, subid)``
+    pairs. Steps:
+
+    1. ``count_members`` first -- a cluster far past ``max_members`` never
+       pays for fetching every embedding just to learn it is too large.
     2. Skip if < MIN_REFINE_MEMBERS (4) members (too small) or
-       > MAX_REFINE_MEMBERS (default 8000) members (too expensive).
+       > ``max_members`` (default 8000) members (too expensive).
     3. ``AgglomerativeClustering(linkage='complete', distance_threshold=0.25,
        metric='cosine')`` over the embeddings.
-    4. Bulk-write ``subid_field`` (e.g. ``"47a"``, ``"47b"``) back to each doc.
-    5. Compute purity (largest-class share among labelled members) and return
-       a summary.
+    4. ``write_subids`` the ``"47a"``, ``"47b"`` ... labels; every current
+       member gets a fresh one, so re-running overwrites a previous partition.
+    5. Purity (largest-class share among labelled members) in the summary.
 
-    Defaults refine item clusters over ``pe_embedding`` / ``cluster_id`` /
-    ``cluster_subid``. The region path passes
-    ``cluster_id_field=RegionFields.cluster_id``,
-    ``embedding_field=RegionFields.embedding``,
-    ``subid_field=RegionFields.cluster_subid`` (see :func:`refine_region_cluster`)
-    to refine region buckets without touching item clustering.
-
-    Returns:
-        ``{cluster_id, n_members, n_subclusters, purity, action, ...}``.
+    Returns ``{cluster_id, n_<unit>, n_subclusters, purity, action, ...}``.
     """
-    if index is None:
-        index = items_index()
-    log = logger.bind(cluster_id=cluster_id, index=index, cluster_id_field=cluster_id_field)
+    log = logger.bind(cluster_id=cluster_id)
     log.info('curation_refine_cluster_start')
+    n_key = f'n_{unit}'
 
-    # Count before scrolling every member's embedding — a cluster
-    # far past max_members should never pay for that fetch just to
-    # discover it's too large to refine.
-    count_resp = await client.count(
-        index=index, body={'query': {'term': {cluster_id_field: cluster_id}}}
-    )
-    precount = int((count_resp or {}).get('count', 0))
+    precount = await count_members()
     if precount > max_members:
         log.warning(
             'curation_refine_cluster_skipped_too_large_precount',
@@ -465,26 +407,20 @@ async def refine_cluster(
         )
         return {
             'cluster_id': cluster_id,
-            'n_members': precount,
+            n_key: precount,
             'n_subclusters': 0,
-            # Purity isn't computed here — that would need the same full
+            # Purity isn't computed here -- that would need the same full
             # fetch this precount check exists to avoid paying for.
             'purity': None,
             'action': 'skipped_too_large',
             'reason': (
                 f'> {max_members} members ({precount} counted); AHC builds a full '
-                '~8*n^2-byte pairwise matrix — raise OP_MAX_REFINE_MEMBERS / '
+                '~8*n^2-byte pairwise matrix -- raise OP_MAX_REFINE_MEMBERS / '
                 'max_members if RAM allows'
             ),
         }
 
-    members = await _fetch_cluster_members(
-        client,
-        cluster_id,
-        index=index,
-        cluster_id_field=cluster_id_field,
-        embedding_field=embedding_field,
-    )
+    members = await fetch_members()
     n_members = len(members)
 
     if n_members < MIN_REFINE_MEMBERS:
@@ -495,7 +431,7 @@ async def refine_cluster(
         )
         return {
             'cluster_id': cluster_id,
-            'n_members': n_members,
+            n_key: n_members,
             'n_subclusters': 0,
             'purity': _compute_purity([m.get('class_name') for m in members]),
             'action': 'skipped_too_small',
@@ -510,30 +446,24 @@ async def refine_cluster(
         )
         return {
             'cluster_id': cluster_id,
-            'n_members': n_members,
+            n_key: n_members,
             'n_subclusters': 0,
             'purity': _compute_purity([m.get('class_name') for m in members]),
             'action': 'skipped_too_large',
             'reason': (
                 f'> {max_members} members; AHC builds a full ~8*n^2-byte pairwise '
-                'matrix — raise OP_MAX_REFINE_MEMBERS / max_members if RAM allows'
+                'matrix -- raise OP_MAX_REFINE_MEMBERS / max_members if RAM allows'
             ),
         }
 
-    # Stack embeddings.
     try:
-        embeddings = np.asarray(
-            [m['embedding'] for m in members],
-            dtype=np.float32,
-        )
+        embeddings = np.asarray([m['embedding'] for m in members], dtype=np.float32)
     except (KeyError, TypeError, ValueError) as e:
         log.error('curation_refine_cluster_embedding_load_failed', error=str(e))
         raise
 
-    # AHC — sklearn import is local to keep startup fast and avoid a hard dep
-    # for callers that never touch clustering.
-    import asyncio as _asyncio
-
+    # sklearn import is local to keep startup fast and avoid a hard dep for
+    # callers that never touch clustering.
     from sklearn.cluster import AgglomerativeClustering
 
     clusterer = AgglomerativeClustering(
@@ -543,32 +473,17 @@ async def refine_cluster(
         metric=AHC_METRIC,
     )
     # Off-load to a worker thread so a large cluster (close to
-    # MAX_REFINE_MEMBERS, default 8000) doesn't block the FastAPI event loop —
-    # refine_cluster runs in the yolo-api process, not the dedicated
-    # worker container, so a sync fit_predict here would starve every
-    # other request.
-    sub_labels = await _asyncio.to_thread(clusterer.fit_predict, embeddings)
+    # MAX_REFINE_MEMBERS) doesn't block the FastAPI event loop -- refine runs
+    # in the yolo-api process, so a sync fit here would starve every other
+    # request.
+    sub_labels = await asyncio.to_thread(clusterer.fit_predict, embeddings)
     n_subclusters = int(sub_labels.max() + 1) if len(sub_labels) > 0 else 0
 
-    # Map each doc to its subid string. Every current member of the
-    # cluster gets a fresh subid, so any previous subid value is
-    # overwritten — re-running refine on the same cluster produces a
-    # clean partition. Crops that left this cluster between runs are
-    # handled by the move/label endpoints clearing cluster_subid when
-    # they change cluster_id.
-    updates: list[tuple[str, str]] = []
-    for member, sub_idx in zip(members, sub_labels, strict=True):
-        subid = f'{cluster_id}{_subcluster_label(int(sub_idx))}'
-        updates.append((member['_id'], subid))
-
-    n_updated = await _bulk_update_subids(
-        client,
-        updates,
-        index=index,
-        subid_field=subid_field,
-        cluster_id_field=cluster_id_field,
-        expected_cluster_id=cluster_id,
-    )
+    updates = [
+        (member['_id'], f'{cluster_id}{subcluster_label(int(sub_idx))}')
+        for member, sub_idx in zip(members, sub_labels, strict=True)
+    ]
+    n_updated = await write_subids(updates)
 
     # Per-sub-cluster purity, then weighted-mean as the cluster summary.
     sub_groups: dict[int, list[str | None]] = {}
@@ -577,15 +492,14 @@ async def refine_cluster(
     weighted_purity = (
         sum(_compute_purity(names) * len(names) for names in sub_groups.values()) / n_members
     )
-    overall_purity = _compute_purity([m.get('class_name') for m in members])
 
     summary: dict[str, Any] = {
         'cluster_id': cluster_id,
-        'n_members': n_members,
+        n_key: n_members,
         'n_subclusters': n_subclusters,
-        'purity': overall_purity,
+        'purity': _compute_purity([m.get('class_name') for m in members]),
         'subcluster_weighted_purity': weighted_purity,
-        'n_updated': n_updated,
+        f'n_{unit}_updated': n_updated,
         'distance_threshold': distance_threshold,
         'linkage': AHC_LINKAGE,
         'metric': AHC_METRIC,
@@ -593,6 +507,38 @@ async def refine_cluster(
     }
     log.info('curation_refine_cluster_done', **summary)
     return summary
+
+
+async def refine_cluster(
+    client: AsyncOpenSearch,
+    cluster_id: int,
+    *,
+    distance_threshold: float = AHC_DISTANCE_THRESHOLD,
+    max_members: int = MAX_REFINE_MEMBERS,
+) -> dict[str, Any]:
+    """Per-cluster AHC refinement of an *item* cluster (``pe_embedding`` /
+    ``cluster_id`` / ``cluster_subid``); see :func:`refine_members`. Region
+    boxes refine through ``region_box_clustering.refine_region_cluster``."""
+    index = items_index()
+
+    async def count_members() -> int:
+        resp = await client.count(index=index, body={'query': {'term': {'cluster_id': cluster_id}}})
+        return int((resp or {}).get('count', 0))
+
+    async def write_subids(updates: list[tuple[Any, str]]) -> int:
+        return await _bulk_update_subids(
+            client, updates, index=index, expected_cluster_id=cluster_id
+        )
+
+    return await refine_members(
+        cluster_id,
+        count_members=count_members,
+        fetch_members=lambda: _fetch_cluster_members(client, cluster_id, index=index),
+        write_subids=write_subids,
+        unit='items',
+        distance_threshold=distance_threshold,
+        max_members=max_members,
+    )
 
 
 # auto_promote_clusters moved to src.services.curation.clustering.auto_promote
@@ -1281,783 +1227,24 @@ async def assign_only_residuals(
     }
 
 
-# ============================================================================
-# Region clustering — coarse partition + per-bucket AHC refine over the
-# RegionFields embedding (a deployment overlay may point this at an
-# existing region_pe_embedding field). Regions are all one class (e.g.
-# a single sub-annotation type), so this is OUTLIER discovery: similar
-# regions group together and false-positives / bad boxes fall out as
-# sub-cluster outliers under refine. Writes the independent RegionFields
-# cluster fields (not the item-level cluster_*).
-# ============================================================================
-
-F = get_region_fields()
-
-REGION_TARGET_BUCKET_SIZE = 800
-# Target members per coarse bucket. K is chosen so buckets land well under
-# MAX_REFINE_MEMBERS (2000), keeping per-bucket AHC refine cheap.
-MIN_REGIONS_FOR_CLUSTERING = 32
-
-# Permanent region false-positive bucket.
-# Negative so it never collides with the flat KMeans namespace (0..K-1).
-# Human FP marks park crops here; cluster_region_residuals excludes them so
-# the good buckets' centroids stay clean. FPs vary widely (background
-# clutter, similar-looking non-target objects, empty boxes) so
-# build_region_fp_centroids sub-types this bucket.
-FALSE_POSITIVE_REGION_CLUSTER_ID = -100
-FP_TARGET_SUBTYPE_SIZE = 150  # target members per FP sub-type
-FP_MIN_FOR_SUBTYPES = 32  # below this, one whole-bucket centroid
-
-
-async def cluster_region_residuals(
-    client: AsyncOpenSearch,
-    *,
-    max_rank: int | None = None,
-    page_size: int = 2000,
-) -> dict[str, Any]:
-    """Coarse-partition boxed regions into ``RegionFields.cluster_id`` buckets.
-
-    Scrolls every crop that carries ``RegionFields.embedding`` (optionally
-    gated to top-N largest crops via ``max_rank`` over
-    ``crop_rank_in_image``), runs MiniBatchKMeans over the unit-norm
-    vectors, and writes ``RegionFields.cluster_id`` +
-    ``RegionFields.cluster_distance``. Each bucket can then be AHC-refined
-    via :func:`refine_region_cluster` to surface outliers.
-
-    No confident-class gate and no RESIDUAL_CLUSTER_ID_OFFSET — regions are
-    a single flat namespace in ``RegionFields.cluster_id`` (0..K-1).
-    """
-    filt: list[dict[str, Any]] = [{'exists': {'field': F.embedding}}]
-    if max_rank is not None:
-        filt.append({'range': {'crop_rank_in_image': {'lte': int(max_rank)}}})
-    # FPs live in the permanent FALSE_POSITIVE_REGION_CLUSTER_ID bucket.
-    # Exclude them so KMeans never reshuffles them back into good buckets
-    # and the good buckets' centroids recompute clean.
-    query = {
-        'bool': {
-            'filter': filt,
-            'must_not': [{'term': {F.status: RegionStatus.FALSE_POSITIVE}}],
-        }
-    }
-
-    ids: list[str] = []
-    vecs: list[list[float]] = []
-    body = {'size': page_size, 'query': query, '_source': [F.embedding]}
-    resp = await client.search(index=items_index(), body=body, scroll='5m')
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    while hits:
-        for h in hits:
-            emb = (h.get('_source') or {}).get(F.embedding)
-            if emb is not None:
-                ids.append(h['_id'])
-                vecs.append(emb)
-        resp = await client.scroll(scroll_id=scroll_id, scroll='5m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-    if scroll_id:
-        try:
-            await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as e:
-            logger.warning('curation_clear_scroll_failed', error=str(e))
-
-    n = len(ids)
-    if n < MIN_REGIONS_FOR_CLUSTERING:
-        return {'status': 'skipped', 'reason': 'too_few_regions', 'n_regions': n, 'n_clusters': 0}
-
-    from sklearn.cluster import MiniBatchKMeans
-
-    x = np.asarray(vecs, dtype=np.float32)
-    # Re-normalize defensively. The k-means/cosine-distance math
-    # below assumes unit-norm rows, but this reads region_embedding
-    # straight off the index with no guarantee the writer's normalization
-    # survived (or that every historical row was written by a
-    # normalizing writer). A norm drift here silently breaks the
-    # "cosine-ish distance to centroid" comment two lines down.
-    norms = np.linalg.norm(x, axis=1, keepdims=True)
-    x = x / np.maximum(norms, 1e-12)
-    k = max(8, round(n / REGION_TARGET_BUCKET_SIZE))
-    k = min(k, n)  # never more clusters than points
-
-    def _fit() -> tuple[Any, Any]:
-        km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=4096)
-        labels = km.fit_predict(x)
-        # Cosine-ish distance to assigned centroid (vectors are unit-norm).
-        dists = np.linalg.norm(x - km.cluster_centers_[labels], axis=1)
-        return labels, dists
-
-    labels, dists = await asyncio.to_thread(_fit)
-
-    now = datetime.now(UTC).isoformat()
-    bulk: list[dict[str, Any]] = []
-    n_written = 0
-    for doc_id, lab, dist in zip(ids, labels, dists, strict=True):
-        bulk.append({'update': {'_index': items_index(), '_id': doc_id}})
-        # Guarded script — noop instead of overwriting a
-        # human-verified/validated region; a fresh coarse partition
-        # invalidates any prior refine, so cluster_subid is removed.
-        bulk.append(
-            _guarded_region_write(
-                F,
-                {
-                    F.cluster_id: int(lab),
-                    F.cluster_distance: float(dist),
-                    F.cluster_subid: None,
-                    'updated_at': now,
-                },
-            )
-        )
-        if len(bulk) >= 1000:
-            br = await client.bulk(body=bulk, refresh=False)
-            if br.get('errors'):
-                _log_bulk_write_errors('cluster_region_residuals', br)
-            n_written += len(bulk) // 2
-            bulk = []
-    if bulk:
-        br = await client.bulk(body=bulk, refresh=False)
-        if br.get('errors'):
-            _log_bulk_write_errors('cluster_region_residuals', br)
-        n_written += len(bulk) // 2
-    try:
-        await client.indices.refresh(index=items_index())
-    except Exception as exc:
-        logger.debug('curation_region_cluster_refresh_failed', error=str(exc))
-
-    logger.info(
-        'curation_cluster_region_residuals_done', n_regions=n, n_clusters=int(k), assigned=n_written
-    )
-    return {
-        'status': 'success',
-        'method': 'minibatch_kmeans',
-        'n_regions': n,
-        'n_clusters': int(k),
-        'assigned': n_written,
-        'max_rank': max_rank,
-    }
-
-
-async def refine_region_cluster(
-    client: AsyncOpenSearch,
-    region_cluster_id: int,
-    *,
-    distance_threshold: float = AHC_DISTANCE_THRESHOLD,
-) -> dict[str, Any]:
-    """AHC-refine one region bucket; writes ``RegionFields.cluster_subid``.
-
-    Thin wrapper over :func:`refine_cluster` pinned to the region fields, so
-    outlier regions (false-positives / bad boxes) split into their own
-    sub-clusters exactly like item-class refine.
-    """
-    return await refine_cluster(
-        client,
-        region_cluster_id,
-        distance_threshold=distance_threshold,
-        index=items_index(),
-        cluster_id_field=F.cluster_id,
-        embedding_field=F.embedding,
-        subid_field=F.cluster_subid,
-    )
-
-
-# Background region-clustering job state, persisted to a small file. The API
-# runs many uvicorn workers in one container; in-process state would make the
-# status poll hit a worker that knows nothing about the job. A file on the
-# shared container fs is consistent across all workers. Clustering 50k+
-# regions scrolls hundreds of MB + writes every assignment (~7-8 min), far
-# too long to hold an HTTP request — so the endpoint fires it and the UI
-# polls this file.
-def _region_state_dir() -> Path:
-    """The bound project's region-clustering state dir: the job files and
-    TTL markers below are per project (one project's refine must never
-    suppress another's re-partition, nor its job show on another's status)."""
-    from src.config.curation import get_curation_config
-
-    return Path(get_curation_config().project_state_dir) / 'region_cluster'
-
-
-def _job_file() -> Path:
-    return _region_state_dir() / 'job.json'
-
-
-_JOB_STALE_S = 1800.0  # a 'running' flag older than this is treated as dead
-_DEFAULT_JOB: dict[str, Any] = {
-    'running': False,
-    'started_at': None,
-    'finished_at': None,
-    'result': None,
-    'error': None,
-}
-_job_tasks: set[asyncio.Task[None]] = set()
-
-
-def _read_region_cluster_job() -> dict[str, Any]:
-    try:
-        state: dict[str, Any] = json.loads(_job_file().read_text())
-    except Exception:
-        return dict(_DEFAULT_JOB)
-    # Stale-guard: a worker that died mid-run would otherwise leave the flag
-    # stuck on 'running' forever, wedging the button.
-    if state.get('running') and state.get('started_at'):
-        try:
-            started = datetime.fromisoformat(state['started_at'])
-            if (datetime.now(UTC) - started).total_seconds() > _JOB_STALE_S:
-                state['running'] = False
-                state['error'] = 'job timed out or worker died'
-        except ValueError:
-            pass
-    return state
-
-
-def _write_region_cluster_job(state: dict[str, Any]) -> None:
-    try:
-        _job_file().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _job_file().with_suffix('.tmp')
-        tmp.write_text(json.dumps(state))
-        tmp.replace(_job_file())  # atomic rename
-    except Exception as exc:
-        logger.warning('curation_region_cluster_job_write_failed', error=str(exc))
-
-
-def region_cluster_job_status() -> dict[str, Any]:
-    """Cross-worker snapshot of the background region-clustering job."""
-    return _read_region_cluster_job()
-
-
-# A manual AHC refine of a good region bucket writes per-crop sub-ids that a
-# full re-partition would wipe (sub-ids are cluster-local). We record the last
-# refine time so the one-click pipeline can skip the destructive re-partition
-# while recent refine work is still fresh (a SHORT TTL), unless the caller forces
-# it OR a substantial batch of new FPs has accumulated since the last partition
-# (which busts the TTL — the good-region pool changed enough to be worth it).
-REGION_REPARTITION_REFINE_TTL_S = 600.0  # 10 min — short; just protects in-progress refines
-FP_REPARTITION_BUST_DELTA = 200  # this many new FPs since last partition busts the TTL
-
-
-def _refine_marker() -> Path:
-    return _region_state_dir() / 'refine_marker.json'
-
-
-def _partition_marker() -> Path:
-    return _region_state_dir() / 'partition_marker.json'
-
-
-def mark_region_refine(cluster_id: int) -> None:
-    """Record that a good region bucket was just manually refined (TTL anchor)."""
-    try:
-        _refine_marker().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _refine_marker().with_suffix('.tmp')
-        tmp.write_text(
-            json.dumps({'last_refine_at': datetime.now(UTC).isoformat(), 'cluster_id': cluster_id})
-        )
-        tmp.replace(_refine_marker())
-    except Exception as exc:
-        logger.warning('curation_region_refine_marker_write_failed', error=str(exc))
-
-
-def _read_region_refine_marker() -> dict[str, Any]:
-    try:
-        data: dict[str, Any] = json.loads(_refine_marker().read_text())
-        return data
-    except Exception:
-        return {}
-
-
-def _write_region_partition_marker(fp_count: int) -> None:
-    try:
-        _partition_marker().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _partition_marker().with_suffix('.tmp')
-        tmp.write_text(
-            json.dumps({'last_partition_at': datetime.now(UTC).isoformat(), 'fp_count': fp_count})
-        )
-        tmp.replace(_partition_marker())
-    except Exception as exc:
-        logger.warning('curation_region_partition_marker_write_failed', error=str(exc))
-
-
-def _read_region_partition_marker() -> dict[str, Any]:
-    try:
-        data: dict[str, Any] = json.loads(_partition_marker().read_text())
-        return data
-    except Exception:
-        return {}
-
-
-async def _count_false_positives(client: AsyncOpenSearch) -> int:
-    """Current count of false-positive region crops (the FP bucket population)."""
-    try:
-        resp = await client.count(
-            index=items_index(),
-            body={'query': {'term': {F.status: RegionStatus.FALSE_POSITIVE}}},
-        )
-        return int(resp.get('count', 0))
-    except Exception as exc:
-        logger.warning('curation_count_fp_failed', error=str(exc))
-        return 0
-
-
-async def start_region_cluster_job(
-    client: AsyncOpenSearch,
-    *,
-    max_rank: int | None = None,
-    auto_fp_threshold: float | None = 0.20,
-    rebuild_fp_centroids: bool = True,
-    repartition_ttl_s: float = REGION_REPARTITION_REFINE_TTL_S,
-    fp_bust_delta: int = FP_REPARTITION_BUST_DELTA,
-    force_repartition: bool = False,
-) -> dict[str, Any]:
-    """Launch the full region-clustering pipeline in the background (single-flight).
-
-    Pipeline (FP-prep steps are best-effort so a failure can't block the main
-    re-partition):
-      1. ``rebuild_fp_centroids``: re-sub-type the FP bucket + rebuild its
-         sub-type centroids from the current false positives.
-      2. ``auto_fp_threshold`` > 0: auto-move regions within that L2 distance of an
-         FP sub-centroid into the FP bucket (the tight, near-certain matches).
-      3. re-partition the good regions (FPs — including the just-moved ones —
-         excluded), so the good buckets' centroids stay clean. **Skipped** when a
-         manual region refine happened within ``repartition_ttl_s`` (a short TTL),
-         to avoid wiping that fresh cluster-local sub-id work — UNLESS
-         ``force_repartition`` or at least ``fp_bust_delta`` new FPs have
-         accumulated since the last partition (a substantial change busts the TTL).
-
-    Returns the job snapshot immediately so the caller never blocks. If a run is
-    already in flight, returns its snapshot without starting another.
-    """
-    state = _read_region_cluster_job()
-    if state.get('running'):
-        return state
-    started = datetime.now(UTC).isoformat()
-    _write_region_cluster_job(
-        {'running': True, 'started_at': started, 'finished_at': None, 'result': None, 'error': None}
-    )
-
-    async def _run() -> None:
-        result: dict[str, Any] | None = None
-        error: str | None = None
-        extra: dict[str, Any] = {}
-        try:
-            if rebuild_fp_centroids:
-                try:
-                    extra['fp_centroids'] = await build_region_fp_centroids(client)
-                except Exception as exc:
-                    extra['fp_centroids'] = {'status': 'error', 'error': str(exc)}
-                    logger.error('curation_region_job_fp_build_failed', error=str(exc))
-            if auto_fp_threshold and auto_fp_threshold > 0:
-                try:
-                    extra['auto_fp'] = await auto_assign_fp_from_centroids(
-                        client, threshold=auto_fp_threshold
-                    )
-                except Exception as exc:
-                    extra['auto_fp'] = {'status': 'error', 'error': str(exc)}
-                    logger.error('curation_region_job_auto_fp_failed', error=str(exc))
-            # TTL gate: a re-partition clears good-region sub-ids, so skip it
-            # while a recent manual refine is still fresh — UNLESS forced, or a
-            # substantial batch of FPs accumulated since the last partition
-            # (then the good-region pool changed enough to be worth re-clustering).
-            current_fp = await _count_false_positives(client)
-            fp_at_last = int(_read_region_partition_marker().get('fp_count', 0))
-            fp_delta = current_fp - fp_at_last
-            refine_at = _read_region_refine_marker().get('last_refine_at')
-            refine_fresh = False
-            if refine_at and not force_repartition:
-                try:
-                    age = (datetime.now(UTC) - datetime.fromisoformat(refine_at)).total_seconds()
-                    refine_fresh = age < repartition_ttl_s
-                except ValueError:
-                    refine_fresh = False
-            busts_ttl = fp_delta >= fp_bust_delta
-            do_repartition = force_repartition or busts_ttl or not refine_fresh
-            if do_repartition:
-                result = await cluster_region_residuals(client, max_rank=max_rank)
-                _write_region_partition_marker(current_fp)
-            else:
-                result = {
-                    'status': 'skipped_repartition_ttl',
-                    'reason': 'recent manual region refine within TTL; sub-clusters preserved',
-                    'last_refine_at': refine_at,
-                    'repartition_ttl_s': repartition_ttl_s,
-                    'fp_delta_since_partition': fp_delta,
-                    'fp_bust_delta': fp_bust_delta,
-                }
-            result = {**result, **extra}
-        except Exception as exc:
-            error = str(exc)
-            logger.error('curation_region_cluster_job_failed', error=str(exc))
-        finally:
-            _write_region_cluster_job(
-                {
-                    'running': False,
-                    'started_at': started,
-                    'finished_at': datetime.now(UTC).isoformat(),
-                    'result': result,
-                    'error': error,
-                }
-            )
-
-    task = asyncio.create_task(_run())
-    _job_tasks.add(task)
-    task.add_done_callback(_job_tasks.discard)
-    return _read_region_cluster_job()
-
-
-# ============================================================================
-# Plate false-positive centroids — sub-type the permanent FP bucket and
-# persist one centroid per sub-type, in a single pass, so the sub-clusters an
-# operator shift-selects and the centroids used by the suspected-FP matcher
-# always agree. MiniBatchKMeans (not AHC) — no 50/2000-member bounds, since the
-# FP bucket starts tiny and grows large.
-# ============================================================================
-
-
-async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
-    """Sub-type the FP bucket via MiniBatchKMeans + persist one centroid/sub-type.
-
-    Scrolls every ``RegionFields.status='false_positive'`` crop carrying a
-    ``RegionFields.embedding``, partitions them into ``k`` sub-types, writes
-    ``RegionFields.cluster_subid`` (``'-100a'`` …) + ``RegionFields.cluster_distance`` per crop,
-    and saves the ``k`` centroids to :class:`FalsePositiveCentroidStore`. FP crops
-    without an embedding still carry the FP cluster id (set on mark) and still
-    export — they are simply not sub-typed here.
-    """
-    from src.services.detection.fp_store import FalsePositiveCentroidStore
-
-    query = {
-        'bool': {
-            'filter': [
-                {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
-                {'exists': {'field': F.embedding}},
-            ]
-        }
-    }
-    ids: list[str] = []
-    vecs: list[list[float]] = []
-    body = {'size': 2000, 'query': query, '_source': [F.embedding]}
-    resp = await client.search(index=items_index(), body=body, scroll='5m')
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    while hits:
-        for h in hits:
-            emb = (h.get('_source') or {}).get(F.embedding)
-            if emb is not None:
-                ids.append(h['_id'])
-                vecs.append(emb)
-        resp = await client.scroll(scroll_id=scroll_id, scroll='5m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-    if scroll_id:
-        try:
-            await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as exc:
-            logger.warning('curation_fp_centroid_clear_scroll_failed', error=str(exc))
-
-    n = len(ids)
-    if n == 0:
-        return {'status': 'skipped', 'reason': 'no_fp_embeddings', 'n_members': 0}
-
-    from sklearn.cluster import MiniBatchKMeans
-
-    x = np.asarray(vecs, dtype=np.float32)
-    x /= np.linalg.norm(x, axis=1, keepdims=True) + 1e-12
-    k = 1 if n < FP_MIN_FOR_SUBTYPES else min(max(1, round(n / FP_TARGET_SUBTYPE_SIZE)), n)
-
-    def _fit() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        if k == 1:
-            c = x.mean(axis=0, keepdims=True)
-            c /= np.linalg.norm(c, axis=1, keepdims=True) + 1e-12
-            labels = np.zeros(n, dtype=int)
-            return c.astype(np.float32), labels, np.linalg.norm(x - c[labels], axis=1)
-        km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=4096)
-        labels = km.fit_predict(x)
-        # k-means centroids (an arithmetic mean of unit-norm
-        # members) are not themselves unit-norm. FalsePositiveCentroidStore
-        # persists these into an IndexFlatL2 that fp_store.search() maps
-        # to cosine similarity assuming every stored vector is unit-norm
-        # -- an un-normalized centroid silently shifts that mapping.
-        centers = km.cluster_centers_
-        centers = centers / (np.linalg.norm(centers, axis=1, keepdims=True) + 1e-12)
-        dists = np.linalg.norm(x - centers[labels], axis=1)
-        return centers.astype(np.float32), labels, dists
-
-    centroids, labels, dists = await asyncio.to_thread(_fit)
-
-    now = datetime.now(UTC).isoformat()
-    bulk: list[dict[str, Any]] = []
-    for doc_id, lab, dist in zip(ids, labels, dists, strict=True):
-        subid = f'{FALSE_POSITIVE_REGION_CLUSTER_ID}{_subcluster_label(int(lab))}'
-        bulk.append({'update': {'_index': items_index(), '_id': doc_id}})
-        bulk.append(
-            {
-                'doc': {
-                    F.cluster_id: FALSE_POSITIVE_REGION_CLUSTER_ID,
-                    F.cluster_subid: subid,
-                    F.cluster_distance: float(dist),
-                    'updated_at': now,
-                }
-            }
-        )
-        if len(bulk) >= 1000:
-            await client.bulk(body=bulk, refresh=False)
-            bulk = []
-    if bulk:
-        await client.bulk(body=bulk, refresh=False)
-    try:
-        await client.indices.refresh(index=items_index())
-    except Exception as exc:
-        logger.debug('curation_fp_centroid_refresh_failed', error=str(exc))
-
-    subids = [f'{FALSE_POSITIVE_REGION_CLUSTER_ID}{_subcluster_label(i)}' for i in range(int(k))]
-    FalsePositiveCentroidStore().save(
-        centroids,
-        {
-            'trained_at': now,
-            'k': int(k),
-            'n_members': n,
-            'subids': subids,
-            'dim': int(centroids.shape[1]),
-        },
-    )
-    logger.info('curation_build_region_fp_centroids_done', n_members=n, k=int(k))
-    return {'status': 'success', 'n_members': n, 'k': int(k), 'subids': subids}
-
-
-def fp_candidate_must_not() -> list[dict[str, Any]]:
-    """OpenSearch must-not clauses for the FP-centroid candidate pool.
-
-    Excludes crops that are already FP, test-holdout, or carry a HUMAN verdict
-    (``RegionFields.label_source`` / ``RegionFields.verifier`` == ``human``).
-    VLM-validated crops are deliberately NOT excluded: ``RegionFields.validated=true``
-    is set by the VLM verifier for the large majority of regions, and its calls
-    aren't trusted as ground truth — so a VLM "validated/detected" verdict must
-    not shield a real false positive. Only a human's decision is final.
-    """
-    return [
-        {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
-        {'term': {'test_holdout': True}},
-        {'term': {F.label_source: 'human'}},
-        {'term': {F.verifier: 'human'}},
-    ]
-
-
-async def auto_assign_fp_from_centroids(
-    client: AsyncOpenSearch, *, threshold: float = 0.20
-) -> dict[str, Any]:
-    """Auto-move tight FP-centroid matches into the permanent FP bucket.
-
-    Scans non-FP, non-human-validated region crops; any whose
-    ``RegionFields.embedding`` is within ``threshold`` (L2 on unit-norm vectors)
-    of a persisted FP sub-type centroid is flipped to
-    ``RegionFields.status='false_positive'`` and parked in
-    ``FALSE_POSITIVE_REGION_CLUSTER_ID`` with the matched sub-id. Looser matches
-    (above ``threshold``) are left for the human ``suspected_false_positives``
-    review. No-op when no centroids exist.
-    ``RegionFields.label_source='auto_fp_centroid'`` marks the moves as
-    auditable + reversible (un-marking releases the crop).
-    """
-    from src.services.detection.fp_store import FalsePositiveCentroidStore
-
-    store = FalsePositiveCentroidStore()
-    if not store.load():
-        return {'status': 'skipped', 'reason': 'no_centroids', 'n_moved': 0, 'threshold': threshold}
-
-    query = {
-        'bool': {
-            'filter': [{'exists': {'field': F.embedding}}],
-            'must_not': fp_candidate_must_not(),
-        }
-    }
-    subids = store.metadata.get('subids', [])
-
-    now = datetime.now(UTC).isoformat()
-    n_scanned = 0
-    moved: list[tuple[str, str | None, float]] = []
-    body = {'size': 2000, 'query': query, '_source': [F.embedding]}
-    resp = await client.search(index=items_index(), body=body, scroll='5m')
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    while hits:
-        embs = np.asarray(
-            [(h.get('_source') or {}).get(F.embedding) for h in hits],
-            dtype=np.float32,
-        )
-        embs /= np.linalg.norm(embs, axis=1, keepdims=True) + 1e-12
-        dist, idx = store.search(embs)
-        for h, d, ci in zip(hits, dist, idx, strict=True):
-            n_scanned += 1
-            if float(d) <= threshold:
-                sub = subids[int(ci)] if 0 <= int(ci) < len(subids) else None
-                moved.append((h['_id'], sub, float(d)))
-        resp = await client.scroll(scroll_id=scroll_id, scroll='5m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-    if scroll_id:
-        try:
-            await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as exc:
-            logger.warning('curation_auto_fp_clear_scroll_failed', error=str(exc))
-
-    bulk: list[dict[str, Any]] = []
-    for doc_id, sub, d in moved:
-        bulk.append({'update': {'_index': items_index(), '_id': doc_id}})
-        # Guarded script — the query above already excludes
-        # human-verified regions via fp_candidate_must_not() at scroll
-        # time, but a human write between the scroll and this write
-        # (the scan + distance search can take a while) must still not
-        # be clobbered, hence the same defense-in-depth guard.
-        bulk.append(
-            _guarded_region_write(
-                F,
-                {
-                    F.status: RegionStatus.FALSE_POSITIVE,
-                    F.label_source: 'auto_fp_centroid',
-                    F.cluster_id: FALSE_POSITIVE_REGION_CLUSTER_ID,
-                    F.cluster_subid: sub,
-                    F.cluster_distance: d,
-                    'updated_at': now,
-                },
-            )
-        )
-        if len(bulk) >= 1000:
-            br = await client.bulk(body=bulk, refresh=False)
-            if br.get('errors'):
-                _log_bulk_write_errors('auto_assign_fp_from_centroids', br)
-            bulk = []
-    if bulk:
-        br = await client.bulk(body=bulk, refresh=False)
-        if br.get('errors'):
-            _log_bulk_write_errors('auto_assign_fp_from_centroids', br)
-    if moved:
-        try:
-            await client.indices.refresh(index=items_index())
-        except Exception as exc:
-            logger.debug('curation_auto_fp_refresh_failed', error=str(exc))
-
-    logger.info(
-        'curation_auto_assign_fp_done', n_scanned=n_scanned, n_moved=len(moved), threshold=threshold
-    )
-    return {
-        'status': 'success',
-        'n_scanned': n_scanned,
-        'n_moved': len(moved),
-        'threshold': threshold,
-    }
-
-
-# Background FP-centroid job state — same cross-worker file pattern as the
-# region-clustering job above (own file so the two can run independently).
-def _fp_job_file() -> Path:
-    return _region_state_dir() / 'fp_job.json'
-
-
-def _read_region_fp_job() -> dict[str, Any]:
-    try:
-        state: dict[str, Any] = json.loads(_fp_job_file().read_text())
-    except Exception:
-        return dict(_DEFAULT_JOB)
-    if state.get('running') and state.get('started_at'):
-        try:
-            started = datetime.fromisoformat(state['started_at'])
-            if (datetime.now(UTC) - started).total_seconds() > _JOB_STALE_S:
-                state['running'] = False
-                state['error'] = 'job timed out or worker died'
-        except ValueError:
-            pass
-    return state
-
-
-def _write_region_fp_job(state: dict[str, Any]) -> None:
-    try:
-        _fp_job_file().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _fp_job_file().with_suffix('.tmp')
-        tmp.write_text(json.dumps(state))
-        tmp.replace(_fp_job_file())
-    except Exception as exc:
-        logger.warning('curation_region_fp_job_write_failed', error=str(exc))
-
-
-def region_fp_centroid_job_status() -> dict[str, Any]:
-    """Cross-worker snapshot of the background FP-centroid build job.
-
-    Merges in the persisted centroid metadata (``trained_at``/``k``/``n_members``)
-    so the UI can warn when the centroids are stale.
-    """
-    from src.services.detection.fp_store import FalsePositiveCentroidStore
-
-    state = _read_region_fp_job()
-    store = FalsePositiveCentroidStore()
-    if store.load():
-        state['centroids'] = {
-            'trained_at': store.metadata.get('trained_at'),
-            'k': store.metadata.get('k'),
-            'n_members': store.metadata.get('n_members'),
-        }
-    else:
-        state['centroids'] = None
-    return state
-
-
-async def start_region_fp_centroid_job(client: AsyncOpenSearch) -> dict[str, Any]:
-    """Launch :func:`build_region_fp_centroids` in the background (single-flight)."""
-    state = _read_region_fp_job()
-    if state.get('running'):
-        return state
-    started = datetime.now(UTC).isoformat()
-    _write_region_fp_job(
-        {'running': True, 'started_at': started, 'finished_at': None, 'result': None, 'error': None}
-    )
-
-    async def _run() -> None:
-        result: dict[str, Any] | None = None
-        error: str | None = None
-        try:
-            result = await build_region_fp_centroids(client)
-        except Exception as exc:
-            error = str(exc)
-            logger.error('curation_region_fp_job_failed', error=str(exc))
-        finally:
-            _write_region_fp_job(
-                {
-                    'running': False,
-                    'started_at': started,
-                    'finished_at': datetime.now(UTC).isoformat(),
-                    'result': result,
-                    'error': error,
-                }
-            )
-
-    task = asyncio.create_task(_run())
-    _job_tasks.add(task)
-    task.add_done_callback(_job_tasks.discard)
-    return region_fp_centroid_job_status()
-
-
 __all__ = [
     'AHC_DISTANCE_THRESHOLD',
     'AHC_LINKAGE',
     'AHC_METRIC',
-    'FALSE_POSITIVE_REGION_CLUSTER_ID',
     'ITEMS_CLUSTER_INDEX',
     'MAX_REFINE_MEMBERS',
     'MIN_REFINE_MEMBERS',
-    'MIN_REGIONS_FOR_CLUSTERING',
     'MIN_RESIDUALS_FOR_CLUSTERING',
     'PARKED_CLUSTER_ID',
     'RESIDUAL_CLUSTER_ID_OFFSET',
     'assign_cluster_to_crop',
     'assign_only_residuals',
-    'auto_assign_fp_from_centroids',
     'auto_promote_clusters',
-    'build_region_fp_centroids',
-    'cluster_region_residuals',
     'cluster_residuals',
-    'fp_candidate_must_not',
     'gate_must_clauses',
-    'mark_region_refine',
     'refine_cluster',
-    'refine_region_cluster',
-    'region_cluster_job_status',
-    'region_fp_centroid_job_status',
+    'refine_members',
     'residual_gate_coverage',
     'should_retrain_centroids',
-    'start_region_cluster_job',
-    'start_region_fp_centroid_job',
+    'subcluster_label',
 ]

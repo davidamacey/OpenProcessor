@@ -8,7 +8,7 @@ Before the fix: a ``verify_rejected`` item's box is always ``rejected``
 box -- ``derive_status`` would report ``pending_verification`` instead),
 so ``apply_requeue`` flipped the item's status without ever giving Path 1
 a ``proposed`` box to find. The worker's Path 1 guard
-(``proposed_stored or t.detector_region_in_source is not None``) then
+(a stored ``proposed`` box) then
 failed, and the item silently ran a fresh detection pass instead -- the
 documented operator action ("Re-verify boxes the previous verify prompt
 rejected", ``requeue_regions.py``) did something else entirely.

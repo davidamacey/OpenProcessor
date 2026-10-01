@@ -171,7 +171,7 @@ def _region_fields_after(
                 and entry.get('kind') == EditKind.REGION.value
                 and entry.get('writer') == writer
             ):
-                return restore_edit_state(entry, EditKind.REGION)
+                return restore_edit_state(entry, EditKind.REGION, current=doc)
         return {}
     fields = boxes_write_fields(remaining, current_src=doc, F=F)
     fields[F.status] = derive_status(remaining, empty_status=RegionStatus.NO_REGION_VISIBLE).value

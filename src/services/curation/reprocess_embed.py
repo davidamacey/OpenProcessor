@@ -1,11 +1,11 @@
 """The ``embed`` scope (W10.13): recompute derived vectors.
 
 Embeddings are derived data, not labels, so locked items are included. Per
-item: the PE crop embedding (``pe_embedding``) and the item-level region
-embedding (``RegionFields.embedding``, the best accepted -- else
-false-positive -- box, the same representative the backfill script picks);
+item: the PE crop embedding (``pe_embedding``) and one region embedding per
+embeddable box (accepted and false-positive; ``region_box_embeddings``,
+written through ``write_box_embeddings`` so the box list is never touched);
 per image: the whole-frame PE embedding on the images doc. Only those
-vector fields are written, with plain partial updates.
+vector fields are written.
 
 ``reembed_items`` is the one function behind the ``embed`` reprocess scope
 and ``scripts/curation/backfill_region_embeddings.py``.
@@ -22,16 +22,22 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from src.config import get_curation_config
-from src.config.region_fields import RegionFields, get_region_fields
-from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.image_serving import is_servable_image_path
 from src.services.curation.ingest_index import crop_pil
+from src.services.curation.region_box_embeddings import (
+    embeddable,
+    entry_for,
+    missing_boxes,
+    write_box_embeddings,
+)
 from src.services.curation.region_boxes import read_boxes
 from src.services.detection.region_embed import embed_region_crops
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from opensearchpy import AsyncOpenSearch
 
     from src.clients.pe_encoder import PEEncoder
@@ -49,23 +55,9 @@ class EmbedTarget:
     image_id: str
     image_path: str
     items: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
-    """``(crop_id, _source)``; the source needs ``bbox_norm`` and the
-    region boxes (``region_boxes``) for the region part."""
-
-
-def best_region_bbox(source: dict[str, Any], F: RegionFields | None = None) -> list[float] | None:
-    """The representative region box's ``bbox_norm``: the highest-``score``
-    accepted box, else the highest-``score`` false-positive box, else
-    ``None``. One item-level embedding needs exactly one crop."""
-    F = F or get_region_fields()
-    boxes = read_boxes(source, F)
-    candidates = [b for b in boxes if b.state == 'accepted']
-    if not candidates:
-        candidates = [b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value]
-    if not candidates:
-        return None
-    best = max(candidates, key=lambda b: b.score if b.score is not None else -1.0)
-    return list(best.bbox_norm)
+    """``(crop_id, _source)``; the source needs ``bbox_norm`` for the crop
+    part and the region boxes (and, for ``only_missing``, the stored box
+    embeddings' ids and geometry) for the region part."""
 
 
 def _load_image(path: str) -> Image.Image | None:
@@ -84,7 +76,7 @@ def _load_image(path: str) -> Image.Image | None:
 
 
 def _pixel_box(
-    bbox_norm: list[float], width: int, height: int
+    bbox_norm: Sequence[float], width: int, height: int
 ) -> tuple[float, float, float, float]:
     x1, y1, x2, y2 = (float(v) for v in bbox_norm)
     return (x1 * width, y1 * height, x2 * width, y2 * height)
@@ -115,15 +107,16 @@ async def reembed_items(
     targets: list[EmbedTarget],
     *,
     parts: frozenset[str] = ALL_PARTS,
+    only_missing: bool = False,
 ) -> dict[str, int]:
     """Recompute the vectors named by ``parts`` (``crop``, ``frame``,
-    ``region``) for every target. Returns counters:
+    ``region``) for every target; ``only_missing`` limits the region part to
+    boxes with no valid stored vector. Returns counters:
     ``images``, ``items``, ``crop_written``, ``frame_written``,
     ``region_written``, ``missing_image`` (path unservable or unreadable)
     and ``decode_failed`` (region crop the encoder could not decode).
     """
     cfg = get_curation_config()
-    F = get_region_fields()
     counts = {
         'images': 0,
         'items': 0,
@@ -135,6 +128,7 @@ async def reembed_items(
     }
     item_updates: dict[str, dict[str, Any]] = {}
     image_updates: list[tuple[str, dict[str, Any]]] = []
+    box_entries: dict[str, list[dict[str, Any]]] = {}
 
     for target in targets:
         img = await asyncio.to_thread(_load_image, target.image_path)
@@ -159,25 +153,25 @@ async def reembed_items(
                     item_updates.setdefault(cid, {})['pe_embedding'] = [float(v) for v in vec]
                     counts['crop_written'] += 1
         if 'region' in parts:
-            ids: list[str] = []
-            jpegs: list[bytes] = []
-            for cid, s in target.items:
-                bbox = best_region_bbox(s, F)
-                if bbox is None or len(bbox) != 4:
-                    continue
-                ids.append(cid)
-                jpegs.append(_jpeg(crop_pil(img, _pixel_box(bbox, *img.size))))
+            work = [
+                (cid, box)
+                for cid, s in target.items
+                for box in (missing_boxes(s) if only_missing else embeddable(read_boxes(s)))
+            ]
+            jpegs = [_jpeg(crop_pil(img, _pixel_box(box.bbox_norm, *img.size))) for _, box in work]
             if jpegs:
-                for cid, vec in zip(ids, await embed_region_crops(pe, jpegs), strict=True):
+                for (cid, box), vec in zip(work, await embed_region_crops(pe, jpegs), strict=True):
                     if vec is None:
                         counts['decode_failed'] += 1
                         continue
-                    item_updates.setdefault(cid, {})[F.embedding] = vec
+                    box_entries.setdefault(cid, []).append(entry_for(box, vec))
                     counts['region_written'] += 1
 
     await _bulk_update(opensearch, cfg.items_index, list(item_updates.items()))
     await _bulk_update(opensearch, cfg.images_index, image_updates)
+    if box_entries:
+        await write_box_embeddings(opensearch, index=cfg.items_index, by_crop=box_entries)
     return counts
 
 
-__all__ = ['ALL_PARTS', 'EmbedTarget', 'best_region_bbox', 'reembed_items']
+__all__ = ['ALL_PARTS', 'EmbedTarget', 'reembed_items']

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from src.config import DetectionProfile
     from src.services.curation.region_boxes import RegionBox
     from src.services.detection.region_text import OcrLine
+    from src.services.labeling.vlm_client import VlmIdentity
 
 
 logger = get_logger('curation_worker')
@@ -45,7 +46,6 @@ DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
 # the parallelism across GPUs adds up. OP_SEGMENTER_URL is the
 # single-URL fallback when OP_SEGMENTER_URLS is unset.
 DEFAULT_SEGMENTER_URLS = os.environ.get('OP_SEGMENTER_URLS', '').strip()
-DEFAULT_VLM_URL = os.environ.get('OP_VLM_URL', '')
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',
@@ -140,10 +140,6 @@ class _ItemTask:
     # Class state this task was read in (class_state_token). The writer
     # applies class fields only if the item still has exactly this state.
     class_token: tuple[Any, ...] | None = None
-    # Existing primary-detector candidate (already in source frame) for
-    # pending_verify.
-    detector_region_in_source: tuple[float, float, float, float] | None = None
-    detector_score: float = 0.0
     # Cropped JPEG bytes — built lazily so we don't load images we'd skip.
     crop_jpeg: bytes | None = None
     # Two-stage pipeline state — Stage A (primary/secondary/OCR-det)
@@ -151,9 +147,6 @@ class _ItemTask:
     candidate_source: str = (
         ''  # 'detector' / 'detector_existing' / 'segmenter' / 'segmenter_text_hint' / ''
     )
-    candidate_in_crop: tuple[float, float, float, float] | None = None
-    candidate_in_source: tuple[float, float, float, float] | None = None
-    candidate_score: float = 0.0
     # text-hint: when the OCR pipeline produced the candidate, its
     # recognized text rides along so writers can persist it even when
     # the downstream VLM verify returns an empty read.
@@ -235,6 +228,14 @@ class _ItemTask:
     # (``detection_failed`` is not part of ``derive_status``'s box-state
     # vocabulary). ``None`` means "derive it from pending_empty_status".
     pending_status: RegionStatus | None = None
+    # Per-box embeddings this pass computed (``region_embed_stage``), keyed
+    # by the box's id in ``pending_boxes`` (a placeholder for a fresh box;
+    # real ids are minted in the write-time merge). ``box_embedding_entries``
+    # is the same data re-keyed onto the final ids by ``bulk_writer._merge``
+    # -- ``[{box_id, bbox_norm, embedding}]`` for the box-embeddings write
+    # that follows the box-list write.
+    box_vectors: dict[str, list[float]] = field(default_factory=dict)
+    box_embedding_entries: list[dict[str, Any]] = field(default_factory=list)
     # Detection trace — list of "<detector>:<tag>" strings the task
     # accumulates as it moves through the cascade, serialized as
     # ``RegionFields.detector_chain`` on every write that produces a
@@ -268,6 +269,18 @@ class _ItemTask:
     # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never
     # gets a stamp implying a VLM ran.
     vlm_called: bool = False
+    # Who answered (W9.3): the identity of the runtime whose VLM this task's
+    # call went to, stamped as `vlm_endpoint` / `vlm_model` on the write.
+    # Per TASK, not read from the store at write time: a swap between the
+    # call and the flush must not relabel an answer.
+    vlm_identity: VlmIdentity | None = None
+
+    def mark_vlm_called(self, identity: VlmIdentity | None) -> None:
+        """A VLM round trip happened for this task (whatever the verdict):
+        any write it produces this pass is stamped with the pack and with
+        WHO answered."""
+        self.vlm_called = True
+        self.vlm_identity = identity
 
 
 def bind_task_project(task: _ItemTask) -> None:

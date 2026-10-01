@@ -19,11 +19,10 @@ import base64
 import binascii
 import io
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
@@ -36,6 +35,16 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._vlm_route_models import (
+    VlmLabelBatchRequest,
+    VlmRegionVisibleBatchRequest,
+    VlmRegionVisibleBatchResponse,
+    VlmVerifyRegionBatchRequest,
+    VlmVerifyRegionBatchResponse,
+    VlmVerifyRegionBatchResult,
+    VlmVerifyRegionsRequest,
+)
+from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, NO_VLM_MESSAGE, VLM_DESC
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
@@ -54,22 +63,12 @@ from src.services.curation.vlm_class_attempt import prediction_class_update, wit
 _F = get_region_fields()
 
 
-def _get_vlm_labeler(pack_name: str | None = None, revision: int | None = None) -> Any:
-    """Lazy per-``(pack, revision)`` ``VlmLabeler`` cache (W2, §3.6) —
-    imported so VLM routes don't pull httpx for the whole router on cold
-    start.
-
-    ``pack_name=None`` uses the config store's *active* pack
-    (:func:`~src.services.labeling.vlm_prompts.active_prompt_pack` — the
-    activated pack if one is set, else the ``OP_PROMPT_PACK_PATH`` pack
-    or the built-in generic pack). A name selects any pack
-    :func:`~src.services.labeling.vlm_prompts.available_prompt_packs`
-    advertises; an unknown name raises ``ValueError``. ``revision`` pins
-    an exact saved revision (a per-run ``name@rev``, §3.7) -- ``None``
-    means "latest." One labeler instance is cached per
-    ``(name, revision-or-sha)``.
-    """
-    from src.services.labeling.vlm_labeler import VlmLabeler
+def _resolve_pack(pack_name: str | None, revision: int | None = None) -> Any:
+    """The prompt pack a labeler is built with: the config store's *active*
+    pack when ``pack_name`` is ``None`` (the activated pack, else the
+    ``OP_PROMPT_PACK_PATH`` pack or the built-in generic pack), else the
+    named pack (``revision`` pins an exact saved revision, ``name@rev``,
+    §3.7). Unknown name -> ``ValueError``."""
     from src.services.labeling.vlm_prompts import active_prompt_pack, get_prompt_pack
 
     pack = (
@@ -78,12 +77,57 @@ def _get_vlm_labeler(pack_name: str | None = None, revision: int | None = None) 
     if pack is None:
         msg = f'unknown prompt pack {pack_name!r}'
         raise ValueError(msg)
-    cache_key = (pack.name, revision)
-    cache: dict[tuple[str, int | None], Any] = _get_vlm_labeler.__dict__.setdefault('_insts', {})
-    inst = cache.get(cache_key)
-    if inst is None or inst._pack != pack:
-        inst = cache[cache_key] = VlmLabeler(pack=pack)
-    return inst
+    return pack
+
+
+def _get_vlm_labeler(
+    pack_name: str | None = None, revision: int | None = None, *, endpoint: Any = None
+) -> Any:
+    """The labeler for ``(endpoint, pack)`` -- a thin wrapper over the one
+    factory (:func:`~src.services.labeling.vlm_factory.labeler_for`, W9).
+
+    ``endpoint=None`` uses the bound project's ACTIVE endpoint from the
+    in-process snapshots (callers on an async path refreshed them first,
+    ``refresh_vlm_state``); routes that resolved a per-run ``?vlm=`` pass it
+    explicitly. Raises ``VlmEndpointUnavailableError`` when there is none.
+    """
+    from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, active_vlm_endpoint
+    from src.services.labeling.vlm_factory import labeler_for
+
+    pack = _resolve_pack(pack_name, revision)
+    resolved = endpoint if endpoint is not None else active_vlm_endpoint()
+    if resolved is None:
+        raise VlmEndpointUnavailableError(NO_VLM_MESSAGE)
+    return labeler_for(resolved, pack)
+
+
+async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) -> Any:
+    """The labeler for one VLM route call: the settings-default pack, and the
+    endpoint the request selected (``?vlm=``) or the project default, both
+    through the shared gate. 409 ``vlm_not_configured`` when the project's
+    VLM is off."""
+    from src.routers.curation.pipeline_vlm import labeler_unavailable, resolve_run_vlm
+    from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
+
+    pack_name = await _default_pack_name(opensearch)
+    run = await resolve_run_vlm(
+        opensearch,
+        vlm,
+        pack=_resolve_pack(pack_name),
+        acknowledge_external=acknowledge_external,
+    )
+    try:
+        return _get_vlm_labeler(pack_name, endpoint=run.endpoint)
+    except VlmEndpointUnavailableError as exc:
+        raise labeler_unavailable(exc) from exc
+
+
+def _vlm_stamp(labeler: Any) -> dict[str, str]:
+    """Provenance of a VLM-derived write: which endpoint/model answered."""
+    return {
+        'vlm_endpoint': labeler.identity.endpoint_ref,
+        'vlm_model': labeler.identity.model,
+    }
 
 
 def _class_locked(source: dict[str, Any]) -> bool:
@@ -141,104 +185,21 @@ def _is_frozen_test_holdout(current_source: dict[str, Any]) -> bool:
     return bool(current_source.get('test_holdout'))
 
 
-class VlmLabelBatchRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-
-    crop_ids: list[str] = Field(..., min_length=1, max_length=5000)
-
-
-class VlmVerifyRegionsRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-
-    crop_ids: list[str] = Field(..., min_length=1, max_length=5000)
-
-
-class VlmVerifyRegionBatchItem(BaseModel):
-    """One item in a batched region-verify request.
-
-    Mirrors the single-crop ``/curation/vlm/verify_region`` shape. The
-    caller is responsible for cropping the sub-region out of its source
-    crop and base64-encoding the JPEG bytes — the API does not re-derive
-    the region JPEG from OpenSearch on this path so the batch endpoint
-    can serve callers (e.g. a detection worker, training scripts) that
-    already hold the JPEG in memory.
-    """
-
-    crop_id: str
-    region_image_b64: str = Field(
-        ...,
-        description='Base64-encoded JPEG of the sub-region crop (no data: prefix).',
-    )
-    candidate_text: str | None = Field(
-        default=None,
-        description='Optional caller-supplied candidate text (e.g. from a text-detection '
-        'pre-pass) echoed back on the result.',
-    )
-
-
-class VlmVerifyRegionBatchRequest(BaseModel):
-    """Request body for ``POST /curation/vlm/verify_region_batch``."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    items: list[VlmVerifyRegionBatchItem] = Field(..., min_length=1)
-
-
-class VlmVerifyRegionBatchResult(BaseModel):
-    """One result in the verify_region_batch response.
-
-    A ``crop_id`` from the request that got no usable VLM answer at all
-    (whole-chunk upstream failure, empty/unparseable/misaligned reply,
-    or an individual crop missing from an otherwise-aligned reply) is
-    absent from ``results`` entirely -- never emitted with a
-    synthesized ``is_region=False``. Callers must treat a missing
-    crop_id as "retry later", the same contract
-    ``/vlm/region_visible_batch`` uses for its map.
-    """
-
-    crop_id: str
-    is_region: bool
-    confidence: str
-    reason: str = ''
-    candidate_text: str | None = None
-
-
-class VlmVerifyRegionBatchResponse(BaseModel):
-    results: list[VlmVerifyRegionBatchResult]
-
-
-class VlmRegionVisibleBatchItem(BaseModel):
-    crop_id: str
-    image_b64: str = Field(
-        ...,
-        description='Base64-encoded JPEG of the item crop (no data: prefix).',
-    )
-
-
-class VlmRegionVisibleBatchRequest(BaseModel):
-    """Request body for ``POST /curation/vlm/region_visible_batch``."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    items: list[VlmRegionVisibleBatchItem] = Field(..., min_length=1)
-
-
-class VlmRegionVisibleBatchResponse(BaseModel):
-    """``{crop_id: bool}`` mapping — True means a sub-region is visible."""
-
-    visible: dict[str, bool]
-
-
 @router.post('/vlm/label_batch')
 async def vlm_label_batch(
     payload: VlmLabelBatchRequest,
     opensearch: OpenSearchDep,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> dict[str, Any]:
     """Send up to 64 crops to the VLM — chunked at ``max_images_per_call``."""
     if not payload.crop_ids:
         return {'predicted': 0, 'updated': 0}
     if len(payload.crop_ids) > 64:
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
+    # Resolved (and gated) before any work: an unknown or unacknowledged
+    # endpoint is a 422 up front, never after the crops were read.
+    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
 
     reg = get_class_registry().load()
     from src.services.curation.region_class import item_classes
@@ -348,7 +309,6 @@ async def vlm_label_batch(
     from src.services.labeling.vlm_labeler import resolve_class_name as _resolve_class_name_fn
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
-    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     _pack_stamp = prompt_pack_stamp(labeler._pack)
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
@@ -387,6 +347,7 @@ async def vlm_label_batch(
         if 'class_source' not in update:
             empty_answers += 1
         update['vlm_prompt_pack'] = _pack_stamp
+        update.update(_vlm_stamp(labeler))
         if proposal is not None:
             proposals.append(proposal)
         updates_by_id[p.img_id] = update
@@ -444,31 +405,42 @@ async def vlm_verify_regions(
     payload: VlmVerifyRegionsRequest,
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> dict[str, Any]:
-    """Verify whether each crop's region-of-interest contains a real region.
+    """Verify, box by box, whether each crop's regions contain a real region.
 
-    A crop the VLM gave no usable answer for (upstream failure, empty or
-    unparseable reply) is skipped entirely -- its verify state is left
-    untouched for a later retry rather than written as ``verified=False``,
-    a verdict the VLM never actually gave.
+    One region crop is sent per stored box still open to a machine verdict
+    (``proposed`` or ``accepted``, never a human- or import-owned box);
+    each verdict lands on its own box and the item status is re-derived
+    (:func:`~src.services.curation.region_verify.verify_regions_update`).
+    A box the VLM gave no usable answer for (upstream failure, empty or
+    unparseable reply) is skipped entirely -- its state is left untouched
+    for a later retry rather than written as rejected, a verdict the VLM
+    never actually gave. ``verified`` counts the VLM verdicts obtained.
     """
     if not payload.crop_ids:
         return {'verified': 0}
     if len(payload.crop_ids) > 64:
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
 
+    from src.services.curation.region_verify import (
+        BoxVerdict,
+        verifiable_boxes,
+        verify_regions_update,
+    )
     from src.services.labeling.vlm_labeler import RegionCrop
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
-    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
-    _pack_stamp = prompt_pack_stamp(labeler._pack)
+    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
+    pack_stamp = prompt_pack_stamp(labeler._pack)
     n_verified = 0
     # Keyed by crop_id rather than written straight to a plain bulk
     # body -- the actual write goes through occ_skip_on_conflict_bulk
     # below so a human verify/label landing on the same crop while this
     # loop's VLM round-trips are in flight wins outright (conflict -> skip,
     # never retried against).
-    updates_by_id: dict[str, dict[str, Any]] = {}
+    verdicts_by_id: dict[str, list[BoxVerdict]] = {}
     now = _now_iso()
     # One mget_crops() call instead of N separate opensearch.get()
     # round trips.
@@ -478,7 +450,7 @@ async def vlm_verify_regions(
         opensearch,
         list(payload.crop_ids),
         index=items_index(),
-        source_includes=[_F.bbox_norm, 'image_path'],
+        source_includes=[_F.boxes, _F.verifier, _F.label_source, 'image_path'],
     )
     for crop_id in payload.crop_ids:
         doc = docs_by_id.get(crop_id)
@@ -486,48 +458,55 @@ async def vlm_verify_regions(
             logger.debug('curation_vlm_region_verify_skip_missing', crop_id=crop_id)
             continue
         src = doc.get('_source') or {}
-        region_box = src.get(_F.bbox_norm)
         image_path = src.get('image_path', '')
-        if not region_box or len(region_box) != 4 or not image_path:
+        if not image_path:
             continue
         root = resolve_crop_root(image_path)
-        try:
-            safe = resolve_safe_path(image_path, root)
-            jpeg = THUMBNAIL_CACHE.get_or_compute(safe, tuple(region_box), size=224)
-        except Exception as exc:
-            logger.warning('curation_vlm_region_thumb_failed', crop_id=crop_id, error=str(exc))
-            continue
-        verdict = await labeler.verify_region(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
-        if verdict is None:
-            # No usable answer at all -- leave this crop's verify state
-            # untouched for a retry rather than writing a verified=False
-            # the VLM never actually said.
-            continue
-        n_verified += 1
-        updates_by_id[crop_id] = {
-            _F.verified: verdict.is_region,
-            _F.reason: verdict.reason,
-            'updated_at': now,
-            'vlm_prompt_pack': _pack_stamp,
-        }
-    if updates_by_id:
+        for box in verifiable_boxes(src, _F):
+            try:
+                safe = resolve_safe_path(image_path, root)
+                jpeg = THUMBNAIL_CACHE.get_or_compute(safe, tuple(box.bbox_norm), size=224)
+            except Exception as exc:
+                logger.warning(
+                    'curation_vlm_region_thumb_failed',
+                    crop_id=crop_id,
+                    box_id=box.box_id,
+                    error=str(exc),
+                )
+                continue
+            verdict = await labeler.verify_region(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
+            if verdict is None:
+                # No usable answer at all -- leave this box's state
+                # untouched for a retry rather than writing a rejection
+                # the VLM never actually gave.
+                continue
+            n_verified += 1
+            verdicts_by_id.setdefault(crop_id, []).append(
+                BoxVerdict(
+                    box_id=box.box_id,
+                    bbox_norm=box.bbox_norm,
+                    is_region=bool(verdict.is_region),
+                    confidence=verdict.confidence,
+                    reason=verdict.reason,
+                )
+            )
+    if verdicts_by_id:
 
         def _merge_verify_regions(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-            # A human verify/label landing on this crop while the VLM
-            # round-trip was in flight must win outright, never be
-            # overwritten by this write -- re-check against the freshest
-            # `current` (occ_skip_on_conflict_bulk re-fetches with
-            # seq_no) rather than the stale per-crop doc read at the top
-            # of the loop above. Mirrors the region-write human guard the
-            # clustering orchestrator's bulk writers use.
-            if current.get(_F.verifier) == 'human' or current.get(_F.label_source) == 'human':
-                return {}
-            return updates_by_id[doc_id]
+            # Applied to the freshest `current`, not the doc read above: a
+            # human write landing during the VLM round-trips wins outright.
+            return verify_regions_update(
+                current,
+                verdicts_by_id[doc_id],
+                now=now,
+                pack_stamp=pack_stamp,
+                vlm_stamp=_vlm_stamp(labeler),
+            )
 
         try:
             await occ_skip_on_conflict_bulk(
                 opensearch,
-                doc_ids=list(updates_by_id.keys()),
+                doc_ids=list(verdicts_by_id.keys()),
                 merger=_merge_verify_regions,
                 index=items_index(),
                 refresh=False,
@@ -543,6 +522,8 @@ async def vlm_verify_region_batch(
     payload: VlmVerifyRegionBatchRequest,
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> VlmVerifyRegionBatchResponse:
     """Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.
 
@@ -598,7 +579,7 @@ async def vlm_verify_region_batch(
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
         candidate_text_by_id[item.crop_id] = item.candidate_text
 
-    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
+    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
     verdicts = await labeler.verify_region_batch(crops)
 
     # Re-order to input order (verify_region_batch already preserves it,
@@ -630,6 +611,8 @@ async def vlm_region_visible_batch(
     payload: VlmRegionVisibleBatchRequest,
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
+    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
+    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
 ) -> VlmRegionVisibleBatchResponse:
     """Pre-filter item crops by asking the VLM whether a sub-region is visible.
 
@@ -679,9 +662,9 @@ async def vlm_region_visible_batch(
             )
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
 
-    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
+    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
     visible = await labeler.region_visible_batch(crops)
     return VlmRegionVisibleBatchResponse(visible=visible)
 
 
-__all__ = ['_get_vlm_labeler']
+__all__ = ['_get_vlm_labeler', 'request_labeler']

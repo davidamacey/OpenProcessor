@@ -26,6 +26,8 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -33,11 +35,18 @@ ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
+_BOX = RegionBox(
+    box_id='b1', bbox_norm=(0.1, 0.1, 0.5, 0.5), state='proposed', score=0.8, detector='det_model'
+)
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'image_path': f'/data/{crop_id}.jpg',
-        F.bbox_norm: [0.1, 0.1, 0.5, 0.5],
+        **boxes_write_fields([_BOX], current_src={}),
         F.verified: None,
         F.reason: None,
         **extra,
@@ -48,9 +57,11 @@ class _FakeVerdict:
     def __init__(self, is_region: bool = True, reason: str = 'looks real') -> None:
         self.is_region = is_region
         self.reason = reason
+        self.confidence = 'high'
 
 
 class _Labeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
     _pack = GENERIC_ITEM_PACK
 
     async def verify_region(self, _crop: Any) -> _FakeVerdict:
@@ -58,6 +69,7 @@ class _Labeler:
 
 
 class _RacingLabeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
     """Human-verifies 'raced' mid-loop -- simulating a human write landing
     on OpenSearch between this endpoint's initial per-crop ``get`` (used
     to read region_box/image_path) and its final bulk write, which is
@@ -119,6 +131,7 @@ async def test_verify_regions_never_overwrites_a_doc_a_human_verified_mid_flight
     # 'plain' had no conflict -- the VLM write applies normally.
     assert docs['plain'][F.verified] is True
     assert docs['plain'][F.reason] == 'looks real'
+    assert docs['plain'][F.boxes][0]['state'] == 'accepted'
     # The VLM verdict was obtained for both regardless of the write outcome
     # (this count reflects labeler calls, not writes -- see the router's
     # docstring/response contract).

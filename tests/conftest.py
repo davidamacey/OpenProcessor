@@ -181,6 +181,7 @@ _PROCESS_CACHES = (
     ('src.routers.curation.select', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
     ('src.clients.curation_opensearch', '_settings_cache'),
+    ('src.clients.curation_opensearch', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
     # Config-store snapshots (W2): one ConfigStore per project, keyed by
@@ -189,8 +190,12 @@ _PROCESS_CACHES = (
     ('src.services.config_store.store', '_STORES'),
     # The global (non-project-scoped) config store singleton (M3) -- its
     # own cache dict, never conflated with `_STORES` above.
-    ('src.services.config_store.store', '_GLOBAL_STORE'),
+    ('src.services.config_store.global_store', '_GLOBAL_STORE'),
+    # W9: immutable VLM endpoint revision copies fetched from the registry.
+    ('src.services.config_store.vlm_snapshot', '_REVISION_CACHE'),
     ('src.services.training.preflight_scan', '_scan_cache'),
+    # W9: the labeler factory's LRU (one labeler per endpoint revision + pack).
+    ('src.services.labeling.vlm_factory', '_LABELERS'),
 )
 
 
@@ -201,6 +206,9 @@ def _clear_process_caches() -> None:
         module = sys.modules.get(module_name)
         if module is not None:
             getattr(module, attr).clear()
+    policy = sys.modules.get('src.services.labeling.vlm_url_policy')
+    if policy is not None:
+        policy.reset_policy_caches()
     capacity = sys.modules.get('src.services.projects.capacity')
     if capacity is not None:
         setattr(capacity, '_cache', None)  # noqa: B010 - module attr unknown to mypy
@@ -212,6 +220,26 @@ def _fresh_process_caches() -> Iterator[None]:
     _clear_process_caches()
     yield
     _clear_process_caches()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The VLM URL policy resolves hostnames; no test may hit real DNS (an
+    unresolvable name is what the policy sees). A test that needs answers
+    patches ``vlm_url_policy._resolve`` itself."""
+    import src.services.labeling.vlm_url_policy as policy
+
+    monkeypatch.setattr(policy, '_resolve', lambda _host: [])
+
+
+@pytest.fixture
+def vlm_env(monkeypatch: pytest.MonkeyPatch) -> str:
+    """An ``env`` built-in VLM endpoint (``OP_VLM_URL``), i.e. a project
+    that never activated one. Returns the base URL."""
+    url = 'http://vlm.invalid:8000/v1'
+    monkeypatch.setenv('OP_VLM_URL', url)
+    monkeypatch.setenv('OP_VLM_MODEL', 'test-vlm')
+    return url
 
 
 collect_ignore = [
@@ -236,7 +264,6 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     names a detector the way a deployment that exported its own would, so
     the cascade tests exercise every leg.
     """
-    import sys
     from pathlib import Path
 
     from _region_profile_fixture import REFERENCE_REGION_DETECTOR_MODEL
@@ -249,15 +276,7 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', str(example_path))
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
-    # The cascade's no-verdict count is process-wide; a test must not
-    # inherit another test's count for the same crop id.
-    no_verdict = sys.modules.get('scripts.curation.worker.no_verdict')
-    if no_verdict is not None:
-        no_verdict.reset_cascade_counter()
     yield
-    no_verdict = sys.modules.get('scripts.curation.worker.no_verdict')
-    if no_verdict is not None:
-        no_verdict.reset_cascade_counter()
     # Lazy re-resolution: the next accessor call (after monkeypatch restores
     # the env) sees the unconfigured default again.
     profile_registry._reset_registry_for_tests()

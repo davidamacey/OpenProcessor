@@ -197,8 +197,8 @@ def test_models_roster_skips_region_models_when_unconfigured(
 def test_training_candidates_query_uses_neutral_profile(region_env: pytest.MonkeyPatch) -> None:
     from src.routers.curation.regions import _training_candidate_query
 
-    query, _reason = _training_candidate_query('low_conf_correct')
-    assert REFERENCE_REGION_DETECTOR_MODEL not in str(query)
+    query, box_clause, _reason = _training_candidate_query('low_conf_correct')
+    assert REFERENCE_REGION_DETECTOR_MODEL not in str((query, box_clause))
 
 
 def _patch_worker_io(
@@ -261,7 +261,7 @@ def _patch_worker_io(
         'AsyncTritonPool': MagicMock(return_value=pool),
         'make_script_opensearch': MagicMock(return_value=os_client),
         'SegmenterClient': MagicMock(return_value=segmenter),
-        'VlmLabeler': MagicMock(return_value=vlm),
+        'build_vlm_labeler': MagicMock(return_value=vlm),
     }
     for name, mock in mocks.items():
         monkeypatch.setattr(worker, name, mock)
@@ -276,6 +276,7 @@ def _patch_worker_io(
         raising=False,
     )
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
     return mocks
 
 
@@ -287,7 +288,6 @@ def _worker_args(
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
             f'--segmenter-url={segmenter_url}',
-            '--vlm-url=http://vlm.local:8000',
             f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
         ]

@@ -211,7 +211,6 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
         body={
             'doc': {
                 'region_label_source': 'human',
-                'region_text': 'ABC123',
                 'region_text_source': 'human',
             }
         },
@@ -229,7 +228,6 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
         'class_name': 'suv',
         'class_source': 'ingest',
         'region_label_source': 'ingest',
-        'region_text': '',
         'region_text_source': 'ingest',
     }
     result = await occ_upsert_bulk(
@@ -254,7 +252,6 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
     got = await client.get(index=index, id=crop_id)
     src = got['_source']
     assert src['region_label_source'] == 'human'
-    assert src['region_text'] == 'ABC123'
     assert src['region_text_source'] == 'human'
     # Non-guarded fields are overwritten normally.
     assert src['class_id'] == 7

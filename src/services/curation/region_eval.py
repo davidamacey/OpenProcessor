@@ -44,9 +44,10 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_state import PENDING_STATUSES, RegionStatus
 from src.services.curation.export_support import scroll_hits
-from src.services.curation.region_boxes import read_boxes
+from src.services.curation.region_boxes import RegionBox, read_boxes
 from src.services.detection.cascade_detect import crop_norm_to_source_norm
 
 
@@ -235,6 +236,17 @@ _BOX_STATE_TO_STATUS: dict[str, str] = {
 }
 
 
+def _box_status(box: RegionBox) -> str:
+    """The status a box is scored under. A box a sanity gate rejected
+    (``sanity_reject:<why>``) is an item-level ``detection_failed``, not a
+    verifier ``verify_rejected`` -- the two are different failures."""
+    if box.state == 'rejected' and (box.rejection_reason or '').startswith(
+        REJECT_REASON_SANITY_PREFIX
+    ):
+        return RegionStatus.DETECTION_FAILED.value
+    return _BOX_STATE_TO_STATUS.get(box.state, box.state)
+
+
 def region_records(
     src: dict[str, Any], fields: RegionFields, doc_id: str = ''
 ) -> list[RegionRecord]:
@@ -261,7 +273,7 @@ def region_records(
     return [
         RegionRecord(
             crop_id=crop_id,
-            status=_BOX_STATE_TO_STATUS.get(b.state, b.state),
+            status=_box_status(b),
             detector=str(b.detector or NO_DETECTOR),
             score=b.score,
             box=as_box(list(b.bbox_norm)),

@@ -17,6 +17,8 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
 
@@ -28,12 +30,18 @@ ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'image_path': f'/data/{crop_id}.jpg',
         'bbox_norm': [0.1, 0.1, 0.5, 0.5],
-        F.bbox_norm: [0.1, 0.1, 0.5, 0.5],
+        **boxes_write_fields(
+            [RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.5, 0.5), state='proposed')],
+            current_src={},
+        ),
         'class_source': 'item_proposal',
         'class_validated': False,
         **extra,
@@ -41,6 +49,7 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
 
 
 class _Labeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
     _pack = GENERIC_ITEM_PACK
 
     async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
@@ -50,7 +59,7 @@ class _Labeler:
         ]
 
     async def verify_region(self, _crop: Any) -> Any:
-        return SimpleNamespace(is_region=True, reason='looks real')
+        return SimpleNamespace(is_region=True, reason='looks real', confidence='high')
 
 
 @pytest.mark.asyncio

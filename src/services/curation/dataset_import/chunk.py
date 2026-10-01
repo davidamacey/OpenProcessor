@@ -44,6 +44,7 @@ from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.ingest_index import ImageContext
 from src.services.curation.item_doc import DetectedItem
 from src.services.curation.proposal_merge import count_disagreements
+from src.services.curation.wire import item_source_excludes
 from src.services.detection.geometry import crop_id as make_crop_id
 
 
@@ -57,7 +58,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _FINAL = ('ok', 'failed', 'skipped')
-_ITEM_EXCLUDES = ['pe_embedding', 'backbone_embedding', 'region_embedding', 'region_box_embeddings']
 
 
 @dataclasses.dataclass
@@ -104,7 +104,7 @@ async def _items_for_image(ctx: ImportContext, image_id: str) -> list[dict[str, 
         body={
             'size': 1000,
             'query': {'term': {'image_id': image_id}},
-            '_source': {'excludes': _ITEM_EXCLUDES},
+            '_source': {'excludes': item_source_excludes()},
         },
     )
     return [h['_source'] for h in (resp.get('hits') or {}).get('hits') or []]
