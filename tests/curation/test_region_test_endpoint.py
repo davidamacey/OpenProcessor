@@ -247,3 +247,83 @@ def test_verify_runs_the_combined_call_and_the_verdicts_decide_the_boxes(stack, 
     # Two boxes were drawn on the crop the VLM was shown.
     (sent,) = stack.upstream.vlm_requests
     assert sent['_host'] == 'a.vlm.test'
+
+
+class _DetectorPool:
+    """A Triton pool whose ``wheel_det`` answers the given anchors
+    (``[cx, cy, w, h, conf]`` in the 640 letterbox frame)."""
+
+    def __init__(self, anchors: list[list[float]]) -> None:
+        self.anchors = anchors
+        self.calls: list[str] = []
+
+    async def infer(
+        self,
+        model_name: str,
+        inputs: list[Any],  # noqa: ARG002
+        outputs: list[Any],  # noqa: ARG002
+    ) -> Any:
+        import numpy as np
+
+        self.calls.append(model_name)
+        raw = np.array([self.anchors], dtype=np.float32).transpose(0, 2, 1)
+
+        class Result:
+            @staticmethod
+            def as_numpy(name: str) -> Any:
+                assert name == 'output0'
+                return raw
+
+        return Result()
+
+
+@pytest.fixture
+def detector(stack: Any, car: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> Any:
+    """``wheel_det`` is READY in Triton and in the profile."""
+    import src.main as main_module
+    from src.services.triton_control import TritonControlService
+
+    async def repo_index(_self: Any) -> list[dict[str, Any]]:
+        return [{'name': 'wheel_det', 'state': 'READY', 'version': '1'}]
+
+    monkeypatch.setattr(TritonControlService, 'get_repository_index', repo_index)
+    pool = _DetectorPool([[160, 320, 128, 128, 0.9], [480, 320, 128, 128, 0.8]])
+    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: pool)
+    return pool
+
+
+def test_a_detector_hit_is_what_the_worker_uses_and_the_segmenter_is_not_run(
+    stack, detector
+) -> None:
+    response = stack.post(URL, crop_id='car1', draft=profile_body(detector_model='wheel_det'))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    detector_leg = _only_leg(response, 'detector')
+    assert detector_leg['status'] == 'ok'
+    assert [c['selected'] for c in detector_leg['candidates']] == [True, True]
+    assert {c['source'] for c in detector_leg['candidates']} == {'detector'}
+    assert {c['detector'] for c in detector_leg['candidates']} == {'wheel_det'}
+    assert _only_leg(response, 'segmenter')['status'] == 'skipped'
+    assert _only_leg(response, 'segmenter')['reason'] == 'detector_hit'
+    assert stack.upstream.segment_requests == [], 'the worker never runs the segmenter after a hit'
+    assert detector.calls == ['wheel_det']
+    assert [b['source'] for b in body['preview_item']['region_boxes']] == ['detector', 'detector']
+    assert body['preview_item']['region_detector_chain'] == [
+        'wheel_det:hit',
+        'wheel_det:accepted_unverified',
+    ]
+
+
+def test_a_detector_miss_falls_through_to_the_segmenter(stack, detector) -> None:
+    detector.anchors = [[160, 320, 128, 128, 0.1]]  # under the profile's floor
+
+    response = stack.post(URL, crop_id='car1', draft=profile_body(detector_model='wheel_det'))
+
+    assert response.status_code == 200, response.text
+    assert _only_leg(response, 'detector')['status'] == 'ok'
+    assert _only_leg(response, 'detector')['candidates'] == []
+    assert _only_leg(response, 'segmenter')['status'] == 'ok'
+    assert len(stack.upstream.segment_requests) == 1
+    chain = response.json()['preview_item']['region_detector_chain']
+    assert chain[:2] == ['wheel_det:miss', 'sam3:hit']
