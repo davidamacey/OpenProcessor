@@ -6,11 +6,14 @@ nothing ever resolved."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
+from curation._vlm_test_support import empty_registry_reads
 
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import DetectionProfile
+from src.services.labeling.vlm_client import VlmIdentity
 
 
 if TYPE_CHECKING:
@@ -96,13 +99,21 @@ def test_label_batch_with_only_the_region_class_is_no_classes(
     reg.add_class('wheel')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
-    def _no_labeler(*_a: object, **_k: object) -> None:
-        raise AssertionError('the VLM must not be called with only the region class')
+    class _NeverCalled:
+        identity = VlmIdentity('env@None', 'test-vlm')
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', _no_labeler)
+        async def label_or_propose_batch(self, *_a: object, **_k: object) -> None:
+            raise AssertionError('the VLM must not be called with only the region class')
+
+    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000/v1')
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['a']), object()))
+        asyncio.run(
+            vlm_mod.vlm_label_batch(
+                VlmLabelBatchRequest(crop_ids=['a']), empty_registry_reads(AsyncMock())
+            )
+        )
     assert exc_info.value.status_code == 409
 
 

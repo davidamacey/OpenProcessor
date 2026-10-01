@@ -37,6 +37,9 @@ ITEMS = base_curation_config().items_index
 # =============================================================================
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 def _finish_current(job_dir: Path, status: str = 'completed') -> None:  # noqa: F811
     """Play the worker: claim the trigger and write a terminal state."""
     (job_dir / 'trigger.json').unlink()

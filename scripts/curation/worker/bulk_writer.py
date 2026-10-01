@@ -305,6 +305,12 @@ async def _bulk_update_one_project(
             # would claim a VLM ran when it didn't.
             if pack_stamp is not None and task.vlm_called:
                 update['vlm_prompt_pack'] = pack_stamp
+            # Who answered: the identity the call actually went to (kept on
+            # the task), never read from the store at write time -- a swap
+            # between the call and this flush must not relabel the answer.
+            if task.vlm_called and task.vlm_identity is not None:
+                update['vlm_endpoint'] = task.vlm_identity.endpoint_ref
+                update['vlm_model'] = task.vlm_identity.model
         return update
 
     result = await occ_skip_on_conflict_bulk(

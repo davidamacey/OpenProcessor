@@ -14,12 +14,12 @@ the contract without W9's routes).
 
 from __future__ import annotations
 
-import os
-from typing import Any
+import contextlib
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._common import get_class_registry, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 
 
 class Choice(BaseModel):
@@ -71,6 +71,9 @@ class VlmEndpointEntry(BaseModel):
     resolved_model: str | None = None
     locality: str
     sends_images_externally: bool
+    warning: str | None = None
+    # The endpoint's own health (`ready | unprobed | probe_failed |
+    # unreachable`, labels in `GET /vlm/endpoints`).
     status: str
     max_images_per_call: int | None = None
     active: bool
@@ -84,6 +87,20 @@ class VlmActiveRef(BaseModel):
 class VlmBlock(BaseModel):
     active: VlmActiveRef
     endpoints: list[VlmEndpointEntry]
+
+
+class ModelChoice(BaseModel):
+    """One row of the "every model choice" table (W9.8, §7.8.4)."""
+
+    role: str
+    label: str
+    scope: Literal['per_request', 'per_run', 'region_profile', 'config_store', 'deployment']
+    current: str | None
+    dims: int | None = None
+    choices: list[Choice]
+    settable: bool
+    settable_via: str | None = None
+    reason: str | None = None
 
 
 class OcrModelEntry(BaseModel):
@@ -139,7 +156,7 @@ class ConfigVocabularyResponse(BaseModel):
     segmenters: list[SegmenterEntry]
     vlm: VlmBlock
     ocr: OcrBlock
-    model_choices: list[dict[str, Any]] = Field(default_factory=list)
+    model_choices: list[ModelChoice] = Field(default_factory=list)
     text_reader_modes: list[TextReaderModeEntry]
     registry_classes: list[RegistryClassEntry]
     prompt_pack_calls: list[PromptPackCallEntry]
@@ -257,23 +274,54 @@ async def _build_segmenter() -> list[SegmenterEntry]:
     ]
 
 
-def _build_vlm() -> VlmBlock:
-    url = os.environ.get('OP_VLM_URL', '').strip()
-    model = os.environ.get('OP_VLM_MODEL', '').strip()
-    if not url:
-        return VlmBlock(active=VlmActiveRef(name=None), endpoints=[])
-    entry = VlmEndpointEntry(
-        name='env',
-        source='env',
-        model=model or 'local-vlm',
-        resolved_model=model or None,
-        locality='compose',
-        sends_images_externally=False,
-        status='configured',
-        max_images_per_call=None,
-        active=True,
+async def _build_vlm(opensearch: Any) -> VlmBlock:
+    """The ``vlm`` block from the endpoint registry (the ``env`` built-in
+    among the entries); ``active`` is the BOUND project's."""
+    from src.services.config_store import get_config_store
+    from src.services.labeling.vlm_endpoints import (
+        VlmEndpointUnavailableError,
+        active_vlm_endpoint,
+        available_vlm_endpoints,
+        external_ack_state,
+        refresh_vlm_state,
     )
-    return VlmBlock(active=VlmActiveRef(name='env'), endpoints=[entry])
+    from src.services.labeling.vlm_url_policy import acompute_locality
+
+    with contextlib.suppress(Exception):
+        await refresh_vlm_state(opensearch)
+    try:
+        active = active_vlm_endpoint()
+    except VlmEndpointUnavailableError:
+        active = None
+    ref = get_config_store().current.active_vlm
+    entries: list[VlmEndpointEntry] = []
+    for endpoint in available_vlm_endpoints():
+        try:
+            locality = await acompute_locality(endpoint.body.base_url, cached=True)
+        except ValueError:
+            locality = 'unknown'
+        ack = external_ack_state(
+            endpoint, locality, active_ref=None, active_ack_at=None, acked_refs=frozenset()
+        )
+        entries.append(
+            VlmEndpointEntry(
+                name=endpoint.name,
+                source=endpoint.source,
+                model=endpoint.body.model,
+                resolved_model=endpoint.model_id,
+                locality=locality,
+                sends_images_externally=ack.sends_images_externally,
+                warning=ack.warning,
+                status=endpoint.status,
+                max_images_per_call=endpoint.body.max_images_per_call,
+                active=active is not None and endpoint.name == active.name,
+            )
+        )
+    revision = ref[1] if isinstance(ref, tuple) else None
+    return VlmBlock(
+        active=VlmActiveRef(name=active.name if active else None, revision=revision),
+        endpoints=entries,
+    )
 
 
 async def _build_ocr() -> OcrBlock:
@@ -345,13 +393,31 @@ def _build_prompt_pack_calls() -> list[PromptPackCallEntry]:
     ]
 
 
+def _build_model_choices(detectors: list[DetectorEntry], ocr: OcrBlock) -> list[ModelChoice]:
+    from src.services.curation.model_choices import build_model_choices
+
+    return [
+        ModelChoice.model_validate(row)
+        for row in build_model_choices(
+            detector_ids=[d.name for d in detectors if d.ready],
+            ocr_pipeline_ids=[m.name for m in ocr.pipeline_models],
+            promoted_ids=[d.name for d in detectors if d.source == 'promoted'],
+        )
+    ]
+
+
 @router.get('/config/vocabulary', response_model=ConfigVocabularyResponse)
-async def get_config_vocabulary(include_other_projects: bool = False) -> ConfigVocabularyResponse:
+async def get_config_vocabulary(
+    opensearch: OpenSearchDep, include_other_projects: bool = False
+) -> ConfigVocabularyResponse:
+    detectors = await _build_detectors(include_other_projects=include_other_projects)
+    ocr = await _build_ocr()
     return ConfigVocabularyResponse(
-        detectors=await _build_detectors(include_other_projects=include_other_projects),
+        detectors=detectors,
         segmenters=await _build_segmenter(),
-        vlm=_build_vlm(),
-        ocr=await _build_ocr(),
+        vlm=await _build_vlm(opensearch),
+        ocr=ocr,
+        model_choices=_build_model_choices(detectors, ocr),
         text_reader_modes=_build_text_reader_modes(),
         registry_classes=_build_registry_classes(),
         prompt_pack_calls=_build_prompt_pack_calls(),

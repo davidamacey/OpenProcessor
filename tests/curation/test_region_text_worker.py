@@ -111,7 +111,7 @@ async def _drive(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
     vlm_cls = MagicMock(return_value=vlm)
-    monkeypatch.setattr(worker, 'VlmLabeler', vlm_cls)
+    monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
     monkeypatch.setattr(
         'src.clients.curation_opensearch.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
@@ -121,12 +121,15 @@ async def _drive(
     # loaded it first.
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
+    if vlm_url:
+        monkeypatch.setenv('OP_VLM_URL', vlm_url)
+    else:
+        monkeypatch.delenv('OP_VLM_URL', raising=False)
     args = worker.parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--segmenter-url=http://seg.invalid:8000',
-            f'--vlm-url={vlm_url}',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',

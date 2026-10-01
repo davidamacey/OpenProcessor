@@ -27,7 +27,7 @@ from src.services.curation.region_boxes import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 _VERIFIABLE_STATES = ('proposed', 'accepted')
 
@@ -57,6 +57,7 @@ def verify_regions_update(
     *,
     now: str,
     pack_stamp: str | None,
+    vlm_stamp: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """The OCC-merge update for ``verdicts`` against the live ``current``
     doc, or ``{}`` when nothing applies.
@@ -108,6 +109,9 @@ def verify_regions_update(
     )
     if pack_stamp is not None:
         update['vlm_prompt_pack'] = pack_stamp
+    if vlm_stamp:
+        # Which endpoint/model answered (W9 provenance).
+        update.update(vlm_stamp)
     return update
 
 

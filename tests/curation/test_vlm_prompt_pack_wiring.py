@@ -21,18 +21,10 @@ from src.routers.curation import vlm as vlm_mod
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
 
 
-@pytest.fixture(autouse=True)
-def _reset_vlm_labeler_singleton() -> Iterator[None]:
-    """The singleton is cached as a function attribute on
-    ``_get_vlm_labeler`` -- clear it around every test in this module so
-    one test's patched pack can't leak into another's."""
-    vlm_mod._get_vlm_labeler.__dict__.pop('_insts', None)
-    yield
-    vlm_mod._get_vlm_labeler.__dict__.pop('_insts', None)
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def test_get_vlm_labeler_uses_generic_pack_by_default() -> None:

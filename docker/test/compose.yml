@@ -134,6 +134,9 @@ services:
       - OP_VLM_URL=http://fake-vlm:8000/v1
       - OP_VLM_MODEL=fake-vlm
       - OP_VLM_API_KEY=EMPTY
+      # W9: this harness has no in-compose vLLM to switch (keeps the live
+      # guard's local-model routes on their no_local_vlm path).
+      - OP_LOCAL_VLM_ENDPOINT=
       # Three write endpoints are disabled by default; without these the
       # harness would "exercise" them and only ever see 400.
       - OP_SCORES_ENABLED=1

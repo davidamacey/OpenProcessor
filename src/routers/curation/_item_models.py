@@ -60,6 +60,12 @@ class ItemDoc(BaseModel):
     class_labeled_at: str | None = None
     class_labeler: str | None = None
     vlm_confidence: str | None = None
+    # Provenance of the VLM's most recent write: the prompt pack
+    # (`name@revision`), the endpoint (`name@revision`, or `env@<sha12>`)
+    # and the resolved model that answered.
+    vlm_prompt_pack: str | None = None
+    vlm_endpoint: str | None = None
+    vlm_model: str | None = None
     # When a VLM was last asked for this item's class, and why that attempt
     # gave no class (no_answer / no_match / invalid_index / unparseable);
     # null reason = it answered. An empty answer leaves the class untouched.

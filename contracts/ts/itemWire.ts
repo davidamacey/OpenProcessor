@@ -35,6 +35,9 @@ export interface ItemWire {
   class_labeled_at: string | null;
   class_labeler: string | null;
   vlm_confidence: string | null;
+  vlm_prompt_pack: string | null;
+  vlm_endpoint: string | null;
+  vlm_model: string | null;
   vlm_class_attempted_at: string | null;
   vlm_class_empty_reason: string | null;
   vlm_raw_class: string | null;
@@ -128,6 +131,9 @@ export const ITEM_WIRE_KEYS = [
   'class_labeled_at',
   'class_labeler',
   'vlm_confidence',
+  'vlm_prompt_pack',
+  'vlm_endpoint',
+  'vlm_model',
   'vlm_class_attempted_at',
   'vlm_class_empty_reason',
   'vlm_raw_class',

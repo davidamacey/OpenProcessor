@@ -117,6 +117,9 @@ LITERAL_ALLOWLIST: dict[str, dict[str, int]] = {
         'region_text': 1,
     },
     'src/services/curation/review_sorts.py': {'region_score': 2},
+    # The model-choices row id for the profile's detector model (a wire id of
+    # `GET /models/choices`, not the retired item-level scalar).
+    'src/services/curation/model_choices.py': {'region_detector': 1},
 }
 # Files whose prompt prose may repeat the VLM reply keys without a count.
 UNCOUNTED_ALLOWLIST: dict[str, frozenset[str]] = {

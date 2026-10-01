@@ -144,6 +144,58 @@
         "title": "ApiErrorResponse",
         "type": "object"
       },
+      "AppliedRuntime": {
+        "description": "One worker process's \"what did I actually apply\" record (any_domain_plan.md\n§4.5/§7.3), served under ``ActiveConfigResponse.applied[]`` from\n``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``,\nW2). ``lagging`` is ``true`` when ``applied_config_revision`` is\nbehind the axis's current ``config_revision`` for longer than the\ndrain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a\nmomentary swap in progress.",
+        "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "applied_config_revision": {
+            "title": "Applied Config Revision",
+            "type": "integer"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "lagging": {
+            "default": false,
+            "title": "Lagging",
+            "type": "boolean"
+          },
+          "pack": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "process": {
+            "title": "Process",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/ActiveRef",
+            "default": {}
+          }
+        },
+        "required": [
+          "process",
+          "host",
+          "applied_config_revision",
+          "profile",
+          "pack"
+        ],
+        "title": "AppliedRuntime",
+        "type": "object"
+      },
       "ArchiveRequest": {
         "properties": {
           "expected_revision": {
@@ -1380,24 +1432,6 @@
         "title": "CancelResponse",
         "type": "object"
       },
-      "Choice": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "Choice",
-        "type": "object"
-      },
       "ClassCreateRequest": {
         "properties": {
           "group": {
@@ -2085,6 +2119,17 @@
             ],
             "title": "Actions"
           },
+          "activate_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activate Via"
+          },
           "active_shards": {
             "anyOf": [
               {
@@ -2175,6 +2220,17 @@
             ],
             "title": "Current Revision"
           },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
           "error": {
             "enum": [
               "project_not_found",
@@ -2218,7 +2274,15 @@
               "hotkey_reserved",
               "hotkey_taken",
               "path_escape",
-              "finish_in_progress"
+              "finish_in_progress",
+              "unknown_vlm",
+              "vlm_external_not_acknowledged",
+              "vlm_not_configured",
+              "vlm_endpoint_unavailable",
+              "no_local_vlm",
+              "unknown_catalog_id",
+              "vlm_catalog_does_not_fit",
+              "probe_busy"
             ],
             "title": "Error",
             "type": "string"
@@ -2320,6 +2384,17 @@
               }
             ]
           },
+          "requested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested"
+          },
           "soft_limit": {
             "anyOf": [
               {
@@ -2382,8 +2457,7 @@
           },
           "model_choices": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ModelChoice"
             },
             "title": "Model Choices",
             "type": "array"
@@ -3114,7 +3188,7 @@
         "additionalProperties": true,
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "job_id": {
             "anyOf": [
@@ -5391,6 +5465,39 @@
             ],
             "title": "Vlm Confidence"
           },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          },
+          "vlm_prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Prompt Pack"
+          },
           "vlm_proposed_class_id": {
             "anyOf": [
               {
@@ -6619,6 +6726,95 @@
         "title": "MetricBlock",
         "type": "object"
       },
+      "ModelChoice": {
+        "description": "One row of the \"every model choice\" table (W9.8, §7.8.4).",
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "dims": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dims"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "per_request",
+              "per_run",
+              "region_profile",
+              "config_store",
+              "deployment"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "settable": {
+            "title": "Settable",
+            "type": "boolean"
+          },
+          "settable_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settable Via"
+          }
+        },
+        "required": [
+          "role",
+          "label",
+          "scope",
+          "current",
+          "choices",
+          "settable"
+        ],
+        "title": "ModelChoice",
+        "type": "object"
+      },
       "ModelClassMappingEntry": {
         "properties": {
           "class_id": {
@@ -6878,7 +7074,7 @@
       "OcrModelEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "configured": {
             "default": false,
@@ -7775,7 +7971,8 @@
               "classes",
               "activations",
               "keymap",
-              "prompt_packs"
+              "prompt_packs",
+              "vlm_activation"
             ],
             "items": {
               "type": "string"
@@ -11037,6 +11234,39 @@
             ],
             "title": "Vlm Confidence"
           },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          },
+          "vlm_prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Prompt Pack"
+          },
           "vlm_proposed_class_id": {
             "anyOf": [
               {
@@ -11713,10 +11943,32 @@
         "title": "ScoresComputeRequest",
         "type": "object"
       },
+      "SecretRef": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "present",
+          "choice"
+        ],
+        "title": "SecretRef",
+        "type": "object"
+      },
       "SegmenterEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "default_min_score": {
             "anyOf": [
@@ -11907,6 +12159,45 @@
             "title": "Default",
             "type": "boolean"
           },
+          "default_ack_recorded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Ack Recorded"
+          },
+          "endpoint_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ready",
+                  "unprobed",
+                  "probe_failed",
+                  "unreachable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Status"
+          },
+          "endpoint_status_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Status Label"
+          },
           "field_coverage": {
             "anyOf": [
               {
@@ -11937,6 +12228,17 @@
             "title": "Label",
             "type": "string"
           },
+          "per_run_ack_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Run Ack Required"
+          },
           "requires_field": {
             "anyOf": [
               {
@@ -11947,6 +12249,17 @@
               }
             ],
             "title": "Requires Field"
+          },
+          "sends_images_externally": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sends Images Externally"
           },
           "settable": {
             "anyOf": [
@@ -11968,6 +12281,17 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
           }
         },
         "required": [
@@ -12096,7 +12420,7 @@
       "TextReaderModeEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "id": {
             "title": "Id",
@@ -13246,7 +13570,37 @@
               "text_hint_inactive_no_ocr",
               "text_fields_ignored",
               "display_name_missing",
-              "parent_class_unknown"
+              "parent_class_unknown",
+              "vlm_name_invalid",
+              "vlm_name_reserved",
+              "vlm_field_range",
+              "vlm_url_invalid",
+              "vlm_url_denied_internal_service",
+              "vlm_url_denied_address",
+              "vlm_api_key_ref_invalid",
+              "vlm_api_key_unresolved",
+              "vlm_api_key_ref_dropped",
+              "vlm_external_not_acknowledged",
+              "vlm_external_denied",
+              "vlm_catalog_id_unknown",
+              "vlm_unreachable",
+              "vlm_timeout",
+              "vlm_auth_failed",
+              "vlm_http_error",
+              "vlm_models_endpoint_missing",
+              "vlm_model_not_listed",
+              "vlm_no_vision",
+              "vlm_vision_answer_wrong",
+              "vlm_json_mode_unsupported",
+              "vlm_max_images_exceeds_server",
+              "vlm_reply_unparseable",
+              "vlm_not_probed",
+              "vlm_probe_failed",
+              "vlm_context_too_small",
+              "vlm_multi_box_unverified",
+              "vlm_reads_text_unverified",
+              "vlm_json_mode_off",
+              "vlm_open_images_clamped"
             ],
             "title": "Code",
             "type": "string"
@@ -13325,6 +13679,44 @@
         "title": "ValidationReport",
         "type": "object"
       },
+      "VlmActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "VlmActivateRequest",
+        "type": "object"
+      },
       "VlmActiveRef": {
         "properties": {
           "name": {
@@ -13356,6 +13748,87 @@
         "title": "VlmActiveRef",
         "type": "object"
       },
+      "VlmActiveResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision"
+        ],
+        "title": "VlmActiveResponse",
+        "type": "object"
+      },
       "VlmBlock": {
         "properties": {
           "active": {
@@ -13374,6 +13847,530 @@
           "endpoints"
         ],
         "title": "VlmBlock",
+        "type": "object"
+      },
+      "VlmCatalogEntry": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+          },
+          "context_max": {
+            "title": "Context Max",
+            "type": "integer"
+          },
+          "desired": {
+            "title": "Desired",
+            "type": "boolean"
+          },
+          "disk_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Gb"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "fits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fits"
+          },
+          "gated": {
+            "title": "Gated",
+            "type": "boolean"
+          },
+          "hf_repo": {
+            "title": "Hf Repo",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "license_url": {
+            "title": "License Url",
+            "type": "string"
+          },
+          "max_images": {
+            "title": "Max Images",
+            "type": "integer"
+          },
+          "max_model_len": {
+            "title": "Max Model Len",
+            "type": "integer"
+          },
+          "multi_box_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multi Box Verified"
+          },
+          "params_b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params B"
+          },
+          "quantization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantization"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "serving": {
+            "title": "Serving",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "tested",
+              "to_verify"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text_reading_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Reading Verified"
+          },
+          "vram_gb": {
+            "title": "Vram Gb",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "choice",
+          "hf_repo",
+          "family",
+          "license",
+          "license_url",
+          "gated",
+          "params_b",
+          "quantization",
+          "context_max",
+          "max_model_len",
+          "max_images",
+          "vram_gb",
+          "disk_gb",
+          "status",
+          "rank",
+          "multi_box_verified",
+          "text_reading_verified",
+          "fits",
+          "serving",
+          "desired"
+        ],
+        "title": "VlmCatalogEntry",
+        "type": "object"
+      },
+      "VlmCatalogLabels": {
+        "properties": {
+          "status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Status",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "VlmCatalogLabels",
+        "type": "object"
+      },
+      "VlmCatalogResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/VlmCatalogEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/VlmCatalogLabels"
+          },
+          "local": {
+            "$ref": "#/components/schemas/VlmLocalStatus"
+          }
+        },
+        "required": [
+          "entries",
+          "local",
+          "labels"
+        ],
+        "title": "VlmCatalogResponse",
+        "type": "object"
+      },
+      "VlmDeactivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "VlmDeactivateRequest",
+        "type": "object"
+      },
+      "VlmEndpointBody": {
+        "additionalProperties": false,
+        "description": "What is stored for an endpoint. The API key itself is never part of\nit: ``api_key_ref`` only names where to find it (W9.9).",
+        "properties": {
+          "allow_external": {
+            "default": false,
+            "title": "Allow External",
+            "type": "boolean"
+          },
+          "api_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Ref"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "json_mode": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ],
+            "title": "Json Mode",
+            "type": "string"
+          },
+          "max_images_per_call": {
+            "default": 8,
+            "title": "Max Images Per Call",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "open_images_per_call": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 3,
+            "title": "Open Images Per Call"
+          },
+          "requests_per_second": {
+            "default": 500.0,
+            "title": "Requests Per Second",
+            "type": "number"
+          },
+          "timeout_s": {
+            "default": 240.0,
+            "title": "Timeout S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "base_url",
+          "model"
+        ],
+        "title": "VlmEndpointBody",
+        "type": "object"
+      },
+      "VlmEndpointCloneRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "VlmEndpointCloneRequest",
+        "type": "object"
+      },
+      "VlmEndpointCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "VlmEndpointCreate",
+        "type": "object"
+      },
+      "VlmEndpointDoc": {
+        "properties": {
+          "active_in": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Active In",
+            "type": "array"
+          },
+          "api_key_present": {
+            "title": "Api Key Present",
+            "type": "boolean"
+          },
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "last_probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmProbeResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "compose",
+                  "host",
+                  "private",
+                  "external",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body",
+          "api_key_present",
+          "locality",
+          "sends_images_externally",
+          "warning"
+        ],
+        "title": "VlmEndpointDoc",
         "type": "object"
       },
       "VlmEndpointEntry": {
@@ -13427,6 +14424,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
           }
         },
         "required": [
@@ -13439,6 +14447,432 @@
           "active"
         ],
         "title": "VlmEndpointEntry",
+        "type": "object"
+      },
+      "VlmEndpointFieldSchema": {
+        "properties": {
+          "advanced": {
+            "default": false,
+            "title": "Advanced",
+            "type": "boolean"
+          },
+          "choices_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "secret_refs",
+                  "vlm_catalog"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices From"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "empty_choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enum": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enum"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "help": {
+            "default": "",
+            "title": "Help",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "int",
+              "float",
+              "bool",
+              "enum"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "group",
+          "type",
+          "default"
+        ],
+        "title": "VlmEndpointFieldSchema",
+        "type": "object"
+      },
+      "VlmEndpointGroup": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "VlmEndpointGroup",
+        "type": "object"
+      },
+      "VlmEndpointLabels": {
+        "properties": {
+          "locality": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Locality",
+            "type": "object"
+          },
+          "source": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source",
+            "type": "object"
+          },
+          "status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Status",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "locality",
+          "source"
+        ],
+        "title": "VlmEndpointLabels",
+        "type": "object"
+      },
+      "VlmEndpointList": {
+        "properties": {
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointSummary"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          },
+          "external_policy": {
+            "enum": [
+              "ack",
+              "deny"
+            ],
+            "title": "External Policy",
+            "type": "string"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/VlmEndpointLabels"
+          },
+          "secret_refs": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRef"
+            },
+            "title": "Secret Refs",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "endpoints",
+          "config_revision",
+          "external_policy",
+          "secret_refs",
+          "labels"
+        ],
+        "title": "VlmEndpointList",
+        "type": "object"
+      },
+      "VlmEndpointSaveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "VlmEndpointSaveRequest",
+        "type": "object"
+      },
+      "VlmEndpointSchema": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/VlmEndpointGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields",
+          "groups"
+        ],
+        "title": "VlmEndpointSchema",
+        "type": "object"
+      },
+      "VlmEndpointSummary": {
+        "properties": {
+          "active_in": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Active In",
+            "type": "array"
+          },
+          "api_key_present": {
+            "title": "Api Key Present",
+            "type": "boolean"
+          },
+          "api_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Ref"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "catalog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "last_probe_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Probe At"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "compose",
+                  "host",
+                  "private",
+                  "external",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "unprobed",
+              "probe_failed",
+              "unreachable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "base_url",
+          "model",
+          "catalog_id",
+          "locality",
+          "sends_images_externally",
+          "warning",
+          "api_key_ref",
+          "api_key_present",
+          "status",
+          "last_probe_at"
+        ],
+        "title": "VlmEndpointSummary",
         "type": "object"
       },
       "VlmLabelBatchRequest": {
@@ -13458,6 +14892,330 @@
           "crop_ids"
         ],
         "title": "VlmLabelBatchRequest",
+        "type": "object"
+      },
+      "VlmLocalDesired": {
+        "properties": {
+          "catalog_id": {
+            "title": "Catalog Id",
+            "type": "string"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          }
+        },
+        "required": [
+          "catalog_id",
+          "requested_at",
+          "command"
+        ],
+        "title": "VlmLocalDesired",
+        "type": "object"
+      },
+      "VlmLocalSelectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_id": {
+            "title": "Catalog Id",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "catalog_id"
+        ],
+        "title": "VlmLocalSelectRequest",
+        "type": "object"
+      },
+      "VlmLocalServed": {
+        "properties": {
+          "catalog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Id"
+          },
+          "max_model_len": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Len"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          }
+        },
+        "required": [
+          "model",
+          "root",
+          "catalog_id",
+          "max_model_len"
+        ],
+        "title": "VlmLocalServed",
+        "type": "object"
+      },
+      "VlmLocalStatus": {
+        "properties": {
+          "can_restart_from_api": {
+            "title": "Can Restart From Api",
+            "type": "boolean"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "desired": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmLocalDesired"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "gpu_total_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Total Gb"
+          },
+          "poll_after_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After S"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "restart_required": {
+            "title": "Restart Required",
+            "type": "boolean"
+          },
+          "served": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmLocalServed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "configured",
+          "endpoint",
+          "served",
+          "desired",
+          "restart_required",
+          "poll_after_s",
+          "gpu_total_gb",
+          "can_restart_from_api",
+          "reason"
+        ],
+        "title": "VlmLocalStatus",
+        "type": "object"
+      },
+      "VlmProbeResult": {
+        "properties": {
+          "image_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Tokens"
+          },
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "json_mode_supported": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Mode Supported"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "max_images_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Images Ok"
+          },
+          "max_model_len": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Len"
+          },
+          "model_listed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Listed"
+          },
+          "models_listed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Listed",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "probed_at": {
+            "title": "Probed At",
+            "type": "string"
+          },
+          "reasoning_channel": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Channel"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          },
+          "vision_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision Ok"
+          }
+        },
+        "required": [
+          "ok",
+          "probed_at"
+        ],
+        "title": "VlmProbeResult",
         "type": "object"
       },
       "VlmRegionVisibleBatchItem": {
@@ -13513,6 +15271,156 @@
           "visible"
         ],
         "title": "VlmRegionVisibleBatchResponse",
+        "type": "object"
+      },
+      "VlmRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "VlmRevisionSummary",
+        "type": "object"
+      },
+      "VlmRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/VlmRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "VlmRevisionsResponse",
+        "type": "object"
+      },
+      "VlmRollbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "VlmRollbackRequest",
+        "type": "object"
+      },
+      "VlmValidateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/VlmEndpointBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "VlmValidateRequest",
+        "type": "object"
+      },
+      "VlmValidateResponse": {
+        "properties": {
+          "locality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "compose",
+                  "host",
+                  "private",
+                  "external",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality"
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmProbeResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sends_images_externally": {
+            "title": "Sends Images Externally",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "validation",
+          "locality",
+          "sends_images_externally"
+        ],
+        "title": "VlmValidateResponse",
         "type": "object"
       },
       "VlmVerifyRegionBatchItem": {
@@ -14128,10 +16036,53 @@
         "title": "RegionProfileSummary",
         "type": "object"
       },
+      "src__routers__curation___vlm_endpoint_models__Choice": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
+      "src__routers__curation__config_vocabulary__Choice": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
       "src__routers__curation__config_vocabulary__RegistryClassEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/Choice"
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
           },
           "class_id": {
             "title": "Class Id",
@@ -20342,6 +22293,36 @@
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -20683,6 +22664,36 @@
               ],
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -23653,7 +25664,7 @@
     },
     "/curation/projects/{project}/regions/vocabulary": {
       "get": {
-        "description": "The deployment-configured detector/segmenter/verifier vocabulary.\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
+        "description": "The deployment-configured detector/segmenter/verifier vocabulary.\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / the VLM endpoint registry --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
         "operationId": "regions_vocabulary_curation_projects__project__regions_vocabulary_get",
         "parameters": [
           {
@@ -26837,6 +28848,221 @@
         ]
       }
     },
+    "/curation/projects/{project}/vlm/endpoints/active": {
+      "get": {
+        "description": "This project's active VLM endpoint (``active.name: null`` = off).",
+        "operationId": "get_active_vlm_curation_projects__project__vlm_endpoints_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Vlm",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/endpoints/active/rollback": {
+      "post": {
+        "description": "Re-activate the previous endpoint through the same gate.",
+        "operationId": "rollback_active_vlm_curation_projects__project__vlm_endpoints_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Vlm",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/endpoints/deactivate": {
+      "post": {
+        "description": "VLM off for this project.",
+        "operationId": "deactivate_active_vlm_curation_projects__project__vlm_endpoints_deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate Active Vlm",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/endpoints/{name}/activate": {
+      "post": {
+        "description": "Activate ``name`` (at ``revision``, else its latest) for this project.\nAn endpoint outside this deployment needs ``acknowledge_external``.",
+        "operationId": "activate_vlm_endpoint_curation_projects__project__vlm_endpoints__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmActiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Vlm Endpoint",
+        "tags": [
+          "Curation",
+          "VLM"
+        ]
+      }
+    },
     "/curation/projects/{project}/vlm/label_batch": {
       "post": {
         "description": "Send up to 64 crops to the VLM — chunked at ``max_images_per_call``.",
@@ -26849,6 +29075,36 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -26932,6 +29188,36 @@
               "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
               "title": "Prompt Pack"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -26976,6 +29262,36 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
             }
           }
         ],
@@ -27030,6 +29346,36 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -27083,6 +29429,36 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+            "in": "query",
+            "name": "vlm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
+              "title": "Vlm"
+            }
+          },
+          {
+            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+            "in": "query",
+            "name": "acknowledge_external",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
+              "title": "Acknowledge External",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -27122,6 +29498,889 @@
         "summary": "Vlm Verify Regions",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/vlm/catalog": {
+      "get": {
+        "description": "The local catalog with ``fits`` / ``serving`` / ``desired`` per entry.",
+        "operationId": "get_vlm_catalog_curation_vlm_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmCatalogResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Get Vlm Catalog",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints": {
+      "get": {
+        "description": "Every endpoint (the ``env`` built-in first), where each is in use,\nthe external-images policy and the secret references present.",
+        "operationId": "list_vlm_endpoints_curation_vlm_endpoints_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "List Vlm Endpoints",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "post": {
+        "operationId": "create_vlm_endpoint_curation_vlm_endpoints_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmEndpointCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/schema": {
+      "get": {
+        "description": "Field specs for the endpoint form.",
+        "operationId": "vlm_endpoint_form_schema_curation_vlm_endpoints_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Vlm Endpoint Form Schema",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/validate": {
+      "post": {
+        "description": "Validate a draft; never writes (except the probe record of an\nexisting ``name``, when ``probe=true``). Always 200: the report says what\nis wrong.",
+        "operationId": "validate_vlm_draft_curation_vlm_endpoints_validate_post",
+        "parameters": [
+          {
+            "description": "Also test the endpoint (synthetic images).",
+            "in": "query",
+            "name": "probe",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also test the endpoint (synthetic images).",
+              "title": "Probe",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Vlm Draft",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}": {
+      "delete": {
+        "description": "409 ``in_use`` while any project runs it (read live, so an unreadable\nproject blocks the delete rather than being skipped).",
+        "operationId": "delete_vlm_endpoint_curation_vlm_endpoints__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "get": {
+        "operationId": "get_vlm_endpoint_doc_curation_vlm_endpoints__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Vlm Endpoint Doc",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "put": {
+        "description": "A new revision. Does not change what any project runs until it is\nactivated there.",
+        "operationId": "update_vlm_endpoint_curation_vlm_endpoints__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmEndpointSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/clone": {
+      "post": {
+        "operationId": "clone_vlm_endpoint_curation_vlm_endpoints__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmEndpointCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/probe": {
+      "post": {
+        "description": "Test the saved endpoint with synthetic images and record the result\n(it also picks up a rotated key file). Never bumps the endpoint's\nrevision; bumps the config revision so every process and worker sees\nthe new ``json_mode`` / model facts.",
+        "operationId": "probe_vlm_endpoint_curation_vlm_endpoints__name__probe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmProbeResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Vlm Endpoint",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/revisions": {
+      "get": {
+        "operationId": "list_vlm_endpoint_revisions_curation_vlm_endpoints__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Vlm Endpoint Revisions",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/endpoints/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_vlm_endpoint_revision_curation_vlm_endpoints__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmEndpointDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Vlm Endpoint Revision",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/local": {
+      "get": {
+        "operationId": "get_local_vlm_curation_vlm_local_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmLocalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Get Local Vlm",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      }
+    },
+    "/curation/vlm/local/select": {
+      "delete": {
+        "description": "Clear the desired local model.",
+        "operationId": "clear_local_vlm_selection_curation_vlm_local_select_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmLocalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Clear Local Vlm Selection",
+        "tags": [
+          "Projects",
+          "VLM"
+        ]
+      },
+      "post": {
+        "description": "Record the desired local model (202): the host applies it with\n``openprocessor vlm use <id>`` (``restart_required`` says so).",
+        "operationId": "select_local_vlm_curation_vlm_local_select_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmLocalSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmLocalStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Local Vlm",
+        "tags": [
+          "Projects",
+          "VLM"
         ]
       }
     }

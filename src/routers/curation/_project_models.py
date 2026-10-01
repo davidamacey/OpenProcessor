@@ -45,6 +45,7 @@ CLONEABLE_AXES: tuple[str, ...] = (
     'activations',
     'keymap',
     'prompt_packs',
+    'vlm_activation',
 )
 
 # The only statuses archive / unarchive act on (lifecycle.py enforces them).

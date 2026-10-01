@@ -121,11 +121,17 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
     """The active name for each config-store-backed axis, for merging
     into ``GET /settings``'s ``defaults`` map."""
     from src.services.config_store import get_config_store
+    from src.services.curation.vlm_strategies import active_default_id
+    from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
     store = get_config_store()
     await store.ensure_fresh(opensearch)
     snapshot = store.current
     result: dict[str, str | None] = {}
+    # W9: the third config-store axis is the project's VLM endpoint.
+    await refresh_vlm_state(opensearch)
+    if (vlm_default := active_default_id()) is not None:
+        result['vlm'] = vlm_default
     for axis, ref in (
         ('prompt_pack', snapshot.active_pack),
         ('detection_profile', snapshot.active_profile),
@@ -181,7 +187,9 @@ async def update_curation_settings_route(
 
     await _ensure_indexes(opensearch)
     config_store_defaults = {k: v for k, v in body.defaults.items() if k in _CONFIG_STORE_AXES}
-    settings_doc_defaults = {k: v for k, v in body.defaults.items() if k not in _CONFIG_STORE_AXES}
+    settings_doc_defaults = {
+        k: v for k, v in body.defaults.items() if k not in _CONFIG_STORE_AXES and k != 'vlm'
+    }
 
     await _validate_defaults(settings_doc_defaults, opensearch)
     # m1 fix (W3/W4 round-4 review): resolve + gate EVERY config-store axis
@@ -206,6 +214,13 @@ async def update_curation_settings_route(
         for axis, value in config_store_defaults.items()
     }
     combined = len(resolved) > 1
+    # W9: the VLM is the third side of the pack <-> profile <-> VLM triple.
+    # It is resolved and gated against the PENDING pack/profile of this same
+    # request, and the pack/profile gates below pair with the PENDING VLM
+    # (never each against the other sides' stored values: R5-1).
+    vlm_plan = None
+    if 'vlm' in body.defaults:
+        vlm_plan = await _plan_vlm(body.defaults['vlm'], resolved, opensearch)
     for axis, res in resolved.items():
         if res.target_name is None:
             continue
@@ -223,9 +238,12 @@ async def update_curation_settings_route(
             res.target_revision,
             opensearch,
             **({'pending_sibling': pending_sibling} if has_sibling else {}),
+            **({'pending_vlm': vlm_plan.endpoint} if vlm_plan is not None else {}),
         )
     for plan in resolved.values():
         await _apply_config_store_axis(plan, opensearch)
+    if vlm_plan is not None:
+        await _apply_vlm(vlm_plan, opensearch)
 
     doc = await update_curation_settings(opensearch, settings_doc_defaults)
     doc['defaults'] = {**doc.get('defaults', {}), **await _config_store_axis_defaults(opensearch)}
@@ -345,6 +363,52 @@ async def _pending_sibling_for_gate(other_axis: str, other: _AxisActivationPlan)
     return PromptPack.from_dict({**pack_record.body, 'name': other.target_name})
 
 
+async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any) -> Any:
+    """Resolve and gate the ``vlm`` default of a ``PUT /settings`` (write
+    nothing): 422 ``unknown_vlm`` for an id nobody advertises, then the one
+    VLM gate against the request's PENDING pack and profile."""
+    from src.routers.curation._config_common_models import api_error
+    from src.services.config_store.vlm_activation import UNSET, plan_default_vlm
+    from src.services.curation.vlm_strategies import advertised_ids
+    from src.services.labeling.vlm_endpoints import refresh_vlm_state
+
+    await refresh_vlm_state(opensearch)
+    if value is not None and value not in advertised_ids():
+        raise api_error(
+            422,
+            'unknown_vlm',
+            f"{value!r} is not a currently-advertised id for axis 'vlm'",
+            axis='vlm',
+            requested=value,
+            valid_ids=sorted(advertised_ids()),
+        )
+    pack: Any = UNSET
+    profile: Any = UNSET
+    if 'prompt_pack' in resolved:
+        pack = await _pending_sibling_for_gate('prompt_pack', resolved['prompt_pack'])
+    if 'detection_profile' in resolved:
+        profile = await _pending_sibling_for_gate(
+            'detection_profile', resolved['detection_profile']
+        )
+    return await plan_default_vlm(opensearch, value, pack=pack, profile=profile)
+
+
+async def _apply_vlm(plan: Any, opensearch: Any) -> None:
+    from src.routers.curation._config_common_models import api_error
+    from src.services.config_store import ActiveConflictError
+    from src.services.config_store.vlm_activation import apply_default_vlm
+
+    try:
+        await apply_default_vlm(opensearch, plan)
+    except ActiveConflictError as exc:
+        raise api_error(
+            409,
+            'active_conflict',
+            'the VLM was activated by another writer since this request started',
+            current=exc.current,
+        ) from exc
+
+
 async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -> None:
     """Write side of a resolved axis activation (see
     :func:`_resolve_config_store_axis`). Only called once every axis in
@@ -382,6 +446,7 @@ async def _run_activation_gate(
     opensearch: Any,
     *,
     pending_sibling: Any = _NO_PENDING_OVERRIDE,
+    pending_vlm: Any = _NO_PENDING_OVERRIDE,
 ) -> None:
     """N1 fix (W3/W4 round-3 review), now routed through the single
     shared gate (round-4 R4-1): the Cropwright default-pack dropdown
@@ -404,6 +469,8 @@ async def _run_activation_gate(
     kwargs: dict[str, Any] = {}
     if pending_sibling is not _NO_PENDING_OVERRIDE:
         kwargs['pending_sibling'] = pending_sibling
+    if pending_vlm is not _NO_PENDING_OVERRIDE:
+        kwargs['pending_vlm'] = pending_vlm
     await run_activation_gate(
         cast('ConfigAxis', axis), target_name, target_revision, client=opensearch, **kwargs
     )

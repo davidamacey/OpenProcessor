@@ -34,6 +34,14 @@ class StrategyEntry(BaseModel):
     requires_field: str | None = None
     field_coverage: int | None = None
     field_coverage_total: int | None = None
+    # W9: set on ``vlm`` entries only (null everywhere else). ``status`` stays
+    # inside its Literal; the endpoint's own health is served here.
+    endpoint_status: Literal['ready', 'unprobed', 'probe_failed', 'unreachable'] | None = None
+    endpoint_status_label: str | None = None
+    sends_images_externally: bool | None = None
+    warning: str | None = None
+    default_ack_recorded: bool | None = None
+    per_run_ack_required: bool | None = None
 
 
 class MethodAxis(BaseModel):

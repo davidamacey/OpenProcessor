@@ -27,8 +27,10 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
+
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 @pytest.fixture
@@ -183,15 +185,14 @@ def _run_kwargs(**overrides: Any) -> dict[str, Any]:
 
 
 @pytest.fixture
-def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
+def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     """Record every labeler the pipeline obtains (real instances)."""
     from src.routers.curation import pipeline, vlm
 
-    vlm._get_vlm_labeler.__dict__.pop('_insts', None)
     got: list[Any] = []
 
-    def _spy(pack_name: str | None = None, revision: int | None = None) -> Any:
-        inst = vlm._get_vlm_labeler(pack_name, revision)
+    def _spy(pack_name: str | None = None, revision: int | None = None, **kw: Any) -> Any:
+        inst = vlm._get_vlm_labeler(pack_name, revision, **kw)
         got.append(inst)
         return inst
 
@@ -200,8 +201,7 @@ def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
         'src.routers.curation.get_class_registry',
         lambda: _FakeRegistry([_FakeClassEntry(3, 'wooden_pallet')]),
     )
-    yield got
-    vlm._get_vlm_labeler.__dict__.pop('_insts', None)
+    return got
 
 
 @pytest.mark.usefixtures('packs')

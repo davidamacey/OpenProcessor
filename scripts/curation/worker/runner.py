@@ -420,7 +420,9 @@ async def run(args: argparse.Namespace) -> int:
     # never the process's own (often unbound) context.
     from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
     from src.config.project_context import bind_project
+    from src.services.config_store.global_store import get_global_config_store
     from src.services.config_store.store import get_config_store as _get_config_store
+    from src.services.labeling.vlm_endpoints import active_vlm_endpoint as _active_vlm_endpoint
     from src.services.labeling.vlm_prompts import active_prompt_pack as _active_prompt_pack
 
     runtime_holder = RuntimeHolder()
@@ -431,6 +433,10 @@ async def run(args: argparse.Namespace) -> int:
     # would make the pinned design inert -- the store is created here,
     # pinned, before this project's first item is ever fetched).
     project_stores: dict[str, Any] = {}
+    # W9: the deployment-wide VLM registry. ONE pinned store shared by every
+    # project's sync, created here (before anything can create a live one) so
+    # its snapshot only moves at a quiesce point like a project's own.
+    registry_store = get_global_config_store(mode='pinned')
     # M1: `runtime:detection_worker:<host>` is written at startup, at
     # every swap, and at least every 60s (any_domain_plan.md sec 4.5
     # steps 2.6 / L803-805) -- throttled per project so N active
@@ -460,6 +466,7 @@ async def run(args: argparse.Namespace) -> int:
                     project_stores[record.slug] = store
                 rt = await maybe_hot_reload(
                     store=store,
+                    registry=registry_store,
                     opensearch=opensearch,
                     holder=runtime_holder,
                     slug=record.slug,
@@ -468,10 +475,11 @@ async def run(args: argparse.Namespace) -> int:
                     queues=[in_q, vlm_visible_q, sam_q, combined_q, out_q],
                     get_active_profile=get_active_region_profile,
                     get_active_pack=_active_prompt_pack,
+                    get_active_vlm=_active_vlm_endpoint,
                     region_detector_cls=RegionDetector,
                     ocr_recognizer_cls=PaddleOcrTextRecognizer,
                     segmenter_cls=_wkr.SegmenterClient,
-                    vlm_cls=_wkr.VlmLabeler,
+                    build_vlm=_wkr.build_vlm_labeler,
                 )
                 if rt is None:
                     return
@@ -1111,7 +1119,7 @@ async def run(args: argparse.Namespace) -> int:
                         # informed gets stamped `vlm_prompt_pack` downstream.
                         for _t in chunk:
                             if _t.crop_jpeg is not None:
-                                _t.vlm_called = True
+                                _t.mark_vlm_called(rt.vlm_identity)
                         OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
                         )
@@ -1289,6 +1297,7 @@ async def run(args: argparse.Namespace) -> int:
                             vlm_text=None,
                             vlm_confidence=None,
                             vlm_available=rt.vlm_available,
+                            vlm_model=rt.vlm_model,
                             rules=rt.text_rules,
                         )
                         box = _box_with_resolved_text(box, text_doc)
@@ -1299,7 +1308,10 @@ async def run(args: argparse.Namespace) -> int:
                             t,
                             [box],
                             RegionStatus.DETECTED,
-                            extra={F.skip_verify: True, **item_verification_fields(verified=False)},
+                            extra={
+                                F.skip_verify: True,
+                                **item_verification_fields(verified=False, verifier=None),
+                            },
                         )
                         await out_q.put(t)
                         sam_q.task_done()
@@ -1499,7 +1511,7 @@ async def run(args: argparse.Namespace) -> int:
                         # informed gets stamped `vlm_prompt_pack` downstream.
                         for _t in chunk:
                             if _t.crop_jpeg is not None:
-                                _t.vlm_called = True
+                                _t.mark_vlm_called(rt.vlm_identity)
                         _vlm_elapsed = time.monotonic() - _vlm_t0
                         OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS.labels(outcome='ok').observe(
                             _vlm_elapsed
@@ -1632,13 +1644,16 @@ async def run(args: argparse.Namespace) -> int:
                                 visible_false_status,
                                 extra={
                                     **_combined_class_update(
-                                        reply, effective_class_names, name_to_id=name_to_id
+                                        reply,
+                                        effective_class_names,
+                                        name_to_id=name_to_id,
+                                        vlm_model=rt.vlm_model,
                                     ),
                                     # R-M4 fix: `verified` means the VLM
                                     # CONFIRMED a region -- never true on
                                     # this branch, since no box here is
                                     # ever accepted.
-                                    **item_verification_fields(verified=False),
+                                    **item_verification_fields(verified=False, verifier=None),
                                 },
                             )
                             combined_no_verdict.clear(t.crop_id)
@@ -1711,7 +1726,10 @@ async def run(args: argparse.Namespace) -> int:
                                 None
                                 if reply is None
                                 else _combined_class_update(
-                                    reply, effective_class_names, name_to_id=name_to_id
+                                    reply,
+                                    effective_class_names,
+                                    name_to_id=name_to_id,
+                                    vlm_model=rt.vlm_model,
                                 )
                             )
                             # Same trace-tagging as the ordinary verdict
@@ -1746,7 +1764,8 @@ async def run(args: argparse.Namespace) -> int:
                                 extra={
                                     **(class_update or {}),
                                     **item_verification_fields(
-                                        verified=any(b.state == 'accepted' for b in boxes)
+                                        verified=any(b.state == 'accepted' for b in boxes),
+                                        verifier=rt.vlm_model,
                                     ),
                                 },
                             )
@@ -1792,6 +1811,7 @@ async def run(args: argparse.Namespace) -> int:
                                 vlm_text=box.text,
                                 vlm_confidence=box.confidence,
                                 vlm_available=True,
+                                vlm_model=rt.vlm_model,
                                 rules=rt.text_rules,
                             )
                             # Text-hint OCR fallback (text_reader='vlm'
@@ -1812,7 +1832,10 @@ async def run(args: argparse.Namespace) -> int:
                             None
                             if reply is None
                             else _combined_class_update(
-                                reply, effective_class_names, name_to_id=name_to_id
+                                reply,
+                                effective_class_names,
+                                name_to_id=name_to_id,
+                                vlm_model=rt.vlm_model,
                             )
                         )
                         # auto_confirmed is the box-aware rule: >=1 accepted
@@ -1838,7 +1861,9 @@ async def run(args: argparse.Namespace) -> int:
                             extra={
                                 **(class_update or {}),
                                 **item_verification_fields(
-                                    verified=any_accepted, auto_confirmed=auto_confirmed
+                                    verified=any_accepted,
+                                    verifier=rt.vlm_model,
+                                    auto_confirmed=auto_confirmed,
                                 ),
                             },
                         )

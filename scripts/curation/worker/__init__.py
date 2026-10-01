@@ -32,7 +32,7 @@ from __future__ import annotations
 #      these names are what ``*`` picks up.
 #   2. ``tests/curation/test_region_worker.py`` monkeypatches the heavy-IO
 #      constructors (``AsyncTritonPool``, ``make_script_opensearch``,
-#      ``SegmenterClient``, ``VlmLabeler``) on the shim module; the runner
+#      ``SegmenterClient``, ``build_vlm_labeler``) on the shim module; the runner
 #      looks them up via the shim (``from scripts.curation import
 #      region_worker_main as _wkr; _wkr.AsyncTritonPool(...)``), so the
 #      patch must reach the shim's namespace.
@@ -44,12 +44,13 @@ from scripts.curation.worker.state import (  # noqa: F401
     DEFAULT_SEGMENTER_URL,
     DEFAULT_SEGMENTER_URLS,
     DEFAULT_TRITON,
-    DEFAULT_VLM_URL,
     JPEG_QUALITY,
     STATUS_PENDING_DETECTION,
     STATUS_PENDING_VERIFICATION,
     items_index,
 )
 from src.clients.triton_pool import AsyncTritonPool  # noqa: F401
-from src.services.labeling.vlm_labeler import VlmLabeler  # noqa: F401
+from src.services.labeling.vlm_factory import (  # noqa: F401
+    build_uncached_labeler as build_vlm_labeler,
+)
 from src.services.projects.guard import make_script_opensearch  # noqa: F401

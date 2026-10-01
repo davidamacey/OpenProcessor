@@ -8,7 +8,8 @@ CRUD routes and W2's own settings bridge both call these.
 Doc ids (see any_domain_plan.md §3.1):
 - ``pack:<name>`` / ``pack:<name>@<rev>`` (current / immutable revision copy)
 - ``profile:<name>`` / ``profile:<name>@<rev>``
-- ``activation:<axis>`` (``axis`` is ``prompt_pack`` | ``detection_profile``)
+- ``vlm:<name>`` / ``vlm:<name>@<rev>`` (W9; global index only)
+- ``activation:<axis>`` (``axis`` is ``prompt_pack`` | ``detection_profile`` | ``vlm``)
 - ``activation_event:<uuid4>``
 - ``meta:config_revision``
 - ``runtime:<process>:<hostname>``
@@ -18,19 +19,26 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from opensearchpy.exceptions import ConflictError, NotFoundError
 
 from src.core.logging import get_logger
 
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 logger = get_logger(__name__)
 
-ConfigKind = Literal['prompt_pack', 'region_profile']
-ConfigAxis = Literal['prompt_pack', 'detection_profile']
+ConfigKind = Literal['prompt_pack', 'region_profile', 'vlm_endpoint']
+ConfigAxis = Literal['prompt_pack', 'detection_profile', 'vlm']
 
-KIND_TO_PREFIX: dict[str, str] = {'prompt_pack': 'pack', 'region_profile': 'profile'}
+KIND_TO_PREFIX: dict[str, str] = {
+    'prompt_pack': 'pack',
+    'region_profile': 'profile',
+    'vlm_endpoint': 'vlm',
+}
 
 META_CONFIG_REVISION_DOC_ID = 'meta:config_revision'
 
@@ -242,18 +250,25 @@ async def activate(
     name: str | None,
     revision: int | None,
     expected_active: dict[str, Any] | None,
+    doc_fields: dict[str, Any] | Callable[[dict[str, Any] | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Write ``activation:<axis>`` plus an ``activation_event`` and bump
     the global revision. ``name=None`` deactivates the axis.
     ``expected_active`` (``{"name": ..., "revision": ...}`` or ``None``
     for "currently off") must equal the current activation, else
-    :class:`ActiveConflictError`.
+    :class:`ActiveConflictError`. ``doc_fields`` is merged into the activation
+    doc (the VLM axis's external-images acknowledgement, W9.9); a callable
+    receives the CURRENT activation doc's ``_source`` (``None`` when there
+    is none) read by this same OCC step, so a carried-forward field cannot
+    be lost to a concurrent writer.
     """
     doc_id = activation_doc_id(axis)
     seq_no = primary_term = None
     previous: dict[str, Any] | None = None
+    current_source: dict[str, Any] | None = None
     try:
         current = await client.get(index=index, id=doc_id)
+        current_source = current['_source']
         previous = {
             'name': current['_source'].get('name'),
             'revision': current['_source'].get('revision'),
@@ -274,6 +289,7 @@ async def activate(
         'revision': revision,
         'activated_at': now,
         'previous': previous,
+        **(doc_fields(current_source) if callable(doc_fields) else (doc_fields or {})),
     }
     index_kwargs: dict[str, Any] = {'index': index, 'id': doc_id, 'body': doc}
     if seq_no is not None:

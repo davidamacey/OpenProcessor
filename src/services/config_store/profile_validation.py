@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.detection.region_text import TEXT_READER_MODES
+from src.services.labeling.vlm_endpoints import vlm_configured
 
 
 if TYPE_CHECKING:
@@ -230,10 +231,7 @@ def _check_text_mode(profile: DetectionProfile) -> list[ValidationIssue]:
                 )
             )
         return issues
-    import os
-
-    vlm_configured = bool(os.environ.get('OP_VLM_URL', '').strip())
-    if profile.text_reader in _TEXT_READING_MODES and not vlm_configured:
+    if profile.text_reader in _TEXT_READING_MODES and not vlm_configured():
         issues.append(
             _issue('vlm_not_configured', 'warning', 'no VLM is configured; falls back to OCR')
         )
@@ -250,13 +248,10 @@ def _check_text_mode(profile: DetectionProfile) -> list[ValidationIssue]:
 
 
 def _needs_ocr_models(profile: DetectionProfile) -> bool:
-    import os
-
-    vlm_configured = bool(os.environ.get('OP_VLM_URL', '').strip())
     if profile.text_reader == 'none':
         return False
     return profile.text_reader in _OCR_NEEDING_MODES or (
-        profile.text_reader == 'vlm' and not vlm_configured
+        profile.text_reader == 'vlm' and not vlm_configured()
     )
 
 

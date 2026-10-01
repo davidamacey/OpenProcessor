@@ -349,6 +349,13 @@ def _items_body() -> dict[str, Any]:
                 'region_profile': {'type': 'keyword'},
                 'region_profile_revision': {'type': 'integer'},
                 'vlm_prompt_pack': {'type': 'keyword'},
+                # Which VLM endpoint / model answered the item's most recent
+                # VLM write (W9.3): `name@revision` (or `env@<sha12>`) and the
+                # resolved model (the probe's `root` when known). Stamped from
+                # the answering runtime's identity, so a hot switch never
+                # relabels an earlier answer.
+                'vlm_endpoint': {'type': 'keyword'},
+                'vlm_model': {'type': 'keyword'},
                 # VLM's raw answer for every classification call (whether or
                 # not it resolved against the registry). Aggregating this field
                 # via terms agg surfaces the long-tail labels that should grow

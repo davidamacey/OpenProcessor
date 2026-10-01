@@ -54,7 +54,6 @@ from src.services.detection.region_text import (
     resolve_region_text,
 )
 from src.services.detection.region_text_rules import RegionTextRules, region_text_rules
-from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 
 
 if TYPE_CHECKING:
@@ -156,6 +155,7 @@ async def apply_region_text(
     vlm_text: str | None,
     vlm_confidence: str | None,
     vlm_available: bool,
+    vlm_model: str | None,
     rules: RegionTextRules | None = None,
 ) -> None:
     """Replace ``doc``'s region text attributes (keyed by ``RegionBox``
@@ -167,6 +167,10 @@ async def apply_region_text(
     reject counts as no reading, so the OCR reader runs in
     ``vlm_then_ocr`` mode too. A text-free profile reads nothing and
     leaves ``doc`` with no region text fields.
+
+    ``vlm_model`` is the resolved model of the VLM that produced
+    ``vlm_text`` (``None`` when no VLM ran): it is the reading's engine
+    version.
     """
     if not profile.reads_text:
         _drop_region_text(doc)
@@ -182,7 +186,7 @@ async def apply_region_text(
         profile.text_reader,
         vlm_text=vlm_text,
         vlm_confidence=vlm_confidence,
-        vlm_engine=VLM_MODEL_ID,
+        vlm_engine=vlm_model or '',
         ocr=reading,
         ocr_engine=ocr_engine_id(profile),
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
@@ -313,7 +317,7 @@ async def accept_without_vlm(
         t.update_doc = {
             F.status: RegionStatus.DETECTION_FAILED,
             F.detector_chain: list(t.detection_trace),
-            **item_verification_fields(verified=False),
+            **item_verification_fields(verified=False, verifier=None),
         }
         return
     t.detection_trace.append(f'{actor}:{ACCEPTED_UNVERIFIED}')
@@ -338,6 +342,7 @@ async def accept_without_vlm(
         vlm_text=None,
         vlm_confidence=None,
         vlm_available=False,
+        vlm_model=None,
         rules=rules,
     )
     box = _box_with_resolved_text(box, text_doc)
@@ -352,7 +357,7 @@ async def accept_without_vlm(
         # guaranteed `detected` regardless of any stored sibling).
         F.status: RegionStatus.DETECTED,
         F.detector_chain: list(t.detection_trace),
-        **item_verification_fields(verified=False),
+        **item_verification_fields(verified=False, verifier=None),
     }
 
 

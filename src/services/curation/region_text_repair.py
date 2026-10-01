@@ -35,7 +35,6 @@ from src.services.detection.region_text import (
     ocr_engine_id,
     resolve_region_text,
 )
-from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 
 
 if TYPE_CHECKING:
@@ -77,7 +76,11 @@ def stored_vlm_reading(view: dict[str, Any]) -> str | None:
 
 
 def rederive(
-    box: RegionBox, *, profile: DetectionProfile, rules: RegionTextRules
+    box: RegionBox,
+    *,
+    profile: DetectionProfile,
+    rules: RegionTextRules,
+    vlm_model: str | None = None,
 ) -> dict[str, Any] | None:
     """Target values (by attribute name) of :data:`MANAGED_ATTRS` for
     ``box``, or ``None`` when it holds human text or no stored reading at
@@ -102,7 +105,10 @@ def rederive(
         profile.text_reader,
         vlm_text=vlm,
         vlm_confidence=None,
-        vlm_engine=VLM_MODEL_ID,
+        # The repair re-derives from readings already stored: the engine of
+        # a VLM reading is the model that made it (stamped on the item at
+        # write time; ``vlm_model``), not whatever this process is configured with.
+        vlm_engine=vlm_model or '',
         ocr=ocr,
         ocr_engine=ocr_engine_id(profile),
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
@@ -192,7 +198,7 @@ async def plan_region_text_repair(
             'size': page_size,
             'query': candidate_query(),
             'sort': [{'crop_id': 'asc'}],
-            '_source': {'includes': ['crop_id', F.boxes]},
+            '_source': {'includes': ['crop_id', 'vlm_model', F.boxes]},
         }
         if cursor is not None:
             body['search_after'] = cursor
@@ -204,8 +210,9 @@ async def plan_region_text_repair(
         for h in hits:
             plan.scanned += 1
             per_box: dict[str, dict[str, Any]] = {}
-            for box in read_boxes(h.get('_source') or {}, F):
-                target = rederive(box, profile=profile, rules=rules)
+            src = h.get('_source') or {}
+            for box in read_boxes(src, F):
+                target = rederive(box, profile=profile, rules=rules, vlm_model=src.get('vlm_model'))
                 if target is None:
                     if box.text_source == HUMAN_TEXT_SOURCE:
                         plan.human_skipped += 1
@@ -252,7 +259,7 @@ async def apply_region_text_repair(
         boxes: list[RegionBox] = []
         changed = False
         for box in read_boxes(current, F):
-            target = rederive(box, profile=profile, rules=rules)
+            target = rederive(box, profile=profile, rules=rules, vlm_model=current.get('vlm_model'))
             diff = changed_fields(box, target) if target is not None else {}
             if diff:
                 changed = True

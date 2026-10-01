@@ -27,6 +27,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -37,6 +38,8 @@ F = get_region_fields()
 _BOX = RegionBox(
     box_id='b1', bbox_norm=(0.1, 0.1, 0.5, 0.5), state='proposed', score=0.8, detector='det_model'
 )
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
@@ -58,6 +61,7 @@ class _FakeVerdict:
 
 
 class _Labeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
     _pack = GENERIC_ITEM_PACK
 
     async def verify_region(self, _crop: Any) -> _FakeVerdict:
@@ -65,6 +69,7 @@ class _Labeler:
 
 
 class _RacingLabeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
     """Human-verifies 'raced' mid-loop -- simulating a human write landing
     on OpenSearch between this endpoint's initial per-crop ``get`` (used
     to read region_box/image_path) and its final bulk write, which is

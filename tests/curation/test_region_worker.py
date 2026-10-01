@@ -182,19 +182,19 @@ async def _drive_text_hint_rescue(
     vlm.region_visible_batch = AsyncMock(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
-    monkeypatch.setattr(worker, 'VlmLabeler', MagicMock(return_value=vlm))
+    monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
     monkeypatch.setattr(
         'src.clients.curation_opensearch.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
     args = worker.parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--segmenter-url=http://seg.invalid:8000',
-            '--vlm-url=http://vlm.invalid:8000',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
@@ -971,7 +971,7 @@ class TestSignalHandling:
 
         vlm = MagicMock()
         vlm.aclose = AsyncMock()
-        monkeypatch.setattr(worker, 'VlmLabeler', MagicMock(return_value=vlm))
+        monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
 
         # Patch signal-handler installation away — adding signal handlers
         # in a non-main asyncio loop would raise here.
@@ -991,12 +991,12 @@ class TestSignalHandling:
         monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
         sentinel = tmp_path / 'pause.sentinel'  # absent
+        monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
         args = worker.parse_args(
             [
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
                 '--segmenter-url=http://segmenter.local:8000',
-                '--vlm-url=http://vlm.local:8000',
                 f'--pause-sentinel={sentinel}',
                 '--max-iterations=1',
             ]

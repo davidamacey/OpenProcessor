@@ -16,6 +16,9 @@ from typing import Any
 import pytest
 
 
+pytestmark = pytest.mark.usefixtures('vlm_env')
+
+
 class TestPipelineSkipFilter:
     """``_run_chunk``'s query must exclude crops with a recent
     ``vlm_verify_completed_at``."""

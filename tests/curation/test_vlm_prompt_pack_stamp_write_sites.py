@@ -18,6 +18,7 @@ from src.clients.curation_opensearch import ClassRegistry
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
 
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
+
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
@@ -45,6 +49,7 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
 
 
 class _Labeler:
+    identity = VlmIdentity('env@None', 'test-vlm')
     _pack = GENERIC_ITEM_PACK
 
     async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:

@@ -18,11 +18,14 @@ from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_VERIFIER
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
-from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+from src.services.labeling.vlm_client import VlmIdentity
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
 
 
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def _box(box_id: str, x: float, **over: Any) -> RegionBox:
@@ -57,6 +60,7 @@ class _Verdict:
 class _Labeler:
     """Answers per call, in call order; records the crops it was shown."""
 
+    identity = VlmIdentity('env@None', 'test-vlm')
     _pack = GENERIC_ITEM_PACK
 
     def __init__(self, answers: list[_Verdict | None]) -> None:
@@ -121,6 +125,9 @@ async def test_each_box_is_verified_and_the_status_re_derived(
     assert doc[F.rejected_count] == 1
     assert doc[F.verified] is True
     assert doc[F.reason] == 'not a region'
+    assert doc['vlm_endpoint'] == 'env@None'
+    assert doc['vlm_model'] == 'test-vlm'
+    assert doc['vlm_prompt_pack'] == prompt_pack_stamp(GENERIC_ITEM_PACK)
 
 
 @pytest.mark.asyncio

@@ -18,6 +18,7 @@ from PIL import Image
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config.curation import base_curation_config
+from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 
 
 ITEMS = base_curation_config().items_index
+
+
+pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
@@ -85,6 +89,7 @@ async def test_label_batch_never_overwrites_validated_class(
     sent: list[str] = []
 
     class _Labeler:
+        identity = VlmIdentity('env@None', 'test-vlm')
         _pack = GENERIC_ITEM_PACK
 
         async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
