@@ -355,7 +355,7 @@ def test_patch_region_box_text_only_does_not_touch_cluster_fields(
     box = written[F.boxes][0]
     assert box['text'] == 'ABC123'
     assert box['text_source'] == 'human'
-    assert F.cluster_id not in written
+    assert box.get('cluster_id') is None
 
 
 def test_patch_region_meta_requires_at_least_one_field(app_client: TestClient) -> None:
@@ -422,6 +422,7 @@ def test_batch_set_region_status_updates_every_crop_and_refreshes(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['updated'] == 2
+    assert [r['region_box_id'] for r in body['items']] == [None, None]  # item-level rows
     assert body['conflicts'] == []
     assert fake_os._docs['crop-1'][F.status] == 'detected'
     assert fake_os._docs['crop-2'][F.status] == 'detected'

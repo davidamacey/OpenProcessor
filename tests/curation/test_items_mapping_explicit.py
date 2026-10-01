@@ -21,14 +21,8 @@ _PROPS = _items_body()['mappings']['properties']
 # Status/provenance fields the API and workers filter, aggregate or sort on.
 _MUST_BE_KEYWORD = {
     'status',
-    'text_source',
-    'text_engine_version',
     'label_source',
-    'source',
     'pairing',
-    'detector',
-    'bbox_frame',
-    'confidence',
 }
 
 
@@ -76,10 +70,14 @@ def test_item_label_fields_are_mapped(field: str, expected: str) -> None:
     assert _PROPS.get(field, {}).get('type') == expected
 
 
-def test_region_text_supports_exact_and_partial_search() -> None:
-    mapping = _PROPS[RegionFields().text]
-    assert mapping['type'] == 'keyword'
-    assert mapping['fields']['search']['type'] == 'text'
+def test_box_text_and_detector_are_keywords_inside_the_nested_box_mapping() -> None:
+    """Per-box text is matched with a case-insensitive wildcard and the
+    detector with a term filter, both on the nested box element."""
+    boxes = _PROPS[RegionFields().boxes]
+    assert boxes['type'] == 'nested'
+    for key in ('text', 'detector', 'state', 'source', 'confidence', 'cluster_subid'):
+        assert boxes['properties'][key]['type'] == 'keyword', key
+    assert boxes['properties']['cluster_id']['type'] == 'integer'
 
 
 def test_no_query_targets_a_dynamic_keyword_subfield_of_a_region_field() -> None:

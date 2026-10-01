@@ -251,29 +251,74 @@ _EXCLUSION_MAPPING: dict[str, Any] = {
 }
 
 
-def _region_text_reader_mapping() -> dict[str, Any]:
-    """Per-reader region text fields (VLM vs OCR reading + disagreement)."""
-    return {
-        F.text_vlm: {'type': 'keyword'},
-        F.text_ocr: {'type': 'keyword'},
-        F.text_disagreement: {'type': 'boolean'},
-        F.text_choice: {'type': 'keyword'},
-        F.text_vlm_invalid: {'type': 'keyword'},
-    }
+def _region_auto_confirm_mapping() -> dict[str, Any]:
+    """The worker's auto-confirm flag (``RegionFields.auto_confirmed``): an
+    accepted-but-unreviewed region, kept apart from human validation."""
+    return {F.auto_confirmed: {'type': 'boolean'}}
 
 
-def _region_review_mapping() -> dict[str, Any]:
-    """Region fields that keep machine verdicts reviewable: the candidate
-    box a verifier rejected (see ``RegionFields.candidate_bbox_norm``) and
-    the worker's auto-confirm (``RegionFields.auto_confirmed``), kept apart
-    from human validation."""
+def _region_boxes_mapping() -> dict[str, Any]:
+    """The W8 multi-box region fields: the box list, the per-box vectors and
+    the item-level summary. The one definition behind both the fresh index
+    body (:func:`_items_body`) and :func:`ensure_items_region_boxes_fields`."""
     return {
-        F.auto_confirmed: {'type': 'boolean'},
-        F.candidate_bbox_norm: {'type': 'float'},
-        F.candidate_score: {'type': 'float'},
-        F.candidate_detector: {'type': 'keyword'},
-        F.candidate_detector_version: {'type': 'keyword'},
-        F.candidate_source: {'type': 'keyword'},
+        # W8 multi-box regions: the per-item box list. `nested` so a
+        # query like "a box with detector=sam3 AND state=accepted"
+        # means the same box (region_boxes.box_query, the only
+        # place that builds this nested clause). Element keys are
+        # FIXED strings, not RegionFields-indirected (W8.2): the
+        # list is new, so no deployment has legacy names for them.
+        F.boxes: {
+            'type': 'nested',
+            'properties': {
+                'box_id': {'type': 'keyword'},
+                'bbox_norm': {'type': 'float', 'index': False},
+                'state': {'type': 'keyword'},
+                'score': {'type': 'float'},
+                'detector': {'type': 'keyword'},
+                'detector_version': {'type': 'keyword'},
+                'source': {'type': 'keyword'},
+                'bbox_correct': {'type': 'boolean'},
+                'confidence': {'type': 'keyword'},
+                'rejection_reason': {'type': 'keyword'},
+                'text': {'type': 'keyword'},
+                'text_raw': {'type': 'keyword'},
+                'text_source': {'type': 'keyword'},
+                'text_engine_version': {'type': 'keyword'},
+                'text_confidence': {'type': 'float'},
+                'text_vlm': {'type': 'keyword'},
+                'text_ocr': {'type': 'keyword'},
+                'text_choice': {'type': 'keyword'},
+                'text_vlm_invalid': {'type': 'keyword'},
+                'text_disagreement': {'type': 'boolean'},
+                'cluster_id': {'type': 'integer'},
+                'cluster_subid': {'type': 'keyword'},
+                'cluster_distance': {'type': 'float'},
+                'detected_at': {'type': 'date'},
+            },
+        },
+        # Per-box vectors live in a SIBLING nested field, not
+        # inside F.boxes (W8.2): every item read that feeds
+        # serialize_item / every OCC read excludes vectors, and a
+        # human edit that read region_boxes with vectors excluded
+        # and wrote the list back would silently delete every
+        # embedding. Only the embed stage / backfill write this.
+        F.box_embeddings: {
+            'type': 'nested',
+            'properties': {
+                'box_id': {'type': 'keyword'},
+                # The geometry the vector was computed from: a box
+                # moved since then has a stale vector.
+                'bbox_norm': {'type': 'float', 'index': False},
+                'embedding': _knn_field(dim=config.encoder_embedding_dim),
+            },
+        },
+        F.count: {'type': 'integer'},
+        F.rejected_count: {'type': 'integer'},
+        F.max_score: {'type': 'float'},
+        F.set_complete: {'type': 'boolean'},
+        F.revision: {'type': 'integer'},
+        F.box_seq: {'type': 'integer', 'index': False},
     }
 
 
@@ -350,15 +395,6 @@ def _items_body() -> dict[str, Any]:
                 'cluster_distance': {'type': 'float'},
                 'cluster_subid': {'type': 'keyword'},  # AHC sub-cluster id (e.g. "47a")
                 **CLUSTER_GEOMETRY_MAPPING,
-                # Region-of-interest clustering — independent of the item
-                # cluster_* above (an item's region rides on an item that
-                # already owns those). Coarse IVF partition + per-bucket AHC
-                # refine over the region embedding, so region
-                # false-positives / bad boxes surface as sub-cluster
-                # outliers.
-                F.cluster_id: {'type': 'integer'},
-                F.cluster_distance: {'type': 'float'},
-                F.cluster_subid: {'type': 'keyword'},
                 'cluster_auto_suggest': {'type': 'keyword'},
                 # Primary-subject ranking + blur quality (computed at ingest,
                 # backfilled for legacy items). crop_rank_in_image=1 is the
@@ -380,44 +416,28 @@ def _items_body() -> dict[str, Any]:
                 'class_validated': {'type': 'boolean'},
                 F.validated: {'type': 'boolean'},
                 'label_source': {'type': 'keyword'},
-                F.bbox_norm: {'type': 'float'},
-                F.score: {'type': 'float'},
                 F.verified: {'type': 'boolean'},
                 F.reason: {'type': 'text'},
-                # Region-of-interest provenance. Every region write carries
-                # which detector produced the bbox, the detector version, the
-                # bbox coordinate frame, and when it was written. Verifier
-                # fields are populated when a VLM (or a human) confirmed the
-                # candidate. ``detector_chain`` is a multi-value keyword
-                # (OpenSearch arrays of keyword work as-is).
-                F.detector: {'type': 'keyword'},
-                F.detector_version: {'type': 'keyword'},
+                # Item-level region provenance: the chain of detector steps
+                # that ran (a multi-value keyword -- OpenSearch arrays of
+                # keyword work as-is), when, and who verified. Per-box
+                # geometry / detector / score live in ``region_boxes``.
                 F.detector_chain: {'type': 'keyword'},
-                F.bbox_frame: {'type': 'keyword'},
                 F.detected_at: {'type': 'date'},
                 F.verifier: {'type': 'keyword'},
                 F.verifier_version: {'type': 'keyword'},
                 F.verified_at: {'type': 'date'},
                 F.rejection_reason: {'type': 'keyword'},
-                # Region lifecycle + VLM read-back. Explicit so none of these
-                # fall to dynamic `text` mapping, where terms aggregations and
-                # sorts on the bare field name fail.
+                # Region lifecycle. Explicit so it doesn't fall to dynamic
+                # `text` mapping, where terms aggregations and sorts on the
+                # bare field name fail.
                 F.status: {'type': 'keyword'},
-                F.bbox_correct: {'type': 'boolean'},
-                F.confidence: {'type': 'keyword'},
-                F.text: {'type': 'keyword', 'fields': {'search': {'type': 'text'}}},
-                F.text_raw: {'type': 'keyword'},
-                F.text_confidence: {'type': 'float'},
-                F.text_source: {'type': 'keyword'},
-                F.text_engine_version: {'type': 'keyword'},
-                **_region_text_reader_mapping(),
-                **_region_review_mapping(),
+                **_region_auto_confirm_mapping(),
                 # Every OCR line read on the item crop + normalized search
                 # tokens (src/services/curation/item_text.py).
                 **ITEM_TEXT_MAPPING,
                 F.class_id: {'type': 'integer'},
                 F.label_source: {'type': 'keyword'},
-                F.source: {'type': 'keyword'},
                 F.pairing: {'type': 'keyword'},
                 F.skip_verify: {'type': 'boolean'},
                 # Item label fields written by ingest and the VLM labeler.
@@ -429,8 +449,6 @@ def _items_body() -> dict[str, Any]:
                 # Quarantine bookkeeping — a legacy-region quarantine script
                 # copies the original values into these fields before
                 # clearing the live fields and re-running detection.
-                F.bbox_norm_legacy: {'type': 'float'},
-                F.score_legacy: {'type': 'float'},
                 F.status_legacy: {'type': 'keyword'},
                 # Class-label provenance (same shape as region provenance,
                 # scoped to the item class label rather than the
@@ -477,80 +495,7 @@ def _items_body() -> dict[str, Any]:
                 # Backbone RoI-pool embedding used for residual AHC
                 # clustering + intra-class similarity refinement.
                 BACKBONE_EMBEDDING_FIELD: _knn_field(dim=config.backbone_embedding_dim),
-                # Encoder embedding of the region-of-interest (cropped at
-                # the region bbox, pad-to-square). Lets regions be
-                # clustered / AHC-refined like item classes so
-                # false-positives and bad boxes surface as outliers.
-                # knn_vector, not a plain indexed float array. A
-                # 1024-value float array indexed 1024 BKD points plus
-                # useless sorted/deduplicated doc values and stored ~22KiB
-                # of JSON in _source per doc (measured fetch cost 50-70ms
-                # per 60 docs even with it _source-excluded, since derived
-                # source still has to skip past it). knn_vector gets
-                # binary derived source instead of JSON and becomes
-                # kNN-searchable for region FP matching. The previous
-                # comment here claimed index.knn was disabled on live
-                # indexes -- that's no longer true (op_items has
-                # index.knn: true), so the plain-float rationale no
-                # longer applies.
-                F.embedding: _knn_field(dim=config.encoder_embedding_dim),
-                # W8 multi-box regions: the per-item box list. `nested` so a
-                # query like "a box with detector=sam3 AND state=accepted"
-                # means the same box (region_boxes.box_query, the only
-                # place that builds this nested clause). Element keys are
-                # FIXED strings, not RegionFields-indirected (W8.2): the
-                # list is new, so no deployment has legacy names for them.
-                F.boxes: {
-                    'type': 'nested',
-                    'properties': {
-                        'box_id': {'type': 'keyword'},
-                        'bbox_norm': {'type': 'float', 'index': False},
-                        'state': {'type': 'keyword'},
-                        'score': {'type': 'float'},
-                        'detector': {'type': 'keyword'},
-                        'detector_version': {'type': 'keyword'},
-                        'source': {'type': 'keyword'},
-                        'bbox_correct': {'type': 'boolean'},
-                        'confidence': {'type': 'keyword'},
-                        'rejection_reason': {'type': 'keyword'},
-                        'text': {'type': 'keyword'},
-                        'text_raw': {'type': 'keyword'},
-                        'text_source': {'type': 'keyword'},
-                        'text_engine_version': {'type': 'keyword'},
-                        'text_confidence': {'type': 'float'},
-                        'text_vlm': {'type': 'keyword'},
-                        'text_ocr': {'type': 'keyword'},
-                        'text_choice': {'type': 'keyword'},
-                        'text_vlm_invalid': {'type': 'keyword'},
-                        'text_disagreement': {'type': 'boolean'},
-                        'cluster_id': {'type': 'integer'},
-                        'cluster_subid': {'type': 'keyword'},
-                        'cluster_distance': {'type': 'float'},
-                        'detected_at': {'type': 'date'},
-                    },
-                },
-                # Per-box vectors live in a SIBLING nested field, not
-                # inside F.boxes (W8.2): every item read that feeds
-                # serialize_item / every OCC read excludes vectors, and a
-                # human edit that read region_boxes with vectors excluded
-                # and wrote the list back would silently delete every
-                # embedding. Only the embed stage / backfill write this.
-                F.box_embeddings: {
-                    'type': 'nested',
-                    'properties': {
-                        'box_id': {'type': 'keyword'},
-                        # The geometry the vector was computed from: a box
-                        # moved since then has a stale vector.
-                        'bbox_norm': {'type': 'float', 'index': False},
-                        'embedding': _knn_field(dim=config.encoder_embedding_dim),
-                    },
-                },
-                F.count: {'type': 'integer'},
-                F.rejected_count: {'type': 'integer'},
-                F.max_score: {'type': 'float'},
-                F.set_complete: {'type': 'boolean'},
-                F.revision: {'type': 'integer'},
-                F.box_seq: {'type': 'integer', 'index': False},
+                **_region_boxes_mapping(),
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
@@ -1076,17 +1021,12 @@ async def ensure_items_provenance_fields(
     index = config.items_index
     body = {
         'properties': {
-            F.detector: {'type': 'keyword'},
-            F.detector_version: {'type': 'keyword'},
             F.detector_chain: {'type': 'keyword'},
-            F.bbox_frame: {'type': 'keyword'},
             F.detected_at: {'type': 'date'},
             F.verifier: {'type': 'keyword'},
             F.verifier_version: {'type': 'keyword'},
             F.verified_at: {'type': 'date'},
             F.rejection_reason: {'type': 'keyword'},
-            F.bbox_norm_legacy: {'type': 'float'},
-            F.score_legacy: {'type': 'float'},
             F.status_legacy: {'type': 'keyword'},
             'class_detector': {'type': 'keyword'},
             'class_detector_version': {'type': 'keyword'},
@@ -1319,11 +1259,11 @@ async def ensure_labels_confirmed_fields(
     return {'acknowledged': True, 'index': index, 'fields_added': added}
 
 
-async def ensure_items_text_reader_fields(
+async def ensure_items_text_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the region text-reader fields, the region review fields and the
-    item-text fields onto the items mapping.
+    """PUT the region auto-confirm flag and the item-text fields onto the
+    items mapping.
 
     One ``PUT _mapping`` per field (as :func:`ensure_items_exclusion_fields`)
     so a dynamic mapping one of them already picked up on an older index
@@ -1332,7 +1272,7 @@ async def ensure_items_text_reader_fields(
     index = config.items_index
     added: list[str] = []
     conflicts: list[str] = []
-    specs = {**_region_text_reader_mapping(), **_region_review_mapping(), **ITEM_TEXT_MAPPING}
+    specs = {**_region_auto_confirm_mapping(), **ITEM_TEXT_MAPPING}
     for field, spec in specs.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
@@ -1396,52 +1336,78 @@ async def ensure_items_embedding_fields(
         }
 
 
-async def ensure_items_region_embedding(
+async def ensure_items_region_boxes_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the region-of-interest embedding + clustering fields onto an
-    existing items mapping.
+    """PUT the multi-box region fields (``region_boxes``,
+    ``region_box_embeddings`` and the item-level summary) onto an existing
+    items mapping.
 
-    Encoder embedding of the region-of-interest plus its own clustering
-    fields (independent of the item ``cluster_*`` on the same doc), used to
-    cluster / AHC-refine regions so false-positives and bad boxes surface
-    as outliers. Additive ``PUT <index>/_mapping`` — idempotent.
-
-    ``knn_vector``, matching the current items mapping
-    (``op_items`` has ``index.knn: true``; the earlier plain-``float``
-    rationale here assumed ``index.knn`` was disabled, which is no longer
-    true). A ``put_mapping`` against an index still carrying the old plain
-    ``float`` mapping fails with a recoverable ``illegal_argument_exception``
-    (field type can't change in place — see ``_is_recoverable_mapping_conflict``)
-    and is logged at info, not error; the type change itself only takes
-    effect on a fresh index or a reindex.
+    One ``PUT _mapping`` per field (as :func:`ensure_items_exclusion_fields`)
+    so a field the index already carries cannot block the others. Additive
+    and idempotent; a type conflict on an existing field is recoverable
+    (logged at info, see ``_is_recoverable_mapping_conflict``) because a
+    field's type cannot change in place.
     """
     index = config.items_index
-    fields = [F.embedding, F.cluster_id, F.cluster_distance, F.cluster_subid]
-    body = {
-        'properties': {
-            F.embedding: _knn_field(dim=config.encoder_embedding_dim),
-            F.cluster_id: {'type': 'integer'},
-            F.cluster_distance: {'type': 'float'},
-            F.cluster_subid: {'type': 'keyword'},
-        }
-    }
+    added: list[str] = []
+    conflicts: list[str] = []
+    for field, spec in _region_boxes_mapping().items():
+        try:
+            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
+            added.append(field)
+        except Exception as exc:
+            msg = str(exc)
+            if not _is_recoverable_mapping_conflict(msg):
+                logger.error('curation_mapping_migration_failed', index=index, error=msg)
+                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
+            conflicts.append(field)
+    logger.info(
+        'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
+    )
+    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
+
+
+_INNER_RESULT_WINDOWS: dict[str, int] = {}
+
+
+def inner_result_window(index: str) -> int | None:
+    """The ``index.max_inner_result_window`` :func:`ensure_items_inner_result_window`
+    last read back for ``index`` (``None`` before it ran in this process)."""
+    return _INNER_RESULT_WINDOWS.get(index)
+
+
+async def ensure_items_inner_result_window(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """Raise ``index.max_inner_result_window`` on the items index to at least
+    ``region_max_boxes_per_write``.
+
+    The region list routes ask a nested query for ``inner_hits`` (which
+    boxes of an item matched) sized to the most boxes one item may hold;
+    OpenSearch rejects an ``inner_hits.size`` above this dynamic setting
+    (default 100). Never lowers it, and issues no write when the current
+    value already suffices. The effective value is remembered per index
+    (:func:`inner_result_window`) so a reader can clamp to it.
+    """
+    index = config.items_index
+    wanted = int(config.region_max_boxes_per_write)
     try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
-        return {'acknowledged': ack, 'index': index, 'fields_added': fields}
+        # No `name=`: the project guard allowlists `GET /{index}/_settings` only.
+        resp = await client.indices.get_settings(index=index)
+        per_index: dict[str, Any] = next(iter(resp.values()), {})
+        raw: dict[str, Any] = per_index.get('settings', {}).get('index', {})
+        current = int(raw.get('max_inner_result_window', 100))
+        if current < wanted:
+            await client.indices.put_settings(
+                index=index, body={'index': {'max_inner_result_window': wanted}}
+            )
+            current = wanted
     except Exception as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {'acknowledged': False, 'index': index, 'fields_added': fields, 'error': msg}
+        logger.warning('curation_inner_result_window_failed', index=index, error=str(exc))
+        return {'acknowledged': False, 'index': index, 'error': str(exc)}
+    _INNER_RESULT_WINDOWS[index] = current
+    return {'acknowledged': True, 'index': index, 'max_inner_result_window': current}
 
 
 async def ensure_images_upload_fields(
@@ -2252,14 +2218,15 @@ __all__ = [
     'ensure_items_embedding_fields',
     'ensure_items_exclusion_fields',
     'ensure_items_history_fields',
+    'ensure_items_inner_result_window',
     'ensure_items_label_cluster_fields',
     'ensure_items_probe_fields',
     'ensure_items_provenance_fields',
     'ensure_items_quality_fields',
-    'ensure_items_region_embedding',
+    'ensure_items_region_boxes_fields',
     'ensure_items_request_id_field',
     'ensure_items_score_fields',
-    'ensure_items_text_reader_fields',
+    'ensure_items_text_fields',
     'ensure_items_validation_split_fields',
     'ensure_items_viz_fields',
     'ensure_items_vlm_raw_label_fields',
@@ -2267,6 +2234,7 @@ __all__ = [
     'get_class_registry',
     'get_curation_index_settings',
     'get_curation_settings',
+    'inner_result_window',
     'mget_crops',
     'update_curation_settings',
 ]

@@ -8,11 +8,11 @@ FP-centroid matcher.
 False positives are heterogeneous (background clutter, similar-looking
 non-target objects, empty/spurious detections), so the matcher is
 **double-layered**:
-:func:`~src.services.curation.clustering.orchestrator.build_region_fp_centroids`
-sub-types the FP bucket into ``k`` sub-clusters and persists **one
-centroid per sub-type**; :func:`suspected_false_positives` matches
-each incoming region vector against *all* sub-centroids and keeps the
-nearest. A new FP that doesn't resemble the bucket average is still
+:func:`~src.services.curation.clustering.region_box_clustering.build_region_fp_centroids`
+sub-types the false-positive *boxes* into ``k`` sub-clusters and persists
+**one centroid per sub-type**; :func:`suspected_false_positives` matches
+each candidate box's vector against *all* sub-centroids and keeps the
+nearest (one row per box). A new FP that doesn't resemble the bucket average is still
 caught by whichever sub-type it's closest to. Re-run the build after
 marking a batch of FPs to retrain the sub-centroids.
 """
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 from fastapi import HTTPException, Query
 
 from src.config import get_region_fields
@@ -34,8 +35,12 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES, _region_item
-from src.services.curation.region_boxes import box_query
+from src.routers.curation._region_row_models import RegionRowPage
+from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
+from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
+from src.services.curation.clustering.region_box_rows import box_state_clause
+from src.services.curation.region_rows import rows_for_pairs
+from src.services.curation.wire import box_thumbnail_url
 
 
 # ``dominant_class_name`` for a non-FP region-cluster card. Region clusters
@@ -53,13 +58,13 @@ _SUSPECTED_FP_CACHE_TTL_SEC = 60.0
 """Interim fix: ``/regions/suspected_false_positives`` scrolled the
 entire region-embedding pool on every single page request (the pool is
 independent of ``page``/``page_size``). Cache the scored
-``[(dist, crop_id, subid)]`` list keyed by ``(project, trained_at, threshold)`` for
+``[(dist, crop_id, box_id, subid)]`` list keyed by ``(project, trained_at, threshold)`` for
 60s so paging through results doesn't re-scroll. The persisted-write
 version (store ``region_fp_distance`` at write time) is the long-term
 fix but is out of scope here."""
 
 _suspected_fp_cache: dict[
-    tuple[str, Any, float], tuple[float, list[tuple[float, str, str | None]]]
+    tuple[str, Any, float], tuple[float, list[tuple[float, str, str, str | None]]]
 ] = {}
 
 
@@ -88,7 +93,7 @@ async def cluster_regions(
     matches into the FP bucket, then re-partitions the good regions (the
     re-partition is skipped if a manual refine is still fresh, unless
     ``force_repartition``). Poll GET {api_prefix}/regions/cluster/status."""
-    from src.services.curation.clustering.orchestrator import start_region_cluster_job
+    from src.services.curation.clustering.region_cluster_jobs import start_region_cluster_job
 
     await _ensure_indexes(opensearch)
     return await start_region_cluster_job(
@@ -103,7 +108,7 @@ async def cluster_regions(
 @router.get('/regions/cluster/status')
 async def region_cluster_status() -> dict[str, Any]:
     """Status of the background region-clustering job."""
-    from src.services.curation.clustering.orchestrator import region_cluster_job_status
+    from src.services.curation.clustering.region_cluster_jobs import region_cluster_job_status
 
     return region_cluster_job_status()
 
@@ -114,12 +119,10 @@ async def refine_region_cluster_endpoint(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
 ) -> dict[str, Any]:
-    """Per-bucket AHC refine; writes RegionFields.cluster_subid so outliers split out."""
-    from src.services.curation.clustering.orchestrator import (
-        FALSE_POSITIVE_REGION_CLUSTER_ID,
-        mark_region_refine,
-        refine_region_cluster,
-    )
+    """Per-bucket AHC refine over the bucket's boxes; writes each box's
+    ``cluster_subid`` so outliers split out."""
+    from src.services.curation.clustering.region_box_clustering import refine_region_cluster
+    from src.services.curation.clustering.region_cluster_jobs import mark_region_refine
 
     await _ensure_indexes(opensearch)
     try:
@@ -145,59 +148,74 @@ async def list_region_clusters(
 ) -> dict[str, Any]:
     """Cluster cards for the region buckets (mirrors /curation/clusters' shape).
 
-    Most cards are ``candidate`` (regions are one class); the permanent
-    false-positive bucket is tagged ``cluster_kind='false_positive'`` and
-    pinned first. Reps are the regions closest to the centroid, shown as
-    region close-up thumbnails.
+    Clusters hold *boxes*: a card's ``size`` is the items with at least one
+    box in the cluster, ``box_count`` the boxes (rows) in it -- an item with
+    two boxes in one cluster is ``size`` 1, ``box_count`` 2. Most cards are
+    ``candidate`` (regions are one class); the permanent false-positive
+    bucket is tagged ``cluster_kind='false_positive'`` and pinned first.
+    ``representatives`` are rows for the boxes closest to the centroid
+    (full wire item + ``region_box_id``), shown as region close-up
+    thumbnails.
     """
-    from src.services.curation.clustering.orchestrator import FALSE_POSITIVE_REGION_CLUSTER_ID
-
     F = get_region_fields()
     await _ensure_indexes(opensearch)
-    # W8-cleanup: `region_bbox_norm` is retired (region_boxes is the only
-    # storage for a box now). A crop "still carries a region box" when it
-    # has an accepted box, or a false_positive one (false_positive keeps
-    # its box for FP analysis/training -- see RegionStatus.FALSE_POSITIVE's
-    # docstring).
-    must: list[dict[str, Any]] = [
-        {'exists': {'field': F.cluster_id}},
-        box_query(
-            {
-                'terms': {
-                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
-                }
-            },
-            F,
-        ),
-    ]
+    # A box sits in a cluster when it is accepted or false_positive (the FP
+    # bucket keeps its geometry for FP analysis/training) and carries a
+    # cluster id; the same nested scope drives the aggregation.
+    scope = {
+        'bool': {
+            'filter': [
+                box_state_clause(['accepted', RegionStatus.FALSE_POSITIVE.value], F),
+                {'exists': {'field': f'{F.boxes}.cluster_id'}},
+            ]
+        }
+    }
+    filters: list[dict[str, Any]] = [{'nested': {'path': F.boxes, 'query': scope}}]
     if max_rank is not None:
-        must.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
+        filters.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
     body = {
         'size': 0,
-        'query': {'bool': {'must': must, 'must_not': [{'term': {'test_holdout': True}}]}},
+        'query': {'bool': {'filter': filters, 'must_not': [{'term': {'test_holdout': True}}]}},
         'aggs': {
-            'clusters': {
-                'terms': {'field': F.cluster_id, 'size': max_clusters},
+            'boxes': {
+                'nested': {'path': F.boxes},
                 'aggs': {
-                    'reps': {
-                        'top_hits': {
-                            'size': per_cluster,
-                            # crop_id == _id here; only _id is ever read
-                            # below — no need to decompress _source.
-                            '_source': False,
-                            'sort': [
-                                {
-                                    F.cluster_distance: {
-                                        'order': 'asc',
-                                        'missing': '_last',
-                                        'unmapped_type': 'float',
-                                    }
-                                }
-                            ],
-                        }
-                    },
-                    'subids': {'cardinality': {'field': F.cluster_subid}},
-                    'validated': {'filter': {'term': {F.validated: True}}},
+                    'in_scope': {
+                        'filter': scope,
+                        'aggs': {
+                            'clusters': {
+                                'terms': {'field': f'{F.boxes}.cluster_id', 'size': max_clusters},
+                                'aggs': {
+                                    'reps': {
+                                        'top_hits': {
+                                            'size': per_cluster,
+                                            # Only the parent _id and the box id are read.
+                                            '_source': False,
+                                            'docvalue_fields': [f'{F.boxes}.box_id'],
+                                            'sort': [
+                                                {
+                                                    f'{F.boxes}.cluster_distance': {
+                                                        'order': 'asc',
+                                                        'missing': '_last',
+                                                        'unmapped_type': 'float',
+                                                    }
+                                                }
+                                            ],
+                                        }
+                                    },
+                                    'subids': {
+                                        'cardinality': {'field': f'{F.boxes}.cluster_subid'}
+                                    },
+                                    'items': {
+                                        'reverse_nested': {},
+                                        'aggs': {
+                                            'validated': {'filter': {'term': {F.validated: True}}}
+                                        },
+                                    },
+                                },
+                            }
+                        },
+                    }
                 },
             }
         },
@@ -207,19 +225,27 @@ async def list_region_clusters(
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
-    buckets = (((resp.get('aggregations') or {}).get('clusters') or {}).get('buckets')) or []
+    scoped = ((resp.get('aggregations') or {}).get('boxes') or {}).get('in_scope') or {}
+    buckets = (scoped.get('clusters') or {}).get('buckets') or []
     clusters: list[dict[str, Any]] = []
+    rep_pairs: list[tuple[str, str | None, dict[str, Any]]] = []
     for b in buckets:
         rep_hits = (((b.get('reps') or {}).get('hits') or {}).get('hits')) or []
-        rep_ids = [h.get('_id') or '' for h in rep_hits]
+        reps = [
+            (h.get('_id') or '', ((h.get('fields') or {}).get(f'{F.boxes}.box_id') or [None])[0])
+            for h in rep_hits
+        ]
+        rep_pairs.extend((crop_id, box_id, {}) for crop_id, box_id in reps)
         n_sub = int((b.get('subids') or {}).get('value', 0))
         is_fp = int(b['key']) == FALSE_POSITIVE_REGION_CLUSTER_ID
+        items = b.get('items') or {}
         clusters.append(
             {
                 'id': int(b['key']),
                 'cluster_kind': RegionStatus.FALSE_POSITIVE if is_fp else 'candidate',
-                'size': int(b['doc_count']),
-                'validated_count': int((b.get('validated') or {}).get('doc_count', 0)),
+                'size': int(items.get('doc_count', 0)),
+                'box_count': int(b['doc_count']),
+                'validated_count': int((items.get('validated') or {}).get('doc_count', 0)),
                 'dominant_class_id': None,
                 'dominant_class_name': RegionStatus.FALSE_POSITIVE
                 if is_fp
@@ -227,15 +253,30 @@ async def list_region_clusters(
                 'dominant_pct': None,
                 'purity': None,
                 'is_unlabeled': True,
-                'representative_crop_ids': rep_ids,
+                'representative_crop_ids': [crop_id for crop_id, _box_id in reps],
+                'representative_box_ids': [box_id for _crop_id, box_id in reps],
                 'representative_thumb_urls': [
-                    f'{project_api_base()}/crops/{cid}/region_thumbnail' for cid in rep_ids
+                    box_thumbnail_url(project_api_base(), crop_id, box_id or '')
+                    for crop_id, box_id in reps
                 ],
                 'has_subclusters': n_sub > 0,
                 'n_subclusters': n_sub,
                 'updated_at': None,
             }
         )
+    rows = await rows_for_pairs(
+        opensearch,
+        index=items_index(),
+        pairs=rep_pairs,
+        source_excludes=_REGION_SOURCE_EXCLUDES,
+    )
+    by_key = {(r['crop_id'], r['region_box_id']): r for r in rows}
+    for c in clusters:
+        c['representatives'] = [
+            by_key[key]
+            for key in zip(c['representative_crop_ids'], c['representative_box_ids'], strict=True)
+            if key in by_key
+        ]
     # Pin the permanent FP card first, then largest buckets.
     clusters.sort(key=lambda c: (c['cluster_kind'] != RegionStatus.FALSE_POSITIVE, -c['size']))
     return {'clusters': clusters, 'count': len(clusters)}
@@ -248,7 +289,7 @@ async def build_fp_centroids_endpoint(opensearch: OpenSearchDep) -> dict[str, An
     This is the retrain trigger for the FP matcher: re-run it after marking a
     new batch of false positives so the per-sub-type centroids reflect them.
     """
-    from src.services.curation.clustering.orchestrator import start_region_fp_centroid_job
+    from src.services.curation.clustering.region_cluster_jobs import start_region_fp_centroid_job
 
     await _ensure_indexes(opensearch)
     return await start_region_fp_centroid_job(opensearch)
@@ -257,12 +298,16 @@ async def build_fp_centroids_endpoint(opensearch: OpenSearchDep) -> dict[str, An
 @router.get('/regions/fp_centroids/status')
 async def fp_centroids_status() -> dict[str, Any]:
     """Background FP-centroid build job snapshot + persisted centroid metadata."""
-    from src.services.curation.clustering.orchestrator import region_fp_centroid_job_status
+    from src.services.curation.clustering.region_cluster_jobs import region_fp_centroid_job_status
 
     return region_fp_centroid_job_status()
 
 
-@router.get('/regions/suspected_false_positives')
+@router.get(
+    '/regions/suspected_false_positives',
+    response_model=None,
+    responses={200: {'model': RegionRowPage}},
+)
 async def suspected_false_positives(
     opensearch: OpenSearchDep,
     threshold: float | None = Query(
@@ -271,24 +316,25 @@ async def suspected_false_positives(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ) -> dict[str, Any]:
-    """Rank non-FP region crops by similarity to the known FP **sub-centroids**.
+    """Rank non-FP region **boxes** by similarity to the known FP **sub-centroids**.
 
-    Each candidate is matched against every FP sub-type centroid and scored by
-    its nearest one (``nearest_fp_subid``), so a crop that resembles only one
-    flavour of false positive (e.g. a bumper but not a sticker) is still caught.
-    Assists auto-labeling: an operator reviews the nearest matches and
-    bulk-confirms via ``POST {api_prefix}/regions/batch_status`` (which routes them into
-    the permanent FP bucket). Requires :func:`build_fp_centroids_endpoint` to
-    have run; otherwise returns an empty result with ``centroids_built=false``.
+    Each row is one candidate box (``region_box_id``), matched against every
+    FP sub-type centroid and scored by its nearest one (``nearest_fp_subid``),
+    so a box that resembles only one flavour of false positive (e.g. a
+    bumper but not a sticker) is still caught. Assists auto-labeling: an
+    operator reviews the nearest matches and flips them with ``POST
+    {api_prefix}/regions/batch_box_state`` (``state: false_positive``, which
+    parks each box in the permanent FP bucket). Requires
+    :func:`build_fp_centroids_endpoint` to have run; otherwise returns an
+    empty result with ``centroids_built=false``. Rows are scored in Python,
+    so this route pages rows directly: ``total == total_rows`` and
+    ``page_size`` counts rows.
     """
     import time
 
-    import numpy as np
-
-    from src.services.curation.clustering.orchestrator import fp_candidate_must_not
+    from src.services.curation.clustering.region_box_clustering import fp_candidate_rows
     from src.services.detection.fp_store import FalsePositiveCentroidStore
 
-    F = get_region_fields()
     if threshold is None:
         threshold = SUSPECTED_FP_MAX_DISTANCE
     await _ensure_indexes(opensearch)
@@ -297,6 +343,7 @@ async def suspected_false_positives(
         return {
             'items': [],
             'total': 0,
+            'total_rows': 0,
             'page': page,
             'page_size': page_size,
             'centroids_built': False,
@@ -319,70 +366,42 @@ async def suspected_false_positives(
     if cached is not None and (now_ts - cached[0]) < _SUSPECTED_FP_CACHE_TTL_SEC:
         scored = cached[1]
     else:
-        # Same candidate pool as the auto-pull: everything except already-FP,
-        # test-holdout, and HUMAN-decided crops. VLM-validated/detected crops
-        # are included (their distance to the FP centroids decides) — real
-        # regions sit far away and never surface, so include_detected is no
-        # longer a useful gate.
-        must = [{'exists': {'field': F.embedding}}]
-        must_not = fp_candidate_must_not()
-        subids = store.metadata.get('subids', [])
-        scored = []
-        body = {
-            'size': 2000,
-            'query': {'bool': {'must': must, 'must_not': must_not}},
-            '_source': {'includes': [F.embedding]},
-            'sort': ['_doc'],
-        }
+        # Same candidate pool as the auto-pull (``fp_candidate_rows``): every
+        # accepted box except those in test-holdout / human-decided items or
+        # owned by a human or an import. VLM-validated boxes are included
+        # (their distance to the FP centroids decides) -- real regions sit far
+        # away and never surface.
         try:
-            resp = await opensearch.search(index=items_index(), body=body, scroll='5m')
+            rows = await fp_candidate_rows(opensearch)
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-        scroll_id = resp.get('_scroll_id')
-        try:
-            hits = resp['hits']['hits']
-            while hits:
-                embs = np.asarray(
-                    [(h.get('_source') or {}).get(F.embedding) for h in hits],
-                    dtype=np.float32,
-                )
-                embs /= np.linalg.norm(embs, axis=1, keepdims=True) + 1e-12
-                dist, idx = store.search(embs)
-                for h, d, ci in zip(hits, dist, idx, strict=True):
-                    if float(d) <= threshold:
-                        sub = subids[int(ci)] if 0 <= int(ci) < len(subids) else None
-                        scored.append((float(d), h['_id'], sub))
-                resp = await opensearch.scroll(scroll_id=scroll_id, scroll='5m')
-                scroll_id = resp.get('_scroll_id')
-                hits = resp['hits']['hits']
-        finally:
-            if scroll_id:
-                try:
-                    await opensearch.clear_scroll(scroll_id=scroll_id)
-                except Exception as exc:
-                    logger.debug('curation_suspected_fp_clear_scroll_failed', error=str(exc))
-
+        subids = store.metadata.get('subids', [])
+        scored = []
+        if rows:
+            embs = np.asarray([r.vector for r in rows], dtype=np.float32)
+            embs /= np.linalg.norm(embs, axis=1, keepdims=True) + 1e-12
+            dist, idx = store.search(embs)
+            for row, d, ci in zip(rows, dist, idx, strict=True):
+                if float(d) <= threshold:
+                    sub = subids[int(ci)] if 0 <= int(ci) < len(subids) else None
+                    scored.append((float(d), row.crop_id, row.box_id, sub))
         scored.sort(key=lambda t: t[0])
         _suspected_fp_cache[cache_key] = (now_ts, scored)
     total = len(scored)
     page_slice = scored[(page - 1) * page_size : (page - 1) * page_size + page_size]
-    items: list[dict[str, Any]] = []
-    ids = [cid for _d, cid, _s in page_slice]
-    if ids:
-        docs = await opensearch.mget(
-            index=items_index(),
-            body={'ids': ids},
-            _source_excludes=_REGION_SOURCE_EXCLUDES,
-        )
-        by_id = {d['_id']: (d.get('_source') or {}) for d in docs['docs'] if d.get('found')}
-        for d, cid, sub in page_slice:
-            item = _region_item(by_id.get(cid, {}), cid)
-            item['suspected_fp_distance'] = d
-            item['nearest_fp_subid'] = sub
-            items.append(item)
+    items = await rows_for_pairs(
+        opensearch,
+        index=items_index(),
+        pairs=[
+            (crop_id, box_id, {'suspected_fp_distance': d, 'nearest_fp_subid': sub})
+            for d, crop_id, box_id, sub in page_slice
+        ],
+        source_excludes=_REGION_SOURCE_EXCLUDES,
+    )
     return {
         'items': items,
         'total': total,
+        'total_rows': total,
         'page': page,
         'page_size': page_size,
         'threshold': threshold,

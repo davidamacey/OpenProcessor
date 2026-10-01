@@ -1,6 +1,6 @@
-"""Targeted tests for two of the worst-covered functions in
-``src/services/curation/clustering/orchestrator.py``: ``refine_region_cluster``
-and ``cluster_residuals``.
+"""Targeted tests for ``cluster_residuals`` and the item-cluster refine
+(``refine_cluster``) in ``src/services/curation/clustering/orchestrator.py``.
+Region-box refine is covered in ``test_region_box_clustering.py``.
 """
 
 from __future__ import annotations
@@ -50,21 +50,20 @@ class _FakeScrollBulkOS:
 
 
 def _member(doc_id: str, embedding: list[float], class_name: str | None = None) -> dict[str, Any]:
-    from src.config import get_region_fields
+    from src.services.curation.clustering.embedding_reduce import RESIDUAL_EMBEDDING_FIELD
 
-    F = get_region_fields()
-    return {'_id': doc_id, '_source': {F.embedding: embedding, 'class_name': class_name}}
+    return {
+        '_id': doc_id,
+        '_source': {RESIDUAL_EMBEDDING_FIELD: embedding, 'class_name': class_name},
+    }
 
 
 # ---------------------------------------------------------------------------
-# refine_region_cluster — real sklearn AHC over two well-separated groups
+# refine_cluster -- real sklearn AHC over two well-separated groups
 # ---------------------------------------------------------------------------
 
 
-async def test_refine_region_cluster_splits_two_separated_groups() -> None:
-    from src.config import get_region_fields
-
-    F = get_region_fields()
+async def test_refine_cluster_splits_two_separated_groups() -> None:
     group_a = [[1.0, 0.01 * i, 0.0] for i in range(3)]
     group_b = [[0.0, 1.0, 0.01 * i] for i in range(3)]
     members = [_member(f'a{i}', v) for i, v in enumerate(group_a)] + [
@@ -72,40 +71,37 @@ async def test_refine_region_cluster_splits_two_separated_groups() -> None:
     ]
     client = _FakeScrollBulkOS(members)
 
-    result = await orch.refine_region_cluster(client, region_cluster_id=42)
+    result = await orch.refine_cluster(client, 42)
 
     assert result['action'] == 'refined'
     assert result['n_members'] == 6
     assert result['n_subclusters'] == 2
 
-    # Wrote through RegionFields.cluster_subid (not the class field)
-    # via a guarded script — noop unless the doc's cluster_id_field
-    # still equals the cluster being refined.
+    # Guarded script: noop unless the doc's cluster_id still equals the
+    # cluster being refined.
     subids_written = set()
     for chunk in client.bulk_calls:
         for action, doc in zip(chunk[0::2], chunk[1::2], strict=True):
             assert '_index' in action['update']
             script = doc['script']
-            assert F.cluster_id in script['source']
+            assert "ctx._source['cluster_id'] != params.cid" in script['source']
             assert script['params']['cid'] == 42
             subids_written.add(script['params']['subid'])
-    # Two distinct subcluster labels sharing the parent id prefix.
     assert len(subids_written) == 2
     assert all(sid.startswith('42') for sid in subids_written)
 
 
-async def test_refine_region_cluster_skips_too_few_members() -> None:
-    members = [_member('only-one', [1.0, 0.0, 0.0])]
-    client = _FakeScrollBulkOS(members)
+async def test_refine_cluster_skips_too_few_members() -> None:
+    client = _FakeScrollBulkOS([_member('only-one', [1.0, 0.0, 0.0])])
 
-    result = await orch.refine_region_cluster(client, region_cluster_id=7)
+    result = await orch.refine_cluster(client, 7)
 
     assert result['action'] == 'skipped_too_small'
     assert result['n_subclusters'] == 0
     assert client.bulk_calls == []
 
 
-async def test_refine_region_cluster_computes_purity_per_subcluster() -> None:
+async def test_refine_cluster_computes_purity_per_subcluster() -> None:
     group_a = [_member(f'a{i}', [1.0, 0.01 * i, 0.0], class_name='sedan') for i in range(3)]
     group_b = [
         _member('b0', [0.0, 1.0, 0.0], class_name='pickup'),
@@ -114,7 +110,7 @@ async def test_refine_region_cluster_computes_purity_per_subcluster() -> None:
     ]
     client = _FakeScrollBulkOS(group_a + group_b)
 
-    result = await orch.refine_region_cluster(client, region_cluster_id=9)
+    result = await orch.refine_cluster(client, 9)
 
     assert result['n_subclusters'] == 2
     # group_a is 100% pure sedan, group_b is 2/3 pickup -> weighted mean
@@ -122,6 +118,15 @@ async def test_refine_region_cluster_computes_purity_per_subcluster() -> None:
     # than either sub-cluster's.
     assert 0.0 < result['subcluster_weighted_purity'] < 1.0
     assert result['purity'] <= result['subcluster_weighted_purity']
+
+
+async def test_refine_cluster_too_large_precount_never_fetches_members() -> None:
+    client = _FakeScrollBulkOS([_member(f'm{i}', [1.0, 0.0, 0.0]) for i in range(5)])
+
+    result = await orch.refine_cluster(client, 3, max_members=2)
+
+    assert result['action'] == 'skipped_too_large'
+    assert client.bulk_calls == []
 
 
 # ---------------------------------------------------------------------------

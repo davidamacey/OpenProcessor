@@ -112,16 +112,27 @@ def test_boxes_write_fields_all_rejected_keeps_item_level_reason() -> None:
     assert doc[F.rejection_reason] == 'blurry'
 
 
-def test_boxes_write_fields_mirror_prefers_accepted_over_higher_scoring_fp() -> None:
-    # W8-cleanup N2 regression: an accepted box must win the mirror even
-    # when a false_positive sibling scores higher.
+def test_boxes_write_fields_carries_the_list_and_item_summary_only() -> None:
+    """A box's geometry / score / detector / source live in its list entry;
+    the write never mirrors them onto the item (no legacy per-box scalar),
+    so a reader of the item can only see the list."""
     boxes = [
         RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.2, 0.2), state='false_positive', score=0.95),
         RegionBox(box_id='b2', bbox_norm=(0.5, 0.5, 0.6, 0.6), state='accepted', score=0.4),
     ]
+
     doc = boxes_write_fields(boxes, current_src={})
-    assert doc[F.bbox_norm] == [0.5, 0.5, 0.6, 0.6]
-    assert doc[F.score] == 0.4
+
+    assert set(doc) == {
+        F.boxes,
+        F.count,
+        F.rejected_count,
+        F.max_score,
+        F.revision,
+        F.box_seq,
+        F.rejection_reason,
+    }
+    assert doc[F.max_score] == 0.95
 
 
 def test_boxes_write_fields_empty_list() -> None:

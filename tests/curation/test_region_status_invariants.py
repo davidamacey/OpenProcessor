@@ -28,7 +28,7 @@ from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.routers.curation._common import HUMAN_REGION_STATUS_VALUES
-from src.services.curation.wire import ITEM_WIRE_KEYS
+from src.services.curation.wire import ITEM_WIRE_KEYS, REGION_ROW_EXTRA_KEYS
 
 
 # No-profile gating contract: this file exercises region routes, which
@@ -223,14 +223,15 @@ def test_patch_meta_reason_only_on_accepted_only_item_does_not_store_reason(
 # ------------------------------------------------------------- M2: the mirror
 
 
-def test_verify_rejected_clears_the_bbox_norm_mirror(
+_RETIRED_ITEM_KEYS = frozenset({'region_bbox_norm', 'region_score', 'region_detector'})
+
+
+def test_verify_rejected_keeps_the_box_in_the_list_and_writes_no_item_mirror(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    """W8-cleanup M2(a): a human `verify_rejected` must clear the mirror,
-    not keep the now-rejected box's bbox/score/detector as if it were
-    still an accepted region -- `bbox_norm` is treated as an accepted
-    region by every reader (browse, export, clustering); leaving a
-    rejected box's coordinates there would make it look accepted."""
+    """A human `verify_rejected` leaves the box in the list as `rejected`;
+    nothing on the item describes it as a region (an accepted-region
+    mirror would make a rejected box look accepted to every reader)."""
     resp = client.patch(
         '/curation/projects/default/crops/boxed-1/region_meta',
         json={'region_status': 'verify_rejected'},
@@ -238,16 +239,14 @@ def test_verify_rejected_clears_the_bbox_norm_mirror(
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['boxed-1']
     assert _box_states(doc) == ['rejected']
-    assert doc[F.bbox_norm] is None
-    assert doc[F.score] is None
-    assert doc[F.detector] is None
+    assert doc[F.count] == 0
+    assert doc[F.rejected_count] == 1
+    assert not _RETIRED_ITEM_KEYS & set(doc)
 
 
-def test_mirror_reflects_the_highest_scoring_accepted_box(
-    client: TestClient, fake_os: _FakeRegionOS
-) -> None:
-    """W8-cleanup M2(c): the mirror must reflect the BEST accepted box,
-    not the first one written."""
+def test_item_summary_follows_the_box_list(client: TestClient, fake_os: _FakeRegionOS) -> None:
+    """Accepting a second box moves the item's count and max score with the
+    list, and no per-box scalar is mirrored onto the item."""
     fake_os._docs['multi-1'] = {
         'crop_id': 'multi-1',
         F.status: RegionStatus.DETECTED.value,
@@ -263,8 +262,9 @@ def test_mirror_reflects_the_highest_scoring_accepted_box(
     )
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['multi-1']
-    assert doc[F.score] == 0.95
-    assert doc[F.bbox_norm] == [0.3, 0.3, 0.4, 0.4]
+    assert doc[F.count] == 2
+    assert doc[F.max_score] == 0.95
+    assert not _RETIRED_ITEM_KEYS & set(doc)
 
 
 # ------------------------------------------------------------ derived verified
@@ -350,7 +350,9 @@ def test_batch_status_returns_post_write_items(client: TestClient) -> None:
     )
     items = resp.json()['items']
     assert [i['crop_id'] for i in items] == ['boxed-1', 'boxed-2']
-    assert all(set(i) == ITEM_WIRE_KEYS for i in items)
+    # Whole-set writes are item-level rows: the item plus `region_box_id: null`.
+    assert all(set(i) == ITEM_WIRE_KEYS | REGION_ROW_EXTRA_KEYS for i in items)
+    assert all(i['region_box_id'] is None for i in items)
     assert all(i['region_status'] == 'false_positive' for i in items)
 
 

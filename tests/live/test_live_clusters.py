@@ -30,16 +30,55 @@ pytestmark = pytest.mark.live
 NONEXISTENT_CLUSTER_ID = 99999
 
 
-def _subid_terms(opensearch: Any, cluster_id: int, field: str = 'cluster_subid') -> dict[str, int]:
-    """Distinct sub-cluster ids in a cluster, via a terms aggregation."""
-    id_field = 'cluster_id' if field == 'cluster_subid' else 'region_cluster_id'
+def _subid_terms(opensearch: Any, cluster_id: int) -> dict[str, int]:
+    """Distinct sub-cluster ids in an item cluster, via a terms aggregation."""
     body = {
         'size': 0,
-        'query': {'term': {id_field: cluster_id}},
-        'aggs': {'subids': {'terms': {'field': field, 'size': 50}}},
+        'query': {'term': {'cluster_id': cluster_id}},
+        'aggs': {'subids': {'terms': {'field': 'cluster_subid', 'size': 50}}},
     }
     buckets = search(opensearch, INDEXES['items'], body)['aggregations']['subids']['buckets']
     return {b['key']: b['doc_count'] for b in buckets}
+
+
+def _region_box_buckets(
+    opensearch: Any, box_filter: dict[str, Any] | None = None
+) -> dict[int, int]:
+    """Boxes per region cluster id: a nested terms aggregation, so each BOX
+    counts once (an item with two boxes in one cluster contributes two)."""
+    inner: dict[str, Any] = {
+        'terms': {'field': 'region_boxes.cluster_id', 'size': 50},
+    }
+    agg: dict[str, Any] = {'boxes': {'nested': {'path': 'region_boxes'}, 'aggs': {'rc': inner}}}
+    if box_filter is not None:
+        agg = {
+            'boxes': {
+                'nested': {'path': 'region_boxes'},
+                'aggs': {'scoped': {'filter': box_filter, 'aggs': {'rc': inner}}},
+            }
+        }
+    resp = search(opensearch, INDEXES['items'], {'size': 0, 'aggs': agg})['aggregations']['boxes']
+    buckets = (resp['scoped'] if box_filter is not None else resp)['rc']['buckets']
+    return {b['key']: b['doc_count'] for b in buckets}
+
+
+def _region_subid_terms(opensearch: Any, cluster_id: int) -> dict[str, int]:
+    """Distinct box sub-cluster ids inside one region cluster."""
+    agg = {
+        'boxes': {
+            'nested': {'path': 'region_boxes'},
+            'aggs': {
+                'in_cluster': {
+                    'filter': {'term': {'region_boxes.cluster_id': cluster_id}},
+                    'aggs': {
+                        'subids': {'terms': {'field': 'region_boxes.cluster_subid', 'size': 50}}
+                    },
+                }
+            },
+        }
+    }
+    resp = search(opensearch, INDEXES['items'], {'size': 0, 'aggs': agg})['aggregations']['boxes']
+    return {b['key']: b['doc_count'] for b in resp['in_cluster']['subids']['buckets']}
 
 
 def _classifier_crop_ids(opensearch: Any, cluster_id: int, limit: int = 5) -> list[str]:
@@ -195,16 +234,7 @@ def test_region_clustering_partitions_the_region_pool(api_client: Any, opensearc
     assert result['assigned'] == result['n_regions']
 
     refresh(opensearch, INDEXES['items'])
-    buckets = search(
-        opensearch,
-        INDEXES['items'],
-        {
-            'size': 0,
-            'query': {'exists': {'field': 'region_embedding'}},
-            'aggs': {'rc': {'terms': {'field': 'region_cluster_id', 'size': 50}}},
-        },
-    )['aggregations']['rc']['buckets']
-    assigned = {b['key']: b['doc_count'] for b in buckets}
+    assigned = _region_box_buckets(opensearch)
     # The permanent false-positive bucket must survive a re-partition.
     assert assigned.get(FP_REGION_CLUSTER_ID, 0) == 12, assigned
     assert len([k for k in assigned if k >= 0]) >= 2, assigned
@@ -220,15 +250,11 @@ def test_region_cluster_cards_pin_the_false_positive_bucket_first(api_client: An
 
 
 def test_region_refine_writes_region_subids(api_client: Any, opensearch: Any) -> None:
-    buckets = search(
-        opensearch,
-        INDEXES['items'],
-        {
-            'size': 0,
-            'query': {'range': {'region_cluster_id': {'gte': 0}}},
-            'aggs': {'rc': {'terms': {'field': 'region_cluster_id', 'size': 50}}},
-        },
-    )['aggregations']['rc']['buckets']
+    buckets = [
+        {'key': key, 'doc_count': n}
+        for key, n in _region_box_buckets(opensearch).items()
+        if key >= 0
+    ]
     biggest = max(buckets, key=lambda b: b['doc_count'])
     if biggest['doc_count'] < 4:
         pytest.skip(f'no region bucket has the 4-member AHC floor: {buckets}')
@@ -240,7 +266,7 @@ def test_region_refine_writes_region_subids(api_client: Any, opensearch: Any) ->
     assert body['n_updated'] == body['n_members']
 
     refresh(opensearch, INDEXES['items'])
-    subids = _subid_terms(opensearch, biggest['key'], field='region_cluster_subid')
+    subids = _region_subid_terms(opensearch, biggest['key'])
     assert sum(subids.values()) == body['n_members'], subids
 
 

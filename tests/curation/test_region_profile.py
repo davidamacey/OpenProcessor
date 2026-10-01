@@ -197,8 +197,8 @@ def test_models_roster_skips_region_models_when_unconfigured(
 def test_training_candidates_query_uses_neutral_profile(region_env: pytest.MonkeyPatch) -> None:
     from src.routers.curation.regions import _training_candidate_query
 
-    query, _reason = _training_candidate_query('low_conf_correct')
-    assert REFERENCE_REGION_DETECTOR_MODEL not in str(query)
+    query, box_clause, _reason = _training_candidate_query('low_conf_correct')
+    assert REFERENCE_REGION_DETECTOR_MODEL not in str((query, box_clause))
 
 
 def _patch_worker_io(

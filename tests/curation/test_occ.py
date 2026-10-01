@@ -50,6 +50,7 @@ class TestMixedPageOutcomes:
 
         assert result['updated'] == 1
         assert result['skipped_due_to_conflict'] == 1
+        assert result['skipped_ids'] == ['conflict-doc']
         assert result['errors'] == [
             {'doc_id': 'missing-doc', 'phase': 'fetch', 'error': 'not_found'}
         ]
@@ -154,7 +155,12 @@ class TestEmptyInput:
     async def test_empty_doc_ids_short_circuits(self) -> None:
         client = AsyncMock()
         result = await occ_skip_on_conflict_bulk(client, doc_ids=[], merger=_noop_merger)
-        assert result == {'updated': 0, 'skipped_due_to_conflict': 0, 'errors': []}
+        assert result == {
+            'updated': 0,
+            'skipped_due_to_conflict': 0,
+            'skipped_ids': [],
+            'errors': [],
+        }
         client.mget.assert_not_awaited()
         client.bulk.assert_not_awaited()
 

@@ -21,8 +21,7 @@ from src.services.curation.review_queries import build_tab_query
 F = get_region_fields()
 
 
-def _region_item(**extra: Any) -> dict[str, Any]:
-    text = extra.pop(F.text, None)
+def _region_item(*, text: str | None = None, **extra: Any) -> dict[str, Any]:
     box: dict[str, Any] = {
         'box_id': 'b1',
         'bbox_norm': [0.2, 0.2, 0.4, 0.3],
@@ -43,9 +42,12 @@ def _region_item(**extra: Any) -> dict[str, Any]:
 def _rejected_candidate_item(**extra: Any) -> dict[str, Any]:
     """A realistic ``verify_rejected`` item (DQ-B2): no accepted box, only
     the candidate box the verifier rejected (kept, ``state='rejected'``)."""
+    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+
     doc = _region_item(**extra)
     doc[F.status] = RegionStatus.VERIFY_REJECTED.value
-    doc[F.boxes] = [{'box_id': 'b1', 'bbox_norm': [0.3, 0.6, 0.4, 0.65], 'state': 'rejected'}]
+    rejected = RegionBox(box_id='b1', bbox_norm=(0.3, 0.6, 0.4, 0.65), state='rejected')
+    doc.update(boxes_write_fields([rejected], current_src={}))
     return doc
 
 
@@ -63,7 +65,9 @@ def test_class_validated_item_with_unreviewed_region_is_queued() -> None:
 
 
 def test_region_validated_item_is_not_queued() -> None:
-    assert not _in_queue(_region_item(**{F.validated: True}))
+    validated = _region_item()
+    validated[F.validated] = True
+    assert not _in_queue(validated)
 
 
 def test_false_positive_regions_are_never_queued() -> None:
@@ -112,12 +116,46 @@ def test_unknown_region_status_filter_raises_400() -> None:
 
 
 def test_text_search_is_case_insensitive() -> None:
-    doc = _region_item(**{F.text: 'Ab12Cd'})
+    doc = _region_item(text='Ab12Cd')
     assert _in_queue(doc, text='b12c')
     assert _in_queue(doc, text='AB12')
     assert not _in_queue(doc, text='zz')
 
 
 def test_text_search_treats_wildcard_characters_literally() -> None:
-    assert not _in_queue(_region_item(**{F.text: 'AB12'}), text='A*2')
-    assert _in_queue(_region_item(**{F.text: 'xA*2y'}), text='a*2')
+    assert not _in_queue(_region_item(text='AB12'), text='A*2')
+    assert _in_queue(_region_item(text='xA*2y'), text='a*2')
+
+
+def _boxed_item(*states: str, status: RegionStatus) -> dict[str, Any]:
+    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+
+    boxes = [
+        RegionBox(box_id=f'b{i + 1}', bbox_norm=(0.1, 0.1, 0.2, 0.2), state=state)
+        for i, state in enumerate(states)
+    ]
+    return {
+        **boxes_write_fields(boxes, current_src={}),
+        F.status: status.value,
+        F.validated: False,
+        'class_validated': False,
+        'test_holdout': False,
+    }
+
+
+def test_has_rejected_box_reaches_a_rejected_box_on_a_detected_item() -> None:
+    mixed = _boxed_item('accepted', 'rejected', status=RegionStatus.DETECTED)
+    assert _in_queue(mixed, region_status='has_rejected_box')
+    # ...but the item is not "only rejected boxes".
+    assert not _in_queue(mixed, region_status=RegionStatus.VERIFY_REJECTED.value)
+
+
+def test_an_all_rejected_item_is_in_both_rejected_options() -> None:
+    rejected = _boxed_item('rejected', 'rejected', status=RegionStatus.VERIFY_REJECTED)
+    assert _in_queue(rejected, region_status='has_rejected_box')
+    assert _in_queue(rejected, region_status=RegionStatus.VERIFY_REJECTED.value)
+
+
+def test_has_rejected_box_ignores_items_without_a_rejected_box() -> None:
+    clean = _boxed_item('accepted', status=RegionStatus.DETECTED)
+    assert not _in_queue(clean, region_status='has_rejected_box')

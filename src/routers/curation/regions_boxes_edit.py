@@ -33,6 +33,7 @@ from src.services.curation.region_box_edits import (
     with_state,
 )
 from src.services.curation.region_boxes import RegionBoxWriteError, read_boxes
+from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
     human_box_write,
     parent_to_source_bbox,
@@ -364,7 +365,8 @@ async def batch_set_region_box_state(
     """One state on many boxes across items (region-gallery triage).
     Flips only the named box on each targeted item -- never its
     siblings (contrast ``POST /regions/batch_status``, which flips every
-    box of each item)."""
+    box of each item). ``items`` are rows: the post-write wire item once
+    per targeted box, with that box as ``region_box_id``."""
     # Validate BEFORE the empty-`targets` early return -- see
     # `batch_set_crop_regions`'s matching comment for why.
     try:
@@ -418,5 +420,6 @@ async def batch_set_region_box_state(
                 invalid.append({'crop_id': crop_id, 'detail': exc.detail})
             continue
         updated += 1
-        items.append(rec.item(crop_id))
+        item = rec.item(crop_id)
+        items.extend(as_row(item, box_id) for box_id in box_ids)
     return {'updated': updated, 'conflicts': conflicts, 'invalid': invalid, 'items': items}

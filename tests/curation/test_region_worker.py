@@ -696,7 +696,7 @@ class TestBulkWrite:
         update doc never even reach the mget/bulk round trip."""
         F = get_region_fields()
         a = _make_task(crop_id='a')
-        a.update_doc = {F.status: 'detected', F.score: 0.9}
+        a.update_doc = {F.status: 'detected', F.max_score: 0.9}
         b = _make_task(crop_id='b')
         # No update — should be skipped.
         c = _make_task(crop_id='c')

@@ -32,7 +32,6 @@ def fake_os() -> _FakeRegionOS:
             'crop-1': {
                 'crop_id': 'crop-1',
                 F.status: 'pending_detection',
-                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
                 F.boxes: [
                     {
                         'box_id': 'b1',
@@ -300,6 +299,26 @@ def test_batch_box_state_flips_only_named_boxes(
     stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
     assert stored['b2']['state'] == 'accepted'
     assert stored['b1']['state'] == 'accepted'
+
+
+def test_batch_box_state_serves_one_row_per_targeted_box(app_client: TestClient) -> None:
+    resp = app_client.post(
+        '/curation/projects/default/regions/batch_box_state',
+        json={
+            'targets': [
+                {'crop_id': 'crop-1', 'box_id': 'b1'},
+                {'crop_id': 'crop-1', 'box_id': 'b2'},
+            ],
+            'state': 'rejected',
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()['items']
+    assert [(r['crop_id'], r['region_box_id']) for r in rows] == [
+        ('crop-1', 'b1'),
+        ('crop-1', 'b2'),
+    ]
+    assert all(r['region_boxes'][0]['state'] == 'rejected' for r in rows)
 
 
 def test_batch_box_state_unknown_box_id_is_invalid_not_updated(

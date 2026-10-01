@@ -111,8 +111,9 @@ def render_item_wire_json(facts: dict[str, Any]) -> str:
             'notes': (
                 'Every item-returning endpoint emits exactly item_keys (all always '
                 "present; nullable per json_schema), plus that endpoint's extra_keys. "
-                'region_keys is the region-of-interest subset; region_thumbnail_url is '
-                'a server-built URL, not a region attribute.'
+                "region_keys is the item-level region subset; a box's own data "
+                '(geometry, score, detector, text, cluster, thumbnail_url) is an element '
+                'of region_boxes.'
             ),
             **facts,
         }

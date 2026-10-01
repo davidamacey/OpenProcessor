@@ -22,8 +22,11 @@ from src.config.region_fields import RegionFields
 from src.routers.curation import _common
 from src.routers.curation._common import ItemDoc
 from src.services.curation import semantic_search, wire
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.services.curation.region_rows import INNER_HITS_NAME
 from src.services.curation.wire import (
     ITEM_WIRE_KEYS,
+    REGION_ROW_EXTRA_KEYS,
     REGION_WIRE_ATTRS,
     REGION_WIRE_KEYS,
     REVIEW_EXTRA_KEYS,
@@ -45,9 +48,7 @@ def _region_values() -> dict[str, Any]:
     """A distinct, JSON-safe value per region attribute."""
     values: dict[str, Any] = {}
     for attr in REGION_WIRE_ATTRS:
-        if attr == 'bbox_norm':
-            values[attr] = [0.1, 0.2, 0.3, 0.4]
-        elif attr == 'detector_chain':
+        if attr == 'detector_chain':
             values[attr] = ['det:miss', 'seg:hit', 'seg:vlm_verify_ok']
         else:
             values[attr] = f'v-{attr}'
@@ -76,8 +77,12 @@ def _stored_doc(storage: RegionFields) -> dict[str, Any]:
         'mistakenness_method': 'm',
         'updated_at': '2026-09-23T00:00:00+00:00',
         'pe_embedding': [0.0] * 4,
-        storage.embedding: [0.0] * 4,
+        storage.box_embeddings: [{'box_id': 'b1', 'embedding': [0.0] * 4}],
     }
+    box = RegionBox(box_id='b1', bbox_norm=(0.1, 0.2, 0.3, 0.4), state='accepted')
+    doc.update(boxes_write_fields([box], F=storage))
+    # The item-level region values last: a distinct value per attribute,
+    # whatever the box write derived.
     for attr, value in _region_values().items():
         doc[getattr(storage, attr)] = value
     return doc
@@ -86,11 +91,22 @@ def _stored_doc(storage: RegionFields) -> dict[str, Any]:
 class _FakeItemsOS:
     """Serves one document to every read path the item endpoints use."""
 
-    def __init__(self, doc: dict[str, Any]) -> None:
+    def __init__(self, doc: dict[str, Any], boxes_key: str = 'region_boxes') -> None:
         self.doc = doc
+        self.boxes_key = boxes_key
 
     def _hit(self) -> dict[str, Any]:
-        return {'_id': self.doc['crop_id'], '_source': dict(self.doc), '_score': 0.77}
+        # Every stored box "matches" a box-selecting query, the way the real
+        # nested `inner_hits` would report it.
+        matched = [
+            {'_nested': {'offset': i}} for i, _ in enumerate(self.doc.get(self.boxes_key, []))
+        ]
+        return {
+            '_id': self.doc['crop_id'],
+            '_source': dict(self.doc),
+            '_score': 0.77,
+            'inner_hits': {INNER_HITS_NAME: {'hits': {'hits': matched}}},
+        }
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {'hits': {'total': {'value': 1}, 'hits': [self._hit()]}}
@@ -109,7 +125,7 @@ def _client(monkeypatch: pytest.MonkeyPatch, storage: RegionFields) -> TestClien
     monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake = _FakeItemsOS(_stored_doc(storage))
+    fake = _FakeItemsOS(_stored_doc(storage), storage.boxes)
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
@@ -143,7 +159,7 @@ _EXTRAS = {
     'crops': frozenset(),
     'crop': frozenset(),
     'review': REVIEW_EXTRA_KEYS,
-    'regions': frozenset(),
+    'regions': REGION_ROW_EXTRA_KEYS,
     'training_candidates': TRAINING_CANDIDATE_EXTRA_KEYS,
 }
 
@@ -155,7 +171,18 @@ def test_item_doc_model_documents_exactly_the_serializer_keys() -> None:
 def test_region_wire_keys_are_the_stock_region_names() -> None:
     assert all(k.startswith('region_') for k in REGION_WIRE_KEYS)
     assert set(REGION_WIRE_KEYS) <= ITEM_WIRE_KEYS
-    assert 'region_thumbnail_url' in ITEM_WIRE_KEYS
+    # A box's own data is an element of region_boxes, not an item key.
+    retired = {
+        'region_bbox_norm',
+        'region_bbox_in_parent',
+        'region_score',
+        'region_detector',
+        'region_text',
+        'region_cluster_id',
+        'region_thumbnail_url',
+        'region_candidate_bbox_norm',
+    }
+    assert not retired & ITEM_WIRE_KEYS
     assert not any('plate' in k or 'gemma' in k for k in ITEM_WIRE_KEYS)
 
 
@@ -283,7 +310,7 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake = _WritableOS(_stored_doc(_OVERRIDE_STORAGE))
+    fake = _WritableOS(_stored_doc(_OVERRIDE_STORAGE), _OVERRIDE_STORAGE.boxes)
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
@@ -325,22 +352,29 @@ def test_region_request_bodies_reject_old_key_names(
     assert r.status_code == 422, r.text
 
 
-def test_region_thumbnail_url_is_non_empty_for_a_candidate_only_item() -> None:
-    """DQ-B2 follow-up: a verify_rejected item (no region_bbox_norm, only
-    region_candidate_bbox_norm) still gets a real region_thumbnail_url --
-    the frontend needs no special case, since the route itself now falls
-    back to the candidate box (see src/routers/curation_images.py)."""
+def test_a_rejected_only_item_serves_its_boxes_with_per_box_urls_and_frames() -> None:
+    """A verify_rejected item is only a list of rejected boxes: each serves
+    its own source-frame box, the same box in the item-crop frame, and its
+    own thumbnail URL -- there is no item-level region box or thumbnail."""
     f = RegionFields()
     src = {
         'crop_id': 'crop-rej',
-        f.status: 'verify_rejected',
-        f.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
         'bbox_norm': [0.2, 0.4, 0.6, 0.8],
+        **boxes_write_fields(
+            [RegionBox(box_id='b1', bbox_norm=(0.3, 0.6, 0.4, 0.7), state='rejected')],
+            F=f,
+        ),
+        f.status: 'verify_rejected',
     }
+
     item = wire.serialize_item(src, 'crop-rej', api_prefix='/curation')
-    assert item['region_bbox_norm'] is None
-    assert item['region_thumbnail_url'] == '/curation/crops/crop-rej/region_thumbnail'
-    assert item['region_candidate_bbox_in_parent'] is not None
+
+    (box,) = item['region_boxes']
+    assert box['bbox_norm'] == [0.3, 0.6, 0.4, 0.7]
+    assert box['bbox_in_parent'] == pytest.approx([0.25, 0.5, 0.5, 0.75])
+    assert box['thumbnail_url'] == '/curation/crops/crop-rej/region_thumbnail?box_id=b1'
+    assert 'region_thumbnail_url' not in item
+    assert 'region_bbox_norm' not in item
 
 
 @pytest.mark.usefixtures('reference_region_profile')
@@ -350,7 +384,8 @@ def test_server_built_urls_follow_the_configured_prefix(monkeypatch: pytest.Monk
         items = _endpoint_items(client)
     for name, item in items.items():
         assert item['thumbnail_url'] == '/custom-mount/crops/crop-1/thumbnail', name
-        assert item['region_thumbnail_url'] == '/custom-mount/crops/crop-1/region_thumbnail', name
+        (box,) = item['region_boxes']
+        assert box['thumbnail_url'] == '/custom-mount/crops/crop-1/region_thumbnail?box_id=b1', name
 
 
 # ---------------------------------------------------------------------------

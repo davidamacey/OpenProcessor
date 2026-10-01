@@ -67,7 +67,7 @@ OCC_BULK_PAGE_SIZE = int(os.environ.get('OCC_BULK_PAGE_SIZE', '500'))
 OCC_BULK_MGET_SOURCE_EXCLUDES = [
     ITEM_EMBEDDING_FIELD,
     BACKBONE_EMBEDDING_FIELD,
-    get_region_fields().embedding,
+    get_region_fields().box_embeddings,
 ]
 
 
@@ -231,7 +231,9 @@ async def occ_skip_on_conflict_bulk(
       unchanged (``True``/``False``/``'wait_for'``).
 
     Returns:
-        ``{updated: int, skipped_due_to_conflict: int, errors: list[dict]}``
+        ``{updated, skipped_due_to_conflict, skipped_ids, errors}`` --
+        ``skipped_ids`` names the docs a conflict skipped, for a caller
+        whose write must not be lost (it re-merges and retries them).
     """
     if index is None:
         index = items_index()
@@ -239,6 +241,7 @@ async def occ_skip_on_conflict_bulk(
 
     updated = 0
     skipped = 0
+    skipped_ids: list[str] = []
     errors: list[dict[str, Any]] = []
 
     page = page_size if page_size is not None else OCC_BULK_PAGE_SIZE
@@ -320,10 +323,16 @@ async def occ_skip_on_conflict_bulk(
                     human_region_validated=source.get(get_region_fields().validated),
                 )
                 skipped += 1
+                skipped_ids.append(doc_id)
                 continue
             errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(error or action)})
 
-    return {'updated': updated, 'skipped_due_to_conflict': skipped, 'errors': errors}
+    return {
+        'updated': updated,
+        'skipped_due_to_conflict': skipped,
+        'skipped_ids': skipped_ids,
+        'errors': errors,
+    }
 
 
 # is_locked_class / _is_locked_marker / is_locked_box / is_locked_item /

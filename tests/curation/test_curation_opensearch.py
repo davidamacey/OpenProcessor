@@ -120,7 +120,7 @@ def test_items_has_region_of_interest_fields_via_region_fields() -> None:
     from src.clients.curation_opensearch import F
 
     props = INDEX_BODIES[IndexRole.ITEMS]['mappings']['properties']
-    for attr in ('bbox_norm', 'score', 'verified', 'reason', 'detector', 'detected_at'):
+    for attr in ('verified', 'reason', 'detector_chain', 'detected_at', 'boxes', 'box_embeddings'):
         key = getattr(F, attr)
         assert key in props, f'expected region field {key!r} in items mapping'
     # And the region key really is the RegionFields default (region_*), not

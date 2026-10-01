@@ -23,12 +23,14 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
+from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
-from src.services.curation.region_boxes import box_query
+from src.services.curation.region_boxes import BOX_STATES, box_query
+from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.review_queries import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
-from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -40,31 +42,30 @@ def _reason(mode: str) -> str:
     return TRAINING_CANDIDATE_MODES[mode].description
 
 
-def _region_item(src: dict[str, Any], crop_id: str) -> dict[str, Any]:
-    """Wire item for /regions + /regions/training_candidates — the shared
-    item serializer, identical to /crops and /review."""
-    return serialize_item(src, crop_id)
-
-
 # Large embedding fields (1024 floats) + class_id_history (a
 # list-only field no browse renderer reads) — excluded from browse _source.
 _REGION_SOURCE_EXCLUDES = item_list_source_excludes()
 
 
-@router.get('/regions')
+def _box_clause(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The one per-box predicate: every part must hold for the SAME box."""
+    return {'bool': {'filter': parts}} if parts else None
+
+
+@router.get('/regions', response_model=None, responses={200: {'model': RegionRowPage}})
 async def list_regions(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     class_id: int | None = Query(None),
-    cluster_id: int | None = Query(None),
-    region_cluster_id: int | None = Query(None, description='Filter by region_cluster_id bucket.'),
-    region_cluster_subid: str | None = Query(None, description='Filter by AHC region sub-cluster.'),
+    cluster_id: int | None = Query(None, description='Filter by the ITEM cluster.'),
+    region_cluster_id: int | None = Query(None, description='Box filter: region cluster bucket.'),
+    region_cluster_subid: str | None = Query(None, description='Box filter: AHC sub-cluster.'),
     sort_by_subid: bool = Query(
         False,
         description=(
-            'Within a bucket, order by region_cluster_subid so AHC sub-clusters '
+            "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters "
             'come back contiguous across pages (the UI groups them with '
             'separators). Overrides the default outliers-first ordering.'
         ),
@@ -72,28 +73,35 @@ async def list_regions(
     max_rank: int | None = Query(
         None, ge=1, description='Only regions on top-N largest crops (crop_rank_in_image<=N).'
     ),
-    min_score: float | None = Query(None, ge=0.0, le=1.0),
-    max_score: float | None = Query(None, ge=0.0, le=1.0),
+    min_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
+    max_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
     verified: bool | None = Query(None),
-    detector: str | None = Query(None, description='Filter by region_detector keyword.'),
-    text: str | None = Query(None, description='Substring search on region_text.'),
+    detector: str | None = Query(None, description='Box filter: the detector that found it.'),
+    text: str | None = Query(None, description='Box filter: substring search on the box text.'),
+    box_state: str | None = Query(
+        None, description='Box filter: a box state (GET /regions/statuses box_states).'
+    ),
     status: str | None = Query(
         None,
         description=(
-            'Only items with this region_status (see GET /regions/statuses). Without it '
-            'only items carrying a region box are listed; with it every item in that '
-            'status is, e.g. status=verify_rejected lists the verifier-rejected items '
-            '(their candidate box is region_candidate_bbox_norm).'
+            'Item filter: only items with this region_status (see GET /regions/statuses). '
+            'Without it, and without a box filter, the rows are the accepted and '
+            'false_positive boxes; with it every item in that status is listed (e.g. '
+            'status=verify_rejected lists the verifier-rejected items) -- an item row has '
+            'region_box_id null unless a box filter selects boxes too.'
         ),
     ),
     include_test: bool = False,
 ) -> dict[str, Any]:
-    """Browse crops that have a region bbox, filtered by provenance/score/text.
+    """Browse region rows filtered by provenance/score/text.
 
-    Used by the labeler's /clusters page when the region-of-interest
-    class is the selected class filter, and by any region-centric
-    review tooling. ``status`` selects one lifecycle status instead of
-    "has a box" (a rejected or absent region has none).
+    Rows (:class:`RegionRowPage`): the box filters (``detector``,
+    ``min_score``, ``max_score``, ``text``, ``region_cluster_id``,
+    ``region_cluster_subid``, ``box_state``) all select the SAME box, and
+    each matching box is its own row (``region_box_id``). The item filters
+    (``status``, ``class_id``, ``cluster_id``, ``verified``, ``max_rank``)
+    select items. ``page`` / ``page_size`` page items; ``total`` counts
+    items, ``total_rows`` rows.
     """
     F = get_region_fields()
     if status is not None and status not in _STATUS_VALUES:
@@ -101,87 +109,87 @@ async def list_regions(
             status_code=400,
             detail=f'status must be one of {sorted(_STATUS_VALUES)}; got {status!r}',
         )
+    if box_state is not None and box_state not in BOX_STATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f'box_state must be one of {sorted(BOX_STATES)}; got {box_state!r}',
+        )
     await _ensure_indexes(opensearch)
-    # Every clause here is a pure predicate (exists/term/range/
-    # wildcard-as-boolean-match) -- filter context, not must.
-    #
-    # W8-cleanup: "has a region box" (the default, no `status` filter) now
-    # means "has an accepted or false_positive box in region_boxes" -- the
-    # retired region_bbox_norm scalar's existence used to mean the same
-    # thing. cluster_id / region_cluster_id / region_cluster_subid /
-    # cluster_distance are untouched: they stay item-level scalars,
-    # written by the region-FP clustering job, not by the box-list model
-    # (per-box clustering is W8-cleanup Item 5, not done this pass).
-    filt: list[dict[str, Any]] = (
-        [
-            box_query(
-                {
-                    'terms': {
-                        f'{F.boxes}.{F.boxes_state}': [
-                            'accepted',
-                            RegionStatus.FALSE_POSITIVE.value,
-                        ]
-                    }
-                },
-                F,
-            )
-        ]
-        if status is None
-        else [{'term': {F.status: status}}]
-    )
-    must_not: list[dict[str, Any]] = []
-    if not include_test:
-        must_not.append({'term': {'test_holdout': True}})
-    if class_id is not None:
-        filt.append({'term': {'class_id': class_id}})
-    if cluster_id is not None:
-        filt.append({'term': {'cluster_id': cluster_id}})
+
+    parts: list[dict[str, Any]] = []
+    if box_state is not None:
+        parts.append({'term': {f'{F.boxes}.{F.boxes_state}': box_state}})
+    elif status is None:
+        # No status and no explicit box state: the boxes a region browse is
+        # about -- accepted, or false_positive (kept for FP analysis).
+        parts.append(
+            {
+                'terms': {
+                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
+                }
+            }
+        )
     if region_cluster_id is not None:
-        filt.append({'term': {F.cluster_id: region_cluster_id}})
+        parts.append({'term': {f'{F.boxes}.cluster_id': region_cluster_id}})
     if region_cluster_subid is not None:
-        filt.append({'term': {F.cluster_subid: region_cluster_subid}})
-    if max_rank is not None:
-        filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
+        parts.append({'term': {f'{F.boxes}.cluster_subid': region_cluster_subid}})
     if min_score is not None or max_score is not None:
         rng: dict[str, float] = {}
         if min_score is not None:
             rng['gte'] = min_score
         if max_score is not None:
             rng['lte'] = max_score
-        filt.append(box_query({'range': {f'{F.boxes}.score': rng}}, F))
+        parts.append({'range': {f'{F.boxes}.score': rng}})
+    if detector is not None:
+        parts.append({'term': {f'{F.boxes}.detector': detector}})
+    if text:
+        parts.append(region_text_clause(f'{F.boxes}.text', text))
+
+    filt: list[dict[str, Any]] = []
+    must_not: list[dict[str, Any]] = []
+    if status is not None:
+        filt.append({'term': {F.status: status}})
+    if not include_test:
+        must_not.append({'term': {'test_holdout': True}})
+    if class_id is not None:
+        filt.append({'term': {'class_id': class_id}})
+    if cluster_id is not None:
+        filt.append({'term': {'cluster_id': cluster_id}})
+    if max_rank is not None:
+        filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
     if verified is not None:
         filt.append({'term': {F.verified: verified}})
-    if detector is not None:
-        filt.append(box_query({'term': {f'{F.boxes}.detector': detector}}, F))
-    if text:
-        filt.append(box_query(region_text_clause(f'{F.boxes}.text', text), F))
 
     # In a bucket, either group by sub-cluster (subid asc, then outliers within
-    # each subid) so refine results render as contiguous, paginated groups — or
-    # float regions farthest from the centroid (outliers) first.
-    _distance_sort = {
-        F.cluster_distance: {'order': 'desc', 'missing': '_last', 'unmapped_type': 'float'}
-    }
+    # each subid) so refine results render as contiguous, paginated groups -- or
+    # float regions farthest from the centroid (outliers) first. The sort reads
+    # the boxes of the bucket only (the nested filter), so an item with a box
+    # in another bucket doesn't sort by that box.
+    def _bucket_sort(field: str, order: str, mode: str, unmapped: str) -> dict[str, Any]:
+        return {
+            f'{F.boxes}.{field}': {
+                'order': order,
+                'mode': mode,
+                'missing': '_last',
+                'unmapped_type': unmapped,
+                'nested': {
+                    'path': F.boxes,
+                    'filter': {'term': {f'{F.boxes}.cluster_id': region_cluster_id}},
+                },
+            }
+        }
+
     sort: list[dict[str, Any]]
-    if region_cluster_id is not None and sort_by_subid:
-        sort = [
-            {
-                F.cluster_subid: {
-                    'order': 'asc',
-                    'missing': '_last',
-                    'unmapped_type': 'keyword',
-                }
-            },
-            _distance_sort,
-        ]
-    elif region_cluster_id is not None:
-        sort = [_distance_sort]
+    if region_cluster_id is not None:
+        distance_sort = _bucket_sort('cluster_distance', 'desc', 'max', 'float')
+        sort = (
+            [_bucket_sort('cluster_subid', 'asc', 'min', 'keyword'), distance_sort]
+            if sort_by_subid
+            else [distance_sort]
+        )
     else:
-        # W8-cleanup: region_detected_at is per-box now (region_boxes has
-        # no item-level detected_at any more). A nested sort with
-        # mode='max' orders by the item's most-recently-detected box --
-        # the closest read of "most recently detected" a per-item listing
-        # can still give without Item 5's per-box row shape.
+        # Items order by their most recently detected box: a nested sort
+        # with mode='max' (region_boxes carries detected_at per box).
         sort = [
             {
                 f'{F.boxes}.detected_at': {
@@ -195,29 +203,33 @@ async def list_regions(
         ]
     sort.append({'crop_id': {'order': 'asc'}})
     guard_page_depth(page, page_size)
-    body: dict[str, Any] = {
-        'from': (page - 1) * page_size,
-        'size': page_size,
-        '_source': {'excludes': _REGION_SOURCE_EXCLUDES},
-        'query': {'bool': {'filter': filt, 'must_not': must_not}},
-        'sort': sort,
-        'track_total_hits': True,
-    }
     try:
-        resp = await opensearch.search(index=items_index(), body=body)
+        return await search_region_rows(
+            opensearch,
+            index=items_index(),
+            filters=filt,
+            must_not=must_not,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+            box_clause=_box_clause(parts),
+            source_excludes=_REGION_SOURCE_EXCLUDES,
+        )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-
-    hits = (resp.get('hits') or {}).get('hits') or []
-    total = int((resp.get('hits') or {}).get('total', {}).get('value', 0))
-    items = [_region_item(h.get('_source') or {}, h.get('_id') or '') for h in hits]
-    return {'total': total, 'page': page, 'page_size': page_size, 'items': items}
 
 
 def _training_candidate_query(
     mode: str, profile: DetectionProfile | None = None
-) -> tuple[dict[str, Any], str]:
-    """Return the OpenSearch query body + selection_reason for a mode.
+) -> tuple[dict[str, Any], dict[str, Any] | None, str]:
+    """``(item query, box clause, selection_reason)`` for a cohort mode.
+
+    The item query selects items (item-level predicates only); the box
+    clause, when the mode's predicate is about ONE box, selects the boxes
+    -- every part of it must hold for the same box -- and each matching box
+    becomes its own row. A mode whose predicate is item-level
+    (``disagreement``, ``human_corrected``) has no box clause: one item
+    row, ``region_box_id: null``.
 
     ``profile`` defaults to the deployment's active region profile; with
     none configured the detector-keyed modes simply match nothing.
@@ -225,74 +237,46 @@ def _training_candidate_query(
     F = get_region_fields()
     if profile is None:
         profile = region_profile_or_neutral()
+    state = f'{F.boxes}.{F.boxes_state}'
+    holdout = [{'term': {'test_holdout': True}}]
+
+    def item_query(*filters: dict[str, Any]) -> dict[str, Any]:
+        return {'bool': {'filter': list(filters), 'must_not': holdout}}
+
     if mode == 'detector_blind_spots':
-        # Primary detector missed but the secondary segmenter found a
-        # region, the VLM verified. These are the high-signal training
-        # examples — the next primary-detector training cycle needs
-        # exactly these crops to expand its recall.
-        # W8-cleanup: detector + accepted-box are now checked together on
-        # the SAME box, via a nested query -- the retired item-level
-        # region_bbox_norm/region_detector scalars used to describe one
-        # box implicitly; a nested bool.filter keeps that same-box
-        # guarantee against region_boxes' now-possibly-multiple boxes.
+        # The primary detector missed but the secondary segmenter found a
+        # region and the VLM verified: the high-signal examples the next
+        # primary-detector training cycle needs to expand its recall. The
+        # segmenter's box is the row.
         return (
+            item_query(
+                {'term': {F.verified: True}},
+                {'term': {F.detector_chain: f'{profile.detector_model}:miss'}},
+            ),
             {
                 'bool': {
                     'filter': [
-                        box_query(
-                            {
-                                'bool': {
-                                    'filter': [
-                                        {'term': {f'{F.boxes}.detector': profile.segmenter_name}},
-                                        {'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}},
-                                    ]
-                                }
-                            },
-                            F,
-                        ),
-                        {'term': {F.verified: True}},
-                        {
-                            'term': {
-                                F.detector_chain: f'{profile.detector_model}:miss',
-                            }
-                        },
-                    ],
-                    'must_not': [{'term': {'test_holdout': True}}],
+                        {'term': {f'{F.boxes}.detector': profile.segmenter_name}},
+                        {'term': {state: 'accepted'}},
+                    ]
                 }
             },
             _reason('detector_blind_spots'),
         )
     if mode == 'low_conf_correct':
-        # W8-cleanup M4 fix: the nested filter must require the SAME box
-        # to also be `accepted` -- otherwise a primary box the verifier
-        # REJECTED at a low score still matches as long as some other
-        # (accepted) box exists on the item, contaminating this "primary
-        # detector correct but low-confidence" training cohort with cases
-        # where the primary detector was actually wrong. Same same-box
-        # nested-filter pattern `detector_blind_spots` already uses above.
+        # The primary detector's accepted, low-confidence box on a verified
+        # item. The box must itself be accepted: a rejected low-score box on
+        # an item that has another accepted box would otherwise contaminate
+        # this "primary detector correct but low-confidence" cohort.
         return (
+            item_query({'term': {F.verified: True}}),
             {
                 'bool': {
                     'filter': [
-                        box_query(
-                            {
-                                'bool': {
-                                    'filter': [
-                                        {'term': {f'{F.boxes}.detector': profile.detector_model}},
-                                        {
-                                            'range': {
-                                                f'{F.boxes}.score': {'lt': REGION_LOW_SCORE_MAX}
-                                            }
-                                        },
-                                        {'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}},
-                                    ]
-                                }
-                            },
-                            F,
-                        ),
-                        {'term': {F.verified: True}},
-                    ],
-                    'must_not': [{'term': {'test_holdout': True}}],
+                        {'term': {f'{F.boxes}.detector': profile.detector_model}},
+                        {'range': {f'{F.boxes}.score': {'lt': REGION_LOW_SCORE_MAX}}},
+                        {'term': {state: 'accepted'}},
+                    ]
                 }
             },
             _reason('low_conf_correct'),
@@ -300,63 +284,38 @@ def _training_candidate_query(
     if mode == 'disagreement':
         # Both the primary detector and secondary segmenter fired. The
         # actual IoU disagreement filter is applied client-side (or in a
-        # follow-up endpoint with a script_score) — here we narrow the
-        # pool to crops that ran through both. Tag both presences via
-        # chain entries.
+        # follow-up endpoint with a script_score) -- here we narrow the
+        # pool to items that ran through both (chain entries). Item-level.
         return (
-            {
-                'bool': {
-                    'filter': [
-                        box_query({'term': {f'{F.boxes}.{F.boxes_state}': 'accepted'}}, F),
-                        {'term': {F.detector_chain: f'{profile.detector_model}:hit'}},
-                        {'term': {F.detector_chain: f'{profile.segmenter_name}:hit'}},
-                    ],
-                    'must_not': [{'term': {'test_holdout': True}}],
-                }
-            },
+            item_query(
+                box_query({'term': {state: 'accepted'}}, F),
+                {'term': {F.detector_chain: f'{profile.detector_model}:hit'}},
+                {'term': {F.detector_chain: f'{profile.segmenter_name}:hit'}},
+            ),
+            None,
             _reason('disagreement'),
         )
     if mode == 'human_corrected':
-        # Rows where a human PUT a region AND there was a prior detector
-        # chain. These are the gold-standard training rows — a human
-        # reviewed a model's output and corrected it.
+        # Items where a human PUT a region AND there was a prior detector
+        # chain: a human reviewed a model's output and corrected it.
+        # Item-level.
         return (
-            {
-                'bool': {
-                    'filter': [
-                        {'exists': {'field': F.label_source}},
-                        {'exists': {'field': F.detector_chain}},
-                    ],
-                    'must_not': [{'term': {'test_holdout': True}}],
-                }
-            },
+            item_query(
+                {'exists': {'field': F.label_source}},
+                {'exists': {'field': F.detector_chain}},
+            ),
+            None,
             _reason('human_corrected'),
         )
     if mode == 'false_positives':
-        # Human marked a detected box as "not a region" but the box +
-        # provenance were KEPT (region status='false_positive'). These
-        # feed the dedicated detector training run as hard negatives —
-        # the detector fired here and should learn not to. The box's own
-        # state carries the same signal as the item's status now, so the
-        # nested check replaces the retired region_bbox_norm existence
-        # check.
+        # Boxes a human marked "not a region" whose geometry + provenance
+        # were KEPT (box state false_positive). They feed the dedicated
+        # detector training run as hard negatives -- the detector fired
+        # here and should learn not to. Whatever the item status: an item
+        # with an accepted sibling box is `detected`, not false_positive.
         return (
-            {
-                'bool': {
-                    'filter': [
-                        {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
-                        box_query(
-                            {
-                                'term': {
-                                    f'{F.boxes}.{F.boxes_state}': RegionStatus.FALSE_POSITIVE.value
-                                }
-                            },
-                            F,
-                        ),
-                    ],
-                    'must_not': [{'term': {'test_holdout': True}}],
-                }
-            },
+            item_query(),
+            {'term': {state: RegionStatus.FALSE_POSITIVE.value}},
             _reason('false_positives'),
         )
     raise HTTPException(
@@ -365,7 +324,9 @@ def _training_candidate_query(
     )
 
 
-@router.get('/regions/training_candidates')
+@router.get(
+    '/regions/training_candidates', response_model=None, responses={200: {'model': RegionRowPage}}
+)
 async def training_candidates(
     opensearch: OpenSearchDep,
     mode: str = Query(
@@ -382,58 +343,48 @@ async def training_candidates(
     """Return regions filtered for the next training cycle.
 
     Powers the /train cockpit's Training-cohort picker. ``mode`` selects
-    a curated slice of the items index (see :func:`_training_candidate_query`).
+    a curated slice of the items index (see :func:`_training_candidate_query`):
+    the box-predicate modes return one row per matching box, the
+    item-predicate modes one row per item (``region_box_id: null``). Every
+    row carries ``selection_reason``.
     """
     F = get_region_fields()
     await _ensure_indexes(opensearch)
-    query, reason = _training_candidate_query(mode)
+    query, box_clause, reason = _training_candidate_query(mode)
+    filters = list(query['bool']['filter'])
     if class_id is not None:
-        # Tack the class filter onto the bool.filter of the mode query.
-        query['bool']['filter'] = [*query['bool']['filter'], {'term': {'class_id': class_id}}]
+        filters.append({'term': {'class_id': class_id}})
 
     guard_page_depth(page, page_size)
-    body: dict[str, Any] = {
-        'from': (page - 1) * page_size,
-        'size': page_size,
-        '_source': {'excludes': _REGION_SOURCE_EXCLUDES},
-        'query': query,
-        'sort': [
-            # W8-cleanup: region_detected_at is per-box now -- see
-            # list_regions' matching sort for the same nested/mode='max'
-            # reasoning.
-            {
-                f'{F.boxes}.detected_at': {
-                    'order': 'desc',
-                    'missing': '_last',
-                    'unmapped_type': 'date',
-                    'nested': {'path': F.boxes},
-                    'mode': 'max',
-                }
-            },
-            {'crop_id': {'order': 'asc'}},
-        ],
-        'track_total_hits': True,
-    }
+    sort: list[dict[str, Any]] = [
+        # Items order by their most recently detected box (nested, mode max).
+        {
+            f'{F.boxes}.detected_at': {
+                'order': 'desc',
+                'missing': '_last',
+                'unmapped_type': 'date',
+                'nested': {'path': F.boxes},
+                'mode': 'max',
+            }
+        },
+        {'crop_id': {'order': 'asc'}},
+    ]
     try:
-        resp = await opensearch.search(index=items_index(), body=body)
+        page_body = await search_region_rows(
+            opensearch,
+            index=items_index(),
+            filters=filters,
+            must_not=query['bool']['must_not'],
+            sort=sort,
+            page=page,
+            page_size=page_size,
+            box_clause=box_clause,
+            source_excludes=_REGION_SOURCE_EXCLUDES,
+            row_keys={'selection_reason': reason},
+        )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-
-    hits = (resp.get('hits') or {}).get('hits') or []
-    total = int((resp.get('hits') or {}).get('total', {}).get('value', 0))
-    items: list[dict[str, Any]] = []
-    for h in hits:
-        item = _region_item(h.get('_source') or {}, h.get('_id') or '')
-        item['selection_reason'] = reason
-        items.append(item)
-    return {
-        'total': total,
-        'page': page,
-        'page_size': page_size,
-        'mode': mode,
-        'selection_reason': reason,
-        'items': items,
-    }
+    return {**page_body, 'mode': mode, 'selection_reason': reason}
 
 
 @router.get('/regions/statuses')

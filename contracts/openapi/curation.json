@@ -5084,56 +5084,6 @@
             ],
             "title": "Region Auto Confirmed"
           },
-          "region_bbox_correct": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Correct"
-          },
-          "region_bbox_frame": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Frame"
-          },
-          "region_bbox_in_parent": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox In Parent"
-          },
-          "region_bbox_norm": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Norm"
-          },
           "region_boxes": {
             "items": {
               "additionalProperties": true,
@@ -5141,78 +5091,6 @@
             },
             "title": "Region Boxes",
             "type": "array"
-          },
-          "region_candidate_bbox_in_parent": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Bbox In Parent"
-          },
-          "region_candidate_bbox_norm": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Bbox Norm"
-          },
-          "region_candidate_detector": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Detector"
-          },
-          "region_candidate_detector_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Detector Version"
-          },
-          "region_candidate_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Score"
-          },
-          "region_candidate_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Candidate Source"
           },
           "region_class_id": {
             "anyOf": [
@@ -5224,42 +5102,6 @@
               }
             ],
             "title": "Region Class Id"
-          },
-          "region_cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Cluster Distance"
-          },
-          "region_cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Cluster Id"
-          },
-          "region_cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Cluster Subid"
-          },
-          "region_confidence": {
-            "title": "Region Confidence"
           },
           "region_count": {
             "default": 0,
@@ -5277,17 +5119,6 @@
             ],
             "title": "Region Detected At"
           },
-          "region_detector": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Detector"
-          },
           "region_detector_chain": {
             "anyOf": [
               {
@@ -5301,17 +5132,6 @@
               }
             ],
             "title": "Region Detector Chain"
-          },
-          "region_detector_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Detector Version"
           },
           "region_label_source": {
             "anyOf": [
@@ -5392,17 +5212,6 @@
             "title": "Region Revision",
             "type": "integer"
           },
-          "region_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Score"
-          },
           "region_set_complete": {
             "anyOf": [
               {
@@ -5425,17 +5234,6 @@
             ],
             "title": "Region Skip Verify"
           },
-          "region_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Source"
-          },
           "region_status": {
             "anyOf": [
               {
@@ -5446,121 +5244,6 @@
               }
             ],
             "title": "Region Status"
-          },
-          "region_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text"
-          },
-          "region_text_choice": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Choice"
-          },
-          "region_text_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Confidence"
-          },
-          "region_text_disagreement": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Disagreement"
-          },
-          "region_text_engine_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Engine Version"
-          },
-          "region_text_ocr": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Ocr"
-          },
-          "region_text_raw": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Raw"
-          },
-          "region_text_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Source"
-          },
-          "region_text_vlm": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Vlm"
-          },
-          "region_text_vlm_invalid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Text Vlm Invalid"
-          },
-          "region_thumbnail_url": {
-            "default": "",
-            "title": "Region Thumbnail Url",
-            "type": "string"
           },
           "region_validated": {
             "anyOf": [
@@ -10496,6 +10179,943 @@
           "body"
         ],
         "title": "RegionProfileValidateRequest",
+        "type": "object"
+      },
+      "RegionRow": {
+        "description": "A full wire item plus the box the row is about.\n\nKey a row by ``(crop_id, region_box_id)``. The route-specific keys are\npresent only on that route's rows.",
+        "properties": {
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "blur_lap_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blur Lap Ratio"
+          },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_confidence_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vlm",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence Source"
+          },
+          "class_detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector"
+          },
+          "class_detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector Version"
+          },
+          "class_excluded": {
+            "default": false,
+            "title": "Class Excluded",
+            "type": "boolean"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_labeled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeled At"
+          },
+          "class_labeler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeler"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Name"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Source"
+          },
+          "class_validated": {
+            "default": false,
+            "title": "Class Validated",
+            "type": "boolean"
+          },
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Distance"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "cluster_is_core": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Is Core"
+          },
+          "cluster_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "class",
+                  "candidate",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Kind"
+          },
+          "cluster_nearest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Nearest Id"
+          },
+          "cluster_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Similarity"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "crop_area_norm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Area Norm"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "crop_rank_in_image": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Rank In Image"
+          },
+          "dup_group_id": {
+            "title": "Dup Group Id"
+          },
+          "dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Group Size"
+          },
+          "dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Is Representative"
+          },
+          "excluded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded At"
+          },
+          "excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "default": "",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "default": "",
+            "title": "Image Path",
+            "type": "string"
+          },
+          "item_text_lines": {
+            "items": {
+              "$ref": "#/components/schemas/ItemTextLine"
+            },
+            "title": "Item Text Lines",
+            "type": "array"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Label Source"
+          },
+          "label_validated": {
+            "default": false,
+            "title": "Label Validated",
+            "type": "boolean"
+          },
+          "mistakenness_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Method"
+          },
+          "mistakenness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Score"
+          },
+          "mistakenness_scored_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Scored At"
+          },
+          "mistakenness_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Version"
+          },
+          "nearest_fp_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "suspected_false_positives: the nearest FP sub-type id.",
+            "title": "Nearest Fp Subid"
+          },
+          "needs_new_class": {
+            "default": false,
+            "title": "Needs New Class",
+            "type": "boolean"
+          },
+          "needs_new_class_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class Note"
+          },
+          "probe_actionable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Actionable"
+          },
+          "probe_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Disagreement"
+          },
+          "probe_in_scope": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe In Scope"
+          },
+          "probe_model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Model Version"
+          },
+          "probe_pred_class": {
+            "title": "Probe Pred Class"
+          },
+          "probe_pred_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Class Id"
+          },
+          "probe_pred_entropy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Entropy"
+          },
+          "proposal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Name"
+          },
+          "proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Class Id"
+          },
+          "proposed_class_name": {
+            "default": "",
+            "title": "Proposed Class Name",
+            "type": "string"
+          },
+          "region_auto_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Auto Confirmed"
+          },
+          "region_box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The box this row is about; null for an item-level row (an item selected without a box predicate).",
+            "title": "Region Box Id"
+          },
+          "region_boxes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Region Boxes",
+            "type": "array"
+          },
+          "region_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Class Id"
+          },
+          "region_count": {
+            "default": 0,
+            "title": "Region Count",
+            "type": "integer"
+          },
+          "region_detected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detected At"
+          },
+          "region_detector_chain": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detector Chain"
+          },
+          "region_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Label Source"
+          },
+          "region_max_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Max Score"
+          },
+          "region_pairing": {
+            "title": "Region Pairing"
+          },
+          "region_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile"
+          },
+          "region_profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile Revision"
+          },
+          "region_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Reason"
+          },
+          "region_rejected_count": {
+            "default": 0,
+            "title": "Region Rejected Count",
+            "type": "integer"
+          },
+          "region_rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Rejection Reason"
+          },
+          "region_revision": {
+            "default": 0,
+            "title": "Region Revision",
+            "type": "integer"
+          },
+          "region_set_complete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Set Complete"
+          },
+          "region_skip_verify": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Skip Verify"
+          },
+          "region_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Status"
+          },
+          "region_validated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Validated"
+          },
+          "region_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified"
+          },
+          "region_verified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified At"
+          },
+          "region_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier"
+          },
+          "region_verifier_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier Version"
+          },
+          "region_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Visible"
+          },
+          "review_dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed At"
+          },
+          "selection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "training_candidates: why the row is in the cohort.",
+            "title": "Selection Reason"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_image_path": {
+            "default": "",
+            "title": "Source Image Path",
+            "type": "string"
+          },
+          "suspected_fp_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "suspected_false_positives: distance to the nearest FP sub-centroid.",
+            "title": "Suspected Fp Distance"
+          },
+          "test_holdout": {
+            "default": false,
+            "title": "Test Holdout",
+            "type": "boolean"
+          },
+          "thumbnail_url": {
+            "default": "",
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "uniqueness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uniqueness Score"
+          },
+          "updated_at": {
+            "default": "",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vlm_class_attempted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Attempted At"
+          },
+          "vlm_class_empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Empty Reason"
+          },
+          "vlm_confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Confidence"
+          },
+          "vlm_proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Id"
+          },
+          "vlm_proposed_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Name"
+          },
+          "vlm_raw_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Raw Class"
+          }
+        },
+        "required": [
+          "id",
+          "crop_id"
+        ],
+        "title": "RegionRow",
+        "type": "object"
+      },
+      "RegionRowPage": {
+        "description": "``GET /regions``, ``/regions/training_candidates`` and\n``/regions/suspected_false_positives``.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegionRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "description": "Items per page (suspected_false_positives: rows).",
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Items matching (page math: hasMore = page * page_size < total). suspected_false_positives pages rows directly, so there total == total_rows.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_rows": {
+            "description": "Rows matching (boxes when the request selects boxes).",
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "total_rows",
+          "page",
+          "page_size"
+        ],
+        "title": "RegionRowPage",
         "type": "object"
       },
       "RegionVocabularyResponse": {
@@ -22011,7 +22631,7 @@
     },
     "/curation/projects/{project}/regions": {
       "get": {
-        "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling. ``status`` selects one lifecycle status instead of\n\"has a box\" (a rejected or absent region has none).",
+        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``class_id``, ``cluster_id``, ``verified``, ``max_rank``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
         "operationId": "list_regions_curation_projects__project__regions_get",
         "parameters": [
           {
@@ -22063,6 +22683,7 @@
             }
           },
           {
+            "description": "Filter by the ITEM cluster.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -22075,11 +22696,12 @@
                   "type": "null"
                 }
               ],
+              "description": "Filter by the ITEM cluster.",
               "title": "Cluster Id"
             }
           },
           {
-            "description": "Filter by region_cluster_id bucket.",
+            "description": "Box filter: region cluster bucket.",
             "in": "query",
             "name": "region_cluster_id",
             "required": false,
@@ -22092,12 +22714,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by region_cluster_id bucket.",
+              "description": "Box filter: region cluster bucket.",
               "title": "Region Cluster Id"
             }
           },
           {
-            "description": "Filter by AHC region sub-cluster.",
+            "description": "Box filter: AHC sub-cluster.",
             "in": "query",
             "name": "region_cluster_subid",
             "required": false,
@@ -22110,18 +22732,18 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by AHC region sub-cluster.",
+              "description": "Box filter: AHC sub-cluster.",
               "title": "Region Cluster Subid"
             }
           },
           {
-            "description": "Within a bucket, order by region_cluster_subid so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
+            "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
             "in": "query",
             "name": "sort_by_subid",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Within a bucket, order by region_cluster_subid so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
+              "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
               "title": "Sort By Subid",
               "type": "boolean"
             }
@@ -22146,6 +22768,7 @@
             }
           },
           {
+            "description": "Box filter.",
             "in": "query",
             "name": "min_score",
             "required": false,
@@ -22160,10 +22783,12 @@
                   "type": "null"
                 }
               ],
+              "description": "Box filter.",
               "title": "Min Score"
             }
           },
           {
+            "description": "Box filter.",
             "in": "query",
             "name": "max_score",
             "required": false,
@@ -22178,6 +22803,7 @@
                   "type": "null"
                 }
               ],
+              "description": "Box filter.",
               "title": "Max Score"
             }
           },
@@ -22198,7 +22824,7 @@
             }
           },
           {
-            "description": "Filter by region_detector keyword.",
+            "description": "Box filter: the detector that found it.",
             "in": "query",
             "name": "detector",
             "required": false,
@@ -22211,12 +22837,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by region_detector keyword.",
+              "description": "Box filter: the detector that found it.",
               "title": "Detector"
             }
           },
           {
-            "description": "Substring search on region_text.",
+            "description": "Box filter: substring search on the box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -22229,12 +22855,30 @@
                   "type": "null"
                 }
               ],
-              "description": "Substring search on region_text.",
+              "description": "Box filter: substring search on the box text.",
               "title": "Text"
             }
           },
           {
-            "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+            "description": "Box filter: a box state (GET /regions/statuses box_states).",
+            "in": "query",
+            "name": "box_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box filter: a box state (GET /regions/statuses box_states).",
+              "title": "Box State"
+            }
+          },
+          {
+            "description": "Item filter: only items with this region_status (see GET /regions/statuses). Without it, and without a box filter, the rows are the accepted and false_positive boxes; with it every item in that status is listed (e.g. status=verify_rejected lists the verifier-rejected items) -- an item row has region_box_id null unless a box filter selects boxes too.",
             "in": "query",
             "name": "status",
             "required": false,
@@ -22247,7 +22891,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+              "description": "Item filter: only items with this region_status (see GET /regions/statuses). Without it, and without a box filter, the rows are the accepted and false_positive boxes; with it every item in that status is listed (e.g. status=verify_rejected lists the verifier-rejected items) -- an item row has region_box_id null unless a box filter selects boxes too.",
               "title": "Status"
             }
           },
@@ -22267,9 +22911,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Regions Curation Projects  Project  Regions Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionRowPage"
                 }
               }
             },
@@ -22294,7 +22936,7 @@
     },
     "/curation/projects/{project}/regions/batch_box_state": {
       "post": {
-        "description": "One state on many boxes across items (region-gallery triage).\nFlips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item).",
+        "description": "One state on many boxes across items (region-gallery triage).\nFlips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item). ``items`` are rows: the post-write wire item once\nper targeted box, with that box as ``region_box_id``.",
         "operationId": "batch_set_region_box_state_curation_projects__project__regions_batch_box_state_post",
         "parameters": [
           {
@@ -22349,7 +22991,7 @@
     },
     "/curation/projects/{project}/regions/batch_status": {
       "post": {
-        "description": "Bulk-set region status over many crops — the cluster-view triage op.\n\nApplies the same lifecycle invariants as ``PATCH region_meta``:\n``no_region_visible`` clears the box, ``region_verified`` follows the\nstatus (a request's ``region_verified`` is ignored), ``detected``\nwithout a box lands in ``invalid``. Human edits are terminal\n(``region_validated=True``). Returns ``updated``, ``conflicts``,\n``invalid`` and ``items`` (post-write wire items).",
+        "description": "Bulk-set region status over many crops — the cluster-view triage op.\n\nApplies the same lifecycle invariants as ``PATCH region_meta``:\n``no_region_visible`` clears the box, ``region_verified`` follows the\nstatus (a request's ``region_verified`` is ignored), ``detected``\nwithout a box lands in ``invalid``. Human edits are terminal\n(``region_validated=True``). Returns ``updated``, ``conflicts``,\n``invalid`` and ``items`` (post-write rows: the wire item plus\n``region_box_id: null``, a whole-set write being item-level).",
         "operationId": "batch_set_region_status_curation_projects__project__regions_batch_status_post",
         "parameters": [
           {
@@ -22551,7 +23193,7 @@
     },
     "/curation/projects/{project}/regions/clusters": {
       "get": {
-        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nMost cards are ``candidate`` (regions are one class); the permanent\nfalse-positive bucket is tagged ``cluster_kind='false_positive'`` and\npinned first. Reps are the regions closest to the centroid, shown as\nregion close-up thumbnails.",
+        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nClusters hold *boxes*: a card's ``size`` is the items with at least one\nbox in the cluster, ``box_count`` the boxes (rows) in it -- an item with\ntwo boxes in one cluster is ``size`` 1, ``box_count`` 2. Most cards are\n``candidate`` (regions are one class); the permanent false-positive\nbucket is tagged ``cluster_kind='false_positive'`` and pinned first.\n``representatives`` are rows for the boxes closest to the centroid\n(full wire item + ``region_box_id``), shown as region close-up\nthumbnails.",
         "operationId": "list_region_clusters_curation_projects__project__regions_clusters_get",
         "parameters": [
           {
@@ -22637,7 +23279,7 @@
     },
     "/curation/projects/{project}/regions/clusters/refine/{cluster_id}": {
       "post": {
-        "description": "Per-bucket AHC refine; writes RegionFields.cluster_subid so outliers split out.",
+        "description": "Per-bucket AHC refine over the bucket's boxes; writes each box's\n``cluster_subid`` so outliers split out.",
         "operationId": "refine_region_cluster_endpoint_curation_projects__project__regions_clusters_refine__cluster_id__post",
         "parameters": [
           {
@@ -22826,7 +23468,7 @@
     },
     "/curation/projects/{project}/regions/suspected_false_positives": {
       "get": {
-        "description": "Rank non-FP region crops by similarity to the known FP **sub-centroids**.\n\nEach candidate is matched against every FP sub-type centroid and scored by\nits nearest one (``nearest_fp_subid``), so a crop that resembles only one\nflavour of false positive (e.g. a bumper but not a sticker) is still caught.\nAssists auto-labeling: an operator reviews the nearest matches and\nbulk-confirms via ``POST {api_prefix}/regions/batch_status`` (which routes them into\nthe permanent FP bucket). Requires :func:`build_fp_centroids_endpoint` to\nhave run; otherwise returns an empty result with ``centroids_built=false``.",
+        "description": "Rank non-FP region **boxes** by similarity to the known FP **sub-centroids**.\n\nEach row is one candidate box (``region_box_id``), matched against every\nFP sub-type centroid and scored by its nearest one (``nearest_fp_subid``),\nso a box that resembles only one flavour of false positive (e.g. a\nbumper but not a sticker) is still caught. Assists auto-labeling: an\noperator reviews the nearest matches and flips them with ``POST\n{api_prefix}/regions/batch_box_state`` (``state: false_positive``, which\nparks each box in the permanent FP bucket). Requires\n:func:`build_fp_centroids_endpoint` to have run; otherwise returns an\nempty result with ``centroids_built=false``. Rows are scored in Python,\nso this route pages rows directly: ``total == total_rows`` and\n``page_size`` counts rows.",
         "operationId": "suspected_false_positives_curation_projects__project__regions_suspected_false_positives_get",
         "parameters": [
           {
@@ -22887,9 +23529,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Suspected False Positives Curation Projects  Project  Regions Suspected False Positives Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionRowPage"
                 }
               }
             },
@@ -22914,7 +23554,7 @@
     },
     "/curation/projects/{project}/regions/training_candidates": {
       "get": {
-        "description": "Return regions filtered for the next training cycle.\n\nPowers the /train cockpit's Training-cohort picker. ``mode`` selects\na curated slice of the items index (see :func:`_training_candidate_query`).",
+        "description": "Return regions filtered for the next training cycle.\n\nPowers the /train cockpit's Training-cohort picker. ``mode`` selects\na curated slice of the items index (see :func:`_training_candidate_query`):\nthe box-predicate modes return one row per matching box, the\nitem-predicate modes one row per item (``region_box_id: null``). Every\nrow carries ``selection_reason``.",
         "operationId": "training_candidates_curation_projects__project__regions_training_candidates_get",
         "parameters": [
           {
@@ -22982,9 +23622,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Training Candidates Curation Projects  Project  Regions Training Candidates Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionRowPage"
                 }
               }
             },

@@ -181,6 +181,7 @@ _PROCESS_CACHES = (
     ('src.routers.curation.select', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
     ('src.clients.curation_opensearch', '_settings_cache'),
+    ('src.clients.curation_opensearch', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
     # Config-store snapshots (W2): one ConfigStore per project, keyed by

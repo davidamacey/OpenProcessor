@@ -22,14 +22,15 @@ from src.clients.curation_opensearch import (
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
     ensure_items_history_fields,
+    ensure_items_inner_result_window,
     ensure_items_label_cluster_fields,
     ensure_items_probe_fields,
     ensure_items_provenance_fields,
     ensure_items_quality_fields,
-    ensure_items_region_embedding,
+    ensure_items_region_boxes_fields,
     ensure_items_request_id_field,
     ensure_items_score_fields,
-    ensure_items_text_reader_fields,
+    ensure_items_text_fields,
     ensure_items_validation_split_fields,
     ensure_items_viz_fields,
     ensure_items_vlm_raw_label_fields,
@@ -244,9 +245,13 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
         except Exception as exc:
             logger.warning('curation_quality_fields_migration_failed', error=str(exc))
         try:
-            await ensure_items_region_embedding(opensearch)
+            await ensure_items_region_boxes_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_region_embedding_migration_failed', error=str(exc))
+        try:
+            await ensure_items_inner_result_window(opensearch)
+        except Exception as exc:
+            logger.warning('curation_inner_window_migration_failed', error=str(exc))
         try:
             await ensure_items_score_fields(opensearch)
         except Exception as exc:
@@ -272,7 +277,7 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
         except Exception as exc:
             logger.warning('curation_cluster_geometry_fields_migration_failed', error=str(exc))
         try:
-            await ensure_items_text_reader_fields(opensearch)
+            await ensure_items_text_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_text_reader_fields_migration_failed', error=str(exc))
         try:

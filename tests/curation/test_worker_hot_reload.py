@@ -488,7 +488,7 @@ def _make_task(*, crop_id: str, status: str | None = 'pending') -> _ItemTask:
 async def test_bulk_write_stamps_region_profile_and_pack() -> None:
     F = get_region_fields()
     a = _make_task(crop_id='a')
-    a.update_doc = {F.status: 'detected', F.score: 0.9}
+    a.update_doc = {F.status: 'detected', F.max_score: 0.9}
     # Minor 5 (W2 review): the pack stamp is per-TASK, gated on whether a
     # VLM call actually contributed to this task's write this pass.
     a.vlm_called = True
@@ -529,7 +529,7 @@ async def test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened() -> Non
     ``vlm_prompt_pack`` -- that would claim a VLM ran when it didn't."""
     F = get_region_fields()
     a = _make_task(crop_id='a')
-    a.update_doc = {F.status: 'detected', F.score: 0.9}
+    a.update_doc = {F.status: 'detected', F.max_score: 0.9}
     assert a.vlm_called is False  # the default
 
     async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
@@ -590,7 +590,7 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
         store.pin_active()
 
         a = _make_task(crop_id='a')
-        a.update_doc = {F.status: 'detected', F.score: 0.9}
+        a.update_doc = {F.status: 'detected', F.max_score: 0.9}
 
         async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
             found = {d['_id']: {F.status: 'pending'} for d in body['docs']}

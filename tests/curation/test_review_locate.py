@@ -107,6 +107,7 @@ def test_locate_returns_in_queue_for_a_rejected_candidate(
     docs['rej'] = {
         'crop_id': 'rej',
         F.status: 'verify_rejected',
+        F.rejected_count: 1,
         F.max_score: 0.81,
         F.boxes: [
             {'box_id': 'b1', 'bbox_norm': [0.3, 0.6, 0.4, 0.65], 'state': 'rejected', 'score': 0.81}

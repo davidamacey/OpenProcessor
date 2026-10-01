@@ -33,6 +33,7 @@ from src.routers.curation._common import (
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.region_boxes import RegionBoxWriteError
+from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
     human_status_box_write,
     post_write_item,
@@ -257,7 +258,7 @@ async def _batch_write(
                 status = action.get('status')
                 if status in (200, 201):
                     updated += 1
-                    items.append(rec.item(crop_id))
+                    items.append(as_row(rec.item(crop_id), None))
                     continue
                 error = action.get('error') or {}
                 is_conflict = status == 409 or 'version_conflict' in error.get('type', '')
@@ -285,7 +286,8 @@ async def batch_set_region_status(
     status (a request's ``region_verified`` is ignored), ``detected``
     without a box lands in ``invalid``. Human edits are terminal
     (``region_validated=True``). Returns ``updated``, ``conflicts``,
-    ``invalid`` and ``items`` (post-write wire items).
+    ``invalid`` and ``items`` (post-write rows: the wire item plus
+    ``region_box_id: null``, a whole-set write being item-level).
     """
     F = get_region_fields()
     if not payload.crop_ids:

@@ -41,7 +41,6 @@ def fake_os() -> _FakeRegionOS:
             'crop-1': {
                 'crop_id': 'crop-1',
                 F.status: 'detected',
-                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
                 F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}],
                 F.count: 1,
             }

@@ -121,6 +121,36 @@ def test_region_records_pending_item_falls_back_to_configured_status_field() -> 
     )
 
 
+@pytest.mark.parametrize(
+    ('reason', 'expected'),
+    [
+        ('sanity_reject:degenerate_zero_size', RegionStatus.DETECTION_FAILED.value),
+        ('verifier_rejected', RegionStatus.VERIFY_REJECTED.value),
+        (None, RegionStatus.VERIFY_REJECTED.value),
+    ],
+)
+def test_a_sanity_rejected_box_is_scored_as_detection_failed(
+    reason: str | None, expected: str
+) -> None:
+    """A box a sanity gate rejected is an item-level `detection_failed`,
+    not a verifier `verify_rejected` -- the two failures are different."""
+    (rec,) = region_records(
+        {
+            'crop_id': 'c',
+            'region_boxes': [
+                {
+                    'box_id': 'b1',
+                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
+                    'state': 'rejected',
+                    'rejection_reason': reason,
+                }
+            ],
+        },
+        get_region_fields(),
+    )
+    assert rec.status == expected
+
+
 def test_region_records_reads_configured_boxes_field_name() -> None:
     fields = RegionFields(boxes='roi_boxes')
     recs = region_records(

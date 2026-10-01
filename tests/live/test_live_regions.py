@@ -95,26 +95,22 @@ def test_malformed_region_bbox_is_rejected(
     assert after['_seq_no'] == before['_seq_no']
 
 
-def test_patch_region_metadata_writes_text_and_source(
+def test_patch_box_text_writes_text_and_source_on_that_box(
     api_client: Any, opensearch: Any, region_cohort: list[str]
 ) -> None:
     crop_id = region_cohort[3]
+    before = _source(opensearch, crop_id)['region_boxes'][0]
     resp = api_client.patch(
-        f'/crops/{crop_id}/region_meta',
-        json={'region_text_reply': 'LIVE-HARNESS-7', 'label_source': 'human'},
+        f'/crops/{crop_id}/regions/{before["box_id"]}', json={'text': 'LIVE-HARNESS-7'}
     )
     assert resp.status_code == 200, resp.text
-    # updated_fields echoes the frozen region_* wire contract, never the
-    # RegionFields storage key (region_text) checked below via `src`.
-    assert 'region_text_reply' in resp.json()['updated_fields']
 
-    src = _source(opensearch, crop_id)
-    assert src['region_text'] == 'LIVE-HARNESS-7'
-    assert src['region_text_source'] == 'human'
-    assert src['region_text_confidence'] == 1.0
-    assert src['region_validated'] is True
-    # A text-only edit must not touch the bbox or its cluster bucket.
-    assert src['region_bbox_norm'] is not None
+    box = _source(opensearch, crop_id)['region_boxes'][0]
+    assert box['text'] == 'LIVE-HARNESS-7'
+    assert box['text_source'] == 'human'
+    # A text-only edit must not touch the box's geometry or cluster bucket.
+    assert box['bbox_norm'] == before['bbox_norm']
+    assert box['cluster_id'] == before['cluster_id']
 
 
 def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
@@ -129,8 +125,8 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
 
     src = _source(opensearch, crop_id)
     assert src['region_status'] == 'false_positive'
-    assert src['region_cluster_id'] == FP_REGION_CLUSTER_ID
-    assert src['region_cluster_subid'] is None
+    assert {b['cluster_id'] for b in src['region_boxes']} == {FP_REGION_CLUSTER_ID}
+    assert {b['cluster_subid'] for b in src['region_boxes']} == {None}
     assert src['region_validated'] is True
 
     # Un-marking releases it so the next re-cluster re-absorbs it.
@@ -141,7 +137,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
     assert resp.status_code == 200, resp.text
     src = _source(opensearch, crop_id)
     assert src['region_status'] == 'detected'
-    assert src['region_cluster_id'] is None
+    assert {b['cluster_id'] for b in src['region_boxes']} == {None}
 
 
 def test_patch_region_rejects_a_non_human_status_and_an_empty_body(
@@ -208,9 +204,10 @@ def test_region_browse_reflects_the_human_edits(api_client: Any) -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['total'] >= 1, body
-    item = body['items'][0]
-    assert item['region_detector'] == HUMAN_DETECTOR
-    assert item['region_thumbnail_url'].endswith('/region_thumbnail')
+    row = body['items'][0]
+    box = next(b for b in row['region_boxes'] if b['box_id'] == row['region_box_id'])
+    assert box['detector'] == HUMAN_DETECTOR
+    assert box['thumbnail_url'].endswith(f'/region_thumbnail?box_id={box["box_id"]}')
 
 
 def test_training_candidate_cohorts_are_queryable(api_client: Any) -> None:
@@ -225,8 +222,13 @@ def test_training_candidate_cohorts_are_queryable(api_client: Any) -> None:
     assert unknown.status_code == 400, unknown.text
 
 
-def test_region_thumbnail_serves_real_pixels(api_client: Any, region_cohort: list[str]) -> None:
-    resp = api_client.get(f'/crops/{region_cohort[20]}/region_thumbnail')
+def test_region_thumbnail_serves_real_pixels(
+    api_client: Any, opensearch: Any, region_cohort: list[str]
+) -> None:
+    crop_id = region_cohort[20]
+    box_id = _source(opensearch, crop_id)['region_boxes'][0]['box_id']
+    resp = api_client.get(f'/crops/{crop_id}/region_thumbnail', params={'box_id': box_id})
     assert resp.status_code == 200, resp.text
+    assert api_client.get(f'/crops/{crop_id}/region_thumbnail').status_code == 422
     assert resp.headers['content-type'].startswith('image/')
     assert len(resp.content) > 100
