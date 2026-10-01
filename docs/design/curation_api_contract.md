@@ -32,10 +32,10 @@ earlier rule that froze historical, domain- and vendor-named wire names
 is **retired**: fresh deployments re-ingest, so there was no legacy data
 to protect.
 
-1. **Region attributes go out as `region_<attr>`** for every
-   `RegionFields` attribute (`region_bbox_norm`, `region_status`,
-   `region_verified`, `region_detector_chain`, `region_text`,
-   `region_visible`, `region_cluster_id`, `region_cluster_subid`, …).
+1. **Region attributes go out as `region_<attr>`** for every item-level
+   `RegionFields` attribute (`region_status`, `region_verified`,
+   `region_detector_chain`, `region_visible`, …; a box's own data is an
+   element of `region_boxes`).
    These wire names are **fixed**: they are the stock `RegionFields()`
    default names, and they do not move when a deployment overrides its
    OpenSearch storage names via `OP_REGION_FIELD_*`. The translation
@@ -72,7 +72,7 @@ by router module; every path is relative to the configured
 | `crop_context.py` | `GET /crops/{crop_id}/context` |
 | `edit_undo.py` | `POST /crops/{crop_id}/region/undo`, `POST /crops/region/undo_batch`, `POST /crops/{crop_id}/vlm_dismiss/undo` |
 | `cohorts.py` | `GET /training_cohorts` |
-| `regions.py` / `regions_edit.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `regions.py` / `regions_edit.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/regions`, `PUT /crops/batch_regions`, `PATCH /crops/{crop_id}/regions/{box_id}`, `POST /regions/batch_box_state`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail?box_id=` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
@@ -659,15 +659,16 @@ max_rank`; omitted = no limit, except `primary_low_conf` /
 min > max), `sort`; `text` and `region_status` on the `regions` tab only
 (ignored elsewhere).
 
-`region_status` (`regions` tab; DQ-B2 follow-up) selects which region
-boxes the queue serves: `'all'` (default) — today's accepted-but-
-unvalidated boxes (`region_bbox_norm` present) plus a verifier-rejected
-candidate that still has a box to show (`region_status=verify_rejected`
-AND `region_candidate_bbox_norm` present); `'detected'` — accepted boxes
-only, same as `'all'` before this existed; `'verify_rejected'` — only the
-rejected candidates. `false_positive` and `no_region_visible` items never
-appear in any mode; a `verify_rejected` row with no candidate box (rejected
-before the candidate was kept) never appears either. `400` for an
+`region_status` (`regions` tab) selects which items the queue serves:
+`'all'` (default) — items with an accepted-but-unvalidated box plus
+verifier-rejected items (`region_status=verify_rejected` with at least one
+rejected box); `'detected'` — items with an accepted box only;
+`'verify_rejected'` — "Items with only rejected boxes"; `'has_rejected_box'`
+— "Items with any rejected box": `region_rejected_count >= 1` whatever the
+item status, so a rejected box on a `detected` item is reachable (an item
+with one accepted and one rejected box is in `has_rejected_box` and not in
+`verify_rejected`; an all-rejected item is in both). `false_positive` and
+`no_region_visible` items never appear in the default modes. `400` for an
 unrecognized value. A rejected candidate's per-item `reason` names the
 rejection (`region_rejection_reason` when the worker recorded one) instead
 of the generic "needs human confirmation" string. `locate` honours the
@@ -1251,18 +1252,18 @@ schema v2 answers `409 "bake-off result <file> has an unsupported schema
 
 - `_PathLookupRequest`: `image_paths` (max 10,000)
 - `_PathLookupResponse`: `known_paths` (`dict[image_path, image_id]`)
-- `_PublishEvent` (`POST /events/publish`, used by the SAM worker): `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `region_status`, `region_text`, `image_path`, `topic`, `extra`. `extra='forbid'`: an unknown key is a `422` (a mismatched status key used to be silently dropped, so worker-published `crop.region_verified` events arrived with no status — audit S7).
+- `_PublishEvent` (`POST /events/publish`, used by the SAM worker): `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `region_status`, `region_count`, `image_path`, `topic`, `extra`. `extra='forbid'`: an unknown key is a `422` (a mismatched status key used to be silently dropped, so worker-published `crop.region_verified` events arrived with no status — audit S7).
 
 ## Item wire format
 
-Built by `serialize_item()` in `src/services/curation/wire.py`. 97 keys,
+Built by `serialize_item()` in `src/services/curation/wire.py`. 88 keys,
 always all present (a value is `null` when the stored doc has no value;
 `bbox_norm` defaults to `[]`, `class_name`/`class_source`/
 `label_source`/`updated_at`/`source`/`proposed_class_name` to `""`,
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (67): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `probe_actionable`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`, `region_candidate_bbox_in_parent`.
+Item keys (64): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `probe_actionable`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `item_text_lines`.
 
 `vlm_class_attempted_at` / `vlm_class_empty_reason`: when a VLM was last
 asked for the item's class, and why that attempt gave no class — `no_answer`
@@ -1278,16 +1279,17 @@ stored. On a `vlm_unmatched` item it is the label the VLM named that is not
 in the registry (the item's `class_name` is whatever it already carried),
 so a reviewer sees what the VLM actually said.
 
-Region keys (42, one per `RegionFields` attribute except `embedding`,
-`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_text_choice`, `region_text_vlm_invalid`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_candidate_bbox_norm`, `region_candidate_score`, `region_candidate_detector`, `region_candidate_detector_version`, `region_candidate_source`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+Region keys (24): the item-level `RegionFields` attributes -- `region_status`, `region_reason`, `region_rejection_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify` -- plus the box list and its summary: `region_boxes`, `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision`. A region's per-box data (geometry in both frames, score, detector, source, verdict, text, cluster placement, thumbnail) is **only** an element of `region_boxes`; there is no item-level `region_bbox_norm` / `region_score` / `region_detector` / `region_text*` / `region_candidate_*` / `region_cluster_*` / `region_thumbnail_url` / `region_bbox_in_parent` key.
 
 Derived keys (computed by the serializer, never stored):
 
-- `region_bbox_in_parent` — the region box in the item-crop frame
-  (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when there is no region or
-  the item has no usable `bbox_norm`. Draw it on the item thumbnail as-is.
-- `region_candidate_bbox_in_parent` — the same projection of
-  `region_candidate_bbox_norm` (`null` without a candidate).
+- `region_boxes[].bbox_in_parent` — a box in the item-crop frame
+  (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when the item has no usable
+  `bbox_norm`. Draw it on the item thumbnail as-is.
+- `region_boxes[].thumbnail_url` — the box's close-up
+  (`GET /crops/{crop_id}/region_thumbnail?box_id=<box_id>`; the `box_id` is
+  required, `422 box_id_required` without it, `404 unknown_box_id` for an
+  id the item does not have).
 - `proposed_class_id` / `proposed_class_name` — the class a one-key confirm
   applies, on **every** item endpoint (was `/review`-only): the VLM
   suggestion when there is one, else `class_id` and `vlm_raw_class` or
@@ -1378,55 +1380,61 @@ worker's auto-confirm policy accepts a box (detector and verifier agree
 strongly enough) it sets `region_auto_confirmed=true` instead: the region
 is accepted (`detected`, exported as a positive) but unreviewed, so it stays
 in the `regions` review tab.
-`thumbnail_url` / `region_thumbnail_url` are built from the configured
+`thumbnail_url` and each box's `thumbnail_url` are built from the configured
 `api_prefix` (`{prefix}/crops/{crop_id}/thumbnail` and
-`…/region_thumbnail`), so `OP_API_PREFIX` and the frontend's proxy prefix
-must match.
+`…/region_thumbnail?box_id=`), so `OP_API_PREFIX` and the frontend's proxy
+prefix must match.
 
 | Endpoint | Items at | Keys |
 |---|---|---|
 | `GET /crops`, `GET /classes/{class_id}/crops` | `crops[]` | item |
 | `GET /crops/{crop_id}` | body | item |
 | `GET /review/{tab}` | `items[]` | item + `reason` |
-| `GET /regions` | `items[]` | item |
-| `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
+| `GET /regions` | `items[]` | item + `region_box_id` |
+| `GET /regions/training_candidates` | `items[]` | item + `region_box_id` + `selection_reason` |
+| `GET /regions/suspected_false_positives` | `items[]` | item + `region_box_id` + `suspected_fp_distance` + `nearest_fp_subid` |
 | `GET /search/text` | `items[]` | item + `semantic_score` |
 
-### Region text — `region_text*`
+### Region text — `region_boxes[].text*`
 
-`region_text` is the chosen reading of the region's text. Which reader
-fills it is the region profile's `text_reader`
-(`OP_REGION_DETECTION_TEXT_READER`):
+A box's `text` is the chosen reading of that box's text, an element key of
+`region_boxes` (there is no item-level `region_text*`). Which reader fills it
+is the region profile's `text_reader` (`OP_REGION_DETECTION_TEXT_READER`):
 
-| `text_reader` | Region OCR runs | `region_text` |
+| `text_reader` | Region OCR runs | `text` |
 |---|---|---|
 | `vlm` | only when no VLM is configured | the VLM's reading |
 | `ocr` | always | the OCR reading (VLM's if OCR read nothing) |
 | `vlm_then_ocr` (generic default) | when the VLM read nothing | VLM's, else OCR's |
 | `both` (reference `license_plate` profile) | always | VLM's, else OCR's |
 
-- `region_text_source`: `vlm` or `ocr` (a human edit writes `human`).
-- `region_text_engine_version`: the VLM model id, or the OCR det + rec
+- `text_source`: `vlm` or `ocr` (a human edit writes `human`).
+- `text_engine_version`: the VLM model id, or the OCR det + rec
   model ids for an OCR reading (`<det>:<ver>+<rec>:<ver>`).
-- `region_text_confidence`: VLM category mapped to 0.92/0.70/0.40, or the
+- `text_confidence`: VLM category mapped to 0.92/0.70/0.40, or the
   minimum recognition score of the kept OCR lines.
-- `region_text_raw`: every line the OCR read on the region crop,
+- `text_raw`: every line the OCR read on the box crop,
   unfiltered, in reading order, joined by a space; the VLM's verbatim
   reading when OCR did not run.
-- `region_text_vlm` / `region_text_ocr`: each reader's own reading
+- `text_vlm` / `text_ocr`: each reader's own reading
   whenever it produced one (keyword).
-- `region_text_disagreement`: `true`/`false` when both *valid* readings
+- `text_disagreement`: `true`/`false` when both *valid* readings
   exist, compared after the profile's normalization; `null` otherwise
   (boolean).
-- `region_text_choice`: why the chosen reading won — `readers_agree`,
+- `text_choice`: why the chosen reading won — `readers_agree`,
   `vlm_preferred` (both valid, they differ, the mode prefers the VLM),
   `vlm_only`, `ocr_only`, `ocr_mode` (`text_reader=ocr`), `vlm_invalid`
   (the VLM reading was rejected, the OCR reading won), `no_valid_reading`
-  (every reading was rejected; `region_text` is `null`), `human` (typed by
+  (every reading was rejected; `text` is `null`), `human` (typed by
   a human).
-- `region_text_vlm_invalid`: why the VLM's reading (still kept in
-  `region_text_vlm`) is not text — `placeholder`, `no_reading`, `sequence`,
+- `text_vlm_invalid`: why the VLM's reading (still kept in
+  `text_vlm`) is not text — `placeholder`, `no_reading`, `sequence`,
   `charset`, `too_short`, `too_long`, `format`; `null` when it is valid.
+
+The VLM's *reply* still names its per-box answers `region_bbox_correct`,
+`region_confidence` and `region_text` (a fixed protocol of the prompt packs,
+`REPLY_*_KEY` in `region_overlay.py`); they are stored as the box's
+`bbox_correct`, `confidence` and `text`.
 
 Before a reading is chosen, every reader's reading is checked by the
 region-text rules (`src/services/detection/region_text_rules.py`), served
@@ -1518,7 +1526,7 @@ deterministic. Retries are bounded per item and stage by
 `OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3, counted in the
 worker process, reset by a restart). At the cap the combined stage writes
 `verify_rejected` with `region_rejection_reason=verifier_no_verdict`, the
-candidate kept in `region_candidate_*` and `region_bbox_correct=null` (no
+box kept (`state=rejected`, `bbox_correct=null`: no
 verdict was given), so a human can confirm it or it can be retried with
 `requeue_regions.py --status verify_rejected --reason verifier_no_verdict`;
 the visibility stage sends the item on to detection (fail open). The
@@ -1588,54 +1596,81 @@ on an item that is no longer pending no longer overrides the name.
 and the server applies `default_threshold` (`0.35`, served on every
 response next to the `threshold` actually used).
 
+`GET /regions` and `GET /regions/training_candidates` return **rows** (the
+`RegionRowPage` envelope): `items[]` are full wire items plus `region_box_id`
+(the box the row is about; `null` for an item-level row), `total` counts
+**items** (page math: `hasMore = page * page_size < total`) and
+`total_rows` counts rows; `page` / `page_size` page items and a page returns
+every row of its items.
+
 `GET /regions` filter params: `page`, `page_size`, `class_id`,
-`cluster_id`, `region_cluster_id`, `region_cluster_subid`,
-`sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`,
-`detector`, `text`, `status`, `include_test`. Without `status` only items
-carrying a region box are listed; `status=<region_status>` (any value from
-`GET /regions/statuses`, else `400`) lists every item in that status
-instead, box or not — e.g. `status=verify_rejected` for the verifier
-rejections, whose box is `region_candidate_bbox_norm`.
+`cluster_id` (the item cluster), `region_cluster_id`,
+`region_cluster_subid`, `sort_by_subid`, `max_rank`, `min_score`,
+`max_score`, `verified`, `detector`, `text`, `box_state`, `status`,
+`include_test`. The **box filters** (`detector`, `min_score`, `max_score`,
+`text`, `region_cluster_id`, `region_cluster_subid`, `box_state`) all apply
+to the **same box**, and each matching box is its own row; with no box
+filter and no `status` the rows are the accepted and `false_positive`
+boxes. The **item filters** (`status`, `class_id`, `cluster_id`, `verified`,
+`max_rank`) select items: `status=<region_status>` (any value from
+`GET /regions/statuses`, else `400`) lists every item in that status, box
+or not (item rows, `region_box_id: null`, unless a box filter selects
+boxes too) — e.g. `status=verify_rejected` for the verifier rejections.
+`box_state` is one of `proposed` / `accepted` / `rejected` /
+`false_positive` (`400` otherwise).
 
-### Verifier-rejected candidates — `region_candidate_*`
+`training_candidates` modes: `detector_blind_spots`, `low_conf_correct`,
+`false_positives` are per box (one row per matching box); `disagreement`
+and `human_corrected` are per item (`region_box_id: null`). The row of a
+per-box mode is found with OpenSearch `inner_hits` on the nested box query;
+the items ensure step raises `index.max_inner_result_window` to at least
+`limits.max_boxes_per_write` (never lowers it).
 
-When the verifier rejects a detector's box (`region_status=verify_rejected`)
-the worker keeps it for review instead of discarding it:
-`region_candidate_bbox_norm` (source frame), `region_candidate_score`,
-`region_candidate_detector`, `region_candidate_detector_version`,
-`region_candidate_source`, plus `region_rejection_reason`
-(`region_visible_elsewhere` for a verifier `region_bbox_correct=false`,
-`sanity_reject:<gate reason>` for the geometry gate, `verifier_no_verdict`
-when the verifier never gave a box verdict) and `region_bbox_correct` for
-the verifier verdict (`false`, or `null` for `verifier_no_verdict`).
-`GET /regions/vocabulary` serves these reasons as `rejection_reasons`:
-`[{id, label, kind, match, label_template}]`, `kind` one of
-`model_verdict` / `automatic` / `needs_human`, `match` `exact` or
+`GET /regions/suspected_false_positives` scores **boxes** (an accepted box,
+with a vector, of an item that is not test-holdout or human-decided, and not
+itself a human's or an import's), so each row is one box with its
+`suspected_fp_distance` and `nearest_fp_subid`; it pages rows directly, so
+`total == total_rows` and `page_size` counts rows.
+
+`GET /regions/clusters`: clusters hold boxes. A card's `size` is the number
+of **items** with at least one box in the cluster and `box_count` the number
+of **boxes** (an item with two boxes in one cluster is `size` 1, `box_count`
+2); `representatives` are rows (item + `region_box_id`) for the boxes
+nearest the centroid, next to `representative_crop_ids` /
+`representative_box_ids` / `representative_thumb_urls`. The permanent
+false-positive cluster (id `-100`) pins first.
+
+### Verifier-rejected boxes
+
+When the verifier rejects a detector's box the worker keeps it, in the item's
+`region_boxes` list with `state='rejected'`, for review instead of discarding
+it: the box carries its own `bbox_norm` (source frame), `score`, `detector`,
+`detector_version`, `source`, `bbox_correct` (`false`, or `null` for
+`verifier_no_verdict`) and `rejection_reason` (`region_visible_elsewhere` for
+a verifier `region_bbox_correct=false`, `sanity_reject:<gate reason>` for the
+geometry gate, `verifier_no_verdict` when the verifier never gave a box
+verdict). The item-level `region_rejection_reason` mirrors the
+highest-scoring rejected box's reason only when the item has no accepted or
+`false_positive` box. `GET /regions/vocabulary` serves these reasons as
+`rejection_reasons`: `[{id, label, kind, match, label_template}]`, `kind` one
+of `model_verdict` / `automatic` / `needs_human`, `match` `exact` or
 `prefix` (`sanity_reject:` -- the rest of the stored value is the gate's
 reason, substituted for `{detail}` in `label_template`). A human-written
-reason is free text and not listed. The candidate is
-never an accepted region: `region_bbox_norm` stays `null`, so browse,
-clustering and export ignore it. A human reverses the rejection with the
-confirm write (see "Region lifecycle"); region undo restores it. An
-accepted worker write clears any stale candidate. Items rejected before
-this existed carry no candidate (re-queue them to get one).
+reason is free text and not listed. A rejected box is never an accepted
+region: browse, clustering and export ignore it. A human reverses the
+rejection with the confirm write (see "Region lifecycle"); region undo
+restores it. A rejected box scores as `detection_failed` in `region_eval`
+when its reason is a `sanity_reject:`, else as `verify_rejected`.
 
-**Review-queue reachability (DQ-B2 follow-up):** a rejected candidate is
-now reachable from `GET /review/regions` — see the `region_status` filter
-above. Its default ('all') `region_score` sort falls back to
-`region_candidate_score` (a second sort key) for items with no
-`region_score`, so rejected candidates sort by their own score instead of
-tying on `missing: '_last'` and falling back to shard order among
-themselves. `GET /crops/{crop_id}/region_thumbnail` renders the candidate
-box when there is no accepted `region_bbox_norm` (404 only when neither
-exists) — the thumbnail cache key includes the box's own coordinates, so
-a later promotion or re-detection that changes the box is never served
-stale.
+**Review-queue reachability:** a rejected box is reachable from
+`GET /review/regions` — see the `region_status` filter above.
+`GET /crops/{crop_id}/region_thumbnail?box_id=` renders that box (also a
+rejected one).
 
 ### SSE — `GET /events`
 
 `crop.region_verified` data: `type`, `topic` (`region_status`),
-`crop_id`, `region_status`, `region_text`, `ts`. The data keys other than
+`crop_id`, `region_status`, `region_count`, `ts`. The data keys other than
 `type`/`topic`/`ts` are item keys with the same meaning. The same payload
 is produced in-process (`publish_region_verified`) and by the SAM worker
 via `POST /events/publish`.
@@ -1852,8 +1887,8 @@ generic vocabulary used throughout this doc:
   `label_source`) onto the fixed `region_*` wire names; `POST
   /events/publish` now rejects unknown keys with `422`.
 - **SSE**: `crop.region_verified` data and its `topic` moved from
-  storage field names to the fixed `region_status` / `region_text`
-  wire names.
+  storage field names to the fixed `region_status` / `region_count`
+  wire names (`region_text` left the event with the per-box text).
 - **Stats**: `GET /stats/dataset`'s classifier-vendor-named labeled
   bucket became `labeled.by_classifier`; its
   domain-named `plates` block became `regions` with
@@ -1989,9 +2024,8 @@ instead of guessing a port.
 overlay. Always the clean source render (EXIF-transpose + RGB-convert +
 optional `max_dim` downscale), byte-identical regardless of the item's
 `bbox_norm` / region box. A client draws every box itself from
-`GET /crops/{id}/context`, which already serves `bbox_norm`,
-`region_bbox_norm`, `region_candidate_bbox_norm` (all source-image
-normalized, per-item `region_bbox_frame='source'`), `class_id` /
+`GET /crops/{id}/context`, which already serves `bbox_norm` and every
+`region_boxes[]` box (source-image normalized), `class_id` /
 `class_name`, `region_status`, `region_rejection_reason` and validation
 flags for every item on the frame — plus the image's `width`/`height`,
 now filled from the file header when the images-index doc doesn't carry

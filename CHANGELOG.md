@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W8-cleanup Items 4-6 fixes** (also the open minors from the Items 1-2
+  review):
+  - `GET /regions`: every box filter (`detector`, `min_score`,
+    `max_score`, `text`, `region_cluster_id`, `region_cluster_subid`,
+    `box_state`) now applies to the SAME box in one nested clause
+    (`m2`; before, each was its own nested query, so `detector=a` AND
+    `min_score=0.8` matched an item whose a-box scored 0.5 and whose
+    b-box scored 0.9).
+  - `region_eval` scores a rejected box whose reason is `sanity_reject:*`
+    as `detection_failed`, not `verify_rejected` (`m3`).
+  - A refine, FP sub-typing or auto FP pull can no longer overwrite a box
+    a human moved, re-stated or locked while the model was fitting: every
+    cluster write is an OCC merge over the live box list, re-merged on a
+    version conflict (up to 3 attempts) instead of dropped.
+  - `GET /crops/{id}/region_thumbnail` requires `?box_id=`
+    (`422 box_id_required`, `404 unknown_box_id`); it no longer serves "the"
+    item region.
+  - `/vlm/verify_regions` verifies every open (proposed/accepted, not
+    human-owned) box and writes each verdict onto its own box (it used to
+    read one item-level box); a verdict is dropped when its box moved or was
+    locked while the VLM call was in flight.
+  - `occ_skip_on_conflict_bulk` returns `skipped_ids` next to
+    `skipped_due_to_conflict`.
+  - `ensure_items_inner_result_window` reads `GET /{index}/_settings` (the
+    project guard allowlists that shape only).
 - **W8-cleanup Item 3: bugs the PUT-region test migration surfaced in the
   box routes** (`region_box_edits.py`, new; shared by every human box
   writer): a parent-frame box on `PUT /crops/{id}/regions` was projected
@@ -262,22 +287,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against these eight files regressing back to the scalars just removed
   from each.
 
-  **Not done this pass (W8-cleanup Item 3, deliberately deferred):**
-  `PUT /crops/{id}/region` / `PUT /crops/batch_region` and
-  `region_writes.py`'s single-box write chain (`region_box_write`,
-  `region_box_doc`, `region_confirm_doc`, `same_box`,
-  `candidate_promotion`, `human_status_fields`) are still live — deleting
-  them needs ~5 test files' PUT-region coverage (same-box confirm,
-  candidate-promotion reversal, parent-frame projection, degenerate-bbox
-  validation, undo) migrated to the W8a box routes first, which did not
-  fit this pass without rushing it. `wire.py`'s legacy per-item mirror
-  fields and two confirmed-dead pre-W8 write builders in
-  `scripts/curation/worker/verify.py` (`_region_write_doc`,
-  `_region_reject_doc` — zero call sites) / `no_verdict.py`
-  (`cascade_no_verdict` → `no_verdict_reject_doc` → `candidate_reject_doc`
-  — zero call sites) were left in place; see the handback report.
+  (The deletions this entry deferred, and the legacy mirror fields, landed in
+  the Items 3-6 entries below.)
 
 ### Added
+- **W8-cleanup Items 5-6: per-box embeddings, clustering and FP, and row
+  shapes** (`docs/design/openprocessor_internal/any_domain_plan.md`
+  W8.10 / W8.12):
+  - `region_box_embeddings` (nested sibling of `region_boxes`):
+    `[{box_id, bbox_norm, embedding}]`, one PE vector per accepted or
+    `false_positive` box; `bbox_norm` is the geometry the vector was
+    computed from, so a box a human moved is recognised as stale and
+    re-embedded. Written only by the worker embed stage (after the bulk
+    write, keyed to the final box ids) and `scripts/curation/
+    backfill_region_embeddings.py` (every missing box; resumable), through
+    `write_box_embeddings` (OCC; never touches the box list or revision).
+  - Region clustering is over boxes (`clustering/region_box_rows.py`,
+    `region_box_clustering.py`, `region_cluster_jobs.py`):
+    `cluster_id` / `cluster_subid` / `cluster_distance` live on each box;
+    the KMeans partition reads accepted boxes, `build_region_fp_centroids`
+    is fed by false-positive boxes only, `auto_assign_fp_from_centroids`
+    flips matching boxes to `false_positive` and re-derives the item
+    status (a sibling accepted box keeps the item `detected`). The AHC
+    core is shared with item refine (`refine_members`). The guard on
+    automated writers is one definition (`human_final_clauses`): a
+    human-final item (human label source / verifier, or validated) or a
+    locked box is never touched. Deviation from the plan: these writes are
+    Python OCC mergers over `boxes_write_fields`, not painless scripts, so
+    one `derive_status` stays the only status implementation.
+  - `ensure_items_region_boxes_fields` (one `_region_boxes_mapping()` behind
+    both the index body and the ensure step) and
+    `ensure_items_inner_result_window` (raises
+    `index.max_inner_result_window` to `limits.max_boxes_per_write`, never
+    lowers it).
+  - Row shapes (`region_rows.py`, `RegionRowPage`): `GET /regions`,
+    `/regions/training_candidates`, `/regions/suspected_false_positives`,
+    the representatives of `GET /regions/clusters` and the items of the
+    batch routes are rows — the full wire item plus `region_box_id` (`null`
+    for an item-level row). A box-selecting request is one row per matching
+    box (matched boxes are asked of OpenSearch via nested `inner_hits`);
+    `total` counts items, new `total_rows` counts rows. `GET /regions`
+    gains the `box_state` filter; cluster cards gain `size` (items),
+    `box_count` (boxes), `representatives` and `representative_box_ids`;
+    `POST /regions/batch_box_state` returns one row per targeted box.
+    The training modes `detector_blind_spots`, `low_conf_correct` and
+    `false_positives` are per box; `disagreement` and `human_corrected`
+    per item. The suspected-FP route scores and pages boxes.
+  - The review `regions` tab gains the `has_rejected_box` option
+    (`region_rejected_count >= 1`, whatever the item status); `verify_rejected`
+    is relabelled "Items with only rejected boxes".
+  - Export: the region stratum key is the first accepted (positive) or
+    `false_positive` (hard negative) box's cluster.
+
 - **W10 dataset import (partial): the lock rule, class-name mapping, and a
   reduced-scope import job.** See
   `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the
@@ -321,6 +382,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LABEL_IMPORT_CLASS_SOURCE` (`external_label`).
 
 ### Removed
+- **W8-cleanup Items 4-6 (breaking, no back-compat): every item-level
+  per-box region scalar is gone** — from `RegionFields` (`bbox_norm`,
+  `bbox_frame`, `bbox_correct`, `score`, `confidence`, `source`, `detector`,
+  `detector_version`, `text*`, `candidate_*`, `embedding`, `cluster_id`,
+  `cluster_subid`, `cluster_distance`, `*_legacy` bbox/score), from the
+  items mapping, from `boxes_write_fields` (it no longer mirrors the
+  representative box onto the item; the item-level `rejection_reason`
+  mirror stays, only for an item with no accepted or false-positive box),
+  and from the wire: `region_bbox_norm`, `region_bbox_frame`,
+  `region_bbox_correct`, `region_score`, `region_confidence`,
+  `region_detector`, `region_detector_version`, `region_source`,
+  `region_text` / `region_text_raw` / `region_text_confidence` /
+  `region_text_source` / `region_text_engine_version` / `region_text_vlm` /
+  `region_text_ocr` / `region_text_disagreement` / `region_text_choice` /
+  `region_text_vlm_invalid`, `region_candidate_*`, `region_cluster_id` /
+  `region_cluster_subid` / `region_cluster_distance`,
+  `region_bbox_in_parent`, `region_candidate_bbox_in_parent` and the
+  item-level `region_thumbnail_url` (88 item keys now). Nothing in this
+  repository reads them: the data is an element of `region_boxes[]`
+  (`bbox_in_parent`, `thumbnail_url` per box). The `crop.region_verified`
+  event carries `region_count` instead of `region_text`. The worker no longer
+  mirrors a candidate onto the item, and its legacy detector fallback is
+  gone.
+- The legacy repair tools `region_provenance_restore` /
+  `scripts/curation/restore_region_provenance.py`, `region_validation_repair`
+  / `scripts/curation/repair_region_validation.py` and
+  `cascade_detect.region_provenance` (fresh build, nothing to repair);
+  `rederive_region_text.py` now re-derives per box.
+- The VLM reply keys `region_bbox_correct` / `region_confidence` /
+  `region_text` are unchanged: a fixed protocol of the prompt packs
+  (`REPLY_*_KEY`).
+- `tests/test_no_legacy_region_scalars.py` is now a full-repo guard over
+  `src/` and `scripts/` (AST: attribute access on any `RegionFields` value
+  including locals, parameters and inline `get_region_fields()`, plus
+  wire-name literals), with a two-entry allowlist: the VLM reply keys in
+  `region_overlay.py` and the served review-sort id `region_score`.
 - **W8-cleanup Item 3 (breaking, no back-compat): the legacy single-box
   routes `PUT /crops/{id}/region` and `PUT /crops/batch_region` are
   deleted outright (no 410), with their whole write chain in
