@@ -45,7 +45,7 @@ class _BoundedLoader(yaml.SafeLoader):
 def load_bounded_yaml(text: str) -> Any:
     """``yaml.safe_load`` of ``text``; raises :class:`yaml.YAMLError` for a
     malformed document (including a scalar its constructor rejects, such as
-    an impossible date or an over-long integer) and
+    an impossible date, an over-long integer or ``!!bool abc``) and
     :class:`YamlTooComplexError` for an alias or a document over the node or
     depth cap: nothing else escapes."""
     loader = _BoundedLoader(text)
@@ -53,7 +53,7 @@ def load_bounded_yaml(text: str) -> Any:
         return loader.get_single_data()
     except YamlTooComplexError:
         raise
-    except (ValueError, RecursionError) as exc:
+    except Exception as exc:  # PyYAML constructors also raise KeyError / AttributeError
         raise yaml.YAMLError(str(exc)) from exc
     finally:
         loader.dispose()

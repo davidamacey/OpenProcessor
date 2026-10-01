@@ -286,3 +286,14 @@ def test_upload_accepts_a_zip_without_file_type_bits(client: TestClient, tmp_pat
         zf.writestr('ds/data.yaml', 'train: images/train\nnames: [car]\n')
     resp = client.post(f'{BASE}/uploads', files={'file': ('a.zip', buf.getvalue())})
     assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.parametrize('tagged', ['!!bool abc', '!!timestamp abc'])
+def test_preview_of_a_data_yaml_with_a_bad_tagged_scalar_is_an_issue_not_a_500(
+    client: TestClient, tmp_path: Path, tagged: str
+) -> None:
+    root = _dataset(tmp_path)
+    (root / 'data.yaml').write_text(f'train: images/train\nnames: [{tagged}]\n')
+    resp = client.post(f'{BASE}/preview', json={'source': {'path': str(root)}})
+    assert resp.status_code == 200, resp.text
+    assert 'data_yaml_invalid' in {i['code'] for i in resp.json()['issues']}

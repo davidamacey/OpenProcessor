@@ -94,8 +94,16 @@ def test_a_document_one_level_past_the_depth_cap_is_refused() -> None:
         'train: images/train\nnames: [' + '9' * 5000 + ']\n',
         'train: images/train\nnames: [2001-13-45]\n',
         'train: 2001-02-30\nnames: [car]\n',
+        'train: images/train\nnames: [!!bool abc]\n',
+        'train: images/train\nnames: [!!timestamp abc]\n',
     ],
-    ids=['over-long integer', 'impossible month', 'impossible day'],
+    ids=[
+        'over-long integer',
+        'impossible month',
+        'impossible day',
+        'bool tag on a non-bool (KeyError)',
+        'timestamp tag on a non-date (AttributeError)',
+    ],
 )
 def test_a_scalar_the_constructor_rejects_is_a_clean_issue(tmp_path: Path, text: str) -> None:
     (tmp_path / 'data.yaml').write_text(text)
