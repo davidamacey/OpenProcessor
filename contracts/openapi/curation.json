@@ -2204,7 +2204,26 @@
               "hotkey_reserved",
               "hotkey_taken",
               "path_escape",
-              "finish_in_progress"
+              "finish_in_progress",
+              "dataset_not_found",
+              "import_not_found",
+              "upload_not_found",
+              "image_not_found",
+              "import_busy",
+              "import_resumable",
+              "dataset_changed",
+              "import_not_resumable",
+              "import_not_undoable",
+              "reprocess_busy",
+              "upload_too_large",
+              "dataset_path_not_allowed",
+              "format_undetected",
+              "import_blocked",
+              "class_mapping_incomplete",
+              "class_mapping_invalid",
+              "archive_invalid",
+              "reprocess_targets_invalid",
+              "region_profile_required"
             ],
             "title": "Error",
             "type": "string"
@@ -2231,6 +2250,31 @@
             ],
             "title": "Heap Max Bytes"
           },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Id"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DatasetIssueWire"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues"
+          },
           "jobs": {
             "anyOf": [
               {
@@ -2244,6 +2288,17 @@
               }
             ],
             "title": "Jobs"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
           },
           "message": {
             "title": "Message",
@@ -2331,6 +2386,20 @@
               }
             ],
             "title": "Unbound Class Hotkeys"
+          },
+          "unmapped": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmapped"
           },
           "valid_ids": {
             "anyOf": [
@@ -2993,6 +3062,132 @@
           "backend"
         ],
         "title": "CustomModelRef",
+        "type": "object"
+      },
+      "DatasetIssueSampleWire": {
+        "properties": {
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "DatasetIssueSampleWire",
+        "type": "object"
+      },
+      "DatasetIssueWire": {
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "bypassable": {
+            "title": "Bypassable",
+            "type": "boolean"
+          },
+          "code": {
+            "enum": [
+              "dataset_path_not_allowed",
+              "format_undetected",
+              "dataset_too_large",
+              "dataset_file_too_large",
+              "data_yaml_invalid",
+              "data_yaml_names_missing",
+              "data_yaml_names_sparse",
+              "split_dir_missing",
+              "coco_json_invalid",
+              "coco_category_duplicate_name",
+              "label_file_missing",
+              "label_file_orphan",
+              "label_row_malformed",
+              "label_class_out_of_range",
+              "label_coords_out_of_range",
+              "label_coords_clamped",
+              "label_box_degenerate",
+              "yolo_polygon_to_box",
+              "coco_crowd_skipped",
+              "coco_bbox_out_of_image",
+              "image_size_mismatch",
+              "image_path_not_servable",
+              "image_duplicate_in_dataset",
+              "images_already_indexed",
+              "already_imported",
+              "class_unmapped",
+              "class_mapping_conflict",
+              "class_name_exists",
+              "class_mapped_to_deprecated",
+              "class_index_name_mismatch",
+              "region_profile_required",
+              "region_class_name_differs",
+              "region_box_no_parent",
+              "label_conflicts_locked",
+              "manifest_unreadable",
+              "names_mismatch",
+              "test_split_changed",
+              "op_export_detected",
+              "dataset_sha_mismatch",
+              "test_frozen_from_manifest",
+              "test_frozen_missing",
+              "stratum_map_partial",
+              "item_crop_export_imported_as_frames",
+              "images_reused_by_stem",
+              "image_unreadable"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetIssueSampleWire"
+            },
+            "title": "Samples",
+            "type": "array"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "blocking",
+          "bypassable",
+          "message",
+          "count"
+        ],
+        "title": "DatasetIssueWire",
         "type": "object"
       },
       "DatasetRef": {

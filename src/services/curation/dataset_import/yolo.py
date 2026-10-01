@@ -2,24 +2,31 @@
 
 Discovery (``data.yaml`` / ``images/<split>`` tree) is a fresh
 implementation here rather than a straight move of
-``scripts/curation/yolo_dataset.py`` (deviation — see the wave report:
-``yolo_dataset.py`` stays in place, still used by
-``scripts/curation/eval_regions_vs_gt.py``, which this pass does not
-touch). The row-level rules (clamp tolerance, polygon-to-box,
-class-range checks) are new — the pre-W10 per-image importer (now
-deleted, along with the rest of the ``label_import`` module) had none
-of them.
+``scripts/curation/yolo_dataset.py`` (which stays in place, still used by
+``scripts/curation/eval_regions_vs_gt.py``). The row-level rules (clamp
+tolerance, polygon-to-box, class-range checks) are new: the pre-W10
+per-image importer had none of them.
+
+A dataset is untrusted input. Every path it names goes through
+:mod:`~src.services.curation.dataset_import.paths`, every text file is
+size-capped before it is read, and a malformed ``data.yaml`` is a blocking
+issue, never an exception.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from src.services.curation.dataset_import.issues import IssueCollector
+from src.services.curation.dataset_import.limits import (
+    MAX_LABEL_FILE_BYTES,
+    MAX_YAML_BYTES,
+    preview_max_files,
+)
+from src.services.curation.dataset_import.paths import DatasetPathNotAllowedError, PathGuard
 from src.services.curation.dataset_import.scan import (
     DatasetScan,
     FormatUndetectedError,
@@ -34,28 +41,30 @@ IMAGE_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.bmp', '.webp'})
 _SPLIT_KEYS = ('train', 'val', 'valid', 'test')
 _CLAMP_TOLERANCE = 1e-3
 
-PathGuard = Callable[[Path], bool]
-
-
-class DatasetPathNotAllowedError(Exception):
-    pass
-
 
 def _names_map(raw: Any) -> dict[int, str] | None:
     """Parse a YOLO ``data.yaml`` ``names`` field into ``{index: name}``.
 
     A list is dense (``enumerate``); a dict may be sparse (a class pruned
     from ``data.yaml`` leaves a gap). A missing index must never be filled
-    in from iteration order — that crosses a label at that index onto the
+    in from iteration order -- that crosses a label at that index onto the
     next *present* name, mislabeling it (the exact bug class this wave
     exists to close). Absent indices are simply not present in the map, so
     a lookup miss is a clean ``label_class_out_of_range``.
+
+    Raises ``ValueError`` for any other shape (a scalar, a dict with a
+    non-integer key, a negative index).
     """
     if raw is None:
         return None
     if isinstance(raw, list):
         return {i: str(n) for i, n in enumerate(raw)}
-    return {int(k): str(v) for k, v in raw.items()}
+    if not isinstance(raw, dict):
+        raise ValueError('names must be a list or a mapping')
+    out = {int(k): str(v) for k, v in raw.items()}
+    if any(k < 0 for k in out):
+        raise ValueError('names has a negative index')
+    return out
 
 
 def _find_yaml(root: Path) -> Path | None:
@@ -67,13 +76,29 @@ def _find_yaml(root: Path) -> Path | None:
     return None
 
 
+def _read_text_capped(path: Path, cap: int) -> str | None:
+    """The file's text, or ``None`` when it is over ``cap`` bytes or
+    unreadable. Never reads more than ``cap + 1`` bytes."""
+    try:
+        with path.open('rb') as fh:
+            raw = fh.read(cap + 1)
+    except OSError:
+        return None
+    if len(raw) > cap:
+        return None
+    return raw.decode('utf-8', errors='replace')
+
+
 def _images_under(entry: Path, base: Path) -> list[Path]:
     if entry.is_dir():
         return sorted(
             p for p in entry.rglob('*') if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
         )
+    text = _read_text_capped(entry, MAX_LABEL_FILE_BYTES)
+    if text is None:
+        return []
     out = []
-    for line in entry.read_text(encoding='utf-8').splitlines():
+    for line in text.splitlines():
         if line.strip():
             p = Path(line.strip())
             out.append(p if p.is_absolute() else (base / p))
@@ -95,26 +120,75 @@ def _resolve_entry(entry: str, yaml_dir: Path, root_field: str | None) -> Path |
     return None
 
 
+def _load_data_yaml(yaml_path: Path, issues: IssueCollector) -> dict[str, Any] | None:
+    """The parsed ``data.yaml`` mapping, or ``None`` after recording why not."""
+    name = yaml_path.name
+    text = _read_text_capped(yaml_path, MAX_YAML_BYTES)
+    if text is None:
+        issues.add('data_yaml_invalid', file=name, detail={'reason': 'unreadable or too large'})
+        return None
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        issues.add(
+            'data_yaml_invalid', file=name, detail={'reason': f'not valid YAML: {exc}'[:200]}
+        )
+        return None
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        issues.add('data_yaml_invalid', file=name, detail={'reason': 'top level is not a mapping'})
+        return None
+    return data
+
+
+def _nc_matches(nc: Any, names: dict[int, str]) -> bool:
+    """``nc`` is the class count: ``len(names)``, or ``max(index) + 1`` for a
+    pruned ``data.yaml`` whose ``names`` keeps its original (sparse) indices."""
+    try:
+        value = int(nc)
+    except (TypeError, ValueError):
+        return False
+    return value in (len(names), max(names) + 1 if names else 0)
+
+
 def discover_yolo(
-    root: Path, issues: IssueCollector
+    root: Path, issues: IssueCollector, path_guard: PathGuard | None = None
 ) -> tuple[dict[str, list[Path]], dict[int, str]]:
     """Return ``({split: [image paths]}, {class index: class name})``. Emits
     ``data_yaml_invalid`` / ``data_yaml_names_missing`` / ``split_dir_missing``
-    / ``data_yaml_names_sparse``."""
+    / ``data_yaml_names_sparse`` / ``dataset_path_not_allowed``.
+
+    With a ``path_guard``, every split entry (directory or list file) must
+    pass it after symlink resolution; one that does not is recorded as
+    ``dataset_path_not_allowed`` and skipped.
+    """
     yaml_path = _find_yaml(root)
     if yaml_path is None:
         # images/<split> or <split>/images tree, no data.yaml.
         raise FormatUndetectedError(str(root))
 
-    data = yaml.safe_load(yaml_path.read_text(encoding='utf-8')) or {}
-    names = _names_map(data.get('names'))
+    data = _load_data_yaml(yaml_path, issues)
+    if data is None:
+        return {}, {}
+    try:
+        names = _names_map(data.get('names'))
+    except (TypeError, ValueError) as exc:
+        issues.add(
+            'data_yaml_invalid',
+            file=yaml_path.name,
+            detail={'reason': f'names: {exc}'[:200]},
+        )
+        return {}, {}
     if names is None:
-        issues.add('data_yaml_names_missing', file=str(yaml_path.name))
+        issues.add('data_yaml_names_missing', file=yaml_path.name)
         return {}, {}
     nc = data.get('nc')
-    if nc is not None and int(nc) != len(names):
+    if nc is not None and not _nc_matches(nc, names):
         issues.add(
-            'data_yaml_invalid', file=str(yaml_path.name), detail={'reason': 'nc != len(names)'}
+            'data_yaml_invalid',
+            file=yaml_path.name,
+            detail={'reason': 'nc matches neither len(names) nor max(index) + 1'},
         )
         return {}, names
     if names and (max(names) + 1 != len(names)):
@@ -123,7 +197,7 @@ def discover_yolo(
         # missing and reject at the label-row lookup.
         issues.add(
             'data_yaml_names_sparse',
-            file=str(yaml_path.name),
+            file=yaml_path.name,
             detail={'present': sorted(names)},
         )
 
@@ -139,6 +213,9 @@ def discover_yolo(
             resolved = _resolve_entry(str(entry), yaml_path.parent, data.get('path'))
             if resolved is None:
                 issues.add('split_dir_missing', file=str(entry))
+                continue
+            if path_guard is not None and not path_guard(resolved):
+                issues.add('dataset_path_not_allowed', file=str(entry))
                 continue
             images.extend(_images_under(resolved, resolved.parent))
         splits.setdefault(stored_key, []).extend(images)
@@ -169,11 +246,15 @@ def read_yolo_labels(
     ``label_coords_out_of_range`` (row skipped). ``cls < 0 or cls >= nc``
     is ``label_class_out_of_range`` (row skipped).
     """
-    if not txt_path.exists():
+    if not txt_path.is_file():
         return [], False
 
     boxes: list[LabelBox] = []
-    lines = txt_path.read_text(encoding='utf-8').splitlines()
+    text = _read_text_capped(txt_path, MAX_LABEL_FILE_BYTES)
+    if text is None:
+        issues.add('dataset_file_too_large', file=rel_file)
+        return [], True
+    lines = text.splitlines()
     for lineno, raw_line in enumerate(lines, start=1):
         line = raw_line.strip()
         if not line or line.startswith('#'):
@@ -241,7 +322,10 @@ def scan_yolo(
     if path_guard is not None and not path_guard(root):
         raise DatasetPathNotAllowedError(str(root))
 
-    splits, names = discover_yolo(root, issues)
+    splits, names = discover_yolo(root, issues, path_guard)
+    if sum(len(images) for images in splits.values()) > preview_max_files():
+        issues.add('dataset_too_large', file=str(root.name))
+        return DatasetScan(format='yolo', root=root, entries=[], issues=issues)
     entries: list[ScanEntry] = []
     seen_labels: set[Path] = set()
 
@@ -257,7 +341,16 @@ def scan_yolo(
                 if root in image.parents or image == root
                 else str(image)
             )
-            boxes, exists = read_yolo_labels(label_path, names=names, rel_file=rel, issues=issues)
+            boxes: list[LabelBox]
+            if path_guard is not None and label_path.exists() and not path_guard(label_path):
+                # A label file (or a symlink) outside every allowed root is
+                # never opened.
+                issues.add('dataset_path_not_allowed', file=rel)
+                boxes, exists = [], False
+            else:
+                boxes, exists = read_yolo_labels(
+                    label_path, names=names, rel_file=rel, issues=issues
+                )
             label_state: LabelState
             if not exists:
                 issues.add('label_file_missing', file=rel)

@@ -51,6 +51,16 @@ class ScanEntry:
     label_state: LabelState
     boxes: list[LabelBox] = field(default_factory=list)
     stratum: str | None = None
+    hard_negative: bool = False
+    """An OpenProcessor-export ``neg:`` frame: a human marked a detector
+    region false-positive there (W10.2.2)."""
+    declared_size: tuple[int, int] | None = None
+    """A COCO image's declared ``(width, height)``; the job compares it with
+    the decoded size (``image_size_mismatch``)."""
+    stem_kind: Literal['frame', 'item_crop'] | None = None
+    """How an OpenProcessor-export stem resolves to existing docs: a
+    whole frame (``image_id``) or an item crop (``crop_id``). ``None`` for
+    every other source."""
 
 
 @dataclass
@@ -62,6 +72,20 @@ class DatasetScan:
     class_box_counts: dict[str, int] = field(default_factory=dict)
     """dataset_class -> total box count across every entry (only classes
     with >=1 box need a mapping decision, W10.5)."""
+
+
+def exif_transposed_size(path: Path) -> tuple[int, int] | None:
+    """The ``(width, height)`` the ingest decode would produce (header read
+    plus the EXIF orientation swap), or ``None`` when unreadable."""
+    from PIL import Image
+
+    try:
+        with Image.open(path) as img:
+            width, height = img.size
+            orientation = img.getexif().get(0x0112, 1)
+    except Exception:
+        return None
+    return (height, width) if orientation in (5, 6, 7, 8) else (width, height)
 
 
 def detect_format(root: Path) -> DatasetFormat:

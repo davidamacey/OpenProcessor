@@ -18,6 +18,10 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from src.routers.curation._dataset_issue_models import (
+    DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
+)
+
 
 # P1 seeded the project-related codes it raises. W2 adds the codes its
 # own low-level primitives (``src.services.config_store``) and the
@@ -77,6 +81,26 @@ ErrorCode = Literal[
     # was refused because a first finish for it is still in flight --
     # distinct from project_busy (a step *inside* one finish failed).
     'finish_in_progress',
+    # W10: dataset import and reprocess.
+    'dataset_not_found',
+    'import_not_found',
+    'upload_not_found',
+    'image_not_found',
+    'import_busy',
+    'import_resumable',
+    'dataset_changed',
+    'import_not_resumable',
+    'import_not_undoable',
+    'reprocess_busy',
+    'upload_too_large',
+    'dataset_path_not_allowed',
+    'format_undetected',
+    'import_blocked',
+    'class_mapping_incomplete',
+    'class_mapping_invalid',
+    'archive_invalid',
+    'reprocess_targets_invalid',
+    'region_profile_required',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
@@ -218,6 +242,13 @@ class ConfigErrorDetail(BaseModel):
     actions: list[dict[str, Any]] | None = None
     class_id: int | None = None
     class_name: str | None = None
+    # W10: 422 import_blocked / dataset_path_not_allowed carry the issues,
+    # 422 class_mapping_incomplete the unmapped dataset classes, a 409 or a
+    # 413 the import id / byte limit it concerns.
+    issues: list[DatasetIssueWire] | None = None
+    unmapped: list[str] | None = None
+    import_id: str | None = None
+    limit: int | None = None
 
 
 class ApiErrorResponse(BaseModel):
