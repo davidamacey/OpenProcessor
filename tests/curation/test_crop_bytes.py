@@ -4,17 +4,13 @@ test-on-crop routes, so a preview crop is the crop the worker sees."""
 from __future__ import annotations
 
 import io
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 from PIL import Image
 
 from scripts.curation.worker import state
 from src.services.curation import crop_bytes
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @pytest.fixture
@@ -89,3 +85,48 @@ def test_the_worker_gets_exactly_the_bytes_the_shared_function_returns(
 
     assert state._crop_jpeg_for_task('w1', str(source_image), bbox) == expected
     assert state._crop_jpeg_for_task('w2', str(source_image), bbox) == b'from-cache'
+
+
+@pytest.fixture
+def servable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Every stored image path is servable (the path guard has its own tests)."""
+    from src.services.curation import image_serving
+
+    monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: tmp_path)
+    monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _root: Path(p))
+    image_serving.THUMBNAIL_CACHE.clear()
+
+
+def test_the_vlm_crop_from_the_cache_is_shrunk_to_vlm_size(
+    cache_dir: Path, servable: None, tmp_path: Path
+) -> None:
+    big = io.BytesIO()
+    Image.new('RGB', (900, 600), (1, 2, 3)).save(big, format='JPEG')
+    (cache_dir / 'c1.jpg').write_bytes(big.getvalue())
+
+    out = crop_bytes.load_vlm_item_jpeg('c1', '/gone.jpg', (0, 0, 1, 1), cache_dir=cache_dir)
+
+    assert out is not None
+    assert max(_size(out)) == crop_bytes.VLM_CROP_SIZE
+
+
+def test_the_vlm_crop_falls_back_to_a_thumbnail_of_the_source(
+    cache_dir: Path, source_image: Path, servable: None
+) -> None:
+    out = crop_bytes.load_vlm_item_jpeg(
+        'absent', str(source_image), (0.0, 0.0, 0.5, 1.0), cache_dir=cache_dir
+    )
+
+    assert out is not None
+    assert max(_size(out)) <= crop_bytes.VLM_CROP_SIZE
+    assert crop_bytes.load_vlm_item_jpeg('x', '/gone.jpg', (0, 0, 1, 1), cache_dir=None) is None
+
+
+def test_a_region_close_up_is_cut_from_the_source_at_vlm_size(
+    source_image: Path, servable: None
+) -> None:
+    out = crop_bytes.load_region_jpeg(str(source_image), (0.5, 0.0, 1.0, 1.0))
+
+    assert max(_size(out)) <= crop_bytes.VLM_CROP_SIZE
+    red, _g, _b = Image.open(io.BytesIO(out)).convert('RGB').getpixel((10, 10))
+    assert red > 150

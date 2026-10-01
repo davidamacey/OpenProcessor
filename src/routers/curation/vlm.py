@@ -11,12 +11,10 @@ from __future__ import annotations
 
 import base64
 import binascii
-import io
 from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
-from PIL import Image
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
@@ -44,11 +42,7 @@ from src.services.curation.class_write_guard import (
     ClassWriteGuard,
     class_write_locked,
 )
-from src.services.curation.image_serving import (
-    THUMBNAIL_CACHE,
-    resolve_crop_root,
-    resolve_safe_path,
-)
+from src.services.curation.crop_bytes import load_region_jpeg, load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
 
 
@@ -198,30 +192,6 @@ async def vlm_label_batch(
     # miss out of the box.
     crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
-    def _vlm_jpeg_for(crop_id: str, image_path: str, bbox: tuple) -> bytes | None:
-        # Phase A: prefer the RAM crop cache populated by ingest, if any.
-        if crop_cache_dir:
-            cache_path = Path(crop_cache_dir) / f'{crop_id}.jpg'
-            try:
-                cached_bytes = cache_path.read_bytes()
-                img = Image.open(io.BytesIO(cached_bytes))
-                img.thumbnail((224, 224))
-                buf = io.BytesIO()
-                img.convert('RGB').save(buf, format='JPEG', quality=90)
-                return buf.getvalue()
-            except FileNotFoundError:
-                pass  # fall through to slow path
-            except Exception as exc:
-                logger.warning('curation_vlm_cache_read_failed', crop_id=crop_id, error=str(exc))
-        # Slow path: open source from disk, EXIF-transpose, crop, resize.
-        try:
-            root = resolve_crop_root(image_path)
-            safe = resolve_safe_path(image_path, root)
-            return THUMBNAIL_CACHE.get_or_compute(safe, tuple(bbox), size=224)
-        except Exception as exc:
-            logger.warning('curation_vlm_thumb_failed', crop_id=crop_id, error=str(exc))
-            return None
-
     crops: list[ItemCrop] = []
     cache_hits = 0
     cache_misses = 0
@@ -261,7 +231,7 @@ async def vlm_label_batch(
             cache_hits += 1
         else:
             cache_misses += 1
-        jpeg = _vlm_jpeg_for(crop_id, image_path, tuple(bbox))
+        jpeg = load_vlm_item_jpeg(crop_id, image_path, tuple(bbox), cache_dir=crop_cache_dir)
         if jpeg is None:
             continue
         crops.append(ItemCrop(img_id=crop_id, jpeg_bytes=jpeg))
@@ -422,11 +392,9 @@ async def vlm_verify_regions(
         image_path = src.get('image_path', '')
         if not image_path:
             continue
-        root = resolve_crop_root(image_path)
         for box in verifiable_boxes(src, _F):
             try:
-                safe = resolve_safe_path(image_path, root)
-                jpeg = THUMBNAIL_CACHE.get_or_compute(safe, tuple(box.bbox_norm), size=224)
+                jpeg = load_region_jpeg(image_path, tuple(box.bbox_norm))
             except Exception as exc:
                 logger.warning(
                     'curation_vlm_region_thumb_failed',

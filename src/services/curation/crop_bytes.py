@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
 
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger('crop_bytes')
 
@@ -105,10 +109,72 @@ def load_item_crop_jpeg(
     return crop_jpeg_from_disk(image_path, bbox)
 
 
+# --- API-side loaders (the stored image path is resolved under the crop root) ---
+
+#: Long edge of the crops sent to a VLM by the label and region routes.
+VLM_CROP_SIZE = 224
+
+
+def resolved_image_path(image_path: str) -> Path:
+    """``image_path`` resolved (and traversal-checked) under its crop root.
+
+    Raises ``HTTPException`` (400/404) when the stored path is not servable.
+    """
+    from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
+
+    return resolve_safe_path(image_path, resolve_crop_root(image_path))
+
+
+def load_vlm_item_jpeg(
+    crop_id: str,
+    image_path: str,
+    bbox: Sequence[float],
+    *,
+    cache_dir: str | Path | None,
+) -> bytes | None:
+    """The item crop at VLM size: the ingest-time crop cache (``cache_dir``)
+    when it has the crop (shrunk to :data:`VLM_CROP_SIZE`), else a thumbnail
+    cut from the source image. ``None`` when neither can be read."""
+    from src.services.curation.image_serving import THUMBNAIL_CACHE
+
+    if cache_dir:
+        try:
+            img = Image.open(io.BytesIO((Path(cache_dir) / f'{crop_id}.jpg').read_bytes()))
+            img.thumbnail((VLM_CROP_SIZE, VLM_CROP_SIZE))
+            buf = io.BytesIO()
+            img.convert('RGB').save(buf, format='JPEG', quality=CROP_JPEG_QUALITY)
+            return buf.getvalue()
+        except FileNotFoundError:
+            pass  # fall through to the source image
+        except Exception as exc:
+            logger.warning('vlm_crop_cache_read_failed', crop_id=crop_id, error=str(exc))
+    try:
+        return THUMBNAIL_CACHE.get_or_compute(
+            resolved_image_path(image_path), tuple(bbox), size=VLM_CROP_SIZE
+        )
+    except Exception as exc:
+        logger.warning('vlm_crop_thumbnail_failed', crop_id=crop_id, error=str(exc))
+        return None
+
+
+def load_region_jpeg(image_path: str, bbox: Sequence[float]) -> bytes:
+    """One region's close-up (source-frame ``bbox``) at VLM size, as the
+    region verifier sends it."""
+    from src.services.curation.image_serving import THUMBNAIL_CACHE
+
+    return THUMBNAIL_CACHE.get_or_compute(
+        resolved_image_path(image_path), tuple(bbox), size=VLM_CROP_SIZE
+    )
+
+
 __all__ = [
     'CROP_JPEG_QUALITY',
+    'VLM_CROP_SIZE',
     'cache_stats',
     'crop_jpeg_from_cache',
     'crop_jpeg_from_disk',
     'load_item_crop_jpeg',
+    'load_region_jpeg',
+    'load_vlm_item_jpeg',
+    'resolved_image_path',
 ]
