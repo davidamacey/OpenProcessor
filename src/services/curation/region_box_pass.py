@@ -93,4 +93,33 @@ def box_pass_update(
     return BoxPassResult(merged=merged, finalized=finalized, update=update)
 
 
-__all__ = ['BoxPassResult', 'box_pass_update']
+def worker_stamps(
+    *,
+    profile_name: str | None,
+    profile_revision: int | None,
+    pack_stamp: str | None,
+    vlm_called: bool,
+    vlm_endpoint: str | None,
+    vlm_model: str | None,
+    F: RegionFields | None = None,
+) -> dict[str, Any]:
+    """The provenance a region write carries: which profile produced it and,
+    only when a VLM actually answered this write, the prompt pack and who
+    answered (``vlm_endpoint`` / ``vlm_model``, taken from the call itself,
+    never from the store at write time). Shared by the bulk writer and the
+    test-on-crop preview."""
+    F = F or get_region_fields()
+    stamps: dict[str, Any] = {}
+    if profile_name is not None:
+        stamps[F.profile] = profile_name
+        stamps[F.profile_revision] = profile_revision
+    if vlm_called:
+        if pack_stamp is not None:
+            stamps['vlm_prompt_pack'] = pack_stamp
+        if vlm_endpoint is not None:
+            stamps['vlm_endpoint'] = vlm_endpoint
+            stamps['vlm_model'] = vlm_model
+    return stamps
+
+
+__all__ = ['BoxPassResult', 'box_pass_update', 'worker_stamps']

@@ -4,11 +4,13 @@ preview, so a preview is the write the worker would land."""
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
-from src.services.curation.region_box_pass import box_pass_update
+from src.services.curation.region_box_pass import box_pass_update, worker_stamps
 from src.services.curation.region_boxes import RegionBox, new_box_placeholder
 
 
@@ -149,3 +151,26 @@ def test_a_pass_with_no_status_at_all_is_refused() -> None:
             status=None,
             empty_status=None,
         )
+
+
+def _stamps(*, vlm_called: bool, profile_name: str | None = 'wheels') -> dict[str, Any]:
+    return worker_stamps(
+        profile_name=profile_name,
+        profile_revision=3,
+        pack_stamp='pack@2',
+        vlm_called=vlm_called,
+        vlm_endpoint='ep@1',
+        vlm_model='real-model',
+    )
+
+
+def test_stamps_name_the_profile_and_only_claim_a_vlm_when_one_answered() -> None:
+    assert _stamps(vlm_called=True) == {
+        F.profile: 'wheels',
+        F.profile_revision: 3,
+        'vlm_prompt_pack': 'pack@2',
+        'vlm_endpoint': 'ep@1',
+        'vlm_model': 'real-model',
+    }
+    assert _stamps(vlm_called=False) == {F.profile: 'wheels', F.profile_revision: 3}
+    assert F.profile not in _stamps(vlm_called=True, profile_name=None)

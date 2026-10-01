@@ -22,7 +22,7 @@ from src.services.curation.class_write_guard import class_write_allowed
 from src.services.curation.history import merge_region_chain, record_class_snapshot
 from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_box_embeddings import entry_for, write_box_embeddings
-from src.services.curation.region_box_pass import box_pass_update
+from src.services.curation.region_box_pass import box_pass_update, worker_stamps
 from src.services.curation.wire import region_event_payload
 
 
@@ -254,24 +254,22 @@ async def _bulk_update_one_project(
         # class-only write) must stay empty, never turn into a real
         # write just because of the stamp.
         if update:
-            if profile_name is not None:
-                update[F.profile] = profile_name
-                update[F.profile_revision] = profile_revision
-            # Minor 5 (W2 review): `vlm_prompt_pack` is a per-TASK stamp,
-            # not a per-batch one -- a batch's pack may be configured and
-            # resolvable even when this particular task's write never
-            # actually involved a VLM call (no VLM configured at all, or a
-            # write path that skipped it, e.g. the high-confidence
-            # secondary-segmenter auto-skip). Stamping unconditionally
-            # would claim a VLM ran when it didn't.
-            if pack_stamp is not None and task.vlm_called:
-                update['vlm_prompt_pack'] = pack_stamp
-            # Who answered: the identity the call actually went to (kept on
-            # the task), never read from the store at write time -- a swap
-            # between the call and this flush must not relabel the answer.
-            if task.vlm_called and task.vlm_identity is not None:
-                update['vlm_endpoint'] = task.vlm_identity.endpoint_ref
-                update['vlm_model'] = task.vlm_identity.model
+            # Per-TASK stamps: a batch's pack may be configured while this
+            # task's write never involved a VLM (none configured, or the
+            # high-confidence segmenter auto-skip), and a swap between the
+            # call and this flush must not relabel the answer.
+            update.update(
+                worker_stamps(
+                    profile_name=profile_name,
+                    profile_revision=profile_revision,
+                    pack_stamp=pack_stamp,
+                    vlm_called=task.vlm_called,
+                    vlm_endpoint=(
+                        task.vlm_identity.endpoint_ref if task.vlm_identity is not None else None
+                    ),
+                    vlm_model=task.vlm_identity.model if task.vlm_identity is not None else None,
+                )
+            )
         return update
 
     result = await occ_skip_on_conflict_bulk(
