@@ -1,165 +1,1173 @@
 # OpenProcessor `/curation` API contract
 
-Status: **living reference doc**, owned by this backend. It
-documents the *currently shipped* `/curation` route surface (mounted
-under `CurationConfig.api_prefix`, default `/curation`) and the
-Pydantic wire-model field names it serves, and states explicitly which
-parts of that contract are frozen.
+Reference for the `/curation` HTTP API as shipped in v0.1.0. The generated
+OpenAPI document `contracts/openapi/curation.json` is the source of truth for
+routes and schemas. The JSON/TypeScript helpers in `contracts/json/` and
+`contracts/ts/` are generated from the same code. This document adds the
+semantics that a schema cannot carry: ordering, locking, error codes,
+concurrency tokens and which route to call for which job.
 
-**This is OpenProcessor's generic curation/labeling API contract, not
-"the labeler's API."** Cropwright (a SvelteKit active-learning labeling
-frontend) is **one consumer** of this API, not the sole audience. Other
-services are anticipated on the same backend: querying,
-visualizing, and searching the same indexed dataset. None of them exist
-yet, and none of them should have to learn any one frontend's historical
-URL vocabulary to consume this API. Every recommendation and naming
-choice in this doc follows from that: the canonical surface is the
-generic one (`/curation`, `vlm`, `region_thumbnail`,
-`RegionFields`-backed storage), and it does not move to accommodate any
-one consumer.
+The API is generic. Cropwright is one consumer. Nothing here is specific to a
+domain, a model vendor or a frontend.
 
-**There is no alternate prefix and no vendor-named route alias, and
-none ever will.** The backend serves `{prefix}` (default `/curation`);
-where a consumer's own naming differs from the generic one, the
-consumer migrates to it. A deployment-side proxy alias is a frontend
-concern only, never a supported backend default and never dual-mounted.
+- [Conventions](#conventions)
+- [Error model](#error-model)
+- [Projects and lifecycle](#projects-and-lifecycle)
+- [Settings, config store and capability discovery](#settings-config-store-and-capability-discovery)
+- [Keymap](#keymap)
+- [Prompt packs](#prompt-packs)
+- [Region profiles](#region-profiles)
+- [VLM endpoints, catalog and activation](#vlm-endpoints-catalog-and-activation)
+- [Items and the item wire format](#items-and-the-item-wire-format)
+- [Crops: browse, label, undo](#crops-browse-label-undo)
+- [Regions: multi-box edits and queues](#regions-multi-box-edits-and-queues)
+- [Review tabs](#review-tabs)
+- [Classes](#classes)
+- [Clusters](#clusters)
+- [VLM labeling and the auto-label pipeline](#vlm-labeling-and-the-auto-label-pipeline)
+- [Ingest](#ingest)
+- [Dataset import](#dataset-import)
+- [Reprocess](#reprocess)
+- [Export](#export)
+- [Training, promote and models](#training-promote-and-models)
+- [Bake-off](#bake-off)
+- [Scores, selection, projection, probe, search, stats](#scores-selection-projection-probe-search-stats)
+- [Images](#images)
+- [Events](#events)
+- [The lock rule](#the-lock-rule)
+- [Class identity](#class-identity)
+- [Breaking wire changes](#breaking-wire-changes)
 
-## The key invariant: one generic wire vocabulary, independent of storage names
+## Conventions
 
-Every request and response on this API uses one generic vocabulary
-(see "B3" under Coordination notes for the full rename summary). An
-earlier rule that froze historical, domain- and vendor-named wire names
-is **retired**: fresh deployments re-ingest, so there was no legacy data
-to protect.
+### Prefix and project scoping
 
-1. **Region attributes go out as `region_<attr>`** for every item-level
-   `RegionFields` attribute (`region_status`, `region_verified`,
-   `region_detector_chain`, `region_visible`, …; a box's own data is an
-   element of `region_boxes`).
-   These wire names are **fixed**: they are the stock `RegionFields()`
-   default names, and they do not move when a deployment overrides its
-   OpenSearch storage names via `OP_REGION_FIELD_*`. The translation
-   storage→wire happens once, at the boundary, in
-   `src/services/curation/wire.py`; with stock defaults it is the
-   identity. Storage config never leaks onto the wire (enforced by
-   `tests/curation/test_wire_contract.py::test_storage_override_does_not_change_wire_keys`).
-2. **VLM and classifier names are vendor-neutral**: `vlm_*` (never a
-   model vendor's name) and `classifier_*` (never a model version).
-3. **Every item-returning endpoint emits the same item** (see "Item wire
-   format" below), built by one serializer, so a client parses one shape.
+- Every path is relative to `CurationConfig.api_prefix` (`OP_API_PREFIX`,
+  default `/curation`). Clients should not hardcode the prefix.
+- Data and per-project configuration live under
+  `/curation/projects/{project}/...`. In the tables below these paths are
+  written without that prefix. For example `/crops` means
+  `/curation/projects/{project}/crops`.
+- Deployment-wide routes are written in full: `/curation/health`,
+  `/curation/events`, `/curation/projects`, `/curation/projects/combine*`,
+  `/curation/vlm/*`.
+- There is no unscoped alias of a project route and no vendor-named alias.
+- `{project}` is a slug (see [Projects and lifecycle](#projects-and-lifecycle)).
+  A slug that does not name a project is `404 project_not_found`, never
+  `422`.
+- A project is bound before the handler runs. A project that is `building`,
+  `deleting` or `failed` cannot be bound (`409`). An `archived` project, or a
+  project bound while the project registry is stale, is bound read-only: every
+  non-GET method answers `409 project_archived` or `409 project_read_only`.
 
-Request bodies follow the same rule: a body key that writes a
-`RegionFields` attribute is named `region_<attr>`.
+### Concurrency tokens
 
-## Route surface
+Writes that replace a stored document carry the revision that the client
+loaded. A stale token is `409`.
 
-Full route list (123 distinct paths / 128 method routes under
-`/curation` as of this wave — the latest additions are the frontend
-logic-move routes: `GET /regions/statuses`, `POST /crops/{crop_id}/discard`,
-`POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`,
-`POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history`,
-`GET /crops/{crop_id}/context`, `GET /review/{tab}/locate`,
-`GET /review/new_class_proposals/summary`, `POST /vlm/label_cluster/{cluster_id}`,
-`GET /training_cohorts`), grouped
-by router module; every path is relative to the configured
-`api_prefix`:
+| Token | Where | Stale answer |
+|---|---|---|
+| `expected_revision` (int) | project PATCH/archive/unarchive/clone_settings, pack/profile/VLM-endpoint PUT, `DELETE ...?expected_revision=`, keymap PUT/reset (also `If-Match: "keymap:N"`), model sharing | `409 revision_conflict` (`current_revision` in the body) |
+| `expected_active` (`{name, revision}`) | activate, rollback, deactivate of a pack, profile or VLM endpoint | `409 active_conflict` (`current` in the body) |
+| `expected_region_revision` (int) | per-item box writes (`PUT /crops/{crop_id}/regions`, `PATCH /crops/{crop_id}/regions/{box_id}`, `POST /regions/batch_box_state` via `expected_region_revisions`) | `409 region_conflict` (`current_region_revision`, `current_box_ids`, `item`) |
+| `expected_preview_sha` | `POST /curation/projects/combine` | `409 preview_stale` |
+| `expected_import_key` | `POST /datasets/imports` | `409 dataset_changed` |
 
-| Router module | Routes |
-|---|---|
-| `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `POST /classes/{class_id}/deprecate`, `POST /classes/{class_id}/restore`, `GET /classes/{class_id}/crops` |
-| `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
-| `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label`, `POST /crops/{crop_id}/discard`, `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`, `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history` |
-| `crop_context.py` | `GET /crops/{crop_id}/context` |
-| `edit_undo.py` | `POST /crops/{crop_id}/region/undo`, `POST /crops/region/undo_batch`, `POST /crops/{crop_id}/vlm_dismiss/undo` |
-| `cohorts.py` | `GET /training_cohorts` |
-| `regions.py` / `regions_edit.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/regions`, `PUT /crops/batch_regions`, `PATCH /crops/{crop_id}/regions/{box_id}`, `POST /regions/batch_box_state`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail?box_id=` |
-| `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
-| `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
-| `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
-| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `GET /ingest/status`, `GET /ingest/region_drain`, `POST /ingest/path_lookup` (W10: the `/import_labels(/batch)` routes this table used to list here are removed; label import is a **planned** `POST /datasets/imports`, not built yet) |
-| `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
-| `search.py` | `GET /search/text` |
-| `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
-| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `GET /pipeline/auto_label/status/{job_id}`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
-| `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
-| `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
-| `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` (each also takes `?vlm=<endpoint>` and `acknowledge_external`) |
-| `vlm_endpoints.py` (global) | `GET,POST /vlm/endpoints`, `GET /vlm/endpoints/schema`, `POST /vlm/endpoints/validate`, `GET,PUT,DELETE /vlm/endpoints/{name}`, `GET /vlm/endpoints/{name}/revisions[/{revision}]`, `POST /vlm/endpoints/{name}/clone`, `POST /vlm/endpoints/{name}/probe` |
-| `vlm_activation.py` | `GET /vlm/endpoints/active`, `POST /vlm/endpoints/{name}/activate`, `POST /vlm/endpoints/active/rollback`, `POST /vlm/endpoints/deactivate` (project scoped) |
-| `vlm_catalog.py` (global) | `GET /vlm/catalog`, `GET /vlm/local`, `POST,DELETE /vlm/local/select` |
-| `bakeoff.py` | `GET /bakeoff/{eval_datasets,trained_models,profiles,baseline_models,runs}`, `POST /bakeoff/run`, `GET /bakeoff/{status,results,matrix}/{job_id}` (typed, schema v2; see "Model comparison" below) |
-| `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
+Every stored document also serves an `etag`. Single-document `GET` routes
+send it as the `ETag` header.
 
-The exact, always-current list is produced by:
+### Revisioned documents
 
-```python
-from src.main import app
-routes = sorted(r.path for r in app.routes if r.path.startswith('/curation'))
-print(len(routes)); print('\n'.join(routes))
+Prompt packs, region profiles and VLM endpoints are immutable revisions:
+every save is a new revision number, numbers are never reused, and
+`GET .../{name}/revisions[/{revision}]` reads history. Documents have a
+`source`: `builtin`, `file`, `template`, `env`, `registered` or `stored`. Only
+`stored` documents can be saved or deleted; the others are `read_only`
+(`403 read_only`). Clone one to get an editable copy.
+
+### Paging and ordering
+
+- Lists page with `page` (from 1) and `page_size`. A page past the 10,000th
+  result is `422`.
+- Every queue ends in a `crop_id` ascending tie-break, so pages are stable.
+- Read endpoints fail closed: a backend outage is `503`, never an empty or
+  zero answer.
+
+### Write conventions
+
+- Request models that write region state use `extra='forbid'`: an unknown key
+  is `422`.
+- A human class or region write never takes its provenance from the client
+  beyond the documented `label_source` / `region_label_source` values. The
+  server stamps `class_source: "human"` itself.
+- Class names, slugs and pack/profile names follow the patterns served by the
+  relevant `schema`/`limits` field; the pattern is part of the response, not a
+  client constant.
+
+## Error model
+
+Routes of the project, config-store, dataset, reprocess, combine, VLM and test
+surfaces raise a typed body:
+
+```json
+{"detail": {"error": "revision_conflict", "message": "...", "current_revision": 4}}
 ```
 
-Note the URL segment is `vlm`, not any one vendor's model name — the
-labeling client is a pluggable `vlm_client`/`vlm_labeler`/`vlm_prompts`
-abstraction over any OpenAI-compatible endpoint. No vendor-named route
-is registered, and none will be added; see the VLM section below.
+`error` is one of the codes below. Extra fields depend on the code (`project`,
+`current_revision`, `current`, `report`, `issues`, `unmapped`, `valid_ids`,
+`projects`, `jobs`, `crop_ids`, `endpoint`, `activate_via`, `limit`,
+`requested`). `report` is a `ValidationReport` (`ok`, `errors[]`, `warnings[]`,
+`force_allowed`; an issue has `code`, `severity`, `message`, `field`, `detail`,
+`bypassable`).
 
-## Wire models
+Older routes (crops, classes, review, export, training, clusters) raise
+`{"detail": "<string>"}` or `{"detail": {"error": "<code>", ...}}`. Validation
+failures of a request body are the standard FastAPI `422` list.
 
-Model class names reflect `src/routers/curation/_common.py`; this table
-is hand-maintained (see D3) — treat `_common.py` as authoritative if the
-two disagree. `ItemDoc`'s field set is test-pinned to the serializer's
-output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
+| Status | Codes |
+|---|---|
+| `404` | `project_not_found`, `not_found`, `unknown_revision`, `model_not_found`, `crop_not_found`, `image_not_found`, `import_not_found`, `combine_not_found`, an export artifact that is not whitelisted or not present, `unknown_box_id` |
+| `403` | `read_only` (a non-stored pack, profile or endpoint), region-detector models in `DELETE /models/{model_name}` |
+| `409` | `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
+| `413` | `upload_too_large`, an upload or batch over its per-request limit |
+| `422` | `validation_failed`, `slug_invalid`, `confirm_mismatch`, `combine_invalid`, `class_mapping_incomplete`, `class_mapping_invalid`, `import_blocked`, `format_undetected`, `dataset_path_not_allowed`, `archive_invalid`, `reprocess_targets_invalid`, `region_profile_required`, `unknown_pack`, `unknown_profile`, `unknown_vlm`, `vlm_external_not_acknowledged`, `unknown_catalog_id`, `vlm_catalog_does_not_fit`, `export_outside_project`, `pack_invalid`, `profile_invalid`, `no_box_to_verify`, `too_many_crops`, `too_many_crop_ids`, `too_many_boxes`, `region_text_disabled`, `box_id_in_batch`, `box_id_required` |
+| `429` | `probe_busy` (VLM endpoint probe), `test_busy` (test-on-crop) |
+| `500` | `internal_isolation_error` (a cross-project access was refused), `path_escape` |
+| `502` | `vlm_transport_error`, `segmenter_error`, `detector_error`, a Triton load refusal on promote |
+| `503` | `config_store_unavailable`, an OpenSearch outage on a read, ingest unavailable before the encoder has loaded |
+| `504` | `test_timeout` |
 
-### Ingest
+The full code enumeration is `ConfigErrorDetail.error` in the OpenAPI
+document. The validation issue codes are `ValidationIssue.code`.
 
-- `IngestImageRequest`: `path`, `source` (F-22: `extra='forbid'` -- an unknown key 422s instead of silently ingesting on defaults)
-- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`, `secondary_detector_error` (F-43: set when a configured secondary detector call failed for this image -- the image still ingests successfully on the primary detector's output alone)
-- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`, `secondary_detector_failures` (F-43: count of otherwise-successful images where the configured secondary detector call failed, e.g. a Triton `DEADLINE_EXCEEDED` -- previously only a `warning` log line, invisible on the wire)
-- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results` (W10: the `disagreements`/`detect_mismatches` model-vs-label reporting this entry described belonged to the removed `label_import` module and `/import_labels/batch`; it's gone with them)
-- D3 (2026-09-25 F8 acceptance): dedup applies **within** a batch, not just against the index. Two byte-identical files (`imohash`) uploaded in the same request collapse onto one representative -- only the first ingests; every later same-hash upload in the batch reports `status: 'duplicate'` with `image_id` set to the representative's `image_id` (the same field the cross-batch duplicate path uses), and exactly one item is created. Previously `hash_to_existing` only resolved hashes already committed to the index before the batch started, so two identical files in one request both ingested `'success'` with `duplicates: 0`.
-- `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
-- `IngestBatchRequest`: `items` (F-22: required, non-empty; `extra='forbid'` -- a wrong key like `paths` used to 200 with all-zero counts instead of 422)
-- (W10: `ImportLabelsRequest`/`ImportLabelsBatchRequest` and the
-  `/import_labels(/batch)` routes they backed are removed along with the
-  rest of the `label_import` module; labeled dataset import is a
-  **planned** `POST /datasets/imports`, not built yet)
+## Projects and lifecycle
 
-### Crops
+A project is an isolated dataset: its own OpenSearch indexes, class
+registry, files, config documents, jobs and promoted models. Nothing is
+shared between projects except the deployment-wide VLM endpoint registry and
+models a project explicitly shares. The `default` project always exists and
+cannot be deleted.
 
-- `ItemDoc`: the shared wire item — see "Item wire format" below for the exact key list. Documentation/OpenAPI model only: handlers return the serializer's dict directly, so an unexpected stored value type never 500s a browse page.
-- `CropsPageResponse`: `total`, `page`, `page_size`, `crops` (list of items), `method`, `version`, `n_pool`
-- `CropLabelRequest`: `class_id`, `label_source` (`human` default or `human_confirmed` — any other value is a `422`; the server always writes `class_source: "human"` for this write, so a client can't make a human label look machine-written)
-- `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` (same rule). Response: `updated`, `updated_ids` (exactly the crops written — the ids to pass to `undo_batch`), `conflicts` (`[{crop_id, current_source}]`, not written)
-- `CropMoveRequest`: `crop_ids`, `cluster_id`. Response: same shape as `batch_label` (`updated`, `updated_ids`, `conflicts`)
-- `CropExcludeRequest`: `crop_ids`, `reason`
-- `CropUnexcludeRequest`: `crop_ids`
-- `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
-- `ItemRegionsRequest` (`PUT /crops/{crop_id}/regions`): `boxes` (the full list in display order; an element is `{box_id}` alone for an untouched stored box, `{box_id, bbox_norm?, state?, text?}` to edit one, `{box_id: null, bbox_norm, state?, text?}` for a new box, default `accepted`; a stored box omitted from the list is deleted), `frame` (`source` default; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none), `region_status` (optional whole-set status applied to the built list in the same write), `region_label_source` (default `human`), `expected_region_revision` (stale → `409 region_conflict`). Stored boxes are always source-frame. A stored box whose `bbox_norm` equals the stored one (each coordinate within `1e-4`, after projection) is a **confirmation**: the stored coordinates and the box's detector / version / score / detection time are kept; a different `bbox_norm` is human geometry (`detector` = the human, `score` 1.0, verdict keys cleared). An empty list is the human "no region visible". Out-of-range or degenerate boxes, a new box without `bbox_norm`, a duplicate or unknown `box_id` are `422`. Extra keys are `422`. Response: `crop_id`, `item` (the post-write wire item).
-- `ItemBatchRegionsRequest` (`PUT /crops/batch_regions`): `crop_ids`, `boxes` (new boxes only, `box_id: null`), `region_status`, `region_label_source`. Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
-- `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_label_source`; `region_status` must be human-writable (see "Region lifecycle" below). `region_verified` is still accepted but **ignored** (deprecated): the server derives it. Response: `updated`, `conflicts` (`[{crop_id, current_source}]`), `invalid` (`[{crop_id, detail}]`, e.g. `detected` on a crop with no box), `items` (post-write wire items).
-- `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_rejection_reason"]`), `item` (post-write wire item). `422` when the status write would break an invariant (`detected` with no box).
-- All four region request models set `extra='forbid'`: a stale key (a pre-rename region-attribute name, `label_source`, …) is a `422`, never a silent no-op.
-- `CropFlagNewClassRequest`: `crop_ids`, `note`
+### Slugs
 
-### Training cohorts — `GET /training_cohorts?class_id=`
+Pattern `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`, 2 to 32 characters. Reserved:
+`combine`, `new`, `all`, `none`, `projects`, `global`, `settings`, `vlm`,
+`health`. A deleted project's slug is retired and cannot be reused
+(`409 slug_retired`). `GET /curation/projects` serves the pattern, the
+bounds, the reserved and retired slugs and the cloneable axes under `limits`.
 
-`{cohorts: [{id, label, description, cutoffs, endpoint, params, row_kind}]}`
-(source: `src/services/curation/training_cohorts.py`). Fetch a cohort's
-rows with `GET {prefix}{endpoint}` + `params` (`class_id` already folded
-in). Core cohorts (always): `validated`, `needs_labeling`,
-`low_confidence` (`cutoffs: {classifier_conf_lt: 0.75}` — the backend's
-review band; the frontend's `0.5` is gone), `model_disagreements`
-(`row_kind: crop`). With a region profile configured, the
-`/regions/training_candidates` modes follow (`row_kind: region`,
-`params.mode`): `detector_blind_spots`, `low_conf_correct` (`cutoffs:
-{region_score_lt: 0.6}`), `disagreement`, `human_corrected`,
-`false_positives`; each `description` is exactly the `selection_reason`
-that endpoint returns.
+### Status
 
-### Per-class dataset thresholds
+| `status` | Meaning | `writable` | `selectable` |
+|---|---|---|---|
+| `building` | being created or filled (a combine target) | no | no |
+| `active` | normal | yes | yes |
+| `archived` | read-only | no | yes |
+| `deleting` | removal running in the background | no | no |
+| `failed` | creation failed, `error` has `code` and `message`; delete it | no | no |
+| `deleted` | tombstone, not served | no | no |
 
-One definition (`src/services/curation/dataset_thresholds.py`), enforced by
-the training preflight and served wherever a client shows class counts:
+`GET /curation/projects` lists `active`, `building`, `failed` and `deleting`
+projects, plus `archived` ones with `include_archived=true`.
+
+### Routes
+
+| Method | Path | Body or query | Response | Errors |
+|---|---|---|---|---|
+| GET | `/curation/projects` | `include_archived` | `ProjectsResponse` (`default_slug`, `projects[]` of `ProjectSummary`, `capacity`, `limits`, `labels`) | |
+| POST | `/curation/projects` | `CreateProjectRequest` (`slug`, `display_name`, `description`, `clone_settings_from`, `clone_axes`) | `201 ProjectLifecycleResponse` | `422 slug_invalid`, `409 slug_taken`, `409 slug_retired`, `409 shard_budget_exceeded`, `409 clone_source_not_ready`, `422 validation_failed` |
+| GET | `/curation/projects/{project}` | | `ProjectRecordResponse` (summary plus `resources`, `error`) | `404 project_not_found` |
+| PATCH | `/curation/projects/{project}` | `PatchProjectRequest` (`display_name`, `description`, `expected_revision`). The slug is immutable | `ProjectLifecycleResponse` | `409 revision_conflict` |
+| POST | `/curation/projects/{project}/archive` | `{expected_revision}` | `ProjectLifecycleResponse` | `409 invalid_transition`, `409 project_busy`, `409 revision_conflict` |
+| POST | `/curation/projects/{project}/unarchive` | `{expected_revision}` | `ProjectLifecycleResponse` | `409 invalid_transition`, `409 revision_conflict` |
+| DELETE | `/curation/projects/{project}` | `dry_run`, `confirm`, `force` | `200 DeleteDryRunResponse` for a dry run, otherwise `202 ProjectLifecycleResponse` | `422 confirm_mismatch`, `409 project_protected`, `409 project_busy`, `409 last_active_project`, `409 in_use` |
+| POST | `/curation/projects/{project}/clone_settings` | `CloneSettingsRequest` (`from`, `axes`, `expected_revision`) | `ProjectLifecycleResponse` | `409 target_not_empty`, `409 clone_source_not_ready`, `422 validation_failed` |
+| GET | `/stats` | | `ProjectStatsResponse` (`counts`, `indexes`, `disk`, `jobs`, `last_ingest_at`) | |
+| GET | `/pause` | | `PipelinePauseState` (`paused`, `paused_by`, `reason`) | |
+| POST | `/pause` | | `PipelinePauseState` | |
+| POST | `/resume` | | `PipelinePauseState` | |
+
+The `ProjectSummary` carries `slug`, `display_name`, `description`, `prefix`
+(the project's API base), `status`, `writable`, `selectable`, `is_default`,
+`deletable`, `archivable`, `unarchivable`, `revision`, `created_at`,
+`updated_at`, `counts` (`images`, `items`, `validated`), `origin` (set for a
+combine target) and `paused`. A client enables buttons from the boolean flags
+and does not recompute them from `status`.
+
+Lifecycle responses carry `warnings[]` (for example `shard_budget_high`) and
+`keymap_clone_conflicts[]` (keymap actions that a `keymap` clone dropped
+because their combo collides with a class hotkey of the target).
+
+### Create and clone
+
+Creation runs: validate, check shard capacity, write the record as
+`building`, create indexes and directories, optionally clone, then flip to
+`active`. A failure leaves the record `failed`. Every refusal that can be
+known up front (unknown axis, clone into itself, source not ready) is raised
+before the first write, so a refused clone burns no slug.
+
+`clone_settings_from` / `POST .../clone_settings` copy configuration, never
+data. The cloneable axes (`limits.cloneable_axes`) are `settings_defaults`,
+`classes`, `activations`, `keymap`, `prompt_packs` and `vlm_activation`. A
+clone never copies an external-endpoint acknowledgement; an external source
+endpoint refuses the clone (`422 vlm_external_not_acknowledged`). `409 target_not_empty` when the target already has items (`classes`), stored
+packs (`prompt_packs`) or an activation or pack name that the clone would
+overwrite.
+
+### Delete
+
+`DELETE ...?dry_run=true` writes nothing and reports `indexes[]`, `dirs[]`,
+`promoted_models[]`, `mlflow_experiment`, `running_jobs[]`, `referenced_by[]`
+and `blocking[]` with `blocking_detail[]`. A real delete needs
+`confirm=<slug>` and answers `202` with the `deleting` record. Index and
+directory removal, promoted-model unload and the tombstone run in the
+background. Follow the `project.deleted` event on `/curation/events`, or poll
+`GET /curation/projects/{project}` until it answers `404`.
+
+A delete is refused while the project has running jobs (`project_busy`), is
+the last active project, or has promoted models shared with other projects
+(`in_use`; `force=true` bypasses only this check). Repeating a `DELETE` for a
+project that is already `deleting` retries the background work.
+
+### Pause
+
+`POST /pause` writes a per-project pipeline pause flag. Workers stop picking
+up new work for that project at their next quiesce point. `paused_by` lists
+`project` and `gpu_training` (a training run holds the GPU for the whole
+deployment). `POST /resume` clears the project flag and is idempotent.
+
+### Combine projects
+
+A combine builds a new project from 1 to 8 source projects. Sources are only
+read. The target is `building` while it fills, then `active` (or `failed`).
+Deleting the target undoes the combine. A running combine marks its sources
+and its target busy (`project_busy`).
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| POST | `/curation/projects/combine/preview` | `CombineRequest` | `CombinePreview` | |
+| POST | `/curation/projects/combine` | `CombineStartRequest` (`CombineRequest` plus `expected_preview_sha`) | `202 {job_id, target}` | `409 preview_stale`, `422 combine_invalid` (with `report`), `409 slug_taken` |
+| GET | `/curation/projects/combine/{job_id}` | | `CombineJobResponse` | `404 combine_not_found` |
+| POST | `/curation/projects/combine/{job_id}/cancel` | | `CombineJobResponse` | `404 combine_not_found` |
+| POST | `/curation/projects/combine/{job_id}/resume` | | `CombineJobResponse` | `409 combine_not_resumable` (only `interrupted` or `cancelled`), `404 combine_not_found` |
+
+`CombineRequest`:
+
+| Field | Meaning |
+|---|---|
+| `target` | `{slug, display_name, description}` of the new project |
+| `sources[]` | `{project, include: {label_states: all or validated_only}}`. Order is priority: the first source wins ties |
+| `class_mapping` | `{<source project>: [ClassMappingEntry]}`, one row per source class (see [Class identity](#class-identity)) |
+| `target_classes` | optional explicit target class names |
+| `dedup` | `content_hash` (default) or `none`. Byte-identical images are copied once from the first-listed source; boxes of the duplicate merge by IoU (`dedup_iou`, default 0.9) and target class, with human over import over VLM over model |
+| `holdout` | `preserve_union` (default), `recompute` (warns), `none` |
+| `settings_from` | optional source project to copy settings from |
+
+`CombinePreview` writes nothing and returns `ok`, `errors[]`, `warnings[]`
+(`CombineIssue`: `code`, `severity`, `message`, `project`, `detail`),
+`suggested_mapping`, `sources[]`, `target`, `dedup`, `bytes` and
+`preview_sha`. Starting with a different body than the one previewed is
+`409 preview_stale`.
+
+`CombineJobResponse`: `job_id`, `status` (`queued`, `running`, `completed`,
+`failed`, `cancelled`, `interrupted`), `phase`, `done`, `total`, `report`,
+`next_steps[]`, `error`, `target`, `sources`, `started_at`, `finished_at`.
+Jobs are file-backed, chunked, marked `interrupted` after a restart and
+resumable from the persisted plan.
+
+Combined items carry `origin_project`, `origin_item_id`, `origin_image_id`,
+`origin_split`, `import_ids` (the job), `combine_conflict`,
+`combine_conflict_origins` and `combine_merged_origins`. A box that disagrees
+on class keeps the priority label and is flagged `combine_conflict`; review
+those with the `combine_conflict` filter. Nothing numbered in a source (class
+ids, cluster ids, class history) crosses into the target.
+
+### Health
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/curation/health` | `GlobalHealthResponse`: `status` (`ok`, `degraded`, `down`), `triton`, `opensearch`, `vlm` (the active endpoint), `mlflow_public_url`, `version`, `api_version` |
+| GET | `/health` | `HealthResponse`: the same facts plus `project`, `registry` and `region_profile` (`name`, `display_name`, `display_name_singular`, `region_class_name`, `text_reader`, `reads_text`, `text_hint_enabled`, `limits.max_boxes_per_write`; `null` when no profile is active) |
+
+`mlflow_public_url` (`OP_MLFLOW_PUBLIC_URL`) is the browser-reachable MLflow
+base to build run links from.
+
+## Settings, config store and capability discovery
+
+Per-project configuration is stored as documents in the project's config
+index. Three axes are activated through the config store: the prompt pack
+(`prompt_pack`), the region profile (`detection_profile`) and the VLM
+endpoint (`vlm`). Activations are served to workers and applied at their next
+quiesce point. A worker reports what it applies as `applied[]` on the
+activation response.
+
+### Project settings
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/settings` | | `CurationSettingsResponse`: `defaults` (map axis id to id), `updated_at`, `updated_by` (always `null`) |
+| PUT | `/settings` | `{defaults: {<axis>: <id or null>}}`, partial | the updated `CurationSettingsResponse` |
+
+`defaults` is an open map. A missing key means no override for the axis.
+A project with no settings document answers `200` with `defaults: {}`.
+
+Settable axes: `cluster`, `sort`, `prompt_pack`, `detection_profile`, `vlm`.
+An unknown axis or an id that `GET /methods` does not advertise is `422`.
+`null` clears an override. A `sort` default that orders by a field no item
+has is refused (`422`).
+
+`prompt_pack`, `detection_profile` and `vlm` are not stored in the settings
+document. A `PUT` activates them through the config store, in one call with
+the same activation gate as the `/activate` routes. `detection_profile`
+accepts `off`. `vlm` accepts an endpoint name, `off`, or `null` (the
+deployment's `env` endpoint). The server resolves and gates every axis of one
+request against the pending values of the others before writing any of them,
+so a combined request cannot leave a half-applied pairing. Errors:
+`422 unknown_pack`, `422 unknown_profile`, `422 unknown_vlm`,
+`422 validation_failed` (with `report`), `409 active_conflict`.
+
+`GET /methods` derives each axis's `default` flag from the same resolver that
+the endpoints use when a request omits the axis parameter. Setting a default
+changes server behavior, not only the display.
+
+### Config vocabulary
+
+`GET /config/vocabulary` (`include_other_projects` optional) is the one place
+that serves every model choice a form needs:
+
+| Field | Content |
+|---|---|
+| `detectors[]` | Triton detector models (`name`, `source`, `ready`, `state`, `versions`, `job_id`, `promoted_at`, `choice`) |
+| `segmenters[]` | segmenter services (`name`, `endpoint`, `status`, `masks`, `default_min_score`, `max_candidates`) |
+| `ocr` | `available`, `det_models[]`, `rec_models[]`, `pipeline_models[]` |
+| `vlm` | `active` and `endpoints[]` from the registry |
+| `text_reader_modes[]` | `none`, `vlm`, `ocr`, `vlm_then_ocr`, `both`, each with `reads_text`, `needs_vlm`, `needs_ocr` |
+| `registry_classes[]` | the project's classes |
+| `prompt_pack_calls[]` | the VLM calls a pack defines |
+| `model_choices[]` | fixed roles with `role`, `label`, `scope` (`per_request`, `per_run`, `region_profile`, `config_store`, `deployment`), `current`, `choices[]`, `settable`, `settable_via`, `reason`, `dims` |
+| `labels` | display copy for served enums |
+
+### Capability discovery
+
+`GET /methods` returns `{axes[], strategies[], flags}`. Gate optional UI on
+it instead of probing a write endpoint. `strategies[]` rows have `axis`
+(`cluster`, `score`, `sort`, `overlay`, `export`, `prompt_pack`,
+`detection_profile`, `vlm`), `id`, `label`, `status` (`stable`,
+`experimental`, `shadow`, `disabled`), `default`, `settable`,
+`requires_field`, `field_coverage` and `field_coverage_total`. A client shows
+`stable` and `experimental` rows and hides a row whose `field_coverage` is
+exactly `0`.
+
+The `export` axis lists the kinds `POST /export/yolo` and
+`POST /export/single_class` can produce. The `vlm` axis lists every endpoint
+plus `off`. Each `vlm` row adds `endpoint_status` (`ready`, `unprobed`,
+`probe_failed`, `unreachable`), `endpoint_status_label`,
+`sends_images_externally`, `warning`, `default_ack_recorded` and
+`per_run_ack_required` (what a run enforces; see
+[VLM endpoints](#vlm-endpoints-catalog-and-activation)).
+
+## Keymap
+
+Per-project, configurable keyboard map. Action ids, contexts, the key grammar
+and the locked and browser-reserved keys are served; a client does not
+hardcode them. `contracts/json/keymap_actions.json` is the generated action
+catalog.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/keymap` | | `KeymapGetResponse`: `project`, `revision`, `etag` (`keymap:N`), `is_default`, `updated_at`, `grammar`, `contexts[]`, `actions[]`, `overrides`, `reserved_hotkeys`, `issues[]` | |
+| PUT | `/keymap` | `KeymapPutRequest`: `overrides` (action id to combos), `expected_revision`, `unbind_conflicting_class_hotkeys` | `KeymapPutResponse` (`KeymapGetResponse` plus `unbound_class_hotkeys[]`) | `409 revision_conflict`, `409 class_hotkey_conflict`, `422 validation_failed` |
+| POST | `/keymap/validate` | `{overrides}` | `KeymapValidateResponse`: `ok`, `errors[]`, `warnings[]`, `force_allowed`, `resolved`, `reserved_hotkeys`, `class_conflicts[]` | |
+| POST | `/keymap/reset` | `KeymapResetRequest`: `action_ids` (all when omitted), `expected_revision`, `unbind_conflicting_class_hotkeys` | `KeymapPutResponse` | `409 revision_conflict`, `409 class_hotkey_conflict` |
+
+- `PUT` replaces the whole override map. An action absent from `overrides`
+  takes its default.
+- The revision comes from `expected_revision` or an `If-Match: "keymap:N"`
+  header. If both are given they must agree. If neither is given the request
+  is `422`.
+- A combo that collides with a class hotkey of the project is
+  `409 class_hotkey_conflict` with `class_conflicts[]`. With
+  `unbind_conflicting_class_hotkeys: true` the server unbinds those class
+  hotkeys and saves the keymap in one step, and rolls the registry back if
+  the save fails. `unbound_class_hotkeys[]` reports what was unbound.
+- A write publishes `config.changed` with `axis: "keymap"` on the project's
+  event stream.
+
+## Prompt packs
+
+A prompt pack holds the prompts and reply contracts of every VLM call:
+classification, open-vocabulary classification, combined classify and verify,
+region verification, region visibility, per-class descriptions and synonyms.
+The built-in generic pack is read-only. Packs are per project.
+
+| Method | Path | Body or query | Response | Errors |
+|---|---|---|---|---|
+| GET | `/prompt_packs` | | `PromptPackList`: `packs[]`, `templates[]`, `active`, `config_revision`, `stale` | |
+| POST | `/prompt_packs` | `{name, body, description}` | `201 PromptPackDoc` | `409 name_conflict`, `422 validation_failed` |
+| GET | `/prompt_packs/schema` | | `PromptPackSchema`: `calls[]`, `fields[]` (placeholders, expected reply keys), `placeholders[]`, `reply_key_contract` | |
+| POST | `/prompt_packs/validate` | `{body, name}`, query `profile` | `ValidationReport` | |
+| POST | `/prompt_packs/test` | `PackTestRequest` | `PackTestResponse` | see [Test on crops](#test-on-crops) |
+| GET | `/prompt_packs/active` | | `ActiveConfigResponse`: `axis`, `active`, `source` (`stored`, `env`, `off`), `activated_at`, `previous`, `applied[]`, `config_revision`, `stale` | |
+| POST | `/prompt_packs/active/rollback` | `{expected_active}` | `ActiveConfigResponse` | `409 no_previous`, `409 previous_deleted`, `409 active_conflict` |
+| GET | `/prompt_packs/{name}` | | `PromptPackDoc` (`name`, `body`, `description`, `revision`, `source`, `read_only`, `active`, `cloned_from`, `etag`) | `404 not_found` |
+| PUT | `/prompt_packs/{name}` | `{body, description, expected_revision}` | `PromptPackDoc` (a new revision) | `403 read_only`, `409 revision_conflict`, `422 validation_failed` |
+| DELETE | `/prompt_packs/{name}` | query `expected_revision` (required) | `204` | `403 read_only`, `409 in_use` (the active pack), `409 revision_conflict` |
+| POST | `/prompt_packs/{name}/activate` | `{revision, expected_active, force}` | `ActiveConfigResponse` plus `validation` | `404 not_found`, `409 active_conflict`, `422 validation_failed` |
+| POST | `/prompt_packs/{name}/clone` | `{new_name, source, revision, from_project, description}` | `201 PromptPackDoc` | `409 name_conflict`, `404 not_found` |
+| GET | `/prompt_packs/{name}/revisions` | | `{name, revisions[]}` | `404 not_found` |
+| GET | `/prompt_packs/{name}/revisions/{revision}` | | `PromptPackDoc` | `404 unknown_revision` |
+
+- `clone` copies from the built-in pack, a template file, a stored pack
+  (`source`), or a stored pack of another project (`from_project`, read-only).
+- Validation checks names, required fields, placeholders, reply keys,
+  synonym and description targets, and example values. A pack that asks for
+  text with a text-free profile, or a single-box pack with a multi-box
+  profile (`max_regions_per_item > 1`), is reported. Pairing errors that make
+  the combination unusable are refused at activation and cannot be bypassed;
+  `force` bypasses only the bypassable ones.
+- Activating a pack validates it against the active region profile and VLM
+  endpoint. A per-run override is available as `?prompt_pack=<name>` or
+  `<name>@<revision>` on the labeling routes.
+
+## Region profiles
+
+A region profile describes how the sub-regions of an item are found and read:
+the optional detector leg, the optional segmenter leg (a text prompt), the
+OCR and text reader, the parent classes it applies to, and
+`max_regions_per_item` (1 to 64; `1` is the default and a single box).
+
+| Method | Path | Body or query | Response | Errors |
+|---|---|---|---|---|
+| GET | `/region_profiles` | `include_templates` | `RegionProfileList`: `profiles[]`, `templates[]`, `active`, `config_revision`, `stale` | |
+| POST | `/region_profiles` | `{name, body, description}` | `201 RegionProfileDoc` | `409 name_conflict`, `422 validation_failed` |
+| GET | `/region_profiles/schema` | | field specs: `fields[]`, `groups[]` | |
+| POST | `/region_profiles/validate` | `{body, name}`, query `for_activation` | `ValidationReport` | |
+| POST | `/region_profiles/validate_segmenter_prompt` | `{text_prompt, sole_leg}` | `ValidationReport` | |
+| POST | `/region_profiles/test` | `RegionTestRequest` | `RegionTestResponse` | see [Test on crops](#test-on-crops) |
+| GET | `/region_profiles/active` | | `ActiveConfigResponse` (`axis: detection_profile`) | |
+| GET | `/region_profiles/active/impact` | | `ActivationImpact` | |
+| POST | `/region_profiles/active/rollback` | `{expected_active}` | `ActiveConfigResponse` | `409 no_previous`, `409 previous_deleted`, `409 active_conflict` |
+| POST | `/region_profiles/deactivate` | `{expected_active}` | `ActiveConfigResponse` (`source: off`) | `409 active_conflict` |
+| GET | `/region_profiles/{name}` | | `RegionProfileDoc` (`body`, `effective`, `source`, `read_only`, `revision`, `active`, `etag`) | `404 not_found` |
+| PUT | `/region_profiles/{name}` | `{body, description, expected_revision}` | `RegionProfileDoc` | `403 read_only`, `404 not_found`, `409 revision_conflict`, `422 validation_failed` |
+| DELETE | `/region_profiles/{name}` | query `expected_revision` (required) | `204` | `403 read_only`, `409 in_use` (the active profile), `409 revision_conflict` |
+| POST | `/region_profiles/{name}/activate` | `{revision, expected_active, force}` | `ActiveConfigResponse` plus `impact` and `validation` | `404 not_found`, `409 active_conflict`, `422 validation_failed` |
+| POST | `/region_profiles/{name}/clone` | `{new_name, ...}` | `201 RegionProfileDoc` | `409 name_conflict`, `404 not_found` |
+| GET | `/region_profiles/{name}/revisions` | | `{name, revisions[]}` | `404 not_found` |
+| GET | `/region_profiles/{name}/revisions/{revision}` | | `RegionProfileDoc` | `404 unknown_revision` |
+
+`RegionProfileDoc.effective` reports what the profile actually does:
+`legs[]`, `reads_text`, `segmenter_enabled`, `text_hint_active`.
+
+### Activation impact and rollback
+
+Activating a profile does not rewrite any item. `ActivationImpact` (returned
+by `/activate` and by `GET /region_profiles/active/impact`) reports how many
+items exist per profile and revision (`by_profile[]`), `items_total`,
+`validated_items`, `unseeded_items`, `pending_items`, `pending_not_matching`
+and `stale_items`. `suggested_reprocess` is a dry-run `ReprocessRequest`
+that selects every unlocked, machine-written item that the active
+profile and revision did not produce. Post it to `POST /reprocess` as is, or
+change `dry_run` to apply it.
+
+`POST /region_profiles/active/rollback` re-activates the previous activation.
+The previous target must still exist (`previous_deleted` otherwise).
+`/region_profiles/deactivate` turns the profile axis off. Rollback and
+deactivate are activations, so they publish the same events and are subject
+to `expected_active`.
+
+Validation covers the detector model (it must exist, be ready, be owned by or
+shared with this project, and its classes must map by name), the segmenter
+prompt, OCR models and the text reader, `parent_classes` (known classes) and
+the pairing with the active pack and endpoint.
+
+### Test on crops
+
+`POST /prompt_packs/test` and `POST /region_profiles/test` run a draft or a
+saved pack, profile or VLM endpoint against crops already in the project and
+return what the worker would decide. They write nothing: no index update and no
+enqueue.
+
+| | `POST /prompt_packs/test` | `POST /region_profiles/test` |
+|---|---|---|
+| Subject | `pack_name`, `pack_revision` or `draft`; `call` (`combined`, `classify`, `open_classify`, `region_verify`, `region_visible`); `crop_ids[]`; `use_region_box`; `class_names`; `profile_name` | one `crop_id`; `profile_name`, `profile_revision` or `draft`; `segmenter_text_prompt`; `verify`; `prompt_pack_name`, `prompt_pack_revision` or `prompt_pack_draft` |
+| VLM source | `vlm_name`, `vlm_revision` or `vlm_draft`; `acknowledge_external` | the same |
+| Response | `call`, `pack`, `vlm`, `prompt` (exact request text), `raw_reply`, `reasoning`, `latency_ms`, `parse_ok`, `parse_error`, `results[]` (`crop_id`, `box_id`, `parsed`, `preview_item`, `skipped`), `validation` | `crop_id`, `profile`, `item_eligible`, `legs[]` (`leg`: `detector` or `segmenter`; `status`; `candidates[]`), optional `verify`, `preview_basis`, `preview_item`, `validation` |
+
+A test candidate (`RegionTestCandidate`) is a box wire plus `candidate_index`,
+`selected`, `drop_reason` (`below_min_score`, `nms`, `over_max`), `mask_iou`,
+`bbox_in_parent`, `mask_polygon` and `mask_polygon_in_parent` (at most 256
+points). `preview_basis` is `selection_accepted` without a verify leg (every
+selected box is shown as accepted) and `vlm_verdicts` with one.
+
+The profile test does not run the OCR text-hint leg or text reading: a
+profile that reads text previews boxes only.
+
+Limits: a crop id from another project is `404 crop_not_found`; at most 4
+concurrent segmenter calls and 2 concurrent VLM runs (`429 test_busy`); a 60
+second bound (`504 test_timeout`); a crop cap (`422 too_many_crops`,
+`422 too_many_crop_ids`); `422 no_box_to_verify`; `422 pack_invalid` and
+`422 profile_invalid` carry `report`; upstream failures are
+`502 vlm_transport_error`, `502 segmenter_error` and `502 detector_error`.
+
+## VLM endpoints, catalog and activation
+
+A VLM endpoint is an OpenAI-compatible chat endpoint with vision. The
+endpoint registry is deployment-wide: an endpoint created in one project is
+visible in all of them. Which endpoint a project uses is that project's
+activation. The built-in `env` endpoint (`OP_VLM_URL`, `OP_VLM_MODEL`) is
+listed first and is read-only. Clone it to get an editable copy.
+
+### Registry (global routes)
+
+| Method | Path | Body or query | Response | Errors |
+|---|---|---|---|---|
+| GET | `/curation/vlm/endpoints` | | `VlmEndpointList`: `endpoints[]` (`VlmEndpointSummary`), `external_policy` (`ack` or `deny`), `secret_refs[]`, `labels`, `config_revision`, `stale` | |
+| POST | `/curation/vlm/endpoints` | `{name, body, description}` | `201 VlmEndpointDoc` | `409 name_conflict`, `422 validation_failed` |
+| GET | `/curation/vlm/endpoints/schema` | | `VlmEndpointSchema`: form `fields[]` and `groups[]` (`choices_from`: `secret_refs` or `vlm_catalog`) | |
+| POST | `/curation/vlm/endpoints/validate` | `{body, name}`, query `probe` | `VlmValidateResponse`: `validation`, `locality`, `sends_images_externally`, optional `probe`. Always `200` | |
+| GET | `/curation/vlm/endpoints/{name}` | | `VlmEndpointDoc` | `404 not_found` |
+| PUT | `/curation/vlm/endpoints/{name}` | `{body, description, expected_revision}` | `VlmEndpointDoc` (a new revision) | `403 read_only`, `409 revision_conflict`, `422 validation_failed` |
+| DELETE | `/curation/vlm/endpoints/{name}` | query `expected_revision` (required) | `204` | `403 read_only`, `409 in_use` (`projects[]`), `409 revision_conflict` |
+| POST | `/curation/vlm/endpoints/{name}/clone` | `{new_name, revision, description}` | `201 VlmEndpointDoc` | `409 name_conflict` |
+| POST | `/curation/vlm/endpoints/{name}/probe` | | `VlmProbeResult` | `429 probe_busy` (more than 2 concurrent probes) |
+| GET | `/curation/vlm/endpoints/{name}/revisions` | | `{name, revisions[]}` | `404 not_found` |
+| GET | `/curation/vlm/endpoints/{name}/revisions/{revision}` | | `VlmEndpointDoc` | `404 unknown_revision` |
+
+Names match `^[a-z0-9][a-z0-9_.-]{1,63}$`. Reserved: `env`, `off`, `none`,
+`default`, `local`, `active`, `schema`, `validate`, `deactivate`.
+
+`VlmEndpointBody`: `base_url`, `model`, `api_key_ref` (`secret:<slug>`),
+`timeout_s`, `requests_per_second`, `max_images_per_call`,
+`open_images_per_call`, `json_mode` (`auto`, `on`, `off`), `allow_external`,
+`catalog_id`.
+
+- Keys are references only. The API serves `api_key_ref` and
+  `api_key_present`, never a key. Write a key on the host with
+  `openprocessor vlm key set <slug>`.
+- A probe sends synthetic images only. It records the served model root,
+  context length, image token cost, the server's image cap and JSON mode
+  support. A probe belongs to the revision and body it tested. A new revision
+  is `unprobed` until probed.
+- URL policy: the stack's own services, link-local, metadata and unspecified
+  addresses (in any notation, for the literal host and every resolved
+  address) are refused. No request to an endpoint follows a redirect.
+- `locality` is `compose`, `host`, `private`, `external` or `unknown`. An
+  endpoint outside this deployment (`sends_images_externally`) needs an
+  acknowledgement. `OP_VLM_EXTERNAL_POLICY=deny` refuses such endpoints
+  outright. An acknowledgement is recorded per project and per
+  `name@revision`.
+- Every registry write publishes the global event `vlm.changed`.
+
+### Activation (project routes)
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/vlm/endpoints/active` | | `VlmActiveResponse` (`axis: vlm`, `active`, `source`: `stored`, `env` or `off`, `previous`, `applied[]`, `config_revision`, `stale`) | |
+| POST | `/vlm/endpoints/{name}/activate` | `{revision, expected_active, force, acknowledge_external}` | `VlmActiveResponse` plus `validation` | `404 not_found`, `409 active_conflict`, `422 validation_failed`, `422 vlm_external_not_acknowledged` (`endpoint`, `activate_via`) |
+| POST | `/vlm/endpoints/active/rollback` | `{expected_active}` | `VlmActiveResponse` | `409 no_previous`, `409 previous_deleted`, `409 active_conflict` |
+| POST | `/vlm/endpoints/deactivate` | `{expected_active}` | `VlmActiveResponse` (`source: off`) | `409 active_conflict` |
+
+`PUT /settings` with `defaults.vlm` activates through the same gate. The
+detection worker follows a project's VLM at its quiesce points. An
+activation, a re-probe or a rollback swaps the labeler. A new revision of the
+active endpoint changes nothing until it is activated.
+
+### One gate, every path
+
+Every path that selects or switches an endpoint calls one gate: activate,
+rollback, `PUT /settings`, a clone's activation copy, a per-run `?vlm=`, and
+the draft tests. The gate checks:
+
+- endpoint validation (URL, secret reference, external policy, and for an
+  activation that a probe exists and did not fail);
+- the external-images acknowledgement. Activation needs
+  `acknowledge_external` or a recorded acknowledgement of that exact
+  `name@revision`. Rollback, settings and clone need the recorded one. A
+  one-off run needs `acknowledge_external` unless the endpoint is the
+  project's acknowledged default;
+- pairing of endpoint, prompt pack and region profile: an estimate of the
+  context size of a labeler call, the server's own image cap, multi-box and
+  text-reading verification, JSON mode.
+
+`force` applies to `activate` only and bypasses only `vlm_not_probed`,
+`vlm_probe_failed` and `vlm_context_too_small`. `vlm_max_images_exceeds_server`
+is never bypassable.
+
+### Per-run selection
+
+The routes below take `?vlm=<name>` or `?vlm=<name>@<revision>` and
+`?acknowledge_external=true`: `POST /vlm/label_batch`,
+`POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`,
+`POST /vlm/region_visible_batch`, `POST /vlm/label_cluster/{cluster_id}`,
+`POST /pipeline/auto_label` and `POST /pipeline/auto_label/start`. An unknown
+endpoint is `422 unknown_vlm` (`valid_ids`). A project whose VLM is off is
+`409 vlm_not_configured`. An endpoint that cannot be used is
+`409 vlm_endpoint_unavailable`. `/pipeline/auto_label/start` pins the
+resolved `(name, revision)` into the job.
+
+Items record which endpoint answered: `vlm_endpoint` (`name@revision`),
+`vlm_model` (the resolved model) and `vlm_prompt_pack`. `region_verifier`,
+`text_engine_version` and the class `detector`/`labeler` provenance carry the
+resolved model, not the configured name.
+
+### Local model catalog (global routes)
+
+The catalog (`examples/vlm/catalog.tsv`) lists models that the in-compose
+vLLM service can serve, with license, VRAM and disk needs, context and image
+limits, and whether each is `tested` or `to_verify`.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/curation/vlm/catalog` | | `VlmCatalogResponse`: `entries[]` (`fits`, `serving`, `desired`, `vram_gb`, `disk_gb`, `max_model_len`, `max_images`, `license`, `gated`, `status`), `labels`, `local` | |
+| GET | `/curation/vlm/local` | | `VlmLocalStatus`: `configured`, `served`, `desired`, `restart_required`, `can_restart_from_api`, `gpu_total_gb`, `reason`, `poll_after_s` | |
+| POST | `/curation/vlm/local/select` | `{catalog_id, force}` | `202 VlmLocalStatus` | `409 no_local_vlm`, `422 unknown_catalog_id`, `422 vlm_catalog_does_not_fit` |
+| DELETE | `/curation/vlm/local/select` | | `VlmLocalStatus` | |
+
+The API never restarts the VLM service. `POST /curation/vlm/local/select`
+records the desired model and returns `restart_required` with the host
+command. `served` changes only after that command ran and a probe recorded
+the new model.
+
+Host CLI: `openprocessor vlm list`, `openprocessor vlm status`,
+`openprocessor vlm use <id> [--force] [--yes]`, `openprocessor vlm apply`,
+`openprocessor vlm probe` and `openprocessor vlm key set <slug>`. `use` checks
+fit, handles the training lock and pause, rewrites the `.env` file (restoring
+it on failure), waits for the new model, probes and unpauses.
+
+## Items and the item wire format
+
+An item is one detected object (a crop) in a source image. Every route that
+returns an item returns the same shape, built by one serializer
+(`serialize_item` in `src/services/curation/wire.py`). The wire names are
+fixed. They do not change when a deployment overrides its storage field names
+with `OP_REGION_FIELD_*`; the translation happens once at the boundary.
+`contracts/json/item_wire.json` lists the exact key set (106 keys, all always
+present, nullable where the schema says so) and `contracts/ts/itemWire.ts` is
+the TypeScript form. `tests/curation/test_wire_contract.py` pins the key set.
+
+### Item keys by group
+
+| Group | Keys |
+|---|---|
+| Identity and geometry | `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm` (`[x1, y1, x2, y2]` normalized to the source frame), `thumbnail_url`, `source`, `updated_at`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio` |
+| Class | `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `label_locked`, `test_holdout`, `proposal_name`, `proposal_chain` |
+| Exclusion and review | `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `needs_new_class`, `needs_new_class_note` |
+| VLM | `vlm_confidence`, `vlm_prompt_pack`, `vlm_endpoint`, `vlm_model`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name` |
+| Cluster | `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid` |
+| Probe and scores | `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `probe_actionable`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative` |
+| Region (item level) | `region_status`, `region_reason`, `region_rejection_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify` |
+| Region boxes | `region_boxes`, `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision` |
+| Import and combine | `import_ids`, `dataset_split`, `imported_at`, `proposed_by_import`, `on_negative_frame`, `import_standalone_region`, `origin_project`, `origin_item_id`, `origin_image_id`, `origin_split`, `combine_conflict`, `combine_conflict_origins`, `combine_merged_origins` |
+| Text | `item_text_lines` |
+
+Endpoint-specific extra keys on top of the item:
+
+| Endpoint | Items at | Extra keys |
+|---|---|---|
+| `GET /crops`, `GET /classes/{class_id}/crops` | `crops[]` | none |
+| `GET /crops/{crop_id}` | body | none |
+| `GET /review/{tab}` | `items[]` | `reason` |
+| `GET /regions` | `items[]` | `region_box_id` |
+| `GET /regions/training_candidates` | `items[]` | `region_box_id`, `selection_reason` |
+| `GET /regions/suspected_false_positives` | `items[]` | `region_box_id`, `suspected_fp_distance`, `nearest_fp_subid` |
+| `GET /search/text` | `items[]` | `semantic_score` |
+
+### Derived and special keys
+
+- `label_validated` is `class_validated` or `region_validated`.
+- `label_locked` is the server's evaluation of [the lock rule](#the-lock-rule)
+  for the whole item. A client disables nothing on its own reading of
+  provenance fields; it reads this flag.
+- `confidence` is the detector or classifier score stored at ingest,
+  whatever wrote the current label. `class_confidence` and
+  `class_confidence_source` are the confidence of the writer that set the
+  label. For a VLM source the VLM category (`vlm_confidence`) maps high
+  `0.92`, medium `0.70`, low `0.40` with source `vlm`. For a classifier
+  source it is the stored score with source `model`. Human, move, merge,
+  import, cluster-vote and unclassified-proposal labels have `null`.
+- `cluster_kind` is `class`, `candidate` or `unassigned`, from `cluster_id`
+  (see [Clusters](#clusters)). `cluster_similarity` is `1 - cluster_distance`.
+  `cluster_is_core` is similarity at or above `core_similarity_min` (served
+  on `GET /clusters`, default `0.75`). When the distance was measured against
+  a cluster the item has since left, the three distance keys are `null`.
+- `proposed_class_id` and `proposed_class_name` are the class a one-key
+  confirm applies, on every item endpoint: the VLM suggestion when there is
+  one, else `class_id` and `vlm_raw_class` or `class_name` or `""`.
+- `probe_actionable` is the server's accept decision for the probe's top-1
+  class. It is `true` only when `probe_in_scope` and `probe_disagreement` are
+  `true` and the probe's confidence is at least
+  `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (default 0.5, echoed as
+  `actionable_min_confidence` on `GET /probe/status`). Offer "accept model
+  class" only when it is `true`. `probe_disagreement` is `null` when the
+  item's class is outside the probe's class set.
+- `region_validated` is human validation only. The detection worker's
+  auto-confirm sets `region_auto_confirmed` instead: the region is accepted
+  but unreviewed and stays in the `regions` review tab.
+- `thumbnail_url` and each box's `thumbnail_url` are built from the
+  configured prefix, so `OP_API_PREFIX` and a frontend proxy prefix must
+  match.
+- `item_text_lines` is every OCR line read on the item crop
+  (`{text, box_norm, confidence, rel_height}`), `[]` when none. It is
+  filled only when item text is enabled (`OP_ITEM_TEXT_ENABLED`; lines below
+  `OP_ITEM_TEXT_MIN_CONFIDENCE` are not stored). The normalized search tokens
+  are storage-only and back the `item_text` filter of `GET /crops`.
+
+### VLM class suggestion
+
+`vlm_proposed_class_id` and `vlm_proposed_class_name` are derived from the
+stored document:
+
+| Stored state | `vlm_proposed_class_id` | `vlm_proposed_class_name` |
+|---|---|---|
+| `class_source` is `vlm` or `vlm_reclassified`, `class_validated` false, `class_id` set | `class_id` | `class_name` |
+| `class_source` is `vlm_new_class_pending`, `class_validated` false | `null` | the proposed new class name (`null` if absent) |
+| anything else, including `vlm_unmatched` and every validated class | `null` | `null` |
+
+`vlm_class_attempted_at` and `vlm_class_empty_reason` record when a VLM was
+last asked and why it gave no class: `no_answer`, `no_match`, `invalid_index`
+or `unparseable`; `null` when it answered. An empty answer leaves every class
+field as it was. It is not `vlm_unmatched`, which means the VLM named a label
+outside the registry (carried in `vlm_raw_class`). Such items stay out of the
+VLM selectors for 24 hours.
+
+Accepting a suggestion has no dedicated route:
+
+- a registry class: `PUT /crops/{crop_id}/label` or `PUT /crops/batch_label`
+  with `class_id` set to `vlm_proposed_class_id` (`label_source:
+  "human_confirmed"` marks an accepted suggestion);
+- a new class: `POST /classes` with `{name}` set to
+  `vlm_proposed_class_name` (`409` if it exists), then label with the new
+  `class_id`. To resolve every item that proposes one name at once, use
+  `POST /review/new_class_proposals/resolve`.
+
+### `class_source` and `label_source`
+
+`GET /class_sources` returns `{class_sources: [{id, label, role,
+short_label}]}`, every `class_source` value this deployment can write.
+Ingest values come first and derive from the configured ingest profiles
+(`OP_INGEST_PRIMARY_*`, `OP_INGEST_SECONDARY_*`). `role` is one of
+`proposal`, `low_conf`, `model`, `vlm`, `vlm_unmatched`,
+`vlm_new_class_pending`, `vlm_reclassified`, `cluster`, `human`, `merge`,
+`label_import`. Label routes take a caller-chosen `label_source`, so a
+client renders an id it does not know verbatim. `contracts/ts/classSources.ts`
+is generated from the catalog.
+
+Fixed ids include `vlm`, `vlm_unmatched`, `vlm_new_class_pending`,
+`vlm_reclassified`, `cluster_majority_agreement`, `human`, `human_move`,
+`class_merge` and `external_label` (a validated dataset import).
+
+### `region_boxes`
+
+Regions are a list per item. One region is a list of one; there is no
+separate single-box shape. Each element:
+
+| Key | Meaning |
+|---|---|
+| `box_id` | `b<N>`, stable within the item and never reused after a delete |
+| `bbox_norm` | `[x1, y1, x2, y2]` in the source-image frame, always |
+| `state` | `proposed`, `accepted`, `rejected` or `false_positive` |
+| `score`, `detector`, `detector_version`, `source`, `detected_at` | provenance. A box a human draws or moves has `detector` set to the profile's human detector name, `score` 1.0 and `source` `human` |
+| `bbox_correct`, `confidence` | the verifier's verdict on the geometry and its category; `bbox_correct` is `null` when no verdict was given |
+| `rejection_reason` | why the box is `rejected` (see below) |
+| `text`, `text_raw`, `text_source`, `text_engine_version`, `text_confidence`, `text_vlm`, `text_ocr`, `text_choice`, `text_vlm_invalid`, `text_disagreement` | per-box text, only when the region profile reads text |
+| `cluster_id`, `cluster_subid`, `cluster_distance` | per-box region cluster placement |
+| `locked` | server-derived: [the lock rule](#the-lock-rule) for this box |
+| `bbox_in_parent` | server-derived: the box in the item-crop frame, clamped to `[0, 1]`; `null` when the item has no usable `bbox_norm`. Draw it on the item thumbnail as is |
+| `thumbnail_url` | server-derived: `GET /crops/{crop_id}/region_thumbnail?box_id=<box_id>` |
+
+Item-level summaries: `region_count` counts `accepted` boxes,
+`region_rejected_count` counts `rejected` ones, `region_max_score` is the best
+score, `region_set_complete` says the worker finished the set, and
+`region_revision` is the token for `expected_region_revision`. It advances on
+every write that changes what an editor sees.
+
+Embeddings per box live in a separate nested field (`region_box_embeddings`)
+that is not on the wire. A box a human moved is recognized as stale and
+re-embedded.
+
+The item `region_status` is derived from the boxes in a fixed order:
+`detected` if any box is `accepted`, else `false_positive` if any box is
+`false_positive`, else `pending_verification` if any is `proposed`, else
+`verify_rejected` if any is `rejected`, else the empty status. The item-level
+`region_rejection_reason` mirrors the best rejected box only when the item
+has no `accepted` or `false_positive` box.
+
+A verifier-rejected box is kept with `state: rejected`. Its
+`rejection_reason` is `region_visible_elsewhere` (the verifier says the
+region is elsewhere), `sanity_reject:<gate reason>` (the geometry gate),
+`verifier_no_verdict` (no verdict after the allowed attempts), or the
+human reason. `GET /regions/vocabulary` serves these as `rejection_reasons[]`
+(`id`, `label`, `kind` of `model_verdict`, `automatic`, `needs_human` or
+`human`, `match` of `exact` or `prefix`, `label_template`). A rejected box is
+never an accepted region: browse, clustering and export ignore it. A human
+reverses a rejection with a confirm write; region undo restores it.
+
+### Text reading
+
+A box's `text` is the chosen reading. Which reader fills it is the region
+profile's `text_reader`:
+
+| `text_reader` | Region OCR runs | `text` |
+|---|---|---|
+| `none` | never | no text on the box |
+| `vlm` | only when no VLM is configured | the VLM's reading |
+| `ocr` | always | the OCR reading (the VLM's if OCR read nothing) |
+| `vlm_then_ocr` (default) | when the VLM read nothing | the VLM's, else the OCR's |
+| `both` | always | the VLM's, else the OCR's |
+
+- `text_source` is `vlm`, `ocr` or `human`. `text_engine_version` is the VLM
+  model id or the OCR detector and recognizer ids. `text_confidence` is the
+  VLM category mapped to 0.92, 0.70 or 0.40, or the minimum recognition score
+  of the kept OCR lines. `text_raw` is every OCR line, unfiltered. `text_vlm`
+  and `text_ocr` are each reader's own reading. `text_disagreement` is
+  `true` or `false` when both valid readings exist, else `null`.
+- `text_choice` is why the chosen reading won: `readers_agree`,
+  `vlm_preferred`, `vlm_only`, `ocr_only`, `ocr_mode`, `vlm_invalid`,
+  `no_valid_reading` (`text` is `null`) or `human`.
+- `text_vlm_invalid` says why a VLM reading is not text: `placeholder`,
+  `no_reading`, `sequence`, `charset`, `too_short`, `too_long`, `format`.
+- The rules and the choice values are served as `text_rules` and
+  `text_choices` on `GET /regions/vocabulary` (`null` rules without a
+  profile). A reading that is a "no reading" word, a placeholder from the
+  active pack, a repeated or ascending sequence (when the profile rejects
+  them), or outside the profile's charset, length or format is not text.
+- With no VLM configured the worker calls no VLM. Detector regions are
+  written `detected` with `region_verified` false (chain entry
+  `<src>:accepted_unverified`) and their text comes from OCR.
+- The VLM's reply keys `region_bbox_correct`, `region_confidence` and
+  `region_text` are a fixed protocol of the prompt packs. They are stored as
+  the box's `bbox_correct`, `confidence` and `text`.
+- `scripts/curation/rederive_region_text.py` re-applies the rules to stored
+  box text (dry run by default).
+
+### `region_detector_chain`
+
+A list of strings, oldest first, each `<actor>:<event>` with no version or
+timestamp, unique per document and capped at 16. `<det>` is the profile's
+detector, `<seg>` its segmenter, `<ocr>` its OCR recognizer and `<src>`
+whichever produced the candidate.
+
+| Entry | Meaning |
+|---|---|
+| `<det>:hit`, `<det>:miss` | the detector found, or found no, candidate |
+| `<seg>:hit`, `<seg>:miss` | the segmenter found, or found no, candidate |
+| `vlm_visible:yes`, `vlm_visible:no` | the VLM pre-filter saw, or did not see, a region |
+| `vlm_visible:no_verdict` | no verdict after the allowed attempts; the item goes on to detection |
+| `<src>:combined_verify_ok` | the VLM confirmed the candidate (written `detected`) |
+| `<src>:combined_verify_reject`, `...:region_visible_elsewhere`, `...:verifier_no_verdict` | the VLM rejected the candidate, with the reason |
+| `<src>:vlm_reject:verifier_no_verdict` | the same, from the per-crop cascade |
+| `<src>:combined_no_region_visible` | the VLM sees no region at all |
+| `<src>:sanity_reject:<reason>` | the geometry gate refused the box |
+| `<seg>:skip_vlm_verify` | a high-score segmenter box written without a VLM call |
+| `<src>:accepted_unverified` | no VLM configured |
+| `<ocr>:text_hint:hit`, `:miss`, `:no_region_shape`, `<seg>:text_hint:miss` | the OCR-hinted segmenter re-pass |
+
+A VLM reply that sees a region but gives no box verdict is not a reject.
+Nothing is written and the item stays pending for a retry. Retries are
+bounded per item and stage by `OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS`
+(default 3). At the cap the combined stage writes `verify_rejected` with
+`verifier_no_verdict` and keeps the box rejected so a human can confirm it.
+A transport failure (no reply) is retried and never counted.
+
+Readers match whole entries with `term` queries. For example
+`GET /regions/training_candidates?mode=detector_blind_spots` requires
+`<det>:miss`.
+
+### Region lifecycle vocabulary
+
+`GET /regions/statuses` serves the lifecycle. The source is
+`src/config/region_state.py`, also emitted to `contracts/ts/regionStatus.ts`.
+
+```json
+{"statuses": [{"value": "no_region_visible", "label": "no region visible", "role": "absent",
+               "terminal": true, "human_writable": true, "clears_box": true, "wants_reason": true}],
+ "confirm_status": "detected", "reject_status": "no_region_visible",
+ "false_positive_status": "false_positive",
+ "box_states": [{"value": "accepted", "label": "accepted", "role": "accepted", "tone": "accepted",
+                 "human_writable": true, "exported": true, "dashed": false, "dim": false, "badge": null}],
+ "box_state_routes": [{"route": "PUT /crops/{crop_id}/regions",
+                       "states": ["proposed", "accepted", "rejected", "false_positive"],
+                       "new_box_default": "accepted"}]}
+```
+
+Item statuses: `pending_detection`, `pending_verification`, `detected`,
+`verify_rejected`, `no_region_box`, `no_region_visible`, `detection_failed`,
+`false_positive`. `role` is `pending`, `positive`, `rejected`, `absent`,
+`false_positive` or `failed`. `tone` is a semantic meaning, not a color.
+`box_state_routes` lists which box states each write route accepts and the
+default state of a new box.
+
+## Crops: browse, label, undo
+
+### Browse
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/crops` | `CropsPageResponse`: `crops[]`, `total`, `page`, `page_size`, `method`, `version`, `n_pool` |
+| GET | `/crops/{crop_id}` | item (`404` when unknown) |
+| GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500 |
+| GET | `/crops/{crop_id}/history` | `{crop_id, entries[]}`: `class_id_history` oldest first |
+| GET | `/classes/{class_id}/crops` | `CropsPageResponse` (`page`, `page_size`, `include_test`) |
+
+`GET /crops` query parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `page`, `page_size` (1 to 500, default 50), `limit` | paging. `limit` is an alias of `page_size` and wins when both are set |
+| `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. Fields: `updated_at`, `created_at`, `confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_distance`, `mistakenness_score`, `uniqueness_score`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
+| `class_id`, `cluster_id`, `label_source`, `class_source`, `label_validated`, `source` | exact filters |
+| `needs_new_class`, `review_dismissed` | boolean filters |
+| `ids` | comma-separated, at most 500. Returns exactly those items in that order, drops missing ids and ignores every other filter |
+| `include_test`, `include_excluded` | include frozen test-holdout and excluded items |
+| `max_rank`, `min_blur_ratio`, `classifier_conf_lt`, `conf_min`, `conf_max` | numeric bands (`400` if `conf_min` is above `conf_max`) |
+| `order` | `default`, `outliers`, `core_first`, `diverse`. `outliers` and `core_first` need `cluster_id` and order by distance to the live centroid of the matched members. Under `core_first` each item's cluster distance keys are recomputed against that centroid. `method` reports the order that ran |
+| `k` | 1 to 10000, `order=diverse` only: the first `k` k-center-greedy picks; `total` is then `k` |
+| `item_text` | at most 200 characters. Every letter or digit word must be a case-insensitive prefix of one of the item's text tokens. A query with no letter or digit is `400` |
+| `import_id` | items whose label or proposal came from that dataset import |
+| `dataset_split` | `train`, `val` or `test` as imported |
+| `on_negative_frame` | `true` keeps only items on a reviewed-negative frame, `false` hides them |
+| `proposed_by_import` | `true` keeps items an import proposed, `false` hides them |
+
+### Human class writes
+
+Every write below is a recorded human write: it snapshots the item's
+pre-write class state into `class_id_history`, so the undo routes can restore
+it. Human writes are not blocked by [the lock rule](#the-lock-rule). The lock
+applies to automated writers.
+
+| Method | Path | Body | Response | Notes |
+|---|---|---|---|---|
+| PUT | `/crops/{crop_id}/label` | `CropLabelRequest`: `class_id`, `label_source` (`human` default, `human_confirmed`, `new_class_proposal`) | `{crop_id, class_id, class_name}` | `400` for an unknown `class_id`, `404` for an unknown crop. The server always writes `class_source: "human"` and `class_validated: true` |
+| PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[]}` | `conflicts` is `[{crop_id, current_source}]`, not written. `updated_ids` are the ids to pass to `undo_batch` |
+| POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[]}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
+| POST | `/crops/flag_new_class` | `{crop_ids, note}` | `{flagged, errors}` | sets `needs_new_class` |
+| POST | `/crops/batch_exclude` | `{crop_ids, reason}` | `{excluded, errors}` | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
+| POST | `/crops/batch_unexclude` | `{crop_ids}` | `{unexcluded, errors}` | restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
+| POST | `/crops/{crop_id}/discard` | `{clear_class: true, dismiss_from_review: false}`, `422` if both false | the item | clears class, provenance and validation and drops the item to the residual pool, and/or hides it from every review tab. Recorded and undoable |
+| POST | `/crops/discard_batch` | `{crop_ids, clear_class, dismiss_from_review}` | `{items[], discarded, conflicts, not_found}` | |
+| POST | `/crops/{crop_id}/review_dismiss` | | `{crop_id, dismissed}` | one-way review hide, not recorded. Prefer `discard` with `clear_class: false` and `dismiss_from_review: true` |
+| POST | `/crops/{crop_id}/review_undismiss` | | the item | clears `review_dismissed_at` |
+| POST | `/crops/{crop_id}/vlm_dismiss` | | the item | rejects the VLM's class suggestion. While the VLM's suggestion is that one the suggestion keys are `null`. A different later suggestion shows again. `409` when there is no suggestion |
+
+### Undo
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| POST | `/crops/{crop_id}/label/undo` | | the restored item | `404` unknown crop, `409` nothing to undo |
+| POST | `/crops/label/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
+| DELETE | `/crops/{crop_id}/label` | | `{crop_id, reset}` | the same restore. With nothing on record it resets the crop to unlabeled instead of `409`. It is itself an undo, so it is not recorded |
+| POST | `/crops/{crop_id}/region/undo` | | the restored item | `404`, `409` nothing to undo |
+| POST | `/crops/region/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
+| POST | `/crops/{crop_id}/vlm_dismiss/undo` | | the restored item | `409` no dismissal to undo |
+
+- A class snapshot holds `class_id`, `class_name`, `class_source`,
+  `label_source`, `confidence`, `class_detector`, `class_detector_version`,
+  `class_labeler`, `class_labeled_at`, `class_validated`, `cluster_id` and
+  `cluster_subid`. Repeated undo steps back through successive human writes.
+  A restored validated class sits in its class cluster
+  (`cluster_id == class_id`); anything else returns to the cluster recorded
+  before the write (`null` is the residual pool). Undo on an excluded item
+  keeps it excluded.
+- A region snapshot holds `region_boxes` with its summaries,
+  `region_status`, `region_verified*`, `region_verifier*`,
+  `region_validated`, `region_label_source`, `region_detected_at` and
+  `region_rejection_reason`. Class fields are untouched.
+- History entries (`GET /crops/{crop_id}/history`) add `writer` (for example
+  `human:label_crop`, `human:discard_crop`, `class_merge`, `vlm_pipeline`) and
+  `at`. Keys that were not recorded are `null`.
+- Which route to call: label or confirm with `PUT /crops/{crop_id}/label`;
+  hide or clear with `POST /crops/{crop_id}/discard`; revert with the undo
+  routes.
+
+## Regions: multi-box edits and queues
+
+The region write routes, `GET /regions`, the region undo routes and the region
+cluster card and refine routes need an active region profile. Without one they
+answer `409` with the plain detail `no region profile is configured`.
+
+### Per-box edits
+
+These are the only human routes that write box geometry or per-box state.
+Every one builds its update through the same code, snapshots the pre-write
+region state for [region undo](#undo), and returns the post-write item so a
+client adopts it instead of re-deriving it.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| PUT | `/crops/{crop_id}/regions` | `ItemRegionsRequest` | `{crop_id, item}` |
+| PUT | `/crops/batch_regions` | `ItemBatchRegionsRequest` | `{updated, conflicts[], invalid[], items[]}` |
+| PATCH | `/crops/{crop_id}/regions/{box_id}` | `BoxPatchRequest` | `{crop_id, box_id, item}` |
+| POST | `/regions/batch_box_state` | `BatchBoxStateRequest` | `{updated, conflicts[], invalid[], items[]}` (rows: one per targeted box, with `region_box_id`) |
+| PATCH | `/crops/{crop_id}/region_meta` | `ItemRegionMetaRequest` | `{crop_id, updated_fields[], item}` |
+| POST | `/regions/batch_status` | `CropBatchStatusRequest` | `{updated, conflicts[], invalid[], items[]}` |
+
+`PUT /crops/{crop_id}/regions` sets the full box list, in display order.
+An element (`BoxWriteElement`: `box_id`, `bbox_norm`, `state`, `text`; extra
+keys are `422`) is:
+
+| Element | Effect |
+|---|---|
+| `{box_id}` alone | the stored box is untouched |
+| `{box_id, bbox_norm}` | a moved box. Within `1e-4` per coordinate of the stored box it is a confirmation: the stored coordinates and provenance are kept. A different box is human geometry: `detector` is the human detector, `score` is 1.0, `source` is `human`, the verdict keys are cleared. State and text stay |
+| `{box_id, state}` or `{box_id, bbox_norm, state}` | also changes the state |
+| `{box_id: null, bbox_norm, state?}` | a new box. The server assigns the next `b<N>`. The default state is `accepted` |
+| a stored box that is omitted | deleted |
+
+Other fields: `frame` (`source` default; `parent` is the item crop's own
+frame, projected through the item's stored `bbox_norm`, `422` if the item has
+none), `region_status` (a whole-set status applied to the built list in the
+same write), `region_label_source` (default `human`) and
+`expected_region_revision`. An empty list is the human "no region visible".
+
+`PUT /crops/batch_regions` replaces each crop's list with the same new boxes
+(typically `[]`). Every element must have `box_id: null` (`422
+box_id_in_batch`).
+
+`PATCH /crops/{crop_id}/regions/{box_id}` takes `state`, `text`,
+`region_label_source` and `expected_region_revision`. At least one of `state`
+and `text` is required (`400`). Siblings are untouched. Reversing a rejection
+of one box is `{"state": "accepted"}`, which keeps the box's provenance and
+clears its rejection reason.
+
+`POST /regions/batch_box_state` flips one state on named boxes across items
+(`targets: [{crop_id, box_id}]`, `state`, `region_label_source`,
+`expected_region_revisions` keyed by crop id). Only the named boxes change.
+
+`PATCH /crops/{crop_id}/region_meta` takes `region_status`,
+`region_rejection_reason` and `region_label_source`; only provided fields are
+written. `POST /regions/batch_status` takes `crop_ids`, `region_status` and
+`region_label_source` and flips every box of each item. The deprecated
+`region_verified` key is accepted and ignored: the server derives it.
+
+Errors for the box routes:
+
+| Status | Cause |
+|---|---|
+| `400` | `PATCH` with neither `state` nor `text`; a `region_status` that is not human-writable on `region_meta` and `batch_status` |
+| `404` | unknown crop |
+| `409 region_conflict` | stale `expected_region_revision`; the body carries `current_region_revision`, `current_box_ids` and the current `item` |
+| `409` | no region profile is active |
+| `422 too_many_boxes` | more elements than `limits.max_boxes_per_write` (`OP_REGION_MAX_BOXES_PER_WRITE`, default 500; served on `GET /health` and `GET /regions/vocabulary`) |
+| `422 region_text_disabled` | a `text` element on a profile whose `text_reader` is `none` |
+| `422` | a `state` not allowed on that route, an out-of-range or degenerate box, a new box without `bbox_norm`, a duplicate or unknown `box_id`, `no_region_visible` together with boxes, `detected` with no accepted or confirmable box |
+
+In the batch routes a per-crop refusal is reported in `invalid[]` (`{crop_id,
+detail}`) and a stale revision in `conflicts[]`. The rest are written.
+
+### Lifecycle rules
+
+Every human region writer enforces, server-side:
+
+- a status with `clears_box` (`no_region_visible`) empties `region_boxes`,
+  whichever writer set it. An empty list written by `PUT` is that same
+  status;
+- `region_verified` is `true` exactly when `region_status` is `detected`. It
+  is never taken from the request;
+- `detected` on an item with no accepted or confirmable box is refused. A
+  whole-set confirm settles the `proposed` boxes and never overrides a
+  per-box decision. When nothing is `proposed` or `accepted` it reopens only
+  the boxes the verifier rejected. A human's own reject and a sanity-gate
+  reject are never reopened by it;
+- human writes set `region_validated`. A box write that leaves a `proposed`
+  box is a partial review and leaves it as stored;
+- a box that becomes `false_positive` is parked in the permanent FP cluster
+  (id `-100`); one that leaves it is released;
+- a write that re-asserts the stored status re-derives nothing: cluster
+  placement stays;
+- a human reject stamps the box as human-owned; a human-typed text sets
+  `text_source` to `human`.
+
+Writable item statuses are the `human_writable` rows of
+`GET /regions/statuses`: `detected`, `verify_rejected`, `no_region_visible`
+and `false_positive`.
+
+### Region browse, clusters and false positives
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/regions` | `RegionRowPage`. Filters: `page`, `page_size` (max 200), `class_id`, `cluster_id` (the item cluster), `region_cluster_id`, `region_cluster_subid`, `sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
+| GET | `/regions/statuses` | the lifecycle vocabulary (see above) |
+| GET | `/regions/vocabulary` | `RegionVocabularyResponse`: `detectors[]` (`id`, `label`, `role`, `filterable`), `region_sources[]`, `chain_actors[]`, `rejection_reasons[]`, `text_rules`, `text_choices`, `region_profile` summary. Built from the active profile, the ingest profiles and the VLM registry, never from a fixed model id |
+| GET | `/regions/training_candidates` | `RegionRowPage`, `mode` required |
+| GET | `/regions/suspected_false_positives` | `RegionRowPage`. `threshold` (0 to 2) is optional; omitted, the server applies `default_threshold` (0.35) and serves both |
+| POST | `/regions/cluster` | job. Query `max_rank`, `auto_fp_threshold` (default 0.2), `rebuild_fp_centroids` (default true), `force_repartition` |
+| GET | `/regions/cluster/status` | job state |
+| GET | `/regions/clusters` | cluster cards (`max_clusters`, `per_cluster`, `max_rank`) |
+| POST | `/regions/clusters/refine/{cluster_id}` | AHC refine of one region cluster |
+| POST | `/regions/fp_centroids/build` | rebuild the false-positive sub-centroids from FP boxes |
+| GET | `/regions/fp_centroids/status` | |
+| GET | `/crops/{crop_id}/region_thumbnail` | `box_id` is required (`422 box_id_required`, `404 unknown_box_id`), `size` 32 to 512. Renders that box, also a rejected one |
+
+Rows. `GET /regions`, `/regions/training_candidates`,
+`/regions/suspected_false_positives`, the representatives of
+`/regions/clusters` and the items of the batch box routes are rows: the full
+wire item plus `region_box_id` (`null` for an item-level row). `total` counts
+items (`hasMore = page * page_size < total`), `total_rows` counts rows, and a
+page returns every row of its items. `rows_truncated` is `true` when an item
+on the page matched more boxes than `index.max_inner_result_window` reports,
+so some of its rows are missing.
+
+`GET /regions` filters. The box filters (`detector`, `min_score`,
+`max_score`, `text`, `region_cluster_id`, `region_cluster_subid`,
+`box_state`) all apply to the same box, and each matching box is its own row.
+With no box filter and no `status` the rows are the accepted and
+`false_positive` boxes. The item filters (`status`, `class_id`, `cluster_id`,
+`verified`, `max_rank`) select items. `status` is any value from
+`GET /regions/statuses` (`400` otherwise) and lists every item in that status
+as item rows. `box_state` is `proposed`, `accepted`, `rejected` or
+`false_positive` (`400` otherwise).
+
+`training_candidates` modes:
+
+| Mode | Unit | Selects |
+|---|---|---|
+| `detector_blind_spots` | box | the detector missed and the segmenter found it (`<det>:miss` in the chain) |
+| `low_conf_correct` | box | accepted boxes with a low score |
+| `false_positives` | box | boxes a human marked false positive |
+| `disagreement` | item | detector and segmenter both fired (`<det>:hit` and `<seg>:hit`) |
+| `human_corrected` | item | a human moved or drew the box over a machine proposal |
+
+An unknown mode is `400`. Each row's `selection_reason` states why it was
+selected. `GET /training_cohorts` serves the same cohorts as links.
+
+`GET /regions/suspected_false_positives` scores boxes: an accepted box with a
+vector, of an item that is not test-holdout and not human-decided, and not
+itself a human's or an import's box. Each row is one box with
+`suspected_fp_distance` and `nearest_fp_subid`. It pages rows directly, so
+`total == total_rows`. The matcher is double-layered: the build sub-types the
+false-positive boxes into `k` sub-clusters and keeps one centroid per
+sub-type. A candidate matches the nearest of them. Re-run the build after
+marking a batch of false positives.
+
+Region clustering is over boxes. A card's `size` is the number of items with
+at least one box in the cluster and `box_count` is the number of boxes.
+`representatives` are rows for the boxes nearest the centroid, next to
+`representative_crop_ids`, `representative_box_ids` and
+`representative_thumb_urls`. The permanent false-positive cluster (`-100`)
+pins first. The count fields name their unit: the cluster job result has
+`n_boxes`, `n_boxes_changed` and `n_items_written`; a region refine has
+`n_boxes` and `n_boxes_updated`; an item refine has `n_items` and
+`n_items_updated`; the centroid build has `n_boxes`; the automatic FP pull
+has `n_boxes_scanned` and `n_boxes_moved`.
+
+Automated region writers (worker, clustering, reprocess) never touch a locked
+box or a human-final item (see [the lock rule](#the-lock-rule)).
+
+### Cohorts
+
+`GET /training_cohorts?class_id=` returns `{cohorts: [{id, label,
+description, cutoffs, endpoint, params, row_kind}]}`. Fetch a cohort's rows
+with `GET {endpoint}` and `params`. Core cohorts are `validated`,
+`needs_labeling`, `low_confidence` (`cutoffs.classifier_conf_lt`, the
+backend's review band) and `model_disagreements` (`row_kind: crop`). With a
+region profile active, the `/regions/training_candidates` modes follow
+(`row_kind: region`).
+
+### Per-class thresholds
+
+One definition (`src/services/curation/dataset_thresholds.py`) serves both
+training preflight and every count display:
 
 ```json
 "thresholds": {"block_below": 20, "warn_below": 500, "min_test_per_class": 5,
@@ -167,2068 +1175,975 @@ the training preflight and served wherever a client shows class counts:
                "aug_target_min": 500, "aug_target_max": 3000}
 ```
 
-`min_train_per_class` / `min_val_per_class` are the per-class instance
-minimums of the `export_class_split_coverage` preflight check (see
-"Export" below).
+`adequacy` is `block` below `block_below` validated items, `warn` below
+`warn_below`, else `ok`. `aug_target` is the validated count clamped to
+`[aug_target_min, aug_target_max]`; `aug_gap` is `aug_target` minus the
+validated count. `trainable` is validated minus test-holdout minus excluded;
+`trainable_gap` is `max(0, block_below - trainable)`. These appear on
+`GET /classes` (`thresholds`, per-class `adequacy`, `trainable`,
+`trainable_gap`), `GET /stats/classes` (also `aug_target`, `aug_gap`),
+`POST /train/preflight` and `GET /test_holdout/stats`
+(`min_test_per_class` and per-class `deficient`).
 
-- `adequacy` (`ok` / `warn` / `block`) of a class's validated count:
-  `< block_below` → `block` (preflight refuses), `< warn_below` → `warn`,
-  else `ok`. The frontend's old `100` "critical" line has no backend
-  meaning and is gone.
-- `aug_target` = validated count clamped to `[aug_target_min,
-  aug_target_max]`; `aug_gap` = `aug_target - validated_count`.
+## Review tabs
 
-| Endpoint | Adds |
+`GET /review/tabs` serves the tab catalog:
+`{tabs: [{id, label, description, filters, filter_defaults, filter_specs}], empty_state}`.
+`filters` is the list of query parameters a tab honors (a parameter that is
+not listed is accepted and ignored). `filter_defaults` is the value applied
+when a parameter is omitted. `filter_specs` self-describes each enum filter
+(`{param, kind: "enum", label, options: [{value, label}]}`) so a client
+renders it generically. `empty_state` is `{has_probe_predictions,
+has_item_scores, has_imported_labels}`. The `regions` tab is offered only
+while a region profile is active.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/review/tabs` | `ReviewTabsResponse` |
+| GET | `/review/{tab}` | `items[]` (item plus `reason`), `total`, `page`, `page_size`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
+| GET | `/review/{tab}/locate` | where one item sits in a tab. `crop_id` required. Same filters and `sort` as the queue plus `page_size` |
+| GET | `/review/new_class_proposals/summary` | `size`, `samples`. Counts and terms behind the `new_class_proposals` tab |
+| POST | `/review/new_class_proposals/resolve` | bulk-resolve every item proposing one name. `dry_run` query |
+| GET | `/review/raw_label_clusters` | `size`, `samples_per_cluster`. Groups of unmatched raw VLM answers |
+| GET | `/review/unmatched_terms` | `size`. Most common unmatched answers |
+
+Tabs:
+
+| Tab | Selects |
 |---|---|
-| `POST /train/preflight` | `thresholds` |
-| `GET /stats/classes` | `thresholds`; per row `adequacy`, `aug_target`, `aug_gap` |
-| `GET /classes` | `thresholds`; per class `adequacy` |
-| `GET /test_holdout/stats` | `min_test_per_class`; per `by_class` bucket `deficient` (`doc_count < min_test_per_class`) |
+| `all` | the unified queue, most uncertain first. Includes `combine_conflict` items |
+| `mismatches` | the VLM's reply did not match any registry class. `reason` says why: no match, a named registry class at low confidence that was not applied, or no class answer |
+| `vlm_low_conf` | a VLM-sourced label whose `vlm_confidence` is `medium` or `low` |
+| `outliers` | far from the cluster centroid |
+| `uncertainty` | high probe entropy |
+| `model_disagreements` | validated items where the probe disagrees with the human label |
+| `regions` | items with an accepted but unvalidated box, plus verifier-rejected items (see `region_status`) |
+| `primary_low_conf`, `classifier_blind_spots` | low-confidence and blind-spot items of the primary subject. `max_rank` defaults to 2 |
+| `new_class_proposals` | items flagged `needs_new_class` by a human, or `class_source: vlm_new_class_pending`. Excludes items whose last VLM attempt had no answer and items that already have a class |
+| `imported` | validated labels a dataset import wrote (`import_id`, `dataset_split`) |
 
-### Augmentation presets — `GET /train/augmentation_presets`
+Common filters: `include_test`, `max_rank`, `min_blur_ratio`,
+`min_mistakenness`, `hide_near_duplicates`, `class_id`, `source`,
+`conf_min`, `conf_max` (`400` if `conf_min` is above `conf_max`),
+`combine_conflict`, `on_negative_frame`, `sort`, `page`, `page_size` (max
+200). Tab-only filters: `text` and `region_status` on `regions`; `import_id`
+and `dataset_split` on `imported`.
 
-The one preset catalog is `src/services/training/augmentation_presets.py`;
-the trainer image copies that file next to `docker/trainer/augment.py`,
-which builds its `PRESETS` from it. Response
-(`AugmentationPresetsResponse`): `presets[]` of `{id, label, description,
-orientation_sensitive}` (in display order) and `default`
-(`"balanced_default"`, used when a job omits `augmentation.preset`).
-`orientation_sensitive: true` means horizontal flip is off for the whole
-run. A client renders this list and never hardcodes ids.
+`region_status` on the `regions` tab:
 
-An enabled `augmentation` block naming any other `preset`:
+| Value | Items served |
+|---|---|
+| `all` (default) | an accepted but unvalidated box, plus `verify_rejected` items with at least one rejected box |
+| `detected` | an accepted box only |
+| `verify_rejected` | items with only rejected boxes |
+| `has_rejected_box` | any rejected box, whatever the item status (`region_rejected_count >= 1`) |
 
-- `POST /train/preflight` → check `augmentation_preset`, severity
-  `block`, message `unknown augmentation preset '<id>'; valid presets:
-  none, balanced_default, …`, `detail: {preset, valid_presets}`
-  (otherwise `ok`; a disabled block isn't judged);
-- `POST /train/start` and `POST /train/start_campaign` → `422` with
-  `detail: {message, field: "augmentation.preset", valid_presets}`,
-  even with `force=true`, before any GPU claim or job write.
+`false_positive` and `no_region_visible` items never appear in the default
+mode. Any other value is `400`. A rejected candidate's `reason` names the
+rejection (`needs human review: ...` for `needs_human` reasons, `rejected:
+...` otherwise).
 
-The other `AugmentationSpec` fields aren't enumerable here:
-`albumentations` override keys are Albumentations transform names (the
-trainer logs and skips unknown ones), and `multiplier` is range-checked
-(`1..20`) by the model.
+Sort. An explicit `sort` is honored even when its field has no coverage.
+When omitted or `default`, the tab's own default applies (a deployment `sort`
+default from `PUT /settings` applies only to a tab without one). If that
+default orders by a field no item has, the queue falls back to the tab's next
+covered sort, ending at `recent`. `sort_applied` names the sort that ran and
+`sort_fallback_reason` says why the default was skipped. `PUT /settings`
+refuses a `sort` default whose field has no coverage. A zero-result page
+carries `empty_reason`, worded from live index state.
 
-### Training `eval` block — `GET /train/status*`, `GET /train/manifest/{job_id}`
+`GET /review/{tab}/locate` returns `{crop_id, in_queue, rank, page,
+page_size, total, reason, sort_applied, sort_fallback_reason}`. `rank` is
+0-based and `page` is 1-based. Outside the queue both are `null` and `reason`
+is `not_found` or `filtered_out`. It counts items sorting before the crop,
+so it works at any queue depth. Use it for deep links.
 
-`status.json`'s (and the manifest's `results.eval`) `eval` block reports the
-result of the trainer's post-training evaluation, and is deliberately
-explicit about which split every number came from:
+`GET /review/new_class_proposals/summary` returns `{total_pending,
+without_term, top_terms, flagged_terms, term_rules}`. The summary, the queue
+and the resolve route share one selection, so counts agree. Each term is
+`{label, count, sample_crop_ids, flag, class_id}`. `flag` is:
 
-```json
-{
-  "map50": 0.62,
-  "map50_95": 0.41,
-  "precision": 0.71,
-  "recall": 0.55,
-  "split": "test",
-  "val_last": {"map50": 0.9191, "map50_95": 0.742},
-  "per_class": [{"class_id": 0, "name": "widget", "precision": 0.8,
-                 "recall": 0.7, "f1": 0.75, "ap50": 0.79, "support": 12}],
-  "confusion_matrix_url": "/curation/train/artifacts/<job_id>/confusion_matrix.png"
-}
-```
-
-- `map50` / `map50_95` / `precision` / `recall` / `per_class` are the
-  **frozen test-split** numbers (a fresh `model.val(..., split='test')` pass,
-  Ultralytics' `DetMetrics.box.{map50,map,mp,mr}` + per-class rows) whenever
-  that pass ran and produced usable metrics. `split: "test"` marks this case.
-- When the test pass fails or the export has no `test` split, the same four
-  overall keys instead carry the **training-time validation** numbers (the
-  last row of `results.csv` — Ultralytics' per-epoch model-selection metric,
-  recorded every epoch against the `val` split) and `per_class` is absent.
-  `split: "val"` marks this case — a consumer MUST check `split` before
-  treating `map50`/`map50_95` as "how the model does on unseen data."
-- `val_last` (`{map50, map50_95}`) is **always** present when `results.csv`
-  had a row, regardless of `split` — the training-time validation numbers,
-  unambiguously named, for a consumer that specifically wants the training
-  curve rather than the headline metric.
-- `confusion_matrix_url` points at `GET
-  {api_prefix}/train/artifacts/{job_id}/{name}` (whitelisted filenames only:
-  `confusion_matrix.png`, `confusion_matrix_normalized.png`, `results.png`,
-  `results.csv`, `BoxP_curve.png`, `BoxR_curve.png`, `BoxF1_curve.png`,
-  `BoxPR_curve.png`) or `null` when the trainer never wrote one. The
-  underlying server filesystem path is never on the wire.
-- The promote gate (`POST /train/promote/{job_id}`, §15.2) reads this same
-  block — a run whose test pass failed (`split: "val"`, no `per_class`)
-  fails the gate's per-class check outright rather than silently passing on
-  val-split numbers relabeled as test.
-
-`mlflow_run_url` on the same payloads is rebuilt from `CurationConfig.
-mlflow_public_url` (`OP_MLFLOW_PUBLIC_URL`) + `mlflow_run_id` +
-`mlflow_experiment_id`; `null` when the public base isn't configured or
-either id is missing (older run) — the trainer's internal tracking-server
-hostname (`MLFLOW_TRACKING_URI`, a container name unreachable from a
-browser) never reaches the wire. `mlflow_run_id` is served either way.
-
-### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
-
-Queues the auto-label job (same job, same `GET /pipeline/auto_label/status`
-/ `POST /pipeline/auto_label/cancel`, `409` while one runs) scoped to one
-cluster with only the VLM stage: no re-clustering, no auto-promote, no cap.
-The server selects **every** unvalidated, non-holdout, non-excluded member
-(the global sweep's cost skips — classifier-confident, `vlm_unmatched`,
-recently combined-classified, a recent empty class answer — don't apply to
-an explicit request) and
-chunks them itself. Optional `?prompt_pack=`. Response: the job state
-(`args.cluster_id` echoes the scope). While running, `total` is the number
-of members selected; on completion `result.stages.unvalidated_after_promote`
-is that count, `result.stages.vlm` `{predicted, updated, …}`, and
-`result.unvalidated_remaining` counts what is still unvalidated in the cluster.
-The same scope is available as `?cluster_id=` on `POST
-/pipeline/auto_label[/start]`. A cluster-scoped job writes **only** to the
-members it selected: the index-wide stages (`cluster_id_normalize`,
-`cluster_residuals`, `auto_promote`) are skipped even if requested
-(`result.stages.<stage>` = `{skipped: true, reason: "cluster-scoped run: …"}`),
-and the post-VLM `cluster_id = class_id` pass runs on the selected items
-only (same for a `?class_id=`-scoped VLM stage).
-
-### Auto-label job by id — `GET /pipeline/auto_label/status/{job_id}`
-
-Poll the job a client started with the `job_id` its start response
-returned. Same body as `GET /pipeline/auto_label/status` (`job_id`,
-`status` `queued|running|completed|failed|cancelled|interrupted`, `stage`,
-`processed`, `total`, `started_at`, `finished_at`, `error`,
-`error_detail`, `result`, `args`, `pipeline`, backend/VRAM telemetry,
-`stage_durations`, `eta_seconds`, `elapsed_seconds`). The current job is
-read live; a job replaced by a later start answers with its final state
-(the newest 50 are kept). `404` for an id no job had (or not a 32-hex id).
-
-### Region shape warnings — deliberately none
-
-The region cascade's geometry gate (`is_plausible_region_bbox`,
-`src/services/detection/cascade_detect.py`) is geometry-only by design: an
-aspect-ratio / size envelope built from one domain's assumptions rejects
-legitimate regions from other domains. `DetectionProfile` carries no
-review-time shape envelope (its `aspect_*` / `auto_confirm_*` bands drive
-the OCR text-hint and the VLM-skip auto-confirm, not a verdict on a stored
-box), so the API serves **no** `region_shape_warning`. A client should not
-flag boxes by a shape prior of its own either.
-
-### Region lifecycle — `GET /regions/statuses`
-
-The single source is `REGION_STATUS_INFO` in `src/config/region_state.py`
-(also emitted to `contracts/ts/regionStatus.ts` by the codegen:
-`HUMAN_REGION_STATUSES`, `REGION_STATUS_ROLE`,
-`CONFIRM_STATUS_VALUE`, `REJECT_STATUS_VALUE`, `FALSE_POSITIVE_STATUS_VALUE`).
-
-```json
-{"statuses": [{"value": "no_region_visible", "label": "no region visible", "role": "absent",
-               "terminal": true, "human_writable": true, "clears_box": true, "wants_reason": true}, ...],
- "confirm_status": "detected", "reject_status": "no_region_visible",
- "false_positive_status": "false_positive"}
-```
-
-`statuses` lists every `RegionStatus` in enum order. `role` is one of
-`pending`, `positive`, `rejected`, `absent`, `false_positive`, `failed`.
-`wants_reason`: the UI may offer `region_rejection_reason` for it.
-
-Every human region writer (`PUT /crops/{id}/regions`, `PUT
-/crops/batch_regions`, `PATCH /crops/{id}/regions/{box_id}`, `POST
-/regions/batch_box_state`, `PATCH /crops/{id}/region_meta`, `POST
-/regions/batch_status`) enforces, server-side:
-
-- a status with `clears_box` (`no_region_visible`) empties `region_boxes`,
-  whichever writer set it (an empty list written by `PUT regions` is that
-  same status);
-- `region_verified` = (`region_status` == `confirm_status`), never taken
-  from the request (`detected` → `true`, every other human status → `false`);
-- `detected` on a crop with no accepted or confirmable box is refused
-  (`422` single / `invalid[]` batch). A whole-set confirm settles the
-  `proposed` boxes and never overrides a per-box decision; when nothing is
-  `proposed` or `accepted` it reopens only the boxes the *verifier*
-  rejected (a human's own reject, or a sanity-gate reject, is never
-  reopened). Reversing a rejection of one box is `PATCH
-  /crops/{id}/regions/{box_id} {state: "accepted"}`, which keeps the box's
-  detector provenance and clears its rejection reason;
-- human writes set `region_validated=true` (a box write that leaves a
-  `proposed` box is a partial review and leaves it as stored);
-  a box that becomes `false_positive` is parked in the FP cluster, and one
-  that leaves it is released;
-- a write that re-asserts the stored status re-derives nothing:
-  `region_verified` and the region-cluster placement stay as stored
-  (confirming still sets `region_verified=true`);
-- every write snapshots the pre-write region state for undo (see "Undo of
-  region writes" below).
-
-Each returns the post-write item, so a client adopts it rather than
-re-deriving the result.
-
-### Undo of region writes and VLM dismissals
-
-Every human region writer snapshots the item's pre-write region state
-(`region_boxes` with its `region_count` / `region_rejected_count` /
-`region_max_score` / `region_set_complete` summaries, `region_status`,
-`region_verified*`, `region_verifier*`, `region_validated`,
-`region_label_source`, `region_detected_at`, `region_rejection_reason`)
-into the
-item's `edit_history` (stored, not indexed, not on the wire; see
-`src/services/curation/edit_history.py` for why it is a kind-tagged list
-separate from `class_id_history`).
-
-- `POST /crops/{crop_id}/region/undo` — restore the region to its state
-  before the most recent not-yet-undone human region write (confirm,
-  reject, false positive, box edit, status or text change). Repeated calls
-  step back. Class fields are untouched. Response: the restored item.
-  `404` unknown crop; `409` nothing left to undo.
-- `POST /crops/region/undo_batch` (`CropRegionUndoBatchRequest`:
-  `crop_ids`) — the same per crop; undo a `batch_status` / `batch_regions`
-  by passing the same `crop_ids`. Response: `items`, `undone`,
-  `nothing_to_undo`, `conflicts`, `not_found`. `409` when no crop had
-  anything to undo.
-- `POST /crops/{crop_id}/vlm_dismiss/undo` — put the `vlm_dismissed_*`
-  fields back to their state before the latest `vlm_dismiss`, so the
-  dismissed suggestion is live again. Response: the restored item. `409`
-  no dismissal to undo.
-
-### Undo of human class writes
-
-Every human class write — `PUT /crops/{crop_id}/label`,
-`PUT /crops/batch_label`, `POST /crops/move` — appends a full snapshot of
-the item's pre-write class state to `class_id_history` (`class_id`,
-`class_name`, `class_source`, `label_source`, `confidence`,
-`class_detector`, `class_detector_version`, `class_labeler`,
-`class_labeled_at`, `class_validated`, `cluster_id`, `cluster_subid`,
-with `restorable: true`). The undo routes restore that snapshot; the
-frontend never decides between re-applying an earlier label and
-reverting — it calls undo and renders the returned item.
-
-- `POST /crops/{crop_id}/label/undo` — restores the crop to its state
-  before its most recent not-yet-undone human class write, whatever that
-  was (an earlier validated human label, a VLM suggestion, an ingest
-  proposal, unlabeled). Repeated calls step back through successive human
-  writes (each undo cancels one write). Response: the restored item
-  (shared wire format). `404` unknown crop; `409` nothing left to undo.
-- `POST /crops/label/undo_batch` (`CropUndoBatchRequest`) — the same,
-  per crop, independently; undo a `batch_label` / `move` by passing the
-  same `crop_ids`. Response: `items` (restored wire items), `undone`,
-  `nothing_to_undo`, `conflicts`, `not_found` (crop id lists). `409` when
-  no crop had anything to undo.
-- `DELETE /crops/{crop_id}/label` — kept for compatibility; same restore,
-  but with nothing on record it resets the crop to unlabeled (class and
-  provenance cleared, nothing invented) instead of `409`. Response:
-  `crop_id`, `reset`.
-
-- `POST /crops/{crop_id}/discard` (`CropDiscardRequest`: `clear_class`
-  default `true`, `dismiss_from_review` default `false`; `422` if both are
-  false) — a **recorded** human write. `clear_class` clears class,
-  provenance and validation and drops the item to the residual pool
-  (`cluster_id: null`); `dismiss_from_review` stamps
-  `review_dismissed_at`/`review_dismissed_by` so every `/review` tab hides
-  it. Response: the post-write item. `POST /crops/discard_batch`
-  (`CropDiscardBatchRequest`: `crop_ids` + the same flags) → `items`,
-  `discarded`, `conflicts`, `not_found`.
-
-Which one to call:
-
-| Action | Route | Recorded (undoable)? |
+| `flag` | Rule | Action |
 |---|---|---|
-| Label / confirm | `PUT /crops/{id}/label`, `PUT /crops/batch_label`, `POST /crops/move` | yes |
-| Discard (clear the class and/or hide from review) | `POST /crops/{id}/discard`, `POST /crops/discard_batch` | yes — undo restores class, placement and review visibility |
-| Undo the last recorded write | `POST /crops/{id}/label/undo`, `POST /crops/label/undo_batch` | is itself the undo; repeated calls step back |
-| `DELETE /crops/{id}/label` | legacy undo (same restore; resets to unlabeled when nothing is on record) | no — it *is* an undo, so Z can't reverse it |
-| `POST /crops/{id}/review_dismiss` | legacy one-way review hide | no — use `discard` with `clear_class: false, dismiss_from_review: true` instead |
+| `null` | worth creating | create a class |
+| `existing_class` | the normalized name is an active class (`class_id` set) | resolve with `class_id` |
+| `generic_parent` | the whole name is in `OP_NEW_CLASS_GENERIC_TERMS`, or is a registry group name | assign a specific class |
+| `non_object` | the name or one of its `_` tokens matches `OP_NEW_CLASS_NON_OBJECT_TERMS` (supports `prefix_*` and `*_suffix`) | discard or exclude |
 
-- `POST /crops/{crop_id}/vlm_dismiss` — reject the VLM's class
-  suggestion: stores `vlm_dismissed_class_id` / `vlm_dismissed_class_name`
-  / `vlm_dismissed_at`; while the VLM's suggestion is that one, the
-  suggestion keys are `null` and `proposed_class_*` no longer apply it
-  (`null` / `""`). A different later VLM suggestion shows again. The class
-  itself is untouched (label or discard separately). Response: the item.
-  `409` no suggestion, `404` unknown crop.
-- `GET /crops/{crop_id}/history` → `{crop_id, entries}`: `class_id_history`
-  oldest first, each entry the class state *before* one write
-  (`class_id`, `class_name`, `class_source`, `label_source`, `confidence`,
-  `class_detector`, `class_detector_version`, `class_labeler`,
-  `class_labeled_at`, `class_validated`, `cluster_id`, `cluster_subid`,
-  `review_dismissed_at`, `review_dismissed_by`) + `writer` (e.g.
-  `human:label_crop`, `human:discard_crop`, `vlm_pipeline`) + `at`;
-  unrecorded keys are `null`.
+Both term lists are empty by default. `term_rules` serves the active rules.
 
-- `POST /crops/{crop_id}/review_undismiss` — clear
-  `review_dismissed_at`/`review_dismissed_by` (back into the review
-  queues); for a `discard`-made dismissal `label/undo` does this *and*
-  restores the class. Response: the item. List hidden items with
-  `GET /crops?review_dismissed=true`; every item carries
-  `review_dismissed_at`.
-- `GET /crops/{crop_id}/context` → `{image: {image_id, image_path, width,
-  height, source, indexed_at} | null, items: [...]}`: the source frame and
-  every item detected in it (wire items, `crop_rank_in_image` ascending,
-  max 500).
+`POST /review/new_class_proposals/resolve` takes `{label, class_id | create:
+{class_name, group, notes}, label_source}`. Exactly one of `class_id` and
+`create` (`422` otherwise). An unknown `class_id` is `400`; a duplicate
+`create.class_name` is `409` with no item writes. It matches every pending
+item proposing `label` (never a validated, review-dismissed, excluded or
+test-holdout item), writes each item independently and re-checks at write
+time. Response: `{class_id, class_name, created, label, matched, matched_ids,
+updated, updated_ids, conflicts[], skipped}`. `dry_run=true` reports the match
+without writing or creating anything. Writes are undoable with
+`POST /crops/label/undo_batch` on `updated_ids`. A resolve over more pending
+items than its safety cap is `422`.
 
-Cluster placement on restore: a restored validated class sits in its
-class cluster (`cluster_id == class_id`, keeping the recorded
-`cluster_subid` only if it belonged to that cluster); anything else goes
-back to the cluster recorded before the write (`null` = residual pool).
-Undo on an excluded crop keeps it excluded and stores the restored
-validation/placement as the state `batch_unexclude` will apply.
+## Classes
 
-Human writes made before snapshots were recorded carry only
-`class_id`/`class_name`/`class_source`/`label_source`/`confidence`;
-undo restores those and leaves the rest `null`/unvalidated.
+A class has an integer id and a name inside one project. Names are unique
+among active classes of a project. See [Class identity](#class-identity).
 
-### Exclude / un-exclude
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/classes` | | `ClassListResponse`: `classes[]`, `thresholds`, `reserved_hotkeys` | `503` |
+| POST | `/classes` | `ClassCreateRequest`: `name`, `group`, `notes`, `hotkey_letter` | `201` registry entry | `422` bad name, `409` name or hotkey taken, `400`/`422` hotkey rules |
+| GET | `/classes/{class_id}` | | `ClassEntry` | `404` |
+| PUT | `/classes/{class_id}` | `ClassUpdateRequest`: `name`, `group`, `hotkey_letter` | registry entry | `404`, `409`, `422` |
+| POST | `/classes/merge` | `{source_id, target_id}`, query `dry_run` | merge report | `400`, `409` |
+| POST | `/classes/{class_id}/deprecate` | | registry entry | `404`, `409 class_still_referenced` |
+| POST | `/classes/{class_id}/restore` | | registry entry | `404`, `409`, `409 class_merged` |
+| POST | `/classes/sync_to_opensearch` | | sync report | |
+| GET | `/class_sources` | | `{class_sources[]}` | |
 
-`POST /crops/batch_exclude` sets `class_excluded`, moves the crop to
-cluster `-2` and clears `class_validated`, recording the prior
-validation and placement in `excluded_prior_class_validated`,
-`excluded_prior_cluster_id`, `excluded_prior_cluster_subid` (re-excluding
-keeps the first record). `POST /crops/batch_unexclude` restores them: a
-validated crop returns to `cluster_id == class_id` (sub-cluster kept if
-it was in that cluster); an unvalidated one drops to the residual pool
-(`cluster_id: null`). Crops that aren't excluded are left untouched.
-Response shapes unchanged (`excluded`/`unexcluded`, `errors`; a
-concurrent-write conflict counts as an error).
+- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`,
+  `validated_count`, `cluster_size`, `deprecated`, `merged_into`,
+  `hotkey_letter`, `adequacy`, `kind` (`item` or `region`), `trainable`,
+  `trainable_gap`, `added_at`. A class named like the active profile's
+  `region_class_name` has `kind: region`. The active region profile's class
+  is seeded into the registry at project creation and API start, and it never
+  labels a whole item.
+- Names match `^[a-z0-9_]+$` on create and rename (`422`).
+- Hotkeys, on create and update: one character (`400`), not reserved
+  (`422 hotkey_reserved`), not bound to another active class (`409
+  hotkey_taken`). `""` on update clears. `reserved_hotkeys` are the single
+  keys bound in contexts where class hotkeys are live in the project's
+  effective keymap. A create that fails a hotkey rule writes nothing.
+- Merge relabels every non-holdout item of the source with `class_source:
+  class_merge` and keeps `class_validated`. `dry_run=true` returns
+  `{dry_run, source_id, target_id, would_relabel, validations_carried_over,
+  holdout_blocking, blocked}` and writes nothing. `blocked` means the real
+  merge would be `409` because of frozen test-holdout items. A self-merge or
+  an unknown id is `400`. The merge is recorded in `class_id_history`
+  (`writer: class_merge`). A merged class cannot be restored
+  (`409 class_merged`); relabel manually.
+- Deprecate retires a class that has no items and no confirmed labels. While
+  items reference it, it is `409 class_still_referenced` with
+  `item_count` and `confirmed_label_count`. It is idempotent and clears the
+  hotkey.
+- Restore is `409` if an active class already holds the name.
 
-### Cluster cards (`GET /clusters`)
+## Clusters
 
-`labelled_count` is the number of members with any `class_name`;
-`dominant_count` / `label_purity` describe the top class among them
-(`label_purity` = `dominant_count / labelled_count`), and
-`labelled_share` = `labelled_count / size`. For a
-candidate cluster (`cluster_id >= cluster_id_offset`)
-`dominant_class_name` is set only for a unique top class with at least
-3 members and at least half of the labelled members
-(`CANDIDATE_DOMINANT_MIN_COUNT` / `CANDIDATE_DOMINANT_MIN_SHARE` in
-`src/routers/curation/clusters.py`), else `null`; `dominant_class_id` is
-always `null` for candidates. Class clusters report their top class as
-before.
+Cluster ids partition into ranges:
 
-**`purity` (DQ-M2, changed meaning).** Label purity is 1.0 on every
-class cluster by construction (`cluster_id == class_id`), so it used to
-call visibly mixed class clusters "pure", and on candidates it covered only
-the few labelled members. A card's `purity` is now a geometric signal
-independent of the labels: the share of the cluster's members whose
-nearest cluster centroid (among every cluster's member-mean centroid over
-the item embedding) is their own cluster's. It is computed by the
-cluster-geometry pass that follows every auto-label clustering stage
-(`cluster_nearest_id` per item) and counts only members measured for
-their current cluster. `purity_n` is how many members it was computed
-over, `purity_basis` is `"nearest_centroid"`; `purity`, `purity_tier` are
-`null` while `purity_n` is `0` (no pass since the members arrived).
-
-Each card also carries `purity_tier` (`pure` / `mixed` / `noisy` from
-`purity`) and `promotable` (the auto-promote gate — unchanged, on the
-labels: at least `promote_min_members` members, at least
-`promote_min_labelled_share` of them labelled, `label_purity` at least
-`pure_min`; never true for a class cluster). The response serves the cut
-points: `purity_thresholds: {pure_min: 0.85, mixed_min: 0.6,
-promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
-`src/services/curation/cluster_purity.py`; the same `pure_min` / `mixed_min`
-cut both `purity` into tiers and `label_purity` at the gate) and
-`core_similarity_min: 0.75` (the cut line for the items' `cluster_is_core`).
-`POST /clusters/auto_promote` counts every labelled member in the purity
-denominator (it used to count only the top-5 classes, overstating purity
-on many-class clusters).
-
-**Representatives are now paged (D-4, breaking change).**
-`GET /clusters` used to attach representative crops to *every* returned
-card via a `top_hits` sub-aggregation, which decompressed stored
-`_source` for every representative across every bucket in the response
-regardless of what the client actually displayed. It now returns every
-card (still up to `max_clusters`, still carrying `size`/`purity`/etc.)
-but only fills in `representatives` for cards in the
-`[representatives_offset, representatives_offset + representatives_limit)`
-window of the *returned, kind-filtered, `_count`-desc-ordered* card
-list — new query params `offset` (default `0`) and `limit` (default
-`50`, max `500`). Cards outside that window still carry the
-`representatives` key, but as an empty list `[]` — the field never
-disappears, so existing clients that only read `card.representatives`
-degrade to "no thumbnails for this card" rather than a KeyError. The
-response also now reports `representatives_offset` /
-`representatives_limit` so the frontend knows which window was served.
-Passing `per_cluster=0` (as before) skips representative computation
-entirely — no `_msearch` is issued.
-
-Representatives are computed by one `_msearch` (one query per cluster
-in the window, each `{size: per_cluster, query: {bool: {filter:
-[{term: {cluster_id}}], must_not: [{term: {class_excluded: true}}]}},
-_source: [crop_id, cluster_distance, class_name, cluster_subid], sort:
-[{cluster_distance: asc}, {crop_id: asc}]}`) instead of a per-bucket
-`top_hits` sub-agg on the cards aggregation itself.
-
-**Frontend action required:** paginate the cluster grid by requesting
-successive `offset`/`limit` windows (matching whatever page of cards is
-actually rendered) rather than assuming every card in one `GET
-/clusters` response already carries thumbnails.
-
-`GET /clusters/representatives` has the same shape change: the
-`clusters` dict in the response now only contains keys for cluster ids
-in the `[offset, offset + max_clusters)` window (ordered by member
-count desc) — call again with a larger `offset` for the next page. New
-`offset` query param (default `0`); response gains `offset` and
-`max_clusters` fields. Previously this endpoint returned representatives
-for every cluster (up to `max_clusters` total) in one response with no
-paging concept at all.
-
-`GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
-50), `limit` (1–500; alias for `page_size`, wins when both are set),
-`sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
-`updated_at`, `created_at`, `confidence`,
-`crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`,
-`cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
-else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
-`cluster_id`, `label_source`, `class_source`, `label_validated`,
-`source` (ingest source tag; the retired short-name query param is
-removed, S2),
-`needs_new_class` (bool), `review_dismissed` (bool), `ids` (comma-separated, max 500: returns exactly
-those items in that order, missing ids dropped, every other filter ignored —
-use it to hydrate a `POST /select/diverse` page in one call),
-`include_test`, `include_excluded`, `max_rank`,
-`min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
-(inclusive band on `confidence`, `400` if min > max), `order`
-(`default`/`outliers`/`core_first`/`diverse`; `outliers` and `core_first`
-need `cluster_id`: members farthest from / nearest to the centroid of the
-matched members first. Under `core_first` each served item's
-`cluster_distance` / `cluster_similarity` / `cluster_is_core` is recomputed
-against that same live centroid, so the cluster view's cut line — the
-first item with `cluster_is_core: false` — always matches the order;
-`method` reports the order that ran, and a pool too large to rank falls
-back to `sort`), `k` (1–10000, `order=diverse` only:
-rank just the first `k` k-center-greedy picks; `total` is then `k`),
-`item_text` (≤200 chars; text read on the item crop — every letter/digit
-word of the query must be a case-insensitive prefix of one of the item's
-`item_text_tokens`, e.g. `smith mot` matches an item whose OCR read
-`Smith Motors`, `abc1234` matches `ABC-1234`; a query with no letter or
-digit is a `400`).
-
-### Classes
-
-- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`, `adequacy`, `added_at` (from the registry)
-- `ClassListResponse`: `classes`, `thresholds`, `reserved_hotkeys` (sorted single keys no class may bind: `/ a b d e f g m n u x z` — the labeling actions, the class picker and the region-review keys)
-- `ClassCreateRequest`: `name`, `group`, `notes`, `hotkey_letter` (optional)
-- `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
-- Class names must match `^[a-z0-9_]+$` on create and rename (`422` otherwise; they become export/training class names). Hotkeys, on create and update: one character (`400`), not reserved (`422`), not bound to another active class (`409`); `""` on update clears. A create that fails any hotkey rule writes nothing.
-- `ClassMergeRequest`: `source_id`, `target_id`. `POST /classes/merge?dry_run=true` writes nothing and returns `{dry_run: true, source_id, target_id, would_relabel, validations_carried_over, holdout_blocking, blocked}` — `would_relabel` counts every non-holdout item of the source class (validated or not); `validations_carried_over` the validated ones among them (F-56 follow-up, 2026-09-25: a merge relabels with `class_source: class_merge` and KEEPS `class_validated` — a human-validated crop of the source class stays validated under the target, so this field counts who carries validation over, not who loses it, and this is the field's replacement for the retired `would_unvalidate`); `blocked` = the real merge would `409` on frozen test-holdout items. `400` for an unknown id or a self-merge. `class_id_history` records the merge (`writer: 'class_merge'`) with a snapshot of the prior `class_id`/`class_source`/`class_validated`, so the pre-merge validation state is on the audit trail either way. `POST /classes/{id}/restore` still `409`s on a merged class (`merged_into` set) — un-merging isn't supported; relabel the crops back manually instead.
-- `GET /class_sources` -> `{"class_sources": [{"id", "label", "role", "short_label"}, ...]}` — see "`class_source` values" below
-- `POST /classes/{class_id}/deprecate` -> `RegistryClassEntry` (`class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `added_at`, `deprecated`, `notes`, `merged_into`, `hotkey_letter`). Retires a class with no target and no data — the direct counterpart to `POST /classes/merge`, which needs both. Counts items-index docs (`term: class_id`) and confirmed-labels-index docs (`term: class_id`, same field the merge relabel touches); `409` while either count is nonzero, body `{error: "class_still_referenced", message, class_id, item_count, confirmed_label_count}` naming merge as the alternative. `404` unknown id. Idempotent — re-deprecating an already-deprecated class returns it unchanged without re-checking references. Clears `hotkey_letter` so the freed letter can't collide with a class bound to it later.
-- `POST /classes/{class_id}/restore` -> `RegistryClassEntry`. Clears `deprecated`. `404` unknown id; `409` (plain-string detail) if a non-deprecated class already holds this class's `class_name` — the same name-uniqueness rule `rename_class`/`add_class` enforce. `409` (structured detail `{error: "class_merged", message, class_id, merged_into: {class_id, class_name}, hint}`) if the class was merged via `POST /classes/merge` (`merged_into` set) — its crops already live on the merge target, so restoring it directly would resurrect an empty class while the data stays put; relabel the crops back manually instead. A plainly deprecated class (no `merged_into`) restores as before.
-
-### VLM labeling/verification
-
-Registered at `POST {prefix}/vlm/*` (`src/routers/curation/vlm.py`).
-Every VLM-related name on the wire is `vlm_*` — URL segment, stored and
-returned fields (`vlm_confidence`, `vlm_raw_label`, …), `class_source`
-values (`vlm`, `vlm_unmatched`, …), the review tab `vlm_low_conf`, the
-auto-label params and the stats keys (see B3).
-
-- `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`. A reply that
-  resolves to a registry class also sets `cluster_id = class_id` (and clears
-  `cluster_subid`) unless the item is excluded, as the worker's combined call
-  and the pipeline's normalize do (DQ-m3) — the item no longer waits in its
-  candidate or old class cluster for the next clustering run. Undo restores
-  the prior placement.
-- `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`. A
-  crop_id the VLM gave no usable answer for (upstream failure, empty or
-  unparseable reply) is skipped — its verify state is left untouched for
-  a retry rather than written as `verified=False`.
-- `VlmVerifyRegionBatchItem`: `crop_id`, `region_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
-- `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
-- `VlmVerifyRegionBatchResult`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text`
-- `VlmVerifyRegionBatchResponse`: `results` — a `crop_id` the VLM gave no
-  verdict for (whole-chunk upstream failure, empty/unparseable/misaligned
-  reply, or an individual crop missing from an otherwise-aligned reply)
-  is absent from `results` entirely, the same "omit, don't reject"
-  contract `/vlm/region_visible_batch` uses for its `visible` map.
-- `VlmRegionVisibleBatchItem`: `crop_id`, `image_b64`
-- `VlmRegionVisibleBatchRequest` (`POST /vlm/region_visible_batch`): `items`
-- `VlmRegionVisibleBatchResponse`: `visible` (`dict[str, bool]`, keyed by `crop_id`)
-
-### Review / holdout
-
-On the `mismatches` tab each item's `reason` says why it is there
-(DQ-m4): the default "VLM's reply did not match any registry class";
-`VLM named registry class '<answer>' at <vlm_confidence> confidence; not
-applied` when the VLM's answer (`vlm_raw_class`, else `vlm_raw_label`) is an
-active registry class name (a low-confidence answer the label path routes
-to review); `VLM gave no class answer` when none is stored.
-
-`vlm_low_conf` selects items whose label came from the VLM (a VLM
-`class_source`) and whose `vlm_confidence` is `medium` or `low`. It no
-longer also requires `confidence < 0.80` (that is the detector/classifier
-score — DQ-M8).
-
-`GET /review/{tab}` tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`,
-`uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`,
-`classifier_blind_spots`, **`new_class_proposals`** (items flagged
-`needs_new_class` by a human, or `class_source: vlm_new_class_pending`).
-Filters (every tab): `include_test`, `max_rank` (`crop_rank_in_image <=
-max_rank`; omitted = no limit, except `primary_low_conf` /
-`classifier_blind_spots`, which default to `2`), `min_blur_ratio`,
-`min_mistakenness`, `hide_near_duplicates`, **`class_id`**, **`source`**,
-**`conf_min` / `conf_max`** (inclusive band on `confidence`, `400` if
-min > max), `sort`; `text` and `region_status` on the `regions` tab only
-(ignored elsewhere).
-
-`region_status` (`regions` tab) selects which items the queue serves:
-`'all'` (default) — items with an accepted-but-unvalidated box plus
-verifier-rejected items (`region_status=verify_rejected` with at least one
-rejected box); `'detected'` — items with an accepted box only;
-`'verify_rejected'` — "Items with only rejected boxes"; `'has_rejected_box'`
-— "Items with any rejected box": `region_rejected_count >= 1` whatever the
-item status, so a rejected box on a `detected` item is reachable (an item
-with one accepted and one rejected box is in `has_rejected_box` and not in
-`verify_rejected`; an all-rejected item is in both). `false_positive` and
-`no_region_visible` items never appear in the default modes. `400` for an
-unrecognized value. A rejected candidate's per-item `reason` names the
-rejection (`region_rejection_reason` when the worker recorded one) instead
-of the generic "needs human confirmation" string. `locate` honours the
-same parameter.
-
-`GET /review/tabs` → `{tabs: [{id, label, description, filters,
-filter_defaults, filter_specs}]}` (typed: `ReviewTabsResponse`): `filters` is the list of query
-parameters the tab honours (a parameter not listed is accepted and
-ignored), `filter_defaults` the values it applies when one is omitted
-(`{"max_rank": 2}` for the two primary-subject tabs, `{"region_status":
-"all"}` for `regions`, else `{}`). `filter_specs` is a self-describing
-entry for each honoured filter with a fixed value set — `{param, kind:
-"enum", label, options: [{value, label}]}` (today only `regions`:
-`{"param": "region_status", "kind": "enum", "label": "Status", "options":
-[{"value": "all", ...}, {"value": "detected", ...}, {"value":
-"verify_rejected", ...}]}`), `[]` for a tab with none — so the frontend
-renders any enum filter generically instead of hardcoding its values. The queue query reads the same
-`filters`/`filter_defaults` table, so the catalog can't advertise a filter
-a tab ignores (DQ-M6: `max_rank` used to be honoured only by the two
-primary tabs). Response: `total`, `page`, `page_size`,
-`items` (item + `reason`), `sort_applied` (the sort id that actually ran),
-`sort_fallback_reason` (`null`, or a human-readable string when the
-resolved default was replaced — see below).
-
-Sort: an explicit `sort` wins (honored even if its field has no coverage);
-omitted (or `default`) → the **tab's own default** (a deployment `sort`
-default from `PUT /settings` never overrides it — it only applies to a tab
-without one, e.g. `new_class_proposals`, else `recent`). If that resolved
-default orders by a field **no item in the index has** (0% coverage), the
-queue falls back to the tab's next covered sort (`all`: `mistakenness`;
-`uncertainty`: `mistakenness`, then `atypicality`; every tab ends at
-`recent`), `sort_applied` names the sort that ran and
-`sort_fallback_reason` says which default was skipped and why. Unknown
-coverage (count failed) never triggers a fallback. `PUT /settings` refuses
-(`422`) a `sort` default whose field has 0% coverage. Every queue ends in a `crop_id` ascending tiebreak so pages are
-stable and positions are exact.
-
-`GET /review/{tab}/locate?crop_id=…` (same filters + `sort`, plus
-`page_size`) → `{crop_id, in_queue, rank, page, page_size, total, reason,
-sort_applied, sort_fallback_reason}`: `rank` is 0-based, `page` the 1-based page holding it;
-out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
-`filtered_out`. It counts the items sorting before the crop (one count, any
-queue depth) — use it for `/review?crop_id=` deep links instead of paging.
-
-`GET /review/new_class_proposals/summary?size=&samples=` →
-`{total_pending, without_term, top_terms, flagged_terms, term_rules}`
-(DQ-M11). The summary, the `new_class_proposals` queue and the resolve
-below share one selection (`src/services/curation/new_class_terms.py`
-`proposal_query`), so `total_pending` equals the queue's `total`, and each
-term's `count` equals what a resolve for that `label` matches.
-`without_term` counts queue items with no proposed name (a human flag).
-Each term is `{label, count, sample_crop_ids, flag, class_id}`, most
-common first; `top_terms` holds only terms worth creating (`flag: null`),
-`flagged_terms` the rest:
-
-| `flag` | Rule | Suggested action |
+| `cluster_id` | `cluster_kind` | Meaning |
 |---|---|---|
-| `existing_class` | the name (normalized: lowercase, spaces/hyphens → `_`) is an active registry class; `class_id` is set | resolve with `class_id` |
-| `generic_parent` | the whole name is in `OP_NEW_CLASS_GENERIC_TERMS`, or is a registry `group` name or one `-`-separated part of one | assign a specific class, don't create |
-| `non_object` | the name, or one `_`-separated token of it, is in `OP_NEW_CLASS_NON_OBJECT_TERMS` | discard / exclude |
+| `< 0` | `unassigned` | not clustered, noise, or excluded (`-2`) |
+| `0` to the offset | `class` | equals the class id, for labeled items |
+| `>= cluster_id_offset` | `candidate` | a residual cluster that needs a class |
 
-`term_rules` serves the active rule: `{generic_terms, non_object_terms,
-registry_groups_are_generic: true, existing_classes_flagged: true,
-generic_terms_env, non_object_terms_env}`. Both env lists are
-comma-separated and empty by default — no vocabulary is built in.
-Generic terms match whole names only (`sports_car` is not flagged by a
-generic `car`).
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/clusters` | cluster cards. Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `class_id`, `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit` |
+| GET | `/clusters/representatives` | `per_cluster`, `max_clusters`, `class_id`, `offset` |
+| POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`. Validates members of pure clusters |
+| POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
+| POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool and re-cluster it. Returns the clustering summary |
 
-`POST /review/new_class_proposals/resolve?dry_run=` (`ResolveNewClassRequest`
-→ `ResolveNewClassResponse`): bulk-resolves **every** item of the
-new-class queue proposing `label` (`vlm_new_class_pending` rows and
-`needs_new_class` flags carrying that `vlm_proposed_class`; never a
-validated, review-dismissed, excluded or test-holdout item), not just the summary's
-capped `sample_crop_ids`. Exactly one of `class_id` (map to an existing
-registry class) / `create` (`{class_name, group, notes}`, registered
-through the same path as `POST /classes`) — else `422`; unknown `class_id`
-→ `400`; duplicate `create.class_name` → `409` with no item writes.
-`create` runs before any item write (a zero-match resolve still creates
-the class and reports `matched: 0`). Each item is written independently
-(bounded concurrency), re-checked at write time to still be pending this
-exact proposal — one that changed state in between lands in `skipped`,
-not `updated_ids`. Response: `{class_id, class_name, created, label,
-matched, matched_ids, updated, updated_ids, conflicts:
-[{crop_id, current_source}], skipped}`. `dry_run=true` reports the match
-(`matched`, `matched_ids`) without writing or creating anything
-(`class_id` is `null` when `create` was given). Writes are undoable via
-`POST /crops/label/undo_batch` on `updated_ids`, same as
-`PUT /crops/batch_label`.
+Cards. `labelled_count` counts members with any `class_name`. `dominant_count`
+and `label_purity` describe the top class among them. For a candidate,
+`dominant_class_name` is set only for a unique top class with at least 3
+members and half of the labelled ones, else `null`, and `dominant_class_id`
+is `null`.
 
-- `TestHoldoutFreezeRequest`: `percent` only (`1`–`50`, default `10`). Unknown fields are
-  rejected (`extra='forbid'`): there is no seed — selection is deterministic — so a request
-  carrying `seed` is a `422` instead of being silently ignored.
-- `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`,
-  `per_class_counts`, `selection` (always `"sha1_per_class"`: per class, the crops with the
-  smallest `sha1(crop_id)`, `max(min_per_class, round(n * percent / 100))` of them, capped at the
-  class size), `percent` (echoed), `min_per_class` (`5`). A client shows the method, not a
-  Seed input.
+`purity` is geometric and independent of labels: the share of members whose
+nearest cluster centroid is their own cluster. `purity_n` is how many members
+it covers and `purity_basis` is `nearest_centroid`; with `purity_n` of `0`
+both `purity` and `purity_tier` are `null`. `purity_tier` is `pure`, `mixed`
+or `noisy`. `promotable` is the auto-promote gate on labels (enough members,
+enough of them labelled, `label_purity` at or above `pure_min`); never true
+for a class cluster. The response serves `purity_thresholds` (`pure_min`
+0.85, `mixed_min` 0.6, `promote_min_members` 4, `promote_min_labelled_share`
+0.5) and `core_similarity_min` (0.75).
 
-### Shared curation-strategy defaults
+Representatives are paged. Every card is returned with `size`, `purity` and
+the rest, but `representatives` is filled only for cards in the
+`[offset, offset + limit)` window of the kind-filtered, member-count-descending
+list (`limit` default 50, max 500). Other cards carry `representatives: []`.
+`per_cluster=0` skips representatives. `GET /clusters/representatives`
+pages the same way by `offset` and `max_clusters`.
 
-- `CurationSettingsResponse` (`GET,PUT /settings`): `defaults` (`dict[str, str]`, open map keyed by axis id), `updated_at` (ISO 8601 or `null`), `updated_by` (always `null` today — no user-account system)
-- `CurationSettingsUpdateRequest` (`PUT /settings` body): `defaults` (`dict[str, str]`, partial — only the axes being changed)
+Clustering runs inside the auto-label pipeline. Setting
+`recluster_unvalidated=true` broadens the residual pool so candidate clusters
+can fuse. The default pool is fresh and class-bucketed unvalidated items.
 
-### Health / status
+## VLM labeling and the auto-label pipeline
 
-- `HealthResponse`: `status` (`ok`/`degraded`/`down`), `triton`, `opensearch`, `vlm`, `registry` — `vlm` reports the configured VLM backend's reachability regardless of which model it is.
-- `StatusResponse`: `status`, `detail`, `extra`
+| Method | Path | Body or query | Response |
+|---|---|---|---|
+| POST | `/vlm/label_batch` | `{crop_ids}` (at most 64), `vlm`, `acknowledge_external` | label results |
+| POST | `/vlm/verify_regions` | `{crop_ids}` (at most 64) | per-crop verification |
+| POST | `/vlm/verify_region_batch` | `{items: [{crop_id, region_image_b64, candidate_text}]}` (at most 64) | `{results[]}`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text` |
+| POST | `/vlm/region_visible_batch` | `{items: [{crop_id, image_b64}]}` (at most 64) | `{visible: {crop_id: bool}}` |
+| POST | `/vlm/label_cluster/{cluster_id}` | `prompt_pack`, `vlm`, `acknowledge_external` | the auto-label job state |
+| POST | `/pipeline/auto_label` | query parameters | runs the pipeline in the request and returns each stage's counts. Idempotent |
+| POST | `/pipeline/auto_label/start` | query parameters | starts a background job and returns at once; poll the status routes. One job at a time (`409` otherwise) |
+| GET | `/pipeline/auto_label/status` | | the current job |
+| GET | `/pipeline/auto_label/status/{job_id}` | | a job by id; `404` for an unknown id |
+| POST | `/pipeline/auto_label/cancel` | | |
+| GET | `/pipeline/events` | | SSE stream for a dashboard: `snapshot` on connect, then `state` on job changes and `stats` every 15 s |
 
-### Export
+- The VLM labeling routes honor the lock rule: an item whose class is locked
+  is never overwritten. A project with no classes is `409 no_classes`. A call
+  over 64 ids is `400`.
+- A reply that resolves to a registry class also sets `cluster_id = class_id`
+  and clears `cluster_subid`, unless the item is excluded. Undo restores the
+  placement.
+- A crop the VLM gave no usable verdict for is omitted from a batch
+  response, or left untouched by a single-crop call. It is never written as a
+  reject.
+- `/pipeline/auto_label` and `/start` take: `train_clusters`,
+  `promote_min_purity`, `promote_min_members`, `vlm_batch_size`,
+  `vlm_concurrency`, `max_vlm_crops`, `classifier_confidence_skip_vlm`,
+  `clustering_method`, `run_vlm`, `recluster_unvalidated`, `reassign_only`,
+  `run_auto_promote`, `gate_max_rank`, `gate_min_blur_ratio`, `n_clusters`,
+  `class_id`, `cluster_id`, `prompt_pack` (`<name>` or `<name>@<revision>`),
+  `vlm` and `acknowledge_external`. A `detection_profile` parameter is `422`:
+  no stage runs region detection. Region detection runs in the detection
+  worker on the active profile.
+- Job state: `job_id`, `status` (`queued`, `running`, `completed`, `failed`,
+  `cancelled`, `interrupted`), `stage`, `processed`, `total`, `started_at`,
+  `finished_at`, `error`, `result`, `args`, backend and VRAM telemetry,
+  `stage_durations`, `eta_seconds`, `elapsed_seconds`. The newest 50 jobs are
+  kept. A start while a job runs is `409`.
+- `/vlm/label_cluster/{cluster_id}` runs only the VLM stage over every
+  unvalidated, non-holdout, non-excluded member of one cluster. It does no
+  re-clustering, no auto-promote and applies no cap. The index-wide stages are
+  skipped even if requested, and writes touch only the selected members.
+  `?cluster_id=` on `/pipeline/auto_label[/start]` gives the same scope.
 
-- `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`,
-  `require_fully_labeled_images` (default `false`)
-- `ExportSingleClassRequest`: `export_dir`, `version_tag`, `class_ids`,
-  `box_source` (`item`/`region`), `region_class_name`, `profile_name`,
-  `seed`, `skip_test_split`, `empty_bg_ratio`, `max_positive_images`,
-  `dedup_threshold`, `image_mode` (`whole_frame`/`item_crop`),
-  `img_max_side`, `copy_images`
+## Ingest
 
-**Multi-class layout (`POST /export/yolo`): one image file and one label
-file per source image.** Validated items (one object each) are grouped
-by `image_id`. Each exported image is written once as
-`images/<split>/<image_id>.<ext>`, next to `labels/<split>/<image_id>.txt`
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/ingest/image` | `IngestImageRequest`: `path`, `source` (`extra='forbid'`) | `IngestImageResponse` |
+| POST | `/ingest/batch` | `IngestBatchRequest`: `items: [{path, source}]` (required, non-empty, `extra='forbid'`) | `BatchIngestResponse` |
+| POST | `/ingest/upload` | multipart: `images` (files), `image_paths` (JSON list of identifiers, optional), `source`, `run_id` | `BatchIngestResponse` |
+| POST | `/ingest/path_lookup` | `{image_paths}` (at most 10,000) | `{known_paths: {path: image_id}}` |
+| GET | `/ingest/config` | | limits |
+| GET | `/ingest/status` | query `run_id` | `{total, by_source[], by_day[]}` |
+| GET | `/ingest/region_drain` | | drain state |
+
+- `IngestImageResponse`: `status` (`success`, `duplicate`, `failed`),
+  `image_id`, `image_path`, `source_identifier`, `imohash`, `n_crops`,
+  `n_regions`, `error`, `error_kind`, `secondary_detector_error` (set when a
+  configured secondary detector call failed; the image still ingests on the
+  primary detector's output).
+- `error_kind` is one of `empty`, `unservable_path`, `unsupported_type`,
+  `decode_failed`, `detector_infer`, `bulk_index`. It is present with `error`
+  when `status` is `failed`.
+- `BatchIngestResponse`: `status` (`success`, `partial`, `error`),
+  `summary` (`successful`, `duplicates`, `failed`, `crops_indexed`,
+  `secondary_detector_failures`) and `results[]`.
+- Duplicates are detected by content hash (`imohash`) against the index and
+  within a batch. A byte-identical file later in the same request reports
+  `duplicate` with the representative's `image_id`, and exactly one item set
+  is created.
+- Paths for `/ingest/image` and `/ingest/batch` must be servable: under a
+  configured source root. An unservable path is `422` (single) or a failed
+  row with `error_kind: unservable_path` (batch). An unreadable file is
+  `404` (single).
+- `/ingest/upload` stores the bytes content-addressed under the project's
+  upload root: `<upload_root>/<imohash[:2]>/<imohash><ext>`, written
+  atomically, stored once per content. `image_path` is the stored, servable
+  path. The client's identifier is `source_identifier`. `path_lookup` matches
+  either field and keys its result by the one that matched. `run_id` is
+  recorded as `ingest_run_id` and scopes `GET /ingest/status?run_id=`.
+- `GET /ingest/config`: `upload` (`enabled`, `max_images_per_request`,
+  `max_bytes_per_request`, `accepted_extensions`, `persists_bytes`), `batch`
+  (`enabled`, `max_items`, `source_roots`), `region_drain` (`poll_interval_s`,
+  `stable_polls`). Limits: `OP_UPLOAD_MAX_IMAGES_PER_REQUEST`,
+  `OP_UPLOAD_MAX_BYTES_PER_REQUEST`, `OP_UPLOAD_ACCEPTED_EXTENSIONS`,
+  `OP_BATCH_MAX_ITEMS_PER_REQUEST`. Over a limit is `413`; an extension
+  outside the accepted list fails that item with `error_kind:
+  unsupported_type`.
+- `GET /ingest/region_drain`: `pending_detection`, `pending_verification`,
+  `total_unfinished`, `drained`, `stable_for_s`, `observed_at`,
+  `region_dependencies[]` (`role`, `model`, `ready`, `unavailable_since`,
+  `detail`) and `stall_reason`. `drained` is `true` only after
+  `total_unfinished` has read `0` for `stable_polls`
+  (`OP_REGION_DRAIN_STABLE_POLLS`, default 3) consecutive polls.
+  `region_dependencies` is checked against Triton's repository index and is
+  empty with no region profile. `stall_reason` is `null` when nothing is
+  pending or every dependency is ready. Items stay `pending_detection` while a
+  dependency is down; the worker never writes a terminal status on an
+  infrastructure failure.
+- `GET /ingest/region_drain` and `GET /ingest/status` answer `503` on a
+  backend outage.
+- Ingest answers `503` until the encoder has loaded.
+
+## Dataset import
+
+Import an already-labeled dataset (YOLO, COCO or an OpenProcessor export)
+into a project. The importer is chunked, persisted, resumable and runs on the
+shared jobs volume. Labels are written through the same single class writer
+that human labels use, so the lock rule holds. A human edit made between
+planning and writing wins.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/datasets/formats` | | `DatasetFormatsResponse`: `formats[]`, `issues[]` (the issue catalog), `mapping_actions[]`, `match_kinds[]`, `parents_modes[]`, `processing_modes[]`, `trust_levels[]`, `status_labels`, `upload_limits` | |
+| POST | `/datasets/uploads` | multipart `file` (zip or tar) | `201 {upload_id, dataset_path, bytes, files}` | `413 upload_too_large`, `422 archive_invalid` |
+| POST | `/datasets/preview` | `DatasetPreviewRequest` | `DatasetPreview` | `422 dataset_path_not_allowed`, `422 format_undetected` |
+| POST | `/datasets/imports` | `DatasetImportRequest` | `202 DatasetImportJob` (`200` with `reused: true` for a completed repeat) | `422 class_mapping_incomplete`, `422 class_mapping_invalid`, `422 import_blocked`, `409 import_busy`, `409 import_resumable`, `409 dataset_changed` |
+| GET | `/datasets/imports` | `page`, `page_size`, `status` | `DatasetImportList` | |
+| GET | `/datasets/imports/{import_id}` | | `DatasetImportJob` | `404 import_not_found` |
+| GET | `/datasets/imports/{import_id}/issues` | `code`, `page`, `page_size` | `DatasetIssuePage` | |
+| GET | `/datasets/imports/{import_id}/entries` | `split`, `label_state`, `status`, `page`, `page_size` | `DatasetImportEntryPage` | |
+| POST | `/datasets/imports/{import_id}/cancel` | | `DatasetImportJob` | |
+| POST | `/datasets/imports/{import_id}/resume` | | `202 DatasetImportJob` | `409 import_not_resumable` (only `interrupted`, `failed` or `cancelled`), `409 import_busy`, `409 dataset_changed` |
+| POST | `/datasets/imports/{import_id}/undo` | `DatasetUndoRequest` | `200 DatasetUndoReportWire` for a dry run, else `202 DatasetImportJob` | `409 import_not_undoable`, `409 import_busy` |
+
+`DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`,
+`openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
+split}`). Auto-detection tries an OpenProcessor export, then YOLO (a data
+YAML, an `images/` directory, or a child with one), then COCO
+(`annotations/*.json`). Pass `format: coco` for a COCO dataset that also has
+an `images/` directory. The path must lie under a source root, the project's
+upload root or the project's export root, after symlinks are resolved
+(`422 dataset_path_not_allowed`). References inside a dataset must stay
+inside it. Archive uploads accept regular files and directories only and
+cap member count, bytes written and compression ratio.
+
+`DatasetImportOptions`:
+
+| Option | Values | Effect |
+|---|---|---|
+| `processing` | `none` (default), `propose` | `propose` runs the detector on the imported images for proposals |
+| `label_trust` | `validated` (default), `suggestion` | `validated` writes locked labels. `suggestion` writes unvalidated labels (and `proposed` boxes) that the machine pipeline may still replace |
+| `parents` | `auto` (default), `labels`, `detect` | where the parent items of region labels come from |
+| `freeze_test_split` | bool or unset | freeze the imported `test` split as the test holdout |
+| `missing_label` | `unlabeled` (default), `negative` | how a frame with an empty label file is treated |
+| `region_negatives` | bool, default true | |
+| `region_containment` | 0.5 to 1.0, default 0.9 | how much of a region box must lie inside a parent |
+| `name`, `source_tag` | strings | labels for the import and the `source` of created items |
+| `force` | bool | bypass issues marked bypassable |
+
+### Class mapping
+
+Every dataset class that has boxes needs a decision. The mapping is a list of
+`ClassMappingEntry`:
+
+| Field | Meaning |
+|---|---|
+| `dataset_class` | the class name in the dataset |
+| `action` | `map` to an existing class, `create` a class, `skip` the boxes, or `region` to treat the boxes as sub-regions of the active region profile |
+| `class_id` | for `map` |
+| `new_class_name`, `new_class_group` | for `create` (and `map` by name) |
+
+The preview serves a `suggestion` per dataset class (`action`, `class_id`,
+`class_name`, `match`: exact, case-insensitive or region). With
+`accept_suggestions: true` the server takes exact, case-insensitive and
+region matches. Matching is always by name, never by index. A class with boxes
+and no decision is `422 class_mapping_incomplete` with `unmapped[]`. An
+invalid row is `422 class_mapping_invalid`. A `region` action needs an active
+region profile. Without one the preview reports the blocking issue
+`region_profile_required` and a start is `422 import_blocked`.
+
+### Preview
+
+`DatasetPreview` writes nothing: `format`, `root`, `source_sha`,
+`import_key`, `splits[]` (per split: `images`, `boxes`, `labeled`,
+`unlabeled`, `negatives`), `classes[]` (`dataset_class`, `boxes`, `images`,
+`suggestion`, `resolved`, `merged_from`), `totals`, `estimate`, `issues[]`,
+`blocking`, `force_allowed`, `region` and `op_export`.
+Issues carry `code`, `severity` (`error`, `warning`, `info`), `blocking`,
+`bypassable`, `count` and `samples[]`. The catalog of codes is in
+`DatasetImportJob`/`DatasetIssueWire.code` and `GET /datasets/formats`.
+
+### Job
+
+`DatasetImportJob`: `import_id`, `import_key`, `name`, `project`, `status`
+(`queued`, `running`, `paused_backpressure`, `completed`,
+`completed_with_errors`, `failed`, `cancelled`, `interrupted`, `undoing`,
+`undone`), `progress` (`images_total`, `images_done`, `images_failed`,
+`chunks_done`, `chunks_total`, `images_per_s`, `eta_s`), `report`, `issues_summary[]`,
+`mapping[]` (resolved, with `created` for classes the import made),
+`options`, `source`, `next_steps[]`, `waiting_for`, `poll_after_s`,
+`reused`, timestamps and `error`.
+
+`report` counts `images_created`, `images_reused`, `images_skipped`,
+`images_failed`, `items_created`, `items_updated`, `items_noop`,
+`items_reconciled_removed`, `labels_written`, `boxes_written`,
+`label_conflicts_locked` (labels a human lock refused), `negatives`,
+`unlabeled`, `parents_detected`, `standalone_regions`, `proposals_created`,
+`proposals_merged`, `holdout_frozen` and `disagreements`.
+
+- `import_key` hashes the project, the source content, the name-based
+  mapping and the write-affecting options. Repeating a request is idempotent:
+  a completed repeat answers `200` with `reused: true`. A prior interrupted
+  import of the same dataset is `409 import_resumable`. `expected_import_key`
+  (from the preview) guards against a changed dataset (`409 dataset_changed`).
+- One import runs per project at a time (`409 import_busy`).
+- When the region worker's backlog exceeds `OP_DATASET_IMPORT_MAX_PENDING`
+  the job pauses (`paused_backpressure`).
+- Importing a different version of a dataset over images an earlier import
+  labeled removes items the new version no longer has, unless a human or a
+  holdout freeze touched them, a box the dataset still has matches them, or
+  the frame has no label file. The whole document is kept in the new
+  import's ledger row, and undoing that import reinstates it.
+- Undo (`dry_run` default `true`) restores each class snapshot or region edit
+  history, deletes items the import created, optionally removes created
+  images (`remove_images`) and deprecates created classes
+  (`deprecate_created_classes`). Items a human edited or that another import
+  shares are kept. A second undo reports zeros.
+- Imported items carry `import_ids`, `dataset_split`, `imported_at`,
+  `proposed_by_import`, `on_negative_frame` and `import_standalone_region`.
+  Browse them with the `import_id`, `dataset_split`, `on_negative_frame` and
+  `proposed_by_import` filters of `GET /crops` or the `imported` review tab.
+
+## Reprocess
+
+One route re-runs pipeline stages. It replaces every ad hoc requeue, clear
+and retry path.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| POST | `/reprocess` | `ReprocessRequest` | `ReprocessWireResponse` | `422 reprocess_targets_invalid`, `409 reprocess_busy` |
+| POST | `/images/{image_id}/reprocess` | `ReprocessOneRequest` | `ReprocessWireResponse` with the image's items | `404 image_not_found` |
+| POST | `/crops/{crop_id}/reprocess` | `ReprocessOneRequest` | `ReprocessWireResponse` with the item | `404 not_found` |
+| GET | `/reprocess/jobs/{job_id}` | | `ReprocessJobInfo` | `404 not_found` |
+| POST | `/reprocess/jobs/{job_id}/cancel` | | `ReprocessJobInfo` | `404 not_found` |
+
+- `ReprocessRequest`: `targets` (exactly one of `image_ids`, `crop_ids`,
+  `filter`; at most 5000 ids), `scopes` (`detect`, `region`, `vlm`, `embed`;
+  at least one), `region_mode` (`redetect` default, `reverify`) and
+  `dry_run` (**default `true`**). The per-image and per-item routes drop
+  `targets` (the path is the target) and apply by default (`dry_run`
+  `false`).
+- `filter` (`ReprocessFilter`): `region_status[]`, `detector[]`, `reason[]`,
+  `profile_not`, `profile_revision_below`, `include_detected` (only valid with
+  a profile selector), `missing_status`, `missing_provenance`, `import_id`,
+  `source`, `class_id`, `dataset_split`. An empty filter is refused.
+- Response: `dry_run`, `scopes[]` (`scope`, `selected`, `locked_skipped`,
+  `queued`, `not_found`, `failed`, `breakdown[]`, `detail`), `items[]` (not on
+  a dry run) and `job` for work that runs in the background.
+- The lock rule applies: locked items and boxes are never written and are
+  counted as `locked_skipped`.
+- A `detect` or `embed` run over more than `OP_REPROCESS_SYNC_MAX` images
+  (default 20) runs as a file-backed job. `job.status` is `queued`, `running`,
+  `completed`, `completed_with_errors`, `cancelled` or `failed`. One job runs
+  at a time (`409 reprocess_busy`). Cancel stops after the current chunk.
+- `suggested_reprocess` in an activation impact is a ready `ReprocessRequest`.
+
+## Export
+
+| Method | Path | Body or query | Response |
+|---|---|---|---|
+| POST | `/export/yolo` | `ExportYoloRequest` | export summary |
+| POST | `/export/single_class` | `ExportSingleClassRequest` | export summary |
+| GET | `/export/status` | | `ExportStatusResponse` |
+| GET | `/export/single_class/status` | `profile_name` (default `single_class`) | status of the last run for that profile |
+| GET | `/export/datasets` | `kind` (`yolo`, `single_class`), `profile_name` | versions on disk |
+| GET | `/export/registry/{artifact}` | | a file download |
+
+`ExportYoloRequest`: `export_dir`, `version_tag`, `seed` (42),
+`max_images`, `dedup_threshold`, `require_fully_labeled_images` (false),
+`include_negative_frames` (true), `split_mode` (`keep_imported` default,
+`recompute`).
+`ExportSingleClassRequest`: `export_dir`, `version_tag`, `class_ids`,
+`box_source` (`item` or `region`), `region_class_name`, `profile_name`,
+`seed`, `skip_test_split`, `empty_bg_ratio`, `max_positive_images`,
+`dedup_threshold`, `image_mode` (`whole_frame` or `item_crop`),
+`img_max_side`, `copy_images`, `split_mode`.
+
+Both exports refuse with `422 nothing to export: <reason>` when nothing is
+exportable, write nothing and leave `current` on the previous export. Every
+manifest records `items_index: {index, uuid, created_at}`.
+
+### Multi-class layout
+
+One image file and one label file per source image. Validated items are
+grouped by `image_id`. Each image is written once as
+`images/<split>/<image_id>.<ext>` next to `labels/<split>/<image_id>.txt`
 with one `cls cx cy w h` line per validated, non-excluded, non-dismissed
-object on it. `cls` is the dense `export_id`; `cx cy w h` come from the
-item's `bbox_norm` (`[x1, y1, x2, y2]`, normalized to the full source
-frame), clamped to `[0, 1]`, so they are relative to the full source
-image. Objects in a file are ordered by item id, so re-runs are
-byte-identical. An item with no `image_id`, no usable box or no class is
-left out and counted in the manifest's `skipped_items`. `resize_mode` on
-the service accepts only `null` (copy as-is) or `aspect`; `letterbox` is
-refused because its padding would shift every box. (Earlier exports
-wrote one full-frame copy and one single-line label file per *item*, so
-an image with three validated objects became three copies each labeled
-with one object, and the detector learned the other two as background.)
+object. `cls` is the dense `export_id`. The box comes from the item's
+`bbox_norm`, normalized to the full source frame and clamped to `[0, 1]`.
+Objects are ordered by item id so re-runs are byte-identical. An item with no
+`image_id`, usable box or class is counted in `skipped_items`.
 
-**Partial frames.** An exported image can also hold *unlabeled* objects:
-items on it that the export does not write — not validated yet,
-validated on a class with no dense id (unregistered or deprecated), or
-validated without a usable box. They are still in the pixels, so
-training learns them as background. `class_excluded` and
-review-dismissed items are not objects to label and never count.
+- Partial frames. An exported image can hold unlabeled objects (not
+  validated, validated on a class with no dense id, or without a usable box).
+  They stay in the pixels. By default the image is exported and the manifest
+  records `unlabeled_items_on_exported_images` and
+  `images_with_unlabeled_items`, and training preflight warns. With
+  `require_fully_labeled_images: true` such images are left out
+  (`images_dropped_not_fully_labeled`); if none remains the export is `422`.
+- Negative frames. A frame an import marked a reviewed negative is written as
+  an empty label file when `include_negative_frames` is true and the frame's
+  `negative_for` covers every class that has objects in the export. The
+  manifest records `negative_images` and `negative_frames_skipped_partial`.
+- Order of operations: the partial-frame policy, then `dedup_threshold`
+  (near-duplicate images collapse; a frozen-holdout image is preferred as
+  survivor), then `max_images` (an even round-robin over each image's rarest
+  class).
+- Splits. The group is the source image (`group_key: image_id`). An image
+  with a frozen `test_holdout` item goes to `test` with all its objects.
+  With `split_mode: keep_imported`, the split a dataset import filed each
+  frame under is kept. With `recompute`, it is ignored. Remaining groups count
+  toward their most common class and are ordered within a class by
+  `sha256(seed:class:group)`. A class with a frozen holdout item uses it as
+  its test set and splits the rest 0.8 train to 0.1 val; a class without one
+  splits 0.8, 0.1, 0.1. Every split with a positive ratio gets one group
+  before any gets a second. The manifest records `split_mode` and how many
+  groups were pinned or overridden.
+- Manifest counts: `image_count`, `object_count`, `split_counts` (images per
+  split), `split_object_counts`, `class_split_counts` (rows with `class_id`,
+  `export_id`, `class_name`, `train`, `val`, `test`), `class_count` (the
+  registry size written as `nc`), `classes_with_objects`, `skipped_items`,
+  `dedup`, `dataset_sha`.
+- `dataset_sha` hashes the on-disk content: for every `labels/<split>/*.txt`
+  sorted by relative path, the path and the sha256 of the bytes, then the
+  ordered `names:` list, so a class rename with no id change still changes
+  it. The multi-class export records the full 64-hex digest and the
+  single-class export the first 16.
+- `POST /export/single_class` builds a narrowed dataset for one class or a
+  subset. It adds `frozen_test_sha`, which hashes the identity of the test
+  split (which frames, not their content). Each `profile_name` has its own
+  output root and its own `current` link. `box_source: region` exports the
+  region boxes of the active profile, with `image_mode: item_crop` cropping
+  to the parent item. The region stratum key is the first accepted (positive)
+  or `false_positive` (hard negative) box's cluster.
+- `GET /export/status` serves the `current` manifest: `status` (`idle`,
+  `unknown`, `success`), `path`, `export_dir`, `last_run`, `version_tag`,
+  `dataset_sha`, `seed`, `group_key`, `image_count`, `object_count`,
+  `class_count`, `classes_with_objects`, the split and class counts and the
+  unlabeled-frame counters. A field the manifest does not record is `null`.
+  `idle` nulls everything; `unknown` (manifest unreadable) sets only the
+  path fields.
+- `GET /export/datasets` rows: `kind`, `profile_name`, `export_dir`,
+  `version_tag`, `image_count`, `object_count`, `split_counts`,
+  `dataset_sha`, `exported_at`, `class_count`, `is_current`.
+- `GET /export/registry/{artifact}` serves a frozen artifact of the current
+  export as a file: `class_registry.json`, `data.yaml`, `manifest.json` or
+  `label_stats.json`. Any other name is `404` before the filesystem is
+  touched. It is scoped to the multi-class export.
 
-- Default (`require_fully_labeled_images: false`): the image is exported
-  with its validated objects labeled. The manifest records
-  `unlabeled_items_on_exported_images` and `images_with_unlabeled_items`,
-  and training preflight warns (`export_unlabeled_objects`).
-- `require_fully_labeled_images: true`: every image with at least one
-  unlabeled object is left out; the manifest records how many as
-  `images_dropped_not_fully_labeled`. If no image is fully labeled the
-  export is refused with `422` and nothing is written.
+Training preflight adds export checks (`export_readiness.py`):
 
-The partial-frame policy runs first, then `dedup_threshold` (which
-collapses near-duplicate *images*; a kept image keeps all its objects,
-a frozen-holdout image is preferred as the survivor, and the manifest's
-`dedup.n_input_rows` / `n_output_rows` count images), then `max_images`
-(a cap on images: an even round-robin over each image's rarest class, so
-a rare class survives the cap).
-
-**Multi-class manifest counts.**
-
-| Field | Counts |
+| Check | `block` when |
 |---|---|
-| `image_count` | exported images (= label files) |
-| `object_count` | exported objects (= label lines) |
-| `split_counts` | images per split, `{train, val, test}` |
-| `split_object_counts` | objects per split, `{train, val, test}` |
-| `class_split_counts` | objects per class per split (rows below) |
-| `unlabeled_items_on_exported_images` | unlabeled objects on the exported images |
-| `images_with_unlabeled_items` | exported images holding at least one unlabeled object |
-| `require_fully_labeled_images` | the request flag |
-| `images_dropped_not_fully_labeled` | images left out by that flag (`0` when off) |
-| `skipped_items` | `{no_image_id, no_usable_box_or_class}` validated items left out |
+| `export_not_empty` | the manifest has 0 images |
+| `export_splits_nonempty` | train or val has 0 images |
+| `export_class_split_coverage` | a trained class has fewer than `min_train_per_class` train or `min_val_per_class` val objects. Not applicable to a single-class export |
+| `export_unlabeled_objects` | never; `warn` when unlabeled objects remain on exported images |
+| `export_generation` | the items index was rebuilt since the export (its `items_index.uuid` differs) |
 
-`label_stats.json` (`{class_name: objects}`) sums `class_split_counts`
-per class.
+Each is `unknown` when the manifest lacks the data.
 
-`POST /export/yolo` returns `status`, `export_dir`, `version_tag`,
-`manifest_path`, `dataset_sha`, `image_count`, `object_count`,
-`split_counts`, `split_object_counts`, `require_fully_labeled_images`,
-`unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
-`images_dropped_not_fully_labeled`, `skipped_items`
-(`{no_image_id, no_usable_box_or_class}`), `dedup` (the requested
-threshold), `started_at`, `finished_at`.
+## Training, promote and models
 
-**`dataset_sha`** is a hash of the export's actual on-disk *content*, not
-of which item ids were selected — two exports of the same items with
-different splits, a corrected box, or a different class map (even with
-byte-identical label files, e.g. after a pure registry rename) always get
-different `dataset_sha`s. Concretely it hashes, over every written
-`labels/<split>/*.txt` file sorted by relative path: the relative path
-(so a split reassignment changes the digest even when the label bytes
-don't) and the sha256 of the file's bytes, then folds in the export's
-ordered `names:` list (`data.yaml` / dense export id → class name) so a
-class rename with no id change still changes the digest. The multi-class
-export records the full 64-hex sha256 digest; `POST /export/single_class`
-records the same digest truncated to 16 hex chars. The shared
-implementation is `label_content_sha` in
-`src/services/curation/export_support.py`.
+Training runs in a separate trainer container. The API writes a job
+(`job.json`), the trainer writes `status.json`, and the API serves both.
+Training is project-scoped: the dataset is the project's export, the run is
+tagged with the project, and a promoted model belongs to the project that
+trained it.
 
-Example manifest excerpt (`img-a` with three objects of two classes,
-`img-b` with one, and `img-c` with one validated object next to one
-unreviewed item). It writes `labels/train/img-a.txt` (three lines, e.g.
-`0 0.200000 0.400000 0.200000 0.400000` for a `bbox_norm` of
-`[0.1, 0.2, 0.3, 0.6]`), `labels/train/img-b.txt` and
-`labels/val/img-c.txt`:
+| Method | Path | Body or query | Response |
+|---|---|---|---|
+| POST | `/train/preflight` | `TrainJobSpec` | `PreflightReport`: `blocked`, `checks[]` (`name`, `severity` of `ok`, `warn`, `block`, `unknown`, `message`, `detail`), `summary`, `thresholds` |
+| POST | `/train/start` | `TrainJobSpec`, query `force` | `201 {job_id, preflight}` |
+| POST | `/train/start_campaign` | `TrainCampaignSpec`, query `force` | `201 {campaign_id, job_ids[]}` |
+| GET | `/train/status` | | the newest run's `TrainJobStatus`, or `null` |
+| GET | `/train/status/{job_id}` | | `TrainJobStatus` |
+| GET | `/train/runs` | `limit`, `offset` | `{items[], total}` |
+| GET | `/train/log/tail/{job_id}` | `lines` (1 to 5000, default 200) | `{job_id, lines[]}` |
+| POST | `/train/cancel/{job_id}` | | `{cancelled, job_id}` |
+| POST | `/train/cancel_campaign/{campaign_id}` | | `{cancelled, campaign_id}` |
+| GET | `/train/profiles` | | `{profiles[]}`: name, description, default hyperparameters |
+| GET | `/train/presets` | | `{class_subset_presets[]}` |
+| GET | `/train/gpus` | | `TrainGpuOptionsResponse`: `options[]` (`value`, `label`, `gpu_ids`, `advisory`, `stops_containers`, `default`), `allowed_ids`, `unrestricted` |
+| GET | `/train/augmentation_presets` | | `{presets[], default}` |
+| POST | `/train/promote/{job_id}` | `PromoteRequest` | `PromoteResponse` |
+| POST | `/train/reload_promoted` | | `{status, reloaded[], failed[]}` |
+| GET | `/train/manifest/{job_id}` | | the run's lineage envelope |
+| GET | `/train/artifacts/{job_id}/{name}` | | a whitelisted artifact file |
 
-```json
-{
-  "group_key": "image_id",
-  "image_count": 3,
-  "object_count": 5,
-  "split_counts": {"train": 2, "val": 1, "test": 0},
-  "split_object_counts": {"train": 4, "val": 1, "test": 0},
-  "class_split_counts": [
-    {"class_id": 1, "export_id": 0, "class_name": "alpha", "train": 2, "val": 1, "test": 0},
-    {"class_id": 2, "export_id": 1, "class_name": "beta", "train": 2, "val": 0, "test": 0}
-  ],
-  "require_fully_labeled_images": false,
-  "unlabeled_items_on_exported_images": 1,
-  "images_with_unlabeled_items": 1,
-  "images_dropped_not_fully_labeled": 0,
-  "skipped_items": {"no_image_id": 0, "no_usable_box_or_class": 0}
-}
-```
+### Start
 
-`POST /export/single_class` builds a narrowed dataset for a single class
-or a class subset, with an extra integrity field the multi-class export
-doesn't need: `frozen_test_sha` hashes the test split's *identity*
-(which frames, not their content — a label correction inside the test
-set must not trip it) so "the held-out set never changed between two
-runs" is checkable. `dataset_sha` uses the same content-hash mechanism as
-the multi-class export (see above). The profile's own `current` symlink
-is flipped atomically. `GET
-/export/single_class/status?profile_name=...` reports the last run for
-one profile, with the same `idle`/`unknown`/`success` contract as
-`GET /export/status`. Each `profile_name` gets its own output root and
-its own `current` symlink, so narrowed exports never clobber each other
-or the multi-class dataset.
+- `TrainJobSpec` fields: `dataset_export_dir` (defaults to the current export;
+  it must be under the project's export root, `422 export_outside_project`,
+  not bypassable by `force`), `profile` (`probe`, `nano`, `small`, `medium`,
+  `large`, `xlarge`, `custom`), `model_family` (`yolo26`), `model_size`,
+  `hyperparameters`, `include_classes`, `single_cls`, `augmentation`,
+  `stop_when`, `auto_promote_best`, `auto_quantize_bakeoff`,
+  `cuda_visible_devices`, `mlflow_experiment`, `mlflow_run_name`,
+  `submitted_by`. Provenance fields (`project`, `dataset_sha`,
+  `frozen_test_sha`, `registry_snapshot_path`, image revision) are filled by
+  the server.
+- A blocked preflight is `422 {message: "preflight blocked", preflight}`
+  unless `force=true` bypasses a bypassable check. An unknown augmentation
+  preset is `422` with `field: augmentation.preset` and `valid_presets`,
+  before any GPU claim or job write, even with `force`. A run that is already
+  active is `409`. A GPU claim that cannot be satisfied is `409`.
+- `GET /train/augmentation_presets` serves the preset catalog (`id`, `label`,
+  `description`, `orientation_sensitive`) and the default
+  (`balanced_default`). A client renders it and never hardcodes ids.
+  `orientation_sensitive` means horizontal flip is off for the whole run.
+- Preflight includes the export checks listed under
+  [Export](#export), the `thresholds` and the class adequacy.
 
-**Readiness (DQ-M9).** Both exports refuse with `422`
-(`detail: "nothing to export: <reason>"`) when nothing is exportable —
-`POST /export/yolo`: no item is `class_validated` (and not excluded or
-review-dismissed), none has an image id, a box and a class, every one is
-on a class id missing from (or deprecated in) the registry, or
-`require_fully_labeled_images` left no image; `POST
-/export/single_class`: no item matches the profile. Nothing is written
-and `current` keeps pointing at the previous export. Every manifest
-records `items_index: {index, uuid, created_at}` — the items index it was
-read from (`null` if it could not be read).
+### Status
 
-`POST /train/preflight` adds these export checks (see
-`src/services/curation/export_readiness.py`):
+`TrainJobStatus`: `job_id`, `state` (`queued`, `starting`, `running`,
+`exporting`, `finished`, `failed`, `cancelled`, `skipped`, `lost`),
+`current_epoch`, `total_epochs`, `epoch_time_s`, `gpu[]`, `heartbeat_at`,
+`started_at`, `finished_at`, `error`, `checkpoint_path`, `campaign_id`,
+`last_epoch_metric`, `best_checkpoint_metric`, `eval`, `compare`,
+`mlflow_run_id`, `mlflow_experiment_id`, `mlflow_run_url`.
 
-| Check | `block` when | `unknown` when |
-|---|---|---|
-| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` images | no readable manifest / no count |
-| `export_splits_nonempty` | `split_counts.train` or `split_counts.val` (images) is `0` (message names the empty split(s); `detail.empty_splits`) | the manifest records no train/val counts |
-| `export_class_split_coverage` | a class the run trains on (`include_classes`, else every class in `class_split_counts`) has fewer than `min_train_per_class` (`1`) train or `min_val_per_class` (`1`) val objects — message lists each as `name (class id): train=N, val=N`; `detail.classes[]` carries `class_id`, `class_name`, `train`, `val`, `test`, `missing_splits`. Always `ok` ("not applicable") for a single-class export, which `export_splits_nonempty` already covers | the manifest has no `class_split_counts` (exported before they were recorded — re-export) |
-| `export_unlabeled_objects` | never blocks: `warn` when `unlabeled_items_on_exported_images > 0` — message gives `images_with_unlabeled_items/image_count` and the object count, says training learns unlabeled objects as background, and points at `require_fully_labeled_images`; `detail` carries `image_count`, `unlabeled_items_on_exported_images`, `images_with_unlabeled_items`, `require_fully_labeled_images`, `images_dropped_not_fully_labeled`. `ok` when `0`, and always `ok` ("not applicable") for a single-class export | the manifest has no unlabeled counts (exported before per-image labels — re-export) |
-| `export_generation` | the manifest's `items_index.uuid` differs from the live items index's (the index was rebuilt since the export); for an unstamped export, its `exported_at` is before the live index's creation | the live index can't be read, or the manifest has neither a stamp nor `exported_at` |
-
-The index `uuid` is the staleness signal because it changes on every
-index creation and is immune to clock skew; label edits after an export
-are deliberately not "stale" (exports are snapshots, and retraining on a
-past one is supported).
-
-**Split assignment** (`stratified_split` in
-`src/services/curation/export_support.py`; the manifest records
-`group_key` and `seed`):
-
-- **Group = source image** (`group_key: "image_id"`). Items cut from
-  one image never straddle train/val/test; the multi-class export writes
-  each image once, so the image and all its objects share one split. `cluster_id` is not a leakage unit — class clusters
-  have `cluster_id == class_id`, so grouping on it made each class one
-  group. Crop-level `dup_group_id` is not used either: it is written only
-  by an opt-in scorer run, only for items in a multi-member group, and
-  its ids (`dup_<n>`) are numbered per run, so two runs can reuse an id
-  for unrelated items. Whole-frame near-duplicate bursts are handled
-  before the split by the export's `dedup_threshold`.
-- **Frozen holdout**: an image carrying a `test_holdout` item goes to
-  `test` with every object on it (any class).
-- **Strata**: each remaining group counts toward its most common class.
-  Within a class, groups are ordered by `sha256(seed:class:group)`, so
-  the same data and seed always give the same split.
-- **Per-class allocation of the `n` remaining groups**: a class with at
-  least one frozen holdout item uses the holdout as its test set and
-  splits the rest train : val = `train_ratio : val_ratio` (0.8 : 0.1); a
-  class with no holdout item splits train / val / test at 0.8 / 0.1 /
-  0.1. Every split with a positive ratio gets one group before any
-  gets a second (priority train → val → test); the rest follow the
-  ratio. So `n = 0` → the class appears only in test (its holdout);
-  `n = 1` → train; `n = 2` → one train + one val; `n >= 3` → at least
-  one train and one val (and, with no holdout, at least one test).
-
-The multi-class manifest's `class_split_counts` lists every class in the
-export (`class_id` registry id, `export_id` dense id, `class_name`,
-`train`, `val`, `test` object counts), including classes with no
-objects. `label_stats.json` keeps its flat `{class_name: count}` shape
-(objects per class).
-
-**`GET /export/status`** (`ExportStatusResponse`) serves the last
-completed multi-class export — the `current` symlink's manifest:
-`status` (`idle` / `unknown` / `success`), `path` (resolved export dir;
-`export_dir` is the same value), `last_run` (finish, else start time),
-`version_tag`, `dataset_sha`, `seed`, `group_key`, `image_count`
-(images), `object_count` (objects), `class_count`, `split_counts`
-(images per split, `{train, val, test}`), `split_object_counts` (objects
-per split), `class_split_counts` (objects per class per split, rows as
-in the manifest), `require_fully_labeled_images`,
-`unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
-`images_dropped_not_fully_labeled`, `skipped_items`
-(`{no_image_id, no_usable_box_or_class}`). A field the manifest does not
-record (an export written before it existed) is `null` — this is the
-common case for `skipped_items` against an export from before it was
-added to the manifest. `idle` sets every other field to `null`; `unknown`
-(manifest missing/unreadable) sets only `path` / `export_dir`.
+- `last_epoch_metric` is `{epoch, map50, map50_95}` of the true last training
+  epoch. `best_checkpoint_metric` is the same shape for the best checkpoint's
+  own re-validation, as one coherent row. Both are `null` for a status
+  written before they existed.
+- `eval` states which split every number came from:
 
 ```json
-{
-  "status": "success",
-  "path": "/exports/20260924T120000Z",
-  "export_dir": "/exports/20260924T120000Z",
-  "last_run": "2026-09-24T12:00:04+00:00",
-  "version_tag": "v1",
-  "dataset_sha": "4c1f...",
-  "seed": 42,
-  "group_key": "image_id",
-  "image_count": 3,
-  "object_count": 5,
-  "class_count": 2,
-  "split_counts": {"train": 2, "val": 1, "test": 0},
-  "split_object_counts": {"train": 4, "val": 1, "test": 0},
-  "class_split_counts": [
-    {"train": 2, "val": 1, "test": 0, "class_id": 1, "export_id": 0, "class_name": "alpha"},
-    {"train": 2, "val": 0, "test": 0, "class_id": 2, "export_id": 1, "class_name": "beta"}
-  ],
-  "require_fully_labeled_images": false,
-  "unlabeled_items_on_exported_images": 1,
-  "images_with_unlabeled_items": 1,
-  "images_dropped_not_fully_labeled": 0,
-  "skipped_items": {"no_image_id": 0, "no_usable_box_or_class": 0}
-}
+{"map50": 0.62, "map50_95": 0.41, "precision": 0.71, "recall": 0.55, "split": "test",
+ "val_last": {"map50": 0.9191, "map50_95": 0.742},
+ "per_class": [{"class_id": 0, "name": "widget", "precision": 0.8, "recall": 0.7,
+                "f1": 0.75, "ap50": 0.79, "support": 12}],
+ "confusion_matrix_url": "/curation/projects/example/train/artifacts/<job_id>/confusion_matrix.png"}
 ```
 
-### Training run status — `last_epoch_metric` / `best_checkpoint_metric`
+  `split: "test"` means the frozen test split was scored. When the test pass
+  fails or the export has no test split, the four overall keys carry the
+  training-time validation numbers, `per_class` is absent and
+  `split: "val"`. A consumer must check `split` before reading `map50` as
+  held-out performance. `val_last` is always present when a result row
+  exists. `head: "end2end"` records that the NMS-free one-to-one head was
+  scored.
+- `confusion_matrix_url` points at `/train/artifacts/{job_id}/{name}`.
+  Whitelisted names: `confusion_matrix.png`, `confusion_matrix_normalized.png`,
+  `results.png`, `results.csv`, `BoxP_curve.png`, `BoxR_curve.png`,
+  `BoxF1_curve.png`, `BoxPR_curve.png`. The server path never reaches the
+  wire.
+- `mlflow_run_url` is rebuilt from `OP_MLFLOW_PUBLIC_URL`, the run id and the
+  experiment id. It is `null` when the public base is not configured. The
+  internal tracking host never reaches the wire.
 
-`GET /train/status`, `GET /train/status/{job_id}` and `GET /train/runs`
-(`TrainJobStatus`) serve two distinct per-run metric rows instead of the
-former `best_metric`/`last_metric` pair:
+### Promote
 
-- `last_epoch_metric`: `{"epoch": <int>, "map50": <float>, "map50_95": <float>}`
-  — the true LAST TRAINING epoch's metrics.
-- `best_checkpoint_metric`: same shape — the best checkpoint's
-  (`best.pt`) own re-validation metrics, as one coherent row (both
-  `map50` and `map50_95` from the same validation pass).
+`POST /train/promote/{job_id}` copies the run's ONNX export into the Triton
+model repository, writes the config and `labels.txt`, and asks Triton to load
+it. Request: `triton_name`, `force`, `fp16`, `input_size`, `max_batch_size`,
+`overwrite`. Response: `triton_name`, `onnx_path`, `config_path`,
+`labels_path`, `triton_loaded`, `class_remap_source`, `force_used`,
+`gate_report`, `lineage_stamped`, `cold_start_expected_on_first_inference`.
 
-Why two fields: Ultralytics fires its `on_fit_epoch_end` callback once
-more after training completes, re-validating `best.pt` — but without
-advancing its internal epoch counter, so that call is otherwise
-indistinguishable from a repeated epoch. The trainer
-(`docker/trainer/trainer.py::_make_ultralytics_callbacks`) detects the
-repeat and routes it to `best_checkpoint_metric` instead of clobbering
-`last_epoch_metric` with the wrong (best-checkpoint, not last-epoch)
-values — and `best_checkpoint_metric` is a single row rather than the
-former per-key running max, which could otherwise report `map50` from
-one epoch and `map50_95` from another. A status written before these
-fields existed serves both as `null`; the retired `best_metric` /
-`last_metric` keys are dropped, never mapped onto the new fields, and
-`eval` is never copied into them (it may be test-split numbers).
+- The model is stored as `<slug>__<triton_name>` for every project except
+  `default`. `triton_name` may not contain `__` (`422`). An existing name is
+  `409` unless `overwrite`.
+- Errors: `404` unknown job or no ONNX export; `422` the run is not
+  `finished` or `exporting`, the promote gate failed, or class identity cannot
+  be proven; `502` Triton refused the load.
+- A `422` body is `{detail: {message, failures[], force_allowed, override,
+  thresholds}}`, each failure `{code, message, class_name?}`. `force_allowed`
+  says whether `force=true` can pass that failure. `force` bypasses only the
+  score thresholds and a missing class remap; it cannot invent a finished
+  run.
+- The gate reads `eval`: a run whose test pass failed (`split: "val"`, no
+  `per_class`) fails the per-class check outright.
+- Class identity. A subset or single-class run's `class_remap.json` is carried
+  from the trainer into the checkpoint's `weights/` directory.
+  Promote resolves it (manifest `lineage.class_remap` first, then the weights
+  directory file) before writing `labels.txt`. With no resolvable remap,
+  a subset or single-class run is `422 class_remap_missing`, and a
+  full-class run whose registry has a gap or deprecated class is
+  `422 class_remap_missing_full_class`. See [Class identity](#class-identity).
+  `force` bypasses both, logged distinctly.
 
-`/bakeoff/trained_models`'s `trainer_map50` column and the promote gate
-(`src/routers/curation_train.py::_evaluate_promote_gate`) read from
-`eval.map50` (the fresh test-split re-validation, `state.eval` /
-`populate_eval_block`), not from either of these two fields — they are
-diagnostic epoch-level metrics, not the run's scored comparison metric.
-`/bakeoff/trained_models` also serves `trainer_map50_split` (`eval.split`:
-`"test"`, or `"val"` when the test pass fell back).
+### Models
 
-`GET /train/manifest/{job_id}`'s `results` block mirrors the same two
-field names (`last_epoch_metric`, `best_checkpoint_metric`) in place of
-the old `results.best_metric`.
+| Method | Path | Body or query | Response | Errors |
+|---|---|---|---|---|
+| GET | `/models/status` | `include_other_projects` | `{models[]}`: Triton models and the segmenter and VLM services. Each Triton entry carries `project`, `shared`, `owned`, `sharing_revision`, `class_mapping`, `optional`. VLM rows are one per registered endpoint with `kind: vlm`, `active` and `active_in` (the bound project only) | |
+| GET | `/models/{model_name}/class_mapping` | | `{model, model_project, project, entries[], unmapped[], not_covered[], labels}` | `404 model_not_found` |
+| PUT | `/models/{model_name}/sharing` | `{shared, expected_revision}`, query `force` | `{name, project, shared, revision, used_by[]}` | `404 model_not_found`, `409 revision_conflict`, `409 in_use` |
+| DELETE | `/models/{model_name}` | query `force` | `{triton_name, triton_unloaded, directory_removed, forced, warning}` | `404`, `400`, `403`, `409` |
 
-**`eval.head`.** YOLO26 exports/serves the NMS-free one-to-one head
-(`nms=False` at export, since Ultralytics forces `nms=False` on any
-`end2end` model). The trainer's own post-training test-split
-re-validation (`_finalize_run`, ~`docker/trainer/trainer.py:585`)
-explicitly forces that same head (`model.end2end = True`) before calling
-`.val(split='test', ...)` when the checkpoint is a genuine dual-head
-(one-to-one + one-to-many) YOLO26 build — `.val()` has no `end2end=`
-keyword; the only real toggle is the loaded model's own `.end2end`
-property (`ultralytics.nn.tasks.DetectionModel.end2end`, a setter
-delegating to `set_head_attr`). `state.eval.head` records `"end2end"`
-when this was applied, so a comparison result is explicit about which
-head it scored rather than silently depending on Ultralytics' own
-`.val()` default for the loaded checkpoint.
+- A model's classes reach another project by name only. `class_mapping`
+  matches them onto the bound project's registry; an entry has `match` of
+  `exact`, `case_insensitive` or `none`.
+- Only the owning project may share a model or delete it (`404` for anyone
+  else). Sharing is opt-in.
+- `status: not_installed` (instead of `not_ready`) marks an optional detector
+  that is absent from Triton's repository index.
+- `DELETE /models/{model_name}`: an external-service model is `400`. A
+  region-detector or OCR model of the active profile is `403` always. Other
+  core pipeline models need `force=true` (`409` without it).
 
-### Capability discovery — `GET /methods`
+## Bake-off
 
-`GET {prefix}/methods` (`src/routers/curation/methods.py`) is the
-capability-discovery endpoint every consumer should gate optional UI on
-instead of feature-probing a write endpoint with a throwaway request.
-It returns `{'strategies': [...], 'flags': {...}}`; each `strategies`
-entry carries an `axis` of `cluster` / `score` / `sort` / `overlay` /
-**`export`**.
+Model comparison on frozen test sets. Models are in
+`src/routers/curation/_bakeoff_models.py`; every route has a response model.
+Evaluator-written files are validated on read. A file that is not schema
+version 2 is `409 bake-off result <file> has an unsupported schema`.
 
-**`export` axis** — which dataset-export *kinds*
-`POST {prefix}/export/{kind}` can actually produce on this deployment:
-
-| `id` | `status` | Notes |
+| Method | Path | Notes |
 |---|---|---|
-| `yolo` | `stable` | Backed by `GenericYoloExportService`; always advertised. |
-| `single_class` | `stable` | Backed by `SingleClassExportService`; single-class or class-subset export. |
+| GET | `/bakeoff/eval_datasets` | `source` (`export` or `external`) -> `{datasets[], count}`. A dataset has `id` (`export:<path>` or `external:<group>/<name>`), `dataset_kind` (`multi_class`, `single_class`, `external`), `nc`, `classes[]`, counts, `frozen_test_sha`, `test_label_sha`, `sha_source`, `dataset_sha`, `is_current` |
+| GET | `/bakeoff/trained_models` | `dataset_id`, `limit` -> `{models[], count}`. A model has `run_id`, `display_name`, `model_family`, `model_size`, `imgsz`, `checkpoint_path`, `class_names`, `single_cls`, `trainer_map50`, `trainer_map50_split` and, with `dataset_id`, `for_dataset` (`same_export`, `same_frozen_test`, `n_classes_mapped`, `train_test_overlap`) |
+| GET | `/bakeoff/profiles` | `{profiles[], count, default_profile, default_error}` |
+| GET | `/bakeoff/baseline_models` | `profile` -> `{baselines[], count}` |
+| POST | `/bakeoff/run` | `BakeoffRunRequest` -> `BakeoffRunAccepted` |
+| GET | `/bakeoff/runs` | `{runs[]}` |
+| GET | `/bakeoff/status/{job_id}` | `BakeoffStatus` (`state`: `queued`, `running`, `done`, `error`; `progress`, `completed[]`, `failed[]`) |
+| GET | `/bakeoff/results/{job_id}` | `dataset_id` optional -> `BakeoffComparison` |
+| GET | `/bakeoff/matrix/{job_id}` | `BakeoffMatrix` (`cells[model][dataset]`, `best[dataset][metric]` with every tied winner) |
 
-There is deliberately **no** domain-named export id. An earlier
-single-class export is covered by
-`single_class`, which takes its target class ids from the request
-instead of hardcoding a domain vocabulary — a domain-named export kind
-would be exactly the
-hardcoding this axis exists to avoid.
+`BakeoffRunRequest` (`extra='forbid'`): `job_id`, `profile`,
+`datasets: [{id}]` (an `id` may be `run:<job_id>`), `models[]` and
+`quantize`. A model is one of `{source: "run", run_id, backend, mode}`,
+`{source: "baseline", name}` or `{source: "custom", name, backend, weights,
+triton_model, imgsz, mode, class_map, backend_options}`. Errors: `400`
+(no models, no datasets, unknown dataset, run or baseline id, duplicate model
+keys, unknown profile), `422` (a single-class run over several classes on a
+multi-class dataset, unknown fields), `409` (the job id exists, or
+GPU-resident containers could not be stopped).
 
-### Shared curation-strategy defaults — `GET,PUT /settings`
+`BakeoffComparison`: `thresholds`, `dataset`, `eval_classes`,
+`common_classes`, `rank_by`, `rank_scope` (`common` or `overall`), `models[]`
+(`rank`, `overall`, `common`, `per_class[]`, `coverage`, `class_mapping`,
+`train_test_overlap`, `latency_ms`, `fps`, `size_mb`, `per_stratum`),
+`failed[]`, `warnings[]`, `n_models`. A model's classes map onto the eval
+classes by name (`class_mapping.method`: `explicit`, `run_class_remap`,
+`registry_ids`, `names`, `single_class_fallback`); unmapped and not-covered
+classes are reported.
 
-Cropwright's StrategyBar/AssistScopeBar (cluster method, sort order,
-detection profile, prompt pack dropdowns) previously reset to a
-hardcoded client default on every reload. There is no user-account
-system (single shared instance), so the shared default per axis is now
-stored once, backend-side, instead of per-browser.
+## Scores, selection, projection, probe, search, stats
 
-`GET {prefix}/settings`:
-
-```json
-{"defaults": {"cluster": "ivf"}, "updated_at": "2026-09-20T12:00:00+00:00", "updated_by": null}
-```
-
-`defaults` is an **open map** keyed by axis id — deliberately not a
-fixed set of named fields (`cluster`/`sort`/`detection_profile`/
-`prompt_pack`) — so a future axis never requires a wire-format change.
-A missing key means "no shared override for that axis." No document has
-ever been written yet (nothing has been `PUT`) is not an error: this
-still returns `200` with `defaults: {}`, `updated_at: null`,
-`updated_by: null`. `updated_by` is always `null` today (no
-user-account system); the field exists on the wire for when one does.
-
-`PUT {prefix}/settings` (partial body — only the axes being changed):
-
-```json
-{"defaults": {"cluster": "ahc"}}
-```
-
-Merges into the stored document; axes already set and not mentioned in
-the body are left untouched. Returns the full updated record, same
-shape as the `GET`. Each `axis` key must be one of
-`src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`
-(`cluster` / `sort` / `prompt_pack` today —
-`score`/`overlay`/`export` have no single-selectable-id "default"
-concept a shared override could apply to, and `detection_profile` is
-read-only (the region cascade runs on the process's `OP_REGION_PROFILE`),
-so they 422 rather than
-silently accepting a value nothing will ever honor), and each `id` must
-be a currently-advertised id for that axis per `GET /methods` — either
-violation returns `422` with a message listing the valid axes/ids.
-
-**The consistency guarantee (the actual point of this endpoint):**
-`GET /methods`'s per-axis `default: true/false` flag is *derived* from
-this settings document via
-`src.services.curation.strategy_defaults.resolve_effective_default(axis)`
-— it looks up `defaults.get(axis)`; if present and still a
-currently-advertised id for that axis, that id is the effective
-default; otherwise it falls back to the axis's pre-existing hardcoded
-default constant (`DEFAULT_METHOD` for `cluster`,
-`get_default_profile_name()` for `detection_profile`,
-`resolve_prompt_pack().name` for `prompt_pack`; `sort` has no single
-hardcoded default — only a per-tab mapping,
-`review_sorts.default_sort_for_tab` — so a `sort` override is an
-*additional*, opt-in global choice layered on top of the untouched
-per-tab defaults, not a replacement for them). This exact function is
-also called by every real endpoint that applies a hardcoded default
-when a request omits that axis's param, so setting a shared default
-changes actual server behavior, not just what `GET /methods` displays:
-
-| Axis | Real endpoint call site |
-|---|---|
-| `cluster` | `src.services.curation.clustering.orchestrator.cluster_residuals` — resolves the effective cluster method when `?clustering_method` is omitted (feeds `POST /pipeline/auto_label*` and `POST /clusters/*`'s residual-clustering stage). |
-| `sort` | `src.services.curation.review_sorts.build_sort` — when `GET /review/{tab}`'s `?sort` is omitted or `'default'`, a valid shared override is tried before falling back to that tab's own hardcoded default. |
-| `detection_profile` | **Read-only.** `GET /methods` lists the registered region profiles with the active one (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`) as `default: true` and `settable: false`; a stored settings override is ignored and `PUT /settings` with this axis is a `422`. `POST /pipeline/auto_label*` rejects `?detection_profile=` with a `422` (no auto-label stage runs region detection) rather than silently ignoring it. |
-| `prompt_pack` | `POST /pipeline/auto_label*` — `?prompt_pack=<id>` selects the pack for that job's VLM labeling stage (same override/`422`/echo semantics); omitted resolves via this function. Every VLM endpoint (`POST /vlm/label_batch`, `/vlm/verify_regions`, `/vlm/verify_region_batch`, `/vlm/region_visible_batch`) also uses the effective default. Selectable ids: the built-in generic pack, every `OP_PROMPT_PACK_PATHS` pack, and the `OP_PROMPT_PACK_PATH` pack (the fallback default). |
-
-Storage: a single OpenSearch document (not a full index of many rows),
-in its own small index (`IndexRole.SETTINGS`, the project's
-`op_prj_<project>__settings`) addressed by the fixed doc id
-`CURATION_SETTINGS_DOC_ID = 'default'` — following the exact same
-`IndexRole` + `INDEX_BODIES` convention every other curation index uses
-(`src/clients/curation_opensearch.py`), wired into the same
-`create_curation_indexes` startup bootstrap automatically. The
-`defaults` field is mapped `{'type': 'object', 'enabled': False}` (never
-queried, so never indexed) — OpenSearch's partial-update `doc` merge
-still recursively merges into it regardless of `enabled`, which is what
-lets a partial `PUT` avoid clobbering other axes without a
-read-modify-write round trip in application code.
-
-### Model comparison (bake-off) — `/bakeoff/*` (BREAKING, schema v2)
-
-Models in `src/routers/curation/_bakeoff_models.py`; every
-route has a `response_model`. Evaluator-written files (`status.json`,
-`comparison.json`, `matrix.json`) are validated on read; a file that is not
-schema v2 answers `409 "bake-off result <file> has an unsupported schema
-(schema_version != 2)"`. No compatibility fields for the v1 wire.
-
-- `GET /bakeoff/eval_datasets?source=export|external` -> `EvalDatasetList`
-  `{datasets: EvalDataset[], count}`. `EvalDataset`: `id`
-  (`export:<path under export_root>` | `external:<group>/<name>`), `source`,
-  `group`, `name`, `path`, `is_current`, `dataset_kind`
-  (`multi_class|single_class|external`), `nc`, `classes`
-  (`EvalDatasetClass`: `eval_class_id`, `name`, `registry_class_id`,
-  `n_objects`, `n_images`; only classes with objects in test), `n_images`,
-  `n_objects`, `n_background_images`, `frozen_test_sha` (identity),
-  `test_label_sha` (content), `sha_source` (`manifest|computed`),
-  `dataset_sha`, `exported_at`, `unlabeled_items_on_exported_images`,
-  `frozen_ok` (external only).
-- `GET /bakeoff/trained_models?dataset_id=&limit=` -> `TrainedModelList`
-  `{models: TrainedModel[], count}`. `TrainedModel`: `run_id`,
-  `display_name`, `model_family`, `model_size`, `imgsz`, `checkpoint_path`,
-  `finished_at`, `campaign_id`, `train_export_id`, `dataset_sha`,
-  `frozen_test_sha`, `class_names`, `single_cls`, `trainer_map50`,
-  `trainer_map50_split`, `for_dataset` (only with `?dataset_id`:
-  `dataset_id`, `same_export`, `same_frozen_test`, `n_classes_mapped`,
-  `train_test_overlap {n_images, fraction}`).
-- `GET /bakeoff/profiles` -> `BakeoffProfileList` `{profiles, count,
-  default_profile, default_error}`; rows (`BakeoffProfileRow`): `name`,
-  `description`, `kind` (`registered|configured`), `default`,
-  `class_filter`, `imgsz`, `conf_floor`, `nms_iou`, `op_conf`, `op_iou`,
-  `rank_metric`, `default_backend`, `triton_model`, `context_class_ids`,
-  `baselines_path`. Example profiles are not listed.
-- `GET /bakeoff/baseline_models?profile=` -> `BaselineModelList`
-  `{baselines: BaselineModel[], count}` (default registry empty).
-  `BaselineModel`: `name`, `backend`, `weights`, `imgsz`, `mode`,
-  `class_map` (`{"<model class id>": "<eval class name>"}` | null),
-  `backend_options`, `training_data`, `triton_model`.
-- `POST /bakeoff/run` body `BakeoffRunRequest` (`extra='forbid'`): `job_id?`,
-  `profile?`, `datasets: [{id}]` (`id` may be `run:<job_id>`), `models[]`
-  discriminated on `source`: `RunModelRef {source:"run", run_id,
-  display_name?, backend?: ultralytics|onnxruntime, mode?}`,
-  `BaselineModelRef {source:"baseline", name, display_name?}`,
-  `CustomModelRef {source:"custom", name, backend, weights?, triton_model?,
-  imgsz?, mode?, class_map?, backend_options?, display_name?}`;
-  `quantize?: {run_id, formats?, n_calib?, calib_split?, throughput?}`.
-  Answers `BakeoffRunAccepted` `{status:"enqueued", job_id, profile,
-  datasets: [{id, path, frozen_test_sha, test_label_sha, n_eval_classes}],
-  models: [{model, display_name, source, class_mapping: {<dataset id>:
-  ClassMapping}, train_test_overlap: {<dataset id>: {n_images, fraction} |
-  null}}], warnings}`. `ClassMapping`: `method`, `model_to_eval`,
-  `unmapped_model_classes`, `not_covered_eval_classes`, `warnings`. Errors:
-  400 (no models/quantize, no datasets, unknown/invalid dataset, run or
-  baseline id, duplicate model keys, unknown profile), 422
-  (`single_cls` run over several classes on a multi-class dataset; unknown
-  fields), 409 (job id exists; GPU-resident containers could not be
-  stopped — the job file is removed and the status set to `error`).
-- `GET /bakeoff/status/{job_id}` -> `BakeoffStatus` (`schema_version`,
-  `job_id`, `state` `queued|running|done|error`, `profile`, `datasets`,
-  `models`, `started_at`, `finished_at`, `progress {done,total}`,
-  `completed [{dataset, model}]`, `failed [{stage, dataset, model, error}]`,
-  `error`).
-- `GET /bakeoff/runs` -> `BakeoffRunList` `{runs: [{job_id, state, profile,
-  datasets, models, started_at, finished_at}]}`; non-v2 dirs skipped.
-- `GET /bakeoff/results/{job_id}?dataset_id=` -> `BakeoffComparison`
-  (default: the job's first dataset): `schema_version`, `job_id`, `profile`,
-  `thresholds`, `dataset`, `eval_classes`, `common_classes`, `rank_by`,
-  `rank_scope` (`common|overall`), `models: ComparisonRow[]` (`rank`,
-  `model`, `display_name`, `source`, `run_id`, `runtime`, `imgsz`,
-  `training_data`, `overall: MetricBlock`, `common: CommonMetricBlock`,
-  `per_class: PerClassRow[]`, `coverage`, `class_mapping {method,
-  warnings}`, `train_test_overlap`, `latency_ms {mean,p50,p90,p99}`, `fps`,
-  `size_mb`, `per_stratum`), `failed`, `warnings`, `n_models`.
-- `GET /bakeoff/matrix/{job_id}` -> `BakeoffMatrix`: `datasets[]` (`id`,
-  shas, `rank_scope`, `n_common_classes`), `models[]`, `metrics`,
-  `cells[model][dataset]` (`map_50`, `map_50_95`, `precision`, `recall`,
-  `f1`, `latency_ms`, `size_mb`, `coverage`, `rank`), `best[dataset][metric]`
-  = list of every tied winner.
-
-### Internal / worker-facing
-
-- `_PathLookupRequest`: `image_paths` (max 10,000)
-- `_PathLookupResponse`: `known_paths` (`dict[image_path, image_id]`)
-- `_PublishEvent` (`POST /events/publish`, used by the SAM worker): `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `region_status`, `region_count`, `image_path`, `topic`, `extra`. `extra='forbid'`: an unknown key is a `422` (a mismatched status key used to be silently dropped, so worker-published `crop.region_verified` events arrived with no status — audit S7).
-
-## Item wire format
-
-Built by `serialize_item()` in `src/services/curation/wire.py`. 88 keys,
-always all present (a value is `null` when the stored doc has no value;
-`bbox_norm` defaults to `[]`, `class_name`/`class_source`/
-`label_source`/`updated_at`/`source`/`proposed_class_name` to `""`,
-`confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
-`needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
-
-Item keys (64): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `probe_actionable`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `item_text_lines`.
-
-`vlm_class_attempted_at` / `vlm_class_empty_reason`: when a VLM was last
-asked for the item's class, and why that attempt gave no class — `no_answer`
-(empty / `null`), `no_match` (`-1`, or `__new__` with no proposed name),
-`invalid_index`, `unparseable` (no usable reply entry); `null` when it
-answered. An empty answer leaves every class field as it was (it is **not**
-`vlm_unmatched`, which means the VLM named a label outside the registry and
-carries it in `vlm_raw_class`). Such items appear in the `all` review tab and
-stay out of the VLM selectors for 24 h.
-
-`vlm_raw_class`: the VLM's class answer verbatim, `null` when none is
-stored. On a `vlm_unmatched` item it is the label the VLM named that is not
-in the registry (the item's `class_name` is whatever it already carried),
-so a reviewer sees what the VLM actually said.
-
-Region keys (24): the item-level `RegionFields` attributes -- `region_status`, `region_reason`, `region_rejection_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify` -- plus the box list and its summary: `region_boxes`, `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision`. A region's per-box data (geometry in both frames, score, detector, source, verdict, text, cluster placement, thumbnail) is **only** an element of `region_boxes`; there is no item-level `region_bbox_norm` / `region_score` / `region_detector` / `region_text*` / `region_candidate_*` / `region_cluster_*` / `region_thumbnail_url` / `region_bbox_in_parent` key.
-
-Derived keys (computed by the serializer, never stored):
-
-- `region_boxes[].bbox_in_parent` — a box in the item-crop frame
-  (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when the item has no usable
-  `bbox_norm`. Draw it on the item thumbnail as-is.
-- `region_boxes[].thumbnail_url` — the box's close-up
-  (`GET /crops/{crop_id}/region_thumbnail?box_id=<box_id>`; the `box_id` is
-  required, `422 box_id_required` without it, `404 unknown_box_id` for an
-  id the item does not have).
-- `proposed_class_id` / `proposed_class_name` — the class a one-key confirm
-  applies, on **every** item endpoint (was `/review`-only): the VLM
-  suggestion when there is one, else `class_id` and `vlm_raw_class` or
-  `class_name` or `""` (see "VLM class suggestion").
-- `confidence` is always the **detector/classifier score** stored at
-  ingest, whatever wrote the current label — never the VLM's. Label it as
-  such. `class_confidence` / `class_confidence_source` (DQ-M8) are the
-  confidence of the writer that set the label: for a VLM `class_source`
-  (`vlm`, `vlm_unmatched`, `vlm_new_class_pending`, `vlm_reclassified`)
-  the VLM's category (`vlm_confidence`) mapped high `0.92` / medium `0.70`
-  / low `0.40` with source `vlm` (`null` for a missing/unknown category);
-  for a classifier source (`<profile>_model`) the stored score with
-  source `model`; `null`/`null` for human, move, merge, import,
-  cluster-vote and unclassified-proposal labels.
-- `cluster_kind` — `class` / `candidate` / `unassigned` from `cluster_id`
-  (`null` without one); same rule as the cluster cards.
-- `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
-  without a distance); `cluster_is_core` — `cluster_similarity >=
-  core_similarity_min` (served on `GET /clusters`, `0.75`).
-  `cluster_distance` is the cosine distance to the item's cluster
-  centroid. Candidate clusters: written by every residual clustering run
-  whatever the method (IVF's own centroids; otherwise the cluster's
-  member-mean centroid). Class clusters (DQ-M3): written by the
-  cluster-geometry pass that follows every auto-label clustering stage
-  (`stages.cluster_residuals.cluster_geometry` in the job summary), as the
-  distance to the class cluster's member-mean centroid. Every writer also
-  stores the stored-only `cluster_distance_cluster_id` (the cluster it was
-  measured against); when that differs from the item's current
-  `cluster_id` (the item moved since), `cluster_distance`,
-  `cluster_similarity` and `cluster_is_core` are served `null` rather than
-  describing a cluster the item has left. `null` also for noise and for
-  items not yet measured. `cluster_nearest_id` — the cluster whose
-  centroid is nearest the item (equal to `cluster_id` when the item sits
-  best where it is; the per-item input to a card's `purity`), from the same
-  pass and gated the same way.
-- Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
-  `class_excluded` (bool), `excluded_reason`, `excluded_at`,
-  `probe_pred_class_id` (registry id of `probe_pred_class`, written by the
-  probe pass), `source` (ingest source tag; stored under the `source`
-  key — the retired short-name storage key is gone, S2).
-- `probe_disagreement` / `probe_in_scope` / `probe_model_version` (D1,
-  2026-09-25 F8 acceptance): the item wire's opinion on whether the
-  active-learning probe's top-1 prediction agrees with the item's
-  current class, made explicit so the frontend never has to infer scope
-  from a null. `probe_in_scope` is `null` until the probe has scored this
-  item at all; once scored, `true` when the item's class is one the probe
-  was trained on (`probe_disagreement` is then a real `true`/`false`) and
-  `false` when the item's class is outside the probe's class set
-  (`probe_disagreement` is then `null` — the probe structurally has no
-  opinion, which is NOT the same as agreement, and the UI must not offer
-  an "accept model's class" action for it). `probe_model_version` is the
-  probe checkpoint's version tag — the closest thing to a "probe run id"
-  this system persists today (see
-  `src.services.curation.probe_predictions`).
-- `probe_actionable` (D1 follow-up, 2026-09-25): the backend's own
-  accept/no-accept decision, so the frontend never re-derives a
-  threshold. `null` mirrors `probe_in_scope`/`probe_disagreement` (the
-  probe hasn't scored this item). Once scored: `true` only when
-  `probe_in_scope` is `true` AND `probe_disagreement` is `true` AND the
-  probe's top-1 posterior (`probe_pred_confidence`) is at least
-  `CurationConfig.probe_actionable_min_confidence` (env
-  `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`, default `0.5`, echoed read-only
-  as `actionable_min_confidence` on `GET /probe/status`); `false` for
-  every other case, including in-scope-and-agreeing, out-of-scope, and
-  disagreeing-but-unsure. **Confidence gates this, not
-  `probe_pred_entropy`** — entropy is a raw Shannon value in nats bounded
-  by `log(nc)` (`nc` = the probe checkpoint's class count), which varies
-  across probe versions/class-subsets and isn't stored per item, so a
-  fixed threshold against it would silently drift as `nc` changes;
-  `probe_pred_confidence` is always in `[0, 1]` by construction (a
-  sum-to-1 posterior's top value) and is written in the same bulk update
-  as `probe_pred_class`, so it's reliably present whenever the probe has
-  scored an item.
-
-  **UI contract:** offer "Accept model's class" only when
-  `probe_actionable` is `true`. When `probe_disagreement` is `true` but
-  `probe_actionable` is `false` (the probe disagrees but isn't confident
-  enough), show `"model unsure: <probe_pred_class>"` with no Accept
-  action — never let a client infer this from `probe_pred_entropy` or
-  `probe_pred_confidence` directly; the threshold decision lives only in
-  `probe_actionable`.
-
-`label_validated` is derived (`class_validated` OR `region_validated`).
-
-`region_validated` is **human** validation only: a human confirmed, drew
-or rejected the region. The detection worker never sets it. When the
-worker's auto-confirm policy accepts a box (detector and verifier agree
-strongly enough) it sets `region_auto_confirmed=true` instead: the region
-is accepted (`detected`, exported as a positive) but unreviewed, so it stays
-in the `regions` review tab.
-`thumbnail_url` and each box's `thumbnail_url` are built from the configured
-`api_prefix` (`{prefix}/crops/{crop_id}/thumbnail` and
-`…/region_thumbnail?box_id=`), so `OP_API_PREFIX` and the frontend's proxy
-prefix must match.
-
-| Endpoint | Items at | Keys |
+| Method | Path | Notes |
 |---|---|---|
-| `GET /crops`, `GET /classes/{class_id}/crops` | `crops[]` | item |
-| `GET /crops/{crop_id}` | body | item |
-| `GET /review/{tab}` | `items[]` | item + `reason` |
-| `GET /regions` | `items[]` | item + `region_box_id` |
-| `GET /regions/training_candidates` | `items[]` | item + `region_box_id` + `selection_reason` |
-| `GET /regions/suspected_false_positives` | `items[]` | item + `region_box_id` + `suspected_fp_distance` + `nearest_fp_subid` |
-| `GET /search/text` | `items[]` | item + `semantic_score` |
+| POST | `/scores/compute` | `{scorers?}`. Starts a scoring job. `400` when `OP_SCORES_ENABLED` is off or a scorer is unknown, `409` while one runs |
+| GET | `/scores/status` | job state |
+| POST | `/scores/cancel` | |
+| GET | `/scores/coverage` | `{coverage}`: how many items carry each score field. Read-only routes work with the flag off |
+| POST | `/select/diverse` | `{k, scope: {cluster_id, filters, review_tab}, seed_crop_id}`. Answers inline with `{crop_ids, method, version, n_pool}` (`200`) when the pool is small enough (`OP_SELECT_SYNC_MAX_OPS`), otherwise starts a background job (`202`). `400` when `OP_SELECT_DIVERSE_ENABLED` is off, `409` while a job runs |
+| GET | `/select/status` | job state. `result` (`crop_ids`, `method`, `version`, `n_pool`) is set once `status` is `completed` |
+| POST | `/select/cancel` | |
+| GET | `/viz/projection` | `cluster_id`, `class_id`, `max_points` (default 50000). `400` when `OP_VIZ_PROJECTION_ENABLED` is off |
+| POST | `/viz/projection/rebuild` | `scope` (`residual` default, or `cluster` with `cluster_id`). `202` |
+| GET | `/viz/projection/status` | |
+| POST | `/viz/projection/cancel` | |
+| POST | `/probe/run` | `{job_id, architecture, gpu, resume}`. Runs the active-learning probe from a finished training job (`409` when that job is unknown, not `finished`, has no checkpoint, or the GPU cannot be claimed; one job at a time) |
+| GET | `/probe/status` | `ProbeStatusResponse` (`status`, `job_id`, `train_job_id`, `model_path`, `gpu`, `updated_count`, `error`, `actionable_min_confidence`) |
+| POST | `/probe/cancel` | |
+| GET | `/search/text` | `q` (required), `page`, `page_size`, `class_id`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is off, `503` while the text encoder is not ready |
+| GET | `/stats` | project counts, indexes, disk, jobs |
+| GET | `/stats/classes` | per-class counts with `thresholds`, `adequacy`, `trainable`, `trainable_gap`, `aug_target`, `aug_gap` |
+| GET | `/stats/dataset` | the dashboard roll-up |
+| POST | `/test_holdout/freeze` | `{percent}` (1 to 50, default 10), query `force` |
+| GET | `/test_holdout/stats` | per-class holdout counts, `min_test_per_class`, `deficient` |
+| GET | `/training_cohorts` | see [Cohorts](#cohorts) |
 
-### Region text — `region_boxes[].text*`
+`POST /test_holdout/freeze` is deterministic: per class, the items with the
+smallest `sha1(crop_id)`, `max(min_per_class, round(n * percent / 100))` of
+them, capped at the class size. There is no seed (a `seed` key is `422`). A
+second freeze without `force=true` is `409`. A selection that would pick zero
+items is `422`. Response: `n_frozen`, `n_classes_covered`,
+`test_holdout_sha`, `per_class_counts`, `selection` (`sha1_per_class`),
+`percent`, `min_per_class` (5).
 
-A box's `text` is the chosen reading of that box's text, an element key of
-`region_boxes` (there is no item-level `region_text*`). Which reader fills it
-is the region profile's `text_reader` (`OP_REGION_DETECTION_TEXT_READER`):
+`GET /stats/dataset`:
 
-| `text_reader` | Region OCR runs | `text` |
-|---|---|---|
-| `vlm` | only when no VLM is configured | the VLM's reading |
-| `ocr` | always | the OCR reading (VLM's if OCR read nothing) |
-| `vlm_then_ocr` (generic default) | when the VLM read nothing | VLM's, else OCR's |
-| `both` (reference `license_plate` profile) | always | VLM's, else OCR's |
-
-- `text_source`: `vlm` or `ocr` (a human edit writes `human`).
-- `text_engine_version`: the VLM model id, or the OCR det + rec
-  model ids for an OCR reading (`<det>:<ver>+<rec>:<ver>`).
-- `text_confidence`: VLM category mapped to 0.92/0.70/0.40, or the
-  minimum recognition score of the kept OCR lines.
-- `text_raw`: every line the OCR read on the box crop,
-  unfiltered, in reading order, joined by a space; the VLM's verbatim
-  reading when OCR did not run.
-- `text_vlm` / `text_ocr`: each reader's own reading
-  whenever it produced one (keyword).
-- `text_disagreement`: `true`/`false` when both *valid* readings
-  exist, compared after the profile's normalization; `null` otherwise
-  (boolean).
-- `text_choice`: why the chosen reading won — `readers_agree`,
-  `vlm_preferred` (both valid, they differ, the mode prefers the VLM),
-  `vlm_only`, `ocr_only`, `ocr_mode` (`text_reader=ocr`), `vlm_invalid`
-  (the VLM reading was rejected, the OCR reading won), `no_valid_reading`
-  (every reading was rejected; `text` is `null`), `human` (typed by
-  a human).
-- `text_vlm_invalid`: why the VLM's reading (still kept in
-  `text_vlm`) is not text — `placeholder`, `no_reading`, `sequence`,
-  `charset`, `too_short`, `too_long`, `format`; `null` when it is valid.
-
-The VLM's *reply* still names its per-box answers `region_bbox_correct`,
-`region_confidence` and `region_text` (a fixed protocol of the prompt packs,
-`REPLY_*_KEY` in `region_overlay.py`); they are stored as the box's
-`bbox_correct`, `confidence` and `text`.
-
-Before a reading is chosen, every reader's reading is checked by the
-region-text rules (`src/services/detection/region_text_rules.py`), served
-as `text_rules` on `GET /regions/vocabulary` (`null` without a region
-profile) with the choice values as `text_choices`. A reading is not text
-when it is a generic "no reading" word (`NOT_READABLE`, `N/A`, …); a
-placeholder — one of the active prompt pack's quoted example values, or a
-truncation of one at least 3 characters long, or a profile
-`text_placeholders` entry (`OP_REGION_DETECTION_TEXT_PLACEHOLDERS`); with
-`text_reject_sequences` (reference `license_plate` profile), one repeated
-character or one ascending / descending run (`999`, `123456`, `XYZ`); or
-outside the profile's normalization, `text_len_min`..`text_len_max`, or the
-optional `text_format` regex. A rejected VLM reading counts as no reading,
-so the OCR reader's valid reading is chosen (and `vlm_then_ocr` runs OCR).
-`scripts/curation/rederive_region_text.py` re-applies these rules to stored
-box text (dry run by default).
-
-The OCR reader keeps the region's dominant text: lines at least
-`text_min_height_ratio` × the tallest line's height, not centered in the
-outer `text_border_margin` band of the crop, minus `text_stopwords`,
-ordered in rows top-to-bottom / left-to-right, normalized
-(`text_uppercase`, `text_charset`), joined with `text_join`, and accepted
-only within `text_len_min`..`text_len_max` and above
-`text_min_confidence`. With no VLM configured (`OP_VLM_URL` unset) the
-worker never calls a VLM:
-detector regions are written `detected` with `region_verified=false`
-(`<src>:accepted_unverified` on the chain) and their text is read by OCR.
-
-### Item text — `item_text_lines`
-
-Every OCR line read on the item crop by the detection worker (gated by
-`OP_ITEM_TEXT_ENABLED`, default on when the region profile names an OCR
-pipeline; lines below `OP_ITEM_TEXT_MIN_CONFIDENCE`, default 0.5, are not
-stored): a list of `{text, box_norm, confidence, rel_height}` —
-`box_norm` is `[x1, y1, x2, y2]` normalized to the item crop,
-`rel_height` the line height over the crop height. Always present on the
-wire (`[]` when none or not yet read). The normalized search tokens
-(`item_text_tokens`, keyword array: each letter/digit word uppercased,
-plus each multi-word line with separators removed) are storage-only and
-back `GET /crops?item_text=`.
-
-### `region_detector_chain` entries
-
-A list of strings, oldest first, each exactly `<actor>:<event>` — one
-colon after the actor, no version, no timestamp (`region_detected_at` /
-`region_verified_at` carry the times). Entries are unique within a doc
-and capped at 16 (oldest dropped). `<det>` is the profile's primary
-detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
-`<src>` is whichever of those produced the candidate box.
-
-| Entry | Meaning |
-|---|---|
-| `<det>:hit` / `<det>:miss` | primary detector found / found no candidate |
-| `<seg>:hit` / `<seg>:miss` | segmenter found / found no candidate |
-| `vlm_visible:yes` / `vlm_visible:no` | VLM pre-filter: a region is / isn't visible in the item |
-| `<src>:combined_verify_ok` | VLM confirmed the candidate box (region written `detected`) |
-| `<src>:combined_verify_reject` | VLM rejected the candidate box |
-| `<src>:combined_verify_reject:region_visible_elsewhere` | VLM sees a region and answered `region_bbox_correct=false` for the candidate box |
-| `<src>:combined_verify_reject:verifier_no_verdict` | VLM gave no box verdict on every allowed attempt (see below) |
-| `<src>:vlm_reject:verifier_no_verdict` | same, from the per-crop cascade's region-only verify call |
-| `vlm_visible:no_verdict` | visibility pre-filter gave no verdict on every allowed attempt; sent on to detection (fail open) |
-| `<src>:combined_no_region_visible` | VLM sees no region at all |
-| `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
-| `<seg>:skip_vlm_verify` | high-score segmenter box written without a VLM call |
-| `<src>:accepted_unverified` | no VLM configured: box written `detected` with `region_verified=false` (text from OCR) |
-| `<ocr>:text_hint:hit` / `:miss` / `:no_region_shape`, `<seg>:text_hint:miss` | OCR-hinted segmenter re-pass |
-
-A VLM reply that sees a region but gives no box verdict
-(`region_bbox_correct` `null`, absent, or a quoted null) is not a reject:
-nothing is written and the item stays pending for a retry, so no chain
-entry is stored for it. An unparseable / missing combined entry is
-treated the same way.
-Likewise an empty reply to the visibility pre-filter is no verdict (never
-`vlm_visible:no`): the item stays pending and is retried. `POST
-/vlm/region_visible_batch` leaves such crops out of its `visible` map.
-`POST /vlm/verify_region_batch` and the single-crop `verify_regions`
-path have the same contract: a crop the VLM gave no verdict for is
-omitted (batch) or left untouched (single) rather than written as
-`is_region=False` / `verified=False`.
-
-A combined-reply entry that nests its answer fields one level down under
-an invented key (some reasoning-model replies do this instead of the flat
-shape the prompt asks for) is unwrapped when there is exactly one
-dict-valued key carrying the expected fields; two or more such candidates
-is ambiguous and the entry is left as a no-verdict.
-
-The VLM runs at temperature 0, so a no-verdict reply is often
-deterministic. Retries are bounded per item and stage by
-`OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3, counted in the
-worker process, reset by a restart). At the cap the combined stage writes
-`verify_rejected` with `region_rejection_reason=verifier_no_verdict`, the
-box kept (`state=rejected`, `bbox_correct=null`: no
-verdict was given), so a human can confirm it or it can be retried with
-`requeue_regions.py --status verify_rejected --reason verifier_no_verdict`;
-the visibility stage sends the item on to detection (fail open). The
-per-crop cascade (`_process_crop`: region-only `verify_plate` and its
-combined cohort path) parks its candidate the same way after the same
-number of no-verdict passes. A VLM transport failure (no reply at all) is
-not a no-verdict reply: it is retried and never counted
-(`label_combined_batch` raises `CombinedTransportError`; the worker
-calls `verify_plate(..., raise_on_transport=True)`, which raises
-`VlmTransportError`; without the flag it still returns `None`).
-
-The combined call marks the candidate box with a red rectangle drawn just
-*outside* the box (so it never covers the region's own pixels) and its
-prompt says so.
-
-Readers match whole entries with `term` queries — e.g. `GET
-/regions/training_candidates?mode=detector_blind_spots` requires
-`<det>:miss`, `mode=disagreement` requires both `<det>:hit` and
-`<seg>:hit`. Builds before 2026-09-24 wrote `<actor>::<event>@<iso>`;
-the worker rewrites such a chain to this form the next time it writes
-the doc.
-
-### VLM class suggestion — `vlm_proposed_class_id` / `vlm_proposed_class_name`
-
-On every item, always present, derived from the stored doc by
-`vlm_suggestion()` (`src/services/curation/class_sources.py`):
-
-| Stored state | `vlm_proposed_class_id` | `vlm_proposed_class_name` |
-|---|---|---|
-| `class_source` is `vlm` or `vlm_reclassified`, `class_validated` false, `class_id` set | `class_id` | `class_name` |
-| `class_source` is `vlm_new_class_pending`, `class_validated` false | `null` | the proposed new class name (stored `vlm_proposed_class`; `null` if absent) |
-| anything else (incl. `vlm_unmatched`, any validated class, non-VLM sources) | `null` | `null` |
-
-When the VLM's answer resolves to a registry class it is **applied**:
-`class_id`/`class_name` are already that class, `class_validated` stays
-false. The suggestion keys just mark "this class is the VLM's, not yet
-confirmed". A `vlm_new_class_pending` item keeps whatever class it had
-before (often none); only the name is suggested. The stored
-`vlm_proposed_class` field can go stale after a later relabel — the wire
-keys are keyed off `class_source`, so a stale value never leaks.
-
-**Accepting a suggestion** (no dedicated endpoint):
-
-- Registry class (`vlm_proposed_class_id` not null): `PUT /crops/{crop_id}/label`
-  `{"class_id": <vlm_proposed_class_id>}` (bulk: `PUT /crops/batch_label`
-  `{"crop_ids": [...], "class_id": ...}`). Sets `class_validated=true`,
-  `class_source` = `human`, `label_source` = the body's `label_source`
-  (`human` default, or `human_confirmed` for an accepted suggestion); both suggestion keys become `null`.
-- New class (`vlm_proposed_class_id` null, name set): `POST /classes`
-  `{"name": <vlm_proposed_class_name>}` -> `{"class_id": N, ...}` (`409` if
-  the name exists — then use `GET /classes` to find its id), then
-  `PUT /crops/{crop_id}/label` / `PUT /crops/batch_label` with `class_id: N`.
-  The label call does not clear the stored `needs_new_class` flag.
-
-`GET /review/{tab}`'s `proposed_class_id` / `proposed_class_name` use the
-same derivation: when `vlm_proposed_class_name` is not null they equal
-the two suggestion keys; otherwise `proposed_class_id` = `class_id` and
-`proposed_class_name` = `vlm_raw_class` (the raw unmatched VLM answer) or
-`class_name` or `""`. Changes vs before this key existed: a
-`vlm_new_class_pending` item's `proposed_class_id` is now `null` (was the
-item's unrelated current `class_id`); a VLM-applied class reports the
-resolved registry `class_name` (was the raw VLM slug `vlm_raw_class` when
-the VLM's new-class answer matched a synonym); a stale `vlm_proposed_class`
-on an item that is no longer pending no longer overrides the name.
-
-`GET /regions/suspected_false_positives`: `threshold` is optional — omit it
-and the server applies `default_threshold` (`0.35`, served on every
-response next to the `threshold` actually used).
-
-`GET /regions` and `GET /regions/training_candidates` return **rows** (the
-`RegionRowPage` envelope): `items[]` are full wire items plus `region_box_id`
-(the box the row is about; `null` for an item-level row), `total` counts
-**items** (page math: `hasMore = page * page_size < total`) and
-`total_rows` counts rows; `page` / `page_size` page items and a page returns
-every row of its items. `rows_truncated` is `true` when an item on the page
-matched more boxes than the index reports per item
-(`index.max_inner_result_window`), so some of its rows are missing from
-`items` (`total_rows` still counts them).
-
-`GET /regions` filter params: `page`, `page_size`, `class_id`,
-`cluster_id` (the item cluster), `region_cluster_id`,
-`region_cluster_subid`, `sort_by_subid`, `max_rank`, `min_score`,
-`max_score`, `verified`, `detector`, `text`, `box_state`, `status`,
-`include_test`. The **box filters** (`detector`, `min_score`, `max_score`,
-`text`, `region_cluster_id`, `region_cluster_subid`, `box_state`) all apply
-to the **same box**, and each matching box is its own row; with no box
-filter and no `status` the rows are the accepted and `false_positive`
-boxes. The **item filters** (`status`, `class_id`, `cluster_id`, `verified`,
-`max_rank`) select items: `status=<region_status>` (any value from
-`GET /regions/statuses`, else `400`) lists every item in that status, box
-or not (item rows, `region_box_id: null`, unless a box filter selects
-boxes too) — e.g. `status=verify_rejected` for the verifier rejections.
-`box_state` is one of `proposed` / `accepted` / `rejected` /
-`false_positive` (`400` otherwise).
-
-`training_candidates` modes: `detector_blind_spots`, `low_conf_correct`,
-`false_positives` are per box (one row per matching box); `disagreement`
-and `human_corrected` are per item (`region_box_id: null`). The row of a
-per-box mode is found with OpenSearch `inner_hits` on the nested box query;
-the items ensure step raises `index.max_inner_result_window` to at least
-`limits.max_boxes_per_write` (never lowers it).
-
-`GET /regions/suspected_false_positives` scores **boxes** (an accepted box,
-with a vector, of an item that is not test-holdout or human-decided, and not
-itself a human's or an import's), so each row is one box with its
-`suspected_fp_distance` and `nearest_fp_subid`; it pages rows directly, so
-`total == total_rows` and `page_size` counts rows.
-
-`GET /regions/clusters`: clusters hold boxes. A card's `size` is the number
-of **items** with at least one box in the cluster and `box_count` the number
-of **boxes** (an item with two boxes in one cluster is `size` 1, `box_count`
-2); `representatives` are rows (item + `region_box_id`) for the boxes
-nearest the centroid, next to `representative_crop_ids` /
-`representative_box_ids` / `representative_thumb_urls`. The permanent
-false-positive cluster (id `-100`) pins first.
-
-Region clustering responses name the unit of every count. The
-`POST /regions/cluster` job result reports `n_boxes` (boxes partitioned),
-`n_boxes_changed` (boxes whose stored cluster changed; `0` on a re-run over
-unchanged data) and `n_items_written` (items updated). The refine response
-reports `n_boxes` and `n_boxes_updated` for a region cluster, `n_items` and
-`n_items_updated` for an item cluster (`POST /clusters/refine/{id}`). The FP
-centroid build reports `n_boxes`; the auto FP pull reports `n_boxes_scanned`
-and `n_boxes_moved`.
-
-### Verifier-rejected boxes
-
-When the verifier rejects a detector's box the worker keeps it, in the item's
-`region_boxes` list with `state='rejected'`, for review instead of discarding
-it: the box carries its own `bbox_norm` (source frame), `score`, `detector`,
-`detector_version`, `source`, `bbox_correct` (`false`, or `null` for
-`verifier_no_verdict`) and `rejection_reason` (`region_visible_elsewhere` for
-a verifier `region_bbox_correct=false`, `sanity_reject:<gate reason>` for the
-geometry gate, `verifier_no_verdict` when the verifier never gave a box
-verdict). The item-level `region_rejection_reason` mirrors the
-highest-scoring rejected box's reason only when the item has no accepted or
-`false_positive` box. `GET /regions/vocabulary` serves these reasons as
-`rejection_reasons`: `[{id, label, kind, match, label_template}]`, `kind` one
-of `model_verdict` / `automatic` / `needs_human`, `match` `exact` or
-`prefix` (`sanity_reject:` -- the rest of the stored value is the gate's
-reason, substituted for `{detail}` in `label_template`). A human-written
-reason is free text and not listed. A rejected box is never an accepted
-region: browse, clustering and export ignore it. A human reverses the
-rejection with the confirm write (see "Region lifecycle"); region undo
-restores it. A rejected box scores as `detection_failed` in `region_eval`
-when its reason is a `sanity_reject:`, else as `verify_rejected`.
-
-**Review-queue reachability:** a rejected box is reachable from
-`GET /review/regions` — see the `region_status` filter above.
-`GET /crops/{crop_id}/region_thumbnail?box_id=` renders that box (also a
-rejected one).
-
-### SSE — `GET /events`
-
-`crop.region_verified` data: `type`, `topic` (`region_status`),
-`crop_id`, `region_status`, `region_count`, `ts`. The data keys other than
-`type`/`topic`/`ts` are item keys with the same meaning. The same payload
-is produced in-process (`publish_region_verified`) and by the SAM worker
-via `POST /events/publish`.
-
-S-3: the hub is cross-process by default (`OP_EVENT_BUS=file`) — every
-uvicorn worker process tails the same shared JSONL log
-(`{OP_STATE_DIR}/events/events.jsonl`, bounded and rotated at
-`OP_EVENT_LOG_MAX_BYTES`) so an SSE client connected to any one worker
-sees events published by any other, and by the out-of-process detection
-worker's `POST /events/publish` calls. `GET /events/stats` reports the
-active `bus` (`file`/`process`) and `log_path` alongside the existing
-`subscribers`/`events_published`/`events_dropped` counters.
-
-### `GET /stats/dataset`
-
-- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `other` (F-23: `by_proposal`
-  moved to `unlabeled` -- those class_source values never carry a
-  `class_id`, so it was structurally always 0 here)
+- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `by_import`, `other`.
+  Built only from items that carry a `class_id`.
+- `unlabeled`: `pending_detection`, `pending_verification`,
+  `no_label_source`, `vlm_no_class` (a VLM answered or proposed but never
+  landed a class) and `by_proposal` (the detector proposed it, nothing
+  classified it). The last two are disjoint subsets of `no_label_source`.
 - `regions`: `boxed`, `confirmed`, `total_detected`, `by_detector`,
-  `by_segmenter`, `by_human`, `by_human_drew`, `verified_by_human`,
-  `verified_by_vlm`, `validated_by_human` (`by_detector` /
-  `by_segmenter` / `by_human_drew` are matched against the active
-  `DetectionProfile`'s `detector_model` / `segmenter_name` /
-  `human_detector_name`; `verified_by_vlm` counts every non-human
-  verifier, because the VLM stamps its own model id)
-- unchanged: `as_of`, `total_crops`, `validated`, `test_holdout`,
-  `by_source`, `unlabeled`, `in_progress`
-- `clusters`: `cluster_count` is the number of distinct non-noise
-  `cluster_id`s in the index now; `last_run_cluster_count` is the last
-  auto-label run's own count (`null` if none recorded — a residual-only
-  pass reports just the clusters it made); `last_run_at`, `method`,
-  `residual_count`, `noise_count` describe that run
+  `by_segmenter`, `by_human`, `by_human_drew`, `by_import`,
+  `verified_by_human`, `verified_by_vlm` (every non-human, non-import
+  verifier), `verified_by_import`, `validated_by_human`,
+  `validated_by_import`. The detector and segmenter buckets match the active
+  profile's names.
+- `validated_by_import`, `as_of`, `total_crops`, `validated`, `test_holdout`,
+  `by_source`, `in_progress` (with `region_stall_reason`, the same text as
+  `GET /ingest/region_drain`).
+- `clusters`: `cluster_count` (distinct non-noise clusters now),
+  `last_run_cluster_count`, `last_run_at`, `method`, `residual_count`,
+  `noise_count`.
 
-### `GET /export/datasets`
+## Images
 
-Query: `kind` (`yolo` | `single_class` — the same ids the `/methods`
-export axis advertises), `profile_name`. Rows: `kind`, `profile_name`
-(`null` for multi-class), `export_dir`, `version_tag`, `image_count`,
-`object_count` (`null` when the manifest does not record it, e.g. every
-single-class export), `split_counts`, `dataset_sha`, `exported_at`, `class_count`,
-`is_current`. Multi-class versions live directly under the export root;
-single-class versions under `<export_root>/<profile_name>/<version>/`, and
-`is_current` is judged against that profile's own `current` symlink.
-
-### `class_source` values — `GET /class_sources`
-
-`GET {prefix}/class_sources` returns
-`{"class_sources": [{"id": str, "label": str, "role": str, "short_label": str}, ...]}` (`short_label`: 1-2 words for badges; `label`: full text for menus/tooltips): every
-`class_source` value this deployment can write, built by
-`class_source_catalog()` (`src/services/curation/class_sources.py`).
-Ingest values come first, derived from the configured ingest profiles
-(`OP_INGEST_PRIMARY_*` / `OP_INGEST_SECONDARY_*`, label uses the
-profile's `DETECTOR_MODEL`, falling back to its `NAME`):
-
-| `id` | `role` | Present when |
+| Method | Path | Notes |
 |---|---|---|
-| `{primary}_proposal` | `proposal` | always |
-| `{primary}_low_conf` | `low_conf` | primary `ASSIGNS_CLASS=true` |
-| `{primary}_model` | `model` | primary `ASSIGNS_CLASS=true` |
-| `{secondary}_model` | `model` | `OP_INGEST_SECONDARY_DETECTOR_MODEL` set (a secondary `NAME` alone configures nothing) |
-| `unlabeled_proposal` | `proposal` | always (item-doc default before a detector stamps a source) |
-| `vlm` | `vlm` | always |
-| `vlm_unmatched` | `vlm_unmatched` | always |
-| `vlm_new_class_pending` | `vlm_new_class_pending` | always |
-| `vlm_reclassified` | `vlm_reclassified` | always |
-| `cluster_majority_agreement` | `cluster` | always |
-| `human` | `human` | always |
-| `human_move` | `human` | always (`POST /crops/move`) |
-| `class_merge` | `merge` | always (`POST /classes/merge`) |
-| `external_label` | `label_import` | always (label-import default) |
+| GET | `/crops/{crop_id}/thumbnail` | JPEG, `size` 32 to 512 |
+| GET | `/crops/{crop_id}/image` | the clean source render: EXIF-transposed, RGB, optional `max_dim` (128 to 8192). It draws no overlay, so the bytes do not depend on any box. Draw boxes from `GET /crops/{crop_id}/context` |
+| GET | `/crops/{crop_id}/region_thumbnail` | see [Regions](#region-browse-clusters-and-false-positives) |
+| GET | `/images/serve` | `path` (required). Streams a source image, choosing the configured root that matches the path |
+| GET | `/images/root/{alias}` | `path` (required, relative to the alias root). `404` for an unknown alias |
+| GET | `/images/cache/stats` | thumbnail cache counters |
 
-`role` enum: `proposal`, `low_conf`, `model`, `vlm`, `vlm_unmatched`,
-`vlm_new_class_pending`, `vlm_reclassified`, `cluster`, `human`, `merge`,
-`label_import`. Not listed because nothing writes them any more:
-`classifier_vlm_agreement`, `vlm_human_confirmed` (still recognised by
-queries/rollups; may appear on older docs). The label endpoints and label
-import take a caller-chosen `label_source` (defaults `human` /
-`external_label`) that is stored as `class_source`, so a client that
-passes its own value can see ids outside the catalog — render unknown
-ids verbatim. `tests/curation/test_class_sources.py` scans every
-`class_source` write in `src/` and `scripts/` and fails if a written
-value is missing from the catalog. The
-`classifier_confidence_skip_vlm` skip, auto-promote, the
-`primary_low_conf` / `classifier_blind_spots` review tabs and the
-`/stats/dataset` rollup all filter on these derived sets, never on one
-deployment's detector names.
+The server serves clean images and database metadata. A client draws boxes,
+labels and styling itself.
 
-## Errors: read endpoints fail closed
+## Events
 
-A backend outage is a `503`, never an empty or zero answer that reads as
-real data. `GET /ingest/region_drain` (its `total_unfinished: 0` is the
-"worker caught up" signal), `GET /ingest/status`, `GET /classes` (live
-counts) and `GET /stats/classes` (registry join) used to answer zeros /
-empty lists on failure and now `503`. Single-item reads added in this
-wave (`GET /crops/{id}/history`, `GET /review/{tab}/locate`) answer `404` /
-`not_found` only when the item doesn't exist and `503` on an outage.
+Server-sent events. A scoped stream carries only its own project's events. The
+global stream carries the families `project.*`, `combine.*` and `vlm.*`.
+Events are advisory: each subscriber has a bounded queue and the oldest drop
+on overflow.
 
-## What is explicitly NOT on the wire
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/curation/events` | global stream; `topic` filter |
+| GET | `/events` | the bound project's stream; `topic` and `class_id` filters |
+| POST | `/events/publish` | used by the detection worker. `_PublishEvent`: `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `region_status`, `region_count`, `image_path`, `topic`, `extra` (`extra='forbid'`). A global event type is `422`; `extra.project` must be the bound project |
+| GET | `/events/stats` | `bus`, `log_path`, `subscribers`, `events_published`, `events_dropped` |
+| GET | `/pipeline/events` | auto-label dashboard stream |
 
-- **Backend OpenSearch field names** for region attributes — governed by
-  `RegionFields` (`src/config/region_fields.py`), overridable per
-  deployment via `OP_REGION_FIELD_*` (see `env.template`). They pick
-  where a value is read from and written to; the wire name is fixed.
-- **`RegionStatus` enum values** in `src/config/region_state.py` are
-  values, not field names (B2 renamed `no_plate_box` /
-  `no_plate_visible` to `no_region_box` / `no_region_visible`).
-- **The `/curation` URL prefix itself** — a config field
-  (`CurationConfig.api_prefix`, env override `OP_API_PREFIX`) that
-  defaults to `/curation`. A deployment may run behind a different
-  prefix; consumers should not hardcode `/curation` or any other fixed
-  prefix.
+Event types: `project.created`, `project.updated`, `project.archived`,
+`project.unarchived`, `project.deleted` (global, with `target`, `status` and
+`revision`), `project.paused` and `project.resumed`, `combine.progress`
+(`target`, `job_id`, `phase`, `done`, `total`, `status`), `vlm.changed`
+(`axis`: `registry` or `local_vlm`), `config.changed` (project, with `axis`
+of `prompt_pack`, `detection_profile`, `vlm`, `keymap`, ...),
+`classes.changed`, `crop.created`, `crop.classified` and
+`crop.region_verified`.
 
-## H3/H4 — historical decisions
+`crop.region_verified` data: `type`, `topic` (`region_status`), `crop_id`,
+`region_status`, `region_count`, `ts`. The event hub is cross-process by
+default (`OP_EVENT_BUS=file`): every API worker tails a shared bounded log, so
+a client connected to any worker sees events from any other and from the
+detection worker.
 
-**H4 — superseded by B3.** An earlier ruling kept historical,
-domain-named field names on the wire and closed a storage reindex as
-WONTFIX. B3 moves the *wire* to generic names; storage names stay
-configurable via `RegionFields` exactly as before, so no reindex is
-required of any deployment. The wire contract above is already fully
-decoupled from OpenSearch storage field names via `RegionFields`; a
-storage rename is invisible to any consumer by construction, so its
-cost (a full reindex against a live deployment) would buy nothing a
-client can observe.
+## The lock rule
 
-**H3 — open items, recorded here for consumers:**
+A label or box that a human or a dataset import set is never touched by an
+automated writer. The rule has one implementation (`src/clients/occ_locks.py`)
+and is checked inside the write, not only before it, so an edit that lands
+between planning and writing still wins.
 
-- **D1** (`annotation_slots` on `GET /classes`): not added. A tier-2
-  static-profile loading path isn't wired into any consumer yet; adding
-  a server field with zero consumers would freeze a wire commitment
-  before the design is exercised. Publish a consumer's slot-spec draft
-  first.
-- **D2** (a client-side status-enum codegen's ownership): recommendation
-  is to retire that codegen and let a consumer's own slot profile be
-  the source of truth. Not yet actioned.
-- **D3** (field-mapping table ownership): this doc's per-model field
-  lists above are hand-maintained and can drift from
-  `src/routers/curation/_common.py` (see the caveat at the top of the
-  Pydantic-models section). Recommendation is a generated,
-  test-enforced table here rather than a hand-written one. Not yet
-  built.
-- **D4** (`POST /train/candidates`): concur with not scheduling it —
-  the current tier-1 cohorts cover the common case; only a second
-  capable slot would justify it. No action planned.
-
-## Coordination notes for consumers
-
-### B2 — domain-named routes removed from the public surface (BREAKING)
-
-Pure 1:1 renames — no handler, filter, or semantic change, and no
-statuses were merged:
-
-| Kind | Change |
+| Level | Locked when |
 |---|---|
-| Routes | Every domain-named `/plates*` route (list, training-candidates, batch-status, clustering, false-positive centroids) moved to the equivalent `/regions*` route; the three `/crops/{crop_id}/...` region routes lost their domain-named segment |
-| Status values | The two domain-named "no box"/"no detection visible" status strings became `no_region_box` / `no_region_visible` |
-| Cohort `mode=` | The two domain-detector-named cohort modes became generic `detector_blind_spots` / `low_conf_correct` |
-| `GET /review/{tab}` tab | The domain-named tab id became `regions` |
+| Class | a human set or confirmed it (`class_source` or `label_source` contains `human`); or it is a validated imported label (`class_source: external_label` and `class_validated`); or the item is in the frozen test holdout (`test_holdout`) |
+| Box | a human created it, gave a verdict on it (a human reject, `rejection_reason` is the human reason) or typed its text (`text_source: human`); or it came from a dataset import (`source: import`) and is not a mere suggestion (`state` is not `proposed`) |
+| Item | its class is locked, or any of its boxes is locked, or its box set is validated with `region_verifier` of `human` or `import` |
 
-The three `/crops/{crop_id}/...` renames bring those routes in line with
-their already-generic sibling `GET /crops/{crop_id}/region_thumbnail`.
+An import with `label_trust: suggestion` writes unvalidated labels and
+`proposed` boxes, which the machine pipeline may still replace.
 
-B2 deliberately left every domain-named item JSON key alone; B3 below
-renames all of them. The `disagreement` / `human_corrected` /
-`false_positives` cohort modes were already generic.
+Automated writers that honor the rule: the detection worker (classification
+gate, bulk writer and box merge), `POST /vlm/label_batch`, re-ingest, region
+clustering and false-positive pulls, `POST /reprocess` (reported as
+`locked_skipped`), the VLM stages of the auto-label pipeline, dataset import
+and combine.
 
-Deployments carrying documents written before B2 need a one-off
-`update_by_query` rewriting the two status strings; nothing else in
-storage changes.
+On the wire:
 
-### B3 — one generic wire vocabulary (BREAKING)
+- `label_locked` on every item is the evaluation for the whole item. A client
+  reads it instead of recomputing it.
+- `locked` on every `region_boxes[]` element is the evaluation for that box.
+- A dataset import reports labels it refused as `label_conflicts_locked`. A
+  combine flags a conflicting box with `combine_conflict` and keeps the
+  priority label.
+- Human routes are not blocked by the rule. A human can always overwrite a
+  human, imported or machine label, and can undo it.
 
-Fresh deployments re-ingest, so no data migration is provided.
+## Class identity
 
-Every previously domain- or vendor-named wire surface moved to the
-generic vocabulary used throughout this doc:
+A class is identified by its name inside one project. The integer id belongs
+to a project's registry and never crosses a project boundary or a file format
+unchanged.
 
-- **Item keys** (all item endpoints): every domain-prefixed region
-  attribute became `region_<attr>` (`region_bbox_norm`,
-  `region_status`, …; full list under "Item wire format"), including
-  the thumbnail URL key.
-- **VLM- and classifier-named fields**: every vendor-model-prefixed
-  confidence/label/cluster field on the wire and in storage moved to
-  the generic `vlm_*` / `classifier_*` prefix (e.g. `vlm_confidence`,
-  `vlm_raw_label`, `vlm_proposed_class`, `vlm_item_make`,
-  `classifier_raw_confidence`).
-- **`class_source` / `label_source` values**: every VLM-named value
-  (unmatched, new-class-pending, reclassified, human-confirmed) moved
-  to the `vlm_*` prefix; the classifier/VLM-agreement values became
-  `classifier_vlm_agreement` / `cluster_majority_agreement`; hardcoded
-  detector-model-named source values were replaced by the configured
-  ingest profiles' own values (`{secondary}_model`, `{primary}_proposal`,
-  `{primary}_low_conf`, …).
-- **Proposal naming**: the detector-family-prefixed proposal-name key
-  became the generic `proposal_name`.
-- **`region_detector_chain` entries**: every VLM-named verify/visible
-  action moved to `vlm_*` / `combined_verify_*` naming (full vocabulary
-  under "`region_detector_chain` entries").
-- **Writer id, review tab, review reason text**: the VLM-named history
-  writer id, the `GET /review/{tab}` low-confidence VLM tab, and the
-  human-readable `reason` strings all moved off vendor/model names onto
-  generic wording ("VLM's reply did not match…", "region detected —
-  needs human confirmation", etc).
-- **Query params**: `GET /crops` dropped its classifier-vendor-prefixed
-  confidence filter for `classifier_conf_lt`, and gained `limit`, `sort`,
-  `conf_min`, `conf_max`, `k`; `GET /regions` moved its cluster filters
-  to `region_cluster_id` / `region_cluster_subid`; `POST
-  /pipeline/auto_label[/start]` moved every VLM-vendor-prefixed
-  parameter to `vlm_*` naming; `GET /export/datasets` gained `kind` and
-  `profile_name` (rows gain the same two fields).
-- **Request/response bodies**: `PUT /crops/{id}/region`, `PUT
-  /crops/batch_region` (both since removed, see `PUT .../regions`), `PATCH /crops/{id}/region_meta`, `POST
-  /regions/batch_status`, and `POST /events/publish` all moved their
-  domain-prefixed keys (`bbox_norm`, status/text/rejection-reason,
-  `label_source`) onto the fixed `region_*` wire names; `POST
-  /events/publish` now rejects unknown keys with `422`.
-- **SSE**: `crop.region_verified` data and its `topic` moved from
-  storage field names to the fixed `region_status` / `region_count`
-  wire names (`region_text` left the event with the per-box text).
-- **Stats**: `GET /stats/dataset`'s classifier-vendor-named labeled
-  bucket became `labeled.by_classifier`; its
-  domain-named `plates` block became `regions` with
-  `regions.by_detector` / `regions.by_segmenter` /
-  `regions.verified_by_vlm`.
-- **Health**: `GET /health`'s vendor-named field became `vlm`.
-- **Ingest response**: the domain-named region count became
-  `n_regions`.
-- **Cluster cards**: `GET /regions/clusters`' `dominant_class_name` no
-  longer hardcodes the example domain's class name — it reports the
-  active region profile's own `region_class_name`.
-- **New route**: `GET /classes/{class_id}`.
-- **Env vars**: every vendor-prefixed VLM/segmenter connection
-  variable moved to the `OP_VLM_*` / `OP_SEGMENTER_*` prefix (see
-  section 3 of the naming sweep for the full old→new table; the old
-  names are retired with no fallback — see `src/config/retired_env.py`).
+| Hop | How the class is matched |
+|---|---|
+| Dataset import | the dataset's class names are mapped (`map`, `create`, `skip`, `region`) onto the project's registry by name, never by index. Two datasets with the same names in a different order land on the same classes |
+| Combine | each source class is mapped by name onto a target class. The target owns its ids. Class ids, class-id history and cluster ids of a source do not cross |
+| Export | the dataset uses a dense `export_id` (0 to n-1) assigned in registry order. `class_split_counts` and `class_registry.json` map `export_id` to `class_id` and `class_name`. `data.yaml` `names:` lists the names |
+| Training | a subset or single-class run records `class_remap.json` (original id to trained id) |
+| Promote | `labels.txt` is written from the remap, so line `i` is the name of trained class `i`. Without a resolvable remap, promote is refused (`class_remap_missing`) |
+| Another project using a promoted model | the model's class names are matched by name onto that project's registry (`GET /models/{model_name}/class_mapping`); unmatched names are reported, never guessed |
+| Bake-off | a model's classes map onto the eval dataset's classes by name or an explicit map; unmapped and uncovered classes are reported |
 
-Not renamed, deliberately: Prometheus metric names (a later wave), an
-internal-only GPU-arbiter Python alias (not wire), and the review tab
-id `classifier_blind_spots` (a proposer-named tab id, left for the
-owners to decide; it now filters on the configured proposal sources —
-`GET /review/tabs` serves it a generic "Classifier blind spots" label).
-An internal-only classifier-embedding storage field (never on the
-wire) was renamed to `backbone_embedding` in the naming sweep's stored-
-data wave — the `CurationConfig.BACKBONE_EMBEDDING_FIELD` constant, not
-a wire key.
+Rules that follow from this:
 
-- This doc is the shared source of truth for the `/curation` API. Point
-  any consumer's docs here instead of duplicating the field list.
-- No wire-format change ships without a corresponding update to this
-  doc; `tests/curation/test_wire_contract.py` pins the item key set.
-- A route-parity CI guard
-  (`tests/integration/test_labeler_route_parity.py`) keeps this doc's
-  route table honest against `app.routes` for any consumer migrating
-  onto this contract.
+- Class names match `^[a-z0-9_]+$` and are unique among active classes.
+- Renaming a class changes its name everywhere the next time the name is
+  read. A merge records the relabel; a restore of a merged class is refused.
+- `ClassEntry.kind` is `region` for the class named like the active region
+  profile's `region_class_name`. That class labels a sub-box, not a whole
+  item.
+- `tests/integration/test_class_identity_e2e.py` and
+  `tests/integration/test_class_identity_combine.py` assert the
+  `(class_id, class_name)` pairing at every hop from import or combine through
+  export, remap, promote and predict.
 
-### 2026-09-24/25 visual + ingest audit batch (X2, D1, R5, R10, L3, M2, R4, E2, K6, K3, BA-1..7, C1, C3)
+## Example: car to wheel
 
-Fixes and new routes from a 2026-09-24 frontend visual audit and an
-ingest hardening pass. Grouped by area; each item's wire shape is exact
-JSON, not illustrative.
+The public example detects wheels on cars. All data is public: COCO car
+images. `examples/region_profiles/vehicle_wheel.json` is a text-free region
+profile (no detector leg, a segmenter text prompt `wheel`, `parent_classes`
+of `car`, `max_regions_per_item: 4`, `text_reader: none`).
+`examples/prompt_packs/vehicle_wheel.json` is the matching prompt pack.
+`examples/bakeoff/vehicle_wheel/profile.json` is the bake-off profile.
+Fetch the images with `make sample-coco-cars`.
 
-**`GET /classes` / `GET /classes/{id}` (X2)** — `ClassEntry` gained
-`kind: 'item' | 'region'` and `trainable` / `trainable_gap`. A class
-whose name equals the active region profile's `region_class_name` is
-marked `kind: 'region'`; its `sample_count` / `validated_count` /
-`cluster_size` are the real (usually 0) item-class-aggregation numbers,
-**no longer** overridden with the region inventory total — that
-inflated `/train`'s class picker and `/export`'s per-class table.
-`trainable = validated_count - test_holdout - class_excluded`,
-`trainable_gap = max(0, block_below - trainable)`. Same two fields added
-to `GET /stats/classes`'s `classes[]` rows.
+The walk, in order (it is what `scripts/examples/wheel_example_live.py`
+runs against a live stack, and what
+`tests/integration/test_wheel_example_e2e.py` runs offline with fakes at the
+OpenSearch, Triton, segmenter and VLM boundaries):
 
-```json
-{"class_id": 80, "class_name": "defect", "kind": "region",
- "sample_count": 0, "validated_count": 0, "cluster_size": 0,
- "trainable": 0, "trainable_gap": 20}
-```
+| Step | Call |
+|---|---|
+| Create the project | `POST /curation/projects` with `{slug, display_name}` |
+| Create the classes | `POST /classes` for `car` and `wheel` |
+| Add the profile and pack | `POST /region_profiles` and `POST /prompt_packs` with the example bodies |
+| Activate them | `POST /region_profiles/{name}/activate` and `POST /prompt_packs/{name}/activate` |
+| Activate a VLM endpoint (optional) | `POST /vlm/endpoints/{name}/activate` |
+| Ingest | `POST /ingest/batch` |
+| Wait for the region worker | poll `GET /ingest/region_drain` until `drained` |
+| Review | `GET /review/{tab}` with the `regions` tab, then `PATCH /crops/{crop_id}/regions/{box_id}` or `PUT /crops/{crop_id}/regions` |
+| Export wheels cropped to their car | `POST /export/single_class` with `box_source: region`, `region_class_name: wheel`, `image_mode: item_crop` |
 
-**`GET /stats/dataset` (D1)** — `labeled.*` is now built only from docs
-that carry a `class_id`; a `class_source` alone (e.g. `vlm_unmatched` /
-`vlm_new_class_pending` with no class) no longer counts as
-`labeled.by_vlm`. New `unlabeled.vlm_no_class`: the subset of
-`no_label_source` where a VLM answered/proposed but never landed a
-class. F-23: `unlabeled.by_proposal` -- the fixed accounting for
-'detector proposed it, nothing has classified it yet' (moved from the
-always-0 `labeled.by_proposal` above) -- is a second, disjoint subset
-of `no_label_source`. `by_proposal + vlm_no_class` can equal
-`no_label_source` exactly (every unclassified crop happens to be one
-or the other) without either counting the other's docs.
+> Screenshot pending: Cropwright (the wheel review screen with several region boxes on one car)
 
-```json
-{"labeled": {"by_human": 174, "by_vlm": 3200, "by_classifier": 3551, "other": 0},
- "unlabeled": {"pending_detection": 0, "pending_verification": 0, "no_label_source": 1252, "vlm_no_class": 1036, "by_proposal": 216}}
-```
+## Breaking wire changes
 
-**`GET /review/new_class_proposals` + `/summary` (R5)** — the queue
-(and everything built on `build_tab_query`'s `new_class_proposals`
-branch) now excludes: an item whose last VLM attempt was
-`vlm_class_empty_reason=no_answer` (nothing was proposed), and an item
-that already carries a resolved `class_id` (a later write settled it;
-`needs_new_class` was stale). No field removed; fewer rows.
+v0.1.0 is a fresh wire. Deployments re-ingest; there is no data migration.
+The table lists renamed or restructured wire surfaces.
 
-**`GET /review/regions` / any tab's per-item `reason` on a
-`verify_rejected` region (R10)** — reworded from the served
-rejection-reason vocabulary (`region_rejection_reason` +
-`GET /regions/vocabulary`'s `kind`: `model_verdict` / `automatic` /
-`needs_human`) instead of embedding the raw id. Exactly one verb per
-reason: `needs human review: ...` for `needs_human`, `rejected: ...`
-otherwise.
+| Surface | Now |
+|---|---|
+| Per-box item scalars (box geometry, score, detector, text, cluster, thumbnail, parent-frame box) | elements of `region_boxes[]`: `bbox_norm`, `score`, `detector`, `text*`, `cluster_*`, `thumbnail_url`, `bbox_in_parent`. The item carries only `region_*` set-level fields |
+| Region attributes with a domain prefix | `region_<attr>`, fixed names independent of storage names |
+| Vendor-named VLM and classifier fields, `class_source` and `label_source` values, review tab and history writer ids | `vlm_*` and `classifier_*`; ingest-profile-derived source ids (`{primary}_proposal`, `{secondary}_model`) |
+| Domain-named statuses | `no_region_box`, `no_region_visible` |
+| Single-box region writes | `PUT /crops/{crop_id}/regions`, `PUT /crops/batch_regions`, `PATCH /crops/{crop_id}/regions/{box_id}`, `POST /regions/batch_box_state` |
+| Labeled-dataset import through ingest | `/datasets/*`. `IngestBatchItem` is `{path, source}` and `BatchIngestSummaryResponse` has no label-import counters |
+| Requeue, clear-detection and retry paths | `POST /reprocess` |
+| One configured VLM | the endpoint registry, a per-project `vlm` axis and per-run `?vlm=`. `GET /models/status` VLM rows have `kind: vlm` |
+| `region_bbox_correct`, `region_confidence`, `region_text` as item keys | box keys `bbox_correct`, `confidence`, `text` (the VLM reply keys keep their protocol names) |
+| Region clustering counts | `n_boxes`, `n_boxes_changed`, `n_items_written`, `n_boxes_updated`, `n_items`, `n_items_updated`, `n_boxes_scanned`, `n_boxes_moved`; cluster cards add `size` (items) and `box_count` |
+| Ingest response region count | `n_regions` |
+| `GET /stats/dataset` | `labeled.by_classifier`, `regions` block (was domain-named), `unlabeled.by_proposal`, `unlabeled.vlm_no_class`, `validated_by_import`, `labeled.by_import`, `regions.by_import` |
+| Training status metric pair | `last_epoch_metric` and `best_checkpoint_metric` |
+| Class merge dry run | `validations_carried_over` (a merge keeps `class_validated`) |
+| `GET /crops/{crop_id}/image` | the clean render, no overlay |
+| `GET /clusters` | `representatives` filled only for the `offset`/`limit` window |
+| `GET /crops` | `classifier_conf_lt`, `limit`, `sort`, `conf_min`, `conf_max`, `k`, `item_text`, `import_id`, `dataset_split`, `on_negative_frame`, `proposed_by_import` |
+| `GET /health` | `vlm` (the active endpoint), `region_profile`, `mlflow_public_url` |
+| Environment variables | VLM and segmenter connection variables are `OP_VLM_*` and `OP_SEGMENTER_*`; retired names are listed in `src/config/retired_env.py` |
+| Item key count | 106 keys; the list in `contracts/json/item_wire.json` is authoritative |
 
-```json
-{"reason": "needs human review: verifier gave no verdict"}
-{"reason": "rejected: the detection is wrong (region is elsewhere)"}
-```
+## Notes for consumers
 
-**`GET /review/new_class_proposals/summary`'s `term_rules` (L3)** — the
-served non-object term rules now support a prefix (`unidentifiable_*`)
-and suffix (`*_scene`) form, matched against the whole term or any of
-its `_`-separated tokens — one configured rule now flags a family of
-terms instead of needing every literal enumerated. Shape unchanged
-(`non_object_terms: string[]`); only the matching semantics of entries
-ending/starting with `*` changed.
-
-**`GET /models/status` (M2)** — the fixed roster now also includes the
-configured primary item proposer (`OP_INGEST_PRIMARY_*`), the optional
-secondary classifier (`OP_INGEST_SECONDARY_*`, omitted when
-unconfigured) and the segmenter (`DetectionProfile.segmenter_name`), in
-addition to the region detector and OCR det/rec already served. Same
-entry shape as every other model (`name`, `friendly_name`, `role`,
-`kind`, ...).
-
-**`GET /methods` sort catalog (R4)** — `classifier_blind_spots_default`'s
-served `label` changed from `"Largest COCO blind spot"` to `"Largest
-classifier blind spot"`.
-
-**Export manifest / `GET /export/datasets` / `GET /export/status`
-(E2)** — new `classes_with_objects` alongside `class_count`.
-`class_count` stays the registry size written into `data.yaml`'s `nc`;
-`classes_with_objects` is how many of those classes have at least one
-labeled object in this export.
-
-```json
-{"class_count": 84, "classes_with_objects": 5}
-```
-
-**`GET /curation/health` (T1)** — new `mlflow_public_url: string | null`
-(`CurationConfig.mlflow_public_url` / `OP_MLFLOW_PUBLIC_URL`), the
-browser-reachable MLflow base a client should build run links from
-instead of guessing a port.
-
-**`GET /crops/{id}/image` (K6, BREAKING)** — no longer draws any
-overlay. Always the clean source render (EXIF-transpose + RGB-convert +
-optional `max_dim` downscale), byte-identical regardless of the item's
-`bbox_norm` / region box. A client draws every box itself from
-`GET /crops/{id}/context`, which already serves `bbox_norm` and every
-`region_boxes[]` box (source-image normalized), `class_id` /
-`class_name`, `region_status`, `region_rejection_reason` and validation
-flags for every item on the frame — plus the image's `width`/`height`,
-now filled from the file header when the images-index doc doesn't carry
-them and the image is servable.
-
-**K3 (data hygiene, no wire change)** — writers audited: an empty VLM
-class answer already leaves `label_source` untouched (records only the
-attempt, per `vlm_class_attempt.py`). A new operator script,
-`scripts/curation/repair_stale_label_source.py`, clears a stale
-`label_source` on any class-less item (`class_id` missing) regardless of
-`class_source` — dry-run by default.
-
-**`POST /probe/run`, `GET /probe/status`, `POST /probe/cancel` (C1,
-new)** — wraps `run_probe_inference` as a background job instead of
-blocking the request. `POST /probe/run` resolves `job_id`'s
-`checkpoint_path` from the training job's status (409 if the run isn't
-`finished` or has no checkpoint on disk); `probe_model_version` is
-stamped as the job id. `gpu` (a `cuda_visible_devices` string) claims
-through the same arbiter `POST /train/start` uses — a claim failure is
-`409`, never silent. One job at a time (`409` otherwise).
-
-`GET /probe/status` additionally serves `actionable_min_confidence`
-(read-only, always present, independent of job state) — a direct echo of
-`CurationConfig.probe_actionable_min_confidence`, so a client can render
-"model unsure" copy without hardcoding the threshold.
-
-```json
-// POST /probe/run {"job_id": "2026-09-25T00-46-20_yolo26n", "gpu": null}
-{"job_id": "2026-09-25T00-46-20_yolo26n", "status": "running",
- "train_job_id": "2026-09-25T00-46-20_yolo26n",
- "model_path": "/jobs/.../weights/best.onnx", "gpu": null,
- "started_at": "2026-09-25T00:00:00+00:00", "finished_at": null,
- "updated_count": null, "error": null, "actionable_min_confidence": 0.5}
-```
-
-**`GET /review/{tab}` + `GET /review/tabs` (C3, new field)** — a
-zero-result page now carries `empty_reason`, computed from live index
-state: `"no probe predictions — run a probe"` (uncertainty /
-model_disagreements with no probe-scored item), `"item scores never
-computed"` (a `min_mistakenness` filter was set but no item has
-`mistakenness_score`), `"no unclassified proposals"`
-(`new_class_proposals`), else `"no items match"`. `GET /review/tabs`
-gained `empty_state: {has_probe_predictions, has_item_scores}` so a
-client can word ANY tab's empty state without a per-tab round trip.
-`GET /review/{tab}=all` when items exist: `empty_reason: null`.
-
-### BA-1..BA-7 — ingest hardening
-
-**BA-1 (blocking, breaking wire shape for uploads)** —
-`POST /ingest/upload` now persists uploaded bytes server-side, content
-addressed, under `CurationConfig.upload_root` /
-the project's upload root (`$OP_STATE_DIR/projects/<project>/uploads`):
-`<upload_root>/<imohash[:2]>/<imohash><ext>`, written atomically
-(temp file + `os.replace`), so the same bytes are only ever stored
-once. `image_path` on the images doc and in every `IngestImageResponse`
-is now that persisted, servable path — **not** the client's identifier.
-The client's identifier moves to a new field, `source_identifier`
-(images-index mapping migration `ensure_images_upload_fields`, wired
-into the existing startup migration sequence).
-`POST /ingest/path_lookup` matches on `image_path` **or**
-`source_identifier`, keying its result by whichever field matched.
-
-```json
-// POST /ingest/upload response row
-{"status": "success", "image_id": "...", 
- "image_path": "/var/lib/openprocessor/uploads/ab/ab12.../ab12....jpg",
- "source_identifier": "remote://shoot1/a.jpg",
- "imohash": "ab12...", "n_crops": 3, "n_regions": 0,
- "error": null, "error_kind": null}
-```
-
-**BA-2** — `GET /ingest/config` (new), typed:
-
-```json
-{"upload": {"enabled": true, "max_images_per_request": 128,
-            "max_bytes_per_request": 536870912,
-            "accepted_extensions": [".jpg", ".jpeg", ".png"],
-            "persists_bytes": true},
- "batch": {"enabled": true, "max_items": 512, "source_roots": ["/data/images", "/var/lib/openprocessor/uploads"]},
- "region_drain": {"poll_interval_s": 10.0, "stable_polls": 3}}
-```
-
-All three limits are real `CurationConfig` fields
-(`OP_UPLOAD_MAX_IMAGES_PER_REQUEST`, `OP_UPLOAD_MAX_BYTES_PER_REQUEST`,
-`OP_UPLOAD_ACCEPTED_EXTENSIONS`, `OP_BATCH_MAX_ITEMS_PER_REQUEST`) and
-enforced: `POST /ingest/upload` 413s over the image-count or
-total-request-byte limit, and fails an individual item
-`error_kind: 'unsupported_type'` for an extension outside
-`accepted_extensions`.
-
-**BA-3** — `GET /ingest/region_drain` gained a server-computed
-stability verdict (`src/services/curation/region_drain.py`):
-
-```json
-{"pending_detection": 0, "pending_verification": 0, "total_unfinished": 0,
- "drained": true, "stable_for_s": 32.4, "observed_at": "2026-09-25T00:00:32+00:00"}
-```
-
-`drained` is true only after `total_unfinished` has read `0` for
-`region_drain.stable_polls` (`OP_REGION_DRAIN_STABLE_POLLS`, default 3)
-consecutive polls of this endpoint — single-process, in-memory; a
-multi-worker deployment polling from different processes tracks
-independent streaks (each worker's own view of "stable", never a
-correctness issue for the raw counts).
-
-**V-1** — the response also carries `region_dependencies` and
-`stall_reason` (`src/services/curation/region_dependency_health.py`),
-so a queue that isn't shrinking has a visible cause instead of reading
-as a flat, unexplained pending count:
-
-```json
-{"pending_detection": 3516, "pending_verification": 0, "total_unfinished": 3516,
- "drained": false, "stable_for_s": 0.0, "observed_at": "2026-09-25T14:05:00+00:00",
- "region_dependencies": [
-   {"role": "detector", "model": "region_detector_v1", "ready": true, "unavailable_since": null, "detail": "READY"},
-   {"role": "segmenter", "model": "sam3", "ready": false, "unavailable_since": "2026-09-25T14:02:11+00:00", "detail": "not in Triton repository index (never loaded)"}
- ],
- "stall_reason": "3516 item(s) awaiting region detection; segmenter (sam3) unavailable since 2026-09-25T14:02:11+00:00"}
-```
-
-`region_dependencies` is checked directly against Triton's own
-repository index from the API process (which can always reach Triton
-over the network, unlike probing the detection worker container, whose
-heartbeat is written to a container-local path the API can't see) —
-empty when no region profile is configured at all (the neutral/off
-case, not a stall). `stall_reason` is null whenever nothing is pending
-or every dependency is READY (the worker just hasn't caught up to a
-backlog yet, which is not a stall). `GET /stats/dataset`'s
-`in_progress.region_stall_reason` mirrors the same computation for the
-dashboard's "In-flight pipeline" panel.
-
-**Item behavior when a dependency is down (design decision, not a code
-change):** items simply stay in `pending_detection` — by design, the
-detection worker never writes a terminal region status on an infra
-failure (see `scripts/curation/worker/cascade.py`'s `_process_crop`
-docstring), so they're already retryable the moment the dependency
-recovers, with no dequeue/requeue logic needed. A new `region_unavailable`
-terminal-ish status was considered and rejected for this pass: it would
-touch the worker's state machine (`RegionStatus`, `region_state.py`'s
-writable-status set, the cascade's retry path) with no way to exercise
-that change against a live worker in this pass (no GPU/compose
-available) — the observability fix above (surface *why* it's stalled)
-covers the operator-facing gap without that risk.
-
-**BA-4** — `POST /ingest/upload` gained an optional `run_id` form
-field, recorded as `ingest_run_id` on every image doc from that call.
-`GET /ingest/status?run_id=` scopes `total`/`by_source`/`by_day` to it.
-
-**BA-5** — `label_txt_path` on `IngestBatchItem` (`POST /ingest/batch`)
-now gets the same root guard `image_path` already had — a
-label file path outside the configured source roots fails that item
-(`error_kind: 'unservable_path'`) before any read. Batch item cap (`CurationConfig.batch_max_items_per_request`) served on
-`GET /ingest/config` and enforced on `POST /ingest/batch` (413 over the
-cap).
-
-(**W10 note**: `label_txt_path`, `detect_mismatches` and the
-`/import_labels(/batch)` routes this entry describes were since removed
-along with the rest of the `label_import` module — `IngestBatchRequest`
-is `extra='forbid'` and no longer accepts them. See the "Ingest" wire
-models below and `docs/CURATION.md`'s known-gaps section.)
-
-**BA-6** — `GET /ingest/status` is now a typed `IngestStatusResponse`
-(`total`, `by_source`, `by_day`); shape unchanged, just declared.
-
-**BA-7** — every `IngestImageResponse` / batch result row gained
-`error_kind: string | null` — one of `empty`, `unservable_path`,
-`unsupported_type`, `decode_failed`, `detector_infer`, `bulk_index`
-(non-exhaustive; always present alongside `error` when
-`status == 'failed'`). `unidentified_image` and `decode_error` were
-merged into `decode_failed`.
-
-**`GET /models/status` (M3, new fields)** — every roster entry now
-carries `optional: bool` (default `false`). It's `true` only for the
-active profile's region detector, and only when a segmenter is also
-configured as its fallback — mirroring
-`region_dependency_health.stall_reason`'s "a ready segmenter means a
-down detector isn't a stall" semantics. When that detector is entirely
-absent from Triton's `/v2/repository/index` (never shipped/installed —
-e.g. the public `license_plate` example profile's
-`license_plate_detector`, which has no public model), `status` is a new
-value, `not_installed`, instead of the generic `not_ready`. A model
-present in the index but not `READY` (unloaded, failed) keeps the
-unchanged `not_ready` status regardless of `optional` — this only
-changes the "entirely missing from the index" case. A client renders
-`not_installed` as "optional, not installed" rather than a red NOT
-READY.
-
-```json
-{"name": "license_plate_detector", "friendly_name": "Region Detector",
- "kind": "triton", "status": "not_installed", "optional": true, ...}
-```
+- This document and the OpenAPI file are the shared contract. No wire change
+  ships without a matching change here. `tests/curation/test_wire_contract.py`
+  pins the item key set. `scripts/docs/check_docs_vs_code.py` checks that every
+  route written in the docs exists.
+- Gate optional UI on `GET /methods`, `GET /review/tabs` and
+  `GET /regions/vocabulary`. They serve labels, options and defaults, so a
+  client does not hardcode vocabulary.
+- A backend outage is `503`. An empty list always means no matching data.
+- Not on the wire: backend OpenSearch field names, the internal tracking
+  host, API keys, and filesystem paths of training artifacts.

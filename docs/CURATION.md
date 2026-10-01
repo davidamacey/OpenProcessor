@@ -1,829 +1,1071 @@
-# Curation & Active Learning
+# Curation and Active Learning
 
-> **Status: EXPERIMENTAL for v0.3.0.** This is a real, working, tested
-> subsystem — not a stub — but it is new, still evolving, and not yet a
-> stable API. Backward compatibility across releases is not guaranteed
-> until it graduates out of experimental status. It ships opt-in, behind
-> a Docker Compose profile, and is disabled by default.
+> **Status: experimental for v0.1.0.** This is a working, tested subsystem,
+> but it is new and its API can still change between releases. It ships
+> opt-in, behind Docker Compose profiles, and is off by default.
 
 ## What this is
 
-The curation subsystem is a generic, domain-agnostic backend for
-building and maintaining an active-learning image-labeling dataset on
-top of OpenProcessor: ingest images, detect and crop regions of
-interest, cluster and browse the crops, label them (by hand or via an
-OpenAI-compatible vision-language model), track class registries and
-review queues, export labeled datasets, and drive a training loop.
+The curation subsystem is a domain-agnostic backend for building and
+maintaining an image-labeling dataset with active learning. You ingest or
+import images, detect items in them, optionally find regions inside each
+item, cluster and browse the results, label them (by hand or with an
+OpenAI-compatible vision-language model), review queues, export a dataset,
+and train a detector.
 
-It was ported and genericized from an earlier internal, domain-specific
-curation product. That history shows up in a
-few frozen wire-level names described below (§ Naming you'll notice),
-but the subsystem itself makes no assumption about what a "region of
-interest" is — a barcode, a defect on a manufactured
-part, a tag on livestock — you configure your own domain via the
-dataclasses in the next section. See
-[`docs/design/curation_design_rationale.md`](design/curation_design_rationale.md)
-for the deeper "why" behind the design (frozen wire contract, the
-`RegionFields` indirection, the pre-commit ratchet exemptions), and
-[`docs/design/curation_api_contract.md`](design/curation_api_contract.md)
-for the full route-by-route wire contract.
+Nothing in it assumes what an "item" or a "region" is. A pallet, a defect on
+a part, a license plate, or the wheel on a car is configuration, not code.
+Everything domain-specific lives in data you own: a class registry, a region
+profile, a prompt pack and a VLM endpoint, all stored per project.
 
-All curation routes are mounted under a single configurable prefix
-(`CurationConfig.api_prefix`, default `/curation`, override via
-`OP_API_PREFIX`) with no `/v1` twin — see the API-versioning note in
-[`CLAUDE.md`](../CLAUDE.md).
+Companion documents:
 
-## The four configuration dataclasses
+- [`design/curation_api_contract.md`](design/curation_api_contract.md): the
+  route-by-route wire contract.
+- [`design/curation_design_rationale.md`](design/curation_design_rationale.md):
+  why it is built this way.
+- [`../contracts/openapi/curation.json`](../contracts/openapi/curation.json):
+  the generated OpenAPI document, the source of truth for routes and schemas.
 
-A new deployment configures the subsystem for its own domain through
-four dataclasses instead of forking code. All four support
-`from_env()` so most of a deployment can be configured purely through
-environment variables (see the env var table below), including the
-region `DetectionProfile` (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`).
-The `DetectionProfile` dataclass field defaults still describe an
-earlier internal domain's OCR/segmenter wiring, so review them for
-a genuinely new region type.
+All curation routes are mounted under one prefix (`OP_API_PREFIX`, default
+`/curation`) and have no `/v1` twin. Every route that touches data is scoped
+to a project: `/curation/projects/{project}/...`. Only the project list and
+lifecycle routes, the VLM endpoint registry, `GET /curation/health` and
+`GET /curation/events` are deployment-wide.
 
-| Dataclass | File | What it configures |
-|---|---|---|
-| `CurationConfig` | `src/config/curation.py` | OpenSearch index names (via `IndexRole` + `index_name()`), filesystem roots (class registry, exported datasets, crop cache, state dir), the API mount prefix, embedding-dimension/HNSW tuning. |
-| `RegionFields` | `src/config/region_fields.py` | Per-attribute OpenSearch field-name overrides for the region-of-interest sub-annotation (e.g. store `region_status` under a different name if your existing data already uses one) — storage names may diverge from the fixed `region_*` HTTP wire names with zero reindex; the wire never changes. |
-| `DetectionProfile` | `src/config/detection_profile.py` | One detectable region-of-interest type as data: aspect-ratio/area heuristics, text-hint pattern and length range, which Triton models back detection/segmentation/OCR for it, their input sizes and confidence floors. One region profile is active per process (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`; none by default). |
-| `RegionStatus` | `src/config/region_state.py` | The canonical region-status state-machine enum (`pending_detection` → `detected`/`verify_rejected`/`no_region_box`; `pending_verification` → `detected`/`no_region_visible`; any path → `detection_failed`; plus a human-settable `false_positive` that preserves the box for hard-negative training). |
+The examples below use two shell variables:
 
-## Known gaps (read this before you rely on it)
+```bash
+BASE=http://localhost:4603/curation          # deployment-wide routes
+API=$BASE/projects/<slug>                    # one project's routes
+```
 
-Stated up front, honestly, rather than discovered in production:
+## Concepts
 
-- **Thinner ingest than a bespoke pipeline.** `POST /curation/ingest/image`
-  and `/ingest/batch` create items with duplicate detection, a quality
-  gate, crop-cache population, and bulk indexing. Importing pre-existing
-  labeled datasets (YOLO, COCO or an OpenProcessor export) is
-  `POST /datasets/imports` (preview, job, undo); `scripts/curation/import_labeled_dataset.py`
-  is a thin client of it. The removed per-image `/import_labels(/batch)`
-  routes are gone.
-  What is *not* included: any domain-specific detector-ensemble
-  policy, class allowlist, or region-status assignment heuristic tuned
-  to one domain — you supply that via `DetectionProfile` and your own
-  detector model(s).
-- **One active region `DetectionProfile` per process.** You cannot run
-  the region cascade for two region-of-interest types from one worker
-  today. Prompt packs are selectable (several can be configured via
-  `OP_PROMPT_PACK_PATHS` and chosen per auto-label run or via the
-  settings default).
-- **No authentication of any kind on the API.** See
-  [`SECURITY.md`](../SECURITY.md) — do not expose this service directly
-  to the internet.
-- **You must supply your own models.** This is BYO-model territory, not
-  a batteries-included product — see "Models you must supply" below.
-- **Both the trainer and the segmenter ship as reference containers**,
-  not just protocols: `docker/trainer/` and `docker/segmenter/` each
-  implement the wire/file protocol the API already speaks, behind their
-  own opt-in compose profiles (`training`, `segmenter`). You still bring
-  your own dataset and base weights — see "Workers and the curation
-  compose profile" below.
-- **Coverage is uneven across the ported surface** — some routers carry
-  thorough test suites, others were ported with comparatively thin
-  coverage because the original implementation had thin coverage there
-  too.
-
-## Models you must supply
-
-**Rebuild `yolo-api` before exporting any of these.** A pulled
-`davidamacey/openprocessor:latest` image can predate the source tree
-you're exporting against. If `make export-pe` (or another curation
-export target) fails with `ModuleNotFoundError: No module named 'core'`,
-that's the `perception_models` package missing from a stale image, not a
-code bug — run `docker compose build yolo-api && docker compose up -d
---force-recreate yolo-api` first, then re-run the export target. See the
-top-level [README.md](../README.md#curation--active-learning) for the
-same note.
-
-Nothing in this subsystem ships a pretrained region-detector, VLM, or
-trainer. A deployment supplies:
-
-- **The PE-Core-L14-336 encoders — image tower `pe_image_encoder`
-  (required, not optional) and text tower (required for semantic
-  search).** Unlike everything else in this list, the Triton model *name*
-  here is hardcoded, not configurable: `src/clients/pe_encoder.py` calls
-  `pe_image_encoder` with a single FP32 input `images` `[B, 3, 336, 336]`
-  and reads a single FP32 output `image_embeddings` `[B, 1024]`. The
-  result is stored as the `pe_embedding` field and is what semantic search
-  (`GET /curation/search/text`), near-duplicate detection, residual
-  clustering and the embedding visualization all run on — without it,
-  ingest cannot write an embedding and those features have nothing to
-  query. The text tower encodes search queries into the same space.
-  **`auto` (the default) prefers Triton's `pe_text_encoder`** — one shared
-  CPU instance for every uvicorn worker — and falls back to a
-  **lazily-loaded, in-process** PyTorch backend only if that model isn't
-  ready, so search still works with Triton down. An in-process ONNX
-  Runtime backend over `pytorch_models/pe_text_encoder.onnx` also exists,
-  but is an explicit opt-in (`OP_PE_TEXT_BACKEND=onnx`) — with 32 uvicorn
-  workers each loading their own ~1.4 GB session, that path alone was
-  observed to add ~80 GiB of container RSS on a fresh install, which is
-  exactly why `auto` no longer considers it. This repo ships the whole
-  chain — `make pe-download` (pinned + SHA-256-verified checkpoint; the HF
-  repo is not gated), `make pe-export-image` + `make pe-build-trt` (or
-  `make pe-build-ort` when the TensorRT build fails on PE's attention-pool
-  ops), `make export-pe` (the full chain, including `make
-  pe-export-text-triton`, which installs the text tower's ONNX +
-  `config.pbtxt` under `models/pe_text_encoder/` for Triton to serve),
-  then `--load-model=pe_image_encoder` and `--load-model=pe_text_encoder`
-  in Triton (both on by default in `docker-compose.yml`) and an API
-  restart; `make pe-text-status` confirms the text backend. Full
-  walkthrough, flags, Triton templates (`models/pe_image_encoder/`,
-  `models/pe_text_encoder/`) and CPU latency numbers:
-  [`export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
-  Swapping in a different embedding model means keeping the same Triton
-  model name and tensor contracts, and matching the preprocessing in
-  `src/services/detection/pe_preprocess.py`.
-- **An item detector for ingest** — an end2end Triton model set via
-  `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus any other
-  `OP_INGEST_PRIMARY_<FIELD>`, read by `_get_detection_profile()` in
-  `routers/curation/ingest.py`). It proposes the item crops in each
-  image; `OP_INGEST_PRIMARY_CLASS_IDS` narrows which of its classes
-  become items (unset = all). By default the primary is treated as a
-  generic proposer (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`): its
-  detections are unlabeled `<name>_proposal` items carrying the model's
-  own label (`OP_INGEST_PRIMARY_LABELS_PATH`), never a registry class
-  looked up by its id. Set it `true` only when the primary was trained on
-  your class registry. The `class_source` values the worker and
-  clustering code filter on are derived from these profile names
-  (`src/services/curation/ingest_class_sources.py`); `GET /curation/class_sources`
-  lists every value the deployment can write. Ingest returns `503` until one is
-  configured and loaded. An optional raw-output secondary detector
-  (`OP_INGEST_SECONDARY_DETECTOR_MODEL` + `OP_INGEST_SECONDARY_<FIELD>`)
-  overrides the primary's class on IoU-matched boxes. The retired
-  `OP_DETECTION_*` prefix is rejected at startup with a rename message.
-
-  **A promoted YOLO26 model does not fit either ingest contract yet
-  (G-25).** `POST /curation/train/promote/{job_id}` exports a fused,
-  already-NMS'd engine with one output tensor shaped `[300, 6]`
-  (`x1, y1, x2, y2, score, class`) — neither the primary's expected
-  4-tensor end2end response (`num_dets`/`det_boxes`/`det_scores`/`det_classes`)
-  nor the secondary's raw `[B, N, 5+nc]` pre-NMS tensor. It serves fine
-  as a stand-alone detector through `POST /detect?model_name=<promoted>`
-  (see `src/routers/detect.py`, which already accepts YOLO26 fused
-  engines per-request), but pointing `OP_INGEST_PRIMARY_DETECTOR_MODEL`
-  or `OP_INGEST_SECONDARY_DETECTOR_MODEL` at one today either fails to
-  decode or silently produces nothing. Wiring it up as an ingest
-  detector needs either a third decode path in `ingest_detect.py` for
-  the `[300, 6]` shape, or re-exporting the trained model through the
-  end2end/raw-output pipeline the ingest detectors already speak — not
-  done as of this writing.
-- **Optionally, a region-of-interest profile** — the sub-region the
-  detection worker's cascade looks for *inside* each item crop.
-  **Neutral by default:** with nothing configured no region profile is
-  active, `GET /methods` advertises an empty `detection_profile` axis,
-  and the worker idles instead of running the cascade. No profile ships
-  built in. Select one with `OP_REGION_PROFILE_PATH=<path>` (a JSON
-  profile file — see `examples/region_profiles/` for a worked example,
-  not a suggested starting point) or `OP_REGION_PROFILE=<name>` (a
-  profile your startup code registered via
-  `src.services.detection.profile_registry.register_profile()`), and/or
-  override individual fields with
-  `OP_REGION_DETECTION_<FIELD>` (e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`,
-  `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`). The resolved profile is
-  registered automatically, so it is exactly what `GET /methods`
-  advertises. An unknown `OP_REGION_PROFILE` name fails at startup.
-  While a region profile is active, ingest (and label import, for
-  labels the detector missed) seeds every **newly created** item with
-  region status `pending_detection` — the only way an item enters the
-  worker's queue. An existing region status is never overwritten on
-  re-ingest. The per-image `n_regions` count in the ingest response is
-  the number of items seeded this way (`0` with no region profile), and
-  `GET {prefix}/ingest/region_drain` reports them under
-  `pending_detection`. **Enabling a region profile on a deployment that
-  already has ingested items:** those items have no region status and
-  the worker will never see them; backfill them once with
-  `python3 scripts/curation/requeue_regions.py --missing-status`
-  (dry run: counts only) then `... --missing-status --apply`.
-- **A dual-head detector, if you want the backbone embedding**
-  (`backbone_embedding`). Residual clustering, the embedding visualization,
-  item scores and the OCC conflict handler all read that field, and it
-  is produced by RoI-pooling a detector's backbone feature map over each
-  detection box (`src.services.detection.geometry.roi_pool_sppf`,
-  pooled to `CurationConfig.backbone_embedding_dim`). A stock detector
-  export emits only the detection tensor, so the detector must be
-  re-exported with a second output — use
-  [`export/export_detector_dual_head.py`](../export/export_detector_dual_head.py)
-  (`output0` + `sppf_feat`; see [`export/README.md`](../export/README.md)).
-  Optional: by default residual clustering reduces `pe_embedding`
-  instead (`OP_RESIDUAL_EMBEDDING_FIELD`), so a deployment that never
-  populates `backbone_embedding` still clusters — it just has one fewer
-  embedding space to compare against. Ingest fills the field from the
-  **secondary** detector (the `secondary_profile` passed to
-  `CurationIngestService`): when Triton's model metadata lists
-  `DetectionProfile.feature_output` (default `sppf_feat`) it is
-  requested alongside `output0` and pooled over every item's bbox. A
-  secondary model without that output is called exactly as before and
-  the field is simply not written. A feature map with fewer channels
-  than `backbone_embedding_dim` is zero-padded (e.g. a 768-channel map
-  into the 1024-d default); one with *more* channels is skipped with a
-  logged error rather than truncated. Note `OP_BACKBONE_EMBEDDING_DIM`
-  sets the mapping only when the items index is created — changing it
-  later does not resize an existing index's field.
-- **An OCR/recognition model, if your region type has readable text**
-  (`DetectionProfile.ocr_rec_model`) — optional, only used by the
-  text-hint heuristics.
-- **A segmenter, if you want the cascade's segmenter leg** — any
-  service reachable at `OP_SEGMENTER_URL` (a generic
-  segment-request/response wire protocol; see
-  `scripts/curation/worker/client.py`). This leg is optional: with
-  `OP_SEGMENTER_URL` empty the cascade runs without it. A reference
-  implementation **does** ship — `docker/segmenter/` wraps SAM 3 behind
-  that wire protocol — but it is opt-in (its own compose profile: it
-  needs a GPU and a HuggingFace token) and it is BYO-weights like
-  everything else here.
-- **A VLM for labeling assist and region verification** — any
-  OpenAI-compatible `/v1/chat/completions` endpoint, configured via
-  `OP_VLM_URL` / `OP_VLM_MODEL` / `OP_VLM_API_KEY`. `OP_VLM_MODEL` is
-  required whenever `OP_VLM_URL` is set — there is no default model id;
-  construction fails loudly without one.
-  `src/services/labeling/vlm_client.py` is the only thing that talks to
-  it; nothing hardcodes a specific vendor or model.
-- **A dataset and base weights for training.** `/curation/train/*` is a
-  control plane over a shared-volume file protocol
-  (`src/services/training/jobs.py`): the API writes `<job_id>.job.json`
-  into `/jobs/` to start a run and a `<job_id>.cancel` sentinel to
-  cancel one; the trainer watching that directory writes
-  `<job_id>.status.json` every ~5s, `<job_id>.run.log`, and
-  `<job_id>.manifest.json` at the end. A trainer container implementing
-  that half **does** ship — `docker/trainer/`, compose service
-  `curation-trainer` under `--profile training`. What you supply is the
-  frozen dataset export (produced by `/curation/export/*`) and the base
-  weights the job trains from; the trainer downloads the family/size
-  checkpoint named by the job spec unless
-  `hyperparameters.model` points at a local file or architecture YAML.
-  You can still swap in your own trainer: it only has to speak the file
-  protocol above.
-
-  **Offline installs (G-19): the trainer needs internet access at run
-  start.** Unless `hyperparameters.model` points at a file already on
-  disk, `curation-trainer` calls into Ultralytics to fetch the base
-  checkpoint (`yolo26s.pt`, `yolo26n.pt`, etc.) from GitHub release
-  assets the first time a given family/size is trained — there is no
-  offline bundle and no pre-flight check for network reachability. On
-  an air-gapped host, pre-download the checkpoint yourself and set
-  `hyperparameters.model` to its path before calling `/train/start`.
-
-  **`POST /curation/train/start` does not merge profile defaults into
-  `hyperparameters` (G-19b).** `GET /curation/train/profiles` returns a
-  hyperparameter table (epochs, batch, imgsz, optimizer, patience, …)
-  per `(model_family, model_size, profile)` for a frontend to render —
-  but posting `{"profile": "small", ...}` alone does **not** pull those
-  values in. Every field the profile implies must be copied into the
-  request's own `hyperparameters` object; a bare top-level `epochs`
-  (outside `hyperparameters`) is rejected with `422` because the
-  request model uses `extra='forbid'`. Example, matching the `small`
-  YOLO26 profile's 70-epoch default:
-
-  ```bash
-  curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
-    "model_family": "yolo26", "model_size": "s", "profile": "small",
-    "cuda_visible_devices": "0",
-    "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"},
-    "mlflow_run_name": "my-run"
-  }'
-  ```
-
-  (F-73: `dataset_export_dir` is optional -- omitted/null defaults to
-  the current export, `data/exports/current`'s target. Pass it
-  explicitly only to train against a different, non-current export.
-  With no export at all yet, preflight reports a single clear blocking
-  check telling you to run `POST /export/yolo` first, instead of a bare
-  422 with no explanation.)
-
-## New-deployment env checklist
-
-One canonical starting point instead of assembling settings across this
-guide's quick-start steps, the GPU-arbiter section, and the full env
-reference below. This lists every `OP_*` var `docker-compose.yml` itself
-sets or reads for the `curation`/`training`/`segmenter`/`vlm` profiles
-(derived from `docker-compose.yml` + `CurationConfig.from_env()` in
-[`src/config/curation.py`](../src/config/curation.py), not memory), grouped
-by what it's for. Full detail, every other `OP_*` var, and defaults live
-in ["Environment variables"](#environment-variables) below.
-
-| Purpose | Vars |
+| Term | Meaning |
 |---|---|
-| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_CLASS_IDS`, `OP_SOURCE_ROOT_HOST` (host path bind-mounted `:ro` to `OP_SOURCE_ROOT`, container default `/data/source`) |
-| Region detection (segmenter cascade) | `OP_REGION_PROFILE_PATH`, `OP_SEGMENTER_URL` / `OP_SEGMENTER_URLS` |
-| VLM labeling | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` |
-| Feature flags | `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED` |
-| GPU / training placement | `OP_GPU_ALLOWED_IDS`, `OP_GPU_LABELS`, `OP_GPU_ARBITER_CONTAINERS`, `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_TRAIN_DEFAULT_GPUS`, `OP_TRAIN_GPU_ORDER` |
-| Projects / API surface | `OP_PROJECTS_DATA_ROOT` (each project's class registry and exports), `OP_PROJECT_INDEX_PREFIX`, `OP_API_PREFIX` |
-| Image build/tag (compose only, not app config) | `OP_IMAGE_REPO`, `OP_IMAGE_TAG`, `OP_BUILD_SHA` |
+| Project | An isolated dataset: its own OpenSearch indexes, class registry, exports, uploads, settings and config. Nothing is shared between projects unless you clone or combine. |
+| Image | One ingested source file. |
+| Item (crop) | One detected object on an image. A route path calls it a `crop`; the wire object is an item. |
+| Region | An optional sub-area inside an item (a wheel on a car, a tag on a pallet). An item holds a list of region boxes, `region_boxes`; one box is a list of one. |
+| Class registry | The project's list of classes. Class identity is the class name; ids are local to the project. |
+| Region profile | How regions are found for a project: detector, segmenter prompt, parent classes, box cap, whether text is read. |
+| Prompt pack | The VLM prompts and vocabulary the labeler uses. |
+| VLM endpoint | An OpenAI-compatible server the labeler calls. Registered once per deployment, activated per project. |
+| Config store | Where profiles, packs and settings live. Every save is an immutable revision; activation is a separate step. |
 
-## Class-registry schema
+## The workflow
 
-Each project's class registry is a single JSON file at
-`$OP_PROJECTS_DATA_ROOT/<project>/class_registry.json` (default
-`./data/projects/default/class_registry.json` for `default`), read/written atomically through
-`src.clients.curation_opensearch.ClassRegistry`. A worked
-example ships at
-[`data/class_registry.example.json`](../data/class_registry.example.json)
-— a small warehouse/retail inventory set (`cardboard_box`,
-`wooden_pallet`, `forklift`, ...). Copy it to the project's registry path and edit
-`classes` for your own domain:
+1. Create a project and define its classes.
+2. Activate a region profile and a prompt pack (optional if you only label
+   whole items) and pick a VLM endpoint (optional).
+3. Ingest images, or import an already-labeled dataset.
+4. Let the workers run: item detection, region detection, VLM verification,
+   embeddings, clustering.
+5. Review and label in a frontend (Cropwright is the first consumer) or
+   through the API.
+6. Freeze a test holdout, export a YOLO dataset, run preflight, train.
+7. Promote the model, compare it in the bake-off, and feed disagreements back
+   into review.
+
+## Use your own domain
+
+This is the whole path for a new domain. The car-to-wheel example in
+[`examples/`](../examples/) is used throughout; replace the names with yours.
+
+**1. Create a project.**
+
+```bash
+curl -s -X POST $BASE/projects -H 'content-type: application/json' \
+  -d '{"slug": "wheels", "display_name": "Wheels"}'
+API=$BASE/projects/wheels
+```
+
+A slug is 2 to 32 characters, lowercase letters, digits and single hyphens,
+starting with a letter. Pass `clone_settings_from` (and optionally
+`clone_axes`) to start from another project's settings.
+
+**2. Define classes.** Items are classed by name. Add only the classes you
+care about.
+
+```bash
+for name in car wheel; do
+  curl -s -X POST $API/classes -H 'content-type: application/json' \
+    -d "{\"name\": \"$name\"}"
+done
+curl -s $API/classes | jq '.classes | length'
+```
+
+A duplicate name is a 409. `scripts/curation/seed_class_registry.py --model
+<detector.onnx>` seeds the registry from a detector's own label space when
+you want all of it.
+
+**3. Write a region profile.** Start from
+[`examples/region_profiles/vehicle_wheel.json`](../examples/region_profiles/vehicle_wheel.json).
+Its key fields:
+
+| Field | Value in the example |
+|---|---|
+| `parent_classes` | `["car"]`: the region stage runs only on items of this class name |
+| `segmenter_text_prompt` | `wheel`: what the segmenter is asked to find |
+| `detector_model` | empty: no detector leg until you train and promote one |
+| `max_regions_per_item` | `4`: the box cap per item |
+| `text_reader` | `none`: a text-free region |
+| `region_class_name` | `wheel`: the class name used on export |
+
+Save and activate it. `jq` drops the `_comment` and `name` keys, which are
+not part of the body.
+
+```bash
+BODY=$(jq '{name: "wheel_example", body: del(._comment, .name)}' \
+  examples/region_profiles/vehicle_wheel.json)
+curl -s -X POST $API/region_profiles -H 'content-type: application/json' -d "$BODY"
+curl -s -X POST $API/region_profiles/wheel_example/activate \
+  -H 'content-type: application/json' -d '{"expected_active": null}'
+```
+
+Use `POST /curation/projects/{project}/region_profiles/validate` to check a
+draft before saving it.
+
+**4. Write a prompt pack.** Start from
+[`examples/prompt_packs/vehicle_wheel.json`](../examples/prompt_packs/vehicle_wheel.json).
+Its prompts ask the VLM to classify a car crop and to verify each numbered
+candidate box. The reply keys it must keep are described by
+`GET /curation/projects/{project}/prompt_packs/schema`.
+
+```bash
+BODY=$(jq '{name: "wheel_example", body: del(._comment, .name)}' \
+  examples/prompt_packs/vehicle_wheel.json)
+curl -s -X POST $API/prompt_packs -H 'content-type: application/json' -d "$BODY"
+curl -s -X POST $API/prompt_packs/wheel_example/activate \
+  -H 'content-type: application/json' -d '{"expected_active": null}'
+```
+
+**5. Pick a VLM endpoint.** Register one, probe it, activate it for the
+project. See [Choosing a VLM](#choosing-a-vlm). Without an active endpoint
+the worker keeps the segmenter's boxes unverified.
+
+**6. Ingest or import.** Put images where the API can read them (see
+[Mounting your image source](#mounting-your-image-source)), then:
+
+```bash
+curl -s -X POST $API/ingest/batch -H 'content-type: application/json' \
+  -d '{"items": [{"path": "/data/source/coco_car/images/000000000001.jpg", "source": "coco_car"}]}'
+curl -s $API/ingest/region_drain | jq     # repeat until drained
+```
+
+An already-labeled YOLO or COCO dataset goes through
+[dataset import](#dataset-import) instead.
+
+**7. Review.** Open the project in a frontend, or list items with
+`GET /curation/projects/{project}/review/tabs` and
+`GET /curation/projects/{project}/review/{tab}`. Confirm or edit boxes with
+the [region routes](#multi-box-regions).
+
+**8. Export and train.**
+
+```bash
+curl -s -X POST $API/export/single_class -H 'content-type: application/json' \
+  -d '{"profile_name": "wheels", "box_source": "region", "region_class_name": "wheel",
+       "image_mode": "item_crop", "class_ids": []}'
+curl -s -X POST $API/train/preflight -H 'content-type: application/json' -d '{}'
+```
+
+Then start a run with `POST /curation/projects/{project}/train/start` (see
+[Export and training](#export-and-training)).
+
+### The worked example: wheels on cars
+
+COCO has no wheel labels. The output of this example is machine-proposed
+wheel boxes that a person reviews, which is the point. Everything it needs is
+in the repository:
+
+- [`examples/region_profiles/vehicle_wheel.json`](../examples/region_profiles/vehicle_wheel.json)
+- [`examples/prompt_packs/vehicle_wheel.json`](../examples/prompt_packs/vehicle_wheel.json)
+- [`examples/bakeoff/vehicle_wheel/profile.json`](../examples/bakeoff/vehicle_wheel/profile.json)
+  (to compare wheel detectors you train later; set its `triton_model`)
+- [`scripts/examples/wheel_example_live.py`](../scripts/examples/wheel_example_live.py)
+
+```bash
+make sample-coco-cars      # 60 CC BY car images into data/samples/coco_car
+.venv/bin/python scripts/examples/wheel_example_live.py \
+    --api http://localhost:4603 --project wheels \
+    --container-dir /data/source/coco_car/images
+```
+
+The script creates the project and the `car` and `wheel` classes, saves and
+activates the example profile and pack, ingests the images, waits for the
+region queue to drain, and exports the wheel boxes cropped to their car. It
+needs the live stack: Triton with the primary detector loaded, the segmenter,
+the `curation` workers, and `data/samples/coco_car` mounted for the API
+container. Without an active VLM endpoint the boxes stay unverified.
+
+Items are chosen for the region stage by class name. The profile's
+`parent_classes` (`car`) matches an item's `class_name` or the detector's own
+label (`proposal_name`), never a class index. The same walk runs offline in CI
+with fakes at the OpenSearch, Triton, segmenter and VLM boundaries:
+`tests/integration/test_wheel_example_e2e.py`.
+
+> Screenshot pending: Cropwright (the wheel project's review grid with
+> numbered wheel boxes on a car).
+
+## Projects
+
+A project owns its indexes (`<OP_PROJECT_INDEX_PREFIX><slug>__<role>`), its
+files under `OP_PROJECTS_DATA_ROOT/<slug>/`, its uploads under
+`OP_STATE_DIR/projects/<slug>/`, its class registry, its settings and its
+config. A `default` project is created on first start; it is an ordinary
+project that can be archived but never deleted.
+
+| Action | Route |
+|---|---|
+| List, create | `GET /curation/projects`, `POST /curation/projects` |
+| Read, rename | `GET /curation/projects/{project}`, `PATCH /curation/projects/{project}` |
+| Archive, restore | `POST /curation/projects/{project}/archive`, `POST /curation/projects/{project}/unarchive` |
+| Delete | `DELETE /curation/projects/{project}` |
+| Pause the workers for one project | `POST /curation/projects/{project}/pause`, `POST /curation/projects/{project}/resume` |
+
+Rules:
+
+- `PATCH`, archive and unarchive take `expected_revision`; a stale value is a
+  409 `revision_conflict`.
+- Archive moves `active` to `archived` and is refused while the project has
+  running jobs (409 `project_busy`) and for the last active project. An
+  archived project is read-only.
+- Delete is a dry run with `?dry_run=true` (writes nothing and returns what
+  would block it). A real delete needs `?confirm=<slug>` (it must equal the slug), drains the
+  detection worker, answers 202 with a `deleting` record, then removes the
+  indexes and directories in the background. The slug is retired afterwards.
+- Reserved slugs: `all`, `combine`, `global`, `health`, `new`, `none`,
+  `projects`, `settings`, `vlm`.
+- A project that is `building` (a combine target filling up) or `failed` is
+  listed with a status; deleting a failed project is a complete cleanup.
+
+`POST /curation/projects/{project}/clone_settings` copies settings from
+another project into this one. The body is `{"from": "<slug>", "axes": [...],
+"expected_revision": N}`. Cloneable axes: `settings_defaults`, `classes`,
+`activations`, `keymap`, `prompt_packs`, `vlm_activation`. A VLM external
+acknowledgement is never copied.
+
+## Settings and the config store
+
+Per-project settings are one shared document, not per-browser state.
+
+- `GET /curation/projects/{project}/settings` and
+  `PUT /curation/projects/{project}/settings` read and merge
+  `defaults`, an open map keyed by axis id. Settable axes: `cluster`, `sort`,
+  `prompt_pack`, `detection_profile`, `vlm`.
+- `GET /curation/projects/{project}/methods` lists every selectable
+  strategy per axis, with the effective default flagged. A settings default
+  is applied by the server wherever a request omits that axis.
+- `GET /curation/projects/{project}/config/vocabulary` serves the labels,
+  limits, model-choice roles and VLM block a frontend needs to render the
+  config screens without its own tables.
+
+Prompt packs, region profiles and VLM endpoints share one lifecycle:
+
+- A save creates an immutable revision. Revision numbers are never reused.
+- Activation is a separate step and takes an `expected_active` guard taken
+  from the active record; a stale guard is a 409.
+- Validation runs on every save and again, stricter, on activation. `force`
+  bypasses only the warnings that are bypassable.
+- Workers and API processes notice an activation within `OP_CONFIG_POLL_S`
+  seconds and apply it without a restart. The detection worker swaps at a
+  quiesce point (its queues drained).
+- Rollback re-activates the previous activation.
+
+## Class registry and class identity
+
+Each project's registry is a JSON file at
+`$OP_PROJECTS_DATA_ROOT/<slug>/class_registry.json`, created on the first
+`POST /curation/projects/{project}/classes`. A worked example is
+[`data/class_registry.example.json`](../data/class_registry.example.json).
 
 ```json
 {
   "version": 1,
   "updated_at": "2026-01-01T00:00:00+00:00",
   "classes": [
-    {
-      "id": 0,
-      "name": "cardboard_box",
-      "group": "packaging",
-      "sample_count": 0,
-      "validated_count": 0,
-      "added_at": "2026-01-01T00:00:00+00:00",
-      "deprecated": false,
-      "notes": "Generic corrugated shipping box, any size.",
-      "merged_into": null,
-      "hotkey_letter": "b"
-    }
+    {"id": 0, "name": "cardboard_box", "group": "packaging", "sample_count": 0,
+     "validated_count": 0, "added_at": "2026-01-01T00:00:00+00:00",
+     "deprecated": false, "notes": "", "merged_into": null, "hotkey_letter": "b"}
   ]
 }
 ```
 
-Each entry's `id` is the dense class id used everywhere in the wire
-contract (`class_id` on crops, export label files, etc.). `group` and
-`hotkey_letter` are UI conveniences (grouping/keyboard shortcuts in a
-labeling frontend); `sample_count`/`validated_count` are maintained by
-the backend, not hand-edited. `GET /curation/classes` reflects whatever
-this file currently contains — starting the API against the example
-file and calling that endpoint is a quick way to confirm your registry
-loaded correctly.
+**Class identity is the name.** A class id is a dense index local to one
+project and one export. Anything that crosses a boundary pairs classes by
+name, never by index: dataset import mapping, combine, bake-off class
+mapping, model promotion (`labels.txt`) and the dense remap an export writes.
+`tests/integration/test_class_identity_e2e.py` and
+`tests/integration/test_class_identity_combine.py` walk import, export,
+train, promote and predict and assert the `(class_id, class_name)` pairing at
+every hop.
 
-## Workers and the curation compose profile
+Class routes: `GET /curation/projects/{project}/classes`,
+`POST /curation/projects/{project}/classes`,
+`PUT /curation/projects/{project}/classes/{class_id}`,
+`POST /curation/projects/{project}/classes/merge` (supports `?dry_run=true`),
+`POST /curation/projects/{project}/classes/{class_id}/deprecate` and
+`POST /curation/projects/{project}/classes/{class_id}/restore`. A merged class
+cannot be restored. Reserved hotkeys are rejected the same way in the API and
+the UI.
 
-The synchronous HTTP API (browse, label, cluster, export) works
-standalone with no workers running. The asynchronous half — automatic
-detection, VLM labeling, clustering refresh — is a separate opt-in
-layer, started with:
+## The lock rule
+
+Automated writers never overwrite what a person or a trusted import decided.
+An item is locked when any of these hold:
+
+- a human set or confirmed its class;
+- its class came from a dataset import with `label_trust: validated`;
+- it is frozen in the test holdout;
+- any of its region boxes was created, moved, verdicted or transcribed by a
+  human, or came from an import and is not a mere suggestion;
+- its region set was validated by a human or an import.
+
+A `label_trust: suggestion` import writes unvalidated classes and `proposed`
+boxes, which the machine pipeline may still replace. The VLM labeler,
+re-ingest, the region worker, reprocess, clustering writers and the
+false-positive auto-assign all skip locked items and report them as
+`locked_skipped`. Imports, undo and reconcile use the same rule, so an undo
+never deletes something a person touched after the import.
+
+## Region profiles
+
+A region profile describes how regions are found inside an item. It is data,
+stored per project, and has no built-in default: with none active, region
+detection is off and the worker idles.
+
+Routes (all under `/curation/projects/{project}`):
+
+| Purpose | Route |
+|---|---|
+| List, create | `GET /region_profiles`, `POST /region_profiles` |
+| Field help | `GET /region_profiles/schema` |
+| Validate a draft | `POST /region_profiles/validate`, `POST /region_profiles/validate_segmenter_prompt` |
+| Read, save, delete | `GET /region_profiles/{name}`, `PUT /region_profiles/{name}`, `DELETE /region_profiles/{name}` |
+| Revisions | `GET /region_profiles/{name}/revisions`, `GET /region_profiles/{name}/revisions/{revision}` |
+| Copy | `POST /region_profiles/{name}/clone` |
+| Activate | `POST /region_profiles/{name}/activate`, `POST /region_profiles/deactivate` |
+| Active profile, impact, rollback | `GET /region_profiles/active`, `GET /region_profiles/active/impact`, `POST /region_profiles/active/rollback` |
+| Test on a crop | `POST /region_profiles/test` |
+
+Notes:
+
+- Sources: `stored` (edited here), `env` (the boot default from
+  `OP_REGION_PROFILE_PATH` / `OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`,
+  read-only), `registered` (from deployment code) and `template` (the files in
+  [`examples/region_profiles/`](../examples/region_profiles/), listed with
+  `?include_templates=true`). A template cannot be activated; clone it first.
+- The activation response carries an impact summary: how many items were
+  processed under another profile or an older revision, how many are
+  validated, how many are pending, and a `suggested_reprocess` body to
+  re-run them. `GET /region_profiles/active/impact` returns the same summary
+  without activating.
+- A profile changes only items processed after activation. Re-run older
+  items with [`POST /reprocess`](#reprocess).
+- `parent_classes` restricts the stage to items of those class names.
+  `max_regions_per_item` caps the boxes kept per item.
+- `text_reader: "none"` makes a text-free profile: no OCR, no text fields.
+  `text_hint_enabled` adds an optional OCR text hint to locate text.
+- A `detector_model` must be a model this project owns or that was shared to
+  it (`PUT /curation/projects/{project}/models/{model_name}/sharing`);
+  validation reports `detector_model_not_shared` and
+  `detector_model_classes_unmapped` otherwise.
+- An empty `detector_model` skips the detector leg and never calls Triton.
+
+## Multi-box regions
+
+Every item holds its regions as one list, `region_boxes`. An item with one
+region has a list of one. There are no single-box scalar fields on the item.
+
+Per box: `box_id` (stable, never reused after a delete), `bbox_norm`, `state`,
+`score`, `detector`, `source`, `confidence`, `rejection_reason`, `text` fields
+when the profile reads text, and `cluster_id`, `cluster_subid`,
+`cluster_distance`. Each box also carries `bbox_in_parent` and a
+`thumbnail_url`. Each accepted or false-positive box has one embedding in
+`region_box_embeddings`.
+
+Box states are `proposed`, `accepted`, `rejected` and `false_positive`. The
+item status is derived from its boxes with a fixed precedence: any accepted
+box makes the item `detected`, then `false_positive`, then `proposed`, then
+`rejected`. The item-level fields `region_count`, `region_rejected_count`,
+`region_max_score`, `region_set_complete`, `region_revision` and
+`region_validated` summarize the list.
+
+How regions get boxes:
+
+1. The region stage selects candidates from the detector and segmenter legs
+   (score floor, NMS, then the `max_regions_per_item` cap).
+2. The VLM sees the crop with each candidate numbered and returns one verdict
+   per box plus whether the region is visible at all.
+3. Verified boxes become `accepted`, the rest `rejected`. A VLM-reported
+   incomplete set is recorded in `region_set_complete`.
+
+Edit routes (all under `/curation/projects/{project}`):
+
+| Purpose | Route |
+|---|---|
+| Replace the whole list | `PUT /crops/{crop_id}/regions` |
+| Edit one box | `PATCH /crops/{crop_id}/regions/{box_id}` |
+| Item-level metadata (status, rejection reason) | `PATCH /crops/{crop_id}/region_meta` |
+| Several items at once | `PUT /crops/batch_regions`, `POST /regions/batch_status`, `POST /regions/batch_box_state` |
+| Undo | `POST /crops/{crop_id}/region/undo`, `POST /crops/region/undo_batch` |
+| Box thumbnail | `GET /crops/{crop_id}/region_thumbnail` |
+
+`PUT /crops/{crop_id}/regions` takes the full list in display order: an
+element with only `box_id` leaves that box alone, `box_id` plus `bbox_norm`
+moves it (a moved box is human geometry), `box_id: null` adds a box (default
+state `accepted`), and a stored box that is omitted is deleted.
+`frame: "parent"` sends boxes in the source image frame. A stale
+`expected_region_revision` is a 409 `region_conflict` with the current
+revision. The list is capped by `OP_REGION_MAX_BOXES_PER_WRITE` per write.
+
+Browse and cluster at box level:
+
+- `GET /regions`, `GET /regions/statuses`, `GET /regions/vocabulary`,
+  `GET /regions/training_candidates` and
+  `GET /regions/suspected_false_positives` return rows. A box-selecting
+  request returns one row per matching box, with `region_box_id`; `total`
+  counts items and `total_rows` counts rows. All box filters apply to the
+  same box.
+- `POST /regions/cluster` partitions accepted boxes (poll
+  `GET /regions/cluster/status`); `GET /regions/clusters` lists the cards and
+  `POST /regions/clusters/refine/{cluster_id}` splits one.
+- `POST /regions/fp_centroids/build` builds false-positive centroids from
+  boxes marked `false_positive`; matching boxes are then flipped
+  automatically and the item status is re-derived (a sibling accepted box
+  keeps the item `detected`).
+- Export strata and region clustering counts use boxes: `n_boxes`,
+  `n_boxes_changed`, `n_items_written`.
+
+## Prompt packs
+
+A prompt pack holds the VLM prompt templates and two vocabulary tables
+(`class_descriptions`, `synonyms`). It is separate from the region profile:
+a profile says where to look, a pack says what to ask. Either can be used
+without the other.
+
+Routes (all under `/curation/projects/{project}`): `GET /prompt_packs`,
+`POST /prompt_packs`, `GET /prompt_packs/schema`,
+`POST /prompt_packs/validate`, `GET /prompt_packs/{name}`,
+`PUT /prompt_packs/{name}`, `DELETE /prompt_packs/{name}`,
+`GET /prompt_packs/{name}/revisions`,
+`GET /prompt_packs/{name}/revisions/{revision}`,
+`POST /prompt_packs/{name}/clone`, `POST /prompt_packs/{name}/activate`,
+`GET /prompt_packs/active`, `POST /prompt_packs/active/rollback` and
+`POST /prompt_packs/test`.
+
+The built-in `generic_region_v1` pack is text-free. A pack whose region
+prompts do not return a per-box list is a warning on save and an error on
+activation when the active profile has `max_regions_per_item` above one.
+`POST /curation/projects/{project}/pipeline/auto_label/start` takes
+`?prompt_pack=` to use another pack for one run.
+
+## Test on a crop
+
+Test a draft before activating it. Both routes run on crops already in the
+project, are read-only (nothing is indexed, updated or queued), and are
+project scoped.
+
+- `POST /curation/projects/{project}/prompt_packs/test` runs the production
+  labeler on up to 64 stored crops and returns the exact request and reply,
+  whether the reply parsed, and per crop the parsed answer and the item the
+  worker would write.
+- `POST /curation/projects/{project}/region_profiles/test` runs the detector
+  and segmenter legs on one crop and returns every candidate with whether it
+  was selected and why it was dropped (floor, NMS or cap), plus segmenter
+  mask polygons. An optional `verify` leg sends the selected boxes to the VLM.
+  The OCR text-hint and text-reading legs are not previewed.
+
+Guards: at most 4 concurrent segmenter calls and 2 concurrent VLM runs (429
+`test_busy`), a 60 second bound (504 `test_timeout`), and a crop cap (422
+`too_many_crops`).
+
+## Choosing a VLM
+
+The VLM is a registry of endpoints, and each project runs one of them. The
+`env` built-in (`OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY`) is always
+listed first and is read-only.
+
+Ways to get a server behind an endpoint:
+
+1. **The shipped `vlm` service** (`docker compose --profile vlm up -d`),
+   with `OP_VLM_URL=http://vlm:8000/v1` and the served model name in
+   `OP_VLM_MODEL`.
+2. **A server on this host outside compose**:
+   `OP_VLM_URL=http://host.docker.internal:<port>/v1`. `yolo-api` and the VLM
+   worker carry `extra_hosts: host.docker.internal:host-gateway` for this.
+3. **A server elsewhere on the network**: `OP_VLM_URL=http://<host>:<port>/v1`.
+
+Client and server image caps are one contract: keep
+`OP_VLM_MAX_IMAGES_PER_CALL` (default 8) numerically equal to the server's
+per-prompt image limit (`VLM_LIMIT_MM_IMAGES` for the in-compose service).
+A request above the smaller of the two gets a 400.
+
+Registry workflow:
+
+- **Register**: `POST /curation/vlm/endpoints` with a name and a body
+  (`base_url`, `model`, optional `api_key_ref`, image cap, `json_mode`). A key
+  is never sent through the API: write it on the host with
+  `./openprocessor vlm key set <slug>` and reference it as `secret:<slug>`.
+  `GET /curation/vlm/endpoints/schema` describes the fields.
+- **Save**: `PUT /curation/vlm/endpoints/{name}` creates a new revision;
+  `GET /curation/vlm/endpoints/{name}/revisions` lists them. Saving never
+  changes what a project runs.
+- **Probe**: `POST /curation/vlm/endpoints/{name}/probe` (or
+  `POST /curation/vlm/endpoints/validate` with a draft). The probe sends
+  synthetic images only and records the served model root, context length,
+  image cap and JSON-mode support for that exact revision.
+- **Activate** for a project:
+  `POST /curation/projects/{project}/vlm/endpoints/{name}/activate`, or
+  `defaults.vlm` in `PUT /curation/projects/{project}/settings`. Read the
+  active one with `GET /curation/projects/{project}/vlm/endpoints/active`;
+  roll back with `POST /curation/projects/{project}/vlm/endpoints/active/rollback`
+  or turn it off with `POST /curation/projects/{project}/vlm/endpoints/deactivate`.
+- **Per run**: the VLM and pipeline routes take `?vlm=<name>` (and
+  `acknowledge_external`) to use another endpoint for that run only.
+
+An endpoint that would send crops outside this deployment needs
+`allow_external` on the endpoint and an acknowledgement when it is activated,
+recorded per `name@revision`. `OP_VLM_EXTERNAL_POLICY=deny` refuses such
+endpoints outright. The URL policy also refuses this stack's own services and
+link-local or metadata addresses. Every labeler re-checks its endpoint at
+most every 30 seconds and refuses (fails closed) if the host now resolves to a
+denied address. See [`../SECURITY.md`](../SECURITY.md) for the residual risk.
+
+Activation runs a pairing check: context size per call, the server's image
+cap, multi-box and text-reading verification, and JSON mode. Items record
+`vlm_endpoint` and `vlm_model` for each answer.
+
+**Local models.** `examples/vlm/catalog.tsv` lists the models the in-compose
+vLLM can serve. `GET /curation/vlm/catalog` and `GET /curation/vlm/local`
+show them with a VRAM fit check. The host CLI changes the served model:
+
+```bash
+./openprocessor vlm list
+./openprocessor vlm status
+./openprocessor vlm use <id> [--force] [--yes]
+./openprocessor vlm apply
+./openprocessor vlm probe
+./openprocessor vlm key set <slug>
+```
+
+`use` checks fit, rewrites `.env` (restoring it on failure), waits for the
+new model, probes it and unpauses. The API records the desired local model
+(`POST /curation/vlm/local/select`) but never restarts vLLM.
+
+## Keymaps
+
+Each project has a keymap for its labeling frontend. `GET /curation/projects/{project}/keymap`
+returns the grammar, contexts, actions with defaults, overrides, reserved
+hotkeys and an `etag`. `PUT /curation/projects/{project}/keymap` saves
+overrides (with `expected_revision`),
+`POST /curation/projects/{project}/keymap/validate` checks a draft, and
+`POST /curation/projects/{project}/keymap/reset` clears overrides. A key that
+collides with a class hotkey is reported with the class; pass
+`unbind_conflicting_class_hotkeys` to unbind it.
+
+## Ingest
+
+| Purpose | Route |
+|---|---|
+| One image by path | `POST /curation/projects/{project}/ingest/image` |
+| Many images by path | `POST /curation/projects/{project}/ingest/batch` |
+| Bytes upload | `POST /curation/projects/{project}/ingest/upload` |
+| Which paths are already known | `POST /curation/projects/{project}/ingest/path_lookup` |
+| Limits and source roots | `GET /curation/projects/{project}/ingest/config` |
+| Status, region queue | `GET /curation/projects/{project}/ingest/status`, `GET /curation/projects/{project}/ingest/region_drain` |
+
+Ingest does duplicate detection, a quality gate, crop-cache population, PE
+embedding and bulk indexing. With a region profile active, every newly
+created item is seeded `pending_detection`, which is the only way an item
+enters the region worker's queue. An existing region status is never
+overwritten on re-ingest. Items that exist before you activate a profile are
+picked up with [`POST /reprocess`](#reprocess).
+
+For bulk work from a shell:
+
+- `scripts/curation/ingest_walker.py`: walk a directory with a resumable
+  progress file.
+- `scripts/curation/ingest_upload.py`: read files locally and upload the
+  bytes when the API cannot mount your storage (resume is server-side content
+  dedup).
+- `scripts/curation/import_labeled_dataset.py`: a thin client of dataset
+  import.
+
+Fetch public sample data with `make sample-coco`, `make sample-coco-cars` or
+`make sample-plates`; `make sample-clean` removes it. On an installed stack,
+`./openprocessor sample coco` fetches the COCO sample.
+
+## Dataset import
+
+Bring an already-labeled YOLO or COCO dataset, or an OpenProcessor export,
+into a project. Under `/curation/projects/{project}`:
+
+| Step | Route |
+|---|---|
+| Upload an archive | `POST /datasets/uploads` |
+| Supported formats | `GET /datasets/formats` |
+| Preview (writes nothing) | `POST /datasets/preview` |
+| Start | `POST /datasets/imports` |
+| List, status | `GET /datasets/imports`, `GET /datasets/imports/{import_id}` |
+| Per-image rows, issues | `GET /datasets/imports/{import_id}/entries`, `GET /datasets/imports/{import_id}/issues` |
+| Cancel, resume, undo | `POST /datasets/imports/{import_id}/cancel`, `POST /datasets/imports/{import_id}/resume`, `POST /datasets/imports/{import_id}/undo` |
+
+The preview returns the detected format, totals, splits, per-class
+suggestions and an `import_key`. Every dataset class needs one decision, by
+name:
+
+- `map` to an existing class (`class_id`),
+- `create` a new class (`new_class_name`),
+- `skip` it, or
+- `region`: the class is a region of its parent item, not an item.
+
+```bash
+curl -s -X POST $API/datasets/preview -H 'content-type: application/json' \
+  -d '{"source": {"path": "/data/source/import_fixture/yolo"}}' | jq '{format, totals, classes}'
+curl -s -X POST $API/datasets/imports -H 'content-type: application/json' -d '{
+  "source": {"path": "/data/source/import_fixture/yolo"},
+  "mapping": [{"dataset_class": "car", "action": "map", "class_id": 0}],
+  "options": {"processing": "none", "freeze_test_split": true, "name": "coco_yolo"}
+}' | jq '{import_id, status}'
+```
+
+A COCO layout must name its format (`"format": "coco"`): `images/` next to
+`annotations/` is not auto-detected. Options: `label_trust` (`validated` or
+`suggestion`), `missing_label` (`unlabeled` or `negative`), `processing`
+(`none` or `propose` to run the detector), `parents`, `region_containment`,
+`freeze_test_split`, `source_tag`, `force`.
+
+Properties:
+
+- Imports are chunked, persisted and resumable. One import runs per project at
+  a time. A repeated request with the same source, mapping and options is
+  idempotent (`reused: true`).
+- A human edit made between plan and write still wins (the lock rule).
+- Undo restores class snapshots and box history, deletes the items and
+  images the import created, and deprecates classes it created. A second
+  undo reports zeros.
+- Importing a newer dataset version over an earlier import removes the items
+  the new version no longer has, except the ones a person or a holdout freeze
+  touched.
+- Backpressure on the region worker: `OP_DATASET_IMPORT_MAX_PENDING`.
+- Import fixture for testing: `make sample-coco-import` builds four layouts
+  (`yolo/`, `coco/`, `yolo_region/`, `yolo_region_only/`) from 96 CC BY COCO
+  images with a `FIXTURE.json` of expected counts. The YOLO layout numbers
+  classes unlike any registry, spells `Car` differently and adds a synonym,
+  and injects label problems; the wheel boxes in the `yolo_region*` layouts
+  are synthetic geometry, not annotations.
+
+Items from an import carry `import_ids` and an `imported` review tab.
+`GET /curation/projects/{project}/crops` and `GET /curation/projects/{project}/review/{tab}`
+filter by `import_id`, `dataset_split` and `on_negative_frame`.
+
+To score the region cascade against region ground truth, import with
+`region` classes and run
+`scripts/curation/eval_regions_vs_gt.py --dataset <data.yaml> --state-dir <dir> --wait-pending 1800`
+(recall, precision, F1, mean IoU, a background false-positive gate and a
+worst-first miss list).
+
+## Reprocess
+
+`POST /curation/projects/{project}/reprocess` re-runs one or more scopes over
+images, items or a filter. It is a dry run by default (`dry_run: true`) and
+reports per scope what is selected and what the lock rule skips.
+
+```bash
+curl -s -X POST $API/reprocess -H 'content-type: application/json' -d '{
+  "targets": {"filter": {"profile_not": "wheel_example", "include_detected": true}},
+  "scopes": ["region"], "region_mode": "redetect", "dry_run": true
+}' | jq
+```
+
+- `scopes`: any of `detect`, `region`, `vlm`, `embed`.
+- `targets`: `crop_ids`, `image_ids` or a `filter` (`class_id`, `source`,
+  `import_id`, `dataset_split`, `region_status`, `missing_status`,
+  `profile_not`, `profile_revision_below`, ...).
+- `region_mode`: `redetect` (clear and re-run the cascade) or `reverify`
+  (re-run VLM verification on existing boxes).
+- Detect and embed over many images return a job; poll
+  `GET /curation/projects/{project}/reprocess/jobs/{job_id}` and stop it with
+  `POST /curation/projects/{project}/reprocess/jobs/{job_id}/cancel`. The
+  synchronous limit is `OP_REPROCESS_SYNC_MAX`.
+- `POST /curation/projects/{project}/crops/{crop_id}/reprocess` and
+  `POST /curation/projects/{project}/images/{image_id}/reprocess` run one
+  target.
+
+## Combine projects
+
+`POST /curation/projects/combine` builds a new project from 1 to 8 existing
+ones. The sources are only read.
+
+1. `POST /curation/projects/combine/preview` writes nothing and returns
+   errors, warnings, a `suggested_mapping`, counts, duplicate and conflict
+   numbers, bytes to link and a `preview_sha`.
+2. `POST /curation/projects/combine` starts the job with
+   `expected_preview_sha` and answers 202 with `{job_id, target}`. The target
+   is `building` while it fills, then `active` (`failed` on an error).
+3. Follow it with `GET /curation/projects/combine/{job_id}`,
+   `POST /curation/projects/combine/{job_id}/cancel` and
+   `POST /curation/projects/combine/{job_id}/resume`. Progress is also
+   published as the `combine.progress` event.
+
+```bash
+curl -s -X POST $BASE/projects/combine/preview -H 'content-type: application/json' -d '{
+  "target": {"slug": "fleet", "display_name": "Fleet"},
+  "sources": [{"project": "cars"}, {"project": "trucks"}]
+}' | jq '{ok, errors, preview_sha, suggested_mapping}'
+```
+
+Rules: each source class maps to a target class by name (`map`, `create`,
+`skip` or `region`, same completeness rule as dataset import); the target owns
+its ids and nothing numbered in a source crosses. Byte-identical images are
+copied once and their boxes merge by IoU and target class (human beats import
+beats VLM beats model); a box with a conflicting class keeps the priority
+label and is flagged `combine_conflict` (filter
+`GET /curation/projects/{project}/review/{tab}?combine_conflict=true`). Items
+record `origin_project`, `origin_item_id` and `origin_image_id`. Frozen test
+splits are kept by union (`holdout: preserve_union`) or recomputed. Deleting
+a failed or unwanted target is a complete undo. Jobs live under
+`OP_COMBINE_JOBS_DIR` and are chunked by `OP_COMBINE_PAGE_SIZE`.
+
+## Review, search and clustering
+
+- Queues: `GET /curation/projects/{project}/review/tabs` lists them with
+  their filters; `GET /curation/projects/{project}/review/{tab}` pages one and
+  `GET /curation/projects/{project}/review/{tab}/locate` finds an item's page.
+- Search: `GET /curation/projects/{project}/search/text` (semantic, needs the
+  PE text encoder and `OP_SEMANTIC_SEARCH_ENABLED`).
+- Item clustering: `GET /curation/projects/{project}/clusters`,
+  `POST /curation/projects/{project}/clusters/refine/{cluster_id}`,
+  `POST /curation/projects/{project}/clusters/auto_promote`.
+- Auto-label job: `POST /curation/projects/{project}/pipeline/auto_label/start`
+  clusters by default; pass `run_vlm=true` to label with the VLM, and
+  `class_id` to scope the run to one class. Poll
+  `GET /curation/projects/{project}/pipeline/auto_label/status`.
+- Scores, diverse selection and the projection:
+  `POST /curation/projects/{project}/scores/compute`,
+  `POST /curation/projects/{project}/select/diverse`,
+  `POST /curation/projects/{project}/viz/projection/rebuild`.
+
+Cluster ids: items cluster on `pe_embedding` by default
+(`OP_RESIDUAL_EMBEDDING_FIELD`); region boxes cluster on their own box
+embedding.
+
+## Export and training
+
+Freeze a test holdout first with
+`POST /curation/projects/{project}/test_holdout/freeze`, check it with
+`GET /curation/projects/{project}/test_holdout/stats`.
+
+| Purpose | Route |
+|---|---|
+| Multi-class export | `POST /curation/projects/{project}/export/yolo` |
+| One class or a class subset | `POST /curation/projects/{project}/export/single_class` |
+| Status, list | `GET /curation/projects/{project}/export/status`, `GET /curation/projects/{project}/export/datasets` |
+| Frozen artifacts | `GET /curation/projects/{project}/export/registry/{artifact}` |
+
+`export/yolo` always exports every class and rejects unknown body keys (422).
+To train a subset use `export/single_class`, or
+`hyperparameters.include_classes` on a training run. Both exporters record
+`dataset_sha`, a hash of the written label content plus the ordered class
+list, and flip their `current` symlink atomically. They split by source
+image, so items cut from one image never straddle splits; an image with a
+frozen holdout item goes to `test`. The multi-class export writes one image
+and one label file per source image, one `cls cx cy w h` line per validated
+object. Reviewed-negative frames are included by default
+(`include_negative_frames`).
+
+An image can hold objects that are not labeled yet. By default it is still
+exported with its validated objects, and the manifest records
+`unlabeled_items_on_exported_images`; preflight then warns
+(`export_unlabeled_objects`). Pass `require_fully_labeled_images: true` to
+leave such images out.
+
+`export/single_class` with `box_source: "region"` and `image_mode:
+"item_crop"` writes one box per accepted region, cropped to its parent item.
+It adds background and hard-negative frames and a `frozen_test_sha`.
+
+Training is a control plane over a shared-volume file protocol
+(`src/services/training/jobs.py`). Routes under
+`/curation/projects/{project}`:
+
+| Purpose | Route |
+|---|---|
+| Check a spec | `POST /train/preflight` |
+| Start a run, a multi-size campaign | `POST /train/start`, `POST /train/start_campaign` |
+| Status, run list, log tail | `GET /train/status`, `GET /train/status/{job_id}`, `GET /train/runs`, `GET /train/log/tail/{job_id}` |
+| Cancel | `POST /train/cancel/{job_id}`, `POST /train/cancel_campaign/{campaign_id}` |
+| Profiles, presets, GPUs | `GET /train/profiles`, `GET /train/presets`, `GET /train/gpus` |
+| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}`, `POST /train/reload_promoted` |
+
+```bash
+docker compose --profile training up -d curation-trainer
+curl -s -X POST $API/train/preflight -H 'content-type: application/json' -d '{}'
+curl -s -X POST $API/train/start -H 'content-type: application/json' -d '{
+  "model_family": "yolo26", "model_size": "s", "profile": "small",
+  "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"}
+}'
+```
+
+- `dataset_export_dir` defaults to the current export. With no export yet,
+  preflight reports one blocking check telling you to export first.
+- `start` does not merge profile defaults: copy the values from
+  `GET /train/profiles` into `hyperparameters`. A bare top-level `epochs` is
+  a 422 (`extra='forbid'`).
+- The trainer downloads the family checkpoint on first use unless
+  `hyperparameters.model` points to a local file. On an air-gapped host,
+  download it first and set that path.
+- Promote exports the model to Triton under the project. A subset or
+  single-class run needs its `class_remap`; promote refuses (422) rather than
+  serve the full registry as if it were the trained subset, unless
+  `force=true`.
+- A promoted YOLO26 model has a fused `[300, 6]` output. It serves through
+  `POST /detect?model_name=<promoted>`, but is not a drop-in ingest detector
+  (`OP_INGEST_PRIMARY_DETECTOR_MODEL` expects the end2end four-tensor
+  response).
+- Model comparison (bake-off) is per project under
+  `/curation/projects/{project}/bakeoff/` (`eval_datasets`, `trained_models`,
+  `baseline_models`, `profiles`, `run`, `runs`, `status/{job_id}`,
+  `results/{job_id}`, `matrix/{job_id}`). Start the evaluator with
+  `docker compose --profile curation up -d curation-evaluator`. It is a
+  long-lived watcher; do not use `docker compose run --rm` for it. See the
+  [design rationale](design/curation_design_rationale.md#8-the-detector-bake-off-harness-bakeoffprofile).
+- Active-learning probe: `POST /curation/projects/{project}/probe/run`
+  scores validated items with the new model;
+  `GET /curation/projects/{project}/review/{tab}` has a model-disagreement
+  view.
+
+## Models you must supply
+
+Nothing here ships a pretrained region detector, VLM or trainer weights.
+
+**Rebuild `yolo-api` before exporting any model.** A pulled image can predate
+the source tree. If `make export-pe` fails with
+`ModuleNotFoundError: No module named 'core'`, the `perception_models` package
+is missing from a stale image: run `docker compose build yolo-api && docker
+compose up -d --force-recreate yolo-api`, then re-run the export.
+
+- **PE-Core-L14-336 encoders.** The image tower `pe_image_encoder` is
+  required and its Triton name is fixed (`src/clients/pe_encoder.py`: input
+  `images` `[B, 3, 336, 336]`, output `image_embeddings` `[B, 1024]`). The
+  result is the `pe_embedding` field that semantic search, near-duplicate
+  detection, clustering and the projection run on. The text tower
+  (`pe_text_encoder`) is needed for semantic search. `OP_PE_TEXT_BACKEND=auto`
+  prefers Triton and falls back to a lazily loaded in-process PyTorch backend;
+  `onnx` is an explicit opt-in because every worker loads its own session.
+  Build: `make pe-download`, `make pe-export-image`, `make pe-build-trt` (or
+  `make pe-build-ort`), `make pe-export-text-triton`, or the whole chain with
+  `make export-pe`; then load both models in Triton and restart the API.
+  `make pe-text-status` confirms the text backend. Details:
+  [`../export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
+- **An item detector for ingest**: an end2end Triton model named by
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus other `OP_INGEST_PRIMARY_<FIELD>`).
+  `OP_INGEST_PRIMARY_CLASS_IDS` narrows which classes become items (unset is
+  all; a stock COCO checkpoint proposes all 80). By default the primary is a
+  proposer (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`): detections are unlabeled
+  `<name>_proposal` items carrying the model's own label, never a registry
+  class looked up by id. Set it true only when the primary was trained on your
+  registry. Ingest returns 503 until a detector is configured and loaded. An
+  optional raw-output secondary detector
+  (`OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_<FIELD>`)
+  overrides the primary's class on IoU-matched boxes.
+  `GET /curation/projects/{project}/class_sources` lists the `class_source`
+  values a deployment can write.
+- **A region profile and segmenter, if you want regions.** The segmenter is
+  any service at `OP_SEGMENTER_URL` speaking the segment wire protocol
+  (`scripts/curation/worker/client.py`). `docker/segmenter/` is a reference
+  implementation behind the `segmenter` compose profile; it needs a GPU and a
+  Hugging Face token. With `OP_SEGMENTER_URL` empty the leg is skipped.
+- **A dual-head detector, if you want `backbone_embedding`.** It is the
+  detector's backbone feature map RoI-pooled over each box. A stock export
+  emits only the detection tensor; re-export with
+  [`export/export_detector_dual_head.py`](../export/export_detector_dual_head.py)
+  (`output0` plus `sppf_feat`). Optional: residual clustering reduces
+  `pe_embedding` by default. `OP_BACKBONE_EMBEDDING_DIM` sets the mapping only
+  when the items index is created.
+- **An OCR model, if your region has readable text**
+  (`ocr_rec_model` or `ocr_pipeline_model` in the profile).
+- **A VLM**: see [Choosing a VLM](#choosing-a-vlm).
+- **A dataset and base weights** for training.
+
+## Workers and compose profiles
+
+The HTTP API (browse, label, cluster, export) works with no workers. The
+asynchronous half is opt-in:
 
 ```bash
 docker compose --profile curation up -d
 ```
 
-This starts, in addition to the base services:
-
 | Service | What it does |
 |---|---|
-| `curation-detection-worker` | Runs the detection cascade continuously over `pending_detection` items. |
-| `curation-vlm-worker` | Verifies/labels items via the configured VLM. |
-| `curation-auto-label-worker` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process. **Clusters only by default** (`run_vlm=false`) — it does not label with the VLM unless a caller passes `run_vlm=true` (see the "VLM labeling" step below). |
-| `curation-cluster-refresh` | Periodically retrains/refreshes the residual clustering. |
-| `curation-evaluator` (a watcher, not a one-shot job) | `docker compose --profile curation up -d curation-evaluator` — starts a long-lived watcher that serves the model-comparison (bake-off) harness: scores training runs and baselines per class on the test split of any export (`/curation/bakeoff/*`, see `docs/design/curation_design_rationale.md` §8). Mounts `./data` read-only to read exports. **Do not use `docker compose run --rm curation-evaluator`** — the container never exits on its own, so `run --rm` just blocks the foreground shell instead of running a job to completion. |
+| `curation-detection-worker` | Runs the region cascade over `pending_detection` items for every active project. |
+| `curation-vlm-worker` | Verifies and labels items through each project's active VLM endpoint. |
+| `curation-auto-label-worker` | Drives the auto-label protocol. Clusters only unless a caller passes `run_vlm=true`. |
+| `curation-cluster-refresh` | Periodically refreshes the clustering. |
+| `curation-evaluator` | Long-lived bake-off watcher; mounts `./data` read-only. |
 
-None of these workers requires Triton or a GPU to *start* — they will
-sit idle or error per-call until you've configured a real detector/VLM
-endpoint. See `docker-compose.yml`'s `curation-*` service definitions
-and `env.template` for every tunable.
+None needs Triton or a GPU to start; they idle or error per call until a
+detector and VLM are configured. Workers serve every active project and skip
+a paused one. Each worker writes a heartbeat file under `OP_HEARTBEAT_DIR`
+that its container health check reads.
 
-The segmenter is a **second, separate profile** because unlike the
-workers above it does need a GPU of its own and a HuggingFace token:
+The segmenter and the trainer are separate profiles because they need a GPU:
 
 ```bash
 OP_SEGMENTER_URL=http://segmenter:8000 \
   docker compose --profile curation --profile segmenter up -d
+docker compose --profile training up -d curation-trainer
 ```
 
-| Service | What it does |
-|---|---|
-| `segmenter` | Promptable segmentation (SAM 3) serving the cascade's segmenter leg. See [`docker/segmenter/README.md`](../docker/segmenter/README.md). |
+`docker/trainer/` implements the job-file protocol. Without it running,
+preflight's `trainer_reachable` check is a warning, never a block. The probe
+reads the trainer's heartbeat on the shared `/jobs` volume, so it needs no
+Docker socket.
 
-Without `OP_SEGMENTER_URL` the detection worker constructs a disabled
-client and the segmenter leg is skipped entirely — no HTTP call, no
-failure.
+### GPU arbiter
 
-## Mounting your image source
-
-Ingest resolves item paths against `OP_SOURCE_ROOT` (default
-`/data/source` in this repo's `docker-compose.yml`). **Both** `yolo-api`
-and `curation-detection-worker` mount the same host directory at the
-same container path:
-
-```yaml
-# docker-compose.yml (already wired; override OP_SOURCE_ROOT_HOST in .env)
-volumes:
-  - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
-```
-
-Point `OP_SOURCE_ROOT_HOST` (in `.env`) at wherever your images actually
-live on the host — `OP_SOURCE_ROOT` itself normally stays at its
-container-side default. If only `yolo-api` has the mount, ingest
-succeeds (it reads bytes to embed/hash at ingest time) but every later
-detection-worker read of that same path fails with
-`detection_failed`/`reason=image_unavailable`, since the worker is a
-separate container with its own filesystem view.
-
-Because this mount is `:ro`, the dataset-fetch scripts
-(`scripts/datasets/fetch_coco_subset.py`,
-`fetch_openimages_plates.py`) must run on the **host**, not via
-`docker compose exec` — see the "Run this on the host" note in either
-script's module docstring. `make sample-coco*` / `make sample-plates`
-already do this correctly.
-
-## VLM
-
-Three ways to get a VLM behind `OP_VLM_URL` (`src/services/labeling/vlm_client.py`):
-
-1. **Run the shipped `vlm` service** (`--profile vlm`, Gemma 4 E4B by
-   default — see the `vlm` service in `docker-compose.yml` and the
-   "In-compose VLM" section of `env.template`):
-
-   ```bash
-   docker compose --profile vlm up -d
-   ```
-
-   Then in `.env`: `OP_VLM_URL=http://vlm:8000/v1`,
-   `OP_VLM_MODEL=gemma-4-e4b` (or your `VLM_SERVED_MODEL_NAME`).
-
-2. **Point at a VLM already running on this host, outside compose**
-   (e.g. a standalone vLLM/Ollama/llama.cpp server you started
-   yourself): `OP_VLM_URL=http://host.docker.internal:<port>/v1`. On
-   Linux this only resolves because `yolo-api` and
-   `curation-vlm-worker` both carry `extra_hosts:
-   ["host.docker.internal:host-gateway"]` in `docker-compose.yml` —
-   Docker Desktop adds this mapping automatically; the Linux engine does
-   not, so without that overlay this example silently fails to connect.
-
-3. **Point at a VLM anywhere else on the network:**
-   `OP_VLM_URL=http://<host>:<port>/v1`.
-
-**Coupling you must keep in sync:** the client-side image cap
-(`OP_VLM_MAX_IMAGES_PER_CALL`, default 8) and the server-side cap (vLLM's
-`--limit-mm-per-prompt '{"image": N}'`, exposed here as
-`VLM_LIMIT_MM_IMAGES`) are two ends of one contract. A request above
-whichever is smaller gets a `400`. Keep them numerically equal — this is
-the most common "VLM labeling returns 400s in the worker logs" cause.
-
-### Choosing a VLM
-
-The three options above set the `env` built-in endpoint. Beyond it, the VLM
-is a registry of endpoints and each project runs one of them:
-
-- **Register** an endpoint (`POST /curation/vlm/endpoints`: URL, served model
-  alias, optional `api_key_ref`, image cap, JSON mode). A key is never typed
-  into the API: write it on the host with `openprocessor vlm key set <slug>`
-  and reference it as `secret:<slug>`. Every save is a new immutable
-  revision; saving never changes what a project runs.
-- **Test** it (`POST .../{name}/probe`, or `validate?probe=true` for an
-  unsaved draft). The probe sends synthetic images only and records the
-  served model root, context length, image cap and JSON-mode support for
-  that exact revision. An endpoint outside this deployment is probed only
-  once it carries `allow_external`, because the probe sends its key.
-- **Activate** it for a project (`.../vlm/endpoints/{name}/activate`, or
-  `defaults.vlm` in `PUT /settings`); roll back or deactivate the same way.
-  An endpoint that sends crops outside this deployment needs an explicit
-  acknowledgement, recorded per `name@revision`;
-  `OP_VLM_EXTERNAL_POLICY=deny` refuses them outright. The detection worker
-  switches at its next quiesce point. A per-run `?vlm=` on the VLM and
-  pipeline routes uses another endpoint for that run only.
-- **Local models**: `openprocessor vlm list|status|use <id>` switches the
-  in-compose `vlm` service to a model from `examples/vlm/catalog.tsv`
-  (fit check, `.env` rewrite with restore on failure, probe).
-
-A host's DNS can change after it was validated, so every labeler re-checks
-its endpoint at most every 30 seconds before sending and refuses (fail
-closed) once the host resolves to a denied address, to an address outside
-the deployment without an acknowledgement, or is denied by policy. See
-`SECURITY.md` for the residual risk.
-
-## GPU arbiter container coordination
-
-`OP_GPU_ARBITER_CONTAINERS` (see the ["New-deployment env
-checklist"](#new-deployment-env-checklist) and "Environment variables"
-below) lets a
-training job stop/restart named sibling containers around the run so
-they don't fight it for GPU memory. Doing that from inside the `yolo-api`
-container requires Docker socket access, which is **not** mounted by
-default:
+`OP_GPU_ARBITER_CONTAINERS` lets a training job stop and restart named sibling
+containers so they do not compete for GPU memory. That needs the Docker socket,
+which is not mounted by default:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu-arbiter.yml \
   --profile training up -d
 ```
 
-**Security tradeoff (read `docker-compose.gpu-arbiter.yml`'s header
-comment before enabling):** mounting `/var/run/docker.sock` into any
-container gives that container's process root-equivalent control over
-the *entire* Docker host, not just this project's containers. Only
-enable this overlay on a host you trust `yolo-api`'s dependency stack
-on. Without it, `OP_GPU_ARBITER_CONTAINERS` still validates as config,
-but every stop/start call fails open (no-op) and the API logs one
-`arbiter_docker_unavailable` warning per outage (not per call) so the gap
-is visible instead of silent.
+Mounting `/var/run/docker.sock` gives that container root-equivalent control
+of the Docker host. Read the header of `docker-compose.gpu-arbiter.yml`
+first. Without the overlay, the stop and start calls are no-ops and the API
+logs one `arbiter_docker_unavailable` warning per outage.
 
-**Trainer reachability (F-72).** `POST /train/preflight` probes whether
-the trainer container is up before letting a job queue forever with no
-error. `OP_GPU_ARBITER_TRAINER_CONTAINER` now defaults to
-`${COMPOSE_PROJECT_NAME:-openprocessor}-trainer` (the `curation-trainer`
-service's own `container_name`), so a deployment running the `training`
-profile gets a working probe with no extra env config. The probe's
-primary signal is the trainer's own heartbeat file
-(`.trainer_capabilities.json` on the shared `/jobs` volume, refreshed
-every ~30s by the trainer's watch loop) -- that needs no Docker socket at
-all, so it works on a stock install with no
-`docker-compose.gpu-arbiter.yml` overlay. A fresh heartbeat reports `ok`;
-a missing or stale one (older trainer image, container mid-restart, or
-the `training` profile never started) reports `warn`, never `block` --
-"can't tell" must never gate `/train/start`. Docker socket access (the
-same `docker-compose.gpu-arbiter.yml` overlay above) is used only as an
-optional, confirming extra: when it's mounted *and* the heartbeat is
-missing/stale, a docker-confirmed "container does not exist" upgrades
-that warning to a definitive `block`.
+## Mounting your image source
+
+Ingest resolves paths under `OP_SOURCE_ROOT` (container default
+`/data/source`). Both `yolo-api` and `curation-detection-worker` must mount the
+same host directory at the same container path:
+
+```yaml
+volumes:
+  - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+```
+
+Set `OP_SOURCE_ROOT_HOST` in `.env`. If only `yolo-api` has the mount, ingest
+succeeds but every later worker read fails with
+`detection_failed` / `reason=image_unavailable`. `GET
+/curation/projects/{project}/ingest/config` lists the accepted source roots.
+Because the mount is read-only, run the dataset fetch scripts on the host,
+not through `docker compose exec`.
 
 ## Wiring up Cropwright
 
-Cropwright (or any `/curation`-consuming frontend) needs three things to
-reach this API from inside the same compose network:
+Cropwright, or any frontend that consumes `/curation`, needs:
 
 | Cropwright env var | Value | Why |
 |---|---|---|
-| `API_UPSTREAM` | `http://op-api:8000` | `yolo-api` carries a network alias `op-api` (see its `networks:` block in `docker-compose.yml`) specifically so a frontend defaulting to `op-api` needs no override. `http://yolo-api:8000` (the actual service name) works identically. |
-| `PUBLIC_API_PREFIX` | `/curation` | Must equal this API's `OP_API_PREFIX` (default `/curation`). |
-| `PUBLIC_TRITON_API_URL` | *(leave empty in Docker)* | Cropwright talks to Triton only through the API, never directly. |
-| Docker network | `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` | The network `docker-compose.yml` creates (`triton_net`, prefixed with the compose project name) — join it as an `external: true` network in Cropwright's own compose file, or attach the container to it directly. |
+| `API_UPSTREAM` | `http://op-api:8000` | `yolo-api` has the network alias `op-api`; `http://yolo-api:8000` works too. |
+| `PUBLIC_API_PREFIX` | `/curation` | Must equal `OP_API_PREFIX`. |
+| `PUBLIC_TRITON_API_URL` | empty in Docker | The frontend talks to Triton only through the API. |
+| Docker network | `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` | Join it as an external network. |
 
-## Seed / bootstrap path for a fresh install
+## Quick start for a fresh install
 
-Setting up a new curation deployment? See the ["New-deployment env
-checklist"](#new-deployment-env-checklist) above for the `OP_*` vars this
-path needs set before step 1.
+1. Start the API (`docker compose up -d`). Indexes are created on startup.
+2. Create a project and classes ([Use your own domain](#use-your-own-domain)).
+3. Build the PE encoders and load them in Triton ([Models you must supply](#models-you-must-supply)).
+4. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` and `OP_INGEST_PRIMARY_CLASS_IDS`.
+5. Ingest or import, start `--profile curation`, review, export, train.
 
-**No dataset to ingest yet?** `make sample-coco` /
-`make sample-coco-readme` / `make sample-plates` fetch public,
-license-filtered sample data (COCO 2017 subset, plus an Open Images V7
-"Vehicle registration plate" region set) into gitignored
-`data/samples/`, from pinned, deterministic manifests
-(`scripts/datasets/manifests/`) — nothing proprietary is bundled with
-this repo. See "Try it with a public sample" in the top-level
-[README.md](../README.md) and `python scripts/datasets/fetch_coco_subset.py --help`
-/ `python scripts/datasets/fetch_openimages_plates.py --help` for every
-flag (per-class counts, seed, license filter, side sets). `make
-sample-clean` removes everything fetched.
+A per-deployment checklist of the `OP_*` variables the compose file reads:
 
-1. Start the API (`docker compose up -d` or your own compose target).
-   OpenSearch indexes are created automatically on startup via
-   `create_curation_indexes` — there is no separate schema-migration
-   step to run by hand.
-2. Copy `data/class_registry.example.json` to the project's registry
-   path (`./data/projects/default/class_registry.json` for `default`) and
-   edit `classes` for your domain, or start from an empty
-   `{"version": 1, "updated_at": "...", "classes": []}` and add classes
-   via `POST /curation/classes`.
-
-   **Create classes from zero (quick start).** A brand-new install has
-   neither file — `data/class_registry.example.json` is a worked
-   warehouse example, and `scripts/curation/seed_class_registry.py`
-   seeds every class a *detector* already knows (all 80 COCO classes for
-   a stock YOLO11/YOLO26 checkpoint), which is rarely what you want for
-   a narrow domain. To start with only the classes you care about:
-
-   ```bash
-   for name in car truck bus motorcycle bicycle; do
-     curl -s -X POST "$API/curation/classes" \
-       -H 'content-type: application/json' \
-       -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
-   done
-   curl -s "$API/curation/classes" | jq '.classes | length'   # -> 5
-   ```
-
-   This writes `data/class_registry.json` (dense ids starting at 0) the
-   first time it's called — no file needs to exist beforehand. `GET
-   /curation/health` flips from `degraded` (`registry.exists=false`) to
-   `ok` once at least one class exists (with Triton/OpenSearch reachable
-   too). A duplicate `name` is `409`; a reserved hotkey (`g n d z x u a m
-   / f e b`) is rejected the same way in the UI and the API.
-3. Build the PE-Core encoders (`make pe-download pe-export-image
-   pe-build-trt pe-export-text-triton`, or `make export-pe`), load
-   `pe_image_encoder` and `pe_text_encoder` in Triton and restart the API
-   — see "Models you must supply" above and
-   [`export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
-   Ingest writes no `pe_embedding` without the image model, and semantic
-   search / near-dup / clustering then have nothing to operate on.
-4. Configure at least an ingest detector model
-   (`OP_INGEST_PRIMARY_DETECTOR_MODEL`) — ingest 503s until one is set.
-   **A stock YOLO checkpoint's full label space becomes item proposals
-   by default** (all 80 COCO classes for a stock YOLO11/YOLO26 model,
-   step 2's `seed_class_registry.py` warning above) — set
-   `OP_INGEST_PRIMARY_CLASS_IDS` to a comma-separated allowlist (e.g.
-   `2,3,5,7` for car/motorcycle/bus/truck) to narrow ingest to only the
-   classes you created in step 2, instead of proposing all of them.
-5. Ingest images: `POST /curation/ingest/image` for one image at a
-   time, or `scripts/curation/ingest_walker.py` for a bulk directory
-   walk with a resumable progress file. If the images are not on storage
-   the API container can mount, use `scripts/curation/ingest_upload.py`
-   instead — it reads the files locally and uploads the bytes to
-   `POST /curation/ingest/upload` (resume = server-side content dedup).
-   Bringing in an **already-labeled** dataset (YOLO, COCO or an
-   OpenProcessor export) is `POST /datasets/imports`: preview it, map its
-   class names onto the registry (by name, never by index), then start the
-   import; it can be resumed and undone as one batch.
-   `scripts/curation/import_labeled_dataset.py` drives it from a shell.
-   `--images-only` skips every class (images indexed, no labels) — use
-   it when the dataset's labels are *region* ground truth rather than
-   item classes (whole frames labeled with, e.g., a single region class
-   plus background frames), so the labels never touch the item registry;
-   let the region cascade run, then score it with
-   `scripts/curation/eval_regions_vs_gt.py
-   --dataset <data.yaml> --state-dir <same state dir> --wait-pending 1800`
-   (recall/precision/F1/mean IoU, background false-positive gate, and a
-   worst-first list of misses). Seed the registry from the detector itself with
-   `scripts/curation/seed_class_registry.py --model <detector.onnx>` so
-   class ids cannot drift from the model's class order.
-6. Optionally bring up the async workers (`--profile curation`) so
-   detection/labeling/clustering keep running without you driving each
-   step by hand. `curation-auto-label-worker` and the underlying
-   `/curation/pipeline/auto_label/start` protocol **cluster only by
-   default** (G-11) — the VLM does not label anything unless you pass
-   `run_vlm=true`:
-
-   ```bash
-   curl -s -X POST \
-     "$API/curation/pipeline/auto_label/start?run_vlm=true&train_clusters=true"
-   curl -s "$API/curation/pipeline/auto_label/status"   # poll until terminal
-   ```
-
-   The continuous `curation-vlm-worker` (started by the same
-   `--profile curation` compose command) also labels unvalidated items
-   with `pe_embedding` on its own schedule, independent of `auto_label`.
-7. Browse and label via `GET /curation/crops`, `PUT
-   /curation/crops/{crop_id}/label`, etc., or point a labeling frontend
-   (Cropwright is the first such consumer) at the API — see
-   [`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
-8. Export a dataset with `POST /curation/export/yolo` once you have
-   labeled data — or `POST /curation/export/single_class` to build a
-   narrowed dataset for one class (or a class subset), which adds
-   background/hard-negative frames the narrowed detector needs and an
-   extra integrity field: `frozen_test_sha` over the test split's
-   identity. **`/export/yolo` always exports every class** — it has no
-   `classes` field. A class subset lives in exactly two places: `POST
-   /export/single_class` (above) for a narrowed *dataset*, or
-   `hyperparameters.include_classes` on `POST /curation/train/start` to
-   train on a subset of an already-exported multi-class dataset. Since
-   the genericization pass (G-16), `/export/yolo` rejects unknown body
-   keys with `422` — passing `classes` there was previously silently
-   ignored (the export ran unfiltered) rather than erroring. Both exporters record `dataset_sha`, a hash of the actual
-   written label *content* (which frames, in which split, with which
-   boxes) plus the export's ordered class-name list — not of which item
-   ids were selected, so a split reassignment, a corrected box, or a
-   class rename all change it even when something else about the export
-   looks unchanged. Both flip their `current` symlink atomically.
-
-   The multi-class export writes **one image file and one label file per
-   source image** (`images/<split>/<image_id>.<ext>` +
-   `labels/<split>/<image_id>.txt`), with one `cls cx cy w h` line per
-   validated object on that image, relative to the full source image.
-   Its manifest counts images (`image_count`, `split_counts`) and
-   objects (`object_count`, `split_object_counts`, `class_split_counts`)
-   separately.
-
-   **Partially labeled images.** An image can also hold objects that
-   are not labeled yet (unreviewed, or on a class the export leaves
-   out). By default the image is still exported with its validated
-   objects labeled, and the manifest records
-   `unlabeled_items_on_exported_images` / `images_with_unlabeled_items`.
-   Training preflight then warns (`export_unlabeled_objects`), because
-   the detector learns an unlabeled object in a training image as
-   background. Pass `require_fully_labeled_images: true` to
-   `POST /curation/export/yolo` to leave those images out instead
-   (`images_dropped_not_fully_labeled` in the manifest). Excluded and
-   review-dismissed items are never counted as unlabeled.
-
-   Both exporters split by **source image** (`group_key: image_id`):
-   items cut from one image always land in the same split. An image
-   with a frozen test-holdout item (`POST /curation/test_holdout/freeze`)
-   goes to `test` with all its objects; a class with a frozen holdout
-   splits its other images between train and val only, and each split
-   gets one image before any gets a second (1 image → train, 2 → train +
-   val). `POST /curation/train/preflight` blocks an export with no train
-   or no val images, or with a trained class missing from train or val
-   — see the "Export" section of the API contract for the exact rules.
-9. **Train.** `curation-trainer` is a separate compose service, opt-in
-   behind the `training` profile (F-21/F-72) -- it isn't started by
-   `--profile curation` or the base `docker compose up`:
-
-   ```bash
-   docker compose --profile training up -d curation-trainer
-   curl -s -X POST "$API/curation/train/preflight" -H 'content-type: application/json' -d '{}'
-   curl -s -X POST "$API/curation/train/start" -H 'content-type: application/json' -d '{
-     "model_family": "yolo26", "model_size": "s", "profile": "small",
-     "hyperparameters": {"epochs": 70, "imgsz": 640, "batch": 16, "optimizer": "MuSGD"}
-   }'
-   ```
-
-   (`dataset_export_dir` defaults to the current export -- F-73 -- so an
-   empty preflight body works once step 8 has run at least once.)
-   Without the `training` profile up, preflight's `trainer_reachable`
-   check reports a `warn` (no heartbeat file yet) instead of blocking
-   silently or forever queuing the job.
-
-## Worked example: wheels on cars (public COCO images)
-
-A text-free region example: find the wheels on car crops. COCO has no wheel
-labels, so the output is machine-proposed wheel boxes for a human to review,
-which is the point. Everything needed ships in the repo:
-`examples/region_profiles/vehicle_wheel.json` (SAM3 text prompt `wheel`, no
-detector leg, no text reading), `examples/prompt_packs/vehicle_wheel.json`, and
-`examples/bakeoff/vehicle_wheel/profile.json` (to compare wheel detectors you
-train later; set its `triton_model`).
-
-```bash
-make sample-coco-cars      # 60 CC BY car images, pinned manifest, into data/samples/coco_car
-.venv/bin/python scripts/examples/wheel_example_live.py \
-    --api http://localhost:4603 --project wheels \
-    --container-dir /data/source/coco_car/images
-```
-
-The script creates the project, creates and activates the example profile and
-pack through the config routes, ingests the images (the primary detector
-proposes the cars), waits for the detection worker, and exports the wheel
-boxes cropped to their car. It needs the live stack: an activated VLM endpoint
-(or accept unverified boxes), the segmenter, and `data/samples/coco_car`
-mounted for the API container (see "Mounting your image source").
-
-Items are chosen for the region stage by class NAME: the profile's
-`parent_classes` (`car`) matches an item's `class_name` or its detector's own
-label (`proposal_name`), never a class index. The same walk runs offline in CI
-with fakes at the OpenSearch, Triton, segmenter and VLM boundaries, over a
-project created through `POST /curation/projects`:
-`tests/integration/test_wheel_example_e2e.py`.
-
-**A labeled-dataset import fixture** (`make sample-coco-import`, 96 CC BY val2017
-images: car, truck, bus, and frames with none of them) builds four layouts of
-the same data (`yolo/`, `coco/`, `yolo_region/`, `yolo_region_only/`) plus a
-`FIXTURE.json` of expected counts. The YOLO layout deliberately numbers classes
-unlike any registry, spells `Car` differently and adds a synonym (`automobile`),
-and injects six label problems; the wheel boxes in the `yolo_region*` layouts are
-synthetic geometry derived from car boxes, not wheel annotations. A COCO-layout
-import must name its format (`"format": "coco"`): `images/` next to
-`annotations/` is not auto-detected.
+| Purpose | Vars |
+|---|---|
+| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_CLASS_IDS`, `OP_SOURCE_ROOT_HOST` |
+| Region detection | `OP_REGION_PROFILE_PATH`, `OP_SEGMENTER_URL` / `OP_SEGMENTER_URLS` |
+| VLM | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` |
+| Feature flags | `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED` |
+| GPU and training | `OP_GPU_ALLOWED_IDS`, `OP_GPU_LABELS`, `OP_GPU_ARBITER_CONTAINERS`, `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_TRAIN_DEFAULT_GPUS`, `OP_TRAIN_GPU_ORDER` |
+| Projects and API | `OP_PROJECTS_DATA_ROOT`, `OP_PROJECT_INDEX_PREFIX`, `OP_API_PREFIX` |
+| Image build (compose only) | `OP_IMAGE_REPO`, `OP_IMAGE_TAG`, `OP_BUILD_SHA` |
 
 ## Environment variables
 
-All `OP_*` curation vars are optional; unset vars fall back to the
-defaults in `CurationConfig.from_env()` / `RegionFields.from_env()` /
-`DetectionProfile.from_env()`. The authoritative, always-current list
-lives in [`env.template`](../env.template) — this table summarizes it
-by area; consult `env.template`'s inline comments for full detail and
-defaults.
+All curation `OP_*` variables are optional. The authoritative list with
+defaults and comments is [`../env.template`](../env.template); its
+"Curation quick-config" block gathers the ones every tier needs. See
+[INSTALLATION.md](../INSTALLATION.md#curation-quick-config) and the
+[README Quick Start](../README.md#quick-start).
 
-**Fastest path:** `env.template`'s "Curation quick-config" block (right
-above the "Curation / Labeling Subsystem" header) gathers the handful of
-vars every curation tier actually needs to get running — ingest
-detector, segmenter URL, VLM endpoint, feature flags, GPU placement, and
-the optional region profile path — into one copy-pasteable block. The
-one-line installer writes exactly that block (see
-[INSTALLATION.md: Curation quick-config](../INSTALLATION.md#curation-quick-config);
-the install itself is in the [README Quick Start](../README.md#quick-start)).
-Start there; the rest of this section and `env.template` cover every
-advanced/per-field override. On an installed stack, `./openprocessor sample
-coco` fetches the public COCO sample to try it on.
-
-**Import-time only:** curation routers build their mount prefix and
-index names at *module import time*. Any `OP_*` var here must be set in
-the process environment **before** `src.main` is imported — it cannot
-be changed at runtime once the app has started.
+Curation routers build their mount prefix and index names at import time, so
+set these before `src.main` is imported; they cannot change at runtime.
+Profiles, packs, VLM endpoints and settings are not environment: they live in
+the config store and change at runtime.
 
 | Area | Vars |
 |---|---|
-| Projects (index names and per-project data) | `OP_PROJECT_INDEX_PREFIX` (indexes are `<prefix><project>__<role>`, e.g. `op_prj_default__items`), `OP_PROJECTS_INDEX`, `OP_PROJECTS_DATA_ROOT` (class registry, exports, bake-off eval sets per project) |
-| Filesystem roots | `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES` (JSON object or `alias=path,...`), `OP_STATE_DIR` (per-project uploads and state under `projects/<project>/`), `OP_CROP_CACHE_DIR` |
-| VLM prompt pack | `OP_PROMPT_PACK_PATH` (default pack), `OP_PROMPT_PACK_PATHS` (extra selectable packs, comma-separated) |
+| Projects | `OP_PROJECT_INDEX_PREFIX`, `OP_PROJECTS_INDEX`, `OP_PROJECTS_DATA_ROOT` |
+| Filesystem roots | `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
+| Prompt pack files | `OP_PROMPT_PACK_PATH` (the boot default pack), `OP_PROMPT_PACK_PATHS` (extra packs, comma-separated) |
+| Config store | `OP_CONFIG_POLL_S` |
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
-| Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
-| Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BOXES`) — see `RegionFields` for the full attribute list |
-| Ingest item detectors | `OP_INGEST_PRIMARY_<FIELD>` (e.g. `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_INPUT_SIZE`, `OP_INGEST_PRIMARY_CLASS_IDS`), optional secondary `OP_INGEST_SECONDARY_<FIELD>` (e.g. `OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_NAME`) — tuple/frozenset fields take a comma-separated value. Replaces the retired `OP_DETECTION_*` |
-| Region detection profile (off by default; no profile ships built in) | `OP_REGION_PROFILE_PATH` (load a profile file, e.g. `examples/region_profiles/license_plate.json`), `OP_REGION_PROFILE` (select a profile a deployment registered by name), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
-| Ingest | `OP_MAX_INGEST_CONCURRENCY` |
-| PE text encoder (semantic-search queries) | `OP_PE_TEXT_BACKEND` (`auto`/`onnx`/`triton`/`torch`), `OP_PE_TEXT_ONNX_PATH` (default `/app/pytorch_models/pe_text_encoder.onnx`), `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
+| Embedding and HNSW | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
+| Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (see `RegionFields`) |
+| Ingest detectors | `OP_INGEST_PRIMARY_<FIELD>`, `OP_INGEST_SECONDARY_<FIELD>` (tuple and frozenset fields take comma-separated values) |
+| Region profile boot default | `OP_REGION_PROFILE_PATH` (a JSON profile file), `OP_REGION_PROFILE` (a name registered by deployment code), `OP_REGION_DETECTION_<FIELD>` (per-field overrides) |
+| Region limits | `OP_REGION_MAX_BOXES_PER_WRITE` |
+| Ingest and upload | `OP_MAX_INGEST_CONCURRENCY`, `OP_UPLOAD_MAX_IMAGES_PER_REQUEST`, `OP_UPLOAD_MAX_BYTES_PER_REQUEST`, `OP_UPLOAD_ACCEPTED_EXTENSIONS` |
+| Dataset import | `OP_DATASET_IMPORTS_DIR`, `OP_DATASET_IMPORT_CHUNK`, `OP_DATASET_IMPORT_MAX_PENDING`, `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` |
+| Reprocess | `OP_REPROCESS_JOBS_DIR`, `OP_REPROCESS_SYNC_MAX` |
+| Combine | `OP_COMBINE_JOBS_DIR`, `OP_COMBINE_PAGE_SIZE` |
+| PE text encoder | `OP_PE_TEXT_BACKEND`, `OP_PE_TEXT_ONNX_PATH`, `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |
-| Item-scores tuning | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |
-| Active-learning probe | `OP_PROBE_JOBS_DIR`, `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (confidence floor gating the item wire's `probe_actionable`; default `0.5`; echoed read-only on `GET /probe/status` as `actionable_min_confidence`) |
-| Diverse-selection tuning | `OP_SELECT_JOBS_DIR`, `OP_SELECT_JOB_MAX_N`, `OP_SELECT_MAX_N`, `OP_SELECT_SYNC_MAX_OPS`, `OP_SELECT_CACHE_TTL_S` |
-| Clustering / IVF tuning | `OP_IVF_RETRAIN_CHECK_S`, `OP_IVF_RETRAIN_GROWTH`, `OP_IVF_RETRAIN_MIN_INTERVAL_S`, `OP_MAX_REFINE_MEMBERS`, `OP_OUTLIER_CACHE_TTL_S`, `OP_OUTLIER_MAX_MEMBERS`, `OP_RESIDUAL_EMBEDDING_FIELD`, `OP_REGION_CLUSTER_JOB_FILE`, `OP_REGION_FP_JOB_FILE`, `OP_REGION_PARTITION_MARKER`, `OP_REGION_REFINE_MARKER` |
-| Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP`, `OP_MLFLOW_PUBLIC_URL` (browser-reachable MLflow base; served `mlflow_run_url` is null when unset) |
-| GPU arbiter (`GpuArbiterConfig.from_env()`) | `OP_GPU_ALLOWED_IDS` (comma list; empty = unrestricted), `OP_GPU_ARBITER_CONTAINERS` (comma-separated `name` or `name@ids`, e.g. `vllm-server@2`, `segmenter@0/2` — `/`-separated ids scope a container to specific GPUs; a bare `name` keeps the old "stop only on a multi-GPU claim" behavior), `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_GPU_LABELS` (comma-separated `id=label`, e.g. `0=RTX A6000,2=RTX A6000`, used by `GET /train/gpus`), `OP_TRAIN_DEFAULT_GPUS` (default `cuda_visible_devices` for new specs; falls back to the smallest allowed id, else `0`), plus `OP_BAKEOFF_JOBS_DIR` (an extra queue dir to watch; it always also scans every project's `$OP_STATE_DIR/projects/<slug>/bakeoff_jobs`) |
+| Item scores | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |
+| Probe | `OP_PROBE_JOBS_DIR`, `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` |
+| Diverse selection | `OP_SELECT_JOBS_DIR`, `OP_SELECT_JOB_MAX_N`, `OP_SELECT_MAX_N`, `OP_SELECT_SYNC_MAX_OPS`, `OP_SELECT_CACHE_TTL_S` |
+| Clustering and IVF | `OP_IVF_RETRAIN_CHECK_S`, `OP_IVF_RETRAIN_GROWTH`, `OP_IVF_RETRAIN_MIN_INTERVAL_S`, `OP_MAX_REFINE_MEMBERS`, `OP_OUTLIER_CACHE_TTL_S`, `OP_OUTLIER_MAX_MEMBERS`, `OP_RESIDUAL_EMBEDDING_FIELD` |
+| Training | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP`, `OP_MLFLOW_PUBLIC_URL` |
+| GPU arbiter | `OP_GPU_ALLOWED_IDS`, `OP_GPU_ARBITER_CONTAINERS` (`name` or `name@ids`, e.g. `segmenter@0/2`), `OP_GPU_ARBITER_TRAINER_CONTAINER`, `OP_GPU_LABELS` (`id=label` pairs), `OP_TRAIN_DEFAULT_GPUS`, `OP_BAKEOFF_JOBS_DIR` |
 | Export | `OP_BUILD_SHA` |
-| Bake-off harness | Jobs queue per project in `$OP_STATE_DIR/projects/<slug>/bakeoff_jobs` (`default` included; not configurable). The evaluator must `--watch $OP_STATE_DIR/bakeoff_jobs` on the same path as the API's state dir, since it finds the project dirs next to that root (its image default, `/var/lib/openprocessor/bakeoff_jobs`, matches the default `OP_STATE_DIR`). `OP_BAKEOFF_JOBS_DIR` (GPU arbiter only, see above), `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE` (registered name or profile `.json` path; examples load by path), `OP_BAKEOFF_PROFILE_<FIELD>` |
-| Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL` (falls back to `OP_API_BASE_URL`/`OP_API`), `OP_EVENT_BUS` (`file`, default, or `process`), `OP_EVENT_LOG_MAX_BYTES`, `OP_HEARTBEAT_DIR` (S-2 worker healthcheck heartbeat files), `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
-| VLM connection | `OP_VLM_URL`, `OP_VLM_MODEL` (required whenever `OP_VLM_URL` is set — no default), `OP_VLM_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `OP_VLM_OPEN_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `OP_VLM_HTTPX_MAX_CONNECTIONS`, `OP_VLM_HTTPX_KEEPALIVE` |
-| Segmenter connection | `OP_SEGMENTER_URL`, `OP_SEGMENTER_URLS`, `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS`, `OP_SEGMENTER_HTTPX_KEEPALIVE` |
+| Bake-off | `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE`, `OP_BAKEOFF_PROFILE_<FIELD>`. Jobs queue per project in `$OP_STATE_DIR/projects/<slug>/bakeoff_jobs`; the evaluator must watch `$OP_STATE_DIR/bakeoff_jobs` on the same path as the API's state dir. |
+| Worker and pipeline | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_EVENT_BUS` (`file` or `process`), `OP_EVENT_LOG_MAX_BYTES`, `OP_HEARTBEAT_DIR`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
+| VLM built-in endpoint | `OP_VLM_URL`, `OP_VLM_MODEL` (required when `OP_VLM_URL` is set), `OP_VLM_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL`, `OP_VLM_OPEN_IMAGES_PER_CALL`, `OP_VLM_EXTERNAL_POLICY` (`ack` or `deny`), `OP_VLM_HTTPX_MAX_CONNECTIONS`, `OP_VLM_HTTPX_KEEPALIVE` |
+| Segmenter | `OP_SEGMENTER_URL`, `OP_SEGMENTER_URLS`, `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS`, `OP_SEGMENTER_HTTPX_KEEPALIVE` |
 
-## Naming you'll notice
+## Wire naming
 
-Every OpenSearch document field defaults to a `region_*` / `vlm_*` /
-`classifier_*` name, and the wire is frozen to the same generic
-vocabulary regardless of storage overrides — see
-`docs/design/curation_api_contract.md`'s "key invariant" section. A
-deployment with existing data under other field names (for example, an
-older deployment's own field-naming convention) can construct its own
-`RegionFields` instance to match, via `OP_REGION_FIELD_<ATTR>`, with no
-reindex. There are no retired vendor- or company-prefixed env-var
-fallbacks — see `src/config/retired_env.py` for the guard that fails
-loudly if one is still set.
+Every OpenSearch field defaults to a `region_*`, `vlm_*` or `classifier_*`
+name, and the wire uses the same generic vocabulary whatever the storage
+names are (see the key-invariant section of
+[`design/curation_api_contract.md`](design/curation_api_contract.md)). A
+deployment with existing data under other field names builds its own
+`RegionFields` through `OP_REGION_FIELD_<ATTR>` with no reindex.
+Retired environment-variable prefixes are rejected at startup by
+`src/config/retired_env.py`.
+
+Item wire fields that were renamed or replaced in v0.1.0:
+
+| Old | Now |
+|---|---|
+| Single-box item fields (`region_bbox_norm`, `region_score`, `region_detector`, `region_text*`, `region_cluster_*`, `region_candidate_*`) | An element of `region_boxes[]` (`bbox_norm`, `score`, `detector`, `text*`, `cluster_*`) |
+| `region_thumbnail_url` on the item | `thumbnail_url` on each box |
+| Region cluster counts `n_regions`, `assigned` | `n_boxes`, `n_boxes_changed`, `n_items_written` |
+| Item refine counts `n_members`, `n_updated` | `n_items`, `n_items_updated` |
+| FP centroid build `n_members`; auto pull `n_scanned`, `n_moved` | `n_boxes`; `n_boxes_scanned`, `n_boxes_moved` |
+| `GET /models/status` VLM rows with `kind: "external"` | One row per registered endpoint with `kind: "vlm"` |
+
+## Known limits
+
+- No authentication on the API. Do not expose it to the internet; see
+  [`../SECURITY.md`](../SECURITY.md).
+- BYO models: the encoders, item detector, segmenter, VLM and base weights are
+  yours to supply.
+- A region profile is per project, but one detection worker process serves
+  every project, and a project runs one active profile at a time.
+- Text reading and the OCR text hint are not previewed by the profile test
+  route.
+- The trainer needs internet access on first use of a base checkpoint unless
+  you point `hyperparameters.model` at a local file.
+- Coverage is uneven across the surface; the least-tested routers are the
+  older ones.
