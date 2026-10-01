@@ -119,7 +119,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
     crop_id = region_cohort[4]
     resp = api_client.patch(
         f'/crops/{crop_id}/region_meta',
-        json={'region_status': 'false_positive', 'label_source': 'human'},
+        json={'region_status': 'false_positive', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
 
@@ -129,12 +129,17 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
     assert {b['cluster_subid'] for b in src['region_boxes']} == {None}
     assert src['region_validated'] is True
 
-    # Un-marking releases it so the next re-cluster re-absorbs it.
-    resp = api_client.patch(
-        f'/crops/{crop_id}/region_meta',
-        json={'region_status': 'detected', 'label_source': 'human'},
-    )
-    assert resp.status_code == 200, resp.text
+    # A false-positive item has no accepted box, so whole-set confirm is a
+    # 422 (`no_accepted_box`); un-marking is per box.
+    confirm = api_client.patch(f'/crops/{crop_id}/region_meta', json={'region_status': 'detected'})
+    assert confirm.status_code == 422, confirm.text
+
+    # Accepting each box releases it so the next re-cluster re-absorbs it.
+    for box in src['region_boxes']:
+        resp = api_client.patch(
+            f'/crops/{crop_id}/regions/{box["box_id"]}', json={'state': 'accepted'}
+        )
+        assert resp.status_code == 200, resp.text
     src = _source(opensearch, crop_id)
     assert src['region_status'] == 'detected'
     assert {b['cluster_id'] for b in src['region_boxes']} == {None}
@@ -149,7 +154,7 @@ def test_patch_region_rejects_a_non_human_status_and_an_empty_body(
     )
     assert bad_status.status_code == 400, bad_status.text
 
-    empty = api_client.patch(f'/crops/{crop_id}/region_meta', json={'label_source': 'human'})
+    empty = api_client.patch(f'/crops/{crop_id}/region_meta', json={'region_label_source': 'human'})
     assert empty.status_code == 400, empty.text
 
 
@@ -174,8 +179,7 @@ def test_bulk_region_status_confirms_many_regions_at_once(
         json={
             'crop_ids': batch,
             'region_status': 'detected',
-            'region_verified': True,
-            'label_source': 'human',
+            'region_label_source': 'human',
         },
     )
     assert resp.status_code == 200, resp.text

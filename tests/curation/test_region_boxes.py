@@ -347,6 +347,13 @@ def test_boxes_with_status_detected_no_accepted_result_raises() -> None:
         boxes_with_status('detected', boxes)
 
 
+def test_confirming_a_false_positive_only_item_points_at_the_per_box_route() -> None:
+    boxes = [RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='false_positive', score=0.9)]
+    with pytest.raises(RegionBoxWriteError, match=r'no_accepted_box.*PATCH /crops/') as exc:
+        boxes_with_status('detected', boxes)
+    assert '{"state": "accepted"}' in str(exc.value)
+
+
 def test_boxes_with_status_false_positive_flips_every_box() -> None:
     boxes = [
         RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', score=0.9),

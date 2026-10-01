@@ -289,7 +289,12 @@ def boxes_with_status(
             # .../region/undo` is the documented way back.
             result = [with_state(b, 'accepted') if _is_verifier_rejected(b) else b for b in boxes]
         if not any(b.state == 'accepted' for b in result):
-            msg = 'no_accepted_box'
+            msg = (
+                'no_accepted_box: no box is proposed or reopenable by a whole-set confirm; '
+                'accept false-positive or human-rejected boxes one by one with '
+                'PATCH /crops/{crop_id}/regions/{box_id} {"state": "accepted"}, '
+                'or undo the earlier edit'
+            )
             raise RegionBoxWriteError(msg)
         return result
     if status == RegionStatus.FALSE_POSITIVE.value:
