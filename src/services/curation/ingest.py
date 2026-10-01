@@ -77,6 +77,7 @@ from src.services.curation.ingest_detect import (
 from src.services.curation.ingest_index import (
     PARKED_CLUSTER_ID,
     ImageContext,
+    IndexOutcome,
     image_id_for,
     index_items,
 )
@@ -209,7 +210,7 @@ class CurationIngestService:
         body = {
             'size': 1,
             'query': {'term': {'imohash': image_hash}},
-            '_source': ['image_id', 'image_path'],
+            '_source': ['image_id', 'image_path', 'dataset_split'],
         }
         try:
             resp = await self.opensearch.search(index=self.config.images_index, body=body)
@@ -336,13 +337,16 @@ class CurationIngestService:
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
+        known_existing: dict[str, Any] | None = None,
     ) -> ImageContext | IngestResult:
         """Decode, fingerprint and dedup one image.
 
         Returns the :class:`ImageContext` :func:`index_items` consumes, or
         a terminal :class:`IngestResult`: ``failed`` for empty or
         undecodable bytes, ``duplicate`` for an image the index already
-        holds. ``adopt_existing=True`` (a dataset import, which must attach
+        holds. ``known_existing`` is a lookup result the caller already has
+        (an image it indexed moments ago that search cannot see yet).
+        ``adopt_existing=True`` (a dataset import, which must attach
         labels to an already-indexed image) turns a duplicate into a
         context with ``created=False`` carrying the existing doc's
         ``image_id`` and ``image_path``.
@@ -372,7 +376,7 @@ class CurationIngestService:
                 )
 
         image_hash = _imohash_bytes(image_bytes)
-        existing = await self._lookup_image(image_hash)
+        existing = known_existing or await self._lookup_image(image_hash)
         if existing is not None and not adopt_existing:
             return IngestResult(
                 status='duplicate',
@@ -391,6 +395,7 @@ class CurationIngestService:
             image_id=image_id,
             image_path=resolved_path,
             created=existing is None,
+            dataset_split=(existing or {}).get('dataset_split'),
             pil=img,
             width=full_w,
             height=full_h,
@@ -401,6 +406,74 @@ class CurationIngestService:
             ingest_run_id=ingest_run_id,
             whole_frame_from_bytes=whole_frame_from_bytes,
         )
+
+    async def detect_items(
+        self,
+        img: Image.Image,
+        *,
+        image_path: str = '',
+        prefilled_items: list[DetectedItem] | None = None,
+        prefilled_secondary: SecondaryOutput | None = None,
+    ) -> tuple[list[DetectedItem], str | None]:
+        """The ingest detectors on one decoded image: the primary, then the
+        optional secondary's class override and backbone embeddings.
+
+        Returns ``(items, secondary_detector_error)``. A primary failure
+        raises (the caller decides whether that fails the image); a
+        secondary failure is returned, not raised, and the primary's items
+        stand. ``ingest_one``, a dataset import's ``propose`` mode and the
+        ``detect`` reprocess scope all run this one function.
+        """
+        if prefilled_items is not None:
+            items = prefilled_items
+        else:
+            items = await self.detector.run_primary(img)
+
+        # F-43: surfaced on the response (IngestResult.secondary_detector_error)
+        # and rolled into IngestSummary.secondary_detector_failures instead of
+        # only ever reaching a 'warning' log line.
+        secondary_detector_error: str | None = None
+        if self.secondary_profile is not None and items:
+            secondary = prefilled_secondary
+            if secondary is None:
+                try:
+                    secondary = await self.detector.run_secondary_raw(img)
+                except Exception as exc:
+                    secondary_detector_error = str(exc)
+                    logger.warning(
+                        'ingest_secondary_detector_failed', path=image_path, error=str(exc)
+                    )
+            if secondary is not None:
+                sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
+                # Class override and embedding pooling fail independently —
+                # an NMS failure must not also drop the embeddings.
+                try:
+                    self.detector.resolve_with_secondary(items, secondary.raw, sec_scale, sec_pad)
+                except Exception as exc:
+                    logger.warning(
+                        'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
+                    )
+                if secondary.feature_map is not None:
+                    try:
+                        self.detector.attach_backbone_embeddings(
+                            items, secondary.feature_map, sec_scale, sec_pad
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
+                        )
+        return items, secondary_detector_error
+
+    async def index_items(
+        self,
+        ctx: ImageContext,
+        items: list[DetectedItem],
+        *,
+        seed_region: bool = True,
+    ) -> IndexOutcome:
+        """Embed, score, place and bulk-index ``items`` for ``ctx`` (see
+        :func:`~src.services.curation.ingest_index.index_items`)."""
+        return await index_items(self, ctx, items, seed_region=seed_region)
 
     async def ingest_one(
         self,
@@ -456,54 +529,22 @@ class CurationIngestService:
             return ctx
         img = ctx.pil
 
-        if prefilled_items is not None:
-            items = prefilled_items
-        else:
-            try:
-                items = await self.detector.run_primary(img)
-            except Exception as exc:
-                logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
-                return IngestResult(
-                    status='failed',
-                    image_path=image_path,
-                    source_identifier=source_identifier,
-                    error=str(exc),
-                    error_kind=ERROR_KIND_DETECTOR_INFER,
-                )
-
-        # F-43: surfaced on the response (IngestResult.secondary_detector_error)
-        # and rolled into IngestSummary.secondary_detector_failures instead of
-        # only ever reaching a 'warning' log line.
-        secondary_detector_error: str | None = None
-        if self.secondary_profile is not None and items:
-            secondary = prefilled_secondary
-            if secondary is None:
-                try:
-                    secondary = await self.detector.run_secondary_raw(img)
-                except Exception as exc:
-                    secondary_detector_error = str(exc)
-                    logger.warning(
-                        'ingest_secondary_detector_failed', path=image_path, error=str(exc)
-                    )
-            if secondary is not None:
-                sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
-                # Class override and embedding pooling fail independently —
-                # an NMS failure must not also drop the embeddings.
-                try:
-                    self.detector.resolve_with_secondary(items, secondary.raw, sec_scale, sec_pad)
-                except Exception as exc:
-                    logger.warning(
-                        'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
-                    )
-                if secondary.feature_map is not None:
-                    try:
-                        self.detector.attach_backbone_embeddings(
-                            items, secondary.feature_map, sec_scale, sec_pad
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
-                        )
+        try:
+            items, secondary_detector_error = await self.detect_items(
+                img,
+                image_path=image_path,
+                prefilled_items=prefilled_items,
+                prefilled_secondary=prefilled_secondary,
+            )
+        except Exception as exc:
+            logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
+            return IngestResult(
+                status='failed',
+                image_path=image_path,
+                source_identifier=source_identifier,
+                error=str(exc),
+                error_kind=ERROR_KIND_DETECTOR_INFER,
+            )
 
         outcome = await index_items(
             self, ctx, items, secondary_detector_error=secondary_detector_error
