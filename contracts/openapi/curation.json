@@ -2925,7 +2925,7 @@
               "test_busy",
               "test_timeout",
               "vlm_transport_error",
-              "no_region_box",
+              "no_box_to_verify",
               "too_many_crops",
               "pack_invalid",
               "profile_invalid",
@@ -28582,7 +28582,7 @@
     },
     "/curation/projects/{project}/prompt_packs/test": {
       "post": {
-        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``no_region_box``; 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
+        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``no_box_to_verify``; 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
         "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
         "parameters": [
           {

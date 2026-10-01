@@ -118,7 +118,7 @@ ErrorCode = Literal[
     'test_busy',
     'test_timeout',
     'vlm_transport_error',
-    'no_region_box',
+    'no_box_to_verify',
     'too_many_crops',
     'pack_invalid',
     'profile_invalid',

@@ -486,7 +486,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`429 test_busy`), a 60 s bound (`504 test_timeout`), and a crop cap
     (`422 too_many_crops`).
   - New error codes: `crop_not_found`, `test_busy`, `test_timeout`,
-    `vlm_transport_error`, `no_region_box`, `too_many_crops`, `pack_invalid`,
+    `vlm_transport_error`, `no_box_to_verify`, `too_many_crops`, `pack_invalid`,
     `profile_invalid`, `segmenter_error`, `detector_error`; `ConfigErrorDetail`
     gains `crop_ids`.
   - The segmenter service accepts `return_masks` and returns a simplified

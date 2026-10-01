@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -63,13 +64,14 @@ def main() -> int:
     )
     ap.add_argument('--api', default='http://localhost:4603')
     ap.add_argument('--project', default='wheels')
+    ap.add_argument('--api-prefix', default=os.environ.get('OP_API_PREFIX', '/curation'))
     ap.add_argument(
         '--container-dir', required=True, help='car images as the API container sees them'
     )
     ap.add_argument('--host-dir', type=Path, default=Path('data/samples/coco_car/images'))
     ap.add_argument('--drain-timeout', type=float, default=1800.0)
     args = ap.parse_args()
-    base = f'{args.api}/curation'
+    base = f'{args.api}{args.api_prefix}'
     scoped = f'{base}/projects/{args.project}'
 
     print(f'1. create project {args.project!r}')

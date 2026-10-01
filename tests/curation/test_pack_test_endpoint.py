@@ -216,7 +216,7 @@ def test_region_verify_needs_a_box_open_to_a_machine_verdict(stack, wheels) -> N
     response = stack.post(URL, call='region_verify', crop_ids=['bare1'])
 
     assert response.status_code == 422
-    assert response.json()['detail']['error'] == 'no_region_box'
+    assert response.json()['detail']['error'] == 'no_box_to_verify'
     assert stack.upstream.vlm_requests == []
 
 

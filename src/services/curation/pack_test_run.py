@@ -57,7 +57,7 @@ class CropImageUnavailableError(RuntimeError):
 
 class NoRegionBoxError(RuntimeError):
     """``region_verify`` needs at least one stored box open to a machine
-    verdict (``422 no_region_box``)."""
+    verdict (``422 no_box_to_verify``)."""
 
 
 class TooManyCropsError(RuntimeError):

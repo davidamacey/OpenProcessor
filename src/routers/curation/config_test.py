@@ -199,7 +199,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     ``parse_ok: false`` (the reply did not parse) is a 200 result, not an
     error. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``
     (+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /
-    ``too_many_crops`` / ``no_region_box``; 404 ``crop_not_found``;
+    ``too_many_crops`` / ``no_box_to_verify``; 404 ``crop_not_found``;
     409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.
     Writes nothing."""
     if not body.crop_ids:
@@ -257,7 +257,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
             )
     except NoRegionBoxError as exc:
         raise api_error(
-            422, 'no_region_box', 'region_verify needs a stored box open to a machine verdict'
+            422, 'no_box_to_verify', 'region_verify needs a stored box open to a machine verdict'
         ) from exc
     except TooManyCropsError as exc:
         raise api_error(

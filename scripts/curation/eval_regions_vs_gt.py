@@ -77,6 +77,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
+from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 from scripts.curation.ingest_upload import map_identifier, parse_path_map
 from scripts.curation.yolo_dataset import DatasetError, discover, label_path_for
 from src.config import RegionStatus, get_curation_config, get_region_fields
@@ -161,7 +162,9 @@ def fetch_import_entries(
     """Every ledger entry of one import, paged, optionally limited to ``splits``."""
     import requests
 
-    url = f'{api.rstrip("/")}/curation/projects/{project}/datasets/imports/{import_id}/entries'
+    url = scoped_url(
+        api.rstrip('/'), curation_api_prefix(), project, f'/datasets/imports/{import_id}/entries'
+    )
     out: list[dict[str, Any]] = []
     for split in splits or [None]:  # type: ignore[list-item]
         page = 1
