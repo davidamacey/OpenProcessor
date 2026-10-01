@@ -131,8 +131,8 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
-- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (`[x1,y1,x2,y2]` in `frame`, or `null` = "no region visible"), `region_label_source` (default `human`), `frame` (`source` default = source-image frame; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none). Stored boxes are always source-frame (`region_bbox_frame: "source"`). A box equal to the stored one (each coordinate within `1e-4`, after projection) is a **confirmation**: status/verified/validated/verifier are written and `region_detector`, `region_detector_version`, `region_score`, `region_detected_at` are kept; any other box is human geometry (`region_detector` = the human, `region_score` 1.0). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
-- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`, `frame` (`parent` projects through each item's own box; items without one land in `invalid`). Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
+- `ItemRegionsRequest` (`PUT /crops/{crop_id}/regions`): `boxes` (the full list in display order; an element is `{box_id}` alone for an untouched stored box, `{box_id, bbox_norm?, state?, text?}` to edit one, `{box_id: null, bbox_norm, state?, text?}` for a new box, default `accepted`; a stored box omitted from the list is deleted), `frame` (`source` default; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none), `region_status` (optional whole-set status applied to the built list in the same write), `region_label_source` (default `human`), `expected_region_revision` (stale → `409 region_conflict`). Stored boxes are always source-frame. A stored box whose `bbox_norm` equals the stored one (each coordinate within `1e-4`, after projection) is a **confirmation**: the stored coordinates and the box's detector / version / score / detection time are kept; a different `bbox_norm` is human geometry (`detector` = the human, `score` 1.0, verdict keys cleared). An empty list is the human "no region visible". Out-of-range or degenerate boxes, a new box without `bbox_norm`, a duplicate or unknown `box_id` are `422`. Extra keys are `422`. Response: `crop_id`, `item` (the post-write wire item).
+- `ItemBatchRegionsRequest` (`PUT /crops/batch_regions`): `crop_ids`, `boxes` (new boxes only, `box_id: null`), `region_status`, `region_label_source`. Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
 - `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_label_source`; `region_status` must be human-writable (see "Region lifecycle" below). `region_verified` is still accepted but **ignored** (deprecated): the server derives it. Response: `updated`, `conflicts` (`[{crop_id, current_source}]`), `invalid` (`[{crop_id, detail}]`, e.g. `detected` on a crop with no box), `items` (post-write wire items).
 - `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`), `item` (post-write wire item). `422` when the status write would break an invariant (`detected` with no box).
 - All four region request models set `extra='forbid'`: a stale key (a pre-rename region-attribute name, `label_source`, …) is a `422`, never a silent no-op.
@@ -322,25 +322,28 @@ The single source is `REGION_STATUS_INFO` in `src/config/region_state.py`
 `pending`, `positive`, `rejected`, `absent`, `false_positive`, `failed`.
 `wants_reason`: the UI may offer `region_rejection_reason` for it.
 
-Every human region writer (`PUT /crops/{id}/region`, `PUT
-/crops/batch_region`, `PATCH /crops/{id}/region_meta`, `POST
+Every human region writer (`PUT /crops/{id}/regions`, `PUT
+/crops/batch_regions`, `PATCH /crops/{id}/regions/{box_id}`, `POST
+/regions/batch_box_state`, `PATCH /crops/{id}/region_meta`, `POST
 /regions/batch_status`) enforces, server-side:
 
-- a status with `clears_box` (`no_region_visible`) clears `region_bbox_norm`
-  and `region_score`, whichever writer set it;
+- a status with `clears_box` (`no_region_visible`) empties `region_boxes`,
+  whichever writer set it (an empty list written by `PUT regions` is that
+  same status);
 - `region_verified` = (`region_status` == `confirm_status`), never taken
   from the request (`detected` → `true`, every other human status → `false`);
-- `detected` on a crop with no box is refused (`422` single / `invalid[]` batch)
-  — unless the crop carries a verifier-rejected candidate
-  (`region_candidate_bbox_norm`, below): then `detected` (and
-  `false_positive`) promotes the candidate into `region_bbox_norm`, taking
-  `region_score` / `region_detector` / `region_detector_version` /
-  `region_source` from the `region_candidate_*` fields, clearing them and
-  `region_rejection_reason`. `PUT /crops/{id}/region` with the candidate's
-  box is the same confirmation (provenance kept); any other box replaces
-  the candidate;
-- human writes set `region_validated=true`; `false_positive` parks the region
-  in the FP cluster, any other status releases it;
+- `detected` on a crop with no accepted or confirmable box is refused
+  (`422` single / `invalid[]` batch). A whole-set confirm settles the
+  `proposed` boxes and never overrides a per-box decision; when nothing is
+  `proposed` or `accepted` it reopens only the boxes the *verifier*
+  rejected (a human's own reject, or a sanity-gate reject, is never
+  reopened). Reversing a rejection of one box is `PATCH
+  /crops/{id}/regions/{box_id} {state: "accepted"}`, which keeps the box's
+  detector provenance and clears its rejection reason;
+- human writes set `region_validated=true` (a box write that leaves a
+  `proposed` box is a partial review and leaves it as stored);
+  a box that becomes `false_positive` is parked in the FP cluster, and one
+  that leaves it is released;
 - a write that re-asserts the stored status re-derives nothing:
   `region_verified` and the region-cluster placement stay as stored
   (confirming still sets `region_verified=true`);
@@ -353,10 +356,11 @@ re-deriving the result.
 ### Undo of region writes and VLM dismissals
 
 Every human region writer snapshots the item's pre-write region state
-(`region_bbox_norm`, `region_bbox_frame`, `region_status`, `region_score`,
+(`region_boxes` with its `region_count` / `region_rejected_count` /
+`region_max_score` / `region_set_complete` summaries, `region_status`,
 `region_verified*`, `region_verifier*`, `region_validated`,
-`region_label_source`, `region_detector*`, `region_detected_at`,
-`region_rejection_reason`, `region_text*`, `region_cluster_*`) into the
+`region_label_source`, `region_detected_at`, `region_rejection_reason`)
+into the
 item's `edit_history` (stored, not indexed, not on the wire; see
 `src/services/curation/edit_history.py` for why it is a kind-tagged list
 separate from `class_id_history`).
@@ -367,7 +371,7 @@ separate from `class_id_history`).
   step back. Class fields are untouched. Response: the restored item.
   `404` unknown crop; `409` nothing left to undo.
 - `POST /crops/region/undo_batch` (`CropRegionUndoBatchRequest`:
-  `crop_ids`) — the same per crop; undo a `batch_status` / `batch_region`
+  `crop_ids`) — the same per crop; undo a `batch_status` / `batch_regions`
   by passing the same `crop_ids`. Response: `items`, `undone`,
   `nothing_to_undo`, `conflicts`, `not_found`. `409` when no crop had
   anything to undo.
@@ -1844,7 +1848,7 @@ generic vocabulary used throughout this doc:
   parameter to `vlm_*` naming; `GET /export/datasets` gained `kind` and
   `profile_name` (rows gain the same two fields).
 - **Request/response bodies**: `PUT /crops/{id}/region`, `PUT
-  /crops/batch_region`, `PATCH /crops/{id}/region_meta`, `POST
+  /crops/batch_region` (both since removed, see `PUT .../regions`), `PATCH /crops/{id}/region_meta`, `POST
   /regions/batch_status`, and `POST /events/publish` all moved their
   domain-prefixed keys (`bbox_norm`, status/text/rejection-reason,
   `label_source`) onto the fixed `region_*` wire names; `POST

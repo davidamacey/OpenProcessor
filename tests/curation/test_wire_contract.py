@@ -291,24 +291,27 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
         r = client.put(
-            f'{_common.config.api_prefix}/projects/default/crops/crop-1/region',
-            json={'region_bbox_norm': [0.1, 0.1, 0.2, 0.2]},
+            f'{_common.config.api_prefix}/projects/default/crops/crop-1/regions',
+            json={'boxes': [{'box_id': None, 'bbox_norm': [0.1, 0.1, 0.2, 0.2]}]},
         )
     assert r.status_code == 200, r.text
-    assert set(r.json()) == {'crop_id', 'region_bbox_norm', 'region_status', 'item'}
+    assert set(r.json()) == {'crop_id', 'item'}
     # The post-write item is the shared wire item under the storage override.
-    assert set(r.json()['item']) == ITEM_WIRE_KEYS
-    assert r.json()['item']['region_bbox_norm'] == [0.1, 0.1, 0.2, 0.2]
-    assert fake.doc[_OVERRIDE_STORAGE.bbox_norm] == [0.1, 0.1, 0.2, 0.2]
+    item = r.json()['item']
+    assert set(item) == ITEM_WIRE_KEYS
+    assert item['region_status'] == 'detected'
+    assert [b['bbox_norm'] for b in item['region_boxes']] == [[0.1, 0.1, 0.2, 0.2]]
+    assert [b['bbox_norm'] for b in fake.doc[_OVERRIDE_STORAGE.boxes]] == [[0.1, 0.1, 0.2, 0.2]]
+    assert fake.doc[_OVERRIDE_STORAGE.count] == 1
 
 
 @pytest.mark.parametrize(
     ('method', 'path', 'body'),
     [
-        ('put', '/crops/crop-1/region', {'bbox_norm': [0.1, 0.1, 0.2, 0.2]}),
+        ('put', '/crops/crop-1/regions', {'bbox_norm': [0.1, 0.1, 0.2, 0.2]}),
         ('patch', '/crops/crop-1/region_meta', {'plate_status': 'detected'}),
         ('post', '/regions/batch_status', {'crop_ids': ['crop-1'], 'plate_status': 'detected'}),
-        ('put', '/crops/batch_region', {'crop_ids': ['crop-1'], 'bbox_norm': None}),
+        ('put', '/crops/batch_regions', {'crop_ids': ['crop-1'], 'bbox_norm': None}),
     ],
 )
 @pytest.mark.usefixtures('reference_region_profile')

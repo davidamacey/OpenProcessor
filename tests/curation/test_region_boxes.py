@@ -18,14 +18,13 @@ import pytest
 from src.config.region_fields import RegionFields
 from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.config.region_state import RegionStatus
+from src.services.curation.region_box_edits import apply_put_boxes, boxes_with_status
 from src.services.curation.region_boxes import (
     BOX_STATES,
     RegionBox,
     RegionBoxWriteError,
     accepted,
-    apply_put_boxes,
     box_query,
-    boxes_with_status,
     boxes_write_fields,
     derive_status,
     has_any_box_query,

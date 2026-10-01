@@ -1066,7 +1066,8 @@
         "type": "object"
       },
       "BatchBoxStateRequest": {
-        "description": "Body for ``POST /regions/batch_box_state`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``POST /regions/batch_box_state``.",
         "properties": {
           "expected_region_revisions": {
             "anyOf": [
@@ -1081,6 +1082,11 @@
               }
             ],
             "title": "Expected Region Revisions"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
+            "type": "string"
           },
           "state": {
             "title": "State",
@@ -1102,6 +1108,7 @@
         "type": "object"
       },
       "BatchBoxStateTarget": {
+        "additionalProperties": false,
         "properties": {
           "box_id": {
             "title": "Box Id",
@@ -1199,7 +1206,8 @@
         "type": "object"
       },
       "BoxPatchRequest": {
-        "description": "Body for ``PATCH /crops/{crop_id}/regions/{box_id}`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``PATCH /crops/{crop_id}/regions/{box_id}``.",
         "properties": {
           "expected_region_revision": {
             "anyOf": [
@@ -1211,6 +1219,11 @@
               }
             ],
             "title": "Expected Region Revision"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
+            "type": "string"
           },
           "state": {
             "anyOf": [
@@ -1239,6 +1252,7 @@
         "type": "object"
       },
       "BoxWriteElement": {
+        "additionalProperties": false,
         "description": "One element of a ``PUT /crops/{crop_id}/regions`` boxes list.\n\n``box_id: None`` (or omitted) is a new box; a stored box referenced by\n``box_id`` alone (no other keys) is left untouched (sibling-preserving,\nany_domain_plan.md §7.7).",
         "properties": {
           "bbox_norm": {
@@ -4528,69 +4542,9 @@
         "title": "IngestUploadConfig",
         "type": "object"
       },
-      "ItemBatchRegionRequest": {
-        "additionalProperties": false,
-        "description": "Bulk variant of ItemRegionRequest (e.g. \"mark these N items as no\nregion present\").",
-        "properties": {
-          "crop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 5000,
-            "title": "Crop Ids",
-            "type": "array"
-          },
-          "frame": {
-            "default": "source",
-            "enum": [
-              "source",
-              "parent"
-            ],
-            "title": "Frame",
-            "type": "string"
-          },
-          "region_bbox_norm": {
-            "anyOf": [
-              {
-                "maxItems": 4,
-                "minItems": 4,
-                "prefixItems": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Norm"
-          },
-          "region_label_source": {
-            "default": "human",
-            "title": "Region Label Source",
-            "type": "string"
-          }
-        },
-        "required": [
-          "crop_ids",
-          "region_bbox_norm"
-        ],
-        "title": "ItemBatchRegionRequest",
-        "type": "object"
-      },
       "ItemBatchRegionsRequest": {
-        "description": "Body for ``PUT /crops/batch_regions`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``PUT /crops/batch_regions``.",
         "properties": {
           "boxes": {
             "items": {
@@ -4605,6 +4559,11 @@
             },
             "title": "Crop Ids",
             "type": "array"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
+            "type": "string"
           },
           "region_status": {
             "anyOf": [
@@ -5825,60 +5784,9 @@
         "title": "ItemRegionMetaRequest",
         "type": "object"
       },
-      "ItemRegionRequest": {
-        "additionalProperties": false,
-        "description": "Set or clear the region-of-interest sub-bbox on a single item.\n\n``frame`` says which frame ``region_bbox_norm`` is in: ``'source'``\n(the source image, the stored frame) or ``'parent'`` (the item crop;\nthe server projects it through the item's own ``bbox_norm``).\n``None`` clears the box and marks the item\n``region_status='no_region_visible'`` (a deliberate human decision,\ndistinct from \"not yet detected\").",
-        "properties": {
-          "frame": {
-            "default": "source",
-            "enum": [
-              "source",
-              "parent"
-            ],
-            "title": "Frame",
-            "type": "string"
-          },
-          "region_bbox_norm": {
-            "anyOf": [
-              {
-                "maxItems": 4,
-                "minItems": 4,
-                "prefixItems": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Region Bbox Norm"
-          },
-          "region_label_source": {
-            "default": "human",
-            "title": "Region Label Source",
-            "type": "string"
-          }
-        },
-        "required": [
-          "region_bbox_norm"
-        ],
-        "title": "ItemRegionRequest",
-        "type": "object"
-      },
       "ItemRegionsRequest": {
-        "description": "Body for ``PUT /crops/{crop_id}/regions`` (W8a).",
+        "additionalProperties": false,
+        "description": "Body for ``PUT /crops/{crop_id}/regions``.",
         "properties": {
           "boxes": {
             "items": {
@@ -5905,6 +5813,11 @@
               "parent"
             ],
             "title": "Frame",
+            "type": "string"
+          },
+          "region_label_source": {
+            "default": "human",
+            "title": "Region Label Source",
             "type": "string"
           },
           "region_status": {
@@ -16389,64 +16302,9 @@
         ]
       }
     },
-    "/curation/projects/{project}/crops/batch_region": {
-      "put": {
-        "description": "Bulk variant of ``PUT /crops/{crop_id}/region`` (typically\n``region_bbox_norm=null``: \"no region visible on these N crops\").\n\nReturns ``updated``, ``conflicts``, ``invalid`` and ``items`` (the\npost-write wire items of the updated crops).",
-        "operationId": "batch_set_crop_region_curation_projects__project__crops_batch_region_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ItemBatchRegionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Set Crop Region Curation Projects  Project  Crops Batch Region Put",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Batch Set Crop Region",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/crops/batch_regions": {
       "put": {
-        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"), W8a. Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A\n``text`` element on a text-free profile is 422 ``region_text_disabled``.",
+        "description": "Replace each crop's box list with the same **new** boxes\n(typically ``boxes: []`` = \"none visible\"). Every element must\nhave ``box_id: null`` (422 ``box_id_in_batch``): ids are per item. A\n``text`` element on a text-free profile is 422 ``region_text_disabled``.",
         "operationId": "batch_set_crop_regions_curation_projects__project__crops_batch_regions_put",
         "parameters": [
           {
@@ -17293,70 +17151,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/crops/{crop_id}/region": {
-      "put": {
-        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. A box equal to the stored one\n(within float noise) confirms the region: status, verified, validated\nand verifier are written, the detector / version / score / detection\ntime are kept. A different box is human geometry (detector = human,\nscore 1.0). Returns ``item``, the post-write wire item.",
-        "operationId": "set_crop_region_curation_projects__project__crops__crop_id__region_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "crop_id",
-            "required": true,
-            "schema": {
-              "title": "Crop Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ItemRegionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Set Crop Region Curation Projects  Project  Crops  Crop Id  Region Put",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Set Crop Region",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/crops/{crop_id}/region/undo": {
       "post": {
         "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",
@@ -17541,7 +17335,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions": {
       "put": {
-        "description": "Set the full per-item box list (W8a).\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3).\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``. A ``text`` element on a text-free profile is 422\n``region_text_disabled``.",
+        "description": "Set the full per-item box list.\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state; a moved box is human\ngeometry, an unmoved one a confirmation), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``, W8\npin 2). ``frame: \"parent\"`` projects into the source frame\nserver-side (W8 pin 1). Optional ``region_status`` applies a\nwhole-set status to the built list in the same write (W8 pin 3);\nan empty list is the human \"no region visible\".\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``. A ``text`` element on a text-free profile is 422\n``region_text_disabled``. An out-of-range or degenerate ``bbox_norm``\nis 422.",
         "operationId": "set_crop_regions_curation_projects__project__crops__crop_id__regions_put",
         "parameters": [
           {
@@ -17605,7 +17399,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions/{box_id}": {
       "patch": {
-        "description": "Per-box state/text patch (W8a) -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently). ``text`` on a\ntext-free profile is 422 ``region_text_disabled``.",
+        "description": "Per-box state/text patch -- the review panel's per-box\naccept/reject action. Every other box in the item's list is left\nuntouched (per-box states persist independently). ``text`` on a\ntext-free profile is 422 ``region_text_disabled``.",
         "operationId": "patch_crop_region_box_curation_projects__project__crops__crop_id__regions__box_id__patch",
         "parameters": [
           {
@@ -22482,7 +22276,7 @@
     },
     "/curation/projects/{project}/regions/batch_box_state": {
       "post": {
-        "description": "One state on many boxes across items (region-gallery triage,\nW8a). Flips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item).",
+        "description": "One state on many boxes across items (region-gallery triage).\nFlips only the named box on each targeted item -- never its\nsiblings (contrast ``POST /regions/batch_status``, which flips every\nbox of each item).",
         "operationId": "batch_set_region_box_state_curation_projects__project__regions_batch_box_state_post",
         "parameters": [
           {

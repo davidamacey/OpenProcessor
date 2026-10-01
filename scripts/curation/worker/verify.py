@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from scripts.curation.worker.state import _ItemTask, region_profile
+from scripts.curation.worker.state import region_profile
 from src.config import get_region_fields
 from src.config.region_rejection import (
     REJECT_REASON_NO_VERDICT,
@@ -28,75 +28,16 @@ from src.services.detection.cascade_detect import (
     _now_iso,
     class_provenance,
     is_plausible_region_bbox,
-    region_provenance,
 )
-from src.services.detection.profile_registry import region_profile_or_neutral
-from src.services.detection.region_text import TEXT_CHOICE_NONE, TEXT_CHOICE_VLM_ONLY
-from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
-from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
 
 
 if TYPE_CHECKING:
     from src.services.labeling.region_overlay import VlmBoxVerdict
+    from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
 logger = get_logger('curation_worker')
-
-
-@dataclass
-class _VerifyOutcome:
-    """Compact record of one VLM verify-and-read call.
-
-    Carried through the cascade so a single VLM call serves as both
-    the is-this-a-real-region gate AND the OCR text source. Storing
-    text on the same row that the bbox lands on means downstream
-    training-set extraction (``mode=human_corrected`` etc.) can pull
-    the text without a second query path.
-    """
-
-    ok: bool
-    confidence: str  # 'high' | 'medium' | 'low'
-    text: str | None
-    text_confidence: str | None
-
-
-async def _verify_with_vlm(
-    vlm: VlmLabeler, task: _ItemTask, region_jpeg: bytes
-) -> _VerifyOutcome | None:
-    """Verify and read a region in one VLM call.
-
-    A ``confidence='low'`` ``is_region=True`` verdict is treated as a
-    rejection to keep the bar high — we'd rather route to the secondary
-    segmenter than write a questionable region box. The returned
-    outcome also carries ``text`` + ``text_confidence`` (None when the
-    VLM couldn't read it or the verdict was rejected), which the caller
-    threads into :func:`_region_write_doc`.
-
-    Returns ``None`` when the VLM answered with no usable verdict (see
-    :py:meth:`VlmLabeler.verify_region`) so the cascade can leave the
-    crop pending for a retry instead of treating "no answer" as a
-    rejection and falling through to the next detector. Raises
-    :class:`VlmTransportError` when the call itself failed, so an outage
-    is never counted as a no-verdict reply.
-
-    Sets ``task.vlm_called`` (minor 5, W2 review): the round trip
-    happened, whatever the verdict, so any write this task ends up
-    producing this pass may be stamped ``vlm_prompt_pack``.
-    """
-    verdict = await vlm.verify_region(
-        RegionCrop(crop_id=task.crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
-    )
-    task.vlm_called = True
-    if verdict is None:
-        return None
-    accepted = bool(verdict.is_region) and verdict.confidence != 'low'
-    return _VerifyOutcome(
-        ok=accepted,
-        confidence=verdict.confidence,
-        text=verdict.text if accepted else None,
-        text_confidence=verdict.text_confidence if accepted else None,
-    )
 
 
 # Region auto-confirm policy.
@@ -150,174 +91,6 @@ def _bbox_shape_is_plausible(bbox_in_crop: tuple[float, float, float, float]) ->
     x1, y1, x2, y2 = bbox_in_crop
     area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
     return area >= region_profile().auto_confirm_area_frac[0]
-
-
-_VLM_TEXT_CONFIDENCE_MAP = {'high': 0.92, 'medium': 0.70, 'low': 0.40}
-
-
-def _region_write_doc(
-    *,
-    region_in_source: tuple[float, float, float, float],
-    score: float,
-    detector: str,
-    detector_version: str,
-    chain: list[str],
-    region_status: str = RegionStatus.DETECTED,
-    region_verified: bool = True,
-    auto_confirmed: bool = False,
-    verifier: str | None = VLM_MODEL_ID,
-    verifier_version: str | None = '1',
-    region_text_reply: str | None = None,
-    region_text_confidence: str | None = None,
-    region_text_source: str | None = None,
-    confidence: str | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Compose the ``update_doc`` for a successful region-detection write.
-
-    Centralizes the region-write shape so every cascade branch produces
-    a consistent set of fields (incl. provenance + chain). The worker
-    never validates a region -- ``RegionFields.validated`` is human-only;
-    its auto-confirm policy's verdict is ``RegionFields.auto_confirmed``.
-
-    ``confidence`` is the VLM verifier's box-confidence verdict
-    (``high``/``medium``/``low``, ``RegionFields.confidence`` ==
-    ``reply.region_confidence`` / ``outcome.confidence``) -- distinct from
-    ``region_text_confidence``, which grades the *text reading*.
-    """
-    F = get_region_fields()
-    doc: dict[str, Any] = {
-        F.bbox_norm: list(region_in_source),
-        F.score: score,
-        F.status: region_status,
-        F.verified: region_verified,
-        F.validated: False,
-        F.auto_confirmed: auto_confirmed,
-    }
-    if confidence:
-        doc[F.confidence] = confidence
-    doc.update(
-        region_provenance(
-            detector=detector,
-            detector_version=detector_version,
-            bbox_frame='source',
-            verifier=verifier if region_verified else None,
-            verifier_version=verifier_version if region_verified else None,
-        )
-    )
-    if chain:
-        doc[F.detector_chain] = list(chain)
-    # An accepted box supersedes any candidate an earlier pass rejected.
-    doc.update(dict.fromkeys(candidate_fields(F)))
-    doc[F.rejection_reason] = None
-    profile = region_profile_or_neutral()
-    if region_text_reply and not profile.reads_text:
-        logger.debug('region_text_ignored_text_free', profile=profile.name)
-        region_text_reply = None
-    invalid = (
-        region_text_rules(profile).invalid_reason(region_text_reply) if region_text_reply else None
-    )
-    if region_text_reply and invalid:
-        # Not text (a prompt placeholder, a "can't read it" answer, ...):
-        # keep the reading for audit, write no region text.
-        doc[F.text_vlm] = region_text_reply
-        doc[F.text_vlm_invalid] = invalid
-        doc[F.text_choice] = TEXT_CHOICE_NONE
-    elif region_text_reply:
-        doc[F.text] = region_text_reply
-        doc[F.text_raw] = region_text_reply
-        doc[F.text_source] = region_text_source or VLM_MODEL_ID
-        doc[F.text_engine_version] = '1'
-        doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
-        if region_text_confidence:
-            doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(region_text_confidence, 0.70)
-    if extra:
-        doc.update(extra)
-    return doc
-
-
-def candidate_fields(F: Any) -> tuple[str, ...]:
-    """Storage names of the rejected-candidate fields."""
-    return (
-        F.candidate_bbox_norm,
-        F.candidate_score,
-        F.candidate_detector,
-        F.candidate_detector_version,
-        F.candidate_source,
-    )
-
-
-def candidate_reject_doc(
-    *,
-    candidate_in_source: tuple[float, float, float, float] | None,
-    candidate_score: float,
-    detector: str,
-    detector_version: str,
-    candidate_source: str,
-    reason: str,
-    chain: list[str],
-    bbox_correct: bool | None = None,
-) -> dict[str, Any]:
-    """Region side of a ``verify_rejected`` write.
-
-    The rejected box is kept in the ``candidate_*`` fields -- never in
-    ``bbox_norm``, which every reader treats as an accepted region -- with
-    its detector and score, plus the rejection reason and the verifier's
-    box verdict, so a human can review the rejection and reverse it
-    (confirming promotes the candidate). Any accepted box a
-    pending-verification item carried is cleared: the verifier rejected it.
-    """
-    F = get_region_fields()
-    doc: dict[str, Any] = {
-        F.status: RegionStatus.VERIFY_REJECTED,
-        F.rejection_reason: reason,
-        F.bbox_norm: None,
-        F.score: None,
-        F.detector_chain: list(chain),
-    }
-    if bbox_correct is not None:
-        doc[F.bbox_correct] = bbox_correct
-    if candidate_in_source is not None:
-        doc.update(
-            {
-                F.candidate_bbox_norm: list(candidate_in_source),
-                F.candidate_score: candidate_score,
-                F.candidate_detector: detector,
-                F.candidate_detector_version: detector_version,
-                F.candidate_source: candidate_source,
-            }
-        )
-    return doc
-
-
-def _region_reject_doc(
-    *,
-    detector: str,
-    detector_version: str,
-    reason: str,
-    chain: list[str],
-) -> dict[str, Any]:
-    """Compose the ``update_doc`` for a sanity-gate rejection.
-
-    Records the detector identity so we can later quantify rejection
-    rates per model, plus a ``RegionFields.rejection_reason`` keyword
-    for triage.
-    """
-    F = get_region_fields()
-    doc: dict[str, Any] = {
-        F.status: RegionStatus.DETECTION_FAILED,
-        F.rejection_reason: reason,
-    }
-    doc.update(
-        region_provenance(
-            detector=detector,
-            detector_version=detector_version,
-            bbox_frame='source',
-        )
-    )
-    if chain:
-        doc[F.detector_chain] = list(chain)
-    return doc
 
 
 def _combined_class_update(
@@ -458,11 +231,7 @@ async def _auto_confirm_or_pending(
 # live pipeline calls select_region_candidates() to build the candidate
 # list, then this module's verdicts_to_boxes() to resolve the VLM's
 # per-box verdicts into RegionBox entries, written via
-# region_boxes.boxes_write_fields(). candidate_reject_doc() /
-# no_verdict_reject_doc() (no_verdict.py) are the pre-W8 single-candidate
-# write builders -- no longer called from runner.py, left defined
-# (candidate_reject_doc still backs no_verdict.py's own helpers) rather
-# than swept this pass; see the W8 handback report.
+# region_boxes.boxes_write_fields().
 
 
 @dataclass(frozen=True)

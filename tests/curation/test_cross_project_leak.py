@@ -169,12 +169,8 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
         ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
-        ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {
             'json': {'region_rejection_reason': f'{slug}-note'}
-        },
-        ('PUT', '/crops/batch_region'): {
-            'json': {'crop_ids': [proposal], 'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}
         },
         ('POST', '/regions/batch_status'): {
             'json': {'crop_ids': [item], 'region_status': 'false_positive'}

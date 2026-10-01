@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W8-cleanup Item 3: bugs the PUT-region test migration surfaced in the
+  box routes** (`region_box_edits.py`, new; shared by every human box
+  writer): a parent-frame box on `PUT /crops/{id}/regions` was projected
+  through the item's region box instead of the item crop's own
+  `bbox_norm`; a moved box kept the machine's detector/score instead of
+  becoming human geometry (and an unmoved one, within float noise, now
+  keeps its stored coordinates and provenance); a human "no region
+  visible" (`boxes: []`) wrote the pipeline status `no_region_box`
+  instead of `no_region_visible`; bbox range/degenerate validation, a
+  required `bbox_norm` on a new box and duplicate `box_id` are now 422s;
+  a box moved into / out of `false_positive` is parked in / released from
+  the FP cluster per box on every writer, and any state change clears a
+  stale per-box `rejection_reason` (review minor m5); `POST
+  /crops/{id}/region/undo` now bumps `region_revision` (a stale
+  `expected_region_revision` across an undo is a 409); the request bodies
+  are `extra='forbid'` and carry `region_label_source`.
 - **W10 dataset-import foundation fix pass (post-review).** An
   independent review of the W10 foundation slice below found 4 majors;
   all fixed before any route is wired to `import_dataset()`:
@@ -305,6 +321,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LABEL_IMPORT_CLASS_SOURCE` (`external_label`).
 
 ### Removed
+- **W8-cleanup Item 3 (breaking, no back-compat): the legacy single-box
+  routes `PUT /crops/{id}/region` and `PUT /crops/batch_region` are
+  deleted outright (no 410), with their whole write chain in
+  `region_writes.py` (`region_box_write`, `region_box_doc`,
+  `region_confirm_doc`, `same_box`, `candidate_promotion`,
+  `human_status_fields`, the `candidate_*` helpers, `fp_cluster_fields`,
+  `RegionWriteError`) and the dead pre-W8 worker write builders
+  (`verify._region_write_doc` / `_region_reject_doc` /
+  `candidate_reject_doc` / `_verify_with_vlm`, `no_verdict.
+  cascade_no_verdict` / `no_verdict_reject_doc` and the process-wide
+  cascade counter). Box edits go through `PUT /crops/{id}/regions` /
+  `PUT /crops/batch_regions` / the per-box routes. `ItemRegionRequest` /
+  `ItemBatchRegionRequest` are removed from the OpenAPI contract.
+  The one-off same-box-confirm repair tool (`region_provenance_restore.py`
+  + `scripts/curation/restore_region_provenance.py`) is deleted with the
+  route whose bug it repaired: it only restored detector provenance on
+  legacy scalar docs, and a same-box confirm on the box routes now keeps
+  provenance (tested below); a fresh build has no such data to repair.
+  Coverage migrated, each test proven red against a mutation: same-box
+  confirm (provenance kept, stored coordinates kept, within float noise,
+  in the parent frame), a moved box is human geometry, accepting a
+  false-positive box, the rejected-box reversal (whole-set confirm and
+  per-box accept, provenance kept, undoable), parent-frame projection,
+  bbox validation, undo.
 - **W10 (breaking, no back-compat): `POST /import_labels` and
   `/import_labels/batch`, deleted outright (no 410).** Importing an
   already-labeled dataset is `POST /datasets/imports` — not yet built

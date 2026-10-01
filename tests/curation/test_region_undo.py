@@ -2,8 +2,10 @@
 
 Every human region writer snapshots the pre-write region state into the
 item's edit history; ``POST /crops/{id}/region/undo`` (and the batch form)
-put it back exactly — box, score, status, flags, detector provenance and
-region-cluster placement — and step back through successive writes.
+put it back exactly — the whole box list, status, flags and detector
+provenance — and step back through successive writes. An undo is itself a
+write: the revision moves forward and the box-id high-water mark never
+decreases.
 ``POST /crops/{id}/vlm_dismiss/undo`` brings a dismissed VLM suggestion
 back.
 """
@@ -19,6 +21,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
 
 # No-profile gating contract: this file exercises region routes, which
@@ -29,40 +32,46 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 F = get_region_fields()
 INDEX = base_curation_config().items_index
 BOX = [0.2, 0.2, 0.4, 0.4]
+BOX_TUPLE = (0.2, 0.2, 0.4, 0.4)
 
 
 def _detected(crop_id: str, **extra: Any) -> dict[str, Any]:
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=BOX_TUPLE,
+        state='accepted',
+        score=0.894,
+        detector='det_model',
+        detector_version='3',
+        source='detector',
+        cluster_id=5,
+        cluster_subid='5a',
+        detected_at='2026-09-24T03:08:19+00:00',
+    )
     return {
         'crop_id': crop_id,
         'bbox_norm': [0.0, 0.0, 0.5, 0.5],
-        F.bbox_norm: list(BOX),
-        F.score: 0.894,
         F.status: 'detected',
         F.verified: True,
         F.validated: False,
-        F.detector: 'det_model',
-        F.detector_version: '3',
         F.verifier: 'vlm_model',
         F.detected_at: '2026-09-24T03:08:19+00:00',
-        F.cluster_id: 5,
-        F.cluster_subid: '5a',
+        **boxes_write_fields([box], current_src={}),
         **extra,
     }
 
 
 def _state(doc: dict[str, Any]) -> dict[str, Any]:
     keys = (
-        F.bbox_norm,
-        F.score,
+        F.boxes,
+        F.count,
+        F.rejected_count,
+        F.max_score,
         F.status,
         F.verified,
         F.validated,
-        F.detector,
-        F.detector_version,
         F.verifier,
         F.detected_at,
-        F.cluster_id,
-        F.cluster_subid,
         F.label_source,
     )
     return {k: doc.get(k) for k in keys}
@@ -110,17 +119,19 @@ def test_undo_box_edit_restores_detector_provenance(
 ) -> None:
     before = _state(_doc(fake_os, 'c1'))
     resp = client.put(
-        '/curation/projects/default/crops/c1/region',
-        json={'region_bbox_norm': [0.1, 0.1, 0.3, 0.3]},
+        '/curation/projects/default/crops/c1/regions',
+        json={'boxes': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.3, 0.3]}]},
     )
     assert resp.status_code == 200, resp.text
-    assert _doc(fake_os, 'c1')[F.detector] != 'det_model'
+    assert _doc(fake_os, 'c1')[F.boxes][0]['detector'] != 'det_model'
 
     resp = client.post('/curation/projects/default/crops/c1/region/undo')
     assert resp.status_code == 200, resp.text
     assert _state(_doc(fake_os, 'c1')) == before
-    assert resp.json()['region_score'] == 0.894
-    assert resp.json()['region_bbox_norm'] == BOX
+    (box,) = resp.json()['region_boxes']
+    assert box['score'] == 0.894
+    assert box['bbox_norm'] == BOX
+    assert box['detector'] == 'det_model'
 
 
 @pytest.mark.parametrize(
@@ -146,24 +157,71 @@ def test_undo_status_write(
     assert _doc(fake_os, 'c1').get(F.rejection_reason) is None
 
 
-def test_undo_restores_box_list_pin4(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
-    """W8 pin 4: undo restores the actual box-list snapshot, not just the
-    legacy scalar (region_writes.py has none for the box-list PUT)."""
-    before_boxes = _doc(fake_os, 'c1').get(F.boxes)
+def test_undo_restores_the_whole_box_list_after_a_multi_box_edit(
+    client: TestClient, fake_os: QueryFakeOpenSearch
+) -> None:
+    """W8 pin 4: one PUT that moves a box, adds one and deletes another is
+    one undo step that restores the whole prior list."""
+    client.put(
+        '/curation/projects/default/crops/c1/regions',
+        json={
+            'boxes': [
+                {'box_id': 'b1'},
+                {'box_id': None, 'bbox_norm': [0.6, 0.6, 0.7, 0.7]},
+                {'box_id': None, 'bbox_norm': [0.7, 0.1, 0.8, 0.2]},
+            ]
+        },
+    )
+    before_boxes = _doc(fake_os, 'c1')[F.boxes]
+    assert [b['box_id'] for b in before_boxes] == ['b1', 'b2', 'b3']
     resp = client.put(
         '/curation/projects/default/crops/c1/regions',
-        json={'boxes': [{'box_id': None, 'bbox_norm': [0.05, 0.05, 0.15, 0.15]}]},
+        json={
+            'boxes': [
+                {'box_id': 'b1', 'bbox_norm': [0.15, 0.15, 0.25, 0.25]},
+                {'box_id': 'b3'},
+                {'box_id': None, 'bbox_norm': [0.05, 0.05, 0.15, 0.15]},
+            ]
+        },
     )
     assert resp.status_code == 200, resp.text
-    after_write = _doc(fake_os, 'c1')
-    assert after_write.get(F.boxes)
-    assert after_write.get(F.count) == 1
+    assert [b['box_id'] for b in _doc(fake_os, 'c1')[F.boxes]] == ['b1', 'b3', 'b4']
 
     resp = client.post('/curation/projects/default/crops/c1/region/undo')
     assert resp.status_code == 200, resp.text
     restored = _doc(fake_os, 'c1')
-    assert restored.get(F.boxes) == before_boxes
-    assert not restored.get(F.count)
+    assert restored[F.boxes] == before_boxes
+    assert restored[F.count] == 3
+
+
+def test_undo_moves_the_revision_forward_and_never_reuses_a_box_id(
+    client: TestClient, fake_os: QueryFakeOpenSearch
+) -> None:
+    rev0 = _doc(fake_os, 'c1')[F.revision]
+    client.put(
+        '/curation/projects/default/crops/c1/regions',
+        json={'boxes': [{'box_id': 'b1'}, {'box_id': None, 'bbox_norm': [0.6, 0.6, 0.7, 0.7]}]},
+    )
+    assert _doc(fake_os, 'c1')[F.revision] == rev0 + 1
+    assert client.post('/curation/projects/default/crops/c1/region/undo').status_code == 200
+    doc = _doc(fake_os, 'c1')
+    assert [b['box_id'] for b in doc[F.boxes]] == ['b1']
+    # The undo is itself a write: a client holding the pre-undo revision
+    # is stale, and the restored snapshot's own (older) revision is not
+    # what the item reports.
+    assert doc[F.revision] == rev0 + 2
+    stale = client.put(
+        '/curation/projects/default/crops/c1/regions',
+        json={'boxes': [{'box_id': 'b1'}], 'expected_region_revision': rev0 + 1},
+    )
+    assert stale.status_code == 409, stale.text
+    # b2 was undone away; the next new box must not reuse its id.
+    resp = client.put(
+        '/curation/projects/default/crops/c1/regions',
+        json={'boxes': [{'box_id': 'b1'}, {'box_id': None, 'bbox_norm': [0.6, 0.6, 0.7, 0.7]}]},
+    )
+    assert resp.status_code == 200, resp.text
+    assert [b['box_id'] for b in _doc(fake_os, 'c1')[F.boxes]] == ['b1', 'b3']
 
 
 def test_repeated_undo_steps_back(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
@@ -172,7 +230,7 @@ def test_repeated_undo_steps_back(client: TestClient, fake_os: QueryFakeOpenSear
         '/curation/projects/default/crops/c1/region_meta', json={'region_status': 'false_positive'}
     )
     after_fp = _state(_doc(fake_os, 'c1'))
-    client.put('/curation/projects/default/crops/c1/region', json={'region_bbox_norm': None})
+    client.put('/curation/projects/default/crops/c1/regions', json={'boxes': []})
 
     assert client.post('/curation/projects/default/crops/c1/region/undo').status_code == 200
     assert _state(_doc(fake_os, 'c1')) == after_fp
@@ -217,8 +275,8 @@ def test_undo_batch_reports_per_crop_outcomes(
 def test_undo_batch_of_bulk_box_clear(client: TestClient, fake_os: QueryFakeOpenSearch) -> None:
     before = _state(_doc(fake_os, 'c2'))
     client.put(
-        '/curation/projects/default/crops/batch_region',
-        json={'crop_ids': ['c2'], 'region_bbox_norm': None},
+        '/curation/projects/default/crops/batch_regions',
+        json={'crop_ids': ['c2'], 'boxes': []},
     )
     resp = client.post(
         '/curation/projects/default/crops/region/undo_batch', json={'crop_ids': ['c2']}

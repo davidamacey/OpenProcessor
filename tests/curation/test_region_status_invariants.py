@@ -1,11 +1,12 @@
 """Region-status invariants are enforced by the backend, not the client.
 
-Every human region writer (``PUT /crops/{id}/region``, ``PUT
-/crops/batch_region``, ``PATCH /crops/{id}/region_meta``, ``POST
+Every human region writer (``PUT /crops/{id}/regions``, ``PUT
+/crops/batch_regions``, ``PATCH /crops/{id}/region_meta``, ``POST
 /regions/batch_status``) must leave the stored region self-consistent:
 
 - a status whose lifecycle entry says ``clears_box`` (``no_region_visible``)
-  removes the box and score, whichever writer set it;
+  empties the box list, whichever writer set it (an empty list written by
+  ``PUT regions`` is that same status);
 - ``region_verified`` is derived from the status (``detected`` -> true,
   anything else -> false), never taken from the request;
 - ``detected`` without a box is refused;
@@ -337,7 +338,7 @@ def test_patch_meta_returns_post_write_item(client: TestClient) -> None:
     item = resp.json()['item']
     assert set(item) == ITEM_WIRE_KEYS
     assert item['region_status'] == 'no_region_visible'
-    assert item['region_bbox_norm'] is None
+    assert item['region_boxes'] == []
     assert item['region_verified'] is False
     assert item['region_validated'] is True
 
@@ -353,36 +354,54 @@ def test_batch_status_returns_post_write_items(client: TestClient) -> None:
     assert all(i['region_status'] == 'false_positive' for i in items)
 
 
-def test_put_region_returns_post_write_item(client: TestClient) -> None:
+def test_put_regions_returns_post_write_item(client: TestClient) -> None:
     resp = client.put(
-        '/curation/projects/default/crops/empty-1/region', json={'region_bbox_norm': BOX}
+        '/curation/projects/default/crops/empty-1/regions',
+        json={'boxes': [{'box_id': None, 'bbox_norm': BOX}]},
     )
     assert resp.status_code == 200, resp.text
     item = resp.json()['item']
     assert set(item) == ITEM_WIRE_KEYS
     assert item['region_status'] == 'detected'
     assert item['region_verified'] is True
-    assert item['region_bbox_norm'] == BOX
+    assert item['region_validated'] is True
+    (box,) = item['region_boxes']
+    assert box['bbox_norm'] == BOX
+    assert box['state'] == 'accepted'
 
 
-def test_put_region_null_unsets_verified(client: TestClient, fake_os: _FakeRegionOS) -> None:
-    resp = client.put(
-        '/curation/projects/default/crops/boxed-1/region', json={'region_bbox_norm': None}
-    )
+def test_put_regions_empty_list_is_no_region_visible_and_unsets_verified(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    resp = client.put('/curation/projects/default/crops/boxed-1/regions', json={'boxes': []})
     assert resp.status_code == 200, resp.text
-    assert fake_os._docs['boxed-1'][F.verified] is False
+    doc = fake_os._docs['boxed-1']
+    assert doc[F.boxes] == []
+    assert doc[F.verified] is False
     assert resp.json()['item']['region_status'] == 'no_region_visible'
 
 
-def test_batch_region_returns_post_write_items(client: TestClient) -> None:
+def test_put_regions_no_region_visible_status_with_boxes_is_contradictory(
+    client: TestClient, fake_os: _FakeRegionOS
+) -> None:
     resp = client.put(
-        '/curation/projects/default/crops/batch_region',
-        json={'crop_ids': ['boxed-1', 'boxed-2'], 'region_bbox_norm': None},
+        '/curation/projects/default/crops/boxed-1/regions',
+        json={'boxes': [{'box_id': 'b1'}], 'region_status': 'no_region_visible'},
+    )
+    assert resp.status_code == 422, resp.text
+    assert _box_states(fake_os._docs['boxed-1']) == ['accepted']
+
+
+def test_batch_regions_returns_post_write_items(client: TestClient) -> None:
+    resp = client.put(
+        '/curation/projects/default/crops/batch_regions',
+        json={'crop_ids': ['boxed-1', 'boxed-2'], 'boxes': []},
     )
     assert resp.status_code == 200, resp.text
     items = resp.json()['items']
     assert [i['crop_id'] for i in items] == ['boxed-1', 'boxed-2']
-    assert all(i['region_bbox_norm'] is None for i in items)
+    assert all(i['region_boxes'] == [] for i in items)
+    assert all(i['region_status'] == 'no_region_visible' for i in items)
 
 
 # ------------------------------------------------------------- the vocabulary

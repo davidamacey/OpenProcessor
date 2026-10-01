@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from scripts.curation.worker.verify import _region_write_doc
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.region_validation_repair import (
@@ -43,18 +42,6 @@ INDEX = base_curation_config().items_index
 
 
 class TestWorkerWrites:
-    def test_auto_confirm_is_recorded_apart_from_validation(self) -> None:
-        doc = _region_write_doc(
-            region_in_source=(0.1, 0.1, 0.2, 0.2),
-            score=0.9,
-            detector='det_model',
-            detector_version='1',
-            chain=[],
-            auto_confirmed=True,
-        )
-        assert doc[F.validated] is False
-        assert doc[F.auto_confirmed] is True
-
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('reference_region_profile')
     async def test_streaming_worker_combined_accept_writes_an_accepted_box(

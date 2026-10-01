@@ -1,11 +1,12 @@
-"""A verifier-rejected candidate box stays reviewable and reversible (DQ-B2).
+"""A verifier-rejected box stays reviewable and reversible (DQ-B2).
 
 The worker keeps the box the verifier rejected (with its detector, score
-and source) in the ``candidate_*`` fields plus the rejection reason --
-never in ``bbox_norm``, which every reader treats as an accepted region.
+and source) as a ``rejected`` entry of ``region_boxes`` plus the
+rejection reason -- never as an accepted region.
 ``GET /regions?status=verify_rejected`` lists those items, and a human
-confirm promotes the candidate into the region box with the detector's
-provenance, undoable through the region edit history.
+reversal (the whole-set confirm, or the per-box accept) turns the box
+into an accepted one with the detector's provenance kept, undoable
+through the region edit history.
 """
 
 from __future__ import annotations
@@ -17,12 +18,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from scripts.curation.worker.verify import _region_write_doc, candidate_reject_doc
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_SANITY_PREFIX
+from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.edit_history import EditKind, restore_edit_state
-from src.services.curation.wire import serialize_item
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
@@ -44,47 +45,34 @@ INDEX = base_curation_config().items_index
 CANDIDATE = [0.3, 0.6, 0.4, 0.65]
 
 
-def _rejected(crop_id: str, *, with_candidate: bool = True) -> dict[str, Any]:
-    doc: dict[str, Any] = {
+def _rejected_box(**over: Any) -> RegionBox:
+    kwargs: dict[str, Any] = {
+        'box_id': 'b1',
+        'bbox_norm': tuple(CANDIDATE),
+        'state': 'rejected',
+        'score': 0.81,
+        'detector': 'det_model',
+        'detector_version': '3',
+        'source': 'detector',
+        'rejection_reason': 'region_visible_elsewhere',
+        'bbox_correct': False,
+    }
+    kwargs.update(over)
+    return RegionBox(**kwargs)
+
+
+def _item_with(crop_id: str, boxes: list[RegionBox], status: str, **extra: Any) -> dict[str, Any]:
+    """A production-shaped item: the box list and its summary fields come
+    from ``boxes_write_fields``, exactly as every writer produces them."""
+    return {
         'crop_id': crop_id,
         'bbox_norm': [0.2, 0.4, 0.6, 0.8],
-        F.status: 'verify_rejected',
-        F.rejection_reason: 'region_visible_elsewhere',
-        F.bbox_correct: False,
+        F.status: status,
         F.detector_chain: ['det_model:hit', 'det_model:combined_verify_reject:x'],
         F.detected_at: '2026-09-24T03:08:19+00:00',
+        **boxes_write_fields(boxes, current_src={}),
+        **extra,
     }
-    if with_candidate:
-        doc.update(
-            {
-                F.candidate_bbox_norm: list(CANDIDATE),
-                F.candidate_score: 0.81,
-                F.candidate_detector: 'det_model',
-                F.candidate_detector_version: '3',
-                F.candidate_source: 'detector',
-            }
-        )
-        # W8-cleanup: the same kept candidate, as a rejected region_boxes
-        # entry -- the box-list source of truth PATCH region_meta /
-        # POST batch_status now operate on. The item-level candidate_*
-        # fields above stay too (GET /regions still serves them as the
-        # additive legacy wire mirror -- see wire.py's region_to_wire).
-        doc[F.boxes] = [
-            {
-                'box_id': 'b1',
-                'bbox_norm': list(CANDIDATE),
-                'state': 'rejected',
-                'score': 0.81,
-                'detector': 'det_model',
-                'detector_version': '3',
-                'source': 'detector',
-                'rejection_reason': 'region_visible_elsewhere',
-                'bbox_correct': False,
-            }
-        ]
-    else:
-        doc[F.boxes] = []
-    return doc
 
 
 @pytest.fixture
@@ -92,18 +80,14 @@ def fake_os() -> QueryFakeOpenSearch:
     return QueryFakeOpenSearch(
         {
             INDEX: {
-                'rej': _rejected('rej'),
-                'legacy': _rejected('legacy', with_candidate=False),
-                'det': {
-                    'crop_id': 'det',
-                    'bbox_norm': [0.0, 0.0, 0.5, 0.5],
-                    F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
-                    F.boxes: [
-                        {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
-                    ],
-                    F.status: 'detected',
-                    F.detected_at: '2026-09-24T04:00:00+00:00',
-                },
+                'rej': _item_with('rej', [_rejected_box()], 'verify_rejected'),
+                'legacy': _item_with('legacy', [], 'verify_rejected'),
+                'det': _item_with(
+                    'det',
+                    [RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.2, 0.2), state='accepted')],
+                    'detected',
+                    **{F.detected_at: '2026-09-24T04:00:00+00:00'},
+                ),
             }
         }
     )
@@ -126,41 +110,11 @@ def _doc(fake_os: QueryFakeOpenSearch, crop_id: str) -> dict[str, Any]:
     return fake_os.docs(INDEX)[crop_id]
 
 
+def _box(fake_os: QueryFakeOpenSearch, crop_id: str, box_id: str = 'b1') -> dict[str, Any]:
+    return next(b for b in _doc(fake_os, crop_id)[F.boxes] if b['box_id'] == box_id)
+
+
 class TestWorkerKeepsTheCandidate:
-    def test_reject_doc_keeps_box_detector_and_reason_out_of_bbox_norm(self) -> None:
-        doc = candidate_reject_doc(
-            candidate_in_source=(0.3, 0.6, 0.4, 0.65),
-            candidate_score=0.81,
-            detector='det_model',
-            detector_version='3',
-            candidate_source='detector',
-            reason='region_visible_elsewhere',
-            chain=['det_model:hit'],
-            bbox_correct=False,
-        )
-        assert doc[F.status] == 'verify_rejected'
-        assert doc[F.bbox_norm] is None
-        assert doc[F.score] is None
-        assert doc[F.candidate_bbox_norm] == CANDIDATE
-        assert doc[F.candidate_score] == 0.81
-        assert doc[F.candidate_detector] == 'det_model'
-        assert doc[F.candidate_detector_version] == '3'
-        assert doc[F.candidate_source] == 'detector'
-        assert doc[F.rejection_reason] == 'region_visible_elsewhere'
-        assert doc[F.bbox_correct] is False
-
-    def test_an_accepted_write_clears_a_stale_candidate(self) -> None:
-        doc = _region_write_doc(
-            region_in_source=(0.1, 0.1, 0.2, 0.2),
-            score=0.9,
-            detector='det_model',
-            detector_version='3',
-            chain=[],
-        )
-        assert doc[F.candidate_bbox_norm] is None
-        assert doc[F.candidate_detector] is None
-        assert doc[F.rejection_reason] is None
-
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('reference_region_profile')
     async def test_streaming_worker_stores_the_rejected_candidate(
@@ -182,7 +136,6 @@ class TestWorkerKeepsTheCandidate:
         doc = fake.live['c1']
         det = _profile().detector_model
         assert doc[F.status] == 'verify_rejected'
-        assert doc.get(F.bbox_norm) is None
         box = doc[F.boxes][0]
         assert box['state'] == 'rejected'
         assert box['bbox_norm'] == pytest.approx([0.34, 0.58, 0.58, 0.7])
@@ -198,18 +151,18 @@ class TestWorkerKeepsTheCandidate:
 
 
 class TestRegionsStatusFilter:
-    def test_status_lists_rejected_items_without_a_box(self, client: TestClient) -> None:
+    def test_status_lists_rejected_items_with_their_rejected_box(self, client: TestClient) -> None:
         resp = client.get(
             '/curation/projects/default/regions', params={'status': 'verify_rejected'}
         )
         assert resp.status_code == 200, resp.text
         items = {i['crop_id']: i for i in resp.json()['items']}
         assert set(items) == {'rej', 'legacy'}
-        assert items['rej']['region_candidate_bbox_norm'] == CANDIDATE
-        assert items['rej']['region_candidate_bbox_in_parent'] == pytest.approx(
-            [0.25, 0.5, 0.5, 0.625]
-        )
-        assert items['rej']['region_bbox_norm'] is None
+        (box,) = items['rej']['region_boxes']
+        assert box['state'] == 'rejected'
+        assert box['bbox_norm'] == CANDIDATE
+        assert box['bbox_in_parent'] == pytest.approx([0.25, 0.5, 0.5, 0.625])
+        assert items['legacy']['region_boxes'] == []
 
     def test_status_detected_lists_only_detected(self, client: TestClient) -> None:
         resp = client.get('/curation/projects/default/regions', params={'status': 'detected'})
@@ -224,8 +177,27 @@ class TestRegionsStatusFilter:
         assert resp.status_code == 400
 
 
+def _assert_reopened_with_provenance(fake_os: QueryFakeOpenSearch, crop_id: str = 'rej') -> None:
+    """The reversed rejection: the box is accepted, keeps the detector's
+    provenance (a human accepting a box doesn't change who found it), and
+    carries no rejection reason."""
+    doc = _doc(fake_os, crop_id)
+    box = _box(fake_os, crop_id)
+    assert box['state'] == 'accepted'
+    assert box['bbox_norm'] == CANDIDATE
+    assert box['score'] == 0.81
+    assert box['detector'] == 'det_model'
+    assert box['detector_version'] == '3'
+    assert box['source'] == 'detector'
+    assert box['rejection_reason'] is None
+    assert doc[F.status] == 'detected'
+    assert doc[F.count] == 1
+    assert doc[F.rejected_count] == 0
+    assert doc.get(F.rejection_reason) is None
+
+
 class TestHumanReversal:
-    def test_confirm_promotes_the_candidate_with_its_provenance(
+    def test_whole_set_confirm_reopens_the_box_with_its_provenance(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.patch(
@@ -233,19 +205,25 @@ class TestHumanReversal:
             json={'region_status': 'detected', 'region_label_source': 'human'},
         )
         assert resp.status_code == 200, resp.text
+        _assert_reopened_with_provenance(fake_os)
         doc = _doc(fake_os, 'rej')
-        assert doc[F.status] == 'detected'
-        assert doc[F.bbox_norm] == CANDIDATE
-        assert doc[F.bbox_frame] == 'source'
-        assert doc[F.score] == 0.81
-        assert doc[F.detector] == 'det_model'
-        assert doc[F.detector_version] == '3'
-        assert doc[F.source] == 'detector'
         assert doc[F.verified] is True
         assert doc[F.validated] is True
-        assert doc.get(F.candidate_bbox_norm) is None
-        assert doc.get(F.rejection_reason) is None
-        assert resp.json()['item']['region_bbox_norm'] == CANDIDATE
+        (wire_box,) = resp.json()['item']['region_boxes']
+        assert wire_box['state'] == 'accepted'
+
+    def test_per_box_accept_reverses_the_rejection_with_its_provenance(
+        self, client: TestClient, fake_os: QueryFakeOpenSearch
+    ) -> None:
+        resp = client.patch(
+            '/curation/projects/default/crops/rej/regions/b1', json={'state': 'accepted'}
+        )
+        assert resp.status_code == 200, resp.text
+        _assert_reopened_with_provenance(fake_os)
+        doc = _doc(fake_os, 'rej')
+        assert doc[F.verified] is True
+        assert doc[F.validated] is True
+        assert doc[F.verifier] == 'human'
 
     def test_confirm_then_undo_restores_the_rejection(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
@@ -258,20 +236,10 @@ class TestHumanReversal:
         resp = client.post('/curation/projects/default/crops/rej/region/undo')
         assert resp.status_code == 200, resp.text
         doc = _doc(fake_os, 'rej')
-        for key in (
-            F.status,
-            F.rejection_reason,
-            F.candidate_bbox_norm,
-            F.candidate_score,
-            F.candidate_detector,
-            F.candidate_detector_version,
-            F.candidate_source,
-        ):
+        for key in (F.status, F.rejection_reason, F.boxes, F.count, F.rejected_count):
             assert doc.get(key) == before.get(key), key
-        assert doc.get(F.bbox_norm) is None
-        assert doc.get(F.detector) is None
 
-    def test_false_positive_keeps_the_candidate_as_the_box(
+    def test_false_positive_keeps_the_box_and_parks_it_in_the_fp_cluster(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.patch(
@@ -280,38 +248,45 @@ class TestHumanReversal:
         )
         assert resp.status_code == 200, resp.text
         doc = _doc(fake_os, 'rej')
+        box = _box(fake_os, 'rej')
         assert doc[F.status] == 'false_positive'
-        assert doc[F.bbox_norm] == CANDIDATE
-        assert doc[F.detector] == 'det_model'
+        assert box['state'] == 'false_positive'
+        assert box['bbox_norm'] == CANDIDATE
+        assert box['detector'] == 'det_model'
+        assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
+        # The verdict that made it a rejected box does not outlive the
+        # transition (m5): a false-positive box carries no stale reason.
+        assert box['rejection_reason'] is None
 
-    def test_put_of_the_candidate_box_is_a_confirmation(
+    def test_put_accepting_the_stored_box_is_a_confirmation(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.put(
-            '/curation/projects/default/crops/rej/region', json={'region_bbox_norm': CANDIDATE}
+            '/curation/projects/default/crops/rej/regions',
+            json={'boxes': [{'box_id': 'b1', 'bbox_norm': CANDIDATE, 'state': 'accepted'}]},
+        )
+        assert resp.status_code == 200, resp.text
+        _assert_reopened_with_provenance(fake_os)
+        assert _doc(fake_os, 'rej')[F.verifier] == 'human'
+
+    def test_put_of_a_new_box_replaces_the_rejected_one(
+        self, client: TestClient, fake_os: QueryFakeOpenSearch
+    ) -> None:
+        resp = client.put(
+            '/curation/projects/default/crops/rej/regions',
+            json={'boxes': [{'box_id': None, 'bbox_norm': [0.31, 0.61, 0.42, 0.66]}]},
         )
         assert resp.status_code == 200, resp.text
         doc = _doc(fake_os, 'rej')
+        (box,) = doc[F.boxes]
+        assert box['box_id'] == 'b2'
+        assert box['detector'] == 'human'
+        assert box['state'] == 'accepted'
         assert doc[F.status] == 'detected'
-        assert doc[F.detector] == 'det_model'
-        assert doc[F.score] == 0.81
-        assert doc[F.verifier] == 'human'
-        assert doc.get(F.candidate_bbox_norm) is None
-
-    def test_put_of_a_new_box_replaces_the_candidate(
-        self, client: TestClient, fake_os: QueryFakeOpenSearch
-    ) -> None:
-        resp = client.put(
-            '/curation/projects/default/crops/rej/region',
-            json={'region_bbox_norm': [0.31, 0.61, 0.42, 0.66]},
-        )
-        assert resp.status_code == 200, resp.text
-        doc = _doc(fake_os, 'rej')
-        assert doc[F.detector] == 'human'
-        assert doc.get(F.candidate_bbox_norm) is None
+        assert doc[F.rejected_count] == 0
         assert doc.get(F.rejection_reason) is None
 
-    def test_confirm_without_a_box_or_candidate_is_still_refused(self, client: TestClient) -> None:
+    def test_confirm_without_a_box_is_still_refused(self, client: TestClient) -> None:
         resp = client.patch(
             '/curation/projects/default/crops/legacy/region_meta',
             json={'region_status': 'detected', 'region_label_source': 'human'},
@@ -325,26 +300,19 @@ class TestHumanReversal:
         VERIFIER rejected -- never a human's own per-box rejection, and
         never a sanity-gate reject. Two boxes here: one rejected by a
         human, one by the sanity gate. Neither is reopenable, so CONFIRM
-        must 422 exactly like pre-W8's `human_status_fields` did for a
-        boxless-equivalent (no `candidate_*` populated)."""
-        fake_os.docs(INDEX)['mixedrej'] = {
-            'crop_id': 'mixedrej',
-            F.status: 'detection_failed',
-            F.boxes: [
-                {
-                    'box_id': 'b1',
-                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
-                    'state': 'rejected',
-                    'rejection_reason': REJECT_REASON_HUMAN,
-                },
-                {
-                    'box_id': 'b2',
-                    'bbox_norm': [0.3, 0.3, 0.31, 0.31],
-                    'state': 'rejected',
-                    'rejection_reason': f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size',
-                },
+        must 422 (pre-W8 refused a confirm with no accepted box too)."""
+        fake_os.docs(INDEX)['mixedrej'] = _item_with(
+            'mixedrej',
+            [
+                _rejected_box(box_id='b1', rejection_reason=REJECT_REASON_HUMAN),
+                _rejected_box(
+                    box_id='b2',
+                    bbox_norm=(0.3, 0.3, 0.31, 0.31),
+                    rejection_reason=f'{REJECT_REASON_SANITY_PREFIX}degenerate_zero_size',
+                ),
             ],
-        }
+            'detection_failed',
+        )
         resp = client.patch(
             '/curation/projects/default/crops/mixedrej/region_meta',
             json={'region_status': 'detected', 'region_label_source': 'human'},
@@ -358,45 +326,28 @@ class TestHumanReversal:
     ) -> None:
         """A whole-set CONFIRM over a box a human rejected plus a box the
         VERIFIER rejected must reopen only the verifier one."""
-        fake_os.docs(INDEX)['mixedrej2'] = {
-            'crop_id': 'mixedrej2',
-            F.status: 'verify_rejected',
-            F.boxes: [
-                {
-                    'box_id': 'b1',
-                    'bbox_norm': [0.1, 0.1, 0.2, 0.2],
-                    'state': 'rejected',
-                    'rejection_reason': REJECT_REASON_HUMAN,
-                },
-                {
-                    'box_id': 'b2',
-                    'bbox_norm': [0.3, 0.6, 0.4, 0.65],
-                    'state': 'rejected',
-                    'score': 0.9,
-                    'rejection_reason': 'region_visible_elsewhere',
-                },
+        fake_os.docs(INDEX)['mixedrej2'] = _item_with(
+            'mixedrej2',
+            [
+                _rejected_box(box_id='b1', rejection_reason=REJECT_REASON_HUMAN),
+                _rejected_box(box_id='b2', score=0.9),
             ],
-        }
+            'verify_rejected',
+        )
         resp = client.patch(
             '/curation/projects/default/crops/mixedrej2/region_meta',
             json={'region_status': 'detected', 'region_label_source': 'human'},
         )
         assert resp.status_code == 200, resp.text
-        doc = _doc(fake_os, 'mixedrej2')
-        by_id = {b['box_id']: b for b in doc[F.boxes]}
+        by_id = {b['box_id']: b for b in _doc(fake_os, 'mixedrej2')[F.boxes]}
         assert by_id['b1']['state'] == 'rejected'
         assert by_id['b2']['state'] == 'accepted'
 
 
 def test_undo_of_an_older_snapshot_leaves_fields_it_never_recorded() -> None:
-    entry = {'kind': 'region', 'state': {F.status: 'detected', F.bbox_norm: [0.1, 0.1, 0.2, 0.2]}}
-    restored = restore_edit_state(entry, EditKind.REGION)
-    assert restored == {F.status: 'detected', F.bbox_norm: [0.1, 0.1, 0.2, 0.2]}
-    assert F.source not in restored
-
-
-def test_wire_item_carries_the_candidate_fields() -> None:
-    item = serialize_item(_rejected('x'), 'x', api_prefix='')
-    assert item['region_candidate_detector'] == 'det_model'
-    assert item['region_candidate_score'] == 0.81
-    assert item['region_candidate_source'] == 'detector'
+    entry = {'kind': 'region', 'state': {F.status: 'detected'}}
+    restored = restore_edit_state(entry, EditKind.REGION, current={F.revision: 4})
+    assert restored[F.status] == 'detected'
+    assert F.boxes not in restored
+    # A restore is a write: the revision moves forward from the stored one.
+    assert restored[F.revision] == 5

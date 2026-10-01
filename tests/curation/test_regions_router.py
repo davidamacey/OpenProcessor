@@ -1,5 +1,5 @@
 """Write-path tests for the human region-labelling endpoints:
-``PUT /crops/{id}/region``, ``PATCH /crops/{id}/region_meta``,
+``PUT /crops/{id}/regions``, ``PATCH /crops/{id}/region_meta``,
 ``POST /regions/batch_status``.
 
 Before this file, ``src/routers/curation/regions.py`` (12.62% coverage)
@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.config import get_region_fields
+from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.wire import ITEM_WIRE_KEYS
 
 
@@ -167,69 +168,130 @@ def app_client(fake_os: _FakeRegionOS) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# PUT crops-id-region
+# PUT crops-id-regions
 # ---------------------------------------------------------------------------
 
 
-def test_set_crop_region_stamps_verifier_fields(
+def test_put_regions_new_box_stamps_the_human_verifier_and_provenance(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.put(
-        '/curation/projects/default/crops/crop-1/region',
-        json={'region_bbox_norm': [0.1, 0.2, 0.3, 0.4], 'region_label_source': 'human'},
+        '/curation/projects/default/crops/crop-1/regions',
+        json={
+            'boxes': [{'box_id': None, 'bbox_norm': [0.1, 0.2, 0.3, 0.4]}],
+            'region_label_source': 'human',
+        },
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body['region_status'] == 'detected'
+    assert body['item']['region_status'] == 'detected'
 
     written = fake_os._docs['crop-1']
-    assert written[F.bbox_norm] == [0.1, 0.2, 0.3, 0.4]
+    (box,) = written[F.boxes]
+    assert box['bbox_norm'] == [0.1, 0.2, 0.3, 0.4]
+    assert box['state'] == 'accepted'
+    assert box['score'] == 1.0
+    assert box['detector']
+    assert box['detector_version']
+    assert box['source'] == 'human'
+    assert box['detected_at']
     assert written[F.verified] is True
     assert written[F.validated] is True
-    # Verifier fields stamped (human PUT is its own verifier).
+    # Verifier fields stamped (a human write is its own verifier).
     assert written[F.verifier]
     assert written[F.verifier_version]
     assert written[F.verified_at]
-    assert written[F.detector]
-    assert written[F.detected_at]
 
 
-def test_set_crop_region_null_bbox_marks_no_region_visible(
+def test_put_regions_leaving_a_proposed_box_is_a_partial_review(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """W8.7: a human write that leaves a ``proposed`` box is a partial
+    review -- not validated, set_complete untouched -- so the item stays
+    in the review queue."""
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={
+            'boxes': [
+                {'box_id': 'b1'},
+                {'box_id': None, 'bbox_norm': [0.5, 0.5, 0.6, 0.6]},
+            ]
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    written = fake_os._docs['crop-1']
+    assert [b['state'] for b in written[F.boxes]] == ['proposed', 'accepted']
+    assert F.validated not in written
+    assert F.set_complete not in written
+
+
+@pytest.mark.parametrize(
+    'bad_box',
+    [
+        [1.5, 0.2, 0.3, 0.4],  # out of range
+        [-0.1, 0.2, 0.3, 0.4],  # out of range (negative)
+        [0.5, 0.5, 0.5, 0.5],  # degenerate (zero area)
+        [0.6, 0.2, 0.3, 0.4],  # degenerate (x2 <= x1)
+    ],
+)
+def test_put_regions_rejects_an_invalid_bbox(
+    app_client: TestClient, fake_os: _FakeRegionOS, bad_box: list[float]
+) -> None:
+    before = dict(fake_os._docs['crop-1'])
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': None, 'bbox_norm': bad_box}]},
+    )
+    assert resp.status_code == 422, resp.text
+    assert fake_os._docs['crop-1'] == before
+
+
+def test_put_regions_rejects_an_invalid_bbox_on_a_stored_box_move(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.put(
-        '/curation/projects/default/crops/crop-1/region', json={'region_bbox_norm': None}
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1', 'bbox_norm': [0.5, 0.5, 0.5, 0.5]}]},
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['region_status'] == 'no_region_visible'
-    written = fake_os._docs['crop-1']
-    assert written[F.bbox_norm] is None
-    assert written[F.score] is None
-    assert written[F.validated] is True
+    assert resp.status_code == 422, resp.text
+    assert fake_os._docs['crop-1'][F.boxes][0]['bbox_norm'] == [0.1, 0.1, 0.2, 0.2]
 
 
-def test_set_crop_region_rejects_out_of_range_bbox(app_client: TestClient) -> None:
+def test_put_regions_new_box_without_a_bbox_is_422(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/projects/default/crops/crop-1/region',
-        json={'region_bbox_norm': [1.5, 0.2, 0.3, 0.4]},
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': None, 'state': 'accepted'}]},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 422, resp.text
 
 
-def test_set_crop_region_rejects_degenerate_bbox(app_client: TestClient) -> None:
+def test_put_regions_duplicate_box_id_is_422(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/projects/default/crops/crop-1/region',
-        json={'region_bbox_norm': [0.5, 0.5, 0.5, 0.5]},
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1'}, {'box_id': 'b1'}]},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 422, resp.text
 
 
-def test_set_crop_region_missing_crop_returns_404(app_client: TestClient) -> None:
+def test_put_regions_missing_crop_returns_404(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/projects/default/crops/does-not-exist/region',
-        json={'region_bbox_norm': [0.1, 0.2, 0.3, 0.4]},
+        '/curation/projects/default/crops/does-not-exist/regions',
+        json={'boxes': [{'box_id': None, 'bbox_norm': [0.1, 0.2, 0.3, 0.4]}]},
     )
     assert resp.status_code == 404
+
+
+def test_legacy_single_box_routes_are_gone(app_client: TestClient) -> None:
+    put = app_client.put(
+        '/curation/projects/default/crops/crop-1/region',
+        json={'region_bbox_norm': [0.1, 0.2, 0.3, 0.4]},
+    )
+    batch = app_client.put(
+        '/curation/projects/default/crops/batch_region',
+        json={'crop_ids': ['crop-1'], 'region_bbox_norm': None},
+    )
+    assert put.status_code in (404, 405)
+    assert batch.status_code in (404, 405)
 
 
 # ---------------------------------------------------------------------------
@@ -270,9 +332,10 @@ def test_patch_region_meta_false_positive_routes_to_fp_bucket(
         json={'region_status': 'false_positive', 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
-    written = fake_os._docs['crop-1']
-    assert written[F.cluster_id] is not None  # FALSE_POSITIVE_REGION_CLUSTER_ID
-    assert written[F.cluster_subid] is None
+    (box,) = fake_os._docs['crop-1'][F.boxes]
+    assert box['state'] == 'false_positive'
+    assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
+    assert box['cluster_subid'] is None
 
 
 def test_patch_region_box_text_only_does_not_touch_cluster_fields(
@@ -377,8 +440,9 @@ def test_batch_set_region_status_false_positive_marks_fp_bucket_for_every_crop(
         json={'crop_ids': ['crop-1', 'crop-2'], 'region_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
-    assert fake_os._docs['crop-1'][F.cluster_id] is not None
-    assert fake_os._docs['crop-2'][F.cluster_id] is not None
+    for crop_id in ('crop-1', 'crop-2'):
+        (box,) = fake_os._docs[crop_id][F.boxes]
+        assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
 
 
 def test_batch_set_region_status_empty_crop_ids_is_a_noop(app_client: TestClient) -> None:

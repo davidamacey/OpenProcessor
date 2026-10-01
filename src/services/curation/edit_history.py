@@ -158,13 +158,27 @@ def find_edit_undo(history: list[Any] | None, kind: EditKind) -> dict[str, Any] 
     return None
 
 
-def restore_edit_state(entry: dict[str, Any], kind: EditKind) -> dict[str, Any]:
-    """Update-doc fields putting back the state recorded in ``entry``."""
+def restore_edit_state(
+    entry: dict[str, Any], kind: EditKind, *, current: dict[str, Any]
+) -> dict[str, Any]:
+    """Update-doc fields putting back the state recorded in ``entry``.
+
+    ``current`` is the stored doc the restore applies to. A region restore
+    is itself a write over the box list, so ``region_revision`` moves
+    forward from ``current`` (the stale-edit guard must see an undo as a
+    change) -- a snapshot's old revision is never restored. ``region_box_seq``
+    is not a snapshot field either, so the id high-water mark never
+    decreases and a restored list can't collide with a box added since.
+    """
     state = entry.get('state') or {}
     # Only the fields the snapshot recorded: an entry written before a
     # field joined ``state_fields`` says nothing about it, and restoring it
     # as null would erase a value that edit never touched.
-    return {f: state[f] for f in state_fields(kind) if f in state}
+    restored = {f: state[f] for f in state_fields(kind) if f in state}
+    if kind == EditKind.REGION:
+        F = get_region_fields()
+        restored[F.revision] = int(current.get(F.revision) or 0) + 1
+    return restored
 
 
 __all__ = [

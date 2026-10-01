@@ -33,43 +33,44 @@ def region_cohort(opensearch: Any) -> list[str]:
     return ids
 
 
-def test_set_region_bbox_writes_human_provenance(
+def test_put_regions_new_box_writes_human_provenance(
     api_client: Any, opensearch: Any, region_cohort: list[str]
 ) -> None:
     crop_id = region_cohort[0]
     bbox = [0.11, 0.22, 0.33, 0.44]
 
     resp = api_client.put(
-        f'/crops/{crop_id}/region', json={'bbox_norm': bbox, 'label_source': 'human'}
+        f'/crops/{crop_id}/regions',
+        json={'boxes': [{'box_id': None, 'bbox_norm': bbox}], 'region_label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()['region_status'] == 'detected'
+    assert resp.json()['item']['region_status'] == 'detected'
 
     src = _source(opensearch, crop_id)
-    assert src['region_bbox_norm'] == pytest.approx(bbox)
+    (box,) = src['region_boxes']
+    assert box['bbox_norm'] == pytest.approx(bbox)
     assert src['region_status'] == 'detected'
-    # A human-set box is ground truth (score 1.0) and terminal.
-    assert src['region_score'] == 1.0
+    # A human-drawn box is ground truth (score 1.0) and terminal.
+    assert box['state'] == 'accepted'
+    assert box['score'] == 1.0
+    assert box['detector'] == HUMAN_DETECTOR
     assert src['region_verified'] is True
     assert src['region_validated'] is True
-    assert src['region_detector'] == HUMAN_DETECTOR
-    assert src['region_bbox_frame'] == 'source'
     assert src['region_label_source'] == 'human'
     # A region edit must never touch the class side.
     assert 'class_validated' in src
 
 
-def test_clear_region_bbox_records_a_deliberate_negative(
+def test_put_regions_empty_list_records_a_deliberate_negative(
     api_client: Any, opensearch: Any, region_cohort: list[str]
 ) -> None:
     crop_id = region_cohort[1]
-    resp = api_client.put(f'/crops/{crop_id}/region', json={'bbox_norm': None})
+    resp = api_client.put(f'/crops/{crop_id}/regions', json={'boxes': []})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['region_status'] == 'no_region_visible'
+    assert resp.json()['item']['region_status'] == 'no_region_visible'
 
     src = _source(opensearch, crop_id)
-    assert src['region_bbox_norm'] is None
-    assert src['region_score'] is None
+    assert src['region_boxes'] == []
     assert src['region_status'] == 'no_region_visible'
     assert src['region_validated'] is True
 
@@ -86,8 +87,10 @@ def test_malformed_region_bbox_is_rejected(
 ) -> None:
     crop_id = region_cohort[2]
     before = get_doc(opensearch, INDEXES['items'], crop_id)
-    resp = api_client.put(f'/crops/{crop_id}/region', json={'bbox_norm': bbox})
-    assert resp.status_code == 400, resp.text
+    resp = api_client.put(
+        f'/crops/{crop_id}/regions', json={'boxes': [{'box_id': None, 'bbox_norm': bbox}]}
+    )
+    assert resp.status_code == 422, resp.text
     after = get_doc(opensearch, INDEXES['items'], crop_id)
     assert after['_seq_no'] == before['_seq_no']
 
@@ -154,16 +157,16 @@ def test_patch_region_rejects_a_non_human_status_and_an_empty_body(
     assert empty.status_code == 400, empty.text
 
 
-def test_batch_region_clear(api_client: Any, opensearch: Any, region_cohort: list[str]) -> None:
+def test_batch_regions_clear(api_client: Any, opensearch: Any, region_cohort: list[str]) -> None:
     batch = region_cohort[6:9]
-    resp = api_client.put('/crops/batch_region', json={'crop_ids': batch, 'bbox_norm': None})
+    resp = api_client.put('/crops/batch_regions', json={'crop_ids': batch, 'boxes': []})
     assert resp.status_code == 200, resp.text
     assert resp.json()['updated'] == len(batch)
     assert resp.json()['conflicts'] == []
     for crop_id in batch:
         src = _source(opensearch, crop_id)
         assert src['region_status'] == 'no_region_visible'
-        assert src['region_bbox_norm'] is None
+        assert src['region_boxes'] == []
 
 
 def test_bulk_region_status_confirms_many_regions_at_once(

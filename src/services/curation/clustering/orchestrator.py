@@ -58,7 +58,10 @@ from src.services.clustering import ClusterIndex
 
 # Class clusters occupy cluster_id 0..OFFSET-1; candidate clusters produced
 # by ``cluster_residuals`` get the offset added so the namespaces never collide.
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.cluster_ids import (
+    FALSE_POSITIVE_REGION_CLUSTER_ID,
+    RESIDUAL_CLUSTER_ID_OFFSET,
+)
 from src.services.curation.clustering.id_normalize import run_update_by_query_polled
 
 
@@ -1298,13 +1301,10 @@ REGION_TARGET_BUCKET_SIZE = 800
 # MAX_REFINE_MEMBERS (2000), keeping per-bucket AHC refine cheap.
 MIN_REGIONS_FOR_CLUSTERING = 32
 
-# Permanent region false-positive bucket.
-# Negative so it never collides with the flat KMeans namespace (0..K-1).
-# Human FP marks park crops here; cluster_region_residuals excludes them so
-# the good buckets' centroids stay clean. FPs vary widely (background
-# clutter, similar-looking non-target objects, empty boxes) so
+# Permanent region false-positive bucket (``FALSE_POSITIVE_REGION_CLUSTER_ID``,
+# defined in ``cluster_ids``). FPs vary widely (background clutter,
+# similar-looking non-target objects, empty boxes) so
 # build_region_fp_centroids sub-types this bucket.
-FALSE_POSITIVE_REGION_CLUSTER_ID = -100
 FP_TARGET_SUBTYPE_SIZE = 150  # target members per FP sub-type
 FP_MIN_FOR_SUBTYPES = 32  # below this, one whole-bucket centroid
 
