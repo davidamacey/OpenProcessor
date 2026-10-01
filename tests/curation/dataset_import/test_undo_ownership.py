@@ -1,5 +1,5 @@
-"""What undo leaves alone: a human verdict on an import's own box, and a
-holdout flag the import did not set."""
+"""What undo leaves alone: a human verdict on an import's own box, a human
+accept of its region set, and a holdout flag the import did not set."""
 
 from __future__ import annotations
 
@@ -99,3 +99,66 @@ async def test_undo_of_a_relabel_keeps_a_holdout_a_curator_set_afterwards(
 
     await undo_import(h.undo_context(store.import_id), store, dry_run=False)
     assert h.items[cid]['test_holdout'] is True
+
+
+@pytest.mark.asyncio
+async def test_a_human_accept_of_an_imports_region_set_survives_undo(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    activate_region_profile(parent_classes=('car',))
+    h = Harness(tmp_path, monkeypatch)
+    h.registry.add_class('car')
+    root = tmp_path / 'ds'
+    write_yolo(root, names=['car', 'wheel'], images={'a': [SAME, '1 0.3 0.3 0.05 0.05']})
+    mapping = [
+        *map_all(h.registry, 'car'),
+        ClassMappingEntry(dataset_class='wheel', action='region'),
+    ]
+    store, _ = await h.run(h.request(root, mapping))
+    (cid,) = h.items
+    # A human accept leaves the boxes exactly as the import wrote them; the
+    # item-level verdict is the only trace.
+    h.items[cid].update({F.verifier: 'human', F.validated: True})
+
+    report = await undo_import(h.undo_context(store.import_id), store, dry_run=False)
+    assert cid in h.items
+    assert (report.items_deleted, report.items_kept_human_edited) == (0, 1)
+
+
+@pytest.mark.asyncio
+async def test_a_curator_holdout_freeze_survives_undo_of_an_import_that_did_not_set_it(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    h = Harness(tmp_path, monkeypatch)
+    h.registry.add_class('car')
+    root = tmp_path / 'ds'
+    write_yolo(root, names=['car'], images={'a': [SAME]})
+    store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
+    (cid,) = h.items
+    assert h.items[cid]['test_holdout'] is False
+    h.items[cid]['test_holdout'] = True  # the class is still the import's
+
+    report = await undo_import(h.undo_context(store.import_id), store, dry_run=False)
+    assert cid in h.items
+    assert h.items[cid]['test_holdout'] is True
+    assert (report.items_deleted, report.items_kept_human_edited) == (0, 1)
+
+
+@pytest.mark.asyncio
+async def test_an_item_the_import_froze_into_the_holdout_is_still_deleted_by_undo(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    h = Harness(tmp_path, monkeypatch)
+    h.registry.add_class('car')
+    root = tmp_path / 'ds'
+    write_yolo_splits(
+        root,
+        names=['car'],
+        splits={'train': {'tr': [SAME]}, 'test': {'te': [SAME]}},
+    )
+    store, _ = await h.run(h.request(root, map_all(h.registry, 'car'), freeze_test_split=True))
+    assert sorted(d['test_holdout'] for d in h.items.values()) == [False, True]
+
+    report = await undo_import(h.undo_context(store.import_id), store, dry_run=False)
+    assert h.items == {}
+    assert report.items_deleted == 2

@@ -12,11 +12,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.clients.occ_locks import is_human_marker
+from src.clients.occ_locks import is_human_owned_item
 from src.services.curation.dataset_import.item_labels import match_existing
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.item_delete import delete_items
-from src.services.curation.region_boxes import is_human_owned, read_boxes
 
 
 if TYPE_CHECKING:
@@ -30,17 +29,16 @@ ACTION = 'reconciled'
 
 def reconcilable(doc: dict[str, Any], import_id: str, fields: RegionFields) -> bool:
     """An item only earlier imports wrote, and nothing since has touched: its
-    class is an import's and not a human's, it is not frozen into the
-    holdout, and it holds no human box."""
+    class is an import's, no person owns any part of it
+    (:func:`~src.clients.occ_locks.is_human_owned_item`, holdout included),
+    and it is not a standalone region."""
     ids = doc.get('import_ids') or []
     return (
         bool(ids)
         and import_id not in ids
         and doc.get('class_source') == LABEL_IMPORT_CLASS_SOURCE
-        and not is_human_marker(doc.get('label_source'))
-        and not doc.get('test_holdout')
+        and not is_human_owned_item(doc, fields)
         and not doc.get('import_standalone_region')
-        and not any(is_human_owned(b) for b in read_boxes(doc, fields))
     )
 
 

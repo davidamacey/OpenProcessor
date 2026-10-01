@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_update_one
-from src.clients.occ_locks import is_human_marker
+from src.clients.occ_locks import is_human_marker, is_human_owned_item
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
 from src.services.curation.dataset_import import reconcile
@@ -189,16 +189,13 @@ def decide_created(
     others = [i for i in doc.get('import_ids') or [] if i != ctx.import_id]
     stored = read_boxes(doc, F)
     mine, edited = _import_boxes(stored, ctx.import_id, ledger_boxes)
-    human_class = is_human_marker(doc.get('class_source')) or is_human_marker(
-        doc.get('label_source')
-    )
-    human_box = any(is_human_owned(b) for b in stored)
+    human = is_human_owned_item(doc, F, count_holdout=not entry.get('import_froze_holdout'))
     counts: dict[str, int] = {'boxes_removed': len(mine), 'boxes_kept_human_edited': len(edited)}
     if others:
         return Decision(
             'update', _without_import(doc, ctx.import_id), {**counts, 'items_kept_shared': 1}
         )
-    if not (human_class or human_box or edited):
+    if not (human or edited):
         key = (
             'proposals_deleted'
             if entry.get('action') in ('proposal', 'parent')

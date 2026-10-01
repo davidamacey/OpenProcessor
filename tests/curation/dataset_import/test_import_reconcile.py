@@ -83,6 +83,15 @@ async def test_a_holdout_item_is_kept(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_an_item_whose_regions_a_human_validated_is_kept(tmp_path, monkeypatch) -> None:
+    h, root = await _v1(tmp_path, monkeypatch)
+    F = get_region_fields()
+    h.items[_truck(h)].update({F.validated: True, F.verifier: 'human'})
+    await h.run(h.request(_v2(root, [CAR]), map_all(h.registry, 'car')))
+    assert _names(h) == ['car', 'truck']
+
+
+@pytest.mark.asyncio
 async def test_a_box_mapped_to_skip_still_keeps_its_item(tmp_path, monkeypatch) -> None:
     h, root = await _v1(tmp_path, monkeypatch)
     mapping = [

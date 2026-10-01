@@ -100,9 +100,36 @@ def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
     return bool(source.get(fields.validated)) and source.get(fields.verifier) in ('human', 'import')
 
 
+def is_human_owned_item(
+    source: dict[str, Any], F: Any = None, *, count_holdout: bool = True
+) -> bool:
+    """True when a person, not an import, owns some part of an item: the
+    members of the lock rule (:func:`is_locked_item`) that an import's own
+    work cannot satisfy. A human class (``class_source`` / ``label_source``),
+    a curator holdout freeze (``test_holdout``; ``count_holdout=False`` when
+    the caller knows the freeze is the import's own), a human-owned box, or a
+    region set a human validated (``validated`` with ``verifier == 'human'``,
+    the only trace of a human accept of an import's untouched boxes).
+
+    The one "an import is still the sole owner" test: everything that deletes
+    what an import created (undo, reconcile) asks it, so none can be narrower
+    than the others."""
+    from src.services.curation.region_boxes import is_human_owned, read_boxes
+
+    fields = F or get_region_fields()
+    return (
+        is_human_marker(source.get('class_source'))
+        or is_human_marker(source.get('label_source'))
+        or (count_holdout and bool(source.get('test_holdout')))
+        or any(is_human_owned(box) for box in read_boxes(source, fields))
+        or (bool(source.get(fields.validated)) and source.get(fields.verifier) == 'human')
+    )
+
+
 __all__ = [
     '_is_locked_marker',
     'is_human_marker',
+    'is_human_owned_item',
     'is_locked_box',
     'is_locked_class',
     'is_locked_item',
