@@ -57,28 +57,30 @@ Sibling modules, split out of this one to keep each to one concern:
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import io
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 
 from src.config import get_curation_config, get_region_fields
-from src.core.logging import get_logger, get_request_id
+from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.event_hub import publish_crop_created
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
     SecondaryOutput,
     WholeImageDetector,
 )
+from src.services.curation.ingest_index import (
+    PARKED_CLUSTER_ID,
+    ImageContext,
+    image_id_for,
+    index_items,
+)
 from src.services.curation.ingest_models import (
-    ERROR_KIND_BULK_INDEX,
     ERROR_KIND_DECODE_FAILED,
     ERROR_KIND_DETECTOR_INFER,
     ERROR_KIND_EMPTY,
@@ -86,19 +88,8 @@ from src.services.curation.ingest_models import (
     IngestResult,
     IngestSummary,
 )
-from src.services.curation.item_doc import (
-    DetectedItem,
-    build_image_doc,
-    build_item_doc,
-    region_seed_status,
-)
-from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
-from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
-from src.services.detection.geometry import (
-    bbox_norm as _bbox_norm_fn,
-    crop_id as _crop_id_fn,
-    letterbox_params,
-)
+from src.services.curation.item_doc import DetectedItem, region_seed_status
+from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
 
 
 if TYPE_CHECKING:
@@ -108,7 +99,6 @@ if TYPE_CHECKING:
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
-    from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
 
 
 logger = get_logger(__name__)
@@ -119,8 +109,6 @@ logger = get_logger(__name__)
 # pipeline from swamping Triton's queue. Override with
 # OP_MAX_INGEST_CONCURRENCY (no rebuild required).
 MAX_INGEST_CONCURRENCY = int(os.getenv('OP_MAX_INGEST_CONCURRENCY', '16'))
-
-PARKED_CLUSTER_ID = -3
 
 
 # =============================================================================
@@ -215,12 +203,13 @@ class CurationIngestService:
     # Dedup
     # ------------------------------------------------------------------
 
-    async def _check_duplicate(self, image_hash: str) -> str | None:
-        """Term-query the images index on imohash. Returns existing image_id or None."""
+    async def _lookup_image(self, image_hash: str) -> dict[str, Any] | None:
+        """Term-query the images index on imohash. Returns the existing
+        doc's ``image_id`` / ``image_path`` or None."""
         body = {
             'size': 1,
             'query': {'term': {'imohash': image_hash}},
-            '_source': ['image_id'],
+            '_source': ['image_id', 'image_path'],
         }
         try:
             resp = await self.opensearch.search(index=self.config.images_index, body=body)
@@ -230,7 +219,13 @@ class CurationIngestService:
         hits = (resp.get('hits') or {}).get('hits') or []
         if not hits:
             return None
-        return (hits[0].get('_source') or {}).get('image_id')
+        source = hits[0].get('_source') or {}
+        return source if source.get('image_id') else None
+
+    async def _check_duplicate(self, image_hash: str) -> str | None:
+        """Existing image_id for ``image_hash``, or None."""
+        existing = await self._lookup_image(image_hash)
+        return existing['image_id'] if existing is not None else None
 
     async def _check_duplicates_msearch(
         self,
@@ -270,6 +265,8 @@ class CurationIngestService:
         image_doc: dict[str, Any] | None,
         crop_docs: list[dict[str, Any]],
         created_ids: list[str] | None = None,
+        *,
+        seed_region: bool = True,
     ) -> dict[str, int]:
         """Index 1 images doc (blind) + N items docs (OCC upsert).
 
@@ -307,14 +304,16 @@ class CurationIngestService:
                 writer_id='ingest',
                 created_ids=created_ids,
                 fill_if_absent=(
-                    (get_region_fields().status,) if self.region_seed_status is not None else ()
+                    (get_region_fields().status,)
+                    if seed_region and self.region_seed_status is not None
+                    else ()
                 ),
             )
             result['crops_created'] = upsert['created']
             result['crops_updated'] = upsert['updated']
             result['crops_preserved_human'] = upsert['preserved_human']
             result['crops_final_conflicts'] = upsert['final_conflicts']
-            if self.region_seed_status is not None:
+            if seed_region and self.region_seed_status is not None:
                 status_field = get_region_fields().status
                 seeded = {d['crop_id'] for d in crop_docs if d.get(status_field) is not None}
                 created_seeded = len([cid for cid in created_ids or () if cid in seeded])
@@ -325,6 +324,83 @@ class CurationIngestService:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    async def ingest_image(
+        self,
+        image_bytes: bytes,
+        image_path: str,
+        source: str = 'unknown',
+        *,
+        prefilled_image: Image.Image | None = None,
+        whole_frame_from_bytes: bool = False,
+        source_identifier: str | None = None,
+        ingest_run_id: str | None = None,
+        adopt_existing: bool = False,
+    ) -> ImageContext | IngestResult:
+        """Decode, fingerprint and dedup one image.
+
+        Returns the :class:`ImageContext` :func:`index_items` consumes, or
+        a terminal :class:`IngestResult`: ``failed`` for empty or
+        undecodable bytes, ``duplicate`` for an image the index already
+        holds. ``adopt_existing=True`` (a dataset import, which must attach
+        labels to an already-indexed image) turns a duplicate into a
+        context with ``created=False`` carrying the existing doc's
+        ``image_id`` and ``image_path``.
+        """
+        if not image_bytes:
+            return IngestResult(
+                status='failed',
+                image_path=image_path,
+                source_identifier=source_identifier,
+                error='empty image bytes',
+                error_kind=ERROR_KIND_EMPTY,
+            )
+
+        if prefilled_image is not None:
+            img = prefilled_image
+            full_w, full_h = img.size
+        else:
+            try:
+                img, full_w, full_h = _decode_image(image_bytes)
+            except Exception as exc:
+                return IngestResult(
+                    status='failed',
+                    image_path=image_path,
+                    source_identifier=source_identifier,
+                    error=str(exc),
+                    error_kind=ERROR_KIND_DECODE_FAILED,
+                )
+
+        image_hash = _imohash_bytes(image_bytes)
+        existing = await self._lookup_image(image_hash)
+        if existing is not None and not adopt_existing:
+            return IngestResult(
+                status='duplicate',
+                image_id=existing['image_id'],
+                image_path=image_path,
+                source_identifier=source_identifier,
+                imohash=image_hash,
+            )
+        if existing is None:
+            image_id = image_id_for(image_path, image_hash)
+            resolved_path = image_path
+        else:
+            image_id = existing['image_id']
+            resolved_path = existing.get('image_path') or image_path
+        return ImageContext(
+            image_id=image_id,
+            image_path=resolved_path,
+            created=existing is None,
+            pil=img,
+            width=full_w,
+            height=full_h,
+            imohash=image_hash,
+            image_bytes=image_bytes,
+            source=source,
+            source_identifier=source_identifier,
+            ingest_run_id=ingest_run_id,
+            whole_frame_from_bytes=whole_frame_from_bytes,
+        )
 
     async def ingest_one(
         self,
@@ -367,48 +443,18 @@ class CurationIngestService:
         (``POST /curation/ingest/image``, scripts) behave exactly as they
         did before the batch path existed.
         """
-        if not image_bytes:
-            return IngestResult(
-                status='failed',
-                image_path=image_path,
-                source_identifier=source_identifier,
-                error='empty image bytes',
-                error_kind=ERROR_KIND_EMPTY,
-            )
-
-        if prefilled_image is not None:
-            img = prefilled_image
-            full_w, full_h = img.size
-        else:
-            try:
-                img, full_w, full_h = _decode_image(image_bytes)
-            except UnidentifiedImageError as exc:
-                return IngestResult(
-                    status='failed',
-                    image_path=image_path,
-                    source_identifier=source_identifier,
-                    error=str(exc),
-                    error_kind=ERROR_KIND_DECODE_FAILED,
-                )
-            except Exception as exc:
-                return IngestResult(
-                    status='failed',
-                    image_path=image_path,
-                    source_identifier=source_identifier,
-                    error=str(exc),
-                    error_kind=ERROR_KIND_DECODE_FAILED,
-                )
-
-        image_hash = _imohash_bytes(image_bytes)
-        existing_id = await self._check_duplicate(image_hash)
-        if existing_id:
-            return IngestResult(
-                status='duplicate',
-                image_id=existing_id,
-                image_path=image_path,
-                source_identifier=source_identifier,
-                imohash=image_hash,
-            )
+        ctx = await self.ingest_image(
+            image_bytes,
+            image_path,
+            source,
+            prefilled_image=prefilled_image,
+            whole_frame_from_bytes=whole_frame_from_bytes,
+            source_identifier=source_identifier,
+            ingest_run_id=ingest_run_id,
+        )
+        if isinstance(ctx, IngestResult):
+            return ctx
+        img = ctx.pil
 
         if prefilled_items is not None:
             items = prefilled_items
@@ -459,140 +505,10 @@ class CurationIngestService:
                             'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
                         )
 
-        crops_pil = [self._crop_pil(img, item.bbox_pixel) for item in items]
-        try:
-            if crops_pil:
-                crop_arrays = [np.asarray(c) for c in crops_pil]
-                embeddings = await self.pe_encoder.embed_crops(
-                    crop_arrays, max_batch=self.profile.batch_limit
-                )
-                for item, emb in zip(items, embeddings, strict=False):
-                    item.pe_embedding = emb
-        except Exception as exc:
-            logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
-
-        whole_frame_embedding = None
-        try:
-            if whole_frame_from_bytes:
-                whole_frame_embedding = await self.pe_encoder.embed_whole_frame_bytes(image_bytes)
-            else:
-                whole_frame_embedding = await self.pe_encoder.embed_whole_frame(image_path)
-        except Exception as exc:
-            logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
-
-        image_id = hashlib.sha256(f'{image_path}|{image_hash}'.encode()).hexdigest()[:32]
-        now = _now_iso()
-        image_doc = build_image_doc(
-            image_id=image_id,
-            image_path=image_path,
-            source=source,
-            width=full_w,
-            height=full_h,
-            imohash=image_hash,
-            now=now,
-            whole_frame_embedding=whole_frame_embedding,
-            source_identifier=source_identifier,
-            ingest_run_id=ingest_run_id,
+        outcome = await index_items(
+            self, ctx, items, secondary_detector_error=secondary_detector_error
         )
-
-        try:
-            img_bgr = np.ascontiguousarray(np.asarray(img.convert('RGB'))[:, :, ::-1])
-            full_var = image_lap_var(img_bgr)
-        except Exception as exc:
-            logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
-            img_bgr = None
-            full_var = 0.0
-
-        bnorms = [_bbox_norm_fn(it.bbox_pixel, full_w, full_h) for it in items]
-        areas = [max(0.0, bn[2] - bn[0]) * max(0.0, bn[3] - bn[1]) for bn in bnorms]
-        cids = [_crop_id(image_id, bn) for bn in bnorms]
-        rank_by_idx = {
-            idx: rank
-            for rank, idx in enumerate(
-                sorted(range(len(items)), key=lambda i: (-areas[i], cids[i])), start=1
-            )
-        }
-
-        store: IVFCentroidStore | None = None
-        if any(it.class_id is None and it.pe_embedding is not None for it in items):
-            store = get_ivf_ingest_store()
-
-        crop_docs: list[dict[str, Any]] = []
-        for idx, item in enumerate(items):
-            bn = bnorms[idx]
-            cid = cids[idx]
-            box_var = crop_lap_var(img_bgr, item.bbox_pixel) if img_bgr is not None else None
-            ratio = blur_ratio(box_var, full_var)
-
-            write_crop_cache(cid, crops_pil[idx], self.config.crop_cache_dir)
-
-            if item.class_id is not None:
-                item.cluster_id = int(item.class_id)
-            elif item.pe_embedding is not None and store is not None:
-                if not ingest_passes_gate(rank_by_idx[idx], ratio):
-                    item.cluster_id = PARKED_CLUSTER_ID
-                else:
-                    try:
-                        centroid, distance = store.assign_one_with_distance(item.pe_embedding)
-                        item.cluster_id = int(centroid) + RESIDUAL_CLUSTER_ID_OFFSET
-                        item.cluster_distance = distance
-                    except Exception as exc:
-                        logger.debug('ingest_ivf_assign_failed', error=str(exc))
-
-            crop_docs.append(
-                build_item_doc(
-                    crop_id=cid,
-                    image_id=image_id,
-                    image_path=image_path,
-                    source=source,
-                    request_id=get_request_id(),
-                    bbox_norm=bn,
-                    item=item,
-                    now=now,
-                    crop_area_norm=areas[idx],
-                    crop_rank_in_image=rank_by_idx[idx],
-                    blur_full_var=full_var,
-                    blur_lap_var=box_var,
-                    blur_lap_ratio=ratio,
-                    region_status=(
-                        region_seed_status(item) if self.region_seed_status is not None else None
-                    ),
-                )
-            )
-
-        await asyncio.to_thread(
-            maybe_prune_crop_cache, self.config.crop_cache_dir, self.config.crop_cache_max_bytes
-        )
-
-        created_ids: list[str] = []
-        try:
-            bulk_result = await self._bulk_index(image_doc, crop_docs, created_ids)
-        except Exception as exc:
-            logger.error('ingest_bulk_index_failed', path=image_path, error=str(exc))
-            return IngestResult(
-                status='failed',
-                image_path=image_path,
-                source_identifier=source_identifier,
-                imohash=image_hash,
-                error=str(exc),
-                error_kind=ERROR_KIND_BULK_INDEX,
-            )
-        self._publish_created(created_ids, image_path)
-
-        return IngestResult(
-            status='success',
-            image_id=image_id,
-            image_path=image_path,
-            source_identifier=source_identifier,
-            imohash=image_hash,
-            n_crops=len(crop_docs),
-            crops_created=bulk_result.get('crops_created', 0),
-            crops_updated=bulk_result.get('crops_updated', 0),
-            crops_preserved_human=bulk_result.get('crops_preserved_human', 0),
-            crops_final_conflicts=bulk_result.get('crops_final_conflicts', 0),
-            n_region_queued=bulk_result.get('region_queued', 0),
-            secondary_detector_error=secondary_detector_error,
-        )
+        return outcome.result
 
     @staticmethod
     def _publish_created(crop_ids: list[str], image_path: str) -> None:
@@ -609,15 +525,6 @@ class CurationIngestService:
                 publish_crop_created(crop_id, image_path)
             except Exception as exc:
                 logger.warning('ingest_event_publish_failed', crop_id=crop_id, error=str(exc))
-
-    @staticmethod
-    def _crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) -> Image.Image:
-        x1, y1, x2, y2 = bbox_pixel
-        x1i = max(0, round(x1))
-        y1i = max(0, round(y1))
-        x2i = max(x1i + 1, round(x2))
-        y2i = max(y1i + 1, round(y2))
-        return img.crop((x1i, y1i, x2i, y2i))
 
     async def ingest_batch(
         self,
