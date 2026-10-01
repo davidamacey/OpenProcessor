@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.services.labeling.vlm_endpoints import ENV_ENDPOINT_NAME, probe_key
 
 
 if TYPE_CHECKING:
@@ -112,8 +113,14 @@ def current_want(store: ConfigStore, registry: ConfigStore) -> Want:
     from -- never against the runtime's own refs (see :class:`RuntimeHolder`)."""
     project = _latest(store)
     ref = project.active_vlm
-    name = 'env' if ref is None else (ref[0] if isinstance(ref, tuple) else None)
-    probe = _latest(registry).vlm_probes.get(name) if name else None
+    key = (
+        probe_key(ENV_ENDPOINT_NAME, None)
+        if ref is None
+        else probe_key(*ref)
+        if isinstance(ref, tuple)
+        else None
+    )
+    probe = _latest(registry).vlm_probes.get(key) if key else None
     marker = ((probe or {}).get('record') or {}).get('probed_at')
     return (project.active_profile, project.active_pack, ref, marker)
 

@@ -27,7 +27,7 @@ from src.services.labeling.vlm_client import (
     extract_message_content,
     extract_reasoning_content,
 )
-from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
+from src.services.labeling.vlm_endpoint_body import FIELD_RANGES, VlmEndpointBody, VlmProbeRecord
 
 
 logger = get_logger(__name__)
@@ -273,7 +273,8 @@ class _Probe:
             )
 
     async def many_images(self) -> None:
-        cap = self.body.max_images_per_call
+        # Defence in depth: the callers refuse an out-of-range body first.
+        cap = min(self.body.max_images_per_call, int(FIELD_RANGES['max_images_per_call'][1]))
         if cap <= 1:
             return
         content: list[dict[str, Any]] = [{'type': 'text', 'text': 'Reply with the single word OK'}]

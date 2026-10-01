@@ -27,10 +27,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
-from src.services.labeling.vlm_url_policy import Locality, external_warning, sends_images_externally
+from src.services.labeling.vlm_url_policy import (
+    Locality,
+    external_warning,
+    sends_images_externally,
+    strip_userinfo,
+)
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from src.services.config_store.store import ConfigSnapshot, StoredConfig
 
 ENV_ENDPOINT_NAME = 'env'
@@ -88,6 +95,13 @@ def probe_fingerprint(body: VlmEndpointBody) -> str:
     return _sha12(
         [body.base_url, body.model, body.api_key_ref, body.max_images_per_call],
     )
+
+
+def probe_key(name: str, revision: int | None) -> str:
+    """What a probe is stored under: ``name@revision`` for a stored endpoint
+    (probing one revision never touches another's), the bare name for the
+    ``env`` built-in, which has no revisions."""
+    return name if revision is None else f'{name}@{revision}'
 
 
 @dataclass(frozen=True)
@@ -247,9 +261,12 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     its fingerprint still matches the env values)."""
     from src.services.labeling.vlm_catalog import catalog_entry_for_root
 
-    url = os.environ.get('OP_VLM_URL', '').strip().rstrip('/')
-    if not url:
+    raw_url = os.environ.get('OP_VLM_URL', '').strip()
+    if not raw_url:
         return None
+    # Credentials in the URL are dropped here, at the source, so no route,
+    # log line or labeler ever sees them (the key goes in OP_VLM_API_KEY).
+    url = strip_userinfo(raw_url).rstrip('/')
     base = VlmEndpointBody(
         base_url=url,
         model=os.environ.get('OP_VLM_MODEL', '').strip(),
@@ -276,7 +293,9 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     )
 
 
-def stored_endpoint(item: StoredConfig, probe_doc: dict[str, Any] | None) -> VlmEndpoint:
+def stored_endpoint(item: StoredConfig, probes: Mapping[str, dict[str, Any]]) -> VlmEndpoint:
+    """``item`` with ITS revision's probe out of the registry's ``probes``."""
+    probe_doc = probes.get(probe_key(item.name, item.revision))
     body = VlmEndpointBody.model_validate(item.body)
     return VlmEndpoint(
         name=item.name,
@@ -389,7 +408,7 @@ def available_vlm_endpoints() -> list[VlmEndpoint]:
     registry = _registry()
     found = [e for e in [env_builtin()] if e is not None]
     found.extend(
-        stored_endpoint(item, registry.vlm_probes.get(name))
+        stored_endpoint(item, registry.vlm_probes)
         for name, item in sorted(registry.vlm_endpoints.items())
     )
     return found
@@ -401,7 +420,7 @@ def get_vlm_endpoint(name: str) -> VlmEndpoint | None:
         return env_builtin()
     registry = _registry()
     item = registry.vlm_endpoints.get(name)
-    return None if item is None else stored_endpoint(item, registry.vlm_probes.get(name))
+    return None if item is None else stored_endpoint(item, registry.vlm_probes)
 
 
 def active_vlm_endpoint() -> VlmEndpoint | None:
@@ -425,7 +444,19 @@ def active_vlm_endpoint() -> VlmEndpoint | None:
     if body is None or body.name != name or body.revision != revision:
         msg = f'the active VLM endpoint {name}@{revision} cannot be resolved'
         raise VlmEndpointUnavailableError(msg)
-    return stored_endpoint(body, registry.vlm_probes.get(name))
+    return stored_endpoint(body, registry.vlm_probes)
+
+
+def vlm_configured() -> bool:
+    """Whether the bound project has a VLM to call: its active endpoint (the
+    ``env`` built-in until it activates one) resolves to something. The one
+    answer to "is a VLM configured" for any code that is not itself calling
+    it (profile validation); an activation that cannot be resolved counts as
+    not configured. Callers refresh the snapshots first."""
+    try:
+        return active_vlm_endpoint() is not None
+    except VlmEndpointUnavailableError:
+        return False
 
 
 async def refresh_vlm_state(client: Any) -> None:
@@ -473,7 +504,7 @@ async def resolve_vlm_source(
     if item is None:
         return None
     registry = _registry()
-    return stored_endpoint(item, registry.vlm_probes.get(name))
+    return stored_endpoint(item, registry.vlm_probes)
 
 
 __all__ = [
@@ -502,9 +533,11 @@ __all__ = [
     'get_vlm_endpoint',
     'list_secret_refs',
     'probe_fingerprint',
+    'probe_key',
     'refresh_vlm_state',
     'resolve_api_key',
     'resolve_vlm_source',
     'secrets_dir',
     'stored_endpoint',
+    'vlm_configured',
 ]

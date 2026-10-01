@@ -128,7 +128,7 @@ async def test_deleting_needs_the_current_revision(client) -> None:
 async def test_a_probe_belongs_to_the_body_it_tested(client) -> None:
     body = _body()
     await save_endpoint(client, name='a', body=body, expected_revision=None)
-    await record_probe(client, name='a', body=body, record=good_probe(root='org/r'))
+    await record_probe(client, name='a', revision=1, body=body, record=good_probe(root='org/r'))
     snapshot = get_global_config_store().current
 
     from src.services.labeling.vlm_endpoints import stored_endpoint
@@ -144,9 +144,11 @@ async def test_a_probe_belongs_to_the_body_it_tested(client) -> None:
             updated_at=None,
             cloned_from=None,
         )
-        return stored_endpoint(item, snapshot.vlm_probes.get('a'))
+        return stored_endpoint(item, snapshot.vlm_probes)
 
     assert endpoint_at(body, 1).status == 'ready'
+    # a probe is of ONE revision: the same body at another revision has none
+    assert endpoint_at(body, 2).status == 'unprobed'
     # fields the probe exercised: a change invalidates it
     for changed in (
         _body(base_url='http://other:8000/v1'),
@@ -154,15 +156,28 @@ async def test_a_probe_belongs_to_the_body_it_tested(client) -> None:
         _body(api_key_ref='secret:vendor'),
         _body(max_images_per_call=2),
     ):
-        assert endpoint_at(changed, 2).status == 'unprobed', changed
-        assert endpoint_at(changed, 2).model_id == changed.model  # not the old root
+        assert endpoint_at(changed, 1).status == 'unprobed', changed
+        assert endpoint_at(changed, 1).model_id == changed.model  # not the old root
     # fields it did not exercise: a change keeps it
     for unchanged in (
         _body(timeout_s=30.0),
         _body(requests_per_second=5.0),
         _body(json_mode='off'),
     ):
-        assert endpoint_at(unchanged, 2).status == 'ready', unchanged
+        assert endpoint_at(unchanged, 1).status == 'ready', unchanged
+
+
+@pytest.mark.asyncio
+async def test_probing_one_revision_never_touches_another_revisions_probe(client) -> None:
+    """M3: the probe of the running revision survives a probe of a newer one."""
+    first, second = _body(), _body(model='newer')
+    await save_endpoint(client, name='a', body=first, expected_revision=None)
+    await record_probe(client, name='a', revision=1, body=first, record=good_probe(root='org/r1'))
+    await save_endpoint(client, name='a', body=second, expected_revision=1)
+    await record_probe(client, name='a', revision=2, body=second, record=good_probe(root='org/r2'))
+    probes = get_global_config_store().current.vlm_probes
+    assert probes['a@1']['record']['root'] == 'org/r1'
+    assert probes['a@2']['record']['root'] == 'org/r2'
 
 
 @pytest.mark.asyncio
@@ -171,7 +186,7 @@ async def test_a_probe_bumps_the_config_revision_but_not_the_endpoint_revision(c
     await save_endpoint(client, name='a', body=body, expected_revision=None)
     store = get_global_config_store()
     before = store.current.config_revision
-    await record_probe(client, name='a', body=body, record=good_probe())
+    await record_probe(client, name='a', revision=1, body=body, record=good_probe())
     assert store.current.config_revision == before + 1
     assert store.current.vlm_endpoints['a'].revision == 1
     assert [r['revision'] for r in await list_revisions(client, 'a')] == [1]
@@ -181,16 +196,16 @@ async def test_a_probe_bumps_the_config_revision_but_not_the_endpoint_revision(c
 async def test_deleting_drops_the_probe_too(client) -> None:
     body = _body()
     await save_endpoint(client, name='a', body=body, expected_revision=None)
-    await record_probe(client, name='a', body=body, record=good_probe())
+    await record_probe(client, name='a', revision=1, body=body, record=good_probe())
     await delete_endpoint(client, name='a', expected_revision=1)
-    assert 'a' not in get_global_config_store().current.vlm_probes
+    assert not get_global_config_store().current.vlm_probes
 
 
 @pytest.mark.asyncio
 async def test_every_write_is_announced_on_the_global_stream(client, events) -> None:
     body = _body()
     await save_endpoint(client, name='a', body=body, expected_revision=None)
-    await record_probe(client, name='a', body=body, record=good_probe())
+    await record_probe(client, name='a', revision=1, body=body, record=good_probe())
     await set_local_desired(client, catalog_id=load_catalog()[0].id)
     await delete_endpoint(client, name='a', expected_revision=1)
     announced = [e for e in events if e['type'] == 'vlm.changed']
@@ -215,13 +230,13 @@ async def test_the_registry_is_one_index_shared_by_every_project(client) -> None
 async def test_a_cold_process_reads_the_same_registry(client) -> None:
     body = _body()
     await save_endpoint(client, name='a', body=body, expected_revision=None)
-    await record_probe(client, name='a', body=body, record=good_probe(root='org/r'))
+    await record_probe(client, name='a', revision=1, body=body, record=good_probe(root='org/r'))
     await set_local_desired(client, catalog_id='qwen3-vl-4b')
     reset_global_config_store()
     cold = get_global_config_store()
     await cold.refresh(client)
     assert set(cold.current.vlm_endpoints) == {'a'}
-    assert cold.current.vlm_probes['a']['record']['root'] == 'org/r'
+    assert cold.current.vlm_probes['a@1']['record']['root'] == 'org/r'
     assert cold.current.local_vlm_desired is not None
     assert cold.current.local_vlm_desired['catalog_id'] == 'qwen3-vl-4b'
 

@@ -5,7 +5,7 @@ Two indexes, two halves:
 
 - the **global** store (``op_global_configs``) holds the endpoint registry:
   ``vlm:<name>`` current docs, ``vlm:<name>@<rev>`` immutable copies,
-  ``vlm_probe:<name>`` last probes and ``local_vlm:desired``;
+  ``vlm_probe:<name>@<rev>`` the last probe of each revision and ``local_vlm:desired``;
 - each **project** store holds only ``activation:vlm`` (which endpoint that
   project runs, and which ``name@revision`` external endpoints it has
   acknowledged). The activated revision's body is resolved from the global
@@ -34,8 +34,8 @@ logger = get_logger(__name__)
 LOCAL_DESIRED_DOC_ID = 'local_vlm:desired'
 
 
-def probe_doc_id(name: str) -> str:
-    return f'vlm_probe:{name}'
+def probe_doc_id(key: str) -> str:
+    return f'vlm_probe:{key}'
 
 
 #: Immutable ``(name, revision) -> StoredConfig`` copies, process-wide.
@@ -104,7 +104,7 @@ async def load_global_fields(client: Any, index: str) -> dict[str, Any]:
             },
         )
         probes = {
-            hit['_source']['name']: dict(hit['_source'].get('body') or {})
+            hit['_source']['probe_key']: dict(hit['_source'].get('body') or {})
             for hit in resp['hits']['hits']
         }
         try:

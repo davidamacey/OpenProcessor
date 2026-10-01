@@ -5,7 +5,6 @@ endpoint, the bound project's active one first. Split out of ``models.py``
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 from src.config.project_context import current_project
 from src.core.logging import get_logger
@@ -16,6 +15,7 @@ from src.services.labeling.vlm_endpoints import (
     available_vlm_endpoints,
     refresh_vlm_state,
 )
+from src.services.labeling.vlm_url_policy import strip_userinfo
 
 
 logger = get_logger(__name__)
@@ -27,17 +27,6 @@ _STATUS = {
     'probe_failed': 'unavailable',
     'unreachable': 'unavailable',
 }
-
-
-def strip_userinfo(url: str) -> str:
-    """``url`` without any ``user:password@`` (an endpoint URL is served on
-    a public listing and must never carry credentials)."""
-    parts = urlsplit(url)
-    host = parts.hostname or ''
-    if ':' in host:
-        host = f'[{host}]'
-    netloc = f'{host}:{parts.port}' if parts.port else host
-    return urlunsplit((parts.scheme, netloc, parts.path, '', ''))
 
 
 async def _refresh() -> None:
@@ -137,4 +126,4 @@ def external_service_names() -> set[str]:
     return names
 
 
-__all__ = ['external_service_names', 'strip_userinfo', 'vlm_status_rows']
+__all__ = ['external_service_names', 'vlm_status_rows']

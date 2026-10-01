@@ -29,9 +29,10 @@ import os
 import re
 import socket
 import time
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 
 Locality = Literal['compose', 'host', 'private', 'external', 'unknown']
@@ -108,6 +109,18 @@ def _resolve(host: str) -> list[str]:
     return [str(info[4][0]).split('%', 1)[0] for info in infos]
 
 
+def strip_userinfo(url: str) -> str:
+    """``url`` without any ``user:password@`` and without query / fragment:
+    the one redaction for an endpoint URL that is served, logged or used (a
+    credential in a URL must never leave the process)."""
+    parts = urlsplit(url)
+    host = parts.hostname or ''
+    if ':' in host:
+        host = f'[{host}]'
+    netloc = f'{host}:{parts.port}' if parts.port else host
+    return urlunsplit((parts.scheme, netloc, parts.path, '', ''))
+
+
 def parse_endpoint_url(base_url: str) -> ParsedUrl:
     """Validate ``base_url``'s syntax; raise :class:`UrlSyntaxError`."""
     text = (base_url or '').strip()
@@ -124,7 +137,9 @@ def parse_endpoint_url(base_url: str) -> ParsedUrl:
         raise UrlSyntaxError('base_url must not carry credentials (userinfo)')
     if parts.query or parts.fragment or '?' in text or '#' in text:
         raise UrlSyntaxError('base_url must not carry a query or fragment')
-    host = (parts.hostname or '').lower().rstrip('.')
+    # NFKC: a resolver folds full-width letters to ASCII,
+    # so the policy must compare the folded name.
+    host = unicodedata.normalize('NFKC', parts.hostname or '').lower().rstrip('.')
     if not host or '%' in host:
         raise UrlSyntaxError('base_url needs a host')
     return ParsedUrl(parts.scheme, host, port, text.rstrip('/'))
@@ -143,19 +158,28 @@ def _literal_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | No
             ip = ipaddress.IPv4Address(socket.inet_aton(host))
         except (OSError, ValueError):
             ip = None
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        return ip.ipv4_mapped
+    return None if ip is None else _unwrap_v4(ip)
+
+
+def _unwrap_v4(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    """The IPv4 address an IPv6 one carries (IPv4-mapped ``::ffff:a.b.c.d``
+    and 6to4 ``2002:ab:cd::``), so every policy decision is made on the v4
+    address a router would actually deliver to."""
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            return ip.ipv4_mapped
+        if ip.sixtofour is not None:
+            return ip.sixtofour
     return ip
 
 
 def _ip_of(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
-        ip = ipaddress.ip_address(text)
+        return _unwrap_v4(ipaddress.ip_address(text))
     except ValueError:
         return None
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        return ip.ipv4_mapped
-    return ip
 
 
 def _never_reachable(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -378,5 +402,6 @@ __all__ = [
     'parse_endpoint_url',
     'reset_policy_caches',
     'sends_images_externally',
+    'strip_userinfo',
     'url_denial',
 ]

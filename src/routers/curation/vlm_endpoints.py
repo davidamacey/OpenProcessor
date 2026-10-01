@@ -56,20 +56,26 @@ from src.services.labeling.vlm_endpoints import (
     ENV_ENDPOINT_NAME,
     ENV_KEY_REF,
     VlmEndpoint,
+    VlmKeyRefInvalidError,
     available_vlm_endpoints,
     get_vlm_endpoint,
+    probe_fingerprint,
     resolve_api_key,
     stored_endpoint,
 )
 
 
 if TYPE_CHECKING:
+    from src.routers.curation._config_common_models import ValidationReport
     from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 
 logger = get_logger(__name__)
 
 #: Errors after which probing would be wrong (the URL must never be
-#: contacted) or pointless.
+#: contacted, a key must never be resolved for it) or pointless. An
+#: unacknowledged external endpoint is here because the probe sends the
+#: resolved key to it; an out-of-range body because the probe builds
+#: ``max_images_per_call`` images synchronously.
 _NO_PROBE_CODES = frozenset(
     {
         'vlm_url_invalid',
@@ -77,6 +83,10 @@ _NO_PROBE_CODES = frozenset(
         'vlm_url_denied_address',
         'vlm_api_key_ref_invalid',
         'vlm_external_denied',
+        'vlm_external_not_acknowledged',
+        'vlm_field_range',
+        'vlm_name_invalid',
+        'vlm_name_reserved',
     }
 )
 _PREFIX = '/vlm/endpoints'
@@ -130,15 +140,22 @@ async def _validated(body: VlmEndpointBody, *, name: str | None, existing: set[s
     return report
 
 
+def _probe_blocked(report: ValidationReport) -> bool:
+    return any(e.code in _NO_PROBE_CODES for e in report.errors)
+
+
 async def _run_probe(
     client: Any,
     body: VlmEndpointBody,
     *,
-    name: str | None,
+    record_for: VlmEndpoint | None,
     is_env: bool,
 ) -> VlmProbeResult:
-    """Probe ``body`` and, when ``name`` is an existing endpoint, record the
-    result. 429 ``probe_busy`` over the per-process cap."""
+    """Probe ``body`` (the caller has already refused a body that may not be
+    contacted) and, when ``record_for`` is the endpoint revision ``body``
+    belongs to, record the result under that revision. 429 ``probe_busy``
+    over the per-process cap; 422 for a key reference this deployment must
+    not resolve."""
     body = body.normalized()
     try:
         record = await probe_endpoint(
@@ -146,8 +163,12 @@ async def _run_probe(
         )
     except ProbeBusyError as exc:
         raise api_error(429, 'probe_busy', 'too many probes are running; retry shortly') from exc
-    if name is not None:
-        await record_probe(client, name=name, body=body, record=record)
+    except VlmKeyRefInvalidError as exc:
+        raise api_error(422, 'validation_failed', str(exc)) from exc
+    if record_for is not None:
+        await record_probe(
+            client, name=record_for.name, revision=record_for.revision, body=body, record=record
+        )
     return probe_wire(record)  # type: ignore[return-value]
 
 
@@ -192,18 +213,21 @@ async def validate_vlm_draft(
         probe=None,
         for_activation=False,
         existing_names=existing,
-        is_env=payload.name == ENV_ENDPOINT_NAME,
     )
     result: VlmProbeResult | None = None
-    if probe and not any(e.code in _NO_PROBE_CODES for e in report.errors):
-        target = payload.name if payload.name and get_vlm_endpoint(payload.name) else None
-        # Only a stored endpoint's probe is recorded; the built-in is probed
-        # through POST /vlm/endpoints/env/probe.
+    if probe and not _probe_blocked(report):
+        # A draft is never the built-in (its ``env:`` key reference is
+        # refused above). Its probe is recorded only when it IS the saved
+        # endpoint's current revision, so a draft never leaves a record that
+        # another revision would pick up.
+        current = get_vlm_endpoint(payload.name) if payload.name else None
+        same = (
+            current is not None
+            and current.source == 'stored'
+            and probe_fingerprint(payload.body.normalized()) == probe_fingerprint(current.body)
+        )
         result = await _run_probe(
-            client,
-            payload.body,
-            name=target if target != ENV_ENDPOINT_NAME else None,
-            is_env=False,
+            client, payload.body, record_for=current if same else None, is_env=False
         )
     from src.services.labeling.vlm_url_policy import sends_images_externally
 
@@ -259,7 +283,7 @@ async def get_vlm_endpoint_revision(
     item = await fetch_revision(client, name, revision)
     if item is None:
         raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-    endpoint = stored_endpoint(item, registry.vlm_probes.get(name))
+    endpoint = stored_endpoint(item, registry.vlm_probes)
     return await doc_of(endpoint, active_in=[])
 
 
@@ -292,7 +316,7 @@ async def clone_vlm_endpoint(
         item = await fetch_revision(client, name, payload.revision)
         if item is None:
             raise api_error(404, 'unknown_revision', f'{name!r} has no revision {payload.revision}')
-        source = stored_endpoint(item, registry.vlm_probes.get(name))
+        source = stored_endpoint(item, registry.vlm_probes)
     body = source.body
     dropped = source.source == 'env' and body.api_key_ref == ENV_KEY_REF
     if dropped:
@@ -404,9 +428,11 @@ async def probe_vlm_endpoint(name: str, client: OpenSearchDep) -> VlmProbeResult
         for_activation=False,
         is_env=endpoint.source == 'env',
     )
-    if any(e.code in _NO_PROBE_CODES for e in report.errors):
+    del locality
+    if _probe_blocked(report):
         raise api_error(
             422, 'validation_failed', 'this endpoint may not be contacted', report=report
         )
-    del locality
-    return await _run_probe(client, endpoint.body, name=name, is_env=endpoint.source == 'env')
+    return await _run_probe(
+        client, endpoint.body, record_for=endpoint, is_env=endpoint.source == 'env'
+    )

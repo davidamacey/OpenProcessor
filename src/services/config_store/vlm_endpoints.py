@@ -2,7 +2,7 @@
 
 Endpoints are global (deployment-wide): docs live in ``op_global_configs``
 (``vlm:<name>`` current, ``vlm:<name>@<rev>`` immutable copies,
-``vlm_probe:<name>``, ``local_vlm:desired``) and are written through W2's
+``vlm_probe:<name>@<rev>``, ``local_vlm:desired``) and are written through W2's
 OCC primitives, so revision numbers, conflicts and the config revision
 counter behave exactly like packs and profiles. Which endpoint a *project*
 runs is that project's own activation
@@ -28,7 +28,12 @@ from src.services.config_store.index import (
     save_config as _save_config,
 )
 from src.services.config_store.vlm_snapshot import LOCAL_DESIRED_DOC_ID, probe_doc_id
-from src.services.labeling.vlm_endpoints import VlmEndpoint, probe_fingerprint, stored_endpoint
+from src.services.labeling.vlm_endpoints import (
+    VlmEndpoint,
+    probe_fingerprint,
+    probe_key,
+    stored_endpoint,
+)
 
 
 if TYPE_CHECKING:
@@ -74,7 +79,7 @@ async def save_endpoint(
         cloned_from=cloned_from,
     )
     snapshot = await _reload(client)
-    return stored_endpoint(snapshot.vlm_endpoints[name], snapshot.vlm_probes.get(name))
+    return stored_endpoint(snapshot.vlm_endpoints[name], snapshot.vlm_probes)
 
 
 async def list_revisions(client: Any, name: str) -> list[dict[str, Any]]:
@@ -107,27 +112,33 @@ async def delete_endpoint(client: Any, *, name: str, expected_revision: int) -> 
     await _delete_config(
         client, store.index, kind='vlm_endpoint', name=name, expected_revision=expected_revision
     )
-    with contextlib.suppress(NotFoundError):
-        await client.delete(index=store.index, id=probe_doc_id(name))
+    for doc in await list_revisions(client, name):
+        with contextlib.suppress(NotFoundError):
+            await client.delete(
+                index=store.index, id=probe_doc_id(probe_key(name, int(doc['revision'])))
+            )
     await bump_config_revision(client, store.index)
     await _reload(client)
 
 
 async def record_probe(
-    client: Any, *, name: str, body: VlmEndpointBody, record: VlmProbeRecord
+    client: Any, *, name: str, revision: int | None, body: VlmEndpointBody, record: VlmProbeRecord
 ) -> None:
-    """Persist ``record`` as ``name``'s last probe. Never bumps the endpoint
-    revision; DOES bump the config revision, so every process (and every
+    """Persist ``record`` as the last probe of ``name@revision`` (``revision``
+    is ``None`` only for the ``env`` built-in); another revision's probe is
+    never touched. Never bumps the endpoint revision; DOES bump the config revision, so every process (and every
     worker's quiesce-and-swap) sees the new ``json_mode`` /
     ``max_model_len`` / model root. ``body`` fingerprints what was probed."""
     store = get_global_config_store()
     payload = {'fingerprint': probe_fingerprint(body), 'record': record.model_dump()}
+    key = probe_key(name, revision)
     await client.index(
         index=store.index,
-        id=probe_doc_id(name),
+        id=probe_doc_id(key),
         body={
             'doc_type': 'vlm_probe',
             'name': name,
+            'probe_key': key,
             'probed_at': record.probed_at,
             'body': payload,
         },

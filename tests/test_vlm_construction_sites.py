@@ -90,7 +90,6 @@ def test_only_the_endpoint_registry_reads_the_vlm_environment_variables() -> Non
     allowed = {
         'src/services/labeling/vlm_endpoints.py',  # the built-in itself
         'src/services/labeling/vlm_client.py',  # the labeler constructor's unit-test defaults
-        'src/services/config_store/profile_validation.py',  # "is a VLM configured" (a bool)
         'src/config/retired_env.py',  # names of retired variables, for the startup warning
     }
     readers = set()

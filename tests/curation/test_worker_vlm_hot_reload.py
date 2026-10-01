@@ -68,7 +68,7 @@ def _body(model: str = 'm') -> VlmEndpointBody:
 async def _endpoint(client: Any, name: str, *, root: str, model: str = 'm') -> None:
     body = _body(model)
     await save_endpoint(client, name=name, body=body, expected_revision=None)
-    await record_probe(client, name=name, body=body, record=good_probe(root=root))
+    await record_probe(client, name=name, revision=1, body=body, record=good_probe(root=root))
 
 
 async def _activate_in(
@@ -262,12 +262,13 @@ async def test_a_rebuild_after_an_edit_still_uses_the_revision_that_was_activate
     await record_probe(
         client,
         name='one',
+        revision=2,
         body=edited,
         record=good_probe(root='org/edited', probed_at='2026-09-28T16:00:00+00:00'),
     )
     for _ in range(2):
         runtime = await worker.cycle(alpha)
-    assert worker.built[-1] == ('one@1', 'm')
+    assert worker.built[-1] == ('one@1', 'org/one')
     assert runtime.vlm_endpoint.body.model == 'm'
 
 
@@ -283,6 +284,7 @@ async def test_a_reprobe_that_changes_the_model_root_rebuilds_the_labeler() -> N
     await record_probe(
         client,
         name='one',
+        revision=1,
         body=_body(),
         record=good_probe(root='org/after', probed_at='2026-09-28T13:00:00+00:00'),
     )
@@ -363,6 +365,7 @@ async def test_a_reprobe_of_a_shared_endpoint_reaches_every_project_running_it()
     await record_probe(
         client,
         name='shared',
+        revision=1,
         body=_body(),
         record=good_probe(root='org/v2', probed_at='2026-09-28T14:00:00+00:00'),
     )
@@ -410,6 +413,7 @@ async def test_the_swap_pins_the_registry_together_with_the_project_store() -> N
         await record_probe(
             client,
             name='one',
+            revision=1,
             body=_body(),
             record=good_probe(root='org/after', probed_at='2026-09-28T15:00:00+00:00'),
         )
@@ -516,3 +520,33 @@ async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -
     doc = opensearch.bulk.await_args.kwargs['body'][1]['doc']
     assert 'vlm_endpoint' not in doc
     assert 'vlm_model' not in doc
+
+
+@pytest.mark.asyncio
+async def test_probing_a_newer_revision_does_not_change_the_running_revisions_marker() -> None:
+    """The probe of ``one@2`` is not the probe of the ``one@1`` this project
+    runs, so it must not make the worker rebuild (W9 review M3)."""
+    client = FakeConfigOpenSearch()
+    alpha = _record('alpha')
+    await _endpoint(client, 'one', root='org/one')
+    await _activate_in(client, alpha, 'one', 1, None)
+    _go_cold()
+    worker = Worker(client)
+    await worker.cycle(alpha)
+    with bind_project(alpha):
+        before = current_want(worker.stores['alpha'], worker.registry)
+    edited = _body('edited')
+    await save_endpoint(client, name='one', body=edited, expected_revision=1)
+    await record_probe(
+        client,
+        name='one',
+        revision=2,
+        body=edited,
+        record=good_probe(root='org/edited', probed_at='2026-09-28T16:00:00+00:00'),
+    )
+    for _ in range(2):
+        await worker.cycle(alpha)
+    with bind_project(alpha):
+        after = current_want(worker.stores['alpha'], worker.registry)
+    assert after == before
+    assert len(worker.built) == 1

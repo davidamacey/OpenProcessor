@@ -118,13 +118,22 @@ def test_saving_a_new_revision_changes_nothing_until_it_is_activated(vlm_api) ->
     moved = vlm_api.activate('alpha', expected_active={'name': 'alpha', 'revision': 1})
     assert moved.status_code == 200, moved.text
     assert moved.json()['active'] == {'name': 'alpha', 'revision': 2}
-    # the probe was of revision 2's body: revision 1 counts as untested
+    # each revision keeps its own probe: going back to revision 1 needs none
     old = {'name': 'alpha', 'revision': 2}
-    untested = vlm_api.activate('alpha', revision=1, expected_active=old)
+    back = vlm_api.activate('alpha', revision=1, expected_active=old)
+    assert back.status_code == 200, back.text
+    assert back.json()['active'] == {'name': 'alpha', 'revision': 1}
+    # a revision that was never probed is still refused
+    third = vlm_api.client.put(
+        f'{GLOBAL_VLM}/alpha',
+        json={'expected_revision': 2, 'body': vlm_api.body(model='third-model')},
+    )
+    assert third.status_code == 200, third.text
+    untested = vlm_api.activate(
+        'alpha', revision=3, expected_active={'name': 'alpha', 'revision': 1}
+    )
     assert untested.status_code == 422
     assert _codes(_err(untested)) == ['vlm_not_probed']
-    pinned = vlm_api.activate('alpha', revision=1, expected_active=old, force=True)
-    assert pinned.json()['active'] == {'name': 'alpha', 'revision': 1}
 
 
 # ---- the probe requirement, and what force may (not) bypass -----------------
