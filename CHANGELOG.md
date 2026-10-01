@@ -471,14 +471,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decide, without writing anything.
   - Pack test: the production VLM labeler runs on the chosen crops through
     the one VLM gate (mode `test`); the response carries the exact request
-    and reply (`probe` capture, so the payload is the worker's own, not a
-    copy), the parsed class and per-box verdicts, and per-crop timings.
-  - Profile test: the detector leg (Triton), the segmenter leg (with mask
-    polygons) and the verify leg, with candidates selected by the same
-    floor / NMS / cap as the worker; a stored box is reused where the worker
-    would reuse it. Boxes come back in the source frame and the crop frame,
-    with `preview_basis` saying whether the VLM verdicts or the plain
-    selection decided what is accepted.
+    text and reply (a capture of the worker's own call, not a copy of its
+    prompt code), whether the reply parsed, and per crop the parsed answer and
+    the `ItemDoc` the worker would write.
+  - Profile test (one crop): the detector leg (Triton) and the segmenter leg
+    (with mask polygons), each with every candidate, whether it was selected
+    and why it was dropped (floor / NMS / cap), using the worker's own
+    selection; an optional `verify` leg sends the selected boxes to the VLM.
+    `preview_basis` says whether VLM verdicts or the plain selection decided
+    what is accepted in the returned `preview_item`.
   - Guards: read-only (nothing is indexed, updated or enqueued), project
     scoped (a crop id from another project is `crop_not_found`), at most 4
     concurrent segmenter calls and 2 concurrent VLM runs
