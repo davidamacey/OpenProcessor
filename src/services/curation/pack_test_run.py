@@ -288,16 +288,19 @@ async def _region_verify(
     labeler: VlmLabeler, crops: list[CropInput], *, pack_stamp: str, capacity: int
 ) -> PackTestRun:
     F = get_region_fields()
-    probe_crops: list[ProbeCrop] = []
     owner: list[tuple[CropInput, Any]] = []
     for c in crops:
-        for box in verifiable_boxes(c.source, F):
-            jpeg = load_region_jpeg(str(c.image_path), box.bbox_norm)
-            probe_crops.append(ProbeCrop(crop_id=f'{c.crop_id}#{box.box_id}', jpeg=jpeg))
-            owner.append((c, box))
-    if not probe_crops:
+        owner.extend((c, box) for box in verifiable_boxes(c.source, F))
+    if not owner:
         raise NoRegionBoxError
-    _check_capacity(len(probe_crops), capacity)
+    _check_capacity(len(owner), capacity)
+    probe_crops = [
+        ProbeCrop(
+            crop_id=f'{c.crop_id}#{box.box_id}',
+            jpeg=load_region_jpeg(str(c.image_path), box.bbox_norm),
+        )
+        for c, box in owner
+    ]
     result = await probe(labeler, 'region_verify', probe_crops)
     run = PackTestRun(probe=result)
     verdicts: dict[str, list[BoxVerdict]] = {}

@@ -43,6 +43,7 @@ from src.services.config_store import (
 from src.services.config_store.pack_validation import validate_pack
 from src.services.config_store.profile_validation import validate_profile
 from src.services.curation.config_test_limits import (
+    MAX_TEST_CROP_IDS,
     ConfigTestBusyError,
     ConfigTestTimeoutError,
     bounded,
@@ -199,11 +200,18 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     ``parse_ok: false`` (the reply did not parse) is a 200 result, not an
     error. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``
     (+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /
-    ``too_many_crops`` / ``no_box_to_verify``; 404 ``crop_not_found``;
+    ``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify``; 404 ``crop_not_found``;
     409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.
     Writes nothing."""
     if not body.crop_ids:
         raise api_error(422, 'validation_failed', 'crop_ids must name at least one crop')
+    if len(body.crop_ids) > MAX_TEST_CROP_IDS:
+        raise api_error(
+            422,
+            'too_many_crop_ids',
+            f'{len(body.crop_ids)} crop ids; at most {MAX_TEST_CROP_IDS}',
+            limit=MAX_TEST_CROP_IDS,
+        )
     await get_config_store().ensure_fresh(opensearch)
     profile = _profile_for(body.profile_name)
     if body.profile_name is not None and profile is None:
@@ -322,12 +330,10 @@ async def _resolve_profile(
             raise api_error(
                 409, 'no_active_profile', 'no region profile is active; name one or send a draft'
             )
-        revision = _active_profile_stamp()[1]
-        if body.segmenter_text_prompt is not None:
-            active = dataclasses.replace(active, segmenter_text_prompt=body.segmenter_text_prompt)
-        return active, revision, active.name, ValidationReport(ok=True)
-    if body.draft is not None:
-        data: dict[str, Any] = body.draft.model_dump()
+        data: dict[str, Any] = {f.name: getattr(active, f.name) for f in dataclasses.fields(active)}
+        name, revision, stamp = active.name, _active_profile_stamp()[1], active.name
+    elif body.draft is not None:
+        data = body.draft.model_dump()
         name, revision, stamp = 'draft', None, None
     else:
         assert body.profile_name is not None

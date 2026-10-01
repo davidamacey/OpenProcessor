@@ -327,3 +327,37 @@ def test_a_detector_miss_falls_through_to_the_segmenter(stack, detector) -> None
     assert len(stack.upstream.segment_requests) == 1
     chain = response.json()['preview_item']['region_detector_chain']
     assert chain[:2] == ['wheel_det:miss', 'sam3:hit']
+
+
+@pytest.fixture
+def unreachable_triton(detector: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.main as main_module
+
+    def no_pool() -> Any:
+        msg = 'triton pool unavailable'
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(main_module, 'get_async_triton_pool', no_pool)
+
+
+def test_a_detector_failure_is_reported_on_its_leg_and_the_segmenter_still_runs(
+    stack, unreachable_triton
+) -> None:
+    response = stack.post(URL, crop_id='car1', draft=profile_body(detector_model='wheel_det'))
+
+    assert response.status_code == 200, response.text
+    leg = _only_leg(response, 'detector')
+    assert leg['status'] == 'error'
+    assert 'triton pool unavailable' in leg['reason']
+    assert _only_leg(response, 'segmenter')['status'] == 'ok'
+
+
+def test_a_detector_failure_with_no_other_leg_is_a_502_detector_error(
+    stack, unreachable_triton
+) -> None:
+    stack.upstream.segmenter_up = False
+
+    response = stack.post(URL, crop_id='car1', draft=profile_body(detector_model='wheel_det'))
+
+    assert response.status_code == 502, response.text
+    assert response.json()['detail']['error'] == 'detector_error'

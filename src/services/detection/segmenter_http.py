@@ -102,7 +102,11 @@ async def segment_once(
     if not isinstance(body, dict):
         msg = 'segmenter call failed: the reply is not a JSON object'
         raise SegmenterCallError(msg)
-    parsed = (_candidate(c) for c in body.get('candidates') or [])
+    try:
+        parsed = [_candidate(c) for c in body.get('candidates') or []]
+    except (TypeError, ValueError) as exc:
+        msg = f'segmenter call failed: unreadable candidate: {type(exc).__name__}'
+        raise SegmenterCallError(msg) from exc
     return [c for c in parsed if c is not None]
 
 

@@ -41,6 +41,7 @@ from src.services.curation.crop_browse import (
 )
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.item_text import item_text_query
+from src.services.curation.review_queries import negative_frame_clause
 from src.services.curation.wire import (
     item_list_source_excludes,
     item_source_excludes,
@@ -258,8 +259,7 @@ async def list_crops(
     if dataset_split:
         filt.append({'term': {'dataset_split': dataset_split}})
     if on_negative_frame is not None:
-        marked: dict[str, Any] = {'term': {'on_negative_frame': True}}
-        filt.append(marked if on_negative_frame else {'bool': {'must_not': marked}})
+        filt.append(negative_frame_clause(on_negative_frame))
     if proposed_by_import is not None:
         proposed: dict[str, Any] = {'exists': {'field': 'proposed_by_import'}}
         filt.append(proposed if proposed_by_import else {'bool': {'must_not': proposed}})

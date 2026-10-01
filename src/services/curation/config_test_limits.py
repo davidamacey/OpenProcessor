@@ -21,6 +21,8 @@ SlotKind = Literal['vlm', 'segmenter']
 
 #: Concurrent test runs per process, per kind.
 SLOT_CAPS: dict[str, int] = {'vlm': 2, 'segmenter': 4}
+#: Most crop ids one pack-test request may name.
+MAX_TEST_CROP_IDS = 64
 #: Wall-clock limit of one test run, seconds.
 TEST_TIMEOUT_S = 60.0
 

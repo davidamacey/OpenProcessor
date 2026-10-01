@@ -96,6 +96,7 @@ COMMON_FILTERS: tuple[str, ...] = (
     'conf_min',
     'conf_max',
     'combine_conflict',
+    'on_negative_frame',
 )
 # Tab-only filters, on top of COMMON_FILTERS.
 TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {
@@ -139,7 +140,26 @@ DATASET_SPLIT_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
     {'value': 'val', 'label': 'Validation'},
     {'value': 'test', 'label': 'Test'},
 )
+ON_NEGATIVE_FRAME_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
+    {'value': 'true', 'label': 'Only items on a reviewed-negative frame'},
+    {'value': 'false', 'label': 'Hide items on a reviewed-negative frame'},
+)
+
+
+def negative_frame_clause(on_negative_frame: bool) -> dict[str, Any]:
+    """The one definition of the ``on_negative_frame`` filter, shared by
+    ``GET /crops`` and the review queue."""
+    marked: dict[str, Any] = {'term': {'on_negative_frame': True}}
+    return marked if on_negative_frame else {'bool': {'must_not': marked}}
+
+
 FILTER_SPECS: dict[str, dict[str, Any]] = {
+    'on_negative_frame': {
+        'param': 'on_negative_frame',
+        'kind': 'enum',
+        'label': 'Negative frames',
+        'options': ON_NEGATIVE_FRAME_FILTER_OPTIONS,
+    },
     'dataset_split': {
         'param': 'dataset_split',
         'kind': 'enum',
@@ -655,6 +675,7 @@ __all__ = [
     'TAB_LABELS',
     'build_tab_query',
     'mismatch_reason',
+    'negative_frame_clause',
     'region_reason',
     'review_tab_catalog',
     'tab_filters',

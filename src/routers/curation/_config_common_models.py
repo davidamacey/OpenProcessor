@@ -120,6 +120,7 @@ ErrorCode = Literal[
     'vlm_transport_error',
     'no_box_to_verify',
     'too_many_crops',
+    'too_many_crop_ids',
     'pack_invalid',
     'profile_invalid',
     'segmenter_error',
