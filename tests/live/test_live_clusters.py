@@ -111,14 +111,14 @@ def test_refine_splits_a_candidate_cluster_into_subclusters(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['action'] == 'refined', body
-    assert body['n_members'] >= 4
+    assert body['n_items'] >= 4
     assert body['n_subclusters'] >= 2, body
-    assert body['n_updated'] == body['n_members']
+    assert body['n_items_updated'] == body['n_items']
 
     refresh(opensearch, INDEXES['items'])
     subids = _subid_terms(opensearch, CANDIDATE_CLUSTER_ID)
     assert len(subids) >= 2, subids
-    assert sum(subids.values()) == body['n_members']
+    assert sum(subids.values()) == body['n_items']
     # Sub-ids are cluster-local and formatted "<cluster_id><letter>".
     assert all(key.startswith(str(CANDIDATE_CLUSTER_ID)) for key in subids), subids
 
@@ -230,8 +230,11 @@ def test_region_clustering_partitions_the_region_pool(api_client: Any, opensearc
     assert state.get('error') is None, state
     result = state['result']
     assert result['status'] == 'success', result
-    assert result['n_regions'] >= 32
-    assert result['assigned'] == result['n_regions']
+    assert result['n_boxes'] >= 32
+    # Counts name their unit: a box is changed only if its cluster did, and
+    # several boxes share an item.
+    assert 0 < result['n_boxes_changed'] <= result['n_boxes'], result
+    assert 0 < result['n_items_written'] <= result['n_boxes_changed'], result
 
     refresh(opensearch, INDEXES['items'])
     assigned = _region_box_buckets(opensearch)
@@ -263,11 +266,11 @@ def test_region_refine_writes_region_subids(api_client: Any, opensearch: Any) ->
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['action'] == 'refined', body
-    assert body['n_updated'] == body['n_members']
+    assert body['n_boxes_updated'] == body['n_boxes']
 
     refresh(opensearch, INDEXES['items'])
     subids = _region_subid_terms(opensearch, biggest['key'])
-    assert sum(subids.values()) == body['n_members'], subids
+    assert sum(subids.values()) == body['n_boxes'], subids
 
 
 def test_fp_centroid_build_then_suspected_false_positives(api_client: Any) -> None:
@@ -277,7 +280,7 @@ def test_fp_centroid_build_then_suspected_false_positives(api_client: Any) -> No
     assert state.get('error') is None, state
     result = state['result']
     assert result['status'] == 'success', result
-    assert result['n_members'] >= 1, result
+    assert result['n_boxes'] >= 1, result
 
     suspected = api_client.get('/regions/suspected_false_positives', params={'threshold': 0.35})
     assert suspected.status_code == 200, suspected.text

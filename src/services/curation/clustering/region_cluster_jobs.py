@@ -295,7 +295,7 @@ def _write_region_fp_job(state: dict[str, Any]) -> None:
 def region_fp_centroid_job_status() -> dict[str, Any]:
     """Cross-worker snapshot of the background FP-centroid build job.
 
-    Merges in the persisted centroid metadata (``trained_at``/``k``/``n_members``)
+    Merges in the persisted centroid metadata (``trained_at``/``k``/``n_boxes``)
     so the UI can warn when the centroids are stale.
     """
     from src.services.detection.fp_store import FalsePositiveCentroidStore
@@ -306,7 +306,7 @@ def region_fp_centroid_job_status() -> dict[str, Any]:
         state['centroids'] = {
             'trained_at': store.metadata.get('trained_at'),
             'k': store.metadata.get('k'),
-            'n_members': store.metadata.get('n_members'),
+            'n_boxes': store.metadata.get('n_boxes'),
         }
     else:
         state['centroids'] = None

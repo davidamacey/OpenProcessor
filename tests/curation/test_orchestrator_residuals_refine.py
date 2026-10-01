@@ -74,7 +74,7 @@ async def test_refine_cluster_splits_two_separated_groups() -> None:
     result = await orch.refine_cluster(client, 42)
 
     assert result['action'] == 'refined'
-    assert result['n_members'] == 6
+    assert result['n_items'] == 6
     assert result['n_subclusters'] == 2
 
     # Guarded script: noop unless the doc's cluster_id still equals the

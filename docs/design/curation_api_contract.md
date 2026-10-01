@@ -1640,6 +1640,15 @@ nearest the centroid, next to `representative_crop_ids` /
 `representative_box_ids` / `representative_thumb_urls`. The permanent
 false-positive cluster (id `-100`) pins first.
 
+Region clustering responses name the unit of every count. The
+`POST /regions/cluster` job result reports `n_boxes` (boxes partitioned),
+`n_boxes_changed` (boxes whose stored cluster changed; `0` on a re-run over
+unchanged data) and `n_items_written` (items updated). The refine response
+reports `n_boxes` and `n_boxes_updated` for a region cluster, `n_items` and
+`n_items_updated` for an item cluster (`POST /clusters/refine/{id}`). The FP
+centroid build reports `n_boxes`; the auto FP pull reports `n_boxes_scanned`
+and `n_boxes_moved`.
+
 ### Verifier-rejected boxes
 
 When the verifier rejects a detector's box the worker keeps it, in the item's

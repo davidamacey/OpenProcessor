@@ -44,7 +44,7 @@ import asyncio
 import os
 from collections import Counter
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
@@ -368,10 +368,15 @@ async def refine_members(
     count_members: Callable[[], Awaitable[int]],
     fetch_members: Callable[[], Awaitable[list[dict[str, Any]]]],
     write_subids: Callable[[list[tuple[Any, str]]], Awaitable[int]],
+    unit: Literal['items', 'boxes'],
     distance_threshold: float = AHC_DISTANCE_THRESHOLD,
     max_members: int = MAX_REFINE_MEMBERS,
 ) -> dict[str, Any]:
     """The AHC refine core shared by item clusters and region-box clusters.
+
+    ``unit`` is what a member is, and names the response counts
+    (``n_<unit>`` members, ``n_<unit>_updated`` members whose stored
+    sub-id ``write_subids`` reports changed).
 
     ``fetch_members`` returns ``{'_id': <opaque key>, 'embedding': [...],
     'class_name': ...}`` dicts; ``write_subids`` receives ``(_id, subid)``
@@ -387,10 +392,11 @@ async def refine_members(
        member gets a fresh one, so re-running overwrites a previous partition.
     5. Purity (largest-class share among labelled members) in the summary.
 
-    Returns ``{cluster_id, n_members, n_subclusters, purity, action, ...}``.
+    Returns ``{cluster_id, n_<unit>, n_subclusters, purity, action, ...}``.
     """
     log = logger.bind(cluster_id=cluster_id)
     log.info('curation_refine_cluster_start')
+    n_key = f'n_{unit}'
 
     precount = await count_members()
     if precount > max_members:
@@ -401,7 +407,7 @@ async def refine_members(
         )
         return {
             'cluster_id': cluster_id,
-            'n_members': precount,
+            n_key: precount,
             'n_subclusters': 0,
             # Purity isn't computed here -- that would need the same full
             # fetch this precount check exists to avoid paying for.
@@ -425,7 +431,7 @@ async def refine_members(
         )
         return {
             'cluster_id': cluster_id,
-            'n_members': n_members,
+            n_key: n_members,
             'n_subclusters': 0,
             'purity': _compute_purity([m.get('class_name') for m in members]),
             'action': 'skipped_too_small',
@@ -440,7 +446,7 @@ async def refine_members(
         )
         return {
             'cluster_id': cluster_id,
-            'n_members': n_members,
+            n_key: n_members,
             'n_subclusters': 0,
             'purity': _compute_purity([m.get('class_name') for m in members]),
             'action': 'skipped_too_large',
@@ -489,11 +495,11 @@ async def refine_members(
 
     summary: dict[str, Any] = {
         'cluster_id': cluster_id,
-        'n_members': n_members,
+        n_key: n_members,
         'n_subclusters': n_subclusters,
         'purity': _compute_purity([m.get('class_name') for m in members]),
         'subcluster_weighted_purity': weighted_purity,
-        'n_updated': n_updated,
+        f'n_{unit}_updated': n_updated,
         'distance_threshold': distance_threshold,
         'linkage': AHC_LINKAGE,
         'metric': AHC_METRIC,
@@ -529,6 +535,7 @@ async def refine_cluster(
         count_members=count_members,
         fetch_members=lambda: _fetch_cluster_members(client, cluster_id, index=index),
         write_subids=write_subids,
+        unit='items',
         distance_threshold=distance_threshold,
         max_members=max_members,
     )

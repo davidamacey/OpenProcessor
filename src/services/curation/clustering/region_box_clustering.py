@@ -114,7 +114,7 @@ async def cluster_region_residuals(
 
     n = len(rows)
     if n < MIN_REGIONS_FOR_CLUSTERING:
-        return {'status': 'skipped', 'reason': 'too_few_regions', 'n_regions': n, 'n_clusters': 0}
+        return {'status': 'skipped', 'reason': 'too_few_regions', 'n_boxes': n, 'n_clusters': 0}
 
     from sklearn.cluster import MiniBatchKMeans
 
@@ -139,13 +139,14 @@ async def cluster_region_residuals(
     result = await write_box_edits(client, index=items_index(), edits=edits, respect_human=True)
     await _refresh(client)
 
-    logger.info('curation_cluster_region_residuals_done', n_regions=n, n_clusters=int(k), **result)
+    logger.info('curation_cluster_region_residuals_done', n_boxes=n, n_clusters=int(k), **result)
     return {
         'status': 'success',
         'method': 'minibatch_kmeans',
-        'n_regions': n,
+        'n_boxes': n,
         'n_clusters': int(k),
-        'assigned': result['written'],
+        'n_boxes_changed': result['boxes_changed'],
+        'n_items_written': result['items_written'],
         'max_rank': max_rank,
     }
 
@@ -191,7 +192,7 @@ async def refine_region_cluster(
             edits.setdefault(crop_id, {})[box_id] = _subid_edit(region_cluster_id, subid)
         result = await write_box_edits(client, index=index, edits=edits, respect_human=False)
         await _refresh(client)
-        return result['written']
+        return result['boxes_changed']
 
     return await refine_members(
         region_cluster_id,
@@ -202,6 +203,7 @@ async def refine_region_cluster(
         write_subids=write_subids,
         distance_threshold=distance_threshold,
         max_members=max_members,
+        unit='boxes',
     )
 
 
@@ -241,7 +243,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     rows = await scroll_box_rows(client, index=items_index(), states=(_FALSE_POSITIVE,))
     n = len(rows)
     if n == 0:
-        return {'status': 'skipped', 'reason': 'no_fp_embeddings', 'n_members': 0}
+        return {'status': 'skipped', 'reason': 'no_fp_embeddings', 'n_boxes': 0}
 
     from sklearn.cluster import MiniBatchKMeans
 
@@ -300,13 +302,13 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
         {
             'trained_at': now,
             'k': int(k),
-            'n_members': n,
+            'n_boxes': n,
             'subids': subids,
             'dim': int(centroids.shape[1]),
         },
     )
-    logger.info('curation_build_region_fp_centroids_done', n_members=n, k=int(k))
-    return {'status': 'success', 'n_members': n, 'k': int(k), 'subids': subids}
+    logger.info('curation_build_region_fp_centroids_done', n_boxes=n, k=int(k))
+    return {'status': 'success', 'n_boxes': n, 'k': int(k), 'subids': subids}
 
 
 def fp_candidate_must_not() -> list[dict[str, Any]]:
@@ -364,7 +366,12 @@ async def auto_assign_fp_from_centroids(
 
     store = FalsePositiveCentroidStore()
     if not store.load():
-        return {'status': 'skipped', 'reason': 'no_centroids', 'n_moved': 0, 'threshold': threshold}
+        return {
+            'status': 'skipped',
+            'reason': 'no_centroids',
+            'n_boxes_moved': 0,
+            'threshold': threshold,
+        }
 
     subids = store.metadata.get('subids', [])
     rows = await fp_candidate_rows(client)
@@ -412,15 +419,15 @@ async def auto_assign_fp_from_centroids(
 
     logger.info(
         'curation_auto_assign_fp_done',
-        n_scanned=len(rows),
-        n_moved=len(moved),
+        n_boxes_scanned=len(rows),
+        n_boxes_moved=len(moved),
         threshold=threshold,
-        written_items=result['written'],
+        items_written=result['items_written'],
     )
     return {
         'status': 'success',
-        'n_scanned': len(rows),
-        'n_moved': len(moved),
+        'n_boxes_scanned': len(rows),
+        'n_boxes_moved': len(moved),
         'threshold': threshold,
     }
 

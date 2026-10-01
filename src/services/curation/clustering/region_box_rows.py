@@ -227,16 +227,23 @@ async def write_box_edits(
     box list (e.g. the re-derived status).
 
     A conflicting write is re-merged against the new version, up to
-    :data:`_CONFLICT_RETRIES` times. Returns ``{'written', 'unchanged',
-    'conflicts', 'errors'}`` where ``written`` is items updated.
+    :data:`_CONFLICT_RETRIES` times. Returns the counts, each named for its
+    unit: ``items_written`` (items updated), ``boxes_changed`` (boxes whose
+    stored value changed, in the items written), ``items_unchanged`` (items
+    where no edit applied), ``items_conflicted`` (items dropped after the
+    retries) and ``items_errored``.
     """
     F = get_region_fields()
-    unchanged = 0
+    unchanged: set[str] = set()
+    changed: dict[str, int] = {}
 
     def merger(crop_id: str, current: dict[str, Any]) -> dict[str, Any]:
-        nonlocal unchanged
+        # Re-run on every conflict retry, so the tallies are keyed by item:
+        # the last merge of an item is the one that counts.
+        changed.pop(crop_id, None)
+        unchanged.discard(crop_id)
         if respect_human and item_is_human_final(current, F):
-            unchanged += 1
+            unchanged.add(crop_id)
             return {}
         by_box = edits[crop_id]
         boxes = read_boxes(current, F)
@@ -248,8 +255,9 @@ async def write_box_edits(
                 continue
             new_boxes.append(edit(box))
         if new_boxes == boxes:
-            unchanged += 1
+            unchanged.add(crop_id)
             return {}
+        changed[crop_id] = sum(1 for old, new in zip(boxes, new_boxes, strict=True) if old != new)
         doc = dict(boxes_write_fields(new_boxes, current_src=current, F=F))
         doc['updated_at'] = datetime.now(UTC).isoformat()
         if item_fields is not None:
@@ -257,24 +265,29 @@ async def write_box_edits(
         return doc
 
     pending = list(edits)
-    written = 0
-    errors = 0
-    conflicts = 0
+    items_written = 0
+    errored: set[str] = set()
     for _attempt in range(_CONFLICT_RETRIES):
         if not pending:
             break
         result = await occ_skip_on_conflict_bulk(
             client, doc_ids=pending, merger=merger, index=index, writer_id=writer_id
         )
-        written += int(result['updated'])
-        errors += len(result['errors'])
+        items_written += int(result['updated'])
+        errored.update(str(e.get('doc_id')) for e in result['errors'])
         pending = list(result['skipped_ids'])
-    conflicts = len(pending)
-    if errors:
-        logger.warning('region_box_edit_errors', writer=writer_id, errors=errors)
-    if conflicts:
-        logger.warning('region_box_edit_conflicts_dropped', writer=writer_id, items=conflicts)
-    return {'written': written, 'unchanged': unchanged, 'conflicts': conflicts, 'errors': errors}
+    if errored:
+        logger.warning('region_box_edit_errors', writer=writer_id, errors=len(errored))
+    if pending:
+        logger.warning('region_box_edit_conflicts_dropped', writer=writer_id, items=len(pending))
+    not_written = errored.union(pending)
+    return {
+        'items_written': items_written,
+        'boxes_changed': sum(n for crop_id, n in changed.items() if crop_id not in not_written),
+        'items_unchanged': len(unchanged),
+        'items_conflicted': len(pending),
+        'items_errored': len(errored),
+    }
 
 
 def with_cluster(cluster_id: int, distance: float | None, *, only_states: Sequence[str]) -> BoxEdit:

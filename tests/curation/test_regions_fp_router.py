@@ -113,7 +113,7 @@ def _save_centroid(vector: tuple[float, float, float], trained_at: str = 'T1') -
 
     FalsePositiveCentroidStore().save(
         np.asarray([_vec(*vector)], dtype=np.float32),
-        {'trained_at': trained_at, 'k': 1, 'n_members': 1, 'subids': [f'{FP}a'], 'dim': 3},
+        {'trained_at': trained_at, 'k': 1, 'n_boxes': 1, 'subids': [f'{FP}a'], 'dim': 3},
     )
 
 

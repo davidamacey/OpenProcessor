@@ -126,7 +126,10 @@ async def test_partition_writes_the_cluster_onto_each_box_of_an_item() -> None:
     result = await rbc.cluster_region_residuals(os_)
 
     assert result['status'] == 'success'
-    assert result['n_regions'] == 42
+    assert result['n_boxes'] == 42
+    # Counts name their unit: 42 boxes live in 41 items.
+    assert result['n_boxes_changed'] == 42
+    assert result['n_items_written'] == 41
     two = _boxes(os_, 'two')
     assert two['b1'].cluster_id is not None
     assert two['b2'].cluster_id is not None
@@ -149,7 +152,7 @@ async def test_partition_never_reshuffles_false_positive_boxes_or_uses_their_vec
 
     result = await rbc.cluster_region_residuals(os_)
 
-    assert result['n_regions'] == 41  # the FP box is not a row
+    assert result['n_boxes'] == 41  # the FP box is not a row
     mixed = _boxes(os_, 'mixed')
     assert mixed['b2'].cluster_id == FP
     assert mixed['b2'].cluster_distance == 0.0
@@ -166,7 +169,7 @@ async def test_partition_skips_a_box_whose_vector_is_stale() -> None:
 
     result = await rbc.cluster_region_residuals(os_)
 
-    assert result['n_regions'] == 40
+    assert result['n_boxes'] == 40
     assert _boxes(os_, 'stale')['b1'].cluster_id is None
 
 
@@ -296,10 +299,53 @@ async def test_write_box_edits_applies_only_the_named_boxes() -> None:
         respect_human=True,
     )
 
-    assert result['written'] == 1
+    assert result['items_written'] == 1
+    assert result['boxes_changed'] == 1
     boxes = _boxes(os_, 'x')
     assert boxes['b1'].cluster_id is None
     assert boxes['b2'].cluster_id == 3
+
+
+async def test_write_box_edits_counts_boxes_and_items_separately() -> None:
+    docs = {
+        'x': _item('x', [(_box('b1'), A), (_box('b2', x=0.5), B)]),
+        'y': _item('y', [(_box('b1'), A)]),
+        'z': _item('z', [(_box('b1', cluster_id=3), A)]),
+    }
+    os_ = _OS({INDEX: docs})
+
+    def to_three(box: RegionBox) -> RegionBox:
+        return dataclasses.replace(box, cluster_id=3)
+
+    result = await write_box_edits(
+        os_,
+        index=INDEX,
+        edits={
+            'x': {'b1': to_three, 'b2': to_three},
+            'y': {'b1': to_three},
+            'z': {'b1': to_three},
+        },
+        respect_human=True,
+    )
+
+    assert result == {
+        'items_written': 2,
+        'boxes_changed': 3,
+        'items_unchanged': 1,
+        'items_conflicted': 0,
+        'items_errored': 0,
+    }
+
+
+async def test_partition_rerun_reports_no_boxes_changed_not_none_assigned() -> None:
+    os_ = _OS({INDEX: _bulk_items()})
+    first = await rbc.cluster_region_residuals(os_)
+    again = await rbc.cluster_region_residuals(os_)
+
+    assert first['n_boxes_changed'] == first['n_boxes'] == 40
+    assert again['n_boxes'] == 40
+    assert again['n_boxes_changed'] == 0
+    assert again['n_items_written'] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -319,13 +365,28 @@ def _bucket_items() -> dict[str, dict[str, Any]]:
     return docs
 
 
+async def test_refine_counts_boxes_when_an_item_has_two_in_the_bucket() -> None:
+    docs = _bucket_items()
+    docs['pair'] = _item(
+        'pair',
+        [(_box('b1', cluster_id=5), A), (_box('b2', x=0.5, cluster_id=5), B)],
+    )
+    os_ = _OS({INDEX: docs})
+
+    result = await rbc.refine_region_cluster(os_, 5)
+
+    assert result['n_boxes'] == 9  # 9 boxes in 8 items
+    assert result['n_boxes_updated'] == 9
+    assert 'n_members' not in result
+
+
 async def test_refine_splits_a_bucket_into_sub_clusters_on_the_boxes() -> None:
     os_ = _OS({INDEX: _bucket_items()})
 
     result = await rbc.refine_region_cluster(os_, 5)
 
     assert result['action'] == 'refined'
-    assert result['n_members'] == 7
+    assert result['n_boxes'] == 7
     assert result['n_subclusters'] == 2
     a = {_boxes(os_, f'a{i}')['b1'].cluster_subid for i in range(3)} | {
         _boxes(os_, 'mix')['b1'].cluster_subid
@@ -396,7 +457,7 @@ async def test_fp_centroids_are_sub_typed_from_fp_boxes_only(fp_store_dir: Any) 
     result = await rbc.build_region_fp_centroids(os_)
 
     assert result['status'] == 'success'
-    assert result['n_members'] == 2  # the two FP boxes; the good boxes don't count
+    assert result['n_boxes'] == 2  # the two FP boxes; the good boxes don't count
     assert result['k'] == 1
     store = FalsePositiveCentroidStore()
     assert store.load()
@@ -414,7 +475,7 @@ async def test_fp_centroids_without_fp_boxes_is_a_noop(fp_store_dir: Any) -> Non
 
     result = await rbc.build_region_fp_centroids(os_)
 
-    assert result == {'status': 'skipped', 'reason': 'no_fp_embeddings', 'n_members': 0}
+    assert result == {'status': 'skipped', 'reason': 'no_fp_embeddings', 'n_boxes': 0}
 
 
 def _save_centroid(fp_store_dir: Any, vector: tuple[float, float, float]) -> None:
@@ -422,7 +483,7 @@ def _save_centroid(fp_store_dir: Any, vector: tuple[float, float, float]) -> Non
 
     FalsePositiveCentroidStore().save(
         np.asarray([_vec(*vector)], dtype=np.float32),
-        {'trained_at': 't', 'k': 1, 'n_members': 1, 'subids': [f'{FP}a'], 'dim': 3},
+        {'trained_at': 't', 'k': 1, 'n_boxes': 1, 'subids': [f'{FP}a'], 'dim': 3},
     )
 
 
@@ -442,7 +503,7 @@ async def test_auto_pull_flips_the_matching_box_and_rederives_the_item(
 
     result = await rbc.auto_assign_fp_from_centroids(os_, threshold=0.2)
 
-    assert result['n_moved'] == 2
+    assert result['n_boxes_moved'] == 2
     only = os_.docs(INDEX)['only']
     box = _boxes(os_, 'only')['b1']
     assert box.state == 'false_positive'
