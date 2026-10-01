@@ -82,6 +82,7 @@ from src.services.labeling.vlm_client import (
     extract_message_content,
     extract_reasoning_content,
     post_chat_with_retry,
+    record_chat_exchange,
 )
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
@@ -791,10 +792,18 @@ class VlmLabeler:
         ``egress_check`` (the factory's) runs first and raises to refuse the
         send: a host's DNS can change after the endpoint was validated."""
 
-        if self._egress_check is not None:
-            self._egress_check()
-        url = f'{self.base_url}/chat/completions'
-        return await post_chat_with_retry(self._client, url, self._headers, payload, self._bucket)
+        try:
+            if self._egress_check is not None:
+                self._egress_check()
+            url = f'{self.base_url}/chat/completions'
+            response = await post_chat_with_retry(
+                self._client, url, self._headers, payload, self._bucket
+            )
+        except Exception as exc:
+            record_chat_exchange(payload, None, f'{type(exc).__name__}: {exc}')
+            raise
+        record_chat_exchange(payload, response)
+        return response
 
     # ----- public API -----
 

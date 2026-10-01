@@ -22,8 +22,10 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from tenacity import (
@@ -36,6 +38,9 @@ from tenacity import (
 
 from src.core.logging import get_logger
 
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 logger = get_logger(__name__)
 
@@ -200,6 +205,42 @@ _RETRYABLE_HTTPX_EXCEPTIONS: tuple[type[Exception], ...] = (
     httpx.ReadTimeout,
     httpx.ConnectTimeout,
 )
+
+
+@dataclass(frozen=True)
+class ChatExchange:
+    """One upstream ``/chat/completions`` call as it was sent and answered.
+    ``response`` is ``None`` (and ``error`` set) when the call failed."""
+
+    payload: dict[str, Any]
+    response: dict[str, Any] | None
+    error: str | None = None
+
+
+# Set only by ``capture_chat`` (the test-on-crop probe): the labeler records
+# every exchange of the production call it is running, so the probe reports
+# the prompt and raw reply of the very call that was parsed.
+_CHAT_CAPTURE: ContextVar[list[ChatExchange] | None] = ContextVar('vlm_chat_capture', default=None)
+
+
+@contextmanager
+def capture_chat() -> Iterator[list[ChatExchange]]:
+    """Record every chat exchange made by this task (and tasks it spawns)."""
+    exchanges: list[ChatExchange] = []
+    token = _CHAT_CAPTURE.set(exchanges)
+    try:
+        yield exchanges
+    finally:
+        _CHAT_CAPTURE.reset(token)
+
+
+def record_chat_exchange(
+    payload: dict[str, Any], response: dict[str, Any] | None, error: str | None = None
+) -> None:
+    """Append to the active :func:`capture_chat` list, if any."""
+    exchanges = _CHAT_CAPTURE.get()
+    if exchanges is not None:
+        exchanges.append(ChatExchange(payload=payload, response=response, error=error))
 
 
 async def post_chat_with_retry(
