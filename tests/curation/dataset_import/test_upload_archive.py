@@ -268,4 +268,5 @@ def test_sweep_removes_only_expired_unreferenced_uploads(tmp_path: Path, monkeyp
         os.utime(root / name, (old, old))
     removed = sweep_uploads(tmp_path, referenced={'old_ref'})
     assert removed == ['old_unref']
-    assert sorted(p.name for p in root.iterdir()) == ['fresh', 'old_ref']
+    assert sorted(p.name for p in root.iterdir() if p.name != '.project') == ['fresh', 'old_ref']
+    assert (root / '.project').read_text() == 'default'  # the sweep stamps a dir it cleans
