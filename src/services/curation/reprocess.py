@@ -239,6 +239,18 @@ async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest)
     plan = ReprocessPlan(kind=kind, results=[])
     if any(s in IMAGE_SCOPES for s in scopes):
         plan.image_ids, plan.not_found_crops = await resolve_image_ids(opensearch, request, kind)
+        if (
+            'detect' in scopes
+            and len(plan.image_ids) > reprocess_sync_max()
+            and ('region' in scopes or 'vlm' in scopes)
+        ):
+            # Above the sync limit detect runs in a background job while
+            # region and vlm flip immediately, which would reorder them
+            # ahead of the detect they are documented to follow.
+            raise ReprocessTargetsError(
+                f'detect over more than {reprocess_sync_max()} images runs as a background '
+                'job; run region and vlm as a separate request once it finishes'
+            )
     for scope in scopes:
         if scope == 'region':
             plan.results.append((await _plan_region(opensearch, request, kind))[0])
