@@ -11,6 +11,7 @@ from src.config.curation import get_curation_config
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import ValidationIssue, ValidationReport, api_error
 from src.services.curation.dataset_import.store import now_iso
+from src.services.curation.job_lock import exclusive_start_lock
 from src.services.projects import lifecycle
 from src.services.projects.combine import store as job_store
 from src.services.projects.combine.execute import load_plan, persist_plan, run_combine
@@ -29,7 +30,7 @@ from src.services.projects.combine.plan import (
     resolve_sources,
     source_state,
 )
-from src.services.projects.registry import get_project_registry, get_record_with_seq
+from src.services.projects.registry import get_record_with_seq
 
 
 if TYPE_CHECKING:
@@ -198,10 +199,7 @@ def job_state(job_id: str) -> dict[str, Any]:
     store = job_store.open_job(job_id)
     if store is None:
         raise api_error(404, 'combine_not_found', f"no combine job '{job_id}'")
-    state = store.job.read()
-    live = store.job.is_live(job_store.ACTIVE_STATUSES)
-    if state.get('status') in job_store.ACTIVE_STATUSES and not live:
-        state = {**state, 'status': 'interrupted'}
+    state = store.job.repair_if_stale(job_store.ACTIVE_STATUSES, error_prefix='combine')
     return {'job_id': job_id, **state}
 
 
@@ -216,29 +214,41 @@ def cancel(job_id: str) -> dict[str, Any]:
 
 
 async def resume(client: Any, job_id: str) -> dict[str, Any]:
+    """Resume an interrupted or cancelled combine. One worker per job: the
+    claim (the ``queued`` write) is made under the job's start lock, and the
+    sources go through the same :func:`resolve_sources` gate as a start."""
     store = job_store.open_job(job_id)
     if store is None:
         raise api_error(404, 'combine_not_found', f"no combine job '{job_id}'")
-    state = job_state(job_id)
-    if state.get('status') not in job_store.RESUMABLE_STATUSES:
-        raise api_error(
-            409,
-            'combine_not_resumable',
-            f'the job is {state.get("status")}; only an interrupted or cancelled combine resumes',
-        )
-    plan = load_plan(store)
-    registry = get_project_registry()
-    await registry.ensure_fresh()
-    sources = [registry.get(s.project) for s in plan.request.sources]
-    missing = [s.project for s, r in zip(plan.request.sources, sources, strict=True) if r is None]
-    if missing:
-        raise api_error(409, 'combine_not_resumable', f'sources are gone: {missing}')
-    target, _seq, _term = await get_record_with_seq(client, state['target'])
-    if target is None or target.status != 'building':
-        raise api_error(409, 'combine_not_resumable', 'the target project is no longer building')
-    store.job.clear_signals()
-    store.job.update(status='queued', error=None, finished_at=None)
-    _spawn(client, store, [r for r in sources if r is not None], target)
+    with exclusive_start_lock(store.directory / 'start.lock') as acquired:
+        if not acquired:
+            raise api_error(409, 'combine_not_resumable', 'the job is already being resumed')
+        state = job_state(job_id)
+        if state.get('status') not in job_store.RESUMABLE_STATUSES:
+            raise api_error(
+                409,
+                'combine_not_resumable',
+                f'the job is {state.get("status")}; only an interrupted or cancelled combine '
+                'resumes',
+            )
+        plan = load_plan(store)
+        sources, errors = await resolve_sources(plan.request, ignore_job=job_id)
+        if errors:
+            raise api_error(
+                409,
+                'combine_not_resumable',
+                'a source can no longer be combined',
+                report=report_of(errors),
+            )
+        target, _seq, _term = await get_record_with_seq(client, state['target'])
+        if target is None or target.status != 'building':
+            raise api_error(
+                409, 'combine_not_resumable', 'the target project is no longer building'
+            )
+        store.job.clear_signals()
+        store.job.update(status='queued', error=None, finished_at=None)
+        store.job.touch_heartbeat()
+    _spawn(client, store, sources, target)
     return job_state(job_id)
 
 

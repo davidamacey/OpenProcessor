@@ -8,6 +8,7 @@ preview`` and the job's persisted plan, so the two cannot disagree.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -84,10 +85,12 @@ class Analysis:
 
 
 async def resolve_sources(
-    request: CombineRequest,
+    request: CombineRequest, *, ignore_job: str | None = None
 ) -> tuple[list[ProjectRecord], list[CombineIssue]]:
     """The source records, plus every environment error (unknown, not ready,
-    busy, duplicated, too many, or the target slug itself)."""
+    busy, duplicated, too many, or the target slug itself). Preview, start
+    and resume all gate on this one function; ``ignore_job`` is the combine
+    job being resumed, which is not "busy" with itself."""
     from src.services.projects import busy
     from src.services.projects.registry import get_project_registry
 
@@ -124,7 +127,11 @@ async def resolve_sources(
                     message=f"'{slug}' is {record.status}",
                 )
             )
-        elif jobs := busy.running_jobs(record):
+        elif jobs := [
+            j
+            for j in busy.running_jobs(record)
+            if not (j.kind == 'combine' and j.job_id == ignore_job)
+        ]:
             errors.append(
                 CombineIssue(
                     code='source_busy',
@@ -316,7 +323,9 @@ async def analyze(client: Any, request: CombineRequest, records: list[ProjectRec
     registry_names = {r.slug: {c.class_name for c in class_names_registry(r)} for r in records}
     mapping = resolve_combine_mapping(request, class_counts, registry_names)
     duplicates = (
-        find_duplicates(prints) if request.dedup == 'content_hash' and not mapping.errors else {}
+        await asyncio.to_thread(find_duplicates, prints)
+        if request.dedup == 'content_hash' and not mapping.errors
+        else {}
     )
     if duplicates and not mapping.errors:
         merged, conflicts, samples = await _dedup_stats(
