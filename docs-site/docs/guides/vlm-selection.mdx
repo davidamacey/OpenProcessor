@@ -1,0 +1,316 @@
+---
+sidebar_position: 6
+title: VLM selection
+---
+
+# VLM selection
+
+The vision-language model (VLM) that verifies regions, reads text and
+proposes labels is a runtime choice. Endpoints are registered once for the
+whole deployment, and each project activates one of them. Any
+OpenAI-compatible `/v1/chat/completions` server with vision input works:
+a vLLM container in the stack, a server on the host, a server elsewhere on
+the network, or a hosted API.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Concepts
+
+- **Endpoint.** A named, versioned record: `base_url`, `model` and request
+  limits. The API key is never stored. An endpoint only holds
+  `api_key_ref`, a pointer to where the key lives.
+- **Built-in `env` endpoint.** Built from `OP_VLM_URL`, `OP_VLM_MODEL` and
+  `OP_VLM_API_KEY`. It is read-only. It is the default a new project runs.
+  Clone it to get an editable copy.
+- **Key references.** `secret:<slug>` names a file `<slug>` in the secrets
+  directory (`OP_VLM_SECRETS_DIR`, a read-only mount of `secrets/vlm`). The
+  reference `env:OP_VLM_API_KEY` is valid only on the built-in endpoint.
+  Write a secret with `openprocessor vlm key set <slug>`, never through the
+  API.
+- **Locality.** The API classifies where `base_url` points: `compose`,
+  `host`, `private`, `external` or `unknown`. An unresolvable host counts as
+  external. Endpoints outside the deployment send crops to a third party.
+- **External policy.** `OP_VLM_EXTERNAL_POLICY` is `ack` (default) or
+  `deny`. With `ack`, an external endpoint needs `allow_external: true` when
+  registered and `acknowledge_external: true` when activated. With `deny`
+  it is refused outright.
+- **URL policy.** Some addresses are always refused: this stack's own
+  non-VLM services, link-local and cloud-metadata addresses. Neither flag
+  bypasses this.
+- **Probe.** A test call with synthetic images. It records whether the
+  model is listed, vision works, JSON mode works, the multi-image limit
+  holds, and the context length.
+- **Local catalog.** A list of models the in-compose vLLM can serve, with
+  VRAM needs and a `fits` flag for the GPU. It is shipped in
+  `examples/vlm/catalog.tsv`.
+- **Activation axis.** The active VLM is one of three activation axes
+  (`prompt_pack`, `detection_profile`, `vlm`). Activation passes a gate that
+  checks the VLM against the active pack and profile.
+
+## Routes
+
+Global registry (not project scoped):
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/vlm/endpoints` | List endpoints, usage, policy and secret refs |
+| `POST /curation/vlm/endpoints` | Register an endpoint |
+| `GET /curation/vlm/endpoints/schema` | Field specs for a form |
+| `POST /curation/vlm/endpoints/validate` | Validate a draft without saving |
+| `GET /curation/vlm/endpoints/{name}` | One endpoint with its last probe |
+| `PUT /curation/vlm/endpoints/{name}` | Save a new revision |
+| `DELETE /curation/vlm/endpoints/{name}` | Delete (refused while in use) |
+| `POST /curation/vlm/endpoints/{name}/clone` | Copy to a new name |
+| `POST /curation/vlm/endpoints/{name}/probe` | Probe and record the result |
+| `GET /curation/vlm/endpoints/{name}/revisions` | Revision history |
+| `GET /curation/vlm/endpoints/{name}/revisions/{revision}` | One past revision |
+| `GET /curation/vlm/catalog` | Local catalog with `fits`, `serving`, `desired` |
+| `GET /curation/vlm/local` | Local VLM status |
+| `POST /curation/vlm/local/select` | Record the desired local model |
+| `DELETE /curation/vlm/local/select` | Clear that request |
+
+Per project:
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects/{project}/vlm/endpoints/active` | Active endpoint and what workers applied |
+| `POST /curation/projects/{project}/vlm/endpoints/{name}/activate` | Activate |
+| `POST /curation/projects/{project}/vlm/endpoints/deactivate` | VLM off for this project |
+| `POST /curation/projects/{project}/vlm/endpoints/active/rollback` | Back to the previous endpoint |
+
+## Register an endpoint
+
+Draft first. `validate` never writes and always answers 200. With
+`probe=true` it also contacts the endpoint.
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints/validate?probe=true" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "body": {
+          "base_url": "http://host.docker.internal:8012/v1",
+          "model": "my-vision-model",
+          "api_key_ref": "secret:my_server",
+          "max_images_per_call": 8,
+          "open_images_per_call": 3,
+          "timeout_s": 240,
+          "requests_per_second": 500,
+          "json_mode": "auto",
+          "allow_external": false,
+          "catalog_id": null
+        }
+      }'
+```
+
+The response has `validation` (`ok`, `errors`, `warnings`,
+`force_allowed`), `locality`, `sends_images_externally` and `probe`.
+
+Body fields:
+
+| Field | Default | Notes |
+|---|---|---|
+| `base_url` | required | http or https, no credentials, query or fragment in the URL |
+| `model` | required | Model id the server expects |
+| `api_key_ref` | null | `secret:<slug>` (slug is 1 to 64 of `a-z0-9_`) |
+| `max_images_per_call` | 8 | 1 to 64. Must not exceed the server's own per-prompt image limit |
+| `open_images_per_call` | 3 | 1 to 64. Chunk size for open-vocabulary labeling, clamped to the cap |
+| `timeout_s` | 240 | 5 to 900 |
+| `requests_per_second` | 500 | 0.1 to 10000 |
+| `json_mode` | `auto` | `auto`, `on` or `off` |
+| `allow_external` | false | Required for endpoints outside the deployment |
+| `catalog_id` | null | Links the endpoint to a local catalog entry |
+
+Names match `^[a-z0-9][a-z0-9_.-]{1,63}$`. These are reserved: `env`,
+`off`, `none`, `default`, `local`, `active`, `schema`, `validate`,
+`deactivate`. A name starting with an underscore is also reserved.
+
+Register it:
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "name": "host-vlm",
+        "description": "vLLM on the host",
+        "body": {"base_url": "http://host.docker.internal:8012/v1", "model": "my-vision-model"}
+      }'
+```
+
+The answer is 201 with the endpoint document: `body`, `revision`, `etag`,
+`locality`, `sends_images_externally`, `warning`, `last_probe`,
+`validation`, `active_in` (projects running it).
+
+Edit with the revision you read. This creates a new revision and changes
+nothing a project runs until it is activated again:
+
+```bash
+curl -s -X PUT "$API/curation/vlm/endpoints/host-vlm" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 1, "description": "vLLM on the host",
+       "body": {"base_url": "http://host.docker.internal:8012/v1",
+                "model": "my-vision-model", "max_images_per_call": 4}}'
+```
+
+Clone, list revisions, and delete:
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints/env/clone" \
+  -H 'Content-Type: application/json' -d '{"new_name": "env-copy"}'
+curl -s "$API/curation/vlm/endpoints/host-vlm/revisions"
+curl -s -X DELETE "$API/curation/vlm/endpoints/host-vlm?expected_revision=2"
+```
+
+Clone accepts an optional `revision` and `description`. Cloning the
+built-in endpoint drops its `env:OP_VLM_API_KEY` reference so a copy cannot
+send the deployment key elsewhere.
+
+## Probe
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints/host-vlm/probe"
+```
+
+The response has `ok`, `latency_ms`, `model_listed`, `models_listed`,
+`root`, `max_model_len`, `vision_ok`, `json_mode_supported`,
+`reasoning_channel`, `max_images_ok`, `image_tokens` and `issues`. The
+result is stored with the endpoint and does not change its revision. At
+most a few probes run at once; extra calls get 429 `probe_busy`.
+
+## Activate for a project
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/vlm/endpoints/host-vlm/activate" \
+  -H 'Content-Type: application/json' \
+  -d '{"revision": null, "acknowledge_external": false, "force": false, "expected_active": null}'
+```
+
+`revision` null means the latest. `expected_active` is `{"name": ..., "revision": ...}`
+and makes the call fail with 409 if the project's active endpoint changed in
+the meantime. `force` bypasses errors the gate marks as bypassable, such as
+an endpoint that has not been probed. The response (also returned by the
+other activation calls) has:
+
+| Field | Content |
+|---|---|
+| `active` | `{name, revision}`; name null means off |
+| `source` | `stored`, `env` or `off` |
+| `previous` | The endpoint a rollback would return to |
+| `activated_at`, `config_revision` | When, and the config revision |
+| `applied` | One entry per worker: which pack, profile and VLM it runs, and `lagging` |
+| `validation` | The gate report |
+
+Workers swap to a newly activated endpoint at a quiet point, so `applied`
+can lag briefly.
+
+```bash
+curl -s "$API/curation/projects/cars/vlm/endpoints/active"
+
+curl -s -X POST "$API/curation/projects/cars/vlm/endpoints/deactivate" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+
+curl -s -X POST "$API/curation/projects/cars/vlm/endpoints/active/rollback" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+```
+
+Several labeling routes (`POST /curation/projects/{project}/vlm/label_batch`,
+`POST /curation/projects/{project}/pipeline/auto_label` and others) accept
+a per-run `vlm` query parameter, a name or `name@revision`. It overrides
+the project default for that run only and is never stored.
+
+## Local models
+
+When the stack runs its own vLLM container, the catalog lists what it can
+serve.
+
+```bash
+curl -s "$API/curation/vlm/catalog"
+curl -s "$API/curation/vlm/local"
+```
+
+Each catalog entry has `id`, `hf_repo`, `license`, `gated`, `vram_gb`,
+`context_max`, `max_images`, `status` (`tested` or `to_verify`), `fits`,
+`serving` and `desired`. The `local` block has `configured`, `endpoint`,
+`served`, `desired`, `restart_required`, `can_restart_from_api` and
+`gpu_total_gb`.
+
+The API cannot restart containers. Selecting a model records the request;
+the host applies it:
+
+```bash
+curl -s -X POST "$API/curation/vlm/local/select" \
+  -H 'Content-Type: application/json' \
+  -d '{"catalog_id": "<id from the catalog>", "force": false}'
+```
+
+The answer is 202 with `restart_required: true` and `desired.command`.
+Then run the command on the host (see the CLI below). Clear the request with
+`DELETE /curation/vlm/local/select`.
+
+## CLI
+
+Run in the install directory (`./openprocessor`), or in a checkout as
+`./scripts/openprocessor.sh`.
+
+| Command | Action |
+|---|---|
+| `openprocessor vlm list` | Print the catalog: id, licence, VRAM, status |
+| `openprocessor vlm status` | Show the model in `.env`, the endpoint, what is served now and what is desired |
+| `openprocessor vlm use <id> [--force] [--yes]` | Switch the in-compose VLM to a catalog entry |
+| `openprocessor vlm apply [--force] [--yes]` | Apply the model requested through the API |
+| `openprocessor vlm probe` | Probe the local endpoint named by `OP_LOCAL_VLM_ENDPOINT` |
+| `openprocessor vlm key set <slug>` | Read a key from the terminal into `secrets/vlm/<slug>` (mode 600) |
+
+`vlm use` checks that the model fits the GPU (override with `--force`),
+that a gated model's Hugging Face token can see it, and that no training
+run holds the GPUs. It pauses the workers, rewrites `.env` after saving a
+backup, recreates the vlm container, waits until the new model is served,
+probes the endpoint, clears the desired request and unpauses. On any
+failure it restores the previous `.env` and container. `--yes` skips the
+confirmation prompt. Both commands need `OP_LOCAL_VLM_ENDPOINT` to be set,
+which the installer does when it sets up an in-compose VLM.
+
+`vlm key set` needs a terminal. The slug matches `[a-z0-9][a-z0-9_-]{0,63}`
+and the endpoint refers to it as `secret:<slug>`.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 404 | `not_found` | Unknown endpoint name |
+| 404 | `unknown_revision` | The endpoint has no such revision |
+| 403 | `read_only` | Edit or delete of the built-in `env` endpoint |
+| 409 | `name_conflict` | Name already used |
+| 409 | `revision_conflict` | `expected_revision` is stale |
+| 409 | `in_use` | Delete while a project runs it; `projects` lists them |
+| 409 | `active_conflict` | Another writer activated first; `current` is returned |
+| 409 | `no_previous`, `previous_deleted` | Nothing to roll back to |
+| 409 | `no_local_vlm` | Local select on a stack without an in-compose VLM |
+| 422 | `validation_failed` | Blocking validation errors; `report` lists them |
+| 422 | `vlm_external_not_acknowledged` | External endpoint without acknowledgement; `activate_via` says where to give it |
+| 422 | `unknown_catalog_id` | Not in the catalog; `valid_ids` is returned |
+| 422 | `vlm_catalog_does_not_fit` | Model needs more VRAM than the card has |
+| 429 | `probe_busy` | Too many probes running |
+
+Validation issue codes start with `vlm_`. Examples: `vlm_url_invalid`,
+`vlm_url_denied_internal_service`, `vlm_url_denied_address`,
+`vlm_api_key_unresolved`, `vlm_external_denied`, `vlm_unreachable`,
+`vlm_timeout`, `vlm_auth_failed`, `vlm_model_not_listed`, `vlm_no_vision`,
+`vlm_json_mode_unsupported`, `vlm_max_images_exceeds_server`,
+`vlm_not_probed`, `vlm_context_too_small`, `vlm_multi_box_unverified` and
+`vlm_reads_text_unverified`.
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the endpoint registry with locality and
+probe status, the external-images warning and acknowledgement, and the
+local model catalog with fit indicators).
+:::
+
+## See also
+
+- [Prompt packs](./prompt-packs.mdx)
+- [Region profiles](./region-profiles.mdx)
+- [Multi-box regions](./multi-box-regions.mdx)
+- [Settings and configuration](./settings-and-config.mdx)
+- [Use your own domain](./use-your-own-domain.mdx)

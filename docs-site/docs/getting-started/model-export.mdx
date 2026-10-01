@@ -107,9 +107,10 @@ It then restarts Triton; restart `yolo-api` afterwards. If the TensorRT
 build fails on PE's attention-pool ops, run `make pe-build-ort` to serve
 the image ONNX through Triton's ONNX Runtime backend instead.
 `make pe-text-status` (`GET /health/pe_text`) shows which text backend
-the API is using: with `OP_PE_TEXT_BACKEND=auto` it prefers Triton's
-shared CPU instance and falls back to a lazily loaded in-process PyTorch
-encoder.
+the API is using: with `OP_PE_TEXT_BACKEND=auto` it uses an in-process
+ONNX Runtime session when `OP_PE_TEXT_ONNX_PATH` exists, else Triton's
+shared CPU instance if it is ready, else a lazily loaded in-process
+PyTorch encoder.
 
 ## Your own models
 
@@ -121,7 +122,9 @@ encoder.
 | `POST /models/upload`, `POST /models/{name}/export` | Upload and export through the API instead of the CLI |
 
 A training run you promote from the curation subsystem is written into
-the model repository and loaded for you; see
+the model repository and loaded for you. The model is named for the
+project that trained it (`{slug}__<name>`; `default` has no prefix), and
+other projects can use it only after it is shared; see
 [Training, bake-off and promote](../operations/training-and-promote.mdx).
 Weight licenses differ per model; read [Licenses](../reference/licenses.mdx)
 before any commercial use.

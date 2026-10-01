@@ -18,18 +18,47 @@ Optional API authentication is on the [Roadmap](/roadmap).
 ## Routes that are dangerous without access control
 
 - `DELETE /query/image/{id}` deletes indexed data with no confirmation.
-- `DELETE /curation/models/{model_name}` unloads a promoted model from
-  Triton.
+- `DELETE /curation/projects/{project}/models/{model_name}` unloads a
+  promoted model from Triton and removes it.
+- `DELETE /curation/projects/{project}` deletes a project's indexes and
+  files. It needs `?confirm=<slug>` and is refused for the `default` project,
+  but there is no authentication behind it.
+- `POST /curation/vlm/endpoints` registers a URL the API will send images
+  to; see [VLM endpoints](#vlm-endpoints-and-server-side-requests).
 - `POST /ingest/directory` reads an arbitrary server-side path: anyone who
   can reach it can make the server read any path it has access to.
 - The curation surface adds well over a hundred routes, dozens of them
   writes, under the same no-authentication model.
 
-Curation's own path-taking routes are narrower. Batch ingest and label
-import resolve image and label paths only under the configured source
-roots (`OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`, the upload root) and
-fail anything else as `unservable_path`; `/curation/images/*` rejects path
-traversal and root escapes with a `400`.
+Curation's own path-taking routes are narrower. Batch ingest and dataset
+import resolve image and dataset paths only under the configured source
+roots (`OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`, the project's upload
+root) and fail anything else as `unservable_path` or
+`dataset_path_not_allowed`; the `images` routes reject path traversal and
+root escapes with a `400`. Dataset archive uploads are extracted with
+member-count, size and compression-ratio caps and every extracted path is
+checked after symlink resolution.
+
+## Projects are not a security boundary
+
+Projects keep datasets apart so one project's queries and writes can't
+reach another's indexes (the OpenSearch client refuses a request that names
+an index outside the bound project). They do not add access control: anyone
+who can reach the API can read, write and delete any project.
+
+## VLM endpoints and server-side requests
+
+Anyone who can reach the API can register a VLM endpoint URL and make the
+API send requests to it. Endpoint URLs are checked before use: this stack's
+own services, link-local and cloud-metadata addresses, and anything that
+resolves to them are refused, redirects are never followed, and keys are
+only ever references (`secret:<slug>`) to files in `./secrets/vlm`, written
+on the host with `openprocessor vlm key set <slug>`. An endpoint outside
+this deployment needs an explicit acknowledgement; set
+`OP_VLM_EXTERNAL_POLICY=deny` to refuse them outright (for air-gapped or
+regulated deployments). A URL that resolves to another host on your private
+network is still a valid endpoint, so put the API behind your own network
+controls. `SECURITY.md` in the repository describes the residual risk.
 
 ## LAN access from the one-line installer
 

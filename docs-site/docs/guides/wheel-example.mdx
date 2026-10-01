@@ -1,0 +1,175 @@
+---
+sidebar_position: 4
+title: "Worked example: wheels on cars"
+---
+
+# Worked example: wheels on cars
+
+A complete public example of the whole pipeline. The primary detector finds
+cars in public photos. The region stage then finds the wheels on each car,
+each wheel on its own. Everything it needs ships in the repository, and the
+photos come from COCO (CC BY).
+
+COCO has no wheel labels. The output is machine-proposed wheel boxes that a
+person reviews. That is the point of the example.
+
+## What each file does
+
+| File | Role |
+|---|---|
+| `examples/region_profiles/vehicle_wheel.json` | Region profile. The segmenter is prompted with `wheel` inside each item whose class name is `car` (`parent_classes`). `detector_model` is empty, so there is no detector leg until you train and promote one. `max_regions_per_item` is 4 and `text_reader` is `none` (a text-free region). `region_class_name` is `wheel`, and the display names are `Wheels` and `Wheel`. `auto_confirm_area_frac` is `[0.005, 0.5]`, and the text hint is off |
+| `examples/prompt_packs/vehicle_wheel.json` | Prompt pack. It asks the VLM to classify a car crop and to verify each numbered candidate box as a wheel (tire plus rim). Nothing in it asks the VLM to read text. It names the per-box reply keys a multi-box profile needs |
+| `examples/bakeoff/vehicle_wheel/profile.json` | Bake-off profile, for comparing wheel detectors you train later. `class_names` is `["wheel"]`, and the COCO car class (id 2) is the context class, so wheels are scored only inside detected cars. `triton_model` is empty: set it to your promoted wheel detector |
+| `scripts/examples/wheel_example_live.py` | A runnable walk through the steps below against a live stack |
+| `tests/integration/test_wheel_example_e2e.py` | The same walk offline, with fakes at the OpenSearch, Triton, segmenter and VLM boundaries |
+| `Makefile` target `sample-coco-cars` | Fetches the 60 car photos |
+
+The profile selects items by class **name**. `parent_classes` (`car`)
+matches an item's `class_name`, or the detector's own label
+(`proposal_name`). A raw class index is never used.
+
+## Prerequisites
+
+- The core stack and the `curation` workers are up, the PE encoders are
+  built, and the primary detector is loaded in Triton. A stock COCO YOLO is
+  enough. See [Quick start](../getting-started/quick-start.mdx).
+- The segmenter service is running (`OP_SEGMENTER_URL`).
+- A VLM endpoint is registered and activated for the project, unless you
+  accept the segmenter's boxes unverified. See
+  [VLM selection](./vlm-selection.mdx). Without an active endpoint the boxes
+  stay unverified.
+- The image folder is mounted read-only at the same path in `yolo-api` and
+  in the detection worker. By default `OP_SOURCE_ROOT_HOST` (default
+  `./data/source`) is mounted at `/data/source`. If only the API has the
+  mount, ingest succeeds but every later worker read fails.
+
+## Run it with the script
+
+```bash
+make sample-coco-cars      # 60 CC BY car images into data/samples/coco_car
+.venv/bin/python scripts/examples/wheel_example_live.py \
+    --api http://localhost:4603 --project wheels \
+    --container-dir /data/source/coco_car/images
+```
+
+`--container-dir` is the image folder as the API container sees it. It must
+be reachable through `OP_SOURCE_ROOT_HOST`; for example, set
+`OP_SOURCE_ROOT_HOST=./data/samples` so that
+`data/samples/coco_car/images` appears as `/data/source/coco_car/images`.
+`--host-dir` (default `data/samples/coco_car/images`) is where the script
+lists the files on the host. Other flags: `--api-prefix` (default
+`/curation`) and `--drain-timeout` (seconds to wait for the region queue,
+default 1800).
+
+The script performs these steps, and each is also a plain HTTP call:
+
+1. Create project `wheels` and the classes `car` and `wheel`.
+2. Save the example profile and the example prompt pack under the name
+   `wheel_example` and activate both.
+3. Ingest the images in batches of 16. The primary detector proposes the
+   cars.
+4. Poll the region queue until it is drained.
+5. Export the wheel boxes, cropped to their car.
+
+## The same steps by hand
+
+```bash
+API=http://localhost:4603/curation/projects/wheels
+
+curl -s -X POST http://localhost:4603/curation/projects \
+  -H 'Content-Type: application/json' \
+  -d '{"slug": "wheels", "display_name": "Wheels"}'
+
+for name in car wheel; do
+  curl -s -X POST "$API/classes" -H 'Content-Type: application/json' \
+    -d "{\"name\": \"$name\"}"
+done
+
+BODY=$(jq '{name: "wheel_example", body: del(._comment, .name)}' \
+  examples/region_profiles/vehicle_wheel.json)
+curl -s -X POST "$API/region_profiles" -H 'Content-Type: application/json' -d "$BODY"
+curl -s -X POST "$API/region_profiles/wheel_example/activate" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+
+BODY=$(jq '{name: "wheel_example", body: del(._comment, .name)}' \
+  examples/prompt_packs/vehicle_wheel.json)
+curl -s -X POST "$API/prompt_packs" -H 'Content-Type: application/json' -d "$BODY"
+curl -s -X POST "$API/prompt_packs/wheel_example/activate" \
+  -H 'Content-Type: application/json' -d '{"expected_active": null}'
+
+curl -s -X POST "$API/ingest/batch" -H 'Content-Type: application/json' \
+  -d '{"items": [{"path": "/data/source/coco_car/images/IMAGE.jpg", "source": "coco_car"}]}'
+
+curl -s "$API/ingest/region_drain"
+
+curl -s -X POST "$API/export/single_class" -H 'Content-Type: application/json' \
+  -d '{"profile_name": "wheels", "box_source": "region", "region_class_name": "wheel",
+       "image_mode": "item_crop", "class_ids": []}'
+```
+
+The `jq` expression drops `_comment` and `name`, which are not part of the
+body. Activation fails with 422 if the pack and profile do not pair. The
+profile allows up to 4 boxes per item, so the pack must name the per-box
+reply keys; the example pack does. Run
+`POST /curation/projects/{project}/region_profiles/validate` and
+`POST /curation/projects/{project}/prompt_packs/validate` on a draft before
+saving it. The routes are described in [Region profiles](./region-profiles.mdx)
+and [Prompt packs](./prompt-packs.mdx).
+
+`GET /curation/projects/{project}/ingest/region_drain` returns `drained`,
+`pending_detection`, `pending_verification`, `total_unfinished`,
+`stable_for_s` and `stall_reason`. Repeat until `drained` is true.
+
+To try the profile on one stored crop before ingesting everything, use the
+test routes in [Test on a crop](./test-on-crop.mdx).
+
+## What you should see
+
+- Items proposed as `car` carry a `region_boxes` list of up to four wheel
+  boxes, each with its own `state`, `score` and `detector`. With a VLM, a
+  verified box is `accepted` and a wrong one `rejected`. See
+  [Multi-box regions](./multi-box-regions.mdx).
+- Wheel boxes have no text fields, since the profile is text-free.
+- The export call answers with `export_dir`, `positive_images`,
+  `split_counts` and the integrity envelope. Positives are the accepted
+  wheel boxes. Each is cropped to its car (`image_mode: item_crop`).
+  Rejected boxes are not exported. Boxes a person marked as false positives
+  become hard negatives.
+- The wheel boxes are for review. Confirm, move, add or reject them in a
+  frontend, or with the region routes, then export again.
+
+## Run the offline version
+
+The same walk runs in CI with fakes at the boundary and needs no GPU or
+stack:
+
+```bash
+.venv/bin/python -m pytest tests/integration/test_wheel_example_e2e.py -v
+```
+
+It creates the project through the lifecycle route, imports a small
+synthetic fixture, runs the region worker against the example profile and
+exports. At every step it asserts that a sibling project (`default`) is
+never touched, and that class identity is the name, never an index.
+
+## Next steps
+
+Review and correct the wheel boxes, export, and train a wheel detector.
+After promoting it, set `detector_model` in the profile to its Triton name
+to add the detector leg, and compare it with others using the bake-off
+profile. See [Use your own domain](./use-your-own-domain.mdx) and
+[Training and promote](../operations/training-and-promote.mdx).
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the wheels project review grid with
+numbered wheel boxes on a car crop).
+:::
+
+## See also
+
+- [Use your own domain](./use-your-own-domain.mdx)
+- [Region profiles](./region-profiles.mdx)
+- [Prompt packs](./prompt-packs.mdx)
+- [Multi-box regions](./multi-box-regions.mdx)

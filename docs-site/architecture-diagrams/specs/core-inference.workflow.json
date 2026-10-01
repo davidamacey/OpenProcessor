@@ -56,15 +56,15 @@
     },
     {
       "id": "faces",
-      "label": "POST /faces/*"
+      "label": "POST /faces/recognize"
     },
     {
       "id": "embed",
-      "label": "POST /embed/*"
+      "label": "POST /embed/image"
     },
     {
       "id": "ocr",
-      "label": "POST /ocr/*"
+      "label": "POST /ocr/predict"
     }
   ],
   "mainPath": [
@@ -256,7 +256,8 @@
       "title": "Runtime model control",
       "items": [
         "Triton runs in explicit model-control mode",
-        "?model_name= selects any loaded detector; POST /models/{name}/load|unload"
+        "?model_name= selects any loaded detector; POST /models/{name}/load|unload",
+        "Models a curation project promotes load the same way, as {slug}__name"
       ]
     }
   ]

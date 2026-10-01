@@ -1,0 +1,170 @@
+---
+sidebar_position: 13
+title: Test on a crop
+---
+
+# Test on a crop
+
+Before activating a prompt pack or region profile, run it against stored
+crops and read the result. Both test routes are dry runs: they write to no
+index, bump no revision and change no item. They return what the production
+code path would have produced.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Concepts
+
+- **Draft or saved.** The subject can be a saved pack or profile (by name
+  and optional revision), a draft sent in the request body, or, when neither
+  is given, the active one. Name and draft together are refused.
+- **VLM source.** A pack test and a profile test with `verify` call a VLM.
+  Use `vlm_name` (and optional `vlm_revision`), a `vlm_draft` endpoint body,
+  or neither for the project's active endpoint. A draft or saved endpoint
+  outside this deployment sends a real crop to a third party, so it needs
+  `acknowledge_external: true`. The same URL policy and secret handling as
+  [VLM selection](./vlm-selection.mdx) apply.
+- **Bounded.** At most 64 crop ids per pack test. Concurrent runs are capped
+  per process (2 VLM runs and 4 segmenter runs); an over-cap request is
+  refused at once, not queued. A run is stopped after 60 seconds.
+- **A parse failure is a result.** When the model answers but the reply does
+  not parse, the call returns 200 with `parse_ok: false`.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `POST /curation/projects/{project}/prompt_packs/test` | Run one VLM call of a pack over stored crops |
+| `POST /curation/projects/{project}/region_profiles/test` | Run a profile's detector and segmenter legs over one stored crop |
+
+## Test a prompt pack
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/prompt_packs/test" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "pack_name": "vehicle_wheel",
+        "pack_revision": null,
+        "draft": null,
+        "call": "combined",
+        "crop_ids": ["CROP_A", "CROP_B"],
+        "use_region_box": "current",
+        "class_names": null,
+        "profile_name": "vehicle_wheel",
+        "vlm_name": null,
+        "vlm_revision": null,
+        "vlm_draft": null,
+        "acknowledge_external": false
+      }'
+```
+
+`call` is one of:
+
+| `call` | What it runs |
+|---|---|
+| `classify` | Classify items into the class names |
+| `open_classify` | Classify, with a proposal for a new class when none fits |
+| `combined` | Classify and verify every stored region box in one call. Needs a region profile (the active one, or `profile_name`) |
+| `region_verify` | Verify one stored box per crop |
+| `region_visible` | Ask whether a region is visible at all (no write) |
+
+`use_region_box` applies to `combined`. `current` draws every stored box as
+the numbered overlay, and `none` sends the crop with no boxes.
+`class_names` overrides the class list; the default is the project's
+registry. `profile_name` selects the profile that gates region text
+(default: the active one).
+
+The response has:
+
+| Field | Content |
+|---|---|
+| `call`, `pack` | What ran. `pack` is `{name, revision, draft}` |
+| `vlm` | `{endpoint, model, name, revision, draft}` of the endpoint that answered |
+| `prompt` | The `system` and `user_text` that were sent |
+| `raw_reply`, `reasoning` | The model's reply and its reasoning channel when it has one |
+| `latency_ms` | Round trip time |
+| `parse_ok`, `parse_error` | Whether the production parser accepted the reply |
+| `results` | One entry per crop: `crop_id`, `box_id` (for `region_verify`), `parsed`, `preview_item`, `skipped` |
+| `validation` | The pack's validation report against the profile |
+
+`preview_item` is the item as the production write would leave it, in the
+shared item wire format. It is null for `region_visible` and for a skipped
+item. `skipped` gives the reason, for example `class_locked`.
+
+## Test a region profile
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/region_profiles/test" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "crop_id": "CROP_A",
+        "profile_name": "vehicle_wheel",
+        "profile_revision": null,
+        "draft": null,
+        "segmenter_text_prompt": "wheel, tire",
+        "verify": true,
+        "prompt_pack_name": "vehicle_wheel",
+        "prompt_pack_revision": null,
+        "prompt_pack_draft": null,
+        "vlm_name": null,
+        "acknowledge_external": false
+      }'
+```
+
+`segmenter_text_prompt` is a quick override of the profile's prompt for
+this run, validated like any prompt. With `verify` true, the combined VLM
+call also runs over the selected boxes, using the pack named by
+`prompt_pack_name`, a `prompt_pack_draft`, or the active pack.
+
+The response has:
+
+| Field | Content |
+|---|---|
+| `profile` | `{name, revision, draft}` |
+| `item_eligible` | True when the profile has no `parent_classes`, or the crop's class is one of them |
+| `legs` | One entry per leg (`detector`, `segmenter`) with `status` (`ok`, `skipped`, `error`), `reason`, `elapsed_ms` and `candidates` |
+| `preview_item` | The item as the worker would leave it |
+| `preview_basis` | `selection_accepted` (no VLM) or `vlm_verdicts` |
+| `verify` | The VLM call, when `verify` was true: prompt, reply, parse result and endpoint |
+| `validation` | The profile's validation report |
+
+Each candidate is a complete region box (`box_id` is null, since ids are
+assigned on write) with `bbox_norm`, `bbox_in_parent`, `score`,
+`detector`, `state`, text fields and `mask_polygon`. It also says what the
+selection did with it: `selected`, and a `drop_reason` of `below_min_score`,
+`nms` or `over_max`. A leg that fails is reported on that leg with status
+200. Only when no leg ran at all is the answer 502.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 404 | `crop_not_found` | A crop id the project does not have; `crop_ids` lists them |
+| 404 | `image_not_found` | The crop's image cannot be read |
+| 409 | `no_active_profile` | `combined`, or a profile test without a name or draft, and no profile is active |
+| 409 | `vlm_not_configured` | No VLM is available for the call |
+| 422 | `validation_failed` | No crop ids, or both a saved subject and a draft |
+| 422 | `too_many_crop_ids` | More than 64 crop ids; `limit` is returned |
+| 422 | `too_many_crops` | More crops than one VLM request carries |
+| 422 | `unknown_pack`, `unknown_revision`, `unknown_profile`, `unknown_vlm` | The named subject does not exist |
+| 422 | `pack_invalid`, `profile_invalid` | A draft with errors; `report` lists them |
+| 422 | `vlm_external_not_acknowledged` | External endpoint without `acknowledge_external` |
+| 422 | `no_box_to_verify` | `region_verify` on a crop with no stored box |
+| 429 | `test_busy` | All run slots are taken; retry shortly |
+| 502 | `vlm_transport_error` | The VLM endpoint failed |
+| 502 | `detector_error`, `segmenter_error` | No leg of the profile ran |
+| 504 | `test_timeout` | The run exceeded 60 seconds |
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the test panel next to the prompt pack and
+region profile editors, showing the sent prompt, the raw reply, and the
+candidate boxes drawn on the crop with their drop reasons).
+:::
+
+## See also
+
+- [Prompt packs](./prompt-packs.mdx)
+- [Region profiles](./region-profiles.mdx)
+- [VLM selection](./vlm-selection.mdx)
+- [Wheel example](./wheel-example.mdx)

@@ -88,7 +88,8 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 | POST | `/clusters/assign/{index}` | Assign vectors to clusters |
 | GET | `/clusters/stats/{index}` | Cluster statistics |
 | GET | `/clusters/{index}/{cluster_id}` | Cluster members (`page`, `size`) |
-| POST, GET | `/clusters/rebalance/{index}`, `/clusters/balance/{index}` | Rebalance / inspect balance |
+| POST | `/clusters/rebalance/{index}` | Force a rebalance |
+| GET | `/clusters/balance/{index}` | Check whether clusters are balanced |
 | GET | `/clusters/albums` | Auto-generated albums (`min_size`) |
 | GET | `/query/stats` | Statistics for every index |
 | GET, DELETE | `/query/image/{image_id}` | Stored image data (`include_embedding`) / delete from all indexes |

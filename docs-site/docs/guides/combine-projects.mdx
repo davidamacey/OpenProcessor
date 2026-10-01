@@ -1,0 +1,186 @@
+---
+sidebar_position: 12
+title: Combine projects
+---
+
+# Combine projects
+
+Combine builds a new project from 1 to 8 existing ones. The source projects
+are only read. Source data is preserved, and class-name conflicts are
+resolved explicitly by a mapping you review first.
+
+`API=http://localhost:4603` is assumed. Combine routes are global, not
+project scoped.
+
+## Concepts
+
+- **Target.** A new project, created in status `building`. It becomes
+  `active` when the job succeeds and `failed` when it does not. Deleting a
+  failed or unwanted target is a complete undo; see
+  [Projects](./projects.mdx).
+- **Source order is priority.** The first source wins a label conflict and
+  donates the image of a duplicate.
+- **Class mapping by name.** The target owns its class ids. Nothing
+  numbered in a source crosses over. Each source class is mapped by name with
+  the same actions as [Dataset import](./dataset-import.mdx): `map` to a
+  target class, `create` a target class, `skip`, or `region`. The preview
+  returns a `suggested_mapping`. Every source class that has data needs a
+  decision, or the preview reports `unmapped_class`.
+- **Dedup.** `content_hash` (default) treats byte-identical images as one:
+  the image is copied once, and the boxes of the duplicates are merged by IoU
+  (`dedup_iou`, default 0.9). `none` keeps every image.
+  Two boxes that overlap with the same target class merge, and the more
+  trusted label survives (human, then import, then VLM, then model). Two
+  overlapping boxes with different classes keep the priority label and the
+  item is flagged `combine_conflict`, with `combine_conflict_origins`.
+- **Holdout.** `preserve_union` keeps the frozen test splits of the sources
+  as the target's frozen test split. `recompute` draws a new split and warns
+  that models trained on a source may have seen the new test images. `none`
+  freezes no test split in the target.
+- **Clusters.** Source clusters are not copied. Recluster the combined items
+  after the job finishes (`next_steps` says so).
+- **Provenance.** Items record `origin_project`, `origin_item_id` and
+  `origin_image_id`.
+- **Label state filter.** Per source, `include.label_states` is `all` or
+  `validated_only`.
+- **Settings.** `settings_from` names a source whose settings defaults,
+  activations and prompt packs are copied to the target.
+- **Preview hash.** The preview returns `preview_sha`, which covers the
+  request and the state of every source. Starting requires the same hash,
+  so a source that changed in between is caught.
+- **Busy sources.** A source with a running job cannot be combined.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `POST /curation/projects/combine/preview` | Dry run; writes nothing |
+| `POST /curation/projects/combine` | Start the job |
+| `GET /curation/projects/combine/{job_id}` | Job status |
+| `POST /curation/projects/combine/{job_id}/cancel` | Cancel a running job |
+| `POST /curation/projects/combine/{job_id}/resume` | Resume an interrupted or cancelled job |
+
+## Preview
+
+```bash
+curl -s -X POST "$API/curation/projects/combine/preview" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "target": {"slug": "fleet", "display_name": "Fleet", "description": "Cars and trucks"},
+        "sources": [
+          {"project": "cars", "include": {"label_states": "all"}},
+          {"project": "trucks", "include": {"label_states": "validated_only"}}
+        ],
+        "class_mapping": {},
+        "target_classes": null,
+        "dedup": "content_hash",
+        "dedup_iou": 0.9,
+        "holdout": "preserve_union",
+        "settings_from": "cars"
+      }'
+```
+
+The response has:
+
+| Field | Content |
+|---|---|
+| `ok` | False when there are errors |
+| `errors`, `warnings` | Issues with `code`, `severity`, `project`, `message`, `detail` |
+| `preview_sha` | The hash to pass back when starting |
+| `suggested_mapping` | Source project to a list of mapping rows (`dataset_class`, `action`, `class_id`, `new_class_name`, `new_class_group`) |
+| `sources` | Per source: `images`, `items`, `labeled_items`, `holdout_images` and its classes with `count` and `mapped_to` |
+| `target` | The slug and whether it is available |
+| `dedup` | `identical_images`, `merged_items`, `conflicts`, `conflict_samples` |
+| `bytes` | `to_link` and `to_copy` |
+
+Typical flow: preview, copy `suggested_mapping` into `class_mapping`, edit
+the decisions, preview again until `ok` is true.
+
+A mapping row in `class_mapping` uses the source project slug as its key:
+
+```json
+{
+  "class_mapping": {
+    "cars": [
+      {"dataset_class": "car", "action": "create", "new_class_name": "vehicle"}
+    ],
+    "trucks": [
+      {"dataset_class": "truck", "action": "map", "new_class_name": "vehicle"},
+      {"dataset_class": "wheel", "action": "region"}
+    ]
+  }
+}
+```
+
+`target_classes` is an optional list that fixes the order of the target
+classes (and so their ids); every name in it must be created by a mapping
+row. Because the target registry is new, a `create` row defines a target class,
+and a `map` row names one by `new_class_name`. The same `create` name in
+two sources is one class.
+
+Issue codes include `too_many_sources`, `duplicate_source`,
+`target_is_source`, `source_not_found`, `source_not_ready`, `source_busy`,
+`slug_invalid`, `slug_taken`, `slug_retired`, `shard_budget_exceeded`,
+`shard_budget_high` (warning), `unmapped_class`, `mapping_target_invalid`,
+`label_conflicts` (warning) and `holdout_recompute_contamination` (warning).
+
+## Start
+
+```bash
+curl -s -X POST "$API/curation/projects/combine" \
+  -H 'Content-Type: application/json' \
+  -d '{ ...the same body as the preview..., "expected_preview_sha": "<preview_sha>" }'
+```
+
+The answer is 202 with `{"job_id": "...", "target": "fleet"}`. The target
+project appears at once in status `building`.
+
+## Follow, cancel, resume
+
+```bash
+curl -s "$API/curation/projects/combine/JOB_ID"
+curl -s -X POST "$API/curation/projects/combine/JOB_ID/cancel"
+curl -s -X POST "$API/curation/projects/combine/JOB_ID/resume"
+```
+
+All three return the job: `job_id`, `status`, `phase`, `target`,
+`sources`, `done`, `total` (images), `report`, `next_steps`, `error`,
+`started_at` and `finished_at`.
+
+Statuses: `queued` and `running` are active. `completed` and
+`completed_with_errors` are finished. `failed` is terminal. `interrupted`
+(for example after a restart) and `cancelled` can be resumed. The phases of
+a running job are `registry`, `images`, `holdout` and `done`. Progress is
+also published as the `combine.progress` event on the global stream.
+
+Cancel works only on an active job. Resume works only on an interrupted or
+cancelled job. It re-checks every source and the preview hash, so a source
+that changed since the preview ends in `preview_stale`, and a new combine
+is needed. The target must still be `building`.
+
+Jobs live under `OP_COMBINE_JOBS_DIR`, in chunks of `OP_COMBINE_PAGE_SIZE`.
+
+## Errors
+
+| Status | `error` | When |
+|---|---|---|
+| 422 | `combine_invalid` | The start request has errors; `report` lists them |
+| 409 | `preview_stale` | A source changed since the preview |
+| 404 | `combine_not_found` | Unknown job |
+| 409 | `combine_not_resumable` | Cancel of a job that is not running, or resume of a job that is running, finished, or whose target or sources can no longer be used |
+| 404 | `project_not_found` | A named project does not exist |
+| 409 | `shard_budget_exceeded` | Creating the target would exceed the shard limit |
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the combine wizard with source selection,
+the class mapping table, the preview summary with duplicates and conflicts,
+and the job progress view).
+:::
+
+## See also
+
+- [Projects](./projects.mdx)
+- [Dataset import](./dataset-import.mdx)
+- [Settings and configuration](./settings-and-config.mdx)

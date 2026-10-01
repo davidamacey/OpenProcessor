@@ -2,9 +2,10 @@
 
 Status: **living reference doc**, owned by this backend. This is the
 canonical answer to "why is it built this way" for the `curation`
-subsystem — the three configuration dataclasses, the storage/wire
-split, the pre-commit ratchet exemptions carried by the files that
-introduced them, and the gaps that are known and tracked rather than
+subsystem: the configuration dataclasses, the storage/wire split, the
+project and config-store model, multi-box regions, the lock rule, class
+identity by name, the pre-commit ratchet exemptions carried by the files
+that introduced them, and the gaps that are known and tracked rather than
 accidental. It complements, and deliberately does not duplicate,
 [`curation_api_contract.md`](curation_api_contract.md) (the HTTP wire
 contract itself) and [`../ARCHITECTURE.md`](../ARCHITECTURE.md#curation-subsystem)
@@ -26,11 +27,13 @@ parameters" and turn every hardcoded value on the wrong side of that
 seam into configuration.
 
 That is the through-line for everything below: **the mechanics are
-generic Python; the domain lives entirely in data** — three frozen
-dataclasses a deployment constructs (or overrides via environment
-variables) rather than a codebase it forks.
+generic Python; the domain lives entirely in data**. Deployment-level data
+is a set of frozen dataclasses built from environment variables. Domain-level
+data (classes, region profile, prompt pack, VLM endpoint, settings) is stored
+per project and edited at runtime, so changing domain never means forking or
+restarting.
 
-## 2. The four configuration dataclasses
+## 2. The configuration dataclasses
 
 ### 2.1 `CurationConfig` (`src/config/curation.py`)
 
@@ -67,24 +70,17 @@ A deployment describing a different region — a barcode on a package, a
 tag on livestock — constructs its own `DetectionProfile` instance
 instead of branching or forking the cascade code that consumes it.
 
-`DetectionProfile.from_env(prefix)` lets a deployment set every field via
-environment variables, the same way it can for `CurationConfig` and
-`RegionFields`, under three separate prefixes: `OP_REGION_DETECTION_*`
-(the region cascade, optionally on top of a profile selected by name
-with `OP_REGION_PROFILE`), `OP_INGEST_PRIMARY_*` and
-`OP_INGEST_SECONDARY_*` (the ingest item detectors). The earlier shared
-`OP_DETECTION_*` prefix is retired and rejected with a rename message
-(see `env.template`). **Known gap, still tracked:**
-`DetectionProfile`'s *default* field values remain the reference
-deployment's tuned numbers (its aspect-ratio range, its text-length
-range, its OCR/segmenter model names) rather than domain-neutral
-placeholders — a new deployment gets a working example, not a neutral
-default, out of the box, and should expect to override most fields for
-its own region type. Also, exactly one `DetectionProfile` (and one
-`PromptPack`) is active per process today; there is no per-request
-selection among multiple registered profiles yet, even though the
-underlying `profile_registry` mechanism supports registering more than
-one.
+`DetectionProfile.from_env(prefix)` sets every field from environment
+variables under three prefixes: `OP_REGION_DETECTION_*` (the region cascade,
+optionally on top of a profile selected by name with `OP_REGION_PROFILE` or
+loaded from a file with `OP_REGION_PROFILE_PATH`), `OP_INGEST_PRIMARY_*` and
+`OP_INGEST_SECONDARY_*` (the ingest item detectors). The environment profile
+is now only the boot default and one read-only source in the config store
+(§9): a project activates a stored profile over it. No region profile ships
+built in, so an unconfigured deployment advertises an empty
+`detection_profile` axis and the region worker idles. The dataclass default
+field values still describe the reference deployment's tuning, so a new
+profile should set every field it relies on.
 
 ### 2.4 `RegionStatus` (`src/config/region_state.py`)
 
@@ -95,9 +91,10 @@ verify → `detected` / `no_region_visible`; any path can short-circuit to
 the terminal `detection_failed`, and a human reviewer can additionally
 mark a detected box `false_positive` without deleting it, preserving
 provenance for hard-negative training). On-disk string values are kept
-byte-identical to what earlier code wrote directly as literals — this
-is a Python-symbol rename, not an OpenSearch data migration, matching
-the same no-reindex reasoning as `RegionFields` (§4).
+byte-identical to what earlier code wrote directly as literals, matching the
+same no-reindex reasoning as `RegionFields` (§4). The status is item-level
+and derived from the item's boxes (§10); the box-level vocabulary is
+`proposed`, `accepted`, `rejected`, `false_positive`.
 
 ## 3. The frozen wire-contract split
 
@@ -125,11 +122,10 @@ to; this doc only states the principle because §4 depends on it.
 
 `RegionFields` is the indirection that makes the wire/storage split in
 §3 actually hold at the OpenSearch layer. Every place the backend reads
-or writes a per-item "region of interest" sub-annotation — its bounding
-box, status, detector provenance, verification state, OCR text, cluster
-assignment — goes through a `RegionFields` instance rather than a
-literal string. The generic OSS defaults are `region_*` names
-(`region_status`, `region_bbox_norm`, …); a deployment whose existing
+or writes a per-item "region of interest" sub-annotation (the box list,
+status, verification state, counts, revision) goes through a `RegionFields`
+instance rather than a literal string. The generic OSS defaults are
+`region_*` names (`region_status`, `region_boxes`, `region_count`, …); a deployment whose existing
 OpenSearch index already has data under different field names (the
 reference deployment's were prefixed for its domain) constructs its own
 `RegionFields` instance with those names instead.
@@ -218,170 +214,109 @@ eventually retire these eight.
 ## 6. Known gaps
 
 These are documented so they read as "known and tracked," not
-discovered-in-production surprises. None of them is fixed in this pass;
-they're recorded here so the rationale for *why the code looks
-unfinished in these specific ways* lives somewhere durable.
+discovered-in-production surprises.
 
-- **Ingest is thinner than the reference deployment's, by design.**
-  `POST /curation/ingest/image` and `/ingest/batch` exist and create
-  items (duplicate detection, quality-gate scoring, crop-cache
-  population, bulk indexing). Importing pre-existing YOLO-format labels
-  is a **planned** `POST /datasets/imports` route (not built yet) — the
-  reference's `/import_labels(/batch)` routes are gone, removed along
-  with the rest of the `label_import` module. What did **not** port: the
-  reference's dual-head domain detector runner, its fixed
-  domain-specific class allowlist, and its region-status assignment
-  policy tuned to one domain — those remain a future, deployment-specific
-  overlay, not something this generic ingest service should hardcode.
-- **The asynchronous half of the product now has a first-party home,
-  but it is still opt-in and still needs a trainer you supply.**
-  `docker compose --profile curation up -d` starts the detection
-  worker, VLM worker, auto-label worker, and cluster-refresh daemon
-  against this codebase. There is still no shipped trainer container —
-  `/curation/train/*` talks a documented file protocol (see
-  `docs/CURATION.md`) that a deployment implements; nothing here starts
-  one for you. The cascade's **segmenter** leg does now have a shipped
-  reference server (`docker/segmenter/`, SAM 3, its own `segmenter`
-  compose profile), but it stays opt-in for the same reason everything
-  else here is: it needs a GPU and model weights you provide, and with
-  `OP_SEGMENTER_URL` empty the leg is a documented no-op.
-- **Environment-variable and metric-name prefixes are fully
-  reconciled on the `OP_`/`op_` convention** — every company- and
-  vendor-prefixed env var and metric name from the original port has
-  been renamed. See `env.template` for the current, complete surface.
-- **`DetectionProfile`'s shipped defaults are domain-tuned, not
-  domain-neutral** (§2.3) — a new deployment should construct its own
-  instance (or override via `OP_REGION_DETECTION_*` /
-  `OP_INGEST_PRIMARY_*`) rather than relying on the defaults describing
-  a sensible generic region. Only one
-  `DetectionProfile`/`PromptPack` is active per process; there is no
-  per-request selection among several registered profiles yet.
-- **No authentication of any kind on the API** — see `SECURITY.md`.
-  Several curation write routes are destructive
-  (`DELETE /curation/models/{model_name}`) or read arbitrary
-  server-side paths (`POST /ingest/directory`). Do not expose this
-  service directly to the internet.
-- **Coverage is uneven across the ported surface.** Some routers and
-  services carry thorough test suites; others were ported with
-  comparatively thin coverage because that earlier internal version
-  itself had thin coverage there. Restoring/extending coverage on the
-  weakest surfaces is ongoing, tracked work rather than a silent gap.
+- **Ingest does not carry a domain policy.** `POST
+  /curation/projects/{project}/ingest/image` and `/ingest/batch` create items
+  (duplicate detection, quality gate, crop-cache population, bulk indexing),
+  and `POST /curation/projects/{project}/datasets/imports` brings in labeled
+  YOLO, COCO or OpenProcessor-export datasets. What is deliberately not
+  included is a domain-specific detector ensemble, a fixed class allowlist or a
+  region-status assignment policy: those are the region profile, the class
+  registry and your detector models.
+- **The asynchronous half is opt-in and needs your models.** `docker compose
+  --profile curation up -d` starts the detection, VLM, auto-label and
+  cluster-refresh workers. The trainer (`docker/trainer/`, profile `training`)
+  and the segmenter (`docker/segmenter/`, profile `segmenter`) ship as
+  reference containers speaking the file and wire protocols the API already
+  uses. Both need a GPU; you bring weights and a dataset.
+- **One detection worker serves every project and each project runs one
+  active region profile and one active VLM endpoint at a time.** Switching is
+  a runtime activation, not a restart, but two profiles are never active in
+  one project at once.
+- **`DetectionProfile` dataclass defaults are the reference deployment's
+  tuned numbers** (§2.3). A stored profile should set every field it relies
+  on; the profile `validate` route reports what a draft leaves implicit.
+- **No authentication of any kind on the API.** See `SECURITY.md`. Several
+  routes are destructive (`DELETE /curation/projects/{project}/models/{model_name}`)
+  or read server-side paths (`POST /curation/projects/{project}/ingest/batch`,
+  dataset import). Do not expose the service directly to the internet.
+- **Coverage is uneven across the surface.** Some routers carry thorough
+  suites; the older ones carry thinner ones.
 
-None of the above blocks using the subsystem for its core loop — ingest
-(direct API calls or the label-import path), browse, cluster, review,
-label, and export. It constrains how far along the "turnkey for an
-arbitrary new deployment, fully autonomous end to end" spectrum the
-subsystem currently sits, which is why it ships labelled experimental
-for this release (v0.3.0) — see `docs/CURATION.md`.
+None of this blocks the core loop of ingest or import, browse, cluster,
+review, label and export. It limits how turnkey the subsystem is for an
+arbitrary deployment, which is why it is labelled experimental for v0.1.0;
+see `docs/CURATION.md`.
 
-## 7. Labeling-assist item selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model
+## 7. Labeling-assist selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model
 
 The frontend's labeling-assist UX lets an operator pick which items or
-classes they want assistance with — pallets, food items, license
-plates, anything — and scope a run to just that selection. Getting this
-right on the backend meant adding a fourth member to the
-`CurationConfig`/`RegionFields`/`DetectionProfile` family (§2) —
-`PromptPack`, in `src/services/labeling/vlm_prompts.py` — and making
-both it and `DetectionProfile` discoverable over the wire, without
-conflating either of them with the frontend's own concept of an
-"annotation slot."
+classes they want assistance with and scope a run to that selection. That
+needed a fourth member of the configuration family (§2): `PromptPack`
+(`src/services/labeling/vlm_prompts.py`), discoverable over the wire next to
+`DetectionProfile`, without conflating either with the frontend's own concept
+of an "annotation slot."
 
-**Why `PromptPack` is a fourth, separate dataclass rather than a field
-on `CurationConfig`.** `CurationConfig` holds names and paths — small,
-uniformly-typed deployment data. A `PromptPack` is the opposite: a dozen
+**Why `PromptPack` is separate from the deployment config.** `CurationConfig`
+holds names and paths: small, uniformly typed data. A `PromptPack` is a dozen
 multi-paragraph prompt templates plus two vocabulary tables
-(`class_descriptions`, `synonyms`), all specific to one labeling
-domain. Folding that much text onto `CurationConfig` would turn a
-lookup-table dataclass into a prompt-engineering dataclass; keeping it
-separate means a deployment can swap its *vocabulary* (`PromptPack`)
-independently of its *index names* (`CurationConfig`) or its *detection
-heuristics* (`DetectionProfile`). `CurationConfig` only holds the
-*pointer* to a pack — `prompt_pack_path` — resolved lazily by
-`resolve_prompt_pack()` so a missing/malformed file degrades to the
-built-in generic pack (logged warning) rather than crashing the VLM
-labeler at import time.
+(`class_descriptions`, `synonyms`), all specific to one labeling domain. A
+deployment swaps its vocabulary independently of its index names or its
+detection heuristics. A pack is now stored per project in the config store
+(§9) and activated at runtime; `OP_PROMPT_PACK_PATH` and
+`OP_PROMPT_PACK_PATHS` remain as the file-based boot defaults, and a missing or
+malformed file degrades to the built-in generic pack with a logged warning
+rather than crashing the labeler.
 
-**Why `PromptPack` and `DetectionProfile` are not the same concept,
-even though they correlate per-deployment.** `DetectionProfile`
-describes a Triton detection *cascade* — which detector model, what
-aspect/confidence thresholds, how OCR is wired. `PromptPack` describes a
-*VLM conversation* — what to ask a vision-language model and what
-vocabulary to expect back. A deployment adding a "pallet" domain
-configures both, and in practice they describe related things (the
-pallet `DetectionProfile`'s region type and the pallet `PromptPack`'s
-`class_descriptions` are about the same physical objects) — but nothing
-in the code ties them together structurally. One deployment could run a
-`DetectionProfile` with no VLM stage at all (pure CNN cascade, VLM
-disabled), or a `PromptPack` with no custom `DetectionProfile` (VLM
-classifies whole-item crops; no sub-region detection). Merging them
-into one dataclass would force every deployment to configure both
-whenever it only needed one.
+**Why `PromptPack` and `DetectionProfile` are not the same concept.**
+`DetectionProfile` describes a region *cascade*: which detector and
+segmenter, which thresholds, which classes it applies to, whether text is
+read. `PromptPack` describes a *VLM conversation*: what to ask and what
+vocabulary to expect back. They correlate per domain, but nothing ties them
+structurally. A project can run a profile with no VLM stage, or a pack with no
+region profile (the VLM classifies whole-item crops). The one place they must
+agree is the reply contract: a profile that keeps several boxes per item needs
+a pack whose region prompts return a per-box list. The pairing check enforces
+that on save (warning) and on activation (error).
 
-**Why neither is the frontend's "annotation slot."** The
-labeling-assist frontend reasons about
-*annotation slots* — a UI-level grouping of what a human curator sees
-and edits for one class. `PromptPack` and `DetectionProfile` are
-backend pipeline concepts: one drives an automated VLM pass, the other
-drives an automated detection cascade. They influence what shows up
-*for* a human to review, but a slot is not required to have a matching
-`DetectionProfile` or a bespoke `PromptPack` entry — the generic pack's
-open-vocabulary prompt and the default profile work across every class
-in the registry unless a deployment opts into something more
-specific. The correlation between all three is `class_id`: a
-`PromptPack`'s `class_descriptions`/`synonyms` are keyed by class name,
-a `DetectionProfile` is bound to whichever classes route to it (see
-`secondary_shape_groups` on the shipped default), and the frontend's
-labeling-assist run now scopes on `class_id` directly (`POST
-{prefix}/pipeline/auto_label/start?class_id=<id>`, below) — but the
-join is data (a shared registry class id), not a code-level dependency
-between the three dataclasses.
+**Why neither is the frontend's "annotation slot."** A slot is a UI-level
+grouping of what a curator sees and edits for one class. A profile and a pack
+are backend pipeline concepts that influence what shows up for review. The
+join between them is data (a shared class name), not a code dependency, and a
+run scopes on `class_id` directly: `POST
+/curation/projects/{project}/pipeline/auto_label/start?class_id=<id>`.
 
-**Discovery**: both are advertised on `GET {prefix}/methods`
-alongside the existing `cluster`/`score`/`sort`/`overlay`/`export` axes
-(`src/services/curation/strategy_registry.py`), in the same
-`{id, axis, label, status, default}` shape as the `export` axis, plus a
-per-entry `settable` flag. The `detection_profile` axis is read-only
-(`settable: false`): it lists every profile in
-`src/services/detection/profile_registry.py` with the active one as the
-default — empty by default (neutral: no region profile until
-`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*` configures one, or startup
-code calls `register_profile()`). The
-`prompt_pack` axis lists every pack `available_prompt_packs()` can load
-(the built-in generic pack, each `OP_PROMPT_PACK_PATHS` pack, and the
-`OP_PROMPT_PACK_PATH` default), keyed by pack `name`; the VLM labeler is
-cached per pack name, so a settings default or a per-run
-`?prompt_pack=` selection changes the VLM's actual behavior and what
-`/methods` reports through the same resolution functions.
+**Discovery.** `GET /curation/projects/{project}/methods` advertises the
+selectable strategies on the `cluster`, `score`, `sort`, `overlay`, `export`,
+`detection_profile`, `prompt_pack` and `vlm` axes in one
+`{id, axis, label, status, default}` shape, with a per-entry `settable` flag.
+The effective default for an axis comes from the project's settings document
+when it names a still-advertised id, else from the active config-store record,
+else from a built-in constant; the same resolution function serves every
+endpoint that applies a default, so `/methods` and real behaviour cannot
+disagree. A template profile is not advertised until a project clones and
+activates it, which keeps an unconfigured deployment's axis empty.
 
-**Worked example — configuring a "pallet" labeling-assist setup
-end to end:**
+**Worked example: a pallet labeling-assist setup.**
 
-1. Add pallet classes to the registry (`data/class_registry.json`, or
-   the project's `class_registry.json` under `OP_PROJECTS_DATA_ROOT`) — see
-   `data/class_registry.example.json` for a worked warehouse/pallet
-   registry.
-2. Define a `DetectionProfile` for the region type you want the
-   cascade to find (e.g. a pallet ID tag) — purely via env
-   (`OP_REGION_DETECTION_NAME=pallet_tag`,
-   `OP_REGION_DETECTION_DETECTOR_MODEL=...`,
-   `OP_REGION_DETECTION_SAM_TEXT_PROMPT=...`), or register it via
-   `src.services.detection.profile_registry.register_profile()` at
-   process startup and select it with `OP_REGION_PROFILE`. Mirror an
-   existing `DetectionProfile` instance's shape (see
-   `tests/curation/test_region_profile.py`). With
-   no region profile configured (the default) region detection is off.
-3. Write a `PromptPack` JSON file describing the pallet vocabulary —
-   copy `data/prompt_pack.example.json` (a worked warehouse/pallet
-   pack) and edit its prompts/`class_descriptions`/`synonyms`.
-4. Point `OP_PROMPT_PACK_PATH` at that file. `GET {prefix}/methods`'s
-   `prompt_pack` axis now reports your pack's `name` instead of
-   `generic_item_v1`.
-5. Trigger `POST {prefix}/pipeline/auto_label/start?class_id=<pallet
-   class id>&run_vlm=true` — the run scopes its unvalidated-item
-   query to that one class (a `term` filter on `class_id`, added
-   alongside the existing `class_validated`/`vlm_verify_completed_at`
-   exclusions in `src/routers/curation/pipeline.py`) instead of
-   labeling the entire pool.
+1. Create a project and add the pallet classes
+   (`POST /curation/projects/{project}/classes`; see
+   `data/class_registry.example.json` for a warehouse registry).
+2. Save and activate a region profile for the sub-region the cascade should
+   find (a pallet ID tag): `POST /curation/projects/{project}/region_profiles`
+   then `POST /curation/projects/{project}/region_profiles/{name}/activate`.
+   `POST /curation/projects/{project}/region_profiles/test` previews the
+   result on a stored crop before activating.
+3. Save and activate a prompt pack with the pallet vocabulary (start from
+   `data/prompt_pack.example.json`): `POST
+   /curation/projects/{project}/prompt_packs` then `POST
+   /curation/projects/{project}/prompt_packs/{name}/activate`.
+4. `GET /curation/projects/{project}/methods` now reports the pack's `name`
+   on the `prompt_pack` axis.
+5. `POST /curation/projects/{project}/pipeline/auto_label/start?class_id=<id>&run_vlm=true`
+   scopes the run's unvalidated-item query to that class instead of the whole
+   pool.
 
 ## 8. The detector bake-off harness: `BakeoffProfile`
 
@@ -402,12 +337,12 @@ for the exact `/bakeoff/*` wire shapes.
 
 **The flow.** Eval datasets are the exports themselves: every export under
 `CurationConfig.export_root` with a labelled test split is listed by
-`GET {prefix}/bakeoff/eval_datasets` (id `export:<path>`), next to optional
+`GET /curation/projects/{project}/bakeoff/eval_datasets` (id `export:<path>`), next to optional
 frozen third-party sets (`external:<group>/<name>`,
 `src/services/curation/eval_datasets.py`). Contenders are finished training
-runs (`GET {prefix}/bakeoff/trained_models`, no weight upload), external
+runs (`GET /curation/projects/{project}/bakeoff/trained_models`, no weight upload), external
 models from a baseline registry, or a custom model such as a deployed
-Triton model. `POST {prefix}/bakeoff/run` re-scores every selected model on
+Triton model. `POST /curation/projects/{project}/bakeoff/run` re-scores every selected model on
 every selected dataset in one job; two hashes pin the test split, identity
 (`frozen_test_sha`, which frames) and content (`test_label_sha`, which
 boxes), and the evaluator refuses a dataset whose content hash changed
@@ -448,7 +383,7 @@ decides *what* is measured lives on a frozen `BakeoffProfile` dataclass
 | `converter_modules`, `backend_modules`, `baselines_path` | plate-benchmark converters, plate-only backends and baseline models shipped as built-ins |
 
 A request's optional `profile` (a registered name or a `.json` path)
-selects one; `GET {prefix}/bakeoff/profiles` lists the registered profiles
+selects one; `GET /curation/projects/{project}/bakeoff/profiles` lists the registered profiles
 and flags the default (`default: true`, `kind: registered` or
 `configured` when `OP_BAKEOFF_PROFILE` names a `.json` path). With no
 profile the neutral `generic` profile (every class, no context classes, no
@@ -484,11 +419,224 @@ same job as `run:<id>:<format>`; failures are recorded as failed stages in
 An earlier internal deployment's CoreML leg drove a macOS host through a
 proprietary driver and is not shipped: the request has no field for it.
 
-**What moved out.** Scripts that existed to produce one paper's tables and
-figures are not part of the harness and are not shipped in this tree: the
-dedup-threshold sweep and the LaTeX-number generator were removed (they
-hardcoded an internal Triton model id and a live-deployment URL); the
-lean-angle sampling and deskew-figure prototypes were removed too (their
-reusable core, `src/services/detection/region_lean.py`, stays).
+**Scope.** The harness is a measurement tool. Scripts that only produce one
+paper's tables and figures (threshold sweeps, number generators, figure
+prototypes) are outside it and not shipped; the reusable lean-angle core lives
+in `src/services/detection/region_lean.py`.
 `tests/curation/test_bakeoff_harness.py` guards the harness core against
 domain vocabulary creeping back in.
+
+## 9. Projects and the config store
+
+**Why projects.** A curation dataset is a set of indexes, a class registry,
+exports, uploads and domain configuration. Sharing those across unrelated
+datasets means a class id, a validated label or a prompt pack from one domain
+can leak into another. A project is the isolation boundary: every
+data-touching route is `/curation/projects/{project}/...`, every project owns
+indexes named `<OP_PROJECT_INDEX_PREFIX><slug>__<role>`, and a project-bound
+request fails closed when it cannot resolve its project instead of falling
+back to a default. `default` is an ordinary project created at first start,
+which can be archived but never deleted. A cross-project leak sweep test
+issues every route against two projects and asserts neither sees the other.
+
+**Lifecycle.** `active` is the working state. Archive makes a project
+read-only and is refused while it has running jobs and for the last active
+project. Delete is a guarded, background operation: a dry run lists what would
+block it, a real delete needs `confirm=<slug>`, drains the detection worker,
+removes indexes and files, and retires the slug forever so an old URL can
+never resolve to a new project. `building` and `failed` exist for combine
+targets (§14) so a half-built project is never selectable. Every mutation
+takes `expected_revision`, so two operators cannot silently overwrite each
+other.
+
+**Why a config store.** Domain configuration as environment variables and files means that
+changing a prompt is a file edit and a restart. Operators
+need to edit, test and roll back configuration while workers run. The store
+keeps three kinds of document (prompt packs, region profiles, VLM endpoints)
+plus the settings defaults, with the same rules:
+
+- Saves are immutable revisions with audit fields; a revision number is never
+  reused, so "profile `wheels` r3" always means the same body.
+- Activation is separate from saving. Saving a draft changes nothing a worker
+  does. Activation takes an `expected_active` guard so two editors cannot
+  activate over each other, and re-validates more strictly than save.
+- Rollback is a first-class route, because the fastest fix for a bad
+  activation is the previous one.
+- Cross-process visibility is a poll (`OP_CONFIG_POLL_S`) against the stored
+  document, not a signal, so API workers and the detection worker converge
+  without coordination. The detection worker applies a new profile or pack
+  only at a quiesce point, so one item is never processed under two profiles.
+- An activation response reports its impact (items under another profile or
+  an older revision, validated and pending counts) and a suggested reprocess
+  body, because a profile only affects items processed after it. Re-running
+  old items is an explicit act (§14), never a side effect of activating.
+- Deployment-wide documents (the VLM endpoint registry) live in a separate
+  global store; project documents are bound read-only when cloned from another
+  project.
+
+The environment profile and the file-based pack remain as the boot default and
+as read-only sources in the store, so an existing deployment keeps working
+until a project activates its own.
+
+## 10. Multi-box regions
+
+**Why a list.** The first design stored one region box per item as scalar
+fields. That fits a license plate on a car and fails for wheels (a car has up
+to four), tags on a pallet or defects on a part. Retrofitting a second box
+onto scalars means parallel fields and a representative-box convention that
+every reader has to know. The decision was a nested list, `region_boxes`, with
+one element per box, and no scalar fallback: an item with one region has a
+list of one. The scalar fields, routes and writers were deleted rather than
+kept in parallel, so there is one code path and one `derive_status`.
+
+What follows from the list:
+
+- **Per-box state, verdict, text, cluster and embedding.** Anything a person
+  can say about a region is said per box (`accepted`, `rejected`,
+  `false_positive`, `proposed`), and a box has its own `box_id`, which is
+  never reused after a delete. The item status is derived from the boxes with
+  a fixed precedence (accepted, false_positive, proposed, rejected, empty), so
+  a rejected box beside an accepted one no longer hides the accepted one.
+- **Replace-the-list edits with an optimistic revision.** `PUT
+  /curation/projects/{project}/crops/{crop_id}/regions` sets the whole list
+  and carries `expected_region_revision`. The revision advances on any write
+  that changes a box's state, geometry or text; cluster-only writes (partition,
+  refine, false-positive sub-typing) do not advance it, so a background
+  recluster does not 409 an open editor.
+- **Candidate selection is an explicit step.** The worker gathers candidates
+  from the detector and segmenter legs, applies a score floor, NMS and the
+  profile's `max_regions_per_item`, then asks the VLM about numbered boxes.
+  `region_set_complete` records the VLM's "all of them are here" answer. The
+  profile test route returns every candidate with its drop reason so the cap
+  is tunable.
+- **Per-box embeddings and clustering.** Boxes are embedded and clustered, not
+  items. A box carries `bbox_norm` in its embedding entry so a moved box is
+  recognised as stale and re-embedded. False-positive sub-typing works on
+  boxes: a matching box flips to `false_positive` and the item status is
+  re-derived, so a sibling accepted box keeps the item `detected`.
+- **Row shapes.** Box-selecting queries return one row per matching box with
+  `region_box_id`; `total` counts items and `total_rows` counts rows. Every
+  box filter applies to one and the same box, so `detector=a` AND
+  `min_score=0.8` cannot match an item whose a-box scored low and whose b-box
+  scored high.
+- **Explicit mapping.** The nested list and its embeddings have an explicit
+  OpenSearch mapping and a raised `index.max_inner_result_window`, and a
+  per-write cap (`OP_REGION_MAX_BOXES_PER_WRITE`) bounds abuse. Element keys
+  inside the list are fixed strings, not `RegionFields`-indirected: the list is
+  new, so no deployment has legacy names for them.
+
+## 11. The lock rule
+
+An automated writer must never undo a human decision or a trusted import. The
+rule is one definition (`src/clients/occ_locks.py`), consulted by every
+automated writer, so no writer carries its own narrower copy:
+
+- A class is locked when a human set it, when it is a validated imported label,
+  or when the item is in the test holdout.
+- A box is locked when a human created, moved, verdicted or transcribed it, or
+  when it came from an import and is not a suggestion.
+- An item is locked when its class is locked, any box is locked, or a human or
+  import validated its region set.
+
+`label_trust: suggestion` is the escape hatch: an import writes unvalidated
+classes and `proposed` boxes, which the pipeline may replace. The rule is
+enforced inside the optimistic-concurrency write itself, not only at the
+decision point, so a human edit made between a worker's read and write still
+wins. Reprocess reports what it skipped as `locked_skipped`. Imports and undo
+share one "is an import still the sole owner" test, so undo and reconcile can
+never delete an item a person touched after the import. The test holdout
+belongs to the rule because a frozen test item whose class changes silently
+invalidates every evaluation that used it.
+
+## 12. Class identity is the name
+
+A class id is a dense index into one project's registry at one moment. It is
+not stable across projects, datasets, exports or models, and treating it as
+identity is a silent-corruption bug: two YOLO datasets that agree on class
+names but disagree on index order, merged by index, swap labels without an
+error. So everything that crosses a boundary pairs by name:
+
+- Dataset import maps each dataset class to a registry class by name through an
+  explicit `map`, `create`, `skip` or `region` decision, and the preview shows
+  what an index-based guess would have done wrong.
+- Combine maps each source class by name; the target owns its ids and nothing
+  numbered in a source crosses.
+- Export writes a dense remap and the promoted model's `labels.txt` carries the
+  trained subset; promote refuses a subset run it cannot remap.
+- Bake-off maps model classes onto eval classes by explicit name map, a run's
+  remap, or normalised names, and reports uncovered classes instead of
+  dropping them.
+- Region profiles select items by `parent_classes` names, matched against the
+  item's class name or the detector's own label, never a detector index.
+
+End-to-end tests walk import, export, train, promote and predict (and combine)
+and assert the `(class_id, class_name)` pairing at every hop.
+
+## 13. The VLM endpoint registry
+
+**Why a registry.** One process-wide `OP_VLM_URL` cannot serve projects that
+need different models, cannot be switched without a restart, and cannot be
+tested before use. Endpoints are deployment-wide documents (a server is a
+deployment fact) and activation is per project.
+
+- **Probe before trust.** A probe sends synthetic images only and records the
+  served model root, context length, image cost, image cap and JSON-mode
+  support. It belongs to the revision and body it tested; a re-save is a new
+  revision that needs a new probe.
+- **One gate.** Every VLM-calling route, including per-run `?vlm=`, passes one
+  function (`enforce_vlm_gate`), and a test walks each route with an input that
+  must be refused. A second path with its own checks is how a safety rule
+  rots.
+- **Keys are references.** `secret:<slug>` points at a file on the host
+  written by `openprocessor vlm key set`; the API never stores, serves or logs
+  a key.
+- **Outbound safety.** A URL policy refuses this stack's own services and
+  link-local or metadata addresses for the literal host and every resolved
+  address, no client follows a redirect, and an endpoint that sends crops
+  outside the deployment needs an explicit acknowledgement recorded per
+  `name@revision` (`OP_VLM_EXTERNAL_POLICY=deny` refuses them). DNS can change
+  after validation, so each labeler re-checks at most every 30 seconds and
+  fails closed. The residual risk is recorded in `SECURITY.md`.
+- **Pairing.** A model that cannot read the prompt size, handle the image
+  count, return JSON or verify several boxes is a bad pairing for the active
+  profile and pack, so activation of any of the three runs the same check.
+- **Provenance.** Items record `vlm_endpoint` and `vlm_model` per answer, and
+  `region_verifier` records the resolved model root, so a label's origin
+  survives a later switch.
+- **Local models are a catalog, not an API action.** `examples/vlm/catalog.tsv`
+  is read by the installer, the CLI and the API. The API records the desired
+  local model; only the host CLI (`openprocessor vlm use`) restarts vLLM,
+  because that needs a fit check, the training lock and an `.env` rewrite that
+  restores itself on failure.
+
+## 14. Dataset import, reprocess and combine
+
+These three are bulk writers over data a person may have touched, so they
+share one design.
+
+- **Preview, then start, then undo.** Preview writes nothing and returns issues,
+  suggestions and an `import_key` hashing the source, the name-based mapping
+  and the write-affecting options. A repeated start with the same key is
+  idempotent. Imports are chunked, persisted and resumable, with a write-ahead
+  ledger so `created` versus `updated` stays truthful across a crash, and undo
+  is the inverse of the ledger. Backpressure on the region worker
+  (`OP_DATASET_IMPORT_MAX_PENDING`) keeps an import from burying the queue.
+- **Dry run by default.** Reprocess (`POST
+  /curation/projects/{project}/reprocess`) is the single re-run route for the
+  `detect`, `region`, `vlm` and `embed` scopes. It counts what it would do and
+  what the lock rule skips before it does anything, and large detect or embed
+  runs are file-backed jobs that survive a restart. It replaced a handful of
+  separate requeue, clear and retry paths whose differing guards were the
+  source of inconsistent behaviour.
+- **Combine reuses import.** `POST /curation/projects/combine` reads a source
+  project as a dataset (the same scan, mapping and completeness rule as
+  import), dedups byte-identical images by content hash, merges boxes by IoU
+  with a fixed source priority (human, import, VLM, model), flags real class
+  conflicts as `combine_conflict` for review instead of picking silently, and
+  builds into a `building` target that is `active` only when it is complete.
+  The preview carries a `preview_sha` the start must echo, so a source that
+  changed since the preview is refused. Sources are bound read-only; deleting
+  the target is a complete undo.
+- **Delete-time re-check.** Deleting what an import or reprocess created
+  re-reads each document and deletes with a sequence-number guard, so a human
+  edit made after the decision survives.

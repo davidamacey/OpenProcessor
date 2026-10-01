@@ -1,0 +1,209 @@
+---
+sidebar_position: 1
+title: Projects
+---
+
+# Projects
+
+A project is an isolated dataset workspace. Each project has its own
+OpenSearch indexes, its own directories, its own class registry, its own
+prompt packs, region profiles, keymap and active VLM endpoint. A request is
+bound to exactly one project by its URL, and the storage layer refuses any
+access that would reach another project's indexes.
+
+`API=http://localhost:4603` is assumed in every example.
+
+## Concepts
+
+- **Slug.** The project id in URLs. 2 to 32 characters, lowercase letters
+  and digits with single hyphens between segments, starting with a letter
+  (`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`). The words `all`, `combine`,
+  `global`, `health`, `new`, `none`, `projects`, `settings` and `vlm` are
+  reserved. The slug cannot be changed. The slug of a deleted project is
+  retired and cannot be reused.
+- **`default` project.** Created at bootstrap like any other project. It can
+  be archived but never deleted.
+- **Status.** One of `building`, `active`, `archived`, `deleting`,
+  `deleted`, `failed`. Only `active` projects are writable. An `archived`
+  project stays readable and refuses every write. `building`, `deleting`
+  and `failed` projects cannot be bound at all.
+- **Revision.** Every lifecycle change bumps `revision`. PATCH, archive and
+  unarchive require `expected_revision`, so two clients cannot overwrite
+  each other.
+- **Per-project resources.** Fixed when the project is created and never
+  recomputed from a later environment change.
+
+| Resource | Location |
+|---|---|
+| Indexes | `<OP_PROJECT_INDEX_PREFIX><slug>__<role>` (default prefix `op_prj_`) |
+| Class registry | `<OP_PROJECTS_DATA_ROOT>/<slug>/class_registry.json` |
+| Exports | `<OP_PROJECTS_DATA_ROOT>/<slug>/exports/` |
+| Bake-off eval sets | `<OP_PROJECTS_DATA_ROOT>/<slug>/bakeoff_eval/` |
+| Uploads, bake-off jobs, per-project state | `<OP_STATE_DIR>/projects/<slug>/` |
+| Training jobs | `<OP_TRAIN_JOBS_DIR>/projects/<slug>/` |
+| Auto-label state | `<OP_AUTO_LABEL_STATE_DIR>/projects/<slug>/` |
+| MLflow experiment | `openprocessor-<slug>` |
+| Promoted model prefix | `<slug>__` (the `default` project uses no prefix) |
+
+`GET /curation/projects/{project}` returns the resolved `resources` for a
+project.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects` | List projects, limits and shard capacity |
+| `POST /curation/projects` | Create a project |
+| `GET /curation/projects/{project}` | One project record with resources |
+| `PATCH /curation/projects/{project}` | Change display name or description |
+| `POST /curation/projects/{project}/archive` | Make the project read-only |
+| `POST /curation/projects/{project}/unarchive` | Make it writable again |
+| `DELETE /curation/projects/{project}` | Dry run, or guarded delete |
+| `POST /curation/projects/{project}/clone_settings` | Copy settings from another project |
+| `POST /curation/projects/{project}/pause` | Workers skip this project |
+| `POST /curation/projects/{project}/resume` | Clear the pause flag |
+
+## List
+
+```bash
+curl -s "$API/curation/projects?include_archived=true"
+```
+
+The response has `projects` (each with `slug`, `display_name`,
+`description`, `status`, `revision`, `is_default`, `counts`, `writable`,
+`selectable`, `archivable`, `unarchivable`, `deletable`, `paused`,
+`origin`), `default_slug`, `limits` (slug pattern and length, reserved and
+retired slugs, cloneable axes), `labels` (display text for statuses) and
+`capacity`. `capacity` reports the OpenSearch shard budget: `status` is
+`ok`, `warn` or `blocked`.
+
+## Create
+
+```bash
+curl -s -X POST "$API/curation/projects" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "slug": "cars",
+        "display_name": "Cars and wheels",
+        "description": "Public car photos",
+        "clone_settings_from": null,
+        "clone_axes": null
+      }'
+```
+
+Returns 201 with `project`, `warnings` and `keymap_clone_conflicts`. A
+`warnings` entry with code `shard_budget_high` means the cluster is close
+to its shard limit. Creation runs these steps: validate the slug, check
+capacity, write a `building` record, create the indexes and directories,
+optionally clone settings, then flip to `active`. A failure midway leaves
+the record `failed`, never partly active.
+
+`clone_settings_from` names an existing `active` or `archived` project to
+copy from. `clone_axes` limits what is copied. Valid axes are
+`settings_defaults`, `classes`, `activations`, `keymap`, `prompt_packs` and
+`vlm_activation`. `null` or an empty list means every axis. See
+[Settings and configuration](./settings-and-config.mdx).
+
+## Edit, archive, unarchive
+
+```bash
+# revision comes from the last response
+curl -s -X PATCH "$API/curation/projects/cars" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 3, "display_name": "Cars", "description": "Public car photos"}'
+
+curl -s -X POST "$API/curation/projects/cars/archive" \
+  -H 'Content-Type: application/json' -d '{"expected_revision": 4}'
+
+curl -s -X POST "$API/curation/projects/cars/unarchive" \
+  -H 'Content-Type: application/json' -d '{"expected_revision": 5}'
+```
+
+Each answers 200 with the lifecycle envelope (`project`, `warnings`,
+`keymap_clone_conflicts`). Archive is refused while the project has running
+jobs, and for the last active project.
+
+## Delete
+
+Delete is two-phase and guarded. First a dry run, which writes nothing:
+
+```bash
+curl -s -X DELETE "$API/curation/projects/cars?dry_run=true"
+```
+
+The 200 response lists `indexes` (name, doc count, size), `dirs` (path,
+bytes), `mlflow_experiment`, `promoted_models`, `running_jobs`,
+`referenced_by` and `blocking` / `blocking_detail`, the reasons a real
+delete would be refused.
+
+Then the real delete. `confirm` must equal the slug:
+
+```bash
+curl -s -X DELETE "$API/curation/projects/cars?confirm=cars"
+```
+
+The response is 202 with the record in status `deleting`. Index and
+directory removal run in the background. Poll
+`GET /curation/projects/{project}` until it answers 404, or follow the
+`project.deleted` event on the global event stream
+(`GET /curation/events`). A failed finish leaves the record `deleting`;
+repeat the same call with `confirm` to retry.
+
+`force=true` skips the refusal for models that other projects share. It
+does not skip the busy check, the last-active check or the `default`
+protection.
+
+## Pause and resume
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/pause"
+curl -s "$API/curation/projects/cars/pause"
+curl -s -X POST "$API/curation/projects/cars/resume"
+```
+
+A paused project is skipped in every worker's next discovery cycle. Both
+calls are idempotent. The response has `paused`, `paused_by` and `reason`.
+
+## Errors
+
+Every error body has the shape
+`{"detail": {"error": "<code>", "message": "...", ...}}`.
+
+| Status | `error` | When |
+|---|---|---|
+| 404 | `project_not_found` | Unknown or deleted slug |
+| 409 | `project_building`, `project_deleting`, `project_failed` | Project is in a state that cannot be bound |
+| 409 | `project_archived` | Write to an archived project |
+| 409 | `project_read_only` | Write while the registry cannot be confirmed fresh |
+| 409 | `slug_taken`, `slug_retired` | Create with a used or retired slug |
+| 409 | `revision_conflict` | `expected_revision` is stale; `current_revision` is returned |
+| 409 | `invalid_transition` | For example archiving a project that is not `active` |
+| 409 | `project_busy` | Running jobs; `jobs` lists them |
+| 409 | `last_active_project` | Archive or delete would leave no active project |
+| 409 | `project_protected` | Delete of the `default` project |
+| 409 | `in_use` | Delete while another project depends on a shared model |
+| 409 | `shard_budget_exceeded` | Create blocked; the full `capacity` block is returned |
+| 409 | `clone_source_not_ready` | Clone source is not `active` or `archived` |
+| 409 | `target_not_empty` | Clone into a project that already has data |
+| 422 | `slug_invalid` | Slug fails the pattern, length or reserved list |
+| 422 | `confirm_mismatch` | Real delete without `confirm` equal to the slug |
+| 422 | `combine_invalid` | Unknown clone axis, or clone into itself |
+
+## Related CLI
+
+There is no dedicated project subcommand in the `openprocessor` CLI.
+Manage projects through the API as above. Per-project environment values
+are listed in [Basic configuration](../configuration/basic.mdx).
+
+## Cropwright
+
+:::note
+Screenshot pending: Cropwright (the project switcher, the create-project
+form with clone options, and the archive and delete confirmation dialogs).
+:::
+
+## See also
+
+- [Settings and configuration](./settings-and-config.mdx)
+- [Combine projects](./combine-projects.mdx)
+- [Use your own domain](./use-your-own-domain.mdx)

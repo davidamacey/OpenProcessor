@@ -27,6 +27,15 @@ Notes:
 - **The curation workers do not need a GPU or even a configured model to
   start.** They idle, or fail per call, until you configure a real
   detector/VLM endpoint.
+- **One set of workers serves every project.** Each cycle a worker lists the
+  active projects, skips paused ones and binds each project only around its
+  own work. `--project <slug>` narrows a worker to one project. See
+  [Workers and heartbeats](../operations/workers.mdx).
+- **The `vlm` profile serves one model at a time**, chosen from a catalog
+  with `openprocessor vlm use <id>`; see
+  [VLM selection](../guides/vlm-selection.mdx). `./secrets/vlm` is mounted
+  read-only into `yolo-api` and the workers so endpoints can reference keys
+  as `secret:<slug>`.
 - **`curation-evaluator` is a long-lived watcher**, not a one-shot job.
   Start it with `up -d`; `docker compose run --rm curation-evaluator`
   just blocks your shell.

@@ -17,6 +17,25 @@ const sidebars: SidebarsConfig = {
     'architecture/overview',
     {
       type: 'category',
+      label: 'Guides',
+      items: [
+        'guides/projects',
+        'guides/settings-and-config',
+        'guides/use-your-own-domain',
+        'guides/wheel-example',
+        'guides/keymaps',
+        'guides/vlm-selection',
+        'guides/prompt-packs',
+        'guides/region-profiles',
+        'guides/multi-box-regions',
+        'guides/dataset-import',
+        'guides/reprocess',
+        'guides/combine-projects',
+        'guides/test-on-crop',
+      ],
+    },
+    {
+      type: 'category',
       label: 'API Reference',
       items: ['api-reference/overview', 'api-reference/core', 'api-reference/curation'],
     },
@@ -41,6 +60,11 @@ const sidebars: SidebarsConfig = {
         'operations/training-and-promote',
         'operations/monitoring',
       ],
+    },
+    {
+      type: 'category',
+      label: 'About',
+      items: ['about/vision-and-goals'],
     },
     {
       type: 'category',

@@ -1,6 +1,6 @@
 # Security Policy
 
-## ⚠️ No authentication — do not expose this service to the internet
+## No authentication — do not expose this service to the internet
 
 **OpenProcessor's API (port 4603 by default) has no authentication,
 authorization, or rate limiting of any kind.** It is designed to run on
@@ -11,16 +11,24 @@ This matters because several routes are genuinely dangerous without
 access control:
 
 - `DELETE /query/image/{id}` — deletes indexed data with no confirmation.
-- `DELETE /curation/models/{model_name}` — unloads/removes a promoted
-  model from Triton.
+- `DELETE /curation/projects/{project}/models/{model_name}` — unloads and
+  removes a promoted model from Triton.
+- `DELETE /curation/projects/{project}` — deletes a project's indexes and
+  directories. A real delete needs only `?confirm=<slug>`.
 - `POST /ingest/directory` — performs an arbitrary server-side
   filesystem path read; anyone who can reach this endpoint can make the
   server read any path it has filesystem access to.
+- `POST /curation/projects/{project}/ingest/batch` and
+  `POST /curation/projects/{project}/datasets/preview` — read server-side paths
+  too, limited to the configured source roots (`OP_SOURCE_ROOT_HOST`
+  mount and the upload root).
 
-The `curation` subsystem (see [`docs/CURATION.md`](docs/CURATION.md),
-shipped experimental and opt-in for this release) adds a further ~109
-routes, ~47 of them write endpoints, all under the same
-no-authentication model.
+The `curation` subsystem (see [`docs/CURATION.md`](docs/CURATION.md), opt-in
+behind the `curation` compose profile) adds about 237 operations, about 125 of
+them writes, all under the same no-authentication model. Projects isolate data
+from each other inside the application (an OpenSearch request guard refuses
+cross-project access), but that is a correctness boundary, not an access
+control: any caller can address any project.
 
 **If you deploy this service, put it behind a reverse proxy that
 enforces authentication, and do not map its ports directly to a public

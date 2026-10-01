@@ -15,17 +15,18 @@
           "segmenter",
           "texthint"
         ],
-        "note": "Each leg runs only when the one before it missed or its candidate was rejected."
+        "note": "Each leg runs only when the one before it missed; candidates are merged and capped."
       },
       {
         "id": "verify",
         "label": "Verify and read",
         "focus": [
           "existing",
+          "select",
           "verify",
           "readtext"
         ],
-        "note": "Every candidate is verified by the VLM (or accepted as-is without one), then its text is read."
+        "note": "Up to max_regions_per_item boxes go to one VLM call (or are accepted without one); each box gets its own verdict and text."
       },
       {
         "id": "no-region",
@@ -36,7 +37,7 @@
           "verify",
           "rejected"
         ],
-        "note": "Misses and rejections become terminal statuses a human can still review and requeue."
+        "note": "Misses and all-rejected sets become terminal statuses a human can review, and reprocess."
       }
     ],
     "legend": {
@@ -77,6 +78,7 @@
   "mainPath": [
     "pending",
     "detector",
+    "select",
     "verify",
     "readtext"
   ],
@@ -132,7 +134,7 @@
       "col": 4,
       "type": "external",
       "label": "VLM verify",
-      "sublabel": "or accept without VLM",
+      "sublabel": "numbered boxes",
       "width": 140
     },
     {
@@ -140,8 +142,8 @@
       "lane": "verify",
       "col": 5,
       "type": "backend",
-      "label": "Read text",
-      "sublabel": "VLM and/or OCR",
+      "label": "Read text per box",
+      "sublabel": "VLM / OCR",
       "tag": "detected",
       "width": 140
     },
@@ -159,8 +161,17 @@
       "lane": "outcome",
       "col": 5,
       "type": "security",
-      "label": "Rejected",
+      "label": "All rejected",
       "sublabel": "verify_rejected",
+      "width": 140
+    },
+    {
+      "id": "select",
+      "lane": "verify",
+      "col": 2,
+      "type": "backend",
+      "label": "Select boxes",
+      "sublabel": "NMS + box cap",
       "width": 140
     }
   ],
@@ -192,26 +203,6 @@
       "variant": "security"
     },
     {
-      "id": "detector-hit",
-      "from": "detector",
-      "to": "verify",
-      "label": "hit",
-      "variant": "emphasis",
-      "role": "main"
-    },
-    {
-      "id": "segmenter-hit",
-      "from": "segmenter",
-      "to": "verify",
-      "label": "hit"
-    },
-    {
-      "id": "texthint-hit",
-      "from": "texthint",
-      "to": "verify",
-      "label": "hit"
-    },
-    {
       "id": "existing-verify",
       "from": "existing",
       "to": "verify"
@@ -230,22 +221,50 @@
       "label": "rejected",
       "role": "error",
       "variant": "security"
+    },
+    {
+      "id": "detector-hit",
+      "from": "detector",
+      "to": "select",
+      "label": "hit",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "segmenter-hit",
+      "from": "segmenter",
+      "to": "select",
+      "label": "hit"
+    },
+    {
+      "id": "texthint-hit",
+      "from": "texthint",
+      "to": "select",
+      "label": "hit"
+    },
+    {
+      "id": "select-verify",
+      "from": "select",
+      "to": "verify",
+      "label": "N candidates",
+      "variant": "emphasis"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "One profile per process",
+      "title": "One active profile per project",
       "items": [
-        "The active DetectionProfile names the detector, segmenter prompt and OCR models",
-        "With no profile configured the worker idles"
+        "The project's active region profile names the detector, segmenter prompt, OCR models and box cap",
+        "With no profile active for a project the worker skips it"
       ]
     },
     {
       "dot": "emerald",
-      "title": "Every leg can verify",
+      "title": "Per-box states",
       "items": [
-        "A segmenter or text-hint candidate goes through the same VLM verify as a detector hit",
+        "Each box is proposed, accepted, rejected or false_positive; the item status derives from them",
+        "Human-owned boxes are locked: the worker plans around them and never rewrites them",
         "Each step is recorded in region_detector_chain"
       ]
     },
@@ -255,7 +274,7 @@
       "items": [
         "A down dependency leaves the item pending, not terminal",
         "detection_failed marks an unreadable image or a sanity-gate reject",
-        "A human can mark a detected box false_positive"
+        "A human can mark a box false_positive; reprocess retries the rest"
       ]
     }
   ]

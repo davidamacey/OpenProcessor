@@ -8,14 +8,16 @@
     "views": [
       {
         "id": "into-the-pool",
-        "label": "Into the item pool",
+        "label": "Into the project",
         "focus": [
+          "project",
           "ingest",
           "detect",
           "embed",
-          "region"
+          "region",
+          "config"
         ],
-        "note": "Ingest proposes items with your detector, embeds them with PE-Core, and seeds region work."
+        "note": "A project binds the work. Ingest or import proposes items, PE-Core embeds them, and the active region profile seeds region work."
       },
       {
         "id": "label",
@@ -30,15 +32,16 @@
       },
       {
         "id": "train-loop",
-        "label": "Export to promote",
+        "label": "Reprocess, export to promote",
         "focus": [
           "review",
+          "reprocess",
           "export",
           "train",
           "bakeoff",
           "promote"
         ],
-        "note": "Validated labels become a frozen export, a training run, a comparison and a served model."
+        "note": "Config changes are re-applied with reprocess (locked labels kept). Validated labels become a frozen export, a run, a comparison, a model."
       }
     ],
     "legend": {
@@ -80,6 +83,7 @@
     }
   ],
   "mainPath": [
+    "project",
     "ingest",
     "detect",
     "embed",
@@ -89,18 +93,27 @@
   ],
   "nodes": [
     {
-      "id": "ingest",
+      "id": "project",
       "lane": "ingest",
       "col": 0,
       "type": "frontend",
-      "label": "Ingest",
-      "sublabel": "/curation/ingest/*",
+      "label": "Project",
+      "sublabel": "/curation/projects/{project}",
+      "width": 140
+    },
+    {
+      "id": "ingest",
+      "lane": "ingest",
+      "col": 1,
+      "type": "frontend",
+      "label": "Ingest / import",
+      "sublabel": "/ingest/*, /datasets/imports",
       "width": 140
     },
     {
       "id": "detect",
       "lane": "ingest",
-      "col": 1,
+      "col": 2,
       "type": "backend",
       "label": "Item detector",
       "sublabel": "OP_INGEST_PRIMARY_*",
@@ -109,7 +122,7 @@
     {
       "id": "embed",
       "lane": "ingest",
-      "col": 2,
+      "col": 3,
       "type": "backend",
       "label": "PE-Core embed",
       "sublabel": "pe_embedding 1024-d",
@@ -118,16 +131,16 @@
     {
       "id": "region",
       "lane": "workers",
-      "col": 2,
+      "col": 3,
       "type": "backend",
       "label": "Region cascade",
-      "sublabel": "detection worker",
+      "sublabel": "per-box verdicts",
       "width": 140
     },
     {
       "id": "cluster",
       "lane": "workers",
-      "col": 3,
+      "col": 4,
       "type": "backend",
       "label": "Cluster",
       "sublabel": "IVF + residual AHC",
@@ -136,7 +149,7 @@
     {
       "id": "vlm",
       "lane": "workers",
-      "col": 4,
+      "col": 5,
       "type": "external",
       "label": "VLM suggest",
       "sublabel": "vlm_* fields",
@@ -187,9 +200,34 @@
       "label": "Promote",
       "sublabel": "Triton load",
       "width": 140
+    },
+    {
+      "id": "config",
+      "lane": "workers",
+      "col": 2,
+      "type": "database",
+      "label": "Config store",
+      "sublabel": "profile / pack / VLM",
+      "width": 140
+    },
+    {
+      "id": "reprocess",
+      "lane": "review",
+      "col": 1,
+      "type": "frontend",
+      "label": "Reprocess",
+      "sublabel": "/reprocess (locks kept)",
+      "width": 140
     }
   ],
   "edges": [
+    {
+      "id": "project-ingest",
+      "from": "project",
+      "to": "ingest",
+      "label": "bind",
+      "variant": "emphasis"
+    },
     {
       "id": "ingest-detect",
       "from": "ingest",
@@ -234,8 +272,7 @@
       "from": "review",
       "to": "export",
       "label": "validated labels",
-      "role": "return",
-      "route": "return-left"
+      "role": "return"
     },
     {
       "id": "export-train",
@@ -261,6 +298,30 @@
       "label": "probe",
       "variant": "dashed",
       "role": "return"
+    },
+    {
+      "id": "config-region",
+      "from": "config",
+      "to": "region",
+      "label": "active profile",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "review-reprocess",
+      "from": "review",
+      "to": "reprocess",
+      "label": "after config change",
+      "variant": "dashed",
+      "role": "return"
+    },
+    {
+      "id": "reprocess-region",
+      "from": "reprocess",
+      "to": "region",
+      "label": "unlocked only",
+      "variant": "dashed",
+      "role": "branch"
     }
   ],
   "cards": [
@@ -269,7 +330,7 @@
       "title": "Bring your own models",
       "items": [
         "You supply the item detector; PE-Core encoders are required",
-        "The VLM, region profile and segmenter are optional",
+        "The VLM, region profile and segmenter are optional, and set per project",
         "Ingest 503s until an item detector is configured"
       ]
     },
@@ -278,7 +339,7 @@
       "title": "Humans stay in charge",
       "items": [
         "VLM answers are suggestions until confirmed",
-        "Every label write is undoable and keeps its class_source",
+        "Human and imported labels are locked: no worker or reprocess overwrites them",
         "auto_label clusters only unless run_vlm=true"
       ]
     },
@@ -288,7 +349,7 @@
       "items": [
         "Promote is gated on mAP50 and per-class precision/support",
         "Probe predictions feed the model_disagreements queue",
-        "The API and trainer only exchange files; see the Training + promote sequence"
+        "Datasets, combine and promoted models match classes by name"
       ]
     }
   ]

@@ -9,6 +9,11 @@ You can run two independent OpenProcessor stacks on one host (for example
 a stable deployment and a development clone). Isolation comes from four
 things, all set in each clone's own `.env`.
 
+This is separate from curation [projects](../guides/projects.mdx), which
+isolate datasets *inside* one stack. A second stack has its own OpenSearch,
+so it has its own set of projects. `COMPOSE_PROJECT_NAME` below names the
+Compose project, not a curation project.
+
 ## 1. Compose project name
 
 `docker-compose.yml` sets `name: ${COMPOSE_PROJECT_NAME:-openprocessor}`,

@@ -6,19 +6,19 @@
       {
         "id": "system-overview",
         "title": "System Overview",
-        "description": "Every service in docker-compose.yml and how they talk: clients reach yolo-api, which calls Triton over gRPC and OpenSearch; the opt-in profiles add the curation workers, segmenter, VLM, trainer, evaluator, MLflow and monitoring. Start here.",
+        "description": "Every service in docker-compose.yml and how they talk: clients reach yolo-api, which calls Triton over gRPC and OpenSearch; the opt-in profiles add the multi-project curation workers, segmenter, VLM endpoints, trainer, evaluator, MLflow and monitoring. Start here.",
         "height": 1000
       },
       {
         "id": "backend-modules",
         "title": "Backend Modules",
-        "description": "How src/ is organized: src/main.py mounts the core and curation routers, which are thin adapters over FastAPI-free services, configured by the src/config dataclasses. The curation workers import the same detection and labeling services.",
+        "description": "How src/ is organized: src/main.py mounts the core and curation routers (curation routes are scoped by project), which are thin adapters over FastAPI-free services, configured by the src/config dataclasses and the per-project config store. The curation workers import the same detection and labeling services.",
         "height": 1000
       },
       {
         "id": "data-model",
         "title": "Data Model",
-        "description": "The OpenSearch indexes: the curation pool (images, items, classes, confirmed labels, settings and projection state, plus the JSON class registry) and the separate visual-search indexes the core /ingest route writes.",
+        "description": "The OpenSearch indexes: each project's six curation indexes (images, items with their region_boxes, classes, UMAP state, configs, legacy labels) plus its class registry and exports, the global project and config indexes, and the separate visual-search indexes the core /ingest route writes.",
         "height": 1150
       }
     ]
@@ -36,13 +36,13 @@
       {
         "id": "curation-pipeline",
         "title": "Curation Pipeline",
-        "description": "The active-learning loop: ingest with your item detector, PE-Core embeddings, clustering, VLM suggestions, human review, export, training, bake-off and promote, with probe predictions feeding the next review cycle.",
+        "description": "The active-learning loop inside a project: ingest or import, PE-Core embeddings, clustering, VLM suggestions, human review, reprocess after config changes, export, training, bake-off and promote, with probe predictions feeding the next review cycle.",
         "height": 1000
       },
       {
         "id": "region-cascade",
         "title": "Region Cascade",
-        "description": "The detection worker's cascade for the active region profile: region detector, then the segmenter leg, then an OCR text-hinted re-segment; every candidate is VLM-verified and its text read. Shows the code as it is today; multi-region support and editable prompts/profiles are coming soon, and this diagram will be updated when they land.",
+        "description": "The detection worker's cascade for a project's active region profile: region detector, then the segmenter leg, then an OCR text-hinted re-segment; up to max_regions_per_item candidates are selected, verified by the VLM in one numbered call, and each box gets its own verdict and text.",
         "height": 1000
       }
     ]
@@ -54,7 +54,7 @@
       {
         "id": "training-promote",
         "title": "Training and Promote",
-        "description": "The API and the trainer exchange only files on the shared /jobs volume. The GPU arbiter claims GPUs for the run and releases them afterwards; promote checks the eval gate, writes the model repository and loads the model into Triton.",
+        "description": "The API and the trainer exchange only files on the shared /jobs volume, in each project's own directory. The GPU arbiter claims GPUs for the run and releases them afterwards; promote checks the eval gate, writes the project-prefixed model into the repository and loads it into Triton.",
         "height": 1300
       }
     ]

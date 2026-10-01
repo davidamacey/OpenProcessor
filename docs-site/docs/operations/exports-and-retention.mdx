@@ -5,24 +5,30 @@ title: Exports and retention
 
 # Exports and retention
 
+Exports are per project. Routes on this page are under
+`/curation/projects/{project}/`; each project's exports live in its own
+directory, `{OP_PROJECTS_DATA_ROOT}/{slug}/exports/`. Class ids in an
+export are the project's own dense ids, written with the ordered class-name
+list.
+
 ## Freezing a test holdout first
 
-`POST /curation/test_holdout/freeze` marks a per-class test split once, so
+`POST /curation/projects/{project}/test_holdout/freeze` marks a per-class test split once, so
 every later export and every model comparison scores against the same
-frozen items. `GET /curation/test_holdout/stats` shows it. Items in the
+frozen items. `GET /curation/projects/{project}/test_holdout/stats` shows it. Items in the
 holdout are protected: a class merge that would move them is refused.
 
 ## Multi-class YOLO export
 
 ```bash
-curl -s -X POST "$API/curation/export/yolo" -H 'content-type: application/json' -d '{}'
-curl -s "$API/curation/export/status"
+curl -s -X POST "$API/curation/projects/$P/export/yolo" -H 'content-type: application/json' -d '{}'
+curl -s "$API/curation/projects/$P/export/status"
 ```
 
-- **Always every class.** `/export/yolo` has no `classes` field and rejects
+- **Always every class.** `POST /export/yolo` has no `classes` field and rejects
   unknown keys. To train on a subset, either export with
   `/export/single_class`, or pass `hyperparameters.include_classes` to
-  `POST /curation/train/start`.
+  `POST /curation/projects/{project}/train/start`.
 - **Split by source image.** Items cut from one image always land in the
   same split. Images holding a frozen holdout item go to `test` with all
   their objects; the rest of that class is split between train and val.
@@ -36,6 +42,11 @@ curl -s "$API/curation/export/status"
   then warns (`export_unlabeled_objects`), because the detector will learn
   those objects as background. `require_fully_labeled_images: true` leaves
   such images out instead.
+- **Imported data round-trips.** A frozen test split, negative frames
+  (images with no box) and split assignments written by a
+  [dataset import](../guides/dataset-import.mdx) are honored by the export,
+  and an OpenProcessor export can be imported into another project with
+  its labels, splits and frozen test SHA intact.
 - **`dataset_sha`** hashes the written label *content* (which frames, which
   split, which boxes) plus the ordered class-name list, so a split change,
   a corrected box or a class rename all change it.
@@ -44,7 +55,7 @@ curl -s "$API/curation/export/status"
 
 ## Single-class and class-subset export
 
-`POST /curation/export/single_class` builds a narrowed dataset for one
+`POST /curation/projects/{project}/export/single_class` builds a narrowed dataset for one
 class or a subset (`class_ids`), adds background and hard-negative frames
 (`empty_bg_ratio`, human-marked false positives), can export whole frames
 or item crops (`image_mode`), can take boxes from items or from the region
@@ -54,9 +65,9 @@ split's identity. Single-class versions live under
 
 ## Listing and downloading
 
-- `GET /curation/export/datasets` lists every export with its `kind`,
+- `GET /curation/projects/{project}/export/datasets` lists every export with its `kind`,
   `dataset_sha`, split counts and `is_current`.
-- `GET /curation/export/registry/{artifact}` downloads a frozen artifact of
+- `GET /curation/projects/{project}/export/registry/{artifact}` downloads a frozen artifact of
   the current export (`class_registry.json`, `data.yaml`, `manifest.json`,
   `label_stats.json`); any other name is a `404` before the filesystem is
   touched.
@@ -78,4 +89,5 @@ target of the `current` symlink, or any export a training job, a finished
 run's lineage, or a queued/running bake-off still references. Training-run
 pruning never removes a non-terminal run, a promoted run, or one a bake-off
 still references, and never touches MLflow. Both scripts are dry runs
-unless you pass `--apply`.
+unless you pass `--apply`, and each visits every active and archived
+project under that project's own binding (`--project` narrows it to one).

@@ -1,283 +1,134 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file guides AI coding agents working in this repository: what it is,
+where things live, and the commands and rules that matter.
 
 ## IMPORTANT: Read the project vision first
 
 Before making design decisions or judgment calls, read
-[`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md) — the canonical
-statement of what OpenProcessor is for, the full v0.1.0 feature scope, and
-the standards this codebase is held to (no dead code, fail-closed
-isolation, class identity by name never index, review depth matched to
-real risk). It also documents what's deliberately out of scope for this
-release and why.
+[`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md): what OpenProcessor is
+for, the v0.1.0 feature scope, and the standards the code is held to (no dead
+code, no compatibility shims, fail-closed isolation, class identity by name
+never index, review depth matched to real risk).
 
 ## IMPORTANT: Python Environment
 
-**ALWAYS call the venv binaries directly — never use `source` to activate:**
+**Call the venv binaries directly. Never `source` the venv.**
 
 ```bash
-.venv/bin/python tests/test_full_system.py
-.venv/bin/python -m pytest tests/
+.venv/bin/python -m pytest tests/ -q
 .venv/bin/pre-commit run --all-files
+.venv/bin/python -m ruff check src/
+.venv/bin/python -m mypy src/
 ```
 
-**When running Python scripts or commands:**
-- ✅ CORRECT: `.venv/bin/python tests/test_full_system.py`
-- ✅ CORRECT: `.venv/bin/pre-commit run --all-files`
-- ❌ WRONG: `source .venv/bin/activate && python ...` (triggers a shell-injection warning in some harnesses)
-- ❌ WRONG: `python tests/test_full_system.py` (uses system Python)
-- ❌ WRONG: `python3 tests/test_full_system.py` (uses system Python3)
+- Correct: `.venv/bin/python tests/test_full_system.py`
+- Wrong: `source .venv/bin/activate && python ...` (some harnesses flag it)
+- Wrong: bare `python` or `python3` (system Python, missing dependencies)
 
-The `.venv` directory contains all required dependencies including:
-- FastAPI, uvicorn, pydantic
-- pre-commit, ruff, mypy, bandit
-- pytest, requests
-- All ML libraries (torch, transformers, opencv, etc.)
+Create the venv with `python3 -m venv .venv` and
+`.venv/bin/pip install -r requirements.txt -r requirements-test.txt`
+(see [CONTRIBUTING.md](CONTRIBUTING.md)). The offline suite needs no Docker
+and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'`.
 
-## Project Overview
+## Project overview
 
-High-performance visual AI API built on FastAPI and NVIDIA Triton Inference Server. The system provides a unified, capability-based REST API for computer vision tasks.
+OpenProcessor is a backend for computer-vision dataset curation and training
+with a fast inference API on NVIDIA Triton underneath. The API runs on FastAPI
+at port 4603.
 
-**Core Capabilities:**
-- **Object Detection**: YOLO11 for 80-class COCO detection
-- **Face Recognition**: SCRFD-10G detection + ArcFace embeddings (512-dim)
-- **CLIP Embeddings**: MobileCLIP for image/text embeddings (512-dim)
-- **OCR**: PP-OCRv5 for text detection and recognition
-- **Visual Search**: OpenSearch k-NN for similarity search across all embedding types
+- **Inference API** (`/detect`, `/faces`, `/embed`, `/search`, `/ingest`,
+  `/ocr`, `/analyze`, `/clusters`, `/query`, `/models`, `/health`): YOLO11 and
+  YOLO26 detection, SCRFD + ArcFace faces, MobileCLIP embeddings, PP-OCRv5.
+  Also served under `/v1`.
+- **Curation subsystem** (`/curation`, no `/v1` twin): isolated projects,
+  ingest, a region stage producing one or many boxes per item, VLM labeling,
+  review, dataset import, combine, export, training and promotion. Cropwright
+  is the separate frontend.
 
-**Key Features:**
-- Single service architecture on port 4603
-- TensorRT-accelerated inference with GPU NMS
-- Batch processing support (up to 64 images per request)
-- Vector search with configurable indexes
-- Face clustering and identification
+## Repository layout
 
-## Architecture
+| Path | What is there |
+|---|---|
+| `src/main.py` | FastAPI app, router mounting, lifespan |
+| `src/routers/` | Core routers; `src/routers/curation/` holds the curation routers (thin HTTP adapters) |
+| `src/services/` | Logic with no FastAPI dependency: `curation/`, `config_store/`, `projects/`, `labeling/` (VLM), `detection/`, `training/` |
+| `src/clients/` | Triton, OpenSearch (`curation_opensearch.py` has the index bodies), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
+| `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, retired-env guard |
+| `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
+| `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/` |
+| `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
+| `models/` | Triton model repository (`config.pbtxt` per model; `.plan` engines are built, not committed) |
+| `export/` | Model export scripts, see [export/README.md](export/README.md) |
+| `docker/` | Side-car images: `segmenter/`, `trainer/`, `evaluator/`, `test/` (live harness), `hardened/` |
+| `contracts/` | Generated OpenAPI and TypeScript/JSON wire contracts. Do not hand-edit |
+| `examples/` | Region profiles, prompt packs, bake-off profiles, the VLM catalog (`vlm/catalog.tsv`) |
+| `tests/` | Offline pytest suite; `tests/live/` needs the live harness |
+| `docs/`, `docs-site/` | Markdown docs; Docusaurus site |
 
-### Services
+## Services and compose
 
-The system uses Docker Compose to orchestrate three core services:
+`docker-compose.yml` is deploy-safe on its own: no `build:` blocks and no
+source mounts. `docker-compose.dev.yml` adds local builds and hot-reload mounts
+for a checkout. The Makefile, `scripts/setup.sh` and the `openprocessor` CLI
+add the dev overlay automatically when `src/main.py` exists next to the compose
+file. `docker-compose.gpu-arbiter.yml` is an opt-in overlay that mounts the
+Docker socket (read its header first).
 
-1. **triton-server**: NVIDIA Triton Inference Server
-   - GPU inference backend (device_ids configurable, default: [`0`])
-   - Ports: 4600 (HTTP), 4601 (gRPC), 4602 (metrics)
-   - Serves TensorRT models with dynamic batching
-   - Max batch size: 128
+| Service | Profile | Port | Role |
+|---|---|---|---|
+| `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
+| `yolo-api` | none | 4603 | FastAPI, all routes |
+| `opensearch` | none | 4607 | k-NN store and the curation datastore |
+| `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh`, `curation-evaluator` | `curation` | | Region cascade, VLM loop, auto-label driver, clustering refresh, bake-off runner |
+| `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt |
+| `vlm` | `vlm` | 4612 | Local vLLM serving a catalog model |
+| `curation-trainer`, `curation-mlflow` | `training` | 4609 (MLflow) | Training jobs through a file protocol, tracking |
+| Prometheus, Grafana, Loki, Alloy, DCGM, node exporter, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4608 | Opt in: `make up-monitoring` |
+| `triton-sdk` | `benchmark` | | Benchmark client |
 
-2. **yolo-api**: FastAPI Service
-   - Python 3.12 with async support
-   - Port: **4603** (all API endpoints)
-   - Workers: 2 (dev) or 64 (production)
-   - Located in [src/main.py](src/main.py)
+GPU placement comes from `.env` (`TRITON_GPU_ID`, `API_GPU_ID`,
+`SEGMENTER_GPU_ID`, `EVALUATOR_GPU_ID`, `VLM_GPU_ID`); the compose files pin no
+GPU. The compose project name is `COMPOSE_PROJECT_NAME` (default
+`openprocessor`). From a git worktree always pass `-p <name>` so you do not
+act on a live stack with the default name.
 
-3. **opensearch**: Vector Database
-   - OpenSearch 3.0+ with k-NN plugin
-   - Port: **4607** (REST API)
-   - Indexes: images, faces, objects, ocr
+## Commands
 
-### Core Models
-
-| Model | Purpose | Input | Output |
-|-------|---------|-------|--------|
-| `yolov11_small_trt_end2end` | Object detection | 640x640 RGB | Boxes + classes |
-| `scrfd_10g_bnkps` | Face detection + landmarks | 640x640 RGB | Boxes + 5-point landmarks |
-| `arcface_w600k_r50` | Face embedding | 112x112 RGB | 512-dim vector |
-| `mobileclip2_s2_image_encoder` | Image embedding | 256x256 RGB | 512-dim vector |
-| `mobileclip2_s2_text_encoder` | Text embedding | Token IDs | 512-dim vector |
-| `paddleocr_det_trt` | Text detection | Variable RGB | Text boxes |
-| `paddleocr_rec_trt` | Text recognition | Text crops | Characters |
-| `ocr_pipeline` | OCR BLS pipeline | Variable RGB | Text + boxes + scores |
-
-### Model Directory Structure
-
-```
-models/
-├── yolov11_small_trt_end2end/   # YOLO11 object detection
-│   ├── 1/model.plan
-│   └── config.pbtxt
-├── scrfd_10g_bnkps/             # SCRFD face detection + landmarks
-│   ├── 1/model.plan
-│   └── config.pbtxt
-├── arcface_w600k_r50/           # ArcFace face embedding
-│   ├── 1/model.plan
-│   └── config.pbtxt
-├── mobileclip2_s2_image_encoder/ # MobileCLIP image encoder
-│   ├── 1/model.plan
-│   └── config.pbtxt
-├── mobileclip2_s2_text_encoder/  # MobileCLIP text encoder
-│   ├── 1/model.plan
-│   └── config.pbtxt
-├── paddleocr_det_trt/           # PP-OCRv5 text detection
-│   ├── 1/model.plan
-│   └── config.pbtxt
-├── paddleocr_rec_trt/           # PP-OCRv5 text recognition
-│   ├── 1/model.plan
-│   └── config.pbtxt
-└── ocr_pipeline/                # OCR BLS pipeline
-    └── config.pbtxt
-```
-
-## API Endpoints
-
-All endpoints available on port **4603**.
-
-### API Versioning
-
-The core inference/ingest/query surface is available at both the root path and under the `/v1` prefix:
-- `/detect` and `/v1/detect` - Both work identically
-- `/faces/recognize` and `/v1/faces/recognize` - Both work identically
-
-**This `/v1` twin does NOT cover the `/curation` surface.** The curation
-subsystem (see [docs/CURATION.md](docs/CURATION.md)) is experimental for
-this release and every `/curation/*` route is only mounted at its single,
-unversioned path — there is no `/v1/curation/*` twin today.
-
-**Versioned endpoints are recommended** for production use of the core API as they ensure compatibility
-when new API versions are released. The current supported version is **v1**.
-
-Check API version via:
 ```bash
-curl http://localhost:4603/ | jq '.api_versions'
-# {"current":"v1","supported":["v1"],"deprecated":[]}
-
-curl http://localhost:4603/health | jq '{version, api_version}'
-# {"version":"0.3.0","api_version":"v1"}
+make up                  # core stack (Triton + API + OpenSearch)
+make up-monitoring       # core plus monitoring
+make down
+make logs-api            # also logs-triton, logs-opensearch
+make restart-api         # route/endpoint changes need an API restart
+make status              # health of all services
+make curation-up         # start the curation workers
+make test                # pytest suite
+make contracts           # regenerate contracts/ after an API or wire change
+make contracts-check
+make models-list         # Triton model states
+make help                # every target
 ```
 
-### /detect - Object Detection
+The management CLI works in a checkout (`./openprocessor`, or the shim
+`./scripts/openprocessor.sh`) and in an installed directory. Subcommands:
+`start`, `stop`, `restart [service]`, `logs [service] [-f]`, `status`,
+`health`, `models [status|install [--only GROUP]|repair]`, `export`,
+`download`, `profile`, `test`, `curation [up|down|logs|status]`, `bench`,
+`clean`, `update`, `sample coco [--full]`, `config show`, `gpu plan`,
+`vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
+`upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`,
+`bench` and `setup` need a checkout. Details:
+[INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/detect` | Detect objects in single image |
-| POST | `/detect/batch` | Batch detection (up to 64 images) |
+Python source is mounted into `yolo-api` in a checkout, so most edits are live;
+restart `yolo-api` after route changes. Rebuild images only when a Dockerfile or
+`requirements.txt` changes.
 
-### /faces - Face Detection and Recognition
+## Core API shape
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/faces/detect` | Detect faces with landmarks |
-| POST | `/faces/recognize` | Detect faces + extract embeddings |
-| POST | `/faces/verify` | Compare two face images (1:1) |
-| POST | `/faces/search` | Search for similar faces in index |
-| POST | `/faces/identify` | Identify face against known identities (1:N) |
-
-### /embed - CLIP Embeddings
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/embed/image` | Generate image embedding |
-| POST | `/embed/text` | Generate text embedding |
-| POST | `/embed/batch` | Batch image embeddings |
-| POST | `/embed/boxes` | Embeddings for cropped regions |
-
-### /search - Visual Search
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/search/image` | Find similar images by image |
-| POST | `/search/text` | Find images by text description |
-| POST | `/search/face` | Find images containing similar faces |
-| POST | `/search/ocr` | Find images by text content |
-| POST | `/search/object` | Find images containing similar objects |
-
-### /ingest - Data Ingestion
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/ingest` | Ingest single image (auto-indexes faces, OCR) |
-| POST | `/ingest/batch` | Batch ingest (up to 64 images, 300+ RPS) |
-| POST | `/ingest/directory` | Ingest entire directory |
-
-### /analyze - Combined Analysis
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/analyze` | Full analysis: detection + faces + embedding + OCR |
-| POST | `/analyze/batch` | Batch full analysis |
-
-### /clusters - Clustering and Albums
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/clusters/train/{index}` | Train clustering model on index |
-| POST | `/clusters/assign/{index}` | Assign vectors to clusters |
-| GET | `/clusters/stats/{index}` | Get clustering statistics |
-| GET | `/clusters/{index}/{cluster_id}` | Get items in specific cluster |
-
-### /query - Data Retrieval
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/query/stats` | Get index statistics |
-| GET | `/query/image/{id}` | Get image metadata by ID |
-| DELETE | `/query/image/{id}` | Delete image from indexes |
-| GET | `/query/duplicates` | Find duplicate images |
-
-### /ocr - Text Extraction
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/ocr/predict` | Extract text from single image |
-| POST | `/ocr/batch` | Batch OCR processing |
-
-### /models - Model Management
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/models/upload` | Upload custom model |
-| GET | `/models` | List available models |
-| POST | `/models/{name}/export` | Export model to TensorRT |
-| GET | `/models/{name}/status` | Get model loading status |
-
-### /curation - Curation and Active-Learning Labeling
-
-Mounted under `CurationConfig.api_prefix` (default `/curation`; 103 routes
-across 21 router modules under `src/routers/curation/`). See
-[`docs/design/curation_api_contract.md`](docs/design/curation_api_contract.md)
-for the full route table and wire-model field names, and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#curation-subsystem) for the
-component map. Design rationale — why it's built behind three config
-dataclasses (`CurationConfig`, `RegionFields`, `DetectionProfile`) that
-keep the subsystem domain-neutral, so a different domain constructs its
-own instances rather than forking the code — is in
-[`docs/design/curation_design_rationale.md`](docs/design/curation_design_rationale.md).
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET, POST | `/curation/classes`, `/curation/classes/merge` | Class registry CRUD + merge |
-| GET, PUT, DELETE | `/curation/crops`, `/curation/crops/{id}/label` | Item browse/label/move/exclude |
-| GET, PUT, PATCH | `/curation/regions`, `/curation/crops/{id}/region*` | Region-of-interest detect/verify/metadata |
-| GET | `/curation/clusters`, `/curation/clusters/representatives` | Cluster cards + representatives |
-| GET | `/curation/review/{tab}` | Active-learning review queue |
-| POST, GET | `/curation/scores/*`, `/curation/select/*` | Mistakenness/uniqueness scoring, diverse selection |
-| GET | `/curation/search/text` | Semantic (PE-Core kNN) text-to-image search |
-| POST | `/curation/vlm/label_batch`, `/curation/vlm/verify_region*` | VLM class labeling + region verification |
-| POST, GET | `/curation/train/*` | Training job lifecycle (preflight, start, status, promote) |
-| POST, GET | `/curation/pipeline/auto_label*` | Auto-label job dispatch + SSE progress |
-| POST, GET | `/curation/export/*` | Dataset export (YOLO format) + status |
-| GET | `/curation/models/status`, `/curation/health` | Curation-scoped model/health status |
-
-## Response Formats
-
-### Detection Response
-
-```json
-{
-  "detections": [
-    {
-      "x1": 0.15, "y1": 0.20, "x2": 0.45, "y2": 0.80,
-      "confidence": 0.92,
-      "class_id": 0,
-      "class_name": "person"
-    }
-  ],
-  "image": {"width": 1920, "height": 1080},
-  "inference_time_ms": 12.5
-}
-```
-
-### Face Recognition Response
+Coordinates are normalized `0.0-1.0`. Face landmarks are a flat list of 10
+floats.
 
 ```json
 {
@@ -293,180 +144,93 @@ own instances rather than forking the code — is in
 }
 ```
 
-### Embedding Response
+`POST /search/text` takes `text` and `top_k` as query parameters, not a JSON
+body. The core route list is in [README.md](README.md#api-endpoints).
 
-```json
-{
-  "embedding": [0.012, -0.034, 0.056, ...],
-  "dimensions": 512,
-  "inference_time_ms": 8.2
-}
-```
+## Curation subsystem: rules that matter when editing
 
-### Search Response
+- **Projects.** Every curation route is `/curation/projects/{project}/...`.
+  A project owns its OpenSearch indexes
+  (`{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`), directories and class registry.
+  Code reads names through the bound project (`src/config/project_context.py`),
+  never through a constant. The OpenSearch guard
+  (`src/services/projects/guard.py`) refuses any request that reaches an index
+  the bound project does not own. Construct OpenSearch clients only through
+  the factory and `make_script_opensearch`. A script binds a project with
+  `--project` (default `$OP_CURATION_PROJECT`, else `default`).
+- **Regions are lists.** `region_boxes` is a nested list per item; one region
+  is a list of one. Box elements have fixed keys (`box_id`, `bbox_norm`, `state`,
+  `score`, `detector`, `text*`, `cluster_*`). Writes go through
+  `src/services/curation/region_boxes.py` and the OCC helpers. Per-box vectors
+  live in the sibling `region_box_embeddings`. `tests/test_no_legacy_region_scalars.py`
+  guards against single-box scalar fields.
+- **Lock rule.** Automated writers never overwrite a human- or
+  import-validated class or box, or an item in the frozen test holdout
+  (`src/clients/occ_locks.py`). Use the OCC read/merge/write helpers, not a
+  blind update.
+- **Class identity is the name.** Never carry a raw class index across a
+  boundary (import, combine, export, train, promote, model sharing).
+- **Config store.** Prompt packs, region profiles and the VLM activation are
+  revisioned documents (`src/services/config_store/`). The VLM endpoint
+  registry is deployment-wide; activation is per project.
+- **Wire contract.** One serializer (`src/services/curation/wire.py`) maps
+  storage to the fixed wire names. After changing a route or model run
+  `make contracts` and commit `contracts/` in the same commit; a pre-commit
+  hook rejects stale contracts.
+- **No dead code or shims.** Delete a superseded route or field in the same
+  change. Retired env vars are rejected at startup
+  (`src/config/retired_env.py`).
+- **Fail closed.** An unbound project, a stale registry or an ambiguous state
+  refuses the operation.
 
-```json
-{
-  "results": [
-    {
-      "image_id": "abc123",
-      "score": 0.95,
-      "image_path": "/data/photos/image001.jpg",
-      "metadata": {}
-    }
-  ],
-  "total_results": 42,
-  "search_time_ms": 3.5
-}
-```
+## Pre-commit and checks
 
-### Ingest Response
-
-```json
-{
-  "image_id": "abc123",
-  "indexed": {
-    "global": true,
-    "faces": 2,
-    "objects": 5,
-    "ocr": true
-  },
-  "processing_time_ms": 45.2
-}
-```
-
-## Development Commands
-
-### Deployment
-
-```bash
-# Start all services (requires GPU)
-docker compose up -d
-
-# View logs
-docker compose logs -f triton-server
-docker compose logs -f yolo-api
-
-# Stop services
-docker compose down
-```
-
-**Code Hot Reloading:**
-- Volume mounts enable hot reloading for Python code
-- To pick up changes: `docker compose stop yolo-api && docker compose rm -f yolo-api && docker compose up -d yolo-api`
-- Only rebuild containers when `Dockerfile` or `requirements.txt` changes
-
-### Testing
+Run `.venv/bin/pre-commit run --all-files` before every commit. Notable
+hooks: ruff, mypy, bandit, the per-file size ratchet
+(`scripts/codegen/check_file_size.py`), the region-field literal ratchet
+(`check_no_literal_region_fields.py`), the naming-leak scan
+(`scripts/codegen/check_naming_leaks.py`: no private product or domain names
+in the tracked tree) and the contract-drift hooks. Docs are checked against
+the code:
 
 ```bash
-# Comprehensive test suite (all endpoints, ingest, search)
-.venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
-
-# Visual validation (draws bounding boxes on images)
-.venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
-
-# View annotated images
-ls test_results/*.jpg
-
-# Quick API tests (legacy Makefile targets)
-make test-all
-make test-detect
-make test-faces
-make test-embed
-make test-search
-make test-ingest
-make test-ocr
-
-# Health check
-make check-all
+.venv/bin/python scripts/docs/check_docs_vs_code.py            # routes, OP_* vars, links
+.venv/bin/python scripts/docs/check_docs_vs_code.py --only README.md
 ```
 
-### Benchmarking
+Docs may only name routes that exist in `contracts/openapi/curation.json` or
+the app, `OP_*` variables read by code, and links that resolve.
+
+## Testing
 
 ```bash
-# Build benchmark tool
-make bench-build
-
-# Quick benchmark (30 seconds)
-make bench-quick
-
-# Full benchmark (60 seconds, 128 clients)
-make bench-full
-
-# Benchmark specific endpoints
-make bench-detect
-make bench-faces
-make bench-ingest
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'   # offline suite
+.venv/bin/python tests/test_full_system.py                     # needs the running stack
+.venv/bin/python tests/validate_visual_results.py              # annotated images in test_results/
 ```
 
-### Model Management
-
-```bash
-# List loaded models
-make models-list
-
-# Export models to TensorRT
-make export-models
-
-# Restart Triton to reload models
-make restart-triton
-```
+The live write-path harness (`docker/test/compose.yml`, `tests/live/`) runs
+under its own compose project name; see
+[`docker/test/README.md`](docker/test/README.md). For UI work, open the page in
+a browser; type checks do not prove a feature works.
 
 ## Configuration
 
-### Triton Server
+Settings live in `.env` (template `env.template`). The "Curation quick-config"
+block lists the keys the curation tiers need. Index names are not
+configurable: they come from the project. Ports: API 4603, Triton 4600-4602,
+Prometheus 4604, Grafana 4605, Loki 4606, OpenSearch 4607, Dashboards 4608,
+MLflow 4609, DCGM 4610, segmenter 4611, VLM 4612. Set `OP_BIND_ADDRESS` to
+publish beyond loopback (the installer asks for consent).
 
-- **Dynamic batching**: Preferred batch sizes [8, 16, 32, 64]
-- **Max queue delay**: 5ms for balanced latency/throughput
-- **TensorRT precision**: FP16 mode
-- **Instance count**: 2 per model (configurable)
+The API has no authentication. Do not expose it. See [SECURITY.md](SECURITY.md).
 
-### OpenSearch Indexes
+## Key documents
 
-| Index | Embedding Dim | Distance | Purpose |
-|-------|---------------|----------|---------|
-| `images` | 512 | cosine | Global image embeddings |
-| `faces` | 512 | cosine | Face embeddings |
-| `objects` | 512 | cosine | Object crop embeddings |
-| `ocr` | 512 | cosine | OCR text embeddings |
-
-## Monitoring
-
-The deployment includes a monitoring stack:
-
-- **Prometheus**: Metrics collection (port 4604)
-- **Grafana**: Visualization dashboards (port 4605, admin/admin)
-- **Loki + Promtail**: Log aggregation (port 4606)
-- **OpenSearch Dashboards**: Vector search management (port 4608)
-
-View dashboards at http://localhost:4605
-
-## Dependencies
-
-Key Python packages in [requirements.txt](requirements.txt):
-
-- `fastapi`, `uvicorn[standard]`: REST API server
-- `tritonclient[all]`: Triton gRPC/HTTP client
-- `opencv-python`, `pillow`: Image processing
-- `numpy`: Numerical operations
-- `opensearch-py>=2.3.0`: Async OpenSearch client
-- `transformers>=4.30.0`: CLIP tokenizer
-
-## Production Deployment
-
-1. All endpoints on single port (4603) - simplifies load balancing
-2. Configure `--workers=64` for production throughput
-3. Enable OpenSearch security for production
-4. Use Prometheus/Grafana for monitoring
-5. Scale horizontally with multiple API instances behind load balancer
-
-## Test Data
-
-| Dataset | Location | Images | Purpose |
-|---------|----------|--------|---------|
-| LFW Deep Funneled | `test_images/faces/lfw-deepfunneled` | 13,233 | Face recognition validation |
-| Sample Images | `test_images/` | varies | General testing |
-
-## Attribution
-
-See [ATTRIBUTION.md](ATTRIBUTION.md) for third-party code attribution and licensing.
+- [README.md](README.md), [INSTALLATION.md](INSTALLATION.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data model, topology
+- [docs/CURATION.md](docs/CURATION.md): curation user guide
+- [docs/design/curation_api_contract.md](docs/design/curation_api_contract.md): routes and wire models
+- [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): index schemas
+- [contracts/README.md](contracts/README.md): generated contracts
+- [ATTRIBUTION.md](ATTRIBUTION.md): third-party licensing

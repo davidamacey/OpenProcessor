@@ -11,9 +11,14 @@ Prometheus, Grafana, MLflow, OpenSearch Dashboards; see
 [Backend screenshots](#backend-screenshots)), and the curation screens,
 which were **captured from Cropwright, a frontend for this backend**,
 and are used here because they show backend-driven features directly:
-cluster cards (`GET /curation/clusters`), review queues
-(`GET /curation/review/{tab}`), region review, training (`/curation/train/*`)
-and model comparison (`/curation/bakeoff/*`).
+cluster cards (`GET /curation/projects/{project}/clusters`), review queues
+(`GET /curation/projects/{project}/review/{tab}`), region review, training
+(the `train` routes) and model comparison (the `bakeoff` routes).
+
+Screens for the project, config-store, VLM-selection and multi-box features
+are not captured yet. Where a page needs one, it carries a placeholder of
+the form `> Screenshot pending: Cropwright (<what it will show>)`. Replace
+the placeholder with a `<Screenshot />` once the PNG exists.
 
 **Public data only.** Every screenshot must come from an instance holding
 public sample data (`make sample-coco`, `make sample-plates`). Never

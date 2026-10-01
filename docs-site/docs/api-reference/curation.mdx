@@ -6,47 +6,91 @@ title: Curation routes
 # Curation routes
 
 :::info[Experimental]
-The curation subsystem is experimental in v0.3.0. It is real and tested,
+The curation subsystem is experimental in v0.1.0. It is real and tested,
 but backward compatibility across releases is not guaranteed until it
 graduates. It ships opt-in behind the `curation` compose profile.
 :::
 
-All paths below are relative to the configured prefix (`OP_API_PREFIX`,
-default `/curation`); consumers should read the prefix from config rather
-than hardcode it. There is no `/v1` twin and no alternate or
-vendor-named alias. The generated contract,
-`contracts/openapi/curation.json`, lists **145 method routes**; the tables
-below group them by area. Request models reject unknown keys
+The generated contract, `contracts/openapi/curation.json`, lists **237
+method routes** and is the source of truth for every path, parameter and
+schema. This page groups them by area. Request models reject unknown keys
 (`extra='forbid'`), so a stale or misspelled field is a `422`, never a
-silent no-op.
+silent no-op. Consumers should read the mount prefix (`OP_API_PREFIX`,
+default `/curation`) from configuration rather than hardcode it. There is no
+`/v1` twin and no alias.
+
+## Projects and scoping
+
+A [project](../guides/projects.mdx) is an isolated dataset workspace with
+its own indexes, class registry, exports, settings and job state. Every
+route that reads or writes data lives under
+`/curation/projects/{project}/`. There is no unscoped alias: an unscoped
+data path is a `404`. Paths on this page omit that prefix unless they are
+global.
+
+The routes outside a project:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/curation/health` | Deployment facts only: `status`, Triton, OpenSearch, VLM, versions |
+| GET | `/curation/events` | Server-sent events with `project: null`: `project.*`, `combine.*`, `vlm.changed` |
+| GET | `/curation/projects` | List projects (`?include_archived=true`), shard capacity, slug limits, display labels |
+| POST | `/curation/projects` | Create a project (`slug`, `display_name`, optional `description`, `clone_settings_from`, `clone_axes`). `201` |
+| GET | `/curation/projects/{project}` | One project: status, revision, counts, resources, flags (`writable`, `deletable`, ...) |
+| PATCH | `/curation/projects/{project}` | Edit `display_name` / `description`; needs `expected_revision` |
+| POST | `/curation/projects/{project}/archive` | Archive (read-only). `/unarchive` reverses it |
+| POST | `/curation/projects/{project}/clone_settings` | Copy settings axes from another project |
+| DELETE | `/curation/projects/{project}` | `?dry_run=true` reports what would go; a real delete needs `?confirm=<slug>` and answers `202` |
+| GET | `/curation/vlm/endpoints` | The VLM endpoint registry (see [VLM endpoints](#vlm-endpoints)) |
+| GET | `/curation/vlm/catalog` | The local VLM catalog |
+
+A project's `status` is `building`, `active`, `archived`, `deleting`,
+`deleted` or `failed`. Only an `active` project is writable; an archived one
+answers writes with `409 project_read_only`. The `default` project is an
+ordinary project that can be archived but never deleted. Lifecycle
+mutations answer one envelope, `{project, warnings}`, so a client can adopt
+the returned summary without a re-read.
+
+Errors from project, config and import routes share one body,
+`{"detail": {"error": "<code>", "message": "...", ...}}`, with
+code-specific extra fields. Read endpoints **fail closed**: a backend error
+is an HTTP error, never a silently empty result.
 
 ## Health, discovery and settings
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | `status` `ok` / `degraded` / `down` plus `triton`, `opensearch`, `vlm`, `registry`, active `region_profile`, `mlflow_public_url` |
-| GET | `/models/status` | Every model the curation pipeline depends on, plus the external VLM and segmenter entries |
-| DELETE | `/models/{model_name}` | Unload a promoted model. Region-detector/OCR models of the active profile are refused (`403`); other core models need `?force=true` (`409` without it) |
-| GET | `/methods` | Capability discovery: `strategies` per axis (`cluster`, `score`, `sort`, `overlay`, `export`, detection profile, prompt pack) and feature `flags`. Gate optional UI on this, never on a probing write. |
-| GET, PUT | `/settings` | Shared per-axis strategy defaults (`defaults` is an open map keyed by axis id) |
+| GET | `/curation/projects/{project}/health` | `status` `ok` / `degraded` / `down` plus `project`, `triton`, `opensearch`, `vlm`, `registry`, active `region_profile`, `mlflow_public_url` |
+| GET | `/models/status` | Every model the curation pipeline depends on; VLM rows are one per registered endpoint (`kind: "vlm"`, with `active`) |
+| DELETE | `/models/{model_name}` | Unload a promoted model. Models the active profile depends on are refused (`403`); other core models need `?force=true` (`409` without it) |
+| GET | `/models/{model_name}/class_mapping` | How a model's classes map by name onto this project's classes |
+| PUT | `/models/{model_name}/sharing` | Opt a promoted model into or out of use by other projects |
+| GET | `/methods` | Capability discovery: `axes` and `strategies` per axis (`cluster`, `score`, `sort`, `overlay`, `export`, `detection_profile`, `prompt_pack`, `vlm`) and feature `flags`. Gate optional UI on this, never on a probing write |
+| GET | `/settings` | Shared per-axis strategy defaults (`defaults` is an open map keyed by axis id) |
+| PUT | `/settings` | Partial update. `defaults.vlm` activates an endpoint through the same gate as `/vlm/endpoints/{name}/activate`; `defaults.prompt_pack` and `defaults.detection_profile` delegate to the config store's activation |
+| GET | `/config/vocabulary` | One place every model choice is served: the active VLM, endpoints, and a `model_choices` table |
 | GET | `/class_sources` | Every `class_source` value this deployment can write, with role and label |
-| GET | `/stats/dataset`, `/stats/classes` | Dataset totals (labeled by human / VLM / classifier, regions, clusters, in-flight work) and per-class counts |
-| GET, POST | `/events`, `/events/publish`, `/events/stats` | Server-sent events (for example `crop.region_verified`), a cross-process publish endpoint for workers, and hub stats |
+| GET | `/stats` | Project counts |
+| GET | `/stats/dataset` | Dataset totals (labeled by human / VLM / classifier / import, regions, clusters, in-flight work) |
+| GET | `/stats/classes` | Per-class counts |
+| GET | `/events` | Server-sent events for this project (for example `crop.region_verified`, `config.changed`) |
+| POST | `/events/publish` | Cross-process publish endpoint the workers use |
+| GET | `/events/stats` | Hub stats for this project's stream |
+| GET | `/pause` | Whether the project's pipeline is paused, and by what |
+| POST | `/pause` | Workers skip this project's work. `/resume` clears it |
 
-## Ingest and label import
+## Ingest
 
-Importing an already-labeled dataset (YOLO, COCO or an OpenProcessor
-export) is `POST /datasets/imports`, with `/datasets/preview`,
-`/datasets/uploads` (zip / tar), `/datasets/imports/{id}` (status, issues,
-entries, cancel, resume, undo) and `/datasets/formats`. The routes this
-section used to list here (`/import_labels`, `/import_labels/batch`) are
-removed. `scripts/curation/import_labeled_dataset.py` is a thin client.
+Ingest runs the configured item detector, crops each detection into an
+item, embeds it, rejects duplicates and indexes in bulk. Images are read
+from configured source roots or uploaded as bytes. To import an
+already-labeled dataset, use [Dataset import](#dataset-import).
 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/ingest/image` | Ingest one image by `path` (under a configured source root) |
 | POST | `/ingest/batch` | Ingest `items` by path; capped by `OP_BATCH_MAX_ITEMS_PER_REQUEST` (`413` over it) |
-| POST | `/ingest/upload` | Multipart upload of `images`; bytes are persisted content-addressed under `OP_UPLOAD_ROOT`; optional `run_id` |
+| POST | `/ingest/upload` | Multipart upload of `images`; bytes are persisted content-addressed under the project's upload root; optional `run_id` |
 | POST | `/ingest/path_lookup` | Which image paths (or upload identifiers) are already indexed |
 | GET | `/ingest/config` | Served upload/batch limits and drain-poll parameters |
 | GET | `/ingest/status` | Totals by source and day (optionally `?run_id=`) |
@@ -58,72 +102,150 @@ Each image result carries `status` (`success` / `duplicate` / `failed`),
 `detector_infer`, `bulk_index`, ...). Byte-identical files are
 deduplicated within a batch as well as against the index.
 
-## Combining projects
+## Dataset import
 
-`POST /projects/combine` builds a NEW project from 1 to 8 existing ones. It
-never writes to a source: the target is created `building`, filled, then
-made `active` (a failed run leaves it `failed`; deleting the target is a
-complete undo). These are global routes, not under a project.
+Bring a labeled YOLO or COCO dataset, or an OpenProcessor export, into a
+project. Classes map **by name**. The import is chunked, resumable and
+undoable. See [Dataset import](../guides/dataset-import.mdx).
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/projects/combine/preview` | Dry run (writes nothing): errors and warnings, `suggested_mapping`, per-source and target counts, duplicate and conflict counts, bytes to link, and a `preview_sha` |
-| POST | `/projects/combine` | Start with the preview body plus `expected_preview_sha` (`409 preview_stale` if a source changed, `422 combine_invalid` with a report). `202 {job_id, target}` |
-| GET | `/projects/combine/{job_id}` | `status`, `phase`, `done` / `total` images, `report`, `next_steps`; also published as `combine.progress` events |
-| POST | `/projects/combine/{job_id}/cancel`, `/resume` | Cancel a running job; resume an interrupted or cancelled one from its last finished chunk |
+| GET | `/datasets/formats` | The formats the importer reads |
+| POST | `/datasets/uploads` | Upload a zip or tar archive (`201`, `413 upload_too_large`) |
+| POST | `/datasets/preview` | Scan a dataset without writing: classes, counts, issues, and `suggestions` for the class mapping |
+| POST | `/datasets/imports` | Start an import. `202`; `reused` when the same `import_key` already ran |
+| GET | `/datasets/imports` | List imports |
+| GET | `/datasets/imports/{import_id}` | Status, progress and the report |
+| GET | `/datasets/imports/{import_id}/issues` | The scan issues, paged |
+| GET | `/datasets/imports/{import_id}/entries` | Per-image ledger rows, paged |
+| POST | `/datasets/imports/{import_id}/cancel` | Stop after the current chunk |
+| POST | `/datasets/imports/{import_id}/resume` | Continue an interrupted or cancelled import (`202`) |
+| POST | `/datasets/imports/{import_id}/undo` | Reverse the import |
+
+The mapping is a list of `{dataset_class, action, ...}` rows where `action`
+is `map` (`class_id`), `create` (`new_class_name`, `new_class_group`), `skip`
+or `region`. Every class that has boxes needs a decision
+(`422 class_mapping_incomplete` lists the `unmapped` names). A COCO layout
+is not auto-detected: send `source.format: "coco"`.
+
+## Reprocess
+
+One route re-runs pipeline stages over existing data. See
+[Reprocess](../guides/reprocess.mdx).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/reprocess` | `targets` (exactly one of `image_ids`, `crop_ids`, `filter`), `scopes` (`detect`, `region`, `vlm`, `embed`), `region_mode` (`redetect` / `reverify`), `dry_run` (default `true`) |
+| POST | `/images/{image_id}/reprocess` | The per-image button; applies by default |
+| POST | `/crops/{crop_id}/reprocess` | The per-item button; applies by default |
+| GET | `/reprocess/jobs/{job_id}` | Progress of a job (`detect` or `embed` beyond `OP_REPROCESS_SYNC_MAX` images runs as a file-backed job; one live job per project, `409 reprocess_busy`) |
+| POST | `/reprocess/jobs/{job_id}/cancel` | Stop a live job after its current chunk |
+
+Locked items and boxes are never written; each scope reports
+`locked_skipped`. The filter also selects by provenance: `profile_not`,
+`profile_revision_below`, `import_id`, `dataset_split`, `region_status`,
+`reason`, `detector`, `missing_status`, `missing_provenance`.
+
+## Combining projects
+
+`POST /curation/projects/combine` builds a NEW project from 1 to 8 existing
+ones. It never writes to a source: the target is created `building`,
+filled, then made `active` (a failed run leaves it `failed`; deleting the
+target is a complete undo). These routes are global, not under a project.
+See [Combine projects](../guides/combine-projects.mdx).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/curation/projects/combine/preview` | Dry run (writes nothing): errors and warnings, `suggested_mapping`, per-source and target counts, duplicate and conflict counts, bytes to link, and a `preview_sha` |
+| POST | `/curation/projects/combine` | Start with the preview body plus `expected_preview_sha` (`409 preview_stale` if a source changed, `422 combine_invalid` with a report). `202 {job_id, target}` |
+| GET | `/curation/projects/combine/{job_id}` | `status`, `phase`, `done` / `total` images, `report`, `next_steps`; also published as `combine.progress` events |
+| POST | `/curation/projects/combine/{job_id}/cancel` | Cancel a running job |
+| POST | `/curation/projects/combine/{job_id}/resume` | Resume an interrupted or cancelled job from its last finished chunk |
 
 A class is its name. `class_mapping` has one list of `map` / `create` /
-`skip` / `region` rows per source, the same rows a dataset import takes: the
-target registry is new, so a `create` row defines a target class and a `map`
-row names one with `new_class_name`. Every source class with an included
-label needs a row (`unmapped_class`). The target numbers its own classes, in
-`target_classes` order when given.
-
-Sources are listed in priority order. With `dedup: content_hash` an image
-that is byte-identical in two sources (confirmed by a full hash) is copied
-once, from the highest-priority source; boxes of the other copy with IoU of
-at least `dedup_iou` and the same target class are merged (the more trusted
-label wins: human, import, VLM, model; ties keep the priority source), and a
-box with a different class keeps the priority label and is flagged
-`combine_conflict` (`GET /review/all?combine_conflict=true` lists them).
-Upload files are hard-linked into the target (a copy across filesystems), so
-deleting a source never breaks it. Clusters are not copied: recluster the
-combined items. `holdout: preserve_union` keeps anything that was test in
-any source as test; `recompute` picks a new split and warns.
+`skip` / `region` rows per source, the same rows a dataset import takes;
+every source class with an included label needs a row (`unmapped_class`).
+The target numbers its own classes. Sources are listed in priority order.
+With `dedup: content_hash`, an image that is byte-identical in two sources is
+copied once, from the highest-priority source; boxes of the other copy with
+IoU of at least `dedup_iou` and the same target class are merged (the more
+trusted label wins: human, import, VLM, model), and a box with a different
+class keeps the priority label and is flagged `combine_conflict`
+(the `combine_conflict` filter on `GET /review/{tab}` lists them). Clusters are not
+copied: recluster the combined items. `holdout: preserve_union` keeps
+anything that was test in any source as test; `recompute` picks a new split
+and warns. A live combine marks its sources and target `project_busy`.
 
 ## Items (crops) and labeling
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/crops`, `/crops/{crop_id}` | Browse and filter items; one item |
-| GET | `/crops/{crop_id}/thumbnail`, `/image`, `/region_thumbnail?box_id=`, `/context` | Item crop, full source image, one region box's crop (`box_id` required), and the other items on the same image |
+| GET | `/crops` | Browse and filter items, including `import_id`, `dataset_split`, `on_negative_frame`, `proposed_by_import` |
+| GET | `/crops/{crop_id}` | One item |
+| GET | `/crops/{crop_id}/thumbnail` | Item crop thumbnail |
+| GET | `/crops/{crop_id}/image` | The clean source image of the item's frame |
+| GET | `/crops/{crop_id}/region_thumbnail` | One region box's crop; `box_id` is required |
+| GET | `/crops/{crop_id}/context` | The item's source image and the other items on it |
 | GET | `/crops/{crop_id}/history` | Label/edit history |
-| PUT, DELETE | `/crops/{crop_id}/label` | Set (`class_id`, `label_source` `human` or `human_confirmed`) or clear a human label |
+| PUT | `/crops/{crop_id}/label` | Set the class (`class_id`, `label_source` `human` or `human_confirmed`) |
+| DELETE | `/crops/{crop_id}/label` | Clear a human label |
 | PUT | `/crops/batch_label` | Label many; returns `updated_ids` and per-item `conflicts` |
-| POST | `/crops/{crop_id}/label/undo`, `/crops/label/undo_batch` | Undo human class writes |
+| POST | `/crops/{crop_id}/label/undo` | Undo the last human class write |
+| POST | `/crops/label/undo_batch` | Batch undo |
 | POST | `/crops/move` | Move items to another cluster |
-| POST | `/crops/batch_exclude`, `/crops/batch_unexclude` | Exclude from datasets (with a `reason`) / restore |
-| POST | `/crops/{crop_id}/discard`, `/crops/discard_batch` | Discard items |
+| POST | `/crops/batch_exclude` | Exclude from datasets (with a `reason`) |
+| POST | `/crops/batch_unexclude` | Restore excluded items |
+| POST | `/crops/{crop_id}/discard` | Discard an item |
+| POST | `/crops/discard_batch` | Discard many |
 | POST | `/crops/flag_new_class` | Flag items as a class the registry lacks |
-| POST | `/crops/{crop_id}/review_dismiss`, `/review_undismiss` | Hide from / return to review |
-| POST | `/crops/{crop_id}/vlm_dismiss`, `/vlm_dismiss/undo` | Dismiss a VLM suggestion / undo |
+| POST | `/crops/{crop_id}/review_dismiss` | Hide from every review queue |
+| POST | `/crops/{crop_id}/review_undismiss` | Return an item to the queues |
+| POST | `/crops/{crop_id}/vlm_dismiss` | Reject the VLM's class suggestion |
+| POST | `/crops/{crop_id}/vlm_dismiss/undo` | Undo that |
 
-A human label always writes `class_source: "human"`; a client cannot make
-a human write look machine-made.
+**The lock rule.** A human-set class, a validated imported label, an item
+in the frozen test holdout, and a human-owned or imported-and-settled
+region box are locked. No automated writer (worker, VLM batch, re-ingest,
+reprocess, import over an existing item) changes a locked value. A human
+label always writes `class_source: "human"`; a client cannot make a human
+write look machine-made. An item serves `label_locked`.
 
 ## Classes
 
+Class identity is the **name**. A project's registry assigns its own ids;
+a dataset, a combined source or a promoted model is matched to it by name.
+
 | Method | Path | Purpose |
 |---|---|---|
-| GET, POST | `/classes` | List (with thresholds and reserved hotkeys) / create (`name` must match `^[a-z0-9_]+$`) |
-| GET, PUT | `/classes/{class_id}` | Get / rename, regroup, rebind hotkey |
+| GET | `/classes` | List with counts, thresholds and reserved hotkeys |
+| POST | `/classes` | Create (`name` must match `^[a-z0-9_]+$`) |
+| GET | `/classes/{class_id}` | One class |
+| PUT | `/classes/{class_id}` | Rename, regroup, bind or clear a hotkey |
 | GET | `/classes/{class_id}/crops` | Items of a class |
 | POST | `/classes/merge` | Merge `source_id` into `target_id`; `?dry_run=true` previews |
-| POST | `/classes/{class_id}/deprecate`, `/restore` | Retire an unreferenced class / restore it |
+| POST | `/classes/{class_id}/deprecate` | Retire a class that has no data yet |
+| POST | `/classes/{class_id}/restore` | Restore it |
 | POST | `/classes/sync_to_opensearch` | Re-sync the JSON registry into the classes index |
 
-The registry is a JSON file at `OP_REGISTRY_PATH`; the first
-`POST /classes` creates it with dense ids starting at 0.
+The registry is a JSON file in the project's data directory; the first
+`POST /classes` creates it with dense ids starting at 0. A hotkey that the
+project's keymap reserves answers `422 hotkey_reserved`; one that another
+class holds answers `409 hotkey_taken`.
+
+## Keymap
+
+Each project stores its own keyboard map; a project with no stored map
+serves the built-in defaults (`is_default: true`). Writes use optimistic
+concurrency (`expected_revision`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/keymap` | The action registry, grammar and this project's bindings |
+| PUT | `/keymap` | Replace the overrides. A clash with a class hotkey is `409 class_hotkey_conflict` unless `unbind_conflicting_class_hotkeys` is set |
+| POST | `/keymap/validate` | Dry run of a PUT; always `200` with a report |
+| POST | `/keymap/reset` | Reset all or the listed actions |
+
+See [Keymaps](../guides/keymaps.mdx).
 
 ## Clusters, scores, selection and search
 
@@ -134,33 +256,158 @@ The registry is a JSON file at `OP_REGISTRY_PATH`; the first
 | POST | `/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
 | POST | `/clusters/auto_promote` | Validate items in high-purity clusters |
 | POST | `/cluster/umap/rebuild` | Rebuild the residual reducer |
-| GET, POST | `/viz/projection`, `/viz/projection/rebuild`, `/status`, `/cancel` | 2-D embedding projection for plotting |
-| POST, GET | `/scores/compute`, `/scores/status`, `/scores/cancel`, `/scores/coverage` | Mistakenness, uniqueness and near-duplicate scores (`OP_SCORES_ENABLED`) |
-| POST, GET | `/select/diverse`, `/select/status`, `/select/cancel` | k-center-greedy diverse sampling (`OP_SELECT_DIVERSE_ENABLED`) |
+| GET | `/viz/projection` | Cached 2-D coordinates for plotting; never fits inline |
+| POST | `/viz/projection/rebuild` | Start the projection fit job |
+| GET | `/viz/projection/status` | Job status. `/viz/projection/cancel` stops it |
+| POST | `/scores/compute` | Mistakenness, uniqueness and near-duplicate scores (`OP_SCORES_ENABLED`) |
+| GET | `/scores/status` | Status. `/scores/coverage` reports field coverage and `/scores/cancel` stops a run |
+| POST | `/select/diverse` | k-center-greedy diverse sampling (`OP_SELECT_DIVERSE_ENABLED`) |
+| GET | `/select/status` | Status of a backgrounded selection. `/select/cancel` stops it |
 | GET | `/search/text` | PE-Core text-to-image semantic search (`OP_SEMANTIC_SEARCH_ENABLED`) |
 
 ## Review queues and holdout
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/review/tabs` | The tab catalog with each tab's filters and defaults |
-| GET | `/review/{tab}` | One queue: `all`, `mismatches`, `vlm_low_conf`, `outliers`, `uncertainty`, `model_disagreements`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, and `regions` (only when a region profile is active) |
+| GET | `/review/tabs` | The tab catalog with each tab's label, filters, defaults and empty-state hints |
+| GET | `/review/{tab}` | One queue. Tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`, `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, `imported` |
 | GET | `/review/{tab}/locate` | Position of one item within a queue |
-| GET, POST | `/review/new_class_proposals/summary`, `/resolve` | VLM-proposed class names, grouped; accept or reject |
-| GET | `/review/raw_label_clusters`, `/review/unmatched_terms` | Raw VLM answers that matched no class |
-| POST, GET | `/test_holdout/freeze`, `/test_holdout/stats` | Freeze a per-class test split before exporting |
-| POST, GET | `/probe/run`, `/probe/status`, `/probe/cancel` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
+| GET | `/review/new_class_proposals/summary` | VLM-proposed class names, grouped |
+| POST | `/review/new_class_proposals/resolve` | Accept or reject a proposed name for every item that proposes it |
+| GET | `/review/raw_label_clusters` | Raw VLM answers that matched no class, clustered |
+| GET | `/review/unmatched_terms` | The same answers, aggregated by term |
+| POST | `/test_holdout/freeze` | Freeze a per-class test split before exporting |
+| GET | `/test_holdout/stats` | Per-class test counts |
+| POST | `/probe/run` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
+| GET | `/probe/status` | Probe status. `/probe/cancel` stops it |
 
-## VLM and auto-label pipeline
+Queue filters include `on_negative_frame` and `combine_conflict`.
+
+## Regions of interest
+
+Regions are meaningful once a [region profile](../guides/region-profiles.mdx)
+is active. An item carries a **list of boxes** (`region_boxes`), each with a
+`box_id` and its own state, verdict, text, cluster and embedding; see
+[Multi-box regions](../guides/multi-box-regions.mdx). A profile's
+`max_regions_per_item` caps the list (default `1`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/vlm/label_batch` | VLM class suggestions for `crop_ids` |
-| POST | `/vlm/label_cluster/{cluster_id}` | VLM-label one cluster's members |
-| POST | `/vlm/verify_regions`, `/vlm/verify_region_batch` | Verify region candidates |
+| GET | `/regions` | Browse region rows: one row per matching box, or per item. `total` counts items, `total_rows` rows. Filters include `box_state` |
+| GET | `/regions/statuses` | The status catalog, the per-box state vocabulary and which are human-writable |
+| GET | `/regions/vocabulary` | Detector, segmenter and verifier vocabulary for the active profile, with `limits.max_boxes_per_write` |
+| PUT | `/crops/{crop_id}/regions` | Set a crop's box list (`frame` `source` or `parent`). A box with only a `box_id` is left untouched; `box_id: null` adds a box. A stale `expected_region_revision` is `409 region_conflict`; an empty list means "no region visible" |
+| PUT | `/crops/batch_regions` | Add the same new boxes to many crops |
+| PATCH | `/crops/{crop_id}/regions/{box_id}` | Patch one box's `state` or `text` without touching its siblings |
+| POST | `/regions/batch_box_state` | Set one state on many `{crop_id, box_id}` targets |
+| PATCH | `/crops/{crop_id}/region_meta` | Edit `region_status` and the rejection reason |
+| POST | `/regions/batch_status` | Set a human-writable whole-item status on many items |
+| POST | `/crops/{crop_id}/region/undo` | Undo a region write (restores the box list) |
+| POST | `/crops/region/undo_batch` | Batch undo |
+| POST | `/regions/cluster` | Cluster region boxes (background job; a cluster card's `size` is items, `box_count` boxes) |
+| GET | `/regions/cluster/status` | Job status |
+| GET | `/regions/clusters` | Region cluster cards |
+| POST | `/regions/clusters/refine/{cluster_id}` | Refine one region cluster |
+| POST | `/regions/fp_centroids/build` | Build false-positive sub-centroids from false-positive boxes |
+| GET | `/regions/fp_centroids/status` | Build status |
+| GET | `/regions/suspected_false_positives` | Non-false-positive boxes ranked by similarity to the false-positive sub-centroids, one row per box |
+| GET | `/regions/training_candidates` | Curated cohorts for training the next region detector |
+
+Per-box states are `proposed`, `accepted`, `rejected` and `false_positive`.
+An item's `region_status` is derived from its boxes (accepted, then false
+positive, then proposed, then rejected, then empty).
+
+## Config store: prompt packs and region profiles
+
+A prompt pack (the VLM's prompts) and a region profile (what to detect and
+how) are named, versioned documents stored per project. Every save is a new
+immutable revision. Exactly one pack and one profile are active at a time,
+and activation is checked against the other settings before it applies.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/prompt_packs` | List stored packs and templates |
+| POST | `/prompt_packs` | Create a pack |
+| GET | `/prompt_packs/schema` | Field specs and placeholders, for a form |
+| POST | `/prompt_packs/validate` | Validate a draft without saving |
+| POST | `/prompt_packs/test` | Run one call of a pack, saved or draft, over stored crops and preview each item's write |
+| GET | `/prompt_packs/active` | The active pack, with what each worker applied |
+| POST | `/prompt_packs/active/rollback` | Re-activate the previous pack |
+| GET | `/prompt_packs/{name}` | One pack |
+| PUT | `/prompt_packs/{name}` | Save a new revision (needs `expected_revision`) |
+| DELETE | `/prompt_packs/{name}` | Delete a pack |
+| POST | `/prompt_packs/{name}/activate` | Activate a revision |
+| POST | `/prompt_packs/{name}/clone` | Copy a pack, optionally from another project (read-only) |
+| GET | `/prompt_packs/{name}/revisions` | Revision history; `/revisions/{revision}` returns one |
+| GET | `/region_profiles` | List stored profiles and templates |
+| POST | `/region_profiles` | Create a profile |
+| GET | `/region_profiles/schema` | Field specs, for a form |
+| POST | `/region_profiles/validate` | Validate a draft without saving |
+| POST | `/region_profiles/validate_segmenter_prompt` | Check a segmenter text prompt |
+| POST | `/region_profiles/test` | Run a profile's detector and segmenter legs over one stored crop, with every candidate and why it was kept or dropped |
+| GET | `/region_profiles/active` | The active profile |
+| GET | `/region_profiles/active/impact` | What activating or deactivating would affect, with a `suggested_reprocess` request |
+| POST | `/region_profiles/active/rollback` | Re-activate the previous profile |
+| POST | `/region_profiles/deactivate` | Turn region detection off for the project |
+| GET | `/region_profiles/{name}` | One profile |
+| PUT | `/region_profiles/{name}` | Save a new revision |
+| DELETE | `/region_profiles/{name}` | Delete a profile |
+| POST | `/region_profiles/{name}/activate` | Activate a revision |
+| POST | `/region_profiles/{name}/clone` | Copy a profile |
+| GET | `/region_profiles/{name}/revisions` | Revision history; `/revisions/{revision}` returns one |
+
+The test routes read stored crops and write nothing. They are limited to
+2 concurrent VLM runs and 4 concurrent segmenter calls (`429 test_busy`),
+a 60 s bound (`504 test_timeout`) and a crop cap (`422 too_many_crops`).
+See [Test on a crop](../guides/test-on-crop.mdx),
+[Prompt packs](../guides/prompt-packs.mdx) and
+[Settings and config store](../guides/settings-and-config.mdx).
+
+## VLM endpoints
+
+The endpoint registry is deployment-wide; which endpoint a project runs is
+per project. The registry is global, so these routes are not under a
+project. Keys are never stored or served: an endpoint holds an
+`api_key_ref` such as `secret:<slug>`. See
+[VLM selection](../guides/vlm-selection.mdx).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/curation/vlm/endpoints` | Every endpoint (the read-only `env` built-in first) with where each is active |
+| POST | `/curation/vlm/endpoints` | Register an endpoint |
+| GET | `/curation/vlm/endpoints/schema` | Form field specs |
+| POST | `/curation/vlm/endpoints/validate` | Validate a draft; `?probe=true` also tests it |
+| GET | `/curation/vlm/endpoints/{name}` | One endpoint |
+| PUT | `/curation/vlm/endpoints/{name}` | Save a new revision (needs `expected_revision`); changes nothing until activated |
+| DELETE | `/curation/vlm/endpoints/{name}` | Delete; `409 in_use` while any project runs it |
+| POST | `/curation/vlm/endpoints/{name}/clone` | Copy an endpoint |
+| POST | `/curation/vlm/endpoints/{name}/probe` | Test with synthetic images and record the served model, context length, image cap and JSON-mode support |
+| GET | `/curation/vlm/endpoints/{name}/revisions` | Revision history |
+| GET | `/curation/vlm/catalog` | The local model catalog with `fits`, `serving` and `desired` per entry |
+| GET | `/curation/vlm/local` | The local VLM's served and desired model |
+| POST | `/curation/vlm/local/select` | Record the desired local model (`202`). The API never restarts vLLM; the host applies it with `openprocessor vlm apply` |
+| DELETE | `/curation/vlm/local/select` | Clear the desired model |
+| GET | `/curation/projects/{project}/vlm/endpoints/active` | This project's active endpoint (`active.name: null` = off) |
+| POST | `/curation/projects/{project}/vlm/endpoints/{name}/activate` | Activate `name` for the project, with optional `revision`, `force`, `acknowledge_external` |
+| POST | `/curation/projects/{project}/vlm/endpoints/active/rollback` | Re-activate the previous endpoint |
+| POST | `/curation/projects/{project}/vlm/endpoints/deactivate` | VLM off for the project |
+
+## VLM and auto-label pipeline
+
+Every VLM route takes an optional `?vlm=<name>` or `<name>@<revision>` and
+`?acknowledge_external=`; an unknown name is `422 unknown_vlm`, and a
+project with the VLM off is `409 vlm_not_configured`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/vlm/label_batch` | VLM class suggestions for up to 64 `crop_ids` |
+| POST | `/vlm/label_cluster/{cluster_id}` | VLM-label one cluster's members, as a background job |
+| POST | `/vlm/verify_regions` | Verify, box by box, whether each crop's regions are real |
+| POST | `/vlm/verify_region_batch` | The same in batches per upstream call |
 | POST | `/vlm/region_visible_batch` | "Is a region visible at all?" pre-filter |
-| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `train_clusters`, ...). Clusters only unless `run_vlm=true`. |
-| GET | `/pipeline/auto_label/status`, `/status/{job_id}` | Job progress |
+| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `train_clusters`, ...). Clusters only unless `run_vlm=true` |
+| GET | `/pipeline/auto_label/status` | Current or last job |
+| GET | `/pipeline/auto_label/status/{job_id}` | One job |
 | POST | `/pipeline/auto_label/cancel` | Cancel |
 | POST | `/pipeline/auto_label` | Run the pipeline in-process (synchronous) |
 | GET | `/pipeline/events` | Pipeline progress events |
@@ -168,29 +415,14 @@ The registry is a JSON file at `OP_REGISTRY_PATH`; the first
 A VLM reply with no usable answer is **omitted**, not written as a
 negative verdict, so the item can be retried.
 
-## Regions of interest
-
-Only meaningful with a region detection profile configured.
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/regions`, `/regions/statuses`, `/regions/vocabulary` | Browse region rows (one per matching box, or per item; `total` counts items, `total_rows` rows); the status catalog (which are human-writable); detector/segmenter vocabulary for the active profile |
-| PUT | `/crops/{crop_id}/regions`, `/crops/batch_regions` | Set a crop's box list (`frame` `source` or `parent`); an empty list is "no region visible" |
-| PATCH, POST | `/crops/{crop_id}/regions/{box_id}`, `/regions/batch_box_state` | Per-box state / text edits |
-| PATCH | `/crops/{crop_id}/region_meta` | Edit `region_status` and the rejection reason (a box's text is edited with the per-box PATCH) |
-| POST | `/crops/{crop_id}/region/undo`, `/crops/region/undo_batch` | Undo region writes |
-| POST | `/regions/batch_status` | Set a human-writable status on many items |
-| POST, GET | `/regions/cluster`, `/regions/cluster/status`, `/regions/clusters`, `/regions/clusters/refine/{cluster_id}` | Cluster region boxes (a cluster card's `size` is items, `box_count` boxes) |
-| POST, GET | `/regions/fp_centroids/build`, `/status`, `/regions/suspected_false_positives` | False-positive centroids (built from false-positive boxes) and suspected-FP boxes, one row each |
-| GET | `/regions/training_candidates` | Curated cohorts for training the next region detector |
-
 ## Export
 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/export/yolo` | Multi-class YOLO export (always every class); `require_fully_labeled_images`, `seed`, `max_images`, `dedup_threshold` |
-| POST | `/export/single_class` | Single-class or class-subset export with background/hard-negative frames and `frozen_test_sha` |
-| GET | `/export/status`, `/export/single_class/status` | Export progress |
+| POST | `/export/single_class` | Single-class or class-subset export with background and hard-negative frames and `frozen_test_sha` |
+| GET | `/export/status` | Last export |
+| GET | `/export/single_class/status` | Last narrowed export for a profile |
 | GET | `/export/datasets` | Every export (`kind`, `dataset_sha`, split counts, `is_current`) |
 | GET | `/export/registry/{artifact}` | Download a frozen artifact of the current export (whitelisted names only) |
 | GET | `/training_cohorts` | Per-class training cohorts (`?class_id=`) |
@@ -199,18 +431,25 @@ Only meaningful with a region detection profile configured.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/train/preflight` | Blocking + warning checks for a spec (dataset, classes, GPUs, trainer reachability) |
-| POST | `/train/start`, `/train/start_campaign` | Submit one run or a progressive multi-size campaign (`?force=true` bypasses blocking checks) |
-| GET | `/train/status`, `/train/status/{job_id}` | Latest / specific run: epochs, eval block, comparison |
+| POST | `/train/preflight` | Blocking and warning checks for a spec (dataset, classes, GPUs, trainer reachability) |
+| POST | `/train/start` | Submit one run (`?force=true` bypasses blocking checks) |
+| POST | `/train/start_campaign` | Submit a progressive multi-size campaign |
+| GET | `/train/status` | Latest run: epochs, eval block, comparison |
+| GET | `/train/status/{job_id}` | A specific run |
 | GET | `/train/runs` | Past runs |
-| GET | `/train/log/tail/{job_id}`, `/train/manifest/{job_id}`, `/train/artifacts/{job_id}/{name}` | Log tail, lineage manifest, run artifacts |
-| POST | `/train/cancel/{job_id}`, `/train/cancel_campaign/{campaign_id}` | Cancel |
-| GET | `/train/profiles`, `/train/presets`, `/train/augmentation_presets`, `/train/gpus` | Hyperparameter tables, class-subset presets, augmentation presets, GPU options |
-| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate |
+| GET | `/train/log/tail/{job_id}` | Log tail |
+| GET | `/train/manifest/{job_id}` | Lineage manifest |
+| GET | `/train/artifacts/{job_id}/{name}` | A whitelisted run artifact |
+| POST | `/train/cancel/{job_id}` | Cancel a run. `/train/cancel_campaign/{campaign_id}` cancels a campaign |
+| GET | `/train/profiles` | Hyperparameter tables. `/train/presets`, `/train/augmentation_presets` and `/train/gpus` list presets and GPU options |
+| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate. The model is named for the project (`{slug}__...`, none for `default`) |
 | POST | `/train/reload_promoted` | Reload promoted models after a Triton restart |
-| GET | `/bakeoff/eval_datasets`, `/bakeoff/trained_models`, `/bakeoff/baseline_models`, `/bakeoff/profiles` | What can be compared |
+| GET | `/bakeoff/eval_datasets` | Eval sets: exports with a labelled test split and frozen external sets. `/bakeoff/trained_models`, `/bakeoff/baseline_models` and `/bakeoff/profiles` list the rest of what can be compared |
 | POST | `/bakeoff/run` | Queue a comparison for the evaluator |
-| GET | `/bakeoff/runs`, `/bakeoff/status/{job_id}`, `/bakeoff/results/{job_id}`, `/bakeoff/matrix/{job_id}` | Results (schema v2) and the model x dataset matrix |
+| GET | `/bakeoff/runs` | Comparison jobs |
+| GET | `/bakeoff/status/{job_id}` | Job status |
+| GET | `/bakeoff/results/{job_id}` | Ranked comparison on one dataset (schema v2) |
+| GET | `/bakeoff/matrix/{job_id}` | The model by dataset matrix |
 
 `POST /train/start` does **not** merge profile defaults: copy the
 hyperparameters from `GET /train/profiles` into the request's own

@@ -15,29 +15,53 @@ routes. `API=http://localhost:4603` below.
    Without `pe_image_encoder`, ingest writes no `pe_embedding`, and
    semantic search, near-duplicate detection and clustering have nothing
    to work on.
-2. OpenSearch indexes are created automatically at API startup.
+2. OpenSearch indexes are created automatically, per project, when the
+   project is created.
 3. You bring the models: an item detector (a stock COCO YOLO works to
    start), and optionally a VLM, a region detector and a segmenter. See
    [Models you must supply](#models-you-must-supply).
 
-## 1. Classes
+## 1. Project
 
-The registry is a JSON file at `OP_REGISTRY_PATH`. Start from zero with
-`POST /curation/classes` (see the [Quick start](../getting-started/quick-start.mdx)),
-copy `data/class_registry.example.json` (a small warehouse example) and
-edit it, or seed every class a detector knows with
-`scripts/curation/seed_class_registry.py --model <detector.onnx>` so class
-ids can't drift from the model's order. Names must match `^[a-z0-9_]+$`;
-some single-key hotkeys are reserved for labeling actions.
+All curation data lives in a [project](../guides/projects.mdx). A fresh
+stack has the `default` project; create one per dataset:
 
-## 2. Ingest
+```bash
+P=my-dataset
+curl -s -X POST "$API/curation/projects" -H 'content-type: application/json' \
+  -d "{\"slug\": \"$P\", \"display_name\": \"My dataset\"}"
+```
+
+Every route below is under `$API/curation/projects/$P/`; the section text
+omits that prefix. A project can copy another's settings at creation
+(`clone_settings_from`), be archived (read-only) and be deleted (not
+`default`). Projects share the models, workers and GPU, not their data.
+
+:::note
+> Screenshot pending: Cropwright (the project switcher listing two projects with item counts)
+:::
+
+## 2. Classes
+
+Each project has its own class registry, a JSON file under its data
+directory. Start from zero with `POST /classes` (see the
+[Quick start](../getting-started/quick-start.mdx)), copy
+`data/class_registry.example.json` (a small warehouse example) and edit it,
+seed every class a detector knows with
+`scripts/curation/seed_class_registry.py --project $P --model <detector.onnx>`
+so class ids can't drift from the model's order, or let a
+[dataset import](../guides/dataset-import.mdx) create them. Names must match
+`^[a-z0-9_]+$`. A class is identified by its name: datasets, combined
+projects and promoted models are matched by name, never by id.
+
+## 3. Ingest or import
 
 | Source | Tool |
 |---|---|
-| Images on storage the API container mounts | `POST /curation/ingest/image`, or `scripts/curation/ingest_walker.py` for a resumable bulk walk |
-| Images only on your machine | `scripts/curation/ingest_upload.py` (uploads bytes to `POST /curation/ingest/upload`; resuming relies on server-side content dedup) |
+| Images on storage the API container mounts | `POST /ingest/image`, or `scripts/curation/ingest_walker.py --project $P` for a resumable bulk walk |
+| Images only on your machine | `scripts/curation/ingest_upload.py --project $P` (uploads bytes to `POST /ingest/upload`; resuming relies on server-side content dedup) |
 | Images only (no labels) from a labeled dataset | `scripts/curation/import_labeled_dataset.py --images-only` (skips every class) |
-| An already-labeled YOLO / COCO dataset or an OpenProcessor export | `POST /curation/projects/{project}/datasets/preview`, then `/datasets/imports` (or `scripts/curation/import_labeled_dataset.py`); classes map by name, the import can be resumed and undone |
+| An already-labeled YOLO / COCO dataset or an OpenProcessor export | `POST /datasets/preview`, then `POST /datasets/imports` (or `scripts/curation/import_labeled_dataset.py`); classes map by name, the import can be resumed and undone |
 
 Ingest runs the item detector (`OP_INGEST_PRIMARY_*`), crops each
 detection into an item, embeds it with PE-Core, rejects duplicates and
@@ -45,19 +69,19 @@ low-quality crops, and indexes items in bulk. Human labels already on an
 item survive re-ingest. With a region profile active, each **new** item
 is also seeded `pending_detection` for the detection worker.
 
-## 3. Cluster
+## 4. Cluster
 
 <Screenshot
   name="clusters-1600.png"
-  alt="Cluster cards served by GET /curation/clusters, captured from Cropwright, a frontend for this backend"
-  caption="Cluster cards from GET /curation/clusters (captured from Cropwright, a frontend for this backend)"
+  alt="Cluster cards served by GET /curation/projects/{project}/clusters, captured from Cropwright, a frontend for this backend"
+  caption="Cluster cards from GET /clusters (captured from Cropwright, a frontend for this backend)"
 />
 
 ```bash
 docker compose --profile curation up -d
-curl -s -X POST "$API/curation/pipeline/auto_label/start?train_clusters=true"
-curl -s "$API/curation/pipeline/auto_label/status"     # poll until terminal
-curl -s "$API/curation/clusters" | jq '.clusters[0]'
+curl -s -X POST "$API/curation/projects/$P/pipeline/auto_label/start?train_clusters=true"
+curl -s "$API/curation/projects/$P/pipeline/auto_label/status"     # poll until terminal
+curl -s "$API/curation/projects/$P/clusters" | jq '.clusters[0]'
 ```
 
 Clustering groups items by embedding (residual clustering reduces
@@ -68,34 +92,42 @@ unassigned/noise, `0..N` mirrors class ids, and ids from 10000 up are
 and representatives; `POST /clusters/refine/{cluster_id}` splits one
 further, and `POST /clusters/auto_promote` validates items in
 high-purity clusters. `curation-cluster-refresh` re-runs auto-promote as
-the pool grows.
+each project's pool grows.
 
-## 4. Label: VLM suggestions and review queues
+## 5. Label: VLM suggestions and review queues
 
 <Screenshot
   name="review-1600.png"
-  alt="Review queue served by GET /curation/review/{tab}, captured from Cropwright, a frontend for this backend"
-  caption="Review queue from GET /curation/review/{tab} (captured from Cropwright, a frontend for this backend)"
+  alt="Review queue served by GET /curation/projects/{project}/review/{tab}, captured from Cropwright, a frontend for this backend"
+  caption="Review queue from GET /review/{tab} (captured from Cropwright, a frontend for this backend)"
 />
 
-- **VLM assist.** With `OP_VLM_URL`/`OP_VLM_MODEL` set, run
+- **VLM assist.** A project runs its active VLM endpoint, by default the
+  `env` endpoint from `OP_VLM_URL`/`OP_VLM_MODEL`. Run
   `auto_label/start?run_vlm=true`, label one cluster with
   `POST /vlm/label_cluster/{cluster_id}`, or let `curation-vlm-worker`
-  suggest classes continuously. VLM answers that name no registry class
-  surface as new-class proposals rather than being forced into a class.
+  suggest classes continuously. Register and activate other endpoints as
+  in [VLM selection](../guides/vlm-selection.mdx); `?vlm=<name>` picks one
+  for a single run. VLM answers that name no registry class surface as
+  new-class proposals rather than being forced into a class.
+- **Prompts.** The VLM's prompts are a [prompt pack](../guides/prompt-packs.mdx);
+  test a draft on stored crops with `POST /prompt_packs/test` before you
+  activate it ([Test on a crop](../guides/test-on-crop.mdx)).
 - **Review queues.** `GET /review/tabs` lists them; the main ones are
   `all`, `mismatches` (VLM answer didn't match the registry),
   `vlm_low_conf`, `outliers`, `uncertainty` and `model_disagreements`
   (both fed by the probe), `primary_low_conf`, `classifier_blind_spots`,
-  `new_class_proposals`, and `regions`.
+  `new_class_proposals`, `imported` and `regions`.
 - **Label writes.** `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`,
   `POST /crops/move`, exclude/discard, and undo for each. Every write is
-  recorded in `GET /crops/{crop_id}/history`.
+  recorded in `GET /crops/{crop_id}/history`. A human label is
+  **locked**: no worker, VLM pass, re-ingest or reprocess overwrites it.
+- **Keyboard.** Each project has its own [keymap](../guides/keymaps.mdx).
 - **Semantic search** (`GET /search/text`, with
   `OP_SEMANTIC_SEARCH_ENABLED=1`) finds items by description, e.g. "blurry
   close-up".
 
-## 5. Regions of interest (optional)
+## 6. Regions of interest (optional)
 
 <Screenshot
   name="review-regions-1600.png"
@@ -103,17 +135,41 @@ the pool grows.
   caption="Region review: box, detector chain and text reading (captured from Cropwright, a frontend for this backend)"
 />
 
-A region profile describes a sub-region to find inside each item (a
-label, a tag, a defect) and which models find, verify and read it. The
-detection worker's cascade tries the region detector, falls back to the
-segmenter leg, asks the VLM to verify, and reads any text by VLM and/or
-OCR. Every write records its provenance in `region_detector_chain`.
-Humans confirm, correct, reject or mark false positives through
-`/crops/{crop_id}/region*` and `/regions/batch_status`. Watch progress on
+A [region profile](../guides/region-profiles.mdx) describes a sub-region to
+find inside each item (a wheel on a car, a label, a defect) and which
+models find, verify and read it. Create or clone one, check it on a stored
+crop, then activate it:
+
+```bash
+curl -s -X POST "$API/curation/projects/$P/region_profiles/test" ...   # one stored crop, writes nothing
+curl -s "$API/curation/projects/$P/region_profiles/active/impact"      # what activation affects
+curl -s -X POST "$API/curation/projects/$P/region_profiles/vehicle_wheel/activate"
+```
+
+The detection worker's cascade selects up to `max_regions_per_item`
+candidate boxes per item (region detector, then the segmenter leg), sends
+one numbered overlay per item to the VLM, and writes a state, verdict and
+optional text **per box**. Every write records its provenance in
+`region_detector_chain`. Humans accept, reject or mark boxes false positive
+one box at a time (`PATCH /crops/{crop_id}/regions/{box_id}`,
+`POST /regions/batch_box_state`) or set a whole-item status
+(`POST /regions/batch_status`). Watch progress on
 `GET /ingest/region_drain`, and see
 [Health and stall reasons](./health-and-stalls.mdx) when it stops moving.
+The [wheel example](../guides/wheel-example.mdx) walks this on public data
+and [Multi-box regions](../guides/multi-box-regions.mdx) explains the box
+model.
 
-## 6. Freeze, export, train, compare, promote
+:::note
+> Screenshot pending: Cropwright (region review with several numbered boxes on one item, each with its own state)
+:::
+
+After changing a profile, pack or VLM, re-run existing items with
+`POST /reprocess` (see
+[Health and stall reasons](./health-and-stalls.mdx#reprocessing)). Locked
+items and boxes are skipped.
+
+## 7. Freeze, export, train, compare, promote
 
 1. `POST /test_holdout/freeze` once.
 2. `POST /export/yolo` (or `/export/single_class`). See
@@ -126,6 +182,13 @@ Humans confirm, correct, reject or mark false positives through
 
 Details: [Training, bake-off and promote](./training-and-promote.mdx).
 
+## 8. Combine projects
+
+To merge several projects into one new project, use
+`POST /curation/projects/combine/preview`, then
+`POST /curation/projects/combine`. Sources are only read; the target is
+built beside them. See [Combine projects](../guides/combine-projects.mdx).
+
 ## Models you must supply
 
 Nothing in the curation subsystem ships a pretrained region detector,
@@ -136,8 +199,8 @@ VLM or trained dataset. A deployment provides:
 | PE-Core-L14-336 image and text encoders | Yes | `make export-pe`; the Triton names `pe_image_encoder` / `pe_text_encoder` are fixed |
 | Item detector | Yes, for ingest | Any end2end Triton model via `OP_INGEST_PRIMARY_DETECTOR_MODEL` |
 | Secondary detector | No | Raw-output model via `OP_INGEST_SECONDARY_DETECTOR_MODEL`; also the source of `backbone_embedding` when exported with `make export-dual-head` |
-| Region profile + region detector | No | `OP_REGION_PROFILE_PATH` or `OP_REGION_PROFILE`; see [advanced configuration](../configuration/advanced.mdx#region-detection-profile) |
-| OCR recognition model | Only if regions carry text | `DetectionProfile.ocr_rec_model` |
+| Region profile + region detector | No | A stored profile activated per project ([Region profiles](../guides/region-profiles.mdx)), or the deployment default from `OP_REGION_PROFILE_PATH` / `OP_REGION_PROFILE`; see [advanced configuration](../configuration/advanced.mdx#region-detection-profile) |
+| OCR recognition model | Only if regions carry text | The profile's `ocr_rec_model` |
 | Segmenter | No | `--profile segmenter` (SAM 3, needs `HF_TOKEN`) or any service speaking the same protocol at `OP_SEGMENTER_URL` |
-| VLM | No | `--profile vlm`, a VLM on the host (`http://host.docker.internal:<port>/v1`), or anywhere on the network |
+| VLM | No | `--profile vlm`, a VLM on the host (`http://host.docker.internal:<port>/v1`), or anywhere on the network; registered as an endpoint ([VLM selection](../guides/vlm-selection.mdx)) |
 | Training data and base weights | For training | Your exports; the trainer fetches base checkpoints unless `hyperparameters.model` is a local path |

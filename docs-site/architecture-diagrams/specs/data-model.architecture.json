@@ -6,39 +6,47 @@
     "locale": "en",
     "quality_profile": "showcase",
     "views": [
-      { "id": "curation", "label": "Curation indexes", "focus": ["op_images", "op_items", "op_classes", "registry", "op_labels"], "note": "Items are crops of images; class ids come from the JSON registry, mirrored into op_classes." },
-      { "id": "search", "label": "Search indexes", "focus": ["vs_global", "vs_faces", "vs_objects", "vs_ocr"], "note": "The core /ingest route writes one global document per image plus face, object and OCR documents." }
+      { "id": "project", "label": "One project", "focus": ["op_images", "op_items", "op_classes", "registry", "op_configs", "op_umap"], "note": "A project owns six indexes plus its class registry and exports. Items are crops of images; each item carries a region_boxes list." },
+      { "id": "global", "label": "Global indexes", "focus": ["op_projects", "op_global", "op_configs"], "note": "op_projects holds the project records; op_global_configs holds the VLM endpoint registry shared by every project." },
+      { "id": "search", "label": "Search indexes", "focus": ["vs_global", "vs_faces", "vs_objects", "vs_ocr"], "note": "The core /ingest route writes one global document per image plus face, object and OCR documents. They belong to no project." }
     ],
     "legend": { "entries": { "database": { "label": "Index" }, "external": { "label": "File" }, "backend": { "label": "State" } } }
   },
   "components": [
-    { "id": "op_images", "type": "database", "label": "op_images", "sublabel": "image_id / imohash / pe_embedding", "pos": [40, 110], "size": [230, 64] },
-    { "id": "op_items", "type": "database", "label": "op_items", "sublabel": "crop_id / bbox_norm / class_id", "pos": [360, 110], "size": [230, 64], "tag": "region_* / vlm_* / probe_*" },
-    { "id": "op_classes", "type": "database", "label": "op_classes", "sublabel": "class_id / class_name / group", "pos": [680, 110], "size": [230, 64] },
-    { "id": "registry", "type": "external", "label": "class_registry.json", "sublabel": "OP_REGISTRY_PATH", "pos": [680, 270], "size": [230, 64] },
-    { "id": "op_labels", "type": "database", "label": "op_labels_confirmed", "sublabel": "crop_id / class_id / label_source", "pos": [360, 270], "size": [230, 64] },
-    { "id": "op_state", "type": "backend", "label": "settings + UMAP state", "sublabel": "op_curation_settings / op_umap_*", "pos": [40, 270], "size": [230, 64] },
-    { "id": "vs_global", "type": "database", "label": "visual_search_global", "sublabel": "image_id / CLIP 512-d", "pos": [360, 460], "size": [230, 64] },
-    { "id": "vs_faces", "type": "database", "label": "visual_search_faces", "sublabel": "face_id / ArcFace 512-d", "pos": [40, 600], "size": [230, 64] },
-    { "id": "vs_objects", "type": "database", "label": "visual_search_vehicles / people", "sublabel": "box / crop embedding", "pos": [360, 600], "size": [230, 64] },
-    { "id": "vs_ocr", "type": "database", "label": "visual_search_ocr", "sublabel": "text + boxes", "pos": [680, 600], "size": [230, 64] }
+    { "id": "op_images", "type": "database", "label": "images", "sublabel": "image_id / imohash / pe_embedding", "pos": [40, 110], "size": [230, 64] },
+    { "id": "op_items", "type": "database", "label": "items", "sublabel": "crop_id / bbox_norm / class_id", "pos": [360, 110], "size": [230, 64], "tag": "region_boxes[] / vlm_* / probe_*" },
+    { "id": "op_classes", "type": "database", "label": "classes", "sublabel": "class_id / class_name / group", "pos": [680, 110], "size": [230, 64] },
+    { "id": "registry", "type": "external", "label": "class_registry.json", "sublabel": "data/projects/<slug>/", "pos": [680, 270], "size": [230, 64] },
+    { "id": "op_configs", "type": "database", "label": "configs", "sublabel": "packs / profiles / keymap / settings", "pos": [360, 270], "size": [230, 64], "tag": "revisions + activations" },
+    { "id": "op_umap", "type": "backend", "label": "umap_state", "sublabel": "clustering reducer cache", "pos": [40, 270], "size": [230, 64] },
+    { "id": "op_labels", "type": "database", "label": "labels_confirmed", "sublabel": "legacy, nothing writes it", "pos": [40, 400], "size": [230, 64] },
+    { "id": "exports", "type": "external", "label": "exports/ + bakeoff_eval/", "sublabel": "data/projects/<slug>/", "pos": [680, 400], "size": [230, 64] },
+    { "id": "op_projects", "type": "database", "label": "op_projects", "sublabel": "one record per project", "pos": [40, 590], "size": [230, 64], "tag": "status / revision / resources" },
+    { "id": "op_global", "type": "database", "label": "op_global_configs", "sublabel": "VLM endpoint registry", "pos": [360, 590], "size": [230, 64], "tag": "no project" },
+    { "id": "vs_global", "type": "database", "label": "visual_search_global", "sublabel": "image_id / CLIP 512-d", "pos": [360, 780], "size": [230, 64] },
+    { "id": "vs_faces", "type": "database", "label": "visual_search_faces", "sublabel": "face_id / ArcFace 512-d", "pos": [40, 920], "size": [230, 64] },
+    { "id": "vs_objects", "type": "database", "label": "visual_search_vehicles / people", "sublabel": "box / crop embedding", "pos": [360, 920], "size": [230, 64] },
+    { "id": "vs_ocr", "type": "database", "label": "visual_search_ocr", "sublabel": "text + boxes", "pos": [680, 920], "size": [230, 64] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Curation (/curation)", "wraps": ["op_images", "op_items", "op_classes", "registry", "op_labels", "op_state"] },
+    { "kind": "region", "label": "Per project: op_prj_<slug>__<role>", "wraps": ["op_images", "op_items", "op_classes", "registry", "op_configs", "op_umap", "op_labels", "exports"] },
+    { "kind": "region", "label": "Global (no project)", "wraps": ["op_projects", "op_global"] },
     { "kind": "region", "label": "Visual search (core /ingest, /search)", "wraps": ["vs_global", "vs_faces", "vs_objects", "vs_ocr"] }
   ],
   "connections": [
     { "id": "items-images", "from": "op_items", "to": "op_images", "label": "image_id" },
     { "id": "items-classes", "from": "op_items", "to": "op_classes", "label": "class_id" },
     { "id": "registry-classes", "from": "registry", "to": "op_classes", "label": "sync", "variant": "dashed" },
-    { "id": "labels-items", "from": "op_labels", "to": "op_items", "label": "crop_id" },
+    { "id": "configs-items", "from": "op_configs", "to": "op_items", "label": "region_profile@rev", "variant": "dashed" },
+    { "id": "exports-registry", "from": "exports", "to": "registry", "label": "class names", "variant": "dashed" },
+    { "id": "projects-configs", "from": "op_projects", "to": "op_configs", "label": "resources", "variant": "dashed" },
     { "id": "faces-global", "from": "vs_faces", "to": "vs_global", "label": "image_id" },
     { "id": "objects-global", "from": "vs_objects", "to": "vs_global", "label": "image_id" },
     { "id": "ocr-global", "from": "vs_ocr", "to": "vs_global", "label": "image_id" }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Items carry the story", "items": ["One document per crop: geometry, class, provenance, cluster, VLM, probe and score fields", "pe_embedding (1024-d) drives search, near-dup and clustering"] },
-    { "dot": "emerald", "title": "Names are config", "items": ["Every curation index name has an OP_* override", "RegionFields can remap region_* storage names without a reindex"] },
-    { "dot": "orange", "title": "Search is separate", "items": ["Core /ingest indexes are independent of the curation pool", "All embeddings are k-NN vector fields"] }
+    { "dot": "cyan", "title": "Items carry the story", "items": ["One document per crop: geometry, class, provenance, cluster, VLM, probe and score fields", "region_boxes is a nested list: each box has its own state, text, cluster and embedding", "pe_embedding (1024-d) drives search, near-dup and clustering"] },
+    { "dot": "emerald", "title": "Projects own their data", "items": ["Every project has six indexes named op_prj_<slug>__<role>; settings and projection state share its configs index", "Paths and index names are fixed when the project is created", "A guard refuses any request that names another project's index"] },
+    { "dot": "orange", "title": "Search is separate", "items": ["Core /ingest indexes are independent of every project", "All embeddings are k-NN vector fields"] }
   ]
 }

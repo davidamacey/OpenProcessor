@@ -66,6 +66,38 @@ never run this against the repo-root `docker-compose.yml` from a
 worktree that might collide with a real deployment's container names or
 ports (4600–4610).
 
+## Contracts
+
+`contracts/` holds generated files: the curation OpenAPI schema, the item wire
+types and the keymap action table. After any change to a route, request or
+response model, or an item field, regenerate and commit the output in the same
+commit:
+
+```bash
+make contracts          # regenerate
+make contracts-check    # fail if anything is stale
+```
+
+Pre-commit rejects a commit that leaves a contract stale. See
+[`contracts/README.md`](contracts/README.md).
+
+## Documentation checks
+
+Docs are checked against the code. A route written in a doc must exist, an
+`OP_*` variable must be read by code, and relative links and anchors must
+resolve:
+
+```bash
+.venv/bin/python scripts/docs/check_docs_vs_code.py                  # everything
+.venv/bin/python scripts/docs/check_docs_vs_code.py --only README.md # some files
+.venv/bin/python -m pytest tests/test_doc_links.py -q --no-cov
+```
+
+Write each route in full on its own mention (`GET /curation/projects/{project}/stats`,
+not a brace-expanded shorthand). Public data only in docs and fixtures (COCO,
+Open Images); no real hostnames, secrets or private product names
+(`scripts/codegen/check_naming_leaks.py` enforces the last one).
+
 ## The `check-no-literal-region-fields` ratchet
 
 `scripts/codegen/check_no_literal_region_fields.py` is a pre-commit hook
@@ -116,8 +148,13 @@ rather than skipping it.
 - Keep PRs scoped to one logical change; large mechanical renames
   (e.g. a service rename) should be their own PR, separate from
   functional changes.
-- CI (`.github/workflows/ci.yml`) runs the pytest suite and
-  `pre-commit run --all-files` on every PR — both must be green.
+- CI (`.github/workflows/ci.yml`) runs the offline pytest suite and
+  `pre-commit run --all-files` on every PR — both must be green. Changes under
+  `docs-site/` also build the documentation site (`docs.yml`).
+- A change that moves the API or wire format includes the regenerated
+  `contracts/`.
+- No compatibility shims: when a route, field or setting is replaced, delete
+  the old one in the same change and update the docs that named it.
 - If your change touches `docs/`, run
   `.venv/bin/python -m pytest tests/test_doc_links.py -q --no-cov`
   locally first — it catches dangling relative markdown links.

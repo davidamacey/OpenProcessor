@@ -160,11 +160,78 @@ room for more, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and
 
 `env.template` has a "Curation quick-config" block with every key the
 curation tiers need: the ingest detector (`OP_INGEST_PRIMARY_*`), the
-segmenter and VLM endpoints, the feature flags, the GPU keys and the optional
-region profile. The installer writes exactly that block; with `--sample-data`
+segmenter and VLM endpoints, the feature flags and the GPU keys. Projects,
+prompt packs, region profiles, keymaps and the active VLM are not `.env`
+settings: they are created and activated through the API. The installer writes exactly that block; with `--sample-data`
 it also points ingest at the COCO sample's classes. `./openprocessor sample
 coco` fetches the public, license-filtered COCO sample (200 images; `--full`
 for 800) into `data/samples/`. Details: [docs/CURATION.md](docs/CURATION.md).
+
+### The `openprocessor` CLI
+
+Every install directory has an `openprocessor` script; a source checkout has
+the same script at the repo root, with `scripts/openprocessor.sh` as a shim.
+It runs every compose command with the right project name, `.env` and
+project directory, and refuses to act on a compose project that another
+directory created. Run `./openprocessor help` for the list.
+
+| Command | What it does |
+|---|---|
+| `start` / `stop` | `docker compose up -d` / `down` for this install |
+| `restart [service]` | restart one service or all |
+| `logs [service] [-f]` | last 100 lines of a service (50 of all), or follow with `-f` |
+| `status` | containers, then API, Triton, OpenSearch and Grafana health on this install's ports, then GPU memory |
+| `health` | print the API `/health` JSON |
+| `models [status]` | Triton model repository index and each model's state |
+| `models install [--only GROUP]` / `models repair` | export and load model groups (`preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`); skips groups that are up to date and re-runs failed ones |
+| `export <model>` / `download <model>` | export to TensorRT / download weights. Targets include `all`, `essential`, `status`; `export` also takes `yolo`, `scrfd`, `arcface`, `clip-image`, `clip-text`, `ocr`; `download` also takes `ocr` |
+| `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
+| `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the API image |
+| `config show` | print `.env` with every token, key, secret and password redacted |
+| `gpu plan` | print the GPU keys from `.env` |
+| `vlm ...` | local VLM catalog and switching, see [Choosing a VLM](#choosing-a-vlm) |
+| `train-mode on\|off` | stop (and later restart) the local VLM, plus the segmenter when it shares the training GPU, around a training run |
+| `upgrade [--version vX.Y.Z]`, `repair`, `uninstall [...]` | run this install's own `setup-openprocessor.sh` against this directory (installed directories only) |
+| `update` | in a checkout: pull images and rebuild; in an install directory: same as `upgrade` |
+| `profile [minimal\|standard\|full] [gpu_id]` | show or switch the Triton instance profile (checkout only) |
+| `test [quick\|full\|visual]` | smoke test, `tests/test_full_system.py`, or visual validation (checkout only; `full` and `visual` need `.venv`) |
+| `bench [quick\|full]` | build and run `benchmarks/triton_bench` (checkout only) |
+| `clean [cache\|models\|exports\|all]` | remove caches, downloaded weights, or TensorRT plans (asks first) |
+| `setup [flags]` | run `scripts/setup.sh` (checkout only) |
+| `version` | print the CLI version |
+
+### Choosing a VLM
+
+Labeling and region verification call an OpenAI-compatible vision-language
+model. A deployment has a **registry** of endpoints (the built-in `env`
+endpoint from `OP_VLM_URL`, plus any you save through the API) and each project
+**activates** one. Three ways to get a model:
+
+1. **Local model from the catalog** (the `vlm` tier). The catalog is
+   `examples/vlm/catalog.tsv`. The installer picks the best `tested` entry
+   that fits the free VRAM on the VLM GPU, or you name one with
+   `--vlm-model-id ID`.
+2. **Remote endpoint** at install time: `--vlm-remote URL --vlm-model NAME
+   [--vlm-key-file PATH]`. The key goes to `secrets/vlm/`, never `.env`. A URL
+   outside private address space needs consent (`OP_ALLOW_EXTERNAL_VLM=1`
+   unattended) because crops leave the host.
+3. **Registered endpoint** through `POST /curation/vlm/endpoints`, activated per
+   project with `POST /curation/projects/{project}/vlm/endpoints/{name}/activate`.
+
+Host-side commands for the local model:
+
+| Command | What it does |
+|---|---|
+| `./openprocessor vlm list` | catalog entries with licence, VRAM and status |
+| `./openprocessor vlm status` | the model in `.env`, the endpoint, the model actually serving (probed) and the one requested through the API |
+| `./openprocessor vlm use <id> [--force] [--yes]` | switch the local model: checks the GPU has room (`--force` to try anyway), checks a gated model's HuggingFace token, refuses while a training run holds the GPUs, pauses the workers, rewrites the VLM keys in `.env` (backup restored on failure), recreates the container, waits until it serves the model, probes it, then unpauses |
+| `./openprocessor vlm apply [--force] [--yes]` | apply the model requested through `POST /curation/vlm/local/select` (does the same as `use`) |
+| `./openprocessor vlm probe` | probe the in-compose endpoint and record what it serves |
+| `./openprocessor vlm key set <slug>` | read a key from the terminal (hidden) into `secrets/vlm/<slug>`, mode 600; reference it from an endpoint as `secret:<slug>` |
+
+Entries whose status is not `tested` are never picked automatically; `use`
+accepts them with a warning. The API never restarts the container: it records
+the wanted model and reports `restart_required`.
 
 ### Upgrade, repair, rollback, uninstall
 
@@ -291,8 +358,9 @@ cd OpenProcessor
 The setup script will:
 1. Check prerequisites (Docker, NVIDIA drivers)
 2. Detect your GPU and select the optimal profile
-3. Pull pre-built Docker images from Docker Hub (~32GB)
-4. Download required models (~500MB, ~16 seconds)
+3. Pull the API and Triton images from Docker Hub (tens of GB); if the pull
+   fails it builds them from the Dockerfiles instead
+4. Download required models (~500MB)
 5. Export models to TensorRT (~30-60 minutes, **one-time only**)
 6. Generate configuration files (the OpenSearch heap is sized from host RAM,
    as for the installer; see [OpenSearch heap sizing](#opensearch-heap-sizing))
@@ -442,8 +510,11 @@ Or generate automatically:
 ### 5. Start Containers (for export)
 
 ```bash
-docker compose up -d triton-server yolo-api
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d triton-server yolo-api
 ```
+
+`make up` and `./openprocessor start` add the dev overlay for you and start
+the whole core stack.
 
 ### 6. Export to TensorRT
 
@@ -463,7 +534,8 @@ This step converts models to optimized TensorRT format:
 ### 7. Start All Services
 
 ```bash
-docker compose up -d
+make up              # or: ./openprocessor start
+make curation-up     # optional: the curation workers
 ```
 
 ### 8. Verify Installation
@@ -514,11 +586,12 @@ curl http://localhost:4603/health
    nvidia-smi  # Need 4GB+ free
    ```
 
-2. Unload existing models first:
+2. The export needs the `triton-server` container running (it builds the
+   engines with `trtexec` there) and frees GPU memory by unloading models
+   first. Stop other GPU processes, then retry:
    ```bash
-   docker compose stop triton-server
+   ./scripts/openprocessor.sh start
    ./scripts/openprocessor.sh export all
-   docker compose start triton-server
    ```
 
 3. Check CUDA version compatibility:
@@ -599,8 +672,8 @@ git pull
 ### Rebuilding After Updates
 
 ```bash
-docker compose build --no-cache
-docker compose up -d
+make rebuild
+make up
 ```
 
 ### Re-exporting Models

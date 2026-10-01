@@ -124,6 +124,11 @@ licenses; Open Images images only under CC BY 2.0. Each fetch writes an
 
 ### Walkthrough
 
+Curation data lives in [projects](../guides/projects.mdx): isolated
+workspaces with their own classes, items, settings and jobs. A fresh stack
+has one project, `default`. The walkthrough makes its own so nothing is
+shared.
+
 ```bash
 # 0. Curation needs the PE-Core encoders (not built by setup.sh)
 make export-pe
@@ -131,16 +136,8 @@ make export-pe
 # 1. Fetch a sample
 make sample-coco-readme
 
-# 2. Create only the classes you care about (the registry starts empty)
-API=http://localhost:4603
-for name in car truck bus motorcycle bicycle; do
-  curl -s -X POST "$API/curation/classes" \
-    -H 'content-type: application/json' \
-    -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
-done
-
-# 3. Configure the ingest detector and narrow it to those classes, and
-#    point the source mount at the samples directory
+# 2. Configure the ingest detector, narrow it to the classes you care
+#    about, and point the source mount at the samples directory
 cat >> .env <<'EOF'
 OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
 OP_INGEST_PRIMARY_CLASS_IDS=2,3,5,7
@@ -148,18 +145,34 @@ OP_SOURCE_ROOT_HOST=./data/samples
 EOF
 docker compose up -d --force-recreate yolo-api
 
-# 4. Ingest. --root is a container path under the /data/source mount
+# 3. Create a project, then its classes (the registry starts empty)
+API=http://localhost:4603
+P=coco-vehicles
+curl -s -X POST "$API/curation/projects" \
+  -H 'content-type: application/json' \
+  -d "{\"slug\": \"$P\", \"display_name\": \"COCO vehicles\"}"
+for name in car truck bus motorcycle bicycle; do
+  curl -s -X POST "$API/curation/projects/$P/classes" \
+    -H 'content-type: application/json' \
+    -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
+done
+
+# 4. Ingest into the project. --root is a container path under the
+#    /data/source mount
 docker compose exec yolo-api python scripts/curation/ingest_walker.py \
-  --root /data/source/coco_va_readme/images --api-base http://localhost:8000/curation
+  --project $P --root /data/source/coco_va_readme/images \
+  --api-base http://localhost:8000/curation
 
 # 5. Optional: start the async workers and cluster (+ VLM-label) the pool
 docker compose --profile curation up -d
-curl -s -X POST "$API/curation/pipeline/auto_label/start?run_vlm=true&train_clusters=true"
-curl -s "$API/curation/pipeline/auto_label/status"
+curl -s -X POST "$API/curation/projects/$P/pipeline/auto_label/start?run_vlm=true&train_clusters=true"
+curl -s "$API/curation/projects/$P/pipeline/auto_label/status"
 ```
 
 Things that trip people up:
 
+- **Every curation data route is under `/curation/projects/{project}/`.**
+  An unscoped path such as `/curation/classes` is a `404`.
 - **`OP_INGEST_PRIMARY_CLASS_IDS`** matters. Without it, a stock detector's
   whole label space (all 80 COCO classes) becomes item proposals.
   `2,3,5,7` is car, motorcycle, bus and truck in COCO's id order.
@@ -168,22 +181,48 @@ Things that trip people up:
 - **`OP_SOURCE_ROOT_HOST`** is the host side of a fixed `/data/source`
   mount. The walker's `--root` must be a *container* path under it,
   otherwise every image fails as `unservable_path`.
-- **`OP_*` variables are read at import time**: recreate `yolo-api` after
-  changing them.
+- **`OP_*` variables are read at process start**: recreate `yolo-api`
+  after changing them.
 - **`auto_label` clusters only by default** (`run_vlm=false`); the VLM
-  labels nothing unless you pass `run_vlm=true` and have a VLM configured
-  (see [VLM configuration](../configuration/advanced.mdx#vlm-and-segmenter)).
-- `GET /curation/health` reports `degraded` until at least one class
-  exists and Triton and OpenSearch are reachable.
+  labels nothing unless you pass `run_vlm=true` and a VLM is configured
+  (see [VLM configuration](../configuration/advanced.mdx#vlm-and-segmenter)
+  and [VLM selection](../guides/vlm-selection.mdx)).
+- `GET /curation/projects/{project}/health` reports `degraded` until at
+  least one class exists and Triton and OpenSearch are reachable.
 
-### Region sample (`make sample-plates`)
+:::note
+> Screenshot pending: Cropwright (the project switcher, and the new project's empty cluster view)
+:::
 
-The Open Images set is **region** ground truth (whole frames with a
-single region class), not item classes. Import it with
-`scripts/curation/import_labeled_dataset.py --images-only` so the labels
-never touch the item registry, activate a region profile (see
-[Configuration: region detection profile](../configuration/advanced.mdx#region-detection-profile)),
-let the detection worker's cascade run, then score it with
+### Bring a labeled dataset instead
+
+If you already have a YOLO or COCO dataset, import it rather than
+re-labeling. Classes are matched to the project's classes by name, and the
+import can be resumed or undone:
+
+```bash
+make sample-coco-import        # public COCO fixture, four layouts under data/samples/import_fixture
+docker compose exec yolo-api python scripts/curation/import_labeled_dataset.py \
+  --project $P --dataset /data/source/import_fixture/yolo \
+  --accept-suggestions --dry-run
+```
+
+Drop `--dry-run` to import. See [Dataset import](../guides/dataset-import.mdx).
+
+### Regions: the car-to-wheel example
+
+A region is a sub-object found inside each item, such as a wheel inside a
+car, with its own boxes, states and (optionally) text. The public
+car-to-wheel example walks through a region profile, a prompt pack, VLM
+verification and multi-box review on public COCO images; see the
+[wheel example](../guides/wheel-example.mdx).
+
+The Open Images plates set (`make sample-plates`) is **region** ground
+truth (whole frames with a single region class), not item classes. Index
+its images with `scripts/curation/import_labeled_dataset.py --images-only`
+so the labels never touch the item registry, activate a region profile
+(see [Region profiles](../guides/region-profiles.mdx)), let the detection
+worker's cascade run, then score it with
 `scripts/curation/eval_regions_vs_gt.py`.
 
 Continue with the end-to-end [curation workflow](../operations/curation-workflow.mdx).

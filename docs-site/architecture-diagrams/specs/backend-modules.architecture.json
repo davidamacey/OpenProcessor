@@ -24,10 +24,12 @@
           "main",
           "curation_routers",
           "curation_services",
+          "projects",
+          "config_store",
           "training",
           "config"
         ],
-        "note": "Curation routers sit over FastAPI-free services, configured by four dataclasses."
+        "note": "Curation routers bind a project, then call FastAPI-free services; config lives in the project config store."
       },
       {
         "id": "workers",
@@ -36,7 +38,8 @@
           "workers",
           "detection",
           "labeling",
-          "curation_services"
+          "curation_services",
+          "config_store"
         ],
         "note": "Workers import the same services the API uses, outside the API process."
       }
@@ -94,7 +97,7 @@
       "id": "curation_routers",
       "type": "frontend",
       "label": "Curation routers",
-      "sublabel": "src/routers/curation/",
+      "sublabel": "scoped by project",
       "pos": [
         290,
         420
@@ -122,7 +125,7 @@
       "id": "curation_services",
       "type": "backend",
       "label": "Curation services",
-      "sublabel": "src/services/curation/",
+      "sublabel": "curation/ (import, reprocess)",
       "pos": [
         560,
         280
@@ -192,9 +195,9 @@
       "id": "config",
       "type": "security",
       "label": "src/config/",
-      "sublabel": "4 dataclasses, from_env()",
+      "sublabel": "dataclasses + projects",
       "pos": [
-        290,
+        40,
         620
       ],
       "size": [
@@ -213,6 +216,34 @@
       ],
       "size": [
         160,
+        64
+      ]
+    },
+    {
+      "id": "projects",
+      "type": "backend",
+      "label": "Projects",
+      "sublabel": "lifecycle / combine",
+      "pos": [
+        290,
+        620
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "config_store",
+      "type": "database",
+      "label": "Config store",
+      "sublabel": "packs / profiles / keymap",
+      "pos": [
+        560,
+        700
+      ],
+      "size": [
+        180,
         64
       ]
     }
@@ -280,6 +311,25 @@
       "from": "workers",
       "to": "labeling",
       "label": "import"
+    },
+    {
+      "id": "curation-routers-projects",
+      "from": "curation_routers",
+      "to": "projects",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "projects-config-store",
+      "from": "projects",
+      "to": "config_store",
+      "variant": "dashed"
+    },
+    {
+      "id": "workers-config-store",
+      "from": "workers",
+      "to": "config_store",
+      "variant": "dashed"
     }
   ],
   "cards": [
@@ -296,15 +346,16 @@
       "title": "Config, not forks",
       "items": [
         "CurationConfig, RegionFields, DetectionProfile and RegionStatus hold everything domain-specific",
-        "OP_* variables are read at import time"
+        "Per-project prompt packs, profiles and VLM choice live in the config store, not in env vars",
+        "Deployment OP_* variables are read at process start"
       ]
     },
     {
       "dot": "orange",
       "title": "One wire vocabulary",
       "items": [
-        "wire.py turns storage fields into region_*, vlm_*, classifier_* names",
-        "OCC helpers keep human labels safe from concurrent writers"
+        "wire.py turns storage fields into region_*, vlm_*, classifier_* names; a region is an element of region_boxes",
+        "OCC helpers and the lock rule keep human and imported labels safe from automated writers"
       ]
     }
   ]
