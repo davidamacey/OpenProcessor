@@ -404,3 +404,77 @@ async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
     # separate client.update() round trips.
     assert len(client.mget_calls) - mget_calls_before == 2
     assert len(client.bulk_calls) - bulk_calls_before == 1
+
+
+_CLASS_GUARDS = ['label_source', 'class_source']
+
+_LOCKED_EXISTING = {
+    'human': {
+        'class_id': 5,
+        'class_name': 'sedan',
+        'class_source': 'human',
+        'label_source': 'human',
+        'class_validated': True,
+        'cluster_id': 5,
+        'test_holdout': False,
+    },
+    # Issue #31: a holdout item whose class came from a machine writer.
+    # Re-ingest used to keep ``class_source=vlm`` (the guard fires on the
+    # holdout flag) while overwriting ``class_id`` with the detector's, so
+    # the provenance described a class the item no longer had; the same
+    # write also reset ``test_holdout`` to false and unfroze the item.
+    'holdout_machine_class': {
+        'class_id': 5,
+        'class_name': 'sedan',
+        'class_source': 'vlm',
+        'label_source': 'vlm',
+        'class_detector': 'vlm_model',
+        'class_validated': False,
+        'cluster_id': 5,
+        'test_holdout': True,
+    },
+    'validated_import': {
+        'class_id': 5,
+        'class_name': 'sedan',
+        'class_source': 'external_label',
+        'label_source': 'import',
+        'class_validated': True,
+        'cluster_id': 5,
+        'test_holdout': False,
+    },
+}
+
+
+@pytest.mark.parametrize('kind', sorted(_LOCKED_EXISTING))
+async def test_reingest_keeps_every_class_field_of_a_locked_item(kind: str) -> None:
+    from src.clients.occ import occ_upsert_bulk
+
+    client = FakeUpsertOpenSearch()
+    index = 'op_items_test'
+    existing = _LOCKED_EXISTING[kind]
+    await client.index(
+        index=index,
+        id='c1',
+        body={'crop_id': 'c1', 'image_id': 'img-1', **existing},
+    )
+    reingest_doc = {
+        'crop_id': 'c1',
+        'image_id': 'img-1',
+        'class_id': 9,
+        'class_name': 'truck',
+        'class_source': 'ingest',
+        'label_source': 'ingest',
+        'class_validated': False,
+        'cluster_id': 9,
+        'confidence': 0.4,
+        'test_holdout': False,
+    }
+    result = await occ_upsert_bulk(
+        client, [reingest_doc], index=index, human_field_guards=_CLASS_GUARDS, writer_id='ingest'
+    )
+    assert result['preserved_human'] >= 1
+
+    got = (await client.get(index=index, id='c1'))['_source']
+    for name, value in existing.items():
+        assert got.get(name) == value, f'{kind}: {name} was overwritten'
+    assert 'confidence' not in got

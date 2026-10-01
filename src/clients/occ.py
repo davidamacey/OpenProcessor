@@ -36,6 +36,7 @@ from src.clients.occ_locks import _is_locked_marker, is_locked_box, is_locked_cl
 from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
 from src.config.curation import items_index
 from src.core.logging import get_logger
+from src.services.curation.history import CLASS_STATE_FIELDS
 
 
 if TYPE_CHECKING:
@@ -378,17 +379,15 @@ _HUMAN_GUARD_COMPANIONS: dict[str, tuple[str, ...]] = {
 }
 
 # Stricter than a companion: when the guard fires, the incoming value is
-# never applied — the existing value is kept, or the field is left absent
-# if the human-owned doc never had it. Class provenance describes who
-# produced the *preserved* class_source, so an ingest detector's
-# provenance must not land on (or be invented for) a human-owned row.
+# never applied -- the existing value is kept, or the field is left absent
+# if the locked doc never had it. A locked class is one unit: the value
+# (class_id/class_name/validated/cluster), the provenance describing who
+# produced it, and the holdout freeze. Preserving only the provenance (the
+# pre-#31 behaviour) left ``class_source`` describing a class the item no
+# longer had, and the fresh ingest doc's ``test_holdout: false`` unfroze a
+# holdout item.
 _HUMAN_GUARD_OWNED: dict[str, tuple[str, ...]] = {
-    'class_source': (
-        'class_detector',
-        'class_detector_version',
-        'class_labeler',
-        'class_labeled_at',
-    ),
+    'class_source': (*CLASS_STATE_FIELDS, 'test_holdout'),
 }
 
 
