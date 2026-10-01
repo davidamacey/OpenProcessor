@@ -229,9 +229,10 @@ async def receive_archive(stream: AsyncIterator[bytes], *, upload_root: Path) ->
     ``OP_DATASET_UPLOAD_MAX_BYTES`` and :class:`ArchiveInvalidError` for an
     unsafe archive (nothing is left extracted).
     """
-    root = mark_project_dir(datasets_root(upload_root))
+    root = datasets_root(upload_root)
     incoming = root / '.incoming'
     incoming.mkdir(parents=True, exist_ok=True)
+    mark_project_dir(root)
     cap = limits.upload_max_bytes()
     tmp = incoming / f'{uuid.uuid4().hex}.part'
     digest = hashlib.sha256()

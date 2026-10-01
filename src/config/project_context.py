@@ -129,21 +129,27 @@ class ProjectDirMismatchError(RuntimeError):
 
 
 def mark_project_dir(directory: Path) -> Path:
-    """Create ``directory`` and stamp it with the bound project's slug in
-    ``.project``. Filesystem state (imports, uploads, reprocess jobs) has no
-    index to scope it, so the marker is what makes a dir that was mounted,
-    copied or symlinked under the wrong project detectable: a marker naming
-    another slug raises rather than being read or written."""
-    slug = current_project().record.slug
-    directory.mkdir(parents=True, exist_ok=True)
+    """Stamp an existing ``directory`` with the bound project's slug in
+    ``.project`` (a missing one is left alone: reads create nothing, and the
+    code that creates it calls this again afterwards). Filesystem state
+    (imports, uploads, reprocess jobs) has no index to scope it, so the
+    marker is what makes a dir mounted, copied or symlinked under the wrong
+    project detectable: a marker naming another slug raises rather than
+    being read or written. A read-only binding verifies but never writes."""
+    bound = current_project()
+    if not directory.is_dir():
+        return directory
     marker = directory / '.project'
     try:
         found = marker.read_text(encoding='utf-8').strip()
     except FileNotFoundError:
-        marker.write_text(slug, encoding='utf-8')
+        if not bound.read_only:
+            marker.write_text(bound.record.slug, encoding='utf-8')
         return directory
-    if found != slug:
-        raise ProjectDirMismatchError(f'{directory} belongs to project {found!r}, not {slug!r}')
+    if found != bound.record.slug:
+        raise ProjectDirMismatchError(
+            f'{directory} belongs to project {found!r}, not {bound.record.slug!r}'
+        )
     return directory
 
 

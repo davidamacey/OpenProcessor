@@ -2126,7 +2126,6 @@ def test_import_state_of_alpha_is_invisible_to_beta_and_a_misplaced_dir_is_refus
         beta_dir = imports_root()
     assert beta_dir != alpha_dir
     # alpha's directory copied under beta's path: refused, not served.
-    shutil.rmtree(beta_dir)
     shutil.copytree(alpha_dir, beta_dir)
     with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
         open_store(import_id)
@@ -2154,6 +2153,7 @@ def test_reprocess_and_upload_dirs_are_marked_with_their_project(
         await receive_archive(body(), upload_root=record.resources.upload_root)
 
     with bind_project(leak_env.records['alpha']):
+        reprocess_job.jobs_root().mkdir(parents=True)
         assert (reprocess_job.jobs_root() / '.project').read_text() == 'alpha'
         asyncio.run(upload(leak_env.records['alpha']))
         alpha_uploads = datasets_root(leak_env.records['alpha'].resources.upload_root)
