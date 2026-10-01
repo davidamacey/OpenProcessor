@@ -52,8 +52,4 @@ def slugs_running(activations: dict[str, dict[str, Any] | None], name: str) -> l
     return out
 
 
-async def projects_using(client: Any, name: str) -> list[str]:
-    return slugs_running(await activations_by_project(client), name)
-
-
-__all__ = ['activations_by_project', 'projects_using', 'slugs_running']
+__all__ = ['activations_by_project', 'slugs_running']

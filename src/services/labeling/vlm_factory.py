@@ -11,6 +11,10 @@ The cache key covers everything a labeler is built from: the endpoint's
 ``ref`` (revision-pinned, or body-hashed for ``env``/drafts), the resolved
 JSON mode, the probe marker (a re-probe -- which is also how a rotated
 secret is picked up -- changes it), and the pack's name and content hash.
+Every labeler also re-checks its endpoint before sending, at most once per
+:data:`_RECHECK_S` (:func:`_assert_may_connect`): a host's DNS can change
+after the endpoint was validated, and a worker's or a cached labeler is long
+lived. A refusal is sticky until the host is acceptable again (fail closed).
 A labeler that a newer key replaced is closed only after ``timeout_s + 10``
 seconds, so an in-flight call is never cut off mid-request.
 """
@@ -20,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
@@ -27,10 +32,12 @@ from src.core.logging import get_logger
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, resolve_api_key
 from src.services.labeling.vlm_labeler import VlmLabeler
-from src.services.labeling.vlm_url_policy import url_denial
+from src.services.labeling.vlm_url_policy import compute_locality, url_denial
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack
 
@@ -38,6 +45,7 @@ logger = get_logger(__name__)
 
 _CACHE_MAX = 32
 _CLOSE_GRACE_S = 10.0
+_RECHECK_S = 30.0
 _LABELERS: OrderedDict[tuple[Any, ...], VlmLabeler] = OrderedDict()
 _CLOSING: set[asyncio.Task[None]] = set()
 
@@ -82,15 +90,45 @@ def _schedule_close(labeler: VlmLabeler) -> None:
     task.add_done_callback(_CLOSING.discard)
 
 
+def _assert_may_connect(endpoint: VlmEndpoint) -> None:
+    """Raise :class:`VlmEndpointDeniedError` unless the endpoint's host is,
+    NOW, one this deployment may send crops to: not a never-allowed address,
+    and (when it resolves outside the deployment) permitted by
+    ``OP_VLM_EXTERNAL_POLICY`` and acknowledged on the endpoint. The same
+    :func:`check_external` the validator runs; the ``env`` built-in is the
+    operator's own choice and is not re-checked."""
+    from src.services.config_store.vlm_validation import check_external
+
+    if endpoint.source == 'env':
+        return
+    body = endpoint.body
+    denial = url_denial(body.base_url)
+    if denial is not None:
+        raise VlmEndpointDeniedError(denial.reason)
+    refusals = check_external(body, compute_locality(body.base_url), is_env=False)
+    if refusals:
+        raise VlmEndpointDeniedError(refusals[0].message)
+
+
+def _egress_check(endpoint: VlmEndpoint) -> Callable[[], None]:
+    """The labeler's pre-send check: :func:`_assert_may_connect`, throttled
+    to once per :data:`_RECHECK_S` while it keeps passing."""
+    checked_at = time.monotonic()
+
+    def check() -> None:
+        nonlocal checked_at
+        if time.monotonic() - checked_at < _RECHECK_S:
+            return
+        _assert_may_connect(endpoint)
+        checked_at = time.monotonic()
+
+    return check
+
+
 def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
     body = endpoint.body
     is_env = endpoint.source == 'env'
-    if not is_env:
-        # Re-checked on every cache miss: a stored endpoint's host can start
-        # resolving to a forbidden address after it was validated.
-        denial = url_denial(body.base_url)
-        if denial is not None:
-            raise VlmEndpointDeniedError(denial.reason)
+    _assert_may_connect(endpoint)
     key = resolve_api_key(body.api_key_ref, is_env_builtin=is_env)
     if key is None and body.api_key_ref is not None and not is_env:
         msg = f'endpoint {endpoint.name!r}: the secret {body.api_key_ref!r} is missing or empty'
@@ -109,6 +147,7 @@ def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
         json_mode=endpoint.json_mode_on,
         open_images_per_call=body.effective_open_images,
         identity=VlmIdentity(endpoint_ref=endpoint.ref, model=endpoint.model_id),
+        egress_check=_egress_check(endpoint),
     )
 
 

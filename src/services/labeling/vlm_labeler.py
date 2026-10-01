@@ -87,6 +87,8 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import httpx
 
 
@@ -703,6 +705,7 @@ class VlmLabeler:
         json_mode: bool = True,
         open_images_per_call: int | None = None,
         identity: VlmIdentity | None = None,
+        egress_check: Callable[[], None] | None = None,
     ) -> None:
         if base_url and not model:
             raise ValueError(
@@ -729,6 +732,7 @@ class VlmLabeler:
             )
             max_images_per_call = _max_hard
 
+        self._egress_check = egress_check
         self.json_mode = json_mode
         self.open_images_per_call = (
             DEFAULT_OPEN_IMAGES_PER_CALL if open_images_per_call is None else open_images_per_call
@@ -783,8 +787,12 @@ class VlmLabeler:
         return build_auth_headers(self.api_key)
 
     async def _post_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """POST /chat/completions with retry on 5xx + connection errors."""
+        """POST /chat/completions with retry on 5xx + connection errors.
+        ``egress_check`` (the factory's) runs first and raises to refuse the
+        send: a host's DNS can change after the endpoint was validated."""
 
+        if self._egress_check is not None:
+            self._egress_check()
         url = f'{self.base_url}/chat/completions'
         return await post_chat_with_retry(self._client, url, self._headers, payload, self._bucket)
 

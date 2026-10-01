@@ -182,7 +182,7 @@ def test_the_uncached_builder_owns_what_it_returns() -> None:
 def test_a_url_that_turned_forbidden_after_it_was_saved_is_refused_at_build(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    good = _endpoint(base_url='http://sneaky.example.com/v1')
+    good = _endpoint(base_url='http://sneaky.example.com/v1', allow_external=True)
     assert labeler_for(good, GENERIC_ITEM_PACK) is not None
     reset_labeler_cache()
     monkeypatch.setattr(policy, '_resolve', lambda _host: ['169.254.169.254'])  # rebinding
@@ -213,3 +213,73 @@ def test_a_stored_endpoints_missing_secret_fails_closed_not_open(tmp_path: Any) 
 
 def test_no_key_means_the_conventional_placeholder() -> None:
     assert labeler_for(_endpoint(), GENERIC_ITEM_PACK).api_key == 'EMPTY'
+
+
+# ---- W9 review M7: the host is re-checked at use time -------------------------
+
+
+def _flip_to(monkeypatch: pytest.MonkeyPatch, host: str, address: str) -> None:
+    monkeypatch.setattr(
+        policy, '_resolve', lambda name: [address] if name == host else ['172.18.0.9']
+    )
+    policy.reset_policy_caches()
+
+
+def test_a_build_refuses_an_unacknowledged_endpoint_whose_host_went_public(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Saved and activated while private (so no external ack was ever given);
+    its DNS later names a public host. The worker's build must not follow."""
+    _flip_to(monkeypatch, 'flip.corp.example', '10.0.0.9')
+    endpoint = _endpoint(base_url='http://flip.corp.example/v1')
+    assert build_uncached_labeler(endpoint, GENERIC_ITEM_PACK) is not None
+    _flip_to(monkeypatch, 'flip.corp.example', '93.184.216.34')
+    with pytest.raises(VlmEndpointDeniedError, match='outside this deployment'):
+        build_uncached_labeler(endpoint, GENERIC_ITEM_PACK)
+
+
+def test_the_deny_policy_applies_to_a_build_even_for_an_acknowledged_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    endpoint = _endpoint(base_url='http://sneaky.example.com/v1', allow_external=True)
+    assert build_uncached_labeler(endpoint, GENERIC_ITEM_PACK) is not None
+    monkeypatch.setenv('OP_VLM_EXTERNAL_POLICY', 'deny')
+    with pytest.raises(VlmEndpointDeniedError, match='OP_VLM_EXTERNAL_POLICY'):
+        build_uncached_labeler(endpoint, GENERIC_ITEM_PACK)
+
+
+@pytest.mark.asyncio
+async def test_a_long_lived_labeler_re_checks_its_host_after_the_ttl(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    import httpx
+
+    clock = {'t': 1000.0}
+    monkeypatch.setattr(vlm_factory, 'time', SimpleNamespace(monotonic=lambda: clock['t']))
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(str(request.url))
+        return httpx.Response(200, json={'choices': [{'message': {'content': 'OK'}}]})
+
+    _flip_to(monkeypatch, 'drift.corp.example', '10.0.0.9')
+    labeler = labeler_for(_endpoint(base_url='http://drift.corp.example/v1'), GENERIC_ITEM_PACK)
+    labeler._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    assert (await labeler.health()).reachable is True
+
+    _flip_to(monkeypatch, 'drift.corp.example', '169.254.169.254')
+    assert (await labeler.health()).reachable is True  # inside the TTL: not re-resolved
+    assert len(sent) == 2
+
+    clock['t'] += vlm_factory._RECHECK_S + 1
+    health = await labeler.health()
+    assert health.reachable is False
+    assert 'VlmEndpointDeniedError' in (health.last_error or '')
+    assert len(sent) == 2  # nothing was sent to the metadata address
+    clock['t'] += 1
+    assert (await labeler.health()).reachable is False  # sticky while the host stays denied
+
+    _flip_to(monkeypatch, 'drift.corp.example', '10.0.0.9')
+    assert (await labeler.health()).reachable is True  # and recovers when it is acceptable again
