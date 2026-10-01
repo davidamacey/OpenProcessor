@@ -124,6 +124,21 @@ async def list_crops(
     label_source: str | None = None,
     class_source: str | None = None,
     label_validated: bool | None = None,
+    import_id: Annotated[
+        str | None,
+        Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
+    ] = None,
+    dataset_split: Annotated[
+        str | None, Query(description='The split a dataset import filed the frame under.')
+    ] = None,
+    on_negative_frame: Annotated[
+        bool | None,
+        Query(description='true = machine items on an imported reviewed-negative frame.'),
+    ] = None,
+    proposed_by_import: Annotated[
+        bool | None,
+        Query(description='true = items an import created from the detector; false = the rest.'),
+    ] = None,
     source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
     needs_new_class: bool | None = None,
     review_dismissed: Annotated[
@@ -228,6 +243,26 @@ async def list_crops(
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).
         filt.append({'term': {'class_validated': label_validated}})
+    if import_id:
+        filt.append(
+            {
+                'bool': {
+                    'should': [
+                        {'term': {'import_ids': import_id}},
+                        {'term': {'proposed_by_import': import_id}},
+                    ],
+                    'minimum_should_match': 1,
+                }
+            }
+        )
+    if dataset_split:
+        filt.append({'term': {'dataset_split': dataset_split}})
+    if on_negative_frame is not None:
+        marked: dict[str, Any] = {'term': {'on_negative_frame': True}}
+        filt.append(marked if on_negative_frame else {'bool': {'must_not': marked}})
+    if proposed_by_import is not None:
+        proposed: dict[str, Any] = {'exists': {'field': 'proposed_by_import'}}
+        filt.append(proposed if proposed_by_import else {'bool': {'must_not': proposed}})
     if source:
         filt.append({'term': {'source': source}})
     if review_dismissed is not None:

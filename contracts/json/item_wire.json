@@ -111,6 +111,13 @@
     "on_negative_frame",
     "import_standalone_region",
     "proposal_chain",
+    "origin_project",
+    "origin_item_id",
+    "origin_image_id",
+    "origin_split",
+    "combine_conflict",
+    "combine_conflict_origins",
+    "combine_merged_origins",
     "item_text_lines"
   ],
   "json_schema": {
@@ -406,6 +413,25 @@
         "default": null,
         "title": "Cluster Subid"
       },
+      "combine_conflict": {
+        "default": false,
+        "title": "Combine Conflict",
+        "type": "boolean"
+      },
+      "combine_conflict_origins": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Combine Conflict Origins",
+        "type": "array"
+      },
+      "combine_merged_origins": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Combine Merged Origins",
+        "type": "array"
+      },
       "confidence": {
         "default": 0.0,
         "title": "Confidence",
@@ -639,6 +665,54 @@
         "default": false,
         "title": "On Negative Frame",
         "type": "boolean"
+      },
+      "origin_image_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Image Id"
+      },
+      "origin_item_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Item Id"
+      },
+      "origin_project": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Project"
+      },
+      "origin_split": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Split"
       },
       "probe_actionable": {
         "anyOf": [

@@ -24,11 +24,13 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
+from src.services.curation import stats_imports as imp
 from src.services.curation.dataset_thresholds import adequacy, aug_target, dataset_thresholds
 from src.services.curation.ingest_class_sources import (
     CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
     CLUSTER_MAJORITY_CLASS_SOURCE,
     DEFAULT_PROPOSAL_CLASS_SOURCE,
+    LABEL_IMPORT_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
     classifier_class_sources,
     unlabeled_proposal_class_sources,
@@ -193,10 +195,13 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     by_vlm = 0
     by_classifier = 0
     by_other = 0
+    by_import = 0
     for b in buckets:
         key = str(b.get('key', ''))
         cnt = int(b.get('doc_count', 0))
-        if key.startswith(_HUMAN_SOURCE_PREFIXES):
+        if key == LABEL_IMPORT_CLASS_SOURCE:
+            by_import += cnt
+        elif key.startswith(_HUMAN_SOURCE_PREFIXES):
             by_human += cnt
         elif key.startswith(VLM_CLASS_SOURCE):
             by_vlm += cnt
@@ -210,6 +215,7 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
         'by_human': by_human,
         'by_vlm': by_vlm,
         'by_classifier': by_classifier,
+        'by_import': by_import,
         'other': by_other,
     }
 
@@ -430,6 +436,7 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                     }
                 }
             },
+            **imp.import_aggregations(fields),
             'region_status': {
                 'terms': {'field': fields.status, 'size': 32},
             },
@@ -568,7 +575,9 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     for b in (aggs.get('region_verifiers') or {}).get('buckets') or []:
         region_verifier_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
     regions_verified_by_human = _sum_prefixed(region_verifier_buckets, profile.human_detector_name)
-    regions_verified_by_vlm = sum(region_verifier_buckets.values()) - regions_verified_by_human
+    regions_verified_by_vlm = imp.verified_by_vlm(
+        region_verifier_buckets, regions_verified_by_human
+    )
 
     # Validated-by-human union (drew the bbox OR confirmed an AI bbox).
     # This is the honest "you reviewed N regions" count for the dashboard.
@@ -617,6 +626,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         # --- legacy keys (do NOT remove — labeler getStats() reads these) -
         'total_crops': int(total),
         'validated': (aggs.get('validated') or {}).get('doc_count', 0),
+        'validated_by_import': imp.count_in(aggs, 'validated_by_import'),
         'test_holdout': (aggs.get('test_holdout') or {}).get('doc_count', 0),
         'by_source': (aggs.get('by_source') or {}).get('buckets', []),
         # --- new dashboard fields -----------------------------------------
@@ -657,6 +667,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             'verified_by_human': regions_verified_by_human,
             'verified_by_vlm': regions_verified_by_vlm,
             'validated_by_human': regions_validated_by_human,
+            **imp.import_region_counts(aggs, region_verifier_buckets, region_detector_buckets),
         },
         'unlabeled': {
             'pending_detection': pending_detection,

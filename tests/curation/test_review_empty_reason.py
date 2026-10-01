@@ -84,9 +84,13 @@ async def test_compute_empty_reason_default_no_items_match() -> None:
 @pytest.mark.asyncio
 async def test_review_tabs_empty_state_flags() -> None:
     fake = AsyncMock()
-    fake.count = AsyncMock(side_effect=[{'count': 3}, {'count': 0}])
+    fake.count = AsyncMock(side_effect=[{'count': 3}, {'count': 0}, {'count': 2}])
     state = await rer.review_tabs_empty_state(fake)
-    assert state == {'has_probe_predictions': True, 'has_item_scores': False}
+    assert state == {
+        'has_probe_predictions': True,
+        'has_item_scores': False,
+        'has_imported_labels': True,
+    }
 
 
 def test_review_queue_serves_empty_reason_when_zero_results(
@@ -124,7 +128,11 @@ def test_review_queue_empty_reason_is_null_when_items_exist(
 
 def test_review_tabs_serves_empty_state_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = AsyncMock()
-    fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 7}])
+    fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 7}, {'count': 0}])
     r = _client(fake).get('/curation/projects/default/review/tabs')
     assert r.status_code == 200, r.text
-    assert r.json()['empty_state'] == {'has_probe_predictions': False, 'has_item_scores': True}
+    assert r.json()['empty_state'] == {
+        'has_probe_predictions': False,
+        'has_item_scores': True,
+        'has_imported_labels': False,
+    }

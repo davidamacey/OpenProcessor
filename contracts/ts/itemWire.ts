@@ -113,6 +113,13 @@ export interface ItemWire {
   on_negative_frame: boolean;
   import_standalone_region: boolean;
   proposal_chain: string[];
+  origin_project: string | null;
+  origin_item_id: string | null;
+  origin_image_id: string | null;
+  origin_split: string | null;
+  combine_conflict: boolean;
+  combine_conflict_origins: string[];
+  combine_merged_origins: string[];
   item_text_lines: ItemTextLine[];
 }
 
@@ -217,6 +224,13 @@ export const ITEM_WIRE_KEYS = [
   'on_negative_frame',
   'import_standalone_region',
   'proposal_chain',
+  'origin_project',
+  'origin_item_id',
+  'origin_image_id',
+  'origin_split',
+  'combine_conflict',
+  'combine_conflict_origins',
+  'combine_merged_origins',
   'item_text_lines',
 ] as const satisfies readonly ItemWireKey[];
 

@@ -61,6 +61,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
         'by_human': 1,
         'by_vlm': 5,
         'by_classifier': 17,
+        'by_import': 0,
         'other': 32,
     }
 

@@ -240,6 +240,8 @@ def _filters(
     conf_max: float | None,
     region_status: str | None,
     combine_conflict: bool,
+    import_id: str | None,
+    dataset_split: str | None,
 ) -> ReviewFilters:
     return ReviewFilters(
         include_test=include_test,
@@ -254,6 +256,8 @@ def _filters(
         conf_max=conf_max,
         region_status=region_status,
         combine_conflict=combine_conflict,
+        import_id=import_id,
+        dataset_split=dataset_split,
     )
 
 
@@ -297,6 +301,19 @@ CombineConflictQ = Annotated[
         description=(
             'Only items a project combine flagged: sources disagreed on the box and the '
             "first-listed source's label was kept (combine_conflict)."
+        )
+    ),
+]
+ImportIdQ = Annotated[
+    str | None,
+    Query(description='Imported tab only: items labeled by this dataset import.'),
+]
+DatasetSplitQ = Annotated[
+    str | None,
+    Query(
+        description=(
+            'Imported tab only: the split the import filed the frame under '
+            '(GET /review/tabs filter_specs, param dataset_split).'
         )
     ),
 ]
@@ -355,6 +372,8 @@ async def review_queue(
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
     combine_conflict: CombineConflictQ = False,
+    import_id: ImportIdQ = None,
+    dataset_split: DatasetSplitQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
 
@@ -381,6 +400,8 @@ async def review_queue(
         conf_max,
         region_status,
         combine_conflict,
+        import_id,
+        dataset_split,
     )
     guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
@@ -465,6 +486,8 @@ async def review_locate(
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
     combine_conflict: CombineConflictQ = False,
+    import_id: ImportIdQ = None,
+    dataset_split: DatasetSplitQ = None,
 ) -> dict[str, Any]:
     """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
     for the same filters and sort.
@@ -489,6 +512,8 @@ async def review_locate(
         conf_max,
         region_status,
         combine_conflict,
+        import_id,
+        dataset_split,
     )
     req = await _request(tab, filters, sort, opensearch)
     out: dict[str, Any] = {

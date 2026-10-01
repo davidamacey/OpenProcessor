@@ -320,6 +320,15 @@ def serialize_item(
         'on_negative_frame': bool(src.get('on_negative_frame', False)),
         'import_standalone_region': bool(src.get('import_standalone_region', False)),
         'proposal_chain': list(src.get('proposal_chain') or []),
+        # Project-combine provenance: where the copied item came from, and a
+        # label conflict the combine left for a human (``combine_conflict``).
+        'origin_project': src.get('origin_project'),
+        'origin_item_id': src.get('origin_item_id'),
+        'origin_image_id': src.get('origin_image_id'),
+        'origin_split': src.get('origin_split'),
+        'combine_conflict': bool(src.get('combine_conflict', False)),
+        'combine_conflict_origins': list(src.get('combine_conflict_origins') or []),
+        'combine_merged_origins': list(src.get('combine_merged_origins') or []),
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),

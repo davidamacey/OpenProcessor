@@ -44,6 +44,7 @@ class ReviewEmptyState(BaseModel):
 
     has_probe_predictions: bool
     has_item_scores: bool
+    has_imported_labels: bool
 
 
 class ReviewTabsResponse(BaseModel):
