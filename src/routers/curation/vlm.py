@@ -5,12 +5,6 @@
 ``/verify_regions``, ``/verify_region_batch`` and ``/region_visible_batch``
 verify (and, for the first two, read) the crop's sub-region-of-interest
 (e.g. a printed label or sticker).
-
-``_class_provenance`` (below) builds the class-label provenance dict
-inline rather than importing it from
-``src.services.detection.cascade_detect``, which carries its own,
-unrelated copy of the same four-line helper — importing across modules
-for four lines isn't worth the coupling.
 """
 
 from __future__ import annotations
@@ -45,19 +39,17 @@ from src.routers.curation._vlm_route_models import (
     VlmVerifyRegionsRequest,
 )
 from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, NO_VLM_MESSAGE, VLM_DESC
-from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
     ClassWriteGuard,
     class_write_locked,
 )
-from src.services.curation.clustering.id_normalize import class_cluster_placement
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     resolve_crop_root,
     resolve_safe_path,
 )
-from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
+from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
 
 
 _F = get_region_fields()
@@ -148,27 +140,6 @@ async def _default_pack_name(opensearch: Any) -> str | None:
     from src.services.curation.strategy_defaults import resolve_effective_default
 
     return await resolve_effective_default('prompt_pack', opensearch)
-
-
-def _class_provenance(
-    detector: str,
-    detector_version: str,
-    *,
-    labeler: str,
-    labeled_at: str | None = None,
-) -> dict[str, Any]:
-    """Build the class-provenance dict for crop class label writers.
-
-    Inlined here rather than imported from ``cascade_detect.py`` — see
-    module docstring. Field names are class-label provenance, not
-    ``RegionFields``-governed.
-    """
-    return {
-        'class_detector': detector,
-        'class_detector_version': detector_version,
-        'class_labeler': labeler,
-        'class_labeled_at': labeled_at or _now_iso(),
-    }
 
 
 def _is_frozen_test_holdout(current_source: dict[str, Any]) -> bool:
@@ -319,12 +290,6 @@ async def vlm_label_batch(
     updates_by_id: dict[str, dict[str, Any]] = {}
     proposals: list[dict[str, Any]] = []
     now = _now_iso()
-    _vlm_class_prov = _class_provenance(
-        detector='vlm',
-        detector_version='1',
-        labeler='vlm',
-        labeled_at=now,
-    )
 
     # Track force-fit bypasses (low-confidence VLM replies where we skip
     # the synonym/fuzzy match and route to the unmatched cohort).
@@ -338,16 +303,21 @@ async def vlm_label_batch(
         return _resolve_class_name_fn(raw, name_to_id, confidence=confidence)  # type: ignore[arg-type]
 
     empty_answers = 0
+    stamp = _vlm_stamp(labeler)
     for p in predictions:
-        update, proposal = prediction_class_update(
-            p, name_to_id=name_to_id, resolve=_resolve, now=now, provenance=_vlm_class_prov
+        update, proposal = label_batch_update(
+            p,
+            name_to_id=name_to_id,
+            resolve=_resolve,
+            now=now,
+            pack_stamp=_pack_stamp,
+            vlm_endpoint=stamp['vlm_endpoint'],
+            vlm_model=stamp['vlm_model'],
         )
         if update is None:
             continue
         if 'class_source' not in update:
             empty_answers += 1
-        update['vlm_prompt_pack'] = _pack_stamp
-        update.update(_vlm_stamp(labeler))
         if proposal is not None:
             proposals.append(proposal)
         updates_by_id[p.img_id] = update
@@ -363,16 +333,7 @@ async def vlm_label_batch(
             # never onto a human-owned or validated class.
             if not guard.allows(doc_id, current):
                 return {}
-            update = dict(updates_by_id[doc_id])
-            # A registry class moves the item into its class cluster now,
-            # as the worker's combined call does (DQ-m3).
-            update.update(class_cluster_placement(update, current))
-            # IT-2: an unmatched VLM answer must not keep the class it
-            # just contradicted -- class_write_locked() inside the helper
-            # still protects a human-owned/validated item.
-            if update.get('class_source') == VLM_UNMATCHED_CLASS_SOURCE:
-                update.update(unmatched_class_clear(current))
-            return with_class_snapshot(update, current, writer='vlm_label_batch')
+            return label_batch_merge(updates_by_id[doc_id], current)
 
         try:
             await occ_skip_on_conflict_bulk(

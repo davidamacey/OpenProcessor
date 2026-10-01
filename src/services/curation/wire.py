@@ -17,7 +17,7 @@ See ``docs/design/curation_api_contract.md``.
 from __future__ import annotations
 
 from dataclasses import fields as dataclass_fields
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
@@ -30,6 +30,9 @@ from src.services.curation.class_sources import (
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
 from src.services.curation.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 
+
+if TYPE_CHECKING:
+    from src.services.curation.region_boxes import RegionBox
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
 WIRE_REGION_FIELDS = RegionFields()
@@ -381,6 +384,21 @@ def box_thumbnail_url(prefix: str, crop_id: str, box_id: str) -> str:
     return f'{prefix}/crops/{crop_id}/region_thumbnail?box_id={box_id}'
 
 
+def region_box_to_wire(
+    src: dict[str, Any], box: RegionBox, *, crop_id: str = '', prefix: str = ''
+) -> dict[str, Any]:
+    """One ``RegionBoxWire`` element: the stored box plus the server-derived
+    ``locked``, ``bbox_in_parent`` (item-crop frame, relative to ``src``'s
+    item box) and ``thumbnail_url`` (``None`` without a ``crop_id``). The
+    one place the box wire is built: a stored box and a test-run candidate
+    render with the same keys."""
+    doc = box.to_doc()
+    doc['locked'] = is_locked_box(box)
+    doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
+    doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None
+    return doc
+
+
 def region_boxes_to_wire(
     src: dict[str, Any],
     storage: RegionFields | None = None,
@@ -398,13 +416,9 @@ def region_boxes_to_wire(
     from src.services.curation.region_boxes import read_boxes
 
     f = storage or get_region_fields()
-    boxes = []
-    for box in read_boxes(src, f):
-        doc = box.to_doc()
-        doc['locked'] = is_locked_box(box)
-        doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
-        doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None
-        boxes.append(doc)
+    boxes = [
+        region_box_to_wire(src, box, crop_id=crop_id, prefix=prefix) for box in read_boxes(src, f)
+    ]
     return {
         'region_boxes': boxes,
         'region_count': int(src.get(f.count) or 0),
@@ -453,6 +467,7 @@ __all__ = [
     'current_cluster_distance',
     'item_list_source_excludes',
     'item_source_excludes',
+    'region_box_to_wire',
     'region_boxes_to_wire',
     'region_event_payload',
     'region_to_wire',
