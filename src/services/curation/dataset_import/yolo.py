@@ -15,6 +15,7 @@ issue, never an exception.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -284,6 +285,9 @@ def read_yolo_labels(
             cls_id = int(parts[0])
             coords = [float(x) for x in parts[1:]]
         except ValueError:
+            issues.add('label_row_malformed', file=rel_file, line=lineno)
+            continue
+        if not all(math.isfinite(c) for c in coords):
             issues.add('label_row_malformed', file=rel_file, line=lineno)
             continue
         if cls_id not in names:

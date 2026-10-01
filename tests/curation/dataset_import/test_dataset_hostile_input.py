@@ -270,3 +270,32 @@ def test_resolve_ref_accepts_a_contained_reference_and_rejects_a_symlink_out(
     (tmp_path / 'in/escape').symlink_to(tmp_path.parent)
     assert resolve_ref(tmp_path, 'in/ok.jpg') == (tmp_path / 'in/ok.jpg').resolve()
     assert resolve_ref(tmp_path, 'in/escape/anything') is None
+
+
+@pytest.mark.parametrize(
+    'row',
+    ['0 nan 0.5 0.2 0.2', '0 0.5 0.5 inf 0.2', '0 0.1 0.1 nan 0.9 0.9 0.2 0.9'],
+    ids=['nan-center', 'inf-width', 'nan-polygon-vertex'],
+)
+def test_a_non_finite_yolo_coordinate_is_a_row_issue_not_a_box(tmp_path: Path, row: str) -> None:
+    _yolo(tmp_path, 'train: images/train\nnames: [car]\n')
+    (tmp_path / 'labels/train/a.txt').write_text(f'{row}\n0 0.5 0.5 0.2 0.2\n')
+    scan = scan_yolo(tmp_path)
+    assert [b.dataset_class for b in scan.entries[0].boxes] == ['car']
+    assert 'label_row_malformed' in _codes(scan)
+
+
+@pytest.mark.parametrize(
+    'bbox', ['[NaN, 0, 5, 5]', '[0, 0, Infinity, 5]'], ids=['nan-x', 'inf-width']
+)
+def test_a_non_finite_coco_bbox_is_a_row_issue_not_a_box(tmp_path: Path, bbox: str) -> None:
+    _image(tmp_path / 'a.jpg')
+    text = (
+        '{"images": [{"id": 1, "file_name": "a.jpg", "width": 100, "height": 100}],'
+        '"categories": [{"id": 10, "name": "car"}],'
+        f'"annotations": [{{"image_id": 1, "category_id": 10, "bbox": {bbox}}},'
+        '{"image_id": 1, "category_id": 10, "bbox": [10, 10, 20, 20]}]}'
+    )
+    scan = scan_coco(_coco(tmp_path, text))
+    assert [b.dataset_class for b in scan.entries[0].boxes] == ['car']
+    assert 'coco_bbox_out_of_image' in _codes(scan)

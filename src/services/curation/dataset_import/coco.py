@@ -9,6 +9,7 @@ unread.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -110,6 +111,8 @@ def _annotation_box(
         cat_name = categories.get(ann['category_id'])
         w, h = float(width), float(height)
     except (KeyError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(v) for v in (bx, by, bw, bh, w, h)):
         return None
     if cat_name is None or w <= 0 or h <= 0:
         return None
