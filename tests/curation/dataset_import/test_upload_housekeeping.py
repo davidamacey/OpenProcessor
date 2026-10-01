@@ -25,8 +25,18 @@ from src.services.curation.dataset_import.upload import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Iterator
     from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def _bound_project() -> Iterator[None]:
+    from src.config.curation import base_curation_config
+    from src.config.project_context import bind_project
+    from src.config.projects import new_project_record
+
+    with bind_project(new_project_record('default', base_curation_config())):
+        yield
 
 
 def _tar_dirs(names: list[str]) -> bytes:

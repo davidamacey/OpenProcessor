@@ -21,8 +21,18 @@ from src.services.curation.dataset_import.upload import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Iterator
     from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def _bound_project() -> Iterator[None]:
+    from src.config.curation import base_curation_config
+    from src.config.project_context import bind_project
+    from src.config.projects import new_project_record
+
+    with bind_project(new_project_record('default', base_curation_config())):
+        yield
 
 
 def _zip(members: list[tuple[str, bytes, int | None]], *, deflate: bool = False) -> bytes:
@@ -230,7 +240,7 @@ async def test_upload_over_the_cap_is_refused_mid_stream_and_leaves_nothing(
     assert exc.value.limit == 2500
     assert read <= 3000  # stopped as soon as it passed the cap
     root = datasets_root(tmp_path)
-    assert [p for p in root.rglob('*') if p.is_file()] == []
+    assert [p.name for p in root.rglob('*') if p.is_file()] == ['.project']
 
 
 @pytest.mark.asyncio
@@ -240,7 +250,7 @@ async def test_a_refused_archive_leaves_no_extracted_dir(tmp_path: Path) -> None
         await receive_archive(_stream(data), upload_root=tmp_path)
     root = datasets_root(tmp_path)
     assert [p.name for p in root.iterdir() if not p.name.startswith('.')] == []
-    assert [p for p in root.rglob('*') if p.is_file()] == []
+    assert [p.name for p in root.rglob('*') if p.is_file()] == ['.project']
 
 
 def test_sweep_removes_only_expired_unreferenced_uploads(tmp_path: Path, monkeypatch) -> None:
