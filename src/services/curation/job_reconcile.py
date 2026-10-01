@@ -44,6 +44,7 @@ def reconcile_stale_running(
     *,
     stale_s: float,
     error_prefix: str,
+    active_statuses: frozenset[str] = frozenset({'running'}),
 ) -> bool:
     """Repair a ``state.json`` left at ``status='running'`` by a process
     that no longer exists.
@@ -55,13 +56,17 @@ def reconcile_stale_running(
     heartbeat yet" as "hasn't ticked once, still busy" because a
     genuinely fresh job might not have written one yet).
 
+    ``active_statuses`` lists the non-terminal statuses a live run can
+    hold (a job with a backpressure pause or an undo phase has more than
+    ``'running'``).
+
     Returns True if the file was rewritten.
     """
     try:
         raw = json.loads(state_file.read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         return False
-    if raw.get('status') != 'running':
+    if raw.get('status') not in active_statuses:
         return False
 
     try:
