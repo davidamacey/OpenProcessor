@@ -29,7 +29,13 @@ from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.region_box_embeddings import join_box_vectors
-from src.services.curation.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
+from src.services.curation.region_boxes import (
+    RegionBox,
+    box_query,
+    boxes_write_fields,
+    read_boxes,
+    without_cluster,
+)
 
 
 if TYPE_CHECKING:
@@ -258,7 +264,13 @@ async def write_box_edits(
             unchanged.add(crop_id)
             return {}
         changed[crop_id] = sum(1 for old, new in zip(boxes, new_boxes, strict=True) if old != new)
-        doc = dict(boxes_write_fields(new_boxes, current_src=current, F=F))
+        # A cluster-only write (partition, refine) changes nothing an open
+        # editor sees, so it must not invalidate its expected revision.
+        visible = any(
+            without_cluster(old) != without_cluster(new)
+            for old, new in zip(boxes, new_boxes, strict=True)
+        )
+        doc = dict(boxes_write_fields(new_boxes, current_src=current, F=F, bump_revision=visible))
         doc['updated_at'] = datetime.now(UTC).isoformat()
         if item_fields is not None:
             doc.update(item_fields(new_boxes))

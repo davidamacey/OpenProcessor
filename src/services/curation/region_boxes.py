@@ -299,18 +299,28 @@ def _best(boxes: Sequence[RegionBox]) -> RegionBox | None:
     return max(boxes, key=lambda b: b.score if b.score is not None else -1.0)
 
 
+def without_cluster(box: RegionBox) -> RegionBox:
+    """``box`` minus its server-owned cluster placement: what is left is
+    the box state a human sees and edits."""
+    return dataclasses.replace(box, cluster_id=None, cluster_subid=None, cluster_distance=None)
+
+
 def boxes_write_fields(
     boxes: Sequence[RegionBox],
     *,
     current_src: dict[str, Any] | None = None,
     F: RegionFields | None = None,
     set_complete: Any = _UNCHANGED,
+    bump_revision: bool = True,
 ) -> dict[str, Any]:
     """The update-doc fields every box writer sets.
 
     ``current_src`` is the OCC-read ``_source`` every writer already
     holds; it supplies the current ``region_revision`` / ``region_box_seq``
-    high-water marks (both default to 0 when absent).
+    high-water marks (both default to 0 when absent). ``region_revision``
+    advances unless ``bump_revision`` is false: it is the token an open
+    editor's ``expected_region_revision`` is checked against, so a write
+    that changes nothing the editor sees (a re-cluster) must not advance it.
 
     Also (re)computes the item-level ``rejection_reason`` on *every* call
     (see below), so it can't go stale on any writer: per-box PATCH, ``PUT
@@ -334,7 +344,7 @@ def boxes_write_fields(
         F.count: sum(1 for b in boxes if b.state == 'accepted'),
         F.rejected_count: sum(1 for b in boxes if b.state == 'rejected'),
         F.max_score: max(scores) if scores else None,
-        F.revision: int(current_src.get(F.revision) or 0) + 1,
+        F.revision: int(current_src.get(F.revision) or 0) + int(bump_revision),
         F.box_seq: max(current_seq, max_id_seen),
     }
     # `rejection_reason` mirrors the highest-scoring REJECTED box, but only

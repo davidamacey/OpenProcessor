@@ -140,8 +140,8 @@ async def test_partition_writes_the_cluster_onto_each_box_of_an_item() -> None:
     assert two['b1'].cluster_id in group_a
     assert two['b2'].cluster_id in group_b
     assert 'region_cluster_id' not in os_.docs(INDEX)['two']
-    # Every box write is an ordinary box write: the revision moved.
-    assert os_.docs(INDEX)['two'][F.revision] == 2
+    # The partition changes placement only, so the revision is the seeded one.
+    assert os_.docs(INDEX)['two'][F.revision] == 1
 
 
 async def test_partition_never_reshuffles_false_positive_boxes_or_uses_their_vectors() -> None:
@@ -335,6 +335,21 @@ async def test_write_box_edits_counts_boxes_and_items_separately() -> None:
         'items_conflicted': 0,
         'items_errored': 0,
     }
+
+
+async def test_cluster_only_writes_leave_the_revision_an_editor_holds() -> None:
+    docs = _bulk_items()
+    docs['x'] = _item('x', [(_box('b1'), A), (_box('b2', x=0.5), B)], **{F.revision: 7})
+    os_ = _OS({INDEX: docs})
+
+    await rbc.cluster_region_residuals(os_)
+    assert os_.docs(INDEX)['x'][F.revision] == 7
+
+    def to_fp(box: RegionBox) -> RegionBox:
+        return dataclasses.replace(box, state='false_positive')
+
+    await write_box_edits(os_, index=INDEX, edits={'x': {'b1': to_fp}}, respect_human=True)
+    assert os_.docs(INDEX)['x'][F.revision] == 8
 
 
 async def test_partition_rerun_reports_no_boxes_changed_not_none_assigned() -> None:
