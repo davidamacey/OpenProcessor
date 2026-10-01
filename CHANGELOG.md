@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     compares between projects) depended on wall-clock speed. The sweep
     fixture pins the window to zero; nothing it asserts changed. (Red under a
     clock that jumps 0 or 2 s per reading, green with the pin.)
+  - **Minors.** The startup upload sweep refuses an upload dir marked for
+    another project and survives a `.incoming` file that vanishes mid-scan;
+    a job dir is created and marked in one step (`ensure_marked_dir`);
+    `FileJob.repair_if_stale` re-checks staleness under a per-job state lock
+    (`update` takes it too), so a resume claim that lands between the check
+    and the write is no longer overwritten with `interrupted`; the redundant
+    liveness test in `check_undoable` is gone.
 - **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
   - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
     path: it re-reads each document, asks the caller whether it is still

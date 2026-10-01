@@ -153,6 +153,15 @@ def mark_project_dir(directory: Path) -> Path:
     return directory
 
 
+def ensure_marked_dir(directory: Path) -> Path:
+    """Create ``directory`` (and parents) and stamp it with the bound
+    project's slug (:func:`mark_project_dir`). The claim of a job dir that
+    may not exist yet calls this, so no window leaves a fresh dir unmarked;
+    a read-only binding verifies a marker but never writes one."""
+    directory.mkdir(parents=True, exist_ok=True)
+    return mark_project_dir(directory)
+
+
 def project_api_base() -> str:
     """``{api_prefix}/projects/{bound slug}`` -- the base every served URL
     (and forward-looking route) is built from."""

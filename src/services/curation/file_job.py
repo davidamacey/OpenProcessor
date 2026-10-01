@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -25,6 +27,7 @@ from src.services.curation.job_reconcile import reconcile_stale_running
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 HEARTBEAT_STALE_S = 30.0
@@ -64,11 +67,24 @@ class FileJob:
         tmp.write_text(json.dumps(state, default=str), encoding='utf-8')
         tmp.replace(self.state_file)
 
+    @contextlib.contextmanager
+    def _state_lock(self) -> Iterator[None]:
+        """Blocking cross-process lock around a read-modify-write of the state
+        (held for file operations only, never across a job's work)."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.directory / 'state.lock', os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)
+
     def update(self, **fields: Any) -> dict[str, Any]:
-        state = self.read()
-        state.update(fields)
-        self.write(state)
-        return state
+        with self._state_lock():
+            state = self.read()
+            state.update(fields)
+            self.write(state)
+            return state
 
     def touch_heartbeat(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -84,10 +100,8 @@ class FileJob:
         """An active status with a heartbeat no older than
         :data:`HEARTBEAT_STALE_S`. No heartbeat yet means the task has not
         ticked once: still live."""
-        if self.read().get('status') not in active_statuses:
-            return False
-        age = self.heartbeat_age()
-        return age is None or age <= HEARTBEAT_STALE_S
+        state = self.read()
+        return state.get('status') in active_statuses and not self._is_stale(state, active_statuses)
 
     def repair_if_stale(
         self, active_statuses: frozenset[str], *, error_prefix: str
@@ -98,18 +112,30 @@ class FileJob:
         whatever reads the job, so a worker killed and restarted inside the
         liveness window (which the startup reconcile leaves alone) is still
         resumable once its heartbeat has aged out. A job that has not
-        ticked once yet is not stale."""
+        ticked once yet is not stale. The write re-checks staleness under the
+        state lock, so a claim that lands in between
+        (resume rewriting the state to ``queued``) is never overwritten with
+        ``interrupted``."""
         state = self.read()
+        if not self._is_stale(state, active_statuses):
+            return state  # the common read: no lock, nothing created
+        with self._state_lock():
+            state = self.read()
+            if not self._is_stale(state, active_statuses):
+                return state
+            state.update(
+                status='interrupted',
+                error=state.get('error') or f'{error_prefix} heartbeat stale',
+                finished_at=datetime.now(UTC).isoformat(),
+            )
+            self.write(state)
+            return state
+
+    def _is_stale(self, state: dict[str, Any], active_statuses: frozenset[str]) -> bool:
         if state.get('status') not in active_statuses:
-            return state
+            return False
         age = self.heartbeat_age()
-        if age is None or age <= HEARTBEAT_STALE_S:
-            return state
-        return self.update(
-            status='interrupted',
-            error=state.get('error') or f'{error_prefix} heartbeat stale',
-            finished_at=datetime.now(UTC).isoformat(),
-        )
+        return age is not None and age > HEARTBEAT_STALE_S
 
     def request_cancel(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)

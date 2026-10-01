@@ -25,7 +25,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
-from src.config.project_context import current_project, mark_project_dir, project_jobs_dir
+from src.config.project_context import (
+    current_project,
+    ensure_marked_dir,
+    mark_project_dir,
+    project_jobs_dir,
+)
 from src.core.logging import get_logger
 from src.services.curation.file_job import FileJob, heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
@@ -122,8 +127,7 @@ def create_job(
     """Claim the per-project singleton and persist ``request.json`` plus a
     ``queued`` state. Raises :class:`ReprocessBusyError` when a job is
     already live (or another process is mid-claim). Nothing runs yet."""
-    root = jobs_root()
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_marked_dir(jobs_root())
     with exclusive_start_lock(root / 'start.lock') as acquired:
         live = running_job_ids()
         if not acquired or live:

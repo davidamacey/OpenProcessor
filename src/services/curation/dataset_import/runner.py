@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.config.project_context import ensure_marked_dir
 from src.core.logging import get_logger
 from src.services.curation.dataset_import import limits
 from src.services.curation.dataset_import.chunk import import_chunk
@@ -119,8 +120,7 @@ def claim_import(
     import of the project is live and :class:`ImportResumableError` when the
     same key has an interrupted/failed/cancelled run.
     """
-    root = imports_root()
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_marked_dir(imports_root())
     with exclusive_start_lock(root / 'start.lock') as acquired:
         if not acquired:
             raise ImportBusyError(None)
@@ -344,9 +344,7 @@ async def finalize(ctx: ImportContext, store: ImportStore, report: ImportReport)
 def check_undoable(store: ImportStore) -> None:
     """An import that finished (or was cut off) can be undone; one a live
     worker is still running cannot."""
-    if store.repaired_state().get('status') not in UNDOABLE_STATUSES or store.job.is_live(
-        ACTIVE_STATUSES
-    ):
+    if store.repaired_state().get('status') not in UNDOABLE_STATUSES:
         raise ImportNotUndoableError(store.import_id)
 
 
@@ -354,8 +352,7 @@ def claim_undo(store: ImportStore) -> None:
     """Atomically move ``store`` to ``undoing``. Like a start or a resume it
     refuses while any other import of the project is live: an undo and an
     import writing the same items would race each other's decisions."""
-    root = imports_root()
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_marked_dir(imports_root())
     with exclusive_start_lock(root / 'start.lock') as acquired:
         if not acquired:
             raise ImportBusyError(None)
@@ -461,8 +458,7 @@ def claim_resume(store: ImportStore) -> dict[str, Any]:
     the same lock a start and an undo take: two resumes, or a resume and an
     undo, cannot both pass the check. Returns the job state to hand back to
     :func:`release_resume` if the resume then fails before its worker runs."""
-    root = imports_root()
-    root.mkdir(parents=True, exist_ok=True)
+    root = ensure_marked_dir(imports_root())
     with exclusive_start_lock(root / 'start.lock') as acquired:
         if not acquired:
             raise ImportBusyError(None)

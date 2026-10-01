@@ -120,3 +120,54 @@ def test_repair_marks_a_stale_active_job_interrupted(tmp_path: Path) -> None:
     assert state['status'] == 'interrupted'
     assert state['error'] == 'thing heartbeat stale'
     assert job.read()['status'] == 'interrupted'
+
+
+def _stale_running_job(directory: Path) -> FileJob:
+    job = FileJob(directory)
+    job.write({'status': 'running'})
+    job.touch_heartbeat()
+    old = time.time() - 600
+    os.utime(job.heartbeat_file, (old, old))
+    return job
+
+
+def test_a_claim_that_lands_during_the_staleness_decision_is_not_overwritten(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    import threading
+
+    job = _stale_running_job(tmp_path / 'job')
+    decided_stale, claimed = threading.Event(), threading.Event()
+    real_age = FileJob.heartbeat_age
+    ages = {'n': 0}
+
+    def parked_after_the_first_reading(self: FileJob) -> float | None:
+        age = real_age(self)
+        ages['n'] += 1
+        if ages['n'] == 1:
+            decided_stale.set()
+            assert claimed.wait(10)
+        return age
+
+    monkeypatch.setattr(FileJob, 'heartbeat_age', parked_after_the_first_reading)
+    seen: list[dict[str, Any]] = []
+    reader = threading.Thread(
+        target=lambda: seen.append(job.repair_if_stale(frozenset({'running'}), error_prefix='t'))
+    )
+    reader.start()
+    assert decided_stale.wait(10)
+    job.update(status='queued')  # a resume claims the job meanwhile
+    job.touch_heartbeat()
+    claimed.set()
+    reader.join(10)
+
+    assert job.read()['status'] == 'queued'
+    assert seen[0]['status'] == 'queued'
+
+
+def test_reading_a_healthy_job_creates_no_lock_file(tmp_path: Path) -> None:
+    job = FileJob(tmp_path / 'job')
+    job.write({'status': 'running'})
+    job.touch_heartbeat()
+    assert job.repair_if_stale(frozenset({'running'}), error_prefix='t')['status'] == 'running'
+    assert not (job.directory / 'state.lock').exists()

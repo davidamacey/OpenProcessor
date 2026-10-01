@@ -13,6 +13,7 @@ any failure removes everything extracted so far.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import shutil
@@ -25,13 +26,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
-from src.config.project_context import mark_project_dir
+from src.config.project_context import ProjectDirMismatchError, mark_project_dir
+from src.core.logging import get_logger
 from src.services.curation.dataset_import import limits
 from src.services.curation.dataset_import.paths import resolve_ref
 
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+logger = get_logger(__name__)
 
 _CHUNK = 1024 * 1024
 _ZIP_MAGIC = b'PK\x03\x04'
@@ -276,17 +280,21 @@ def sweep_uploads(
     root = datasets_root(upload_root)
     if not root.is_dir():
         return []
-    cutoff = (now if now is not None else time.time()) - limits.upload_ttl_hours() * 3600
+    try:
+        mark_project_dir(root)
+    except ProjectDirMismatchError:
+        logger.warning('upload_sweep_refused_foreign_dir', directory=str(root))
+        return []
+    now_s = now if now is not None else time.time()
+    cutoff = now_s - limits.upload_ttl_hours() * 3600
     removed = []
     incoming = root / '.incoming'
     if incoming.is_dir():
         for leftover in incoming.iterdir():
-            if (
-                leftover.stat().st_mtime
-                < (now if now is not None else time.time()) - _INCOMING_STALE_S
-            ):
-                shutil.rmtree(leftover, ignore_errors=True)
-                leftover.unlink(missing_ok=True)
+            with contextlib.suppress(FileNotFoundError):  # an upload finished meanwhile
+                if leftover.stat().st_mtime < now_s - _INCOMING_STALE_S:
+                    shutil.rmtree(leftover, ignore_errors=True)
+                    leftover.unlink(missing_ok=True)
     for path in root.iterdir():
         if path.name.startswith('.') or not path.is_dir() or path.name in referenced:
             continue

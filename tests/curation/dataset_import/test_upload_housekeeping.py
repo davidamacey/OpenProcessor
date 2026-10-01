@@ -151,3 +151,44 @@ async def test_a_concurrent_upload_of_the_same_archive_is_not_removed(
     result = await receive_archive(_stream(data), upload_root=tmp_path)
     assert (final / 'ds' / 'winner.txt').read_bytes() == b'kept'
     assert result.dataset_path == final / 'ds'
+
+
+def test_a_sweep_refuses_an_upload_dir_marked_for_another_project(tmp_path: Path) -> None:
+    root = datasets_root(tmp_path)
+    old = root / 'aaaaaaaa'
+    old.mkdir(parents=True)
+    (root / '.project').write_text('someone-else')
+    os.utime(old, (0, 0))
+
+    assert sweep_uploads(tmp_path, referenced=set()) == []
+    assert old.is_dir()
+
+
+def test_a_sweep_survives_an_incoming_file_that_vanishes_underfoot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pathlib import Path as RealPath
+
+    incoming = datasets_root(tmp_path) / '.incoming'
+    incoming.mkdir(parents=True)
+    (incoming / 'done.part').write_bytes(b'x')
+    (incoming / 'stale.part').write_bytes(b'x')
+    os.utime(incoming / 'stale.part', (0, 0))
+    real_stat = RealPath.stat
+
+    def stat_then_gone(self: Any, *args: Any, **kwargs: Any) -> Any:
+        if self.name == 'done.part':
+            raise FileNotFoundError(self.name)  # the upload finished and moved it
+        return real_stat(self, *args, **kwargs)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(RealPath, 'stat', stat_then_gone)
+        sweep_uploads(tmp_path, referenced=set())
+    assert not (incoming / 'stale.part').exists()
+
+
+def test_a_job_dir_is_marked_in_the_call_that_creates_it(tmp_path: Path) -> None:
+    from src.config.project_context import ensure_marked_dir
+
+    created = ensure_marked_dir(tmp_path / 'a' / 'b')
+    assert (created / '.project').read_text() == 'default'
