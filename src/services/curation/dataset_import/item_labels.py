@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import occ_update_one
-from src.clients.occ_locks import _is_human_marker
+from src.clients.occ_locks import is_human_marker
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.detection.geometry import crop_id as make_crop_id, iou
@@ -34,7 +34,7 @@ def human_owned(src: dict[str, Any]) -> bool:
     """A human wrote this item's class (or froze it into the holdout): an
     import never overwrites it. A holdout item whose class an earlier
     import set is the import's own and stays correctable by a newer one."""
-    if _is_human_marker(src.get('class_source')) or _is_human_marker(src.get('label_source')):
+    if is_human_marker(src.get('class_source')) or is_human_marker(src.get('label_source')):
         return True
     return bool(src.get('test_holdout')) and src.get('class_source') != LABEL_IMPORT_CLASS_SOURCE
 

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from src.clients.occ_locks import _is_human_marker
+from src.clients.occ_locks import is_human_marker
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.detection.geometry import iou
 
@@ -40,7 +40,7 @@ def trust_rank(item: dict[str, object]) -> int:
     if item.get('class_id') is None and not item.get('class_name'):
         return UNCLASSED_RANK
     markers = (item.get('label_source'), item.get('class_source'))
-    if any(_is_human_marker(m) for m in markers):
+    if any(is_human_marker(m) for m in markers):
         return 0
     if any(m in ('import', LABEL_IMPORT_CLASS_SOURCE) for m in markers):
         return 1

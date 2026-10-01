@@ -15,7 +15,7 @@ from typing import Any
 from src.config import get_region_fields
 
 
-def _is_human_marker(value: Any) -> bool:
+def is_human_marker(value: Any) -> bool:
     """A guard-field value indicates a human write iff it's a string
     containing the substring ``human``.
 
@@ -29,7 +29,7 @@ def _is_human_marker(value: Any) -> bool:
 
 
 def _is_locked_marker(value: Any) -> bool:
-    """``_is_human_marker`` plus the two import-provenance string values
+    """``is_human_marker`` plus the two import-provenance string values
     (W10). Used wherever a re-ingest/automated writer must never clobber
     an imported label the same way it must never clobber a human one."""
     from src.services.curation.ingest_class_sources import (
@@ -37,7 +37,7 @@ def _is_locked_marker(value: Any) -> bool:
         LABEL_SOURCE_IMPORT,
     )
 
-    return _is_human_marker(value) or value in (LABEL_SOURCE_IMPORT, LABEL_IMPORT_CLASS_SOURCE)
+    return is_human_marker(value) or value in (LABEL_SOURCE_IMPORT, LABEL_IMPORT_CLASS_SOURCE)
 
 
 def is_locked_class(source: dict[str, Any]) -> bool:
@@ -47,7 +47,7 @@ def is_locked_class(source: dict[str, Any]) -> bool:
 
     True when a crop's current class state must never be touched by an
     automated writer:
-      * a human already set/confirmed the class (``_is_human_marker``);
+      * a human already set/confirmed the class (``is_human_marker``);
       * OR it's a *validated* imported label (``class_source ==
         LABEL_IMPORT_CLASS_SOURCE`` and ``class_validated``) — an
         unvalidated (``label_trust: suggestion``) import is NOT locked,
@@ -66,7 +66,7 @@ def is_locked_class(source: dict[str, Any]) -> bool:
     from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 
     class_source = source.get('class_source')
-    if _is_human_marker(class_source):
+    if is_human_marker(class_source):
         return True
     if class_source == LABEL_IMPORT_CLASS_SOURCE and bool(source.get('class_validated')):
         return True
@@ -101,8 +101,8 @@ def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
 
 
 __all__ = [
-    '_is_human_marker',
     '_is_locked_marker',
+    'is_human_marker',
     'is_locked_box',
     'is_locked_class',
     'is_locked_item',

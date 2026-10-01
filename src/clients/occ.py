@@ -328,7 +328,7 @@ async def occ_skip_on_conflict_bulk(
 
 
 # is_locked_class / _is_locked_marker / is_locked_box / is_locked_item /
-# _is_human_marker live in occ_locks.py (LOC ratchet) and are imported at
+# is_human_marker live in occ_locks.py (LOC ratchet) and are imported at
 # module top, so every existing `from src.clients.occ import
 # is_locked_class`-shaped call site keeps working unchanged.
 

@@ -130,7 +130,7 @@ class TestReingestPreservesImportedLabel:
     fields — the OCC guard the ingest pipeline runs through
     ``occ_upsert_bulk`` (``ingest.py``'s ``_CROP_HUMAN_FIELD_GUARDS =
     ('label_source', 'class_source')``). Red before W10:
-    ``_merge_preserving_human`` used ``_is_human_marker``, which does not
+    ``_merge_preserving_human`` used ``is_human_marker``, which does not
     recognize import provenance.
 
     W10 fix-pass note (Opus review 2026-09-28, lock-rule call-site m4):

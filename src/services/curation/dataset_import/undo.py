@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_update_one
-from src.clients.occ_locks import _is_human_marker
+from src.clients.occ_locks import is_human_marker
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
 from src.services.curation.edit_history import (
@@ -120,7 +120,7 @@ def _without_import(doc: dict[str, Any], import_id: str) -> dict[str, Any]:
 
 
 def _class_is_import_owned(doc: dict[str, Any]) -> bool:
-    return doc.get('class_source') == LABEL_IMPORT_CLASS_SOURCE and not _is_human_marker(
+    return doc.get('class_source') == LABEL_IMPORT_CLASS_SOURCE and not is_human_marker(
         doc.get('label_source')
     )
 
@@ -187,7 +187,7 @@ def decide_created(
     others = [i for i in doc.get('import_ids') or [] if i != ctx.import_id]
     stored = read_boxes(doc, F)
     mine, edited = _import_boxes(stored, ctx.import_id, ledger_boxes)
-    human_class = _is_human_marker(doc.get('class_source')) or _is_human_marker(
+    human_class = is_human_marker(doc.get('class_source')) or is_human_marker(
         doc.get('label_source')
     )
     human_box = any(is_human_owned(b) for b in stored)

@@ -70,6 +70,7 @@ from src.services.curation.region_boxes import (
     has_any_box_query,
     read_boxes,
 )
+from src.services.curation.reprocess_locks import region_locked_clause, region_set_locked
 
 
 if TYPE_CHECKING:
@@ -186,7 +187,7 @@ def requeue_query(
     # Every clause is a pure predicate (term/exists/should-of-terms
     # via _value_filter) -- filter context, not must.
     filt: list[dict[str, Any]] = list(sel.extra)
-    must_not: list[dict[str, Any]] = [] if include_locked else [{'term': {F.validated: True}}]
+    must_not: list[dict[str, Any]] = [] if include_locked else [region_locked_clause(F)]
     if sel.status is None:
         must_not.append({'exists': {'field': F.status}})
     else:
@@ -361,7 +362,7 @@ def _make_merger(
     to_clear = detection_fields(F) if clear_detection else ()
 
     def _merge(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-        if current.get(F.validated) is True:
+        if region_set_locked(current, F):
             return {}
         if expected is not _ANY_STATUS and current.get(F.status) != expected:
             return {}
