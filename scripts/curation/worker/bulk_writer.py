@@ -22,15 +22,7 @@ from src.services.curation.class_write_guard import class_write_allowed
 from src.services.curation.history import merge_region_chain, record_class_snapshot
 from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_box_embeddings import entry_for, write_box_embeddings
-from src.services.curation.region_boxes import (
-    RegionBox,
-    boxes_write_fields,
-    derive_status,
-    finalize_box_ids,
-    is_human_owned,
-    merge_boxes_for_write,
-    read_boxes,
-)
+from src.services.curation.region_box_pass import box_pass_update
 from src.services.curation.wire import region_event_payload
 
 
@@ -42,6 +34,8 @@ from scripts.curation.worker.state import _ItemTask, items_index
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
+
+    from src.services.curation.region_boxes import RegionBox
 
 
 def _current_config_stamp() -> tuple[str | None, int | None, str | None]:
@@ -177,56 +171,23 @@ async def _bulk_update_one_project(
         # both come from `current`, never `task.region_revision` /
         # `task.region_box_seq`.
         if task.pending_boxes is not None:
-            stored_now = read_boxes(current, F)
-            if task.reverify:
-                # Path 1 re-verify (W8 B1): this pass only resolved the
-                # stored `proposed` box(es) it re-verified -- every OTHER
-                # sibling (already accepted/rejected, or a second
-                # `proposed` box this pass didn't select) must survive,
-                # by id.
-                #
-                # R-M3 fix (M1 residual, 2026-09-27 re-review):
-                # `task.stored_boxes` is the fetch-time snapshot this
-                # pass's candidates were actually built from and sent to
-                # the VLM against -- passed as `baseline` so a box a
-                # human moved or deleted DURING that VLM call is detected
-                # (per-box, by comparing `baseline` to `stored_now`) and
-                # never silently overwritten/resurrected by this pass's
-                # now-stale verdict for it.
-                merged = merge_boxes_for_write(
-                    stored_now, task.pending_boxes, baseline=task.stored_boxes
-                )
-            elif task.pending_merge:
-                # W8c M1 fix (2026-09-28 re-review): a FRESH detection
-                # pass (Path 2/3, or the text-hint re-pass they can fall
-                # into) is a new answer to "where are the regions?", not
-                # a partial update -- "merge" (keeping a stale sibling by
-                # id) was the wrong semantic here and let a stale
-                # MACHINE-sourced box (e.g. a prior pass's sanity-gate
-                # reject, left in place by a `clear_detection=False`
-                # requeue) accumulate forever and keep overriding this
-                # pass's own derived status. Keep only stored boxes a
-                # human owns (`is_human_owned` -- created OR explicitly
-                # accepted/rejected/transcribed via the W8a per-box edit
-                # routes); replace every machine-sourced one with this
-                # pass's own fresh findings.
-                keep = [b for b in stored_now if is_human_owned(b)]
-                merged = [*keep, *task.pending_boxes]
-            else:
-                merged = list(task.pending_boxes)
-            finalized = finalize_box_ids(
-                merged, existing=stored_now, seq=int(current.get(F.box_seq) or 0)
+            # The merge itself (reverify / fresh-detection replace-machine-
+            # keep-human / whole list), id finalization and status derivation
+            # are `box_pass_update`, shared with the test-on-crop preview.
+            # `task.stored_boxes` is the fetch-time snapshot this pass's
+            # candidates were sent to the VLM against (R-M3): the baseline
+            # that detects a box a human moved or deleted during that call.
+            box_pass = box_pass_update(
+                current,
+                task.pending_boxes,
+                reverify=task.reverify,
+                merge_machine_boxes=task.pending_merge,
+                baseline=task.stored_boxes,
+                status=task.pending_status,
+                empty_status=task.pending_empty_status,
             )
-            task.box_embedding_entries = _vector_entries(task, merged, finalized)
-            merged = finalized
-            if task.pending_status is not None:
-                update[F.status] = task.pending_status
-            else:
-                assert task.pending_empty_status is not None, (
-                    'pending_boxes set without pending_status or pending_empty_status'
-                )
-                update[F.status] = derive_status(merged, empty_status=task.pending_empty_status)
-            update.update(boxes_write_fields(merged, current_src=current))
+            task.box_embedding_entries = _vector_entries(task, box_pass.merged, box_pass.finalized)
+            update.update(box_pass.update)
             # R-M1 fix (2026-09-27 re-review): correct the PROVISIONAL
             # ``F.status`` ``_box_list_doc`` / ``accept_without_vlm``
             # stamped onto ``task.update_doc`` at task-processing time
