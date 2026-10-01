@@ -8,6 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W5/W6/W10 review fixes** (`w5_w6_review_2026-10-01`).
+  - **`POST /region_profiles/test` prompt override.** `segmenter_text_prompt`
+    on the default (active-profile) path is now validated by the same
+    `validate_profile` call as the named and draft paths: over 200 characters,
+    multiple lines or empty answers 422 `profile_invalid` and nothing reaches
+    the segmenter (it used to forward any length).
+  - **`crop_ids` is capped** at 64 on `POST /prompt_packs/test`
+    (422 `too_many_crop_ids`, checked before any lookup), and
+    `region_verify` checks the per-call image capacity before decoding any box.
+  - **A malformed segmenter reply** (bad `mask_polygon`, non-numeric `score` or
+    box) is a `SegmenterCallError`, so the test route answers 502
+    `segmenter_error` instead of a 500.
+  - **`on_negative_frame` review filter.** `GET /review/{tab}` and its locate
+    twin take `on_negative_frame` (true = only items on an imported
+    reviewed-negative frame, false = hide them) on every tab, served as a
+    `filter_specs` entry on `GET /review/tabs`; `GET /crops` shares the one
+    clause.
+  - **Fixture tooling** refuses an image `file_name` that carries a path
+    (`build_import_fixture.py`, `fetch_coco_subset.py`); two guards no caller
+    needed were removed (`select_negatives` `exclude_ids`, the `status`
+    check in `eval_regions_vs_gt.py`).
+  - **Tests.** The region-route tests now cover the external-VLM
+    acknowledgement refusal, segmenter and VLM `test_busy`, `test_timeout`,
+    `vlm_transport_error` and `detector_error`. The wheel E2E asserts the
+    provenance stamps, text-free boxes and `detector == 'sam3'`, performs a
+    human edit through `PUT /crops/{id}/regions`, and runs `POST
+    /train/preflight` on the export. A fixture test checks COCO class names
+    against the YAML names independently of the builder.
+  - **Deferred.** `scripts/datasets/manifests/coco_car_60.json` and
+    `coco_import_96.json` are not generated (they need network access; run
+    `make sample-coco-cars` on a networked host and commit them);
+    `test_pinned_manifest_is_sixty_cc_by_cars` skips with that reason until
+    then. The plan's `region_set_complete: false` car and the export's
+    `skipped_incomplete_sets` manifest key are not in the E2E: neither the
+    worker nor the export has a code path for them yet, so there is nothing to
+    assert offline.
 - **W10 round-3 review fixes** (`w10_p4_review_2026-10-01`).
   - **`data.yaml` tagged scalars.** `names: [!!bool abc]` (KeyError) and
     `[!!timestamp abc]` (AttributeError) escaped `load_bounded_yaml` and made
