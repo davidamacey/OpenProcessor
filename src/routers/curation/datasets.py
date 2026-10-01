@@ -9,6 +9,7 @@ through :func:`api_error`.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -59,6 +60,7 @@ from src.services.curation.dataset_import.upload import (
     UploadTooLargeError,
     receive_archive,
 )
+from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.ingest import CurationIngestService
 
 
@@ -421,7 +423,7 @@ async def resume_dataset_import(
 ) -> DatasetImportJob:
     store = _open(import_id)
     try:
-        runner.check_resumable(store)
+        prior = runner.claim_resume(store)
     except runner.ImportNotResumableError:
         raise api_error(
             409,
@@ -434,26 +436,34 @@ async def resume_dataset_import(
         raise api_error(
             409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
         ) from None
-    request = DatasetImportRequest(**store.read_request())
+    # The claim is live only while its heartbeat is: a rescan of a big dataset
+    # outlasts the stale window, and a stale claim is repairable by anyone.
+    ticker = asyncio.create_task(heartbeat_ticker(store.job))
     try:
-        entries = await asyncio.to_thread(
-            runner.rescan_for_resume, store, request, path_guard=_guard()
-        )
-    except runner.DatasetChangedError:
-        raise api_error(
-            409,
-            'dataset_changed',
-            'the dataset changed since this import started',
-            import_id=import_id,
-            project=_slug(),
-        ) from None
-    except (DatasetPathNotAllowedError, FormatUndetectedError) as exc:
-        raise api_error(422, 'dataset_path_not_allowed', str(exc), project=_slug()) from None
-    runner.prepare_resume(store, registry)
-    ctx = _context(store, request, runner.load_pinned(store), opensearch, registry)
-    store.job.clear_signals()
-    store.job.update(status='queued', error=None, finished_at=None)
-    store.job.touch_heartbeat()
+        request = DatasetImportRequest(**store.read_request())
+        try:
+            entries = await asyncio.to_thread(
+                runner.rescan_for_resume, store, request, path_guard=_guard()
+            )
+        except runner.DatasetChangedError:
+            raise api_error(
+                409,
+                'dataset_changed',
+                'the dataset changed since this import started',
+                import_id=import_id,
+                project=_slug(),
+            ) from None
+        except (DatasetPathNotAllowedError, FormatUndetectedError) as exc:
+            raise api_error(422, 'dataset_path_not_allowed', str(exc), project=_slug()) from None
+        runner.prepare_resume(store, registry)
+        ctx = _context(store, request, runner.load_pinned(store), opensearch, registry)
+    except BaseException:
+        runner.release_resume(store, prior)
+        raise
+    finally:
+        ticker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await ticker
     runner.spawn(ctx, store, entries)
     return job_wire(store, project=_slug())
 

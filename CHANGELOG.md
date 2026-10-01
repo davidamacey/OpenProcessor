@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W10 finish and combine confirmation-review fixes** (round 2 of
+  `w10_p4_review_2026-10-01`).
+  - **Import resume takes the project start lock.** `POST
+    /datasets/imports/{id}/resume` claims the job (`queued`) under the same lock
+    a start and an undo take, before the dataset rescan, and keeps the claim's
+    heartbeat alive during it. Two resumes, or a resume and an undo, can no
+    longer both pass the check (two workers; resume overwriting `undoing`);
+    the loser gets `409 import_not_resumable` / `import_not_undoable`. A
+    resume that fails before its worker runs puts the job back as it was.
+  - **One "an import is still the sole owner" test** (`is_human_owned_item` in
+    `occ_locks`) for undo of an import-created item and for reconcile: a
+    curator holdout freeze (unless the import itself froze it), a human accept
+    of the region set (`validated` + `verifier == human`), a human class and a
+    human box all keep the item. Both paths used narrower tests and deleted
+    such items.
 - **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
   - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
     path: it re-reads each document, asks the caller whether it is still

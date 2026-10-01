@@ -456,6 +456,33 @@ def check_resumable(store: ImportStore) -> None:
         raise ImportBusyError(live.import_id)
 
 
+def claim_resume(store: ImportStore) -> dict[str, Any]:
+    """Atomically move ``store`` to ``queued`` under the project start lock,
+    the same lock a start and an undo take: two resumes, or a resume and an
+    undo, cannot both pass the check. Returns the job state to hand back to
+    :func:`release_resume` if the resume then fails before its worker runs."""
+    root = imports_root()
+    root.mkdir(parents=True, exist_ok=True)
+    with exclusive_start_lock(root / 'start.lock') as acquired:
+        if not acquired:
+            raise ImportBusyError(None)
+        check_resumable(store)
+        prior = store.job.read()
+        store.job.clear_signals()
+        store.job.update(status='queued', error=None, finished_at=None)
+        store.job.touch_heartbeat()
+    return prior
+
+
+def release_resume(store: ImportStore, prior: dict[str, Any]) -> None:
+    """Put a claimed-but-not-started resume back to its pre-claim state."""
+    store.job.update(
+        status=prior.get('status'),
+        error=prior.get('error'),
+        finished_at=prior.get('finished_at'),
+    )
+
+
 def prepare_resume(store: ImportStore, registry: ClassRegistry) -> None:
     """Re-materialize classes an interrupted start created but never recorded."""
     resolved, _profile, _parents = load_pinned(store)
