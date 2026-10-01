@@ -8,6 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W8-cleanup items 3-6 review fixes.**
+  - **Breaking (response keys):** every region clustering count names its
+    unit. `POST /regions/cluster` job result: `n_regions` -> `n_boxes`,
+    `assigned` -> `n_boxes_changed` (boxes whose cluster changed; `0` on a
+    re-run over unchanged data) plus `n_items_written`. Refine
+    (`POST /regions/clusters/refine/{id}` -> `n_boxes`, `n_boxes_updated`;
+    `POST /clusters/refine/{id}` -> `n_items`, `n_items_updated`; was
+    `n_members` / `n_updated`, which counted boxes and items respectively
+    under the same names). FP centroid build: `n_members` -> `n_boxes` (also in
+    the persisted centroid metadata and `GET /regions/fp_centroids/status`);
+    auto FP pull: `n_scanned` / `n_moved` -> `n_boxes_scanned` /
+    `n_boxes_moved`. `write_box_edits` reports `items_*` / `boxes_changed`, and
+    its `unchanged` tally no longer double counts conflict retries.
+  - `GET /regions*` pages carry `rows_truncated` (an item matched more boxes
+    than `index.max_inner_result_window`, so some of its rows are missing).
+  - Cluster-only box writes (partition, refine, FP sub-typing) no longer
+    advance `region_revision`, so a recluster no longer 409s an open editor;
+    any write that changes a box's state, geometry or text still does.
+  - `GET /crops/{id}/region_thumbnail` is `no-cache` with an `ETag` (a moved
+    box is no longer shown from a one-hour public cache; an unmoved one is a
+    304).
+  - A human move or delete of a box (`PUT .../regions`, `PUT
+    /crops/batch_regions`) and `requeue --clear-detection` prune that box's
+    `region_box_embeddings` entry immediately; a stale (moved-box) entry is
+    now dropped by every embedding write too.
+  - A whole-set confirm that no box can satisfy answers an actionable 422
+    (`no_accepted_box: ... accept ... one by one with PATCH
+    /crops/{crop_id}/regions/{box_id}`) instead of the bare code.
+  - Live harness: seeded `region_box_embeddings` entries carry `bbox_norm`
+    (built with the production `entry_for`), so the live clustering and FP
+    scenarios no longer see every vector as stale; the live region tests send
+    `region_label_source` (the request models forbid `label_source`) and
+    un-mark a false-positive item per box.
+  - Docs: dropped the deleted `OP_REGION_FIELD_BBOX_NORM` override and the
+    removed `region_text` meta field.
 - **W8-cleanup Items 4-6 fixes** (also the open minors from the Items 1-2
   review):
   - `GET /regions`: every box filter (`detector`, `min_score`,
