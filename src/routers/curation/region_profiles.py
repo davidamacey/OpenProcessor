@@ -54,15 +54,13 @@ def _registry_class_names() -> frozenset[str]:
 
 
 async def _segmenter_health_fn() -> tuple[str, str | None]:
-    import os
-
     from src.routers.curation._models_segmenter import _segmenter_health
+    from src.services.detection.segmenter_http import first_segmenter_url
 
-    url = os.environ.get('OP_SEGMENTER_URL', '').strip()
-    if not url:
+    url = first_segmenter_url()
+    if url is None:
         return 'unavailable', 'OP_SEGMENTER_URL is not configured'
-    first_url = url.split(',')[0].strip().rstrip('/')
-    return await _segmenter_health(first_url)
+    return await _segmenter_health(url)
 
 
 def _effective(profile: Any) -> RegionProfileEffective:
