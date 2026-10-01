@@ -24,6 +24,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import backfill_region_embeddings as backfill_script  # noqa: E402
 
+from src.services.curation.reprocess_embed import best_region_bbox  # noqa: E402
+
 
 class _FakeTritonPool:
     def __init__(self, *_args: Any, **_kwargs: Any) -> None: ...
@@ -79,6 +81,22 @@ def _tiny_jpeg() -> bytes:
     return buf.getvalue()
 
 
+def _servable_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The embed step reads an image only when its stored path is servable:
+    declare ``tmp_path`` a configured source root."""
+    from src.services.curation import image_serving
+
+    root = tmp_path.resolve()
+    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (root,))  # noqa: ARG005
+    return root
+
+
+def _write_image(root: Path, name: str) -> str:
+    path = root / name
+    path.write_bytes(_tiny_jpeg())
+    return str(path)
+
+
 def _hit(
     doc_id: str,
     *,
@@ -124,22 +142,18 @@ async def test_dry_run_reports_count_and_does_not_touch_triton(
 
 @pytest.mark.asyncio
 async def test_apply_writes_normalized_embeddings_for_eligible_items(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    root = _servable_root(tmp_path, monkeypatch)
     hits = [
-        _hit('crop-1', image_path='/data/a.jpg', bbox=[0.1, 0.1, 0.5, 0.5]),
-        _hit('crop-2', image_path='/data/b.jpg', bbox=[0.2, 0.2, 0.6, 0.6]),
+        _hit('crop-1', image_path=_write_image(root, 'a.jpg'), bbox=[0.1, 0.1, 0.5, 0.5]),
+        _hit('crop-2', image_path=_write_image(root, 'b.jpg'), bbox=[0.2, 0.2, 0.6, 0.6]),
     ]
     client = _FakeOSClient(hits)
     fake_pe = _FakePE()
     monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
-    monkeypatch.setattr(
-        backfill_script,
-        '_crop_jpeg_from_disk',
-        lambda image_path, bbox: _tiny_jpeg(),  # noqa: ARG005
-    )
 
     rc = await backfill_script._run(
         'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
@@ -157,19 +171,15 @@ async def test_apply_writes_normalized_embeddings_for_eligible_items(
 
 @pytest.mark.asyncio
 async def test_apply_skips_items_with_unreadable_source_image(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    hits = [_hit('crop-missing', image_path='/data/gone.jpg', bbox=[0.1, 0.1, 0.5, 0.5])]
+    root = _servable_root(tmp_path, monkeypatch)
+    hits = [_hit('crop-missing', image_path=str(root / 'gone.jpg'), bbox=[0.1, 0.1, 0.5, 0.5])]
     client = _FakeOSClient(hits)
     fake_pe = _FakePE()
     monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
-    monkeypatch.setattr(
-        backfill_script,
-        '_crop_jpeg_from_disk',
-        lambda image_path, bbox: None,  # noqa: ARG005
-    )
 
     rc = await backfill_script._run(
         'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
@@ -235,15 +245,16 @@ def test_selection_query_matches_a_false_positive_only_item() -> None:
 
 @pytest.mark.asyncio
 async def test_apply_writes_embeddings_for_a_false_positive_only_item(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    root = _servable_root(tmp_path, monkeypatch)
     """M5: an FP-only item (no accepted box at all) must still get a
-    representative crop -- `_best_accepted_bbox` falls back to the
+    representative crop -- `best_region_bbox` falls back to the
     highest-scoring false-positive box."""
     hit = {
         '_id': 'fp-crop',
         '_source': {
-            'image_path': '/data/a.jpg',
+            'image_path': _write_image(root, 'a.jpg'),
             'region_boxes': [
                 {
                     'box_id': 'b1',
@@ -259,11 +270,6 @@ async def test_apply_writes_embeddings_for_a_false_positive_only_item(
     monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
-    monkeypatch.setattr(
-        backfill_script,
-        '_crop_jpeg_from_disk',
-        lambda image_path, bbox: _tiny_jpeg(),  # noqa: ARG005
-    )
 
     rc = await backfill_script._run(
         'http://fake:9200', 'fake-triton:8001', apply=True, max_docs=None
@@ -284,7 +290,7 @@ def test_best_accepted_bbox_picks_the_highest_scoring_accepted_box() -> None:
             {'box_id': 'b3', 'bbox_norm': [0.4, 0.4, 0.5, 0.5], 'state': 'accepted', 'score': 0.8},
         ]
     }
-    assert backfill_script._best_accepted_bbox(source, get_region_fields()) == [0.4, 0.4, 0.5, 0.5]
+    assert best_region_bbox(source, get_region_fields()) == [0.4, 0.4, 0.5, 0.5]
 
 
 def test_best_accepted_bbox_falls_back_to_the_highest_scoring_fp_box() -> None:
@@ -308,7 +314,7 @@ def test_best_accepted_bbox_falls_back_to_the_highest_scoring_fp_box() -> None:
             },
         ]
     }
-    assert backfill_script._best_accepted_bbox(source, get_region_fields()) == [0.2, 0.2, 0.3, 0.3]
+    assert best_region_bbox(source, get_region_fields()) == [0.2, 0.2, 0.3, 0.3]
 
 
 def test_best_accepted_bbox_none_when_no_accepted_or_fp_box() -> None:
@@ -319,4 +325,4 @@ def test_best_accepted_bbox_none_when_no_accepted_or_fp_box() -> None:
             {'box_id': 'b1', 'bbox_norm': [0.0, 0.0, 0.1, 0.1], 'state': 'rejected', 'score': 0.9},
         ]
     }
-    assert backfill_script._best_accepted_bbox(source, get_region_fields()) is None
+    assert best_region_bbox(source, get_region_fields()) is None

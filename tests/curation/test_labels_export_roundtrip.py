@@ -142,39 +142,38 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     ``occ_upsert_bulk()`` primitive every other writer exercised by this
     test uses.
     """
-    from PIL import Image
-
+    from curation.dataset_import.harness import Harness, write_yolo
     from src.services.curation.clustering.orchestrator import auto_promote_clusters
-    from src.services.curation.dataset_import.job import import_dataset, registry_class_views
-    from src.services.curation.dataset_import.mapping import ClassMappingEntry, resolve_mapping
-    from src.services.curation.dataset_import.yolo import scan_yolo
+    from src.services.curation.dataset_import.mapping import ClassMappingEntry
+    from src.services.curation.ingest import CurationIngestService
 
     await _human_label_paths(fake, registry, monkeypatch)
 
     promoted = await auto_promote_clusters(fake, min_purity=0.85, min_members=4)
     assert promoted['promoted'] == 4
 
+    # The production importer, pointed at this test's index and registry.
+    h = Harness(tmp_path, monkeypatch)
+    h.os = fake
+    h.registry = registry
+    h.service = CurationIngestService(
+        opensearch=fake,
+        triton_pool=h.triton,
+        registry=registry,
+        profile=h.profile,
+        pe_encoder=h.pe,
+        config=h.cfg,
+    )
     ds_root = tmp_path / 'one_image_ds'
-    (ds_root / 'images/train').mkdir(parents=True)
-    (ds_root / 'labels/train').mkdir(parents=True)
-    (ds_root / 'data.yaml').write_text('train: images/train\nnames:\n  0: widget\n  1: gadget\n')
-    Image.new('RGB', (10, 10)).save(ds_root / 'images/train/imp.jpg')
-    (ds_root / 'labels/train/imp.txt').write_text('1 0.7 0.7 0.2 0.2\n')
-
-    scan = scan_yolo(ds_root)
-    resolved = resolve_mapping(
-        ['gadget'],
-        [ClassMappingEntry(dataset_class='gadget', action='map', class_id=1)],
-        registry_classes=registry_class_views(registry),
+    write_yolo(ds_root, names=['widget', 'gadget'], images={'imp': ['1 0.7 0.7 0.2 0.2']})
+    store, _ = await h.run(
+        h.request(ds_root, [ClassMappingEntry(dataset_class='gadget', action='map', class_id=1)])
     )
-    assert resolved.ok
-    report = await import_dataset(
-        fake, scan, resolved, import_id='imp_test', images_index=IMAGES, items_index=ITEMS
-    )
-    assert report.items_created == 1
+    assert store.job.read()['status'] == 'completed'
+    import_id = store.import_id
 
     items = fake.docs(ITEMS)
-    imported_ids = {i for i, d in items.items() if d.get('import_ids') == ['imp_test']}
+    imported_ids = {i for i, d in items.items() if d.get('import_ids') == [import_id]}
     assert len(imported_ids) == 1
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
     assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
@@ -187,7 +186,8 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     result = await _export(fake, registry, tmp_path)
     assert result.image_count == len(validated) == 9
     assert CONFIRMED not in fake.searched_indexes
-    assert set(fake.searched_indexes) == {ITEMS}
+    # Items, plus the images index the imported-negative-frame scan reads.
+    assert set(fake.searched_indexes) == {ITEMS, IMAGES}
 
 
 @pytest.mark.asyncio

@@ -378,12 +378,14 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
         F.revision: 2,
     }
     item = serialize_item(src, 'x')
-    # bbox_in_parent / thumbnail_url are derived wire-only additions on
-    # top of the stored element (W8.9) -- not part of RegionBox.to_doc().
+    # bbox_in_parent / thumbnail_url / locked are derived wire-only additions
+    # on top of the stored element (W8.9, W10 lock rule) -- not part of
+    # RegionBox.to_doc().
     assert item['region_boxes'] == [
         {
             **box.to_doc(),
             'bbox_in_parent': None,
+            'locked': False,
             'thumbnail_url': item['region_boxes'][0]['thumbnail_url'],
         }
     ]

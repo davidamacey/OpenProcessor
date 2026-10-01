@@ -74,6 +74,14 @@ class TestIsLockedBox:
         box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', source='import')
         assert is_locked_box(box) is True
 
+    def test_suggestion_import_box_is_not_locked(self) -> None:
+        """``label_trust: suggestion`` writes ``proposed`` boxes with
+        ``source: import``: the machine pipeline may still replace them."""
+        box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='proposed', source='import')
+        assert is_locked_box(box) is False
+        accepted = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='accepted', source='import')
+        assert is_locked_box(accepted) is True
+
     def test_machine_box_unlocked(self) -> None:
         box = RegionBox(box_id='b1', bbox_norm=(0, 0, 1, 1), state='proposed', source='segmenter')
         assert is_locked_box(box) is False

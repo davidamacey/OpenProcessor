@@ -115,7 +115,6 @@ scripts/README.md # example prose for eval_regions_vs_gt.py's cohort description
 scripts/download_ocr_test_images.py # public Wikimedia OCR sample images (license plates), a legitimate OCR example domain
 scripts/create_ocr_test_images.py # public OCR sample image filename
 scripts/curation/eval_regions_vs_gt.py # docstring YAML example (license_plate class), matches the bakeoff example domain
-scripts/curation/import_labeled_dataset.py # docstring YAML example (license_plate class), matches the bakeoff example domain
 export/export_pe_text_encoder.py # public PE-Core text-encoder calibration prompt example
 tests/curation/test_pe_text_backends.py # exercises the same public calibration prompt example
 src/clients/curation_opensearch.py # docstring example value
@@ -150,7 +149,6 @@ tests/curation/test_train_router.py # negative assertion that 'license_plate' is
 tests/curation/test_training_class_subset_presets.py # exercises the example profile's region_class_name in preset tests; docstring also names the hardcoded presets it replaces
 tests/curation/test_triton_promote.py # exercises the example profile
 tests/curation/test_yolo26_triton_config.py # exercises the example profile
-tests/integration/test_import_labeled_dataset.py # exercises the example profile
 tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
 scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout
 docker-compose.yml:license[ _-]?plate # G-08 (fresh-start gaps batch B): comment naming the public license_plate.json worked-example path that ./examples is mounted for

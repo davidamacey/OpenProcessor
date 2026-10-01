@@ -386,6 +386,7 @@ def scan_yolo(
         root=root,
         entries=entries,
         issues=issues,
+        class_ids={name: idx for idx, name in names.items()},
         class_box_counts=class_box_counts(entries),
     )
 

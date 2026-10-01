@@ -128,6 +128,14 @@
     "region_max_score",
     "region_set_complete",
     "region_revision",
+    "label_locked",
+    "import_ids",
+    "dataset_split",
+    "imported_at",
+    "proposed_by_import",
+    "on_negative_frame",
+    "import_standalone_region",
+    "proposal_chain",
     "item_text_lines"
   ],
   "json_schema": {
@@ -456,6 +464,18 @@
         "default": null,
         "title": "Crop Rank In Image"
       },
+      "dataset_split": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dataset Split"
+      },
       "dup_group_id": {
         "default": null,
         "title": "Dup Group Id"
@@ -522,12 +542,41 @@
         "title": "Image Path",
         "type": "string"
       },
+      "import_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Import Ids",
+        "type": "array"
+      },
+      "import_standalone_region": {
+        "default": false,
+        "title": "Import Standalone Region",
+        "type": "boolean"
+      },
+      "imported_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Imported At"
+      },
       "item_text_lines": {
         "items": {
           "$ref": "#/$defs/ItemTextLine"
         },
         "title": "Item Text Lines",
         "type": "array"
+      },
+      "label_locked": {
+        "default": false,
+        "title": "Label Locked",
+        "type": "boolean"
       },
       "label_source": {
         "anyOf": [
@@ -611,6 +660,11 @@
         "default": null,
         "title": "Needs New Class Note"
       },
+      "on_negative_frame": {
+        "default": false,
+        "title": "On Negative Frame",
+        "type": "boolean"
+      },
       "probe_actionable": {
         "anyOf": [
           {
@@ -687,6 +741,13 @@
         "default": null,
         "title": "Probe Pred Entropy"
       },
+      "proposal_chain": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Proposal Chain",
+        "type": "array"
+      },
       "proposal_name": {
         "anyOf": [
           {
@@ -698,6 +759,18 @@
         ],
         "default": null,
         "title": "Proposal Name"
+      },
+      "proposed_by_import": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposed By Import"
       },
       "proposed_class_id": {
         "anyOf": [

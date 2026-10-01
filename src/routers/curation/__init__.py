@@ -21,6 +21,7 @@ import src.routers.curation.cohorts
 import src.routers.curation.config_vocabulary
 import src.routers.curation.crop_context
 import src.routers.curation.crops
+import src.routers.curation.datasets
 import src.routers.curation.edit_undo
 import src.routers.curation.events
 import src.routers.curation.export
@@ -43,6 +44,7 @@ import src.routers.curation.regions
 import src.routers.curation.regions_boxes_edit
 import src.routers.curation.regions_edit
 import src.routers.curation.regions_fp
+import src.routers.curation.reprocess
 import src.routers.curation.review
 import src.routers.curation.review_proposals
 import src.routers.curation.review_resolve

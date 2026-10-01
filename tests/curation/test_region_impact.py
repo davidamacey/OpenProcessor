@@ -115,3 +115,71 @@ async def test_activation_impact_skips_pending_not_matching_without_profile() ->
 
     assert impact.pending_not_matching == 0
     assert client.count_calls == []
+
+
+# ---------------------------------------------------------- suggested_reprocess
+
+
+def _stale_corpus() -> list[dict[str, Any]]:
+    from curation.reprocess_fixtures import F, RegionStatus, box, item
+
+    detected = RegionStatus.DETECTED.value
+    accepted = (box('b1', state='accepted'),)
+    return [
+        item('old', detected, boxes=accepted, **{F.profile: 'wheel', F.profile_revision: 1}),
+        item('cur', detected, boxes=accepted, **{F.profile: 'wheel', F.profile_revision: 2}),
+        item('other', detected, boxes=accepted, **{F.profile: 'plate', F.profile_revision: 3}),
+        item('failed', RegionStatus.DETECTION_FAILED.value, **{F.profile: 'plate'}),
+        item('pending', RegionStatus.PENDING_DETECTION.value),
+        item('human', detected, validated=True, verifier='human', **{F.profile: 'plate'}),
+        item('unseeded'),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_activation_impact_suggests_the_reprocess_that_reruns_exactly_the_stale_items(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The impact carries a ``ReprocessRequest`` a client POSTs to
+    ``/reprocess`` verbatim: unlocked, machine-written items the active
+    ``wheel@2`` did not produce (not pending ones: the new profile processes
+    those anyway; not validated ones; not unseeded ones)."""
+    from curation.reprocess_fixtures import make_fake
+    from src.services.curation import region_impact
+    from src.services.curation.reprocess import plan_reprocess
+
+    monkeypatch.setattr(region_impact, '_active_revision', lambda _profile: 2)
+    fake = make_fake(_stale_corpus())
+
+    impact = await compute_activation_impact(fake, profile=DetectionProfile(name='wheel'))
+
+    assert impact.stale_items == 3  # old (rev 1), other (plate), failed (plate)
+    suggestion = impact.suggested_reprocess
+    assert suggestion is not None
+    assert suggestion.scopes == ['region']
+    assert suggestion.dry_run is True
+    assert suggestion.targets.filter is not None
+    assert suggestion.targets.filter.profile_not == 'wheel'
+    assert suggestion.targets.filter.profile_revision_below == 2
+    # what the GUI POSTs: the dumped request, verbatim
+    posted = type(suggestion).model_validate(impact.model_dump()['suggested_reprocess'])
+    region = (await plan_reprocess(fake, posted)).results[0]
+    # the human-validated plate item matches the selector but is locked: the
+    # re-run reports it as skipped, and `stale_items` counts only what it moves
+    assert (region.selected, region.locked_skipped) == (4, 1)
+    assert region.selected - region.locked_skipped == impact.stale_items
+
+
+@pytest.mark.asyncio
+async def test_activation_impact_suggests_nothing_without_a_profile_or_stale_items(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from curation.reprocess_fixtures import make_fake
+    from src.services.curation import region_impact
+
+    monkeypatch.setattr(region_impact, '_active_revision', lambda _profile: 2)
+    fake = make_fake(_stale_corpus())
+    assert (await compute_activation_impact(fake, profile=None)).suggested_reprocess is None
+    only_current = make_fake([d for d in _stale_corpus() if d['crop_id'] == 'cur'])
+    impact = await compute_activation_impact(only_current, profile=DetectionProfile(name='wheel'))
+    assert (impact.stale_items, impact.suggested_reprocess) == (0, None)

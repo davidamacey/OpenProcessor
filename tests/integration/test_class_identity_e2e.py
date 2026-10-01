@@ -43,22 +43,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from curation.dataset_import.harness import Harness
 
-from src.clients.curation_opensearch import ClassRegistry
 from src.config.curation import CurationConfig
-from src.services.curation.dataset_import.job import (
-    _image_id_for,
-    import_dataset,
-    materialize_created_classes,
-    registry_class_views,
-)
-from src.services.curation.dataset_import.mapping import (
-    ClassMappingEntry,
-    ResolvedMapping,
-    resolve_mapping,
-    suggest_mapping,
-)
-from src.services.curation.dataset_import.yolo import scan_yolo
+from src.services.curation.dataset_import.mapping import ClassMappingEntry
 from src.services.curation.export import GenericYoloExportService
 from src.services.detection.geometry import crop_id as _crop_id
 from src.services.training.triton_promote import resolve_class_remap
@@ -66,20 +54,7 @@ from src.services.training.yolo_triton_config import render_labels_file
 
 
 if TYPE_CHECKING:
-    from src.services.curation.dataset_import.scan import DatasetScan
-
-
-def _query_fake():
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'curation'))
-    from query_fakes import QueryFakeOpenSearch
-
-    return QueryFakeOpenSearch
-
-
-IMAGES_INDEX = 'op_curation_images'
-ITEMS_INDEX = 'op_curation_items'
+    from src.clients.curation_opensearch import ClassRegistry
 
 
 # =============================================================================
@@ -112,9 +87,9 @@ def _write_yolo_fixture(
 
     expected: dict[tuple[float, ...], str] = {}
     for stem, rows in boxes.items():
-        Image.new('RGB', (100, 100), color='blue').save(
-            root / f'images/train/{stem}.jpg', format='JPEG'
-        )
+        Image.new(
+            'RGB', (100, 100), color=tuple(ord(c) * 7 % 256 for c in (stem + 'xxx')[:3])
+        ).save(root / f'images/train/{stem}.jpg', format='JPEG')
         resolved_rows = []
         for row in rows:
             cls_name, cx, cy, w, h = row.split()
@@ -149,20 +124,16 @@ def fixture_b(root: Path) -> dict[tuple[float, ...], str]:
 
 
 # =============================================================================
-# Step 2: import each fixture, mapping by name (never by index).
+# Step 2: import each fixture through the real importer, mapping by name
+# (never by index): the suggestion ladder maps what the registry knows and
+# the rest is created.
 # =============================================================================
 
 
-def step_import_fixture(
-    root: Path, registry: ClassRegistry, opensearch, *, import_id: str
-) -> tuple[DatasetScan, ResolvedMapping]:
-    scan = scan_yolo(root)
-    views = registry_class_views(registry)
-    dataset_classes = [c for c, n in scan.class_box_counts.items() if n > 0]
-    suggestions = {c: suggest_mapping(c, registry_classes=views) for c in dataset_classes}
+async def run_import(h: Harness, root: Path, *, name: str):
+    probe = h.prepare(h.request(root))
     entries = []
-    for dataset_class in dataset_classes:
-        s = suggestions[dataset_class]
+    for dataset_class, s in probe.suggestions.items():
         if s.action == 'map':
             entries.append(
                 ClassMappingEntry(dataset_class=dataset_class, action='map', class_id=s.class_id)
@@ -173,27 +144,13 @@ def step_import_fixture(
                     dataset_class=dataset_class, action='create', new_class_name=dataset_class
                 )
             )
-    resolved = resolve_mapping(dataset_classes, entries, registry_classes=views)
-    assert resolved.ok, resolved.errors
-    materialize_created_classes(resolved, registry)
-    return scan, resolved
-
-
-async def run_import(root: Path, registry: ClassRegistry, opensearch, *, import_id: str):
-    scan, resolved = step_import_fixture(root, registry, opensearch, import_id=import_id)
-    report = await import_dataset(
-        opensearch,
-        scan,
-        resolved,
-        import_id=import_id,
-        images_index=IMAGES_INDEX,
-        items_index=ITEMS_INDEX,
-    )
-    return report, resolved
+    store, _ = await h.run(h.request(root, entries, name=name))
+    assert store.job.read()['status'] == 'completed'
+    return store
 
 
 def assert_written_items_match_fixture_geometry(
-    opensearch, root: Path, expected: dict[tuple[float, ...], str]
+    h: Harness, root: Path, expected: dict[tuple[float, ...], str]
 ) -> None:
     """Tie each SPECIFIC box's geometry to its SPECIFIC written class
     name, by recomputing the same crop_id the importer used
@@ -201,22 +158,27 @@ def assert_written_items_match_fixture_geometry(
     or aggregate-count assertion would pass even if two boxes' names
     were swapped; this cannot, because it addresses one document per
     fixture box by its geometry-derived id."""
-    image_ids = {p.stem: _image_id_for(p) for p in (root / 'images/train').glob('*.jpg')}
+    image_ids = {
+        d['import_source_stem']: d['image_id']
+        for d in h.images.values()
+        if d.get('image_path', '').startswith(str(root))
+    }
     assert image_ids, 'fixture wrote no images'
     matched = 0
     for bbox, expected_name in expected.items():
-        found = False
-        for image_id in image_ids.values():
-            cid = _crop_id(image_id, list(bbox))
-            doc = opensearch.docs(ITEMS_INDEX).get(cid)
-            if doc is not None:
-                assert doc['class_name'] == expected_name, (
-                    f'box {bbox} imported as {doc["class_name"]!r}, expected {expected_name!r}'
-                )
-                found = True
-                matched += 1
-                break
-        assert found, f'no item doc found for fixture box {bbox} ({expected_name})'
+        doc = next(
+            (
+                h.items[cid]
+                for image_id in image_ids.values()
+                if (cid := _crop_id(image_id, list(bbox))) in h.items
+            ),
+            None,
+        )
+        assert doc is not None, f'no item doc found for fixture box {bbox} ({expected_name})'
+        assert doc['class_name'] == expected_name, (
+            f'box {bbox} imported as {doc["class_name"]!r}, expected {expected_name!r}'
+        )
+        matched += 1
     assert matched == len(expected)
 
 
@@ -228,14 +190,14 @@ def assert_written_items_match_fixture_geometry(
 
 
 async def step_real_export(
-    opensearch, registry: ClassRegistry, tmp_path: Path
+    h: Harness, registry: ClassRegistry, tmp_path: Path
 ) -> tuple[Path, dict[int, int]]:
     cfg = CurationConfig(
-        items_index=ITEMS_INDEX,
-        images_index=IMAGES_INDEX,
+        items_index=h.cfg.items_index,
+        images_index=h.cfg.images_index,
         export_root=tmp_path / 'exports',
     )
-    service = GenericYoloExportService(opensearch, config=cfg, registry=registry)
+    service = GenericYoloExportService(h.os, config=cfg, registry=registry)
     result = await service.export_dataset(version_tag='e2e', copy_images=False)
     export_dir = Path(result.export_dir)
     class_registry_payload = json.loads((export_dir / 'class_registry.json').read_text())
@@ -283,6 +245,11 @@ def assert_exported_labels_match_fixture_geometry(
 # dense mapping itself now comes from the real exporter's
 # class_registry.json (step_real_export), not test-local code.
 # =============================================================================
+
+
+def _targets(store) -> list[dict]:
+    raw = store.read_mapping()['targets']
+    return [{'dataset_class': k, **v} for k, v in raw.items()]
 
 
 def step_stub_train_manifest(dense_mapping: dict[int, int], names: list[str]) -> dict:
@@ -334,10 +301,9 @@ def step_predict(dense_class_id: int, remap) -> tuple[int, str | None, int]:
 
 
 @pytest.mark.asyncio
-async def test_class_identity_holds_at_every_hop(tmp_path: Path) -> None:
-    QueryFakeOpenSearch = _query_fake()
-    opensearch = QueryFakeOpenSearch()
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+async def test_class_identity_holds_at_every_hop(tmp_path: Path, monkeypatch) -> None:
+    h = Harness(tmp_path / 'state', monkeypatch, root=tmp_path)
+    registry = h.registry
 
     root_a = tmp_path / 'fixture_a'
     root_b = tmp_path / 'fixture_b'
@@ -345,28 +311,30 @@ async def test_class_identity_holds_at_every_hop(tmp_path: Path) -> None:
     expected_b = fixture_b(root_b)
     expected_all = {**expected_a, **expected_b}
 
-    report_a, resolved_a = await run_import(root_a, registry, opensearch, import_id='imp_a')
-    assert report_a.items_created == 2
-    report_b, resolved_b = await run_import(root_b, registry, opensearch, import_id='imp_b')
-    assert report_b.items_created == 3
+    store_a = await run_import(h, root_a, name='imp_a')
+    assert store_a.job.read()['report']['items_created'] == 2
+    store_b = await run_import(h, root_b, name='imp_b')
+    assert store_b.job.read()['report']['items_created'] == 3
+    resolved_a = {t['dataset_class']: t for t in _targets(store_a)}
+    resolved_b = {t['dataset_class']: t for t in _targets(store_b)}
 
     reg = registry.load()
     names_by_id = {c.class_id: c.class_name for c in reg.classes}
     assert set(names_by_id.values()) == {'car', 'truck', 'bus'}
     # The two imports' resolved targets must agree on car/truck's ids
     # (fixture B did not recreate them despite a different data.yaml order).
-    assert resolved_a.targets['car'].class_id == resolved_b.targets['car'].class_id
-    assert resolved_a.targets['truck'].class_id == resolved_b.targets['truck'].class_id
+    assert resolved_a['car']['class_id'] == resolved_b['car']['class_id']
+    assert resolved_a['truck']['class_id'] == resolved_b['truck']['class_id']
 
     # M4 fix: tie EACH box's geometry to its SPECIFIC written class name,
     # not an aggregate name-set / count check that a car<->truck swap
     # would still pass.
-    assert_written_items_match_fixture_geometry(opensearch, root_a, expected_a)
-    assert_written_items_match_fixture_geometry(opensearch, root_b, expected_b)
+    assert_written_items_match_fixture_geometry(h, root_a, expected_a)
+    assert_written_items_match_fixture_geometry(h, root_b, expected_b)
 
     # M4 fix: export through the real production exporter, not test-local
     # dense-mapping code.
-    export_dir, dense_mapping = await step_real_export(opensearch, registry, tmp_path)
+    export_dir, dense_mapping = await step_real_export(h, registry, tmp_path)
     assert_exported_labels_match_fixture_geometry(export_dir, expected_all)
 
     dense_names: list[str] = [''] * len(dense_mapping)

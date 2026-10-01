@@ -262,13 +262,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — zero call sites) were left in place; see the handback report.
 
 ### Added
-- **W10 dataset import (partial): the lock rule, class-name mapping, and a
-  reduced-scope import job.** See
-  `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the
-  full spec and the wave handback report for the exact deferred list
-  (no ledger/resume/backpressure/undo/archive-upload/negatives/holdout/
-  `propose` processing/region `parents: detect`/reprocess-route
-  unification this pass).
+- **W10 dataset import: `/datasets/imports` (preview, start, status, cancel,
+  list, resume, undo), archive uploads and the OpenProcessor-export reader.**
+  A chunked, persisted, resumable importer on the shared jobs volume
+  (`dataset_import/{prepare,runner,chunk,store,undo,upload,op_export}.py`):
+  - Class identity is the name in the project's registry; every dataset class
+    needs a `map`/`create`/`skip`/`region` decision, pinned in `mapping.json`
+    and consumed (not re-resolved) on resume. `import_key` (project, source
+    hash, name-based mapping, write-affecting options) makes a repeated
+    request idempotent (`reused`); one import per project at a time.
+  - Labels are written through `class_label_update` / `ItemLabel.imported`; a
+    human edit between plan and write still wins (the merger re-checks the
+    lock inside the OCC write). A write-ahead ledger keeps `created` vs
+    `updated` truthful across a mid-chunk crash; undo restores each class
+    snapshot or region `edit_history`, deletes created items (and crops),
+    deprecates created classes, and a second undo reports zeros.
+  - Negatives, splits, `test` holdout freeze, `processing: propose` (the
+    shared `detect_items` path), region class labels with `parents: detect`,
+    and backpressure on the region worker (`OP_DATASET_IMPORT_MAX_PENDING`).
+  - Uploads: only regular files and directories, member-count / bytes-written
+    / compression-ratio caps, content-addressed extraction, 413 on the stream
+    cap; every path is checked after symlink resolution.
+  - A thin `scripts/curation/import_labeled_dataset.py` client replaces the
+    old labeled mode. New env vars are documented in `env.template`.
+- **W10 unified `POST /reprocess`** (scopes `detect|region|vlm|embed`)
+  replaces the requeue route, `clear_detection` and the retry endpoints;
+  larger detect/embed runs are file-backed jobs. `ActivationImpact` gains
+  `suggested_reprocess`.
+- **W10 export**: negative frames, split pinning and the frozen test-holdout
+  record; items and regions carry `locked` / import provenance on the wire.
+- **W10 dataset import (earlier slice): the lock rule, class-name mapping.**
+  See `docs/design/openprocessor_internal/any_domain_plan.md` W10 for the spec.
   - `src/clients/occ_locks.py` (new): `is_locked_class` / `is_locked_box`
     / `is_locked_item` / `_is_locked_marker` — the lock rule. Replaces
     `is_human_owned_class` (superset semantics: also locks validated
@@ -280,21 +304,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     every human AND dataset-import class-label write goes through
     (`tests/test_class_label_single_writer.py` gates it).
   - New `src/services/curation/dataset_import/` package: `scan.py` /
-    `yolo.py` / `coco.py` (format detection + reading; OpenProcessor's
-    own export format is not yet detected/read), `mapping.py`
+    `yolo.py` / `coco.py` (format detection + reading), `mapping.py`
     (`suggest_mapping`/`resolve_mapping` — class mapping is always by
     NAME, never by index; exported for P4's combine-projects wave),
-    `regions.py` (`attach_region_boxes`), `issues.py` (the served issue
-    catalog), `job.py` (`import_dataset` — synchronous, in-process,
-    `processing: none` only).
+    `issues.py` (the served issue catalog).
   - `tests/integration/test_class_identity_e2e.py`: two YOLO fixtures
     with the same class names in different `data.yaml` index orders (one
     with an extra class) import → export (dense remap) → stub-train
     (`class_remap.json`) → promote (`labels.txt`) → predict, asserting
     `(class_id, class_name)` pairing at every hop.
-  - `src/services/projects/busy.py` gains `_dataset_import_jobs()` (the
-    P2 busy-inventory hook) — returns `[]` today since the reduced-scope
-    job writes no persistent state yet; ready for a later pass.
+  - `src/services/projects/busy.py`'s `_dataset_import_jobs()` (the P2
+    busy-inventory hook) reports a project's live import.
 
 ### Changed
 - `DetectedItem` (`item_doc.py`) gains an optional `label: ItemLabel`
@@ -303,12 +323,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every existing caller).
 - `confident_class_sources()` (`ingest_class_sources.py`) now includes
   `LABEL_IMPORT_CLASS_SOURCE` (`external_label`).
+- Re-ingest keeps a locked item's whole class state (`class_source`,
+  `class_validated`, `test_holdout`) -- fixes #31; a pruned `names` map with
+  `nc == max + 1` is accepted.
 
 ### Removed
 - **W10 (breaking, no back-compat): `POST /import_labels` and
   `/import_labels/batch`, deleted outright (no 410).** Importing an
-  already-labeled dataset is `POST /datasets/imports` — not yet built
-  this pass; see the handback report. `src/services/curation/
+  already-labeled dataset is `POST /datasets/imports`. `src/services/curation/
   label_import.py` (the parallel, non-OCC item writer these routes used)
   is deleted entirely, along with `IngestBatchItem.label_txt_path`,
   `IngestBatchRequest.label_source`/`detect_mismatches`, and the

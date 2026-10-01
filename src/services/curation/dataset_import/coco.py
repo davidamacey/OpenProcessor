@@ -127,6 +127,7 @@ def read_coco(
     issues: IssueCollector,
     path_guard: PathGuard | None = None,
     size_checks: int = PREVIEW_SIZE_CHECKS,
+    class_ids: dict[str, int] | None = None,
 ) -> list[ScanEntry]:
     """Read one or more COCO annotation files into ``ScanEntry`` rows.
 
@@ -145,6 +146,10 @@ def read_coco(
         if data is None:
             continue
         categories = _categories(data, issues, f.path.name)
+        if class_ids is not None:
+            for cat_id, cat_name in categories.items():
+                if isinstance(cat_id, int):
+                    class_ids[cat_name] = cat_id
 
         anns_by_image: dict[Any, list[dict[str, Any]]] = {}
         for ann in data['annotations']:
@@ -224,13 +229,15 @@ def scan_coco(
     files: list[CocoAnnotationFile], *, path_guard: PathGuard | None = None
 ) -> DatasetScan:
     issues = IssueCollector()
-    entries = read_coco(files, issues=issues, path_guard=path_guard)
+    class_ids: dict[str, int] = {}
+    entries = read_coco(files, issues=issues, path_guard=path_guard, class_ids=class_ids)
     root = files[0].images_dir if files else Path()
     return DatasetScan(
         format='coco',
         root=root,
         entries=entries,
         issues=issues,
+        class_ids=class_ids,
         class_box_counts=class_box_counts(entries),
     )
 

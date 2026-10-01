@@ -7,8 +7,7 @@ import os
 from pathlib import Path
 
 
-def _int_env(name: str, default: int) -> int:
-    raw = os.environ.get(name)
+def _positive_int(raw: str | None, default: int) -> int:
     if raw is None or not raw.strip():
         return default
     try:
@@ -23,35 +22,35 @@ def imports_base_dir() -> Path:
 
 
 def import_chunk_size() -> int:
-    return _int_env('OP_DATASET_IMPORT_CHUNK', 64)
+    return _positive_int(os.environ.get('OP_DATASET_IMPORT_CHUNK'), 64)
 
 
 def import_max_pending() -> int:
-    return _int_env('OP_DATASET_IMPORT_MAX_PENDING', 2000)
+    return _positive_int(os.environ.get('OP_DATASET_IMPORT_MAX_PENDING'), 2000)
 
 
 def import_max_failed_chunks() -> int:
-    return _int_env('OP_DATASET_IMPORT_MAX_FAILED_CHUNKS', 5)
+    return _positive_int(os.environ.get('OP_DATASET_IMPORT_MAX_FAILED_CHUNKS'), 5)
 
 
 def preview_max_files() -> int:
-    return _int_env('OP_DATASET_PREVIEW_MAX_FILES', 500_000)
+    return _positive_int(os.environ.get('OP_DATASET_PREVIEW_MAX_FILES'), 500_000)
 
 
 def upload_max_bytes() -> int:
-    return _int_env('OP_DATASET_UPLOAD_MAX_BYTES', 2 * 1024**3)
+    return _positive_int(os.environ.get('OP_DATASET_UPLOAD_MAX_BYTES'), 2 * 1024**3)
 
 
 def upload_max_files() -> int:
-    return _int_env('OP_DATASET_UPLOAD_MAX_FILES', 200_000)
+    return _positive_int(os.environ.get('OP_DATASET_UPLOAD_MAX_FILES'), 200_000)
 
 
 def upload_ttl_hours() -> int:
-    return _int_env('OP_DATASET_UPLOAD_TTL_H', 72)
+    return _positive_int(os.environ.get('OP_DATASET_UPLOAD_TTL_H'), 72)
 
 
 def reprocess_sync_max() -> int:
-    return _int_env('OP_REPROCESS_SYNC_MAX', 20)
+    return _positive_int(os.environ.get('OP_REPROCESS_SYNC_MAX'), 20)
 
 
 # Per-file read caps for the small text files a dataset is described by. A

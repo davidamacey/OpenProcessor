@@ -219,49 +219,71 @@ def test_export_jobs_stub_reports_nothing(tmp_path) -> None:
     assert _export_jobs(record) == []
 
 
+IMPORT_A = 'imp_20260101T000000_aaaaaaaa'
+IMPORT_B = 'imp_20260101T000000_bbbbbbbb'
+
+
+def _write_import(record, import_id: str, state: dict, *, heartbeat: bool = True) -> None:
+    from src.services.curation.dataset_import.limits import imports_base_dir
+
+    directory = imports_base_dir() / 'projects' / record.slug / import_id
+    directory.mkdir(parents=True)
+    (directory / 'state.json').write_text(json.dumps({'import_id': import_id, **state}))
+    if heartbeat:
+        (directory / 'heartbeat').touch()
+    assert directory.is_dir()
+
+
+@pytest.fixture(autouse=True)
+def _imports_dir(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
+
+
 def test_dataset_import_jobs_reports_nothing_with_no_state_dir(tmp_path) -> None:
-    """Reduced-scope gap (W10, dataset_import/job.py): import_dataset()
-    writes no state.json this pass, so there is nothing on disk to find
-    busy yet -- this hook reports [] until a later pass adds
-    ledger/resume persistence, at which point it starts working with no
-    further P2 wiring."""
     record = _record('alpha', tmp_path)
     assert _dataset_import_jobs(record) == []
 
 
-def test_dataset_import_jobs_reads_the_conventional_state_layout(tmp_path) -> None:
-    """Once something writes
-    <project_state_dir>/dataset_imports/<import_id>/state.json, this hook
-    picks it up with no further wiring."""
+@pytest.mark.parametrize('status', ['queued', 'running', 'paused_backpressure', 'undoing'])
+def test_dataset_import_jobs_reports_a_live_import(tmp_path, status) -> None:
     record = _record('alpha', tmp_path)
-    state_dir = record.resources.project_state_dir / 'dataset_imports' / 'imp_1'
-    state_dir.mkdir(parents=True)
-    (state_dir / 'state.json').write_text(
-        json.dumps({'import_id': 'imp_1', 'status': 'running', 'started_at': '2026-01-01T00:00:00'})
-    )
-    jobs = _dataset_import_jobs(record)
-    assert jobs == [JobRef(kind='dataset_import', job_id='imp_1', started_at='2026-01-01T00:00:00')]
+    _write_import(record, IMPORT_A, {'status': status, 'started_at': '2026-01-01T00:00:00'})
+    assert _dataset_import_jobs(record) == [
+        JobRef(kind='dataset_import', job_id=IMPORT_A, started_at='2026-01-01T00:00:00')
+    ]
 
 
-def test_dataset_import_jobs_ignores_terminal_status(tmp_path) -> None:
+@pytest.mark.parametrize(
+    'status', ['completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted', 'undone']
+)
+def test_dataset_import_jobs_ignores_terminal_status(tmp_path, status) -> None:
     record = _record('alpha', tmp_path)
-    state_dir = record.resources.project_state_dir / 'dataset_imports' / 'imp_2'
-    state_dir.mkdir(parents=True)
-    (state_dir / 'state.json').write_text(json.dumps({'import_id': 'imp_2', 'status': 'completed'}))
+    _write_import(record, IMPORT_A, {'status': status})
+    assert _dataset_import_jobs(record) == []
+
+
+def test_dataset_import_jobs_ignores_a_dead_workers_import(tmp_path) -> None:
+    """No heartbeat for longer than the stale window: the process died."""
+    import os
+    import time
+
+    record = _record('alpha', tmp_path)
+    _write_import(record, IMPORT_A, {'status': 'running'})
+    from src.services.curation.dataset_import.limits import imports_base_dir
+
+    heartbeat = imports_base_dir() / 'projects' / 'alpha' / IMPORT_A / 'heartbeat'
+    old = time.time() - 3600
+    os.utime(heartbeat, (old, old))
     assert _dataset_import_jobs(record) == []
 
 
 def test_dataset_import_jobs_scoped_to_its_own_dir(tmp_path) -> None:
     alpha = _record('alpha', tmp_path)
     beta = _record('beta', tmp_path)
-    for record, import_id in ((alpha, 'imp_a'), (beta, 'imp_b')):
-        state_dir = record.resources.project_state_dir / 'dataset_imports' / import_id
-        state_dir.mkdir(parents=True)
-        (state_dir / 'state.json').write_text(
-            json.dumps({'import_id': import_id, 'status': 'running'})
-        )
-    assert [j.job_id for j in _dataset_import_jobs(alpha)] == ['imp_a']
-    assert [j.job_id for j in _dataset_import_jobs(beta)] == ['imp_b']
+    _write_import(alpha, IMPORT_A, {'status': 'running'})
+    _write_import(beta, IMPORT_B, {'status': 'running'})
+    assert [j.job_id for j in _dataset_import_jobs(alpha)] == [IMPORT_A]
+    assert [j.job_id for j in _dataset_import_jobs(beta)] == [IMPORT_B]
 
 
 def test_detection_worker_inflight_reads_the_real_liveness_file(tmp_path) -> None:

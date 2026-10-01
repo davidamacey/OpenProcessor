@@ -111,6 +111,8 @@ _LEAF_MATCHERS = {
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
     'wildcard': _wildcard_matches,
     'nested': _nested_matches,
+    # Scoring is irrelevant to which docs match.
+    'function_score': lambda doc, clause: matches(doc, clause.get('query')),
 }
 
 

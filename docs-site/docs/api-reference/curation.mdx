@@ -35,11 +35,12 @@ silent no-op.
 
 ## Ingest and label import
 
-Importing an already-labeled YOLO dataset as item class labels is a
-**planned** `POST /datasets/imports` route (not built yet) — the routes
-this section used to list here (`/import_labels`, `/import_labels/batch`)
-are removed. `scripts/curation/import_labeled_dataset.py --images-only`
-ingests images with no label import today.
+Importing an already-labeled dataset (YOLO, COCO or an OpenProcessor
+export) is `POST /datasets/imports`, with `/datasets/preview`,
+`/datasets/uploads` (zip / tar), `/datasets/imports/{id}` (status, issues,
+entries, cancel, resume, undo) and `/datasets/formats`. The routes this
+section used to list here (`/import_labels`, `/import_labels/batch`) are
+removed. `scripts/curation/import_labeled_dataset.py` is a thin client.
 
 | Method | Path | Purpose |
 |---|---|---|

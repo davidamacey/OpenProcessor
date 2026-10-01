@@ -80,6 +80,8 @@ async def export_yolo(
             max_images=payload.max_images,
             dedup_threshold=payload.dedup_threshold,
             require_fully_labeled_images=payload.require_fully_labeled_images,
+            split_mode=payload.split_mode,
+            include_negative_frames=payload.include_negative_frames,
         )
     except NothingToExportError as exc:
         # Nothing exportable is the caller's data state, not a server

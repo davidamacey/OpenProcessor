@@ -1,68 +1,43 @@
 #!/usr/bin/env python3
-"""Bulk-ingest a YOLO dataset's images (``--images-only`` only).
+"""Import an already-labeled dataset (YOLO, COCO or an OpenProcessor export)
+through ``POST {api_base}/projects/{project}/datasets/imports``.
 
-Walks a YOLO dataset (``data.yaml`` splits, or ``images/<split>`` /
-``<split>/images`` directories) and, per split, sends every image to
-``POST {api_base}/ingest/batch``. The server ingests the image (detector +
-embeddings). Use it when the dataset's labels are not item classes to
-import — e.g. whole frames labeled with the *region* class
-(``names: {0: defect}``) that should be checked against the region cascade
-afterwards with ``eval_regions_vs_gt.py``, not imported into the item
-registry.
+A thin client of the import API: the SERVER scans the dataset, maps its
+classes by name, imports the labels and images, and keeps the ledger, resume
+and undo. This script previews, builds the class mapping from the flags,
+starts (or resumes) the import and polls it to the end.
 
-**Labeled-import mode (posting ground-truth boxes as validated item labels,
-and ``--relabel-duplicates``) is currently disabled.** It depended on
-``/ingest/batch`` label fields and ``/import_labels/batch``, both removed
-from this repo's API surface; the planned replacement,
-``POST /datasets/imports`` fronting ``dataset_import.import_dataset()``, is
-not built yet (W10 Opus review 2026-09-28, finding M1). Passing anything
-other than ``--images-only`` fails immediately with a clear error — pass
-``--images-only``, or call ``src.services.curation.dataset_import.job.import_dataset()``
-directly for a labeled import today.
+``--dataset`` is a path on the SERVER (a mounted source root). ``--path-map
+LOCAL=SERVER`` rewrites a local path prefix to it.
 
-``--images-only`` behavior: no registry class check, no label import, no
-disagreement report. Resume, checkpoints, ``--limit`` (stratified by
-positive = non-empty label file), ``--seed``, ``--splits`` and
-``--path-map`` all still apply, and local label-file stats (positives,
-backgrounds, label row counts) are still collected and reported for context.
+Class mapping (every dataset class with boxes needs one)::
 
-Resume, at two levels, under ``--state-dir``:
+    --accept-suggestions         take exact / case-insensitive / region matches
+    --map CLASS=CLASS_ID         map to an existing class
+    --create CLASS[=NAME]        create a class (default name: the dataset's)
+    --skip CLASS                 drop its boxes (the frames stay unlabeled)
+    --region CLASS               a region class (needs an active region profile)
+    --images-only                skip EVERY class: index the images, no labels
 
-* ``checkpoints/<split>.json`` — a finished split is skipped on re-run
-  (``--force`` redoes it); its counts still roll into the summary.
-* ``progress/<split>.jsonl`` — one line per completed batch (paths +
-  counts), so an interrupted split resumes where it stopped.
-
-Server-side content dedup additionally makes a re-sent image a cheap
-``duplicate``.
-
-Every run writes ``ingested/<split>.jsonl`` under ``--state-dir``: one line
-per image that landed (``image``, ``server_path``, ``image_id``,
-``status``, ``positive``). ``eval_regions_vs_gt.py --state-dir`` reads it
-as its cohort.
+``--state-dir DIR`` writes ``DIR/ingested/<split>.jsonl`` (one line per image:
+``image``, ``server_path``, ``image_id``, ``status``, ``positive``), the
+cohort ``eval_regions_vs_gt.py --state-dir`` reads.
 
 Usage::
 
-    # Preview: discovered splits, positives/backgrounds
-    python3 scripts/curation/import_labeled_dataset.py --dataset /data/ds/data.yaml \\
-        --api-base http://localhost:4603/curation --path-map /data/ds=/datasets/ds \\
-        --images-only --dry-run
-
-    # Region ground truth: ingest images only, then evaluate the region cascade
-    python3 scripts/curation/import_labeled_dataset.py --dataset /data/regions/data.yaml \\
-        --images-only --splits test --limit 1000 --state-dir ./state/regions
+    python3 scripts/curation/import_labeled_dataset.py --dataset /data/source/ds \\
+        --accept-suggestions --dry-run
+    python3 scripts/curation/import_labeled_dataset.py --project cars \\
+        --dataset /data/source/ds --map Car=2 --create automobile=car --skip person
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import logging
 import sys
 import time
-from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -74,382 +49,236 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from scripts.curation.ingest_upload import map_identifier, parse_path_map
-from scripts.curation.yolo_dataset import (
-    DatasetError,
-    Sample,
-    discover,
-    label_path_for,  # noqa: F401 - public re-export (discovery moved to yolo_dataset)
-    load_samples,
-    stratified_sample,
-)
-from src.config import get_curation_config
+from src.config.curation import base_curation_config as get_curation_config
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 logger = logging.getLogger('import_labeled_dataset')
 
-COUNT_KEYS = (
-    'images',
-    'positives',
-    'backgrounds',
-    'label_rows',
-    'label_files_missing',
-    'successful',
-    'duplicates',
-    'failed',
+_TERMINAL = frozenset(
+    {'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted', 'undone'}
 )
 
 
-# =============================================================================
-# Import
-# =============================================================================
-
-
-@dataclass
-class ImportConfig:
-    api_base: str
-    state_dir: Path
-    source_prefix: str
-    path_map: tuple[str, str] | None = None
-    batch_size: int = 32
-    concurrency: int = 4
-    images_only: bool = False
-    force: bool = False
-    retries: int = 3
-    retry_backoff_s: float = 2.0
-    timeout_s: float = 600.0
-
-
-def _zero() -> dict[str, int]:
-    return dict.fromkeys(COUNT_KEYS, 0)
-
-
-def _add(into: dict[str, int], other: dict[str, Any]) -> None:
-    for k in COUNT_KEYS:
-        into[k] += int(other.get(k, 0))
-
-
-class DatasetImporter:
-    """Images-only dataset ingest driver. Labeled-import mode is disabled --
-    see the module docstring."""
-
-    def __init__(self, cfg: ImportConfig, client: httpx.AsyncClient) -> None:
-        self.cfg = cfg
-        self.client = client
-        for sub in ('checkpoints', 'progress', 'ingested'):
-            (cfg.state_dir / sub).mkdir(parents=True, exist_ok=True)
-
-    def server_path(self, local: Path) -> str:
-        return map_identifier(local, self.cfg.path_map)
-
-    # ------------------------------------------------------------- server
-
-    async def _post(self, url: str, body: dict[str, Any]) -> dict[str, Any] | None:
-        for attempt in range(1, self.cfg.retries + 1):
-            try:
-                resp = await self.client.post(url, json=body, timeout=self.cfg.timeout_s)
-                if resp.status_code < 500:
-                    resp.raise_for_status()
-                    return resp.json()
-                logger.warning('%s -> HTTP %d (attempt %d)', url, resp.status_code, attempt)
-            except httpx.HTTPStatusError as exc:
-                logger.error('%s rejected: %s', url, exc.response.text[:300])
-                return None
-            except httpx.HTTPError as exc:
-                logger.warning('%s failed (attempt %d): %s', url, attempt, exc)
-            if attempt < self.cfg.retries:
-                await asyncio.sleep(self.cfg.retry_backoff_s * attempt)
-        return None
-
-    async def import_batch(self, split: str, batch: list[Sample]) -> dict[str, Any] | None:
-        """One ``/ingest/batch`` call (images only). Returns this batch's
-        counts, or None on failure."""
-        by_server = {self.server_path(s.image): s for s in batch}
-        items: list[dict[str, Any]] = [
-            {'path': self.server_path(s.image), 'source': f'{self.cfg.source_prefix}:{split}'}
-            for s in batch
-        ]
-        result = await self._post(f'{self.cfg.api_base}/ingest/batch', {'items': items})
-        if result is None:
-            return None
-
-        counts = _zero()
-        summary = result.get('summary') or {}
-        for key in ('successful', 'duplicates', 'failed'):
-            counts[key] = int(summary.get(key, 0))
-        rows = {r.get('image_path'): r for r in result.get('results') or []}
-        status = {p: r.get('status') for p, r in rows.items()}
-        landed = [(p, s) for p, s in by_server.items() if status.get(p) in ('success', 'duplicate')]
-        return {
-            'paths': [str(s.image) for _p, s in landed],
-            # The evaluator's cohort: a duplicate's items live under the
-            # *first* copy's image_id, so the id is what joins back to them.
-            'ingested': [
-                {
-                    'image': str(s.image),
-                    'server_path': p,
-                    'image_id': rows[p].get('image_id') or None,
-                    'status': status[p],
-                    'positive': s.positive,
-                }
-                for p, s in landed
-            ],
-            'counts': counts,
-        }
-
-    # -------------------------------------------------------------- split
-
-    def _load_progress(self, split: str) -> tuple[set[str], dict[str, int]]:
-        done: set[str] = set()
-        counts = _zero()
-        path = self.cfg.state_dir / 'progress' / f'{split}.jsonl'
-        if path.exists() and not self.cfg.force:
-            for line in path.read_text(encoding='utf-8').splitlines():
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                done.update(row['paths'])
-                _add(counts, row['counts'])
-        elif path.exists():
-            path.unlink()
-        return done, counts
-
-    def write_ingested_list(self, split: str) -> Path:
-        """Rebuild ``ingested/<split>.jsonl`` from the progress file.
-
-        Derived from progress (not appended per batch) so a resumed or
-        checkpoint-skipped split still yields its complete cohort.
-        """
-        out = self.cfg.state_dir / 'ingested' / f'{split}.jsonl'
-        progress = self.cfg.state_dir / 'progress' / f'{split}.jsonl'
-        seen: set[str] = set()
-        lines: list[str] = []
-        if progress.exists():
-            for line in progress.read_text(encoding='utf-8').splitlines():
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                entries = row.get('ingested') or [{'image': p} for p in row['paths']]
-                for entry in entries:
-                    if entry['image'] not in seen:
-                        seen.add(entry['image'])
-                        lines.append(json.dumps(entry))
-        out.write_text(''.join(f'{ln}\n' for ln in lines), encoding='utf-8')
-        return out
-
-    async def run_split(self, split: str, samples: list[Sample]) -> dict[str, int]:
-        counts = await self._run_split(split, samples)
-        self.write_ingested_list(split)
-        return counts
-
-    async def _run_split(self, split: str, samples: list[Sample]) -> dict[str, int]:
-        ckpt = self.cfg.state_dir / 'checkpoints' / f'{split}.json'
-        if ckpt.exists() and not self.cfg.force:
-            logger.info('[%s] checkpoint exists; skipping (use --force to redo)', split)
-            return json.loads(ckpt.read_text(encoding='utf-8'))['counts']
-
-        done, counts = self._load_progress(split)
-        pending = [s for s in samples if str(s.image) not in done]
-        counts['images'] = len(samples)
-        counts['positives'] = sum(1 for s in samples if s.positive)
-        counts['backgrounds'] = counts['images'] - counts['positives']
-        counts['label_rows'] = sum(s.n_labels for s in samples)
-        counts['label_files_missing'] = sum(1 for s in samples if not s.label_exists)
-        logger.info(
-            '[%s] %d images (%d positive, %d background), %d already done',
-            split,
-            len(samples),
-            counts['positives'],
-            counts['backgrounds'],
-            len(samples) - len(pending),
-        )
-
-        progress_path = self.cfg.state_dir / 'progress' / f'{split}.jsonl'
-        batches = [
-            pending[i : i + self.cfg.batch_size]
-            for i in range(0, len(pending), self.cfg.batch_size)
-        ]
-        started = time.monotonic()
-
-        async def _process(batch: list[Sample]) -> None:
-            out = await self.import_batch(split, batch)
-            if out is None:
-                counts['failed'] += len(batch)
-                return
-            _add(counts, out['counts'])
-            with progress_path.open('a', encoding='utf-8') as fh:
-                fh.write(json.dumps(out) + '\n')
-            handled = counts['successful'] + counts['duplicates'] + counts['failed']
-            rate = handled / max(1e-6, time.monotonic() - started)
-            logger.info('[%s] %d handled (%.1f img/s)', split, handled, rate)
-
-        async def _worker() -> None:
-            while batches:
-                await _process(batches.pop(0))
-
-        await asyncio.gather(*[_worker() for _ in range(max(1, self.cfg.concurrency))])
-
-        # Failed images are not in the progress file, so a re-run retries
-        # them; only a split with no failures is checkpointed as complete.
-        if counts['failed'] == 0:
-            ckpt.write_text(
-                json.dumps(
-                    {
-                        'split': split,
-                        'completed_at': datetime.now(UTC).isoformat(),
-                        'counts': counts,
-                    },
-                    indent=2,
-                ),
-                encoding='utf-8',
-            )
-        return counts
-
-
-def summarize(per_split: dict[str, dict[str, int]]) -> dict[str, Any]:
-    total = _zero()
-    for c in per_split.values():
-        _add(total, c)
-    return {
-        'generated_at': datetime.now(UTC).isoformat(),
-        'splits': dict(per_split),
-        'total': total,
-    }
-
-
-async def run(
-    cfg: ImportConfig,
-    client: httpx.AsyncClient,
-    splits: dict[str, list[Sample]],
-) -> dict[str, Any]:
-    importer = DatasetImporter(cfg, client)
-    per_split: dict[str, dict[str, int]] = {}
-    for split, samples in splits.items():
-        per_split[split] = await importer.run_split(split, samples)
-    summary = summarize(per_split)
-    (cfg.state_dir / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
-    return summary
-
-
-# =============================================================================
-# CLI
-# =============================================================================
+class ImportCliError(Exception):
+    pass
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    p.add_argument('--dataset', required=True, type=Path, help='data.yaml or dataset root')
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    add_project_argument(p)
     p.add_argument(
         '--api-base',
         default=f'http://localhost:4603{get_curation_config().api_prefix}',
-        help='Curation API mount; requests go to <api-base>/projects/<--project>/...',
+        help='API base including the curation prefix (default: %(default)s)',
     )
-    p.add_argument('--splits', default=None, help='Comma-separated subset (default: all found)')
+    p.add_argument('--dataset', required=True, help='Dataset path on the server')
+    p.add_argument('--path-map', default=None, help='LOCAL=SERVER prefix rewrite for --dataset')
     p.add_argument(
-        '--path-map',
-        type=parse_path_map,
-        default=None,
-        metavar='LOCAL=SERVER',
-        help='Rewrite the local dataset prefix to the path the API container sees',
+        '--format', default='auto', choices=['auto', 'yolo', 'coco', 'openprocessor_export']
     )
-    p.add_argument(
-        '--source-prefix', default=None, help='Image source tag prefix (<prefix>:<split>)'
-    )
-    p.add_argument('--state-dir', type=Path, default=None, help='Checkpoints, progress, report')
-    p.add_argument('--batch-size', type=int, default=32)
-    p.add_argument('--concurrency', type=int, default=4, help='Concurrent in-flight batches')
-    p.add_argument('--limit', type=int, default=None, help='Stratified sample of N per split')
-    p.add_argument('--seed', type=int, default=0, help='Seed for --limit sampling')
-    p.add_argument(
-        '--images-only',
-        action='store_true',
-        help='Ingest the dataset images without importing their labels. REQUIRED today -- '
-        'labeled-import mode is disabled (see module docstring); any run without this flag '
-        'fails immediately.',
-    )
-    p.add_argument('--force', action='store_true', help='Redo splits that have checkpoints')
-    p.add_argument('--dry-run', action='store_true', help='Discover only')
-    add_project_argument(p)
+    p.add_argument('--accept-suggestions', action='store_true')
+    p.add_argument('--map', action='append', default=[], metavar='CLASS=ID')
+    p.add_argument('--create', action='append', default=[], metavar='CLASS[=NAME]')
+    p.add_argument('--skip', action='append', default=[], metavar='CLASS')
+    p.add_argument('--region', action='append', default=[], metavar='CLASS')
+    p.add_argument('--images-only', action='store_true')
+    p.add_argument('--processing', default='none', choices=['none', 'propose'])
+    p.add_argument('--label-trust', default='validated', choices=['validated', 'suggestion'])
+    p.add_argument('--parents', default='auto', choices=['auto', 'labels', 'detect'])
+    p.add_argument('--missing-label', default='unlabeled', choices=['unlabeled', 'negative'])
+    p.add_argument('--freeze-test-split', dest='freeze', action='store_true', default=None)
+    p.add_argument('--no-freeze-test-split', dest='freeze', action='store_false')
+    p.add_argument('--name', default='cli_import')
+    p.add_argument('--force', action='store_true')
+    p.add_argument('--dry-run', action='store_true', help='Preview only')
+    p.add_argument('--resume', default=None, metavar='IMPORT_ID', help='Resume an import')
+    p.add_argument('--state-dir', type=Path, default=None)
+    p.add_argument('--poll-interval', type=float, default=2.0)
+    p.add_argument('--timeout', type=float, default=7 * 24 * 3600.0)
     return p
 
 
-async def _async_main(args: argparse.Namespace) -> int:
-    if not args.images_only:
-        # W10 (Opus review 2026-09-28, finding M1): labeled mode posted
-        # forbidden fields (label_txt_path/detect_mismatches) to
-        # /ingest/batch (IngestBatchRequest is extra='forbid' -- every
-        # batch 422s) and relabel-duplicates posted to the deleted
-        # /import_labels/batch (404). Neither surface exists anymore;
-        # dataset_import's Python API (import_dataset()) has no HTTP
-        # route yet to front it (planned: POST /datasets/imports), so the
-        # labeled-mode code was deleted rather than kept unreachable. Fail
-        # loudly and immediately here -- before any dataset discovery,
-        # project binding, or HTTP call -- instead of erroring deep in a
-        # request with no clear signal to the operator.
-        logger.error(
-            'Labeled import mode is not available: it posted to routes this repo removed '
-            "(/ingest/batch's label fields, /import_labels/batch), and the replacement "
-            '(POST /datasets/imports, fronting dataset_import.import_dataset()) is not built '
-            'yet. Pass --images-only to ingest images without labels, or call '
-            'src.services.curation.dataset_import.job.import_dataset() directly for a labeled '
-            'import today.'
+def apply_path_map(path: str, path_map: str | None) -> str:
+    if not path_map:
+        return path
+    local, sep, server = path_map.partition('=')
+    if not sep or not local or not server:
+        raise ImportCliError('--path-map must be LOCAL=SERVER')
+    return server + path[len(local) :] if path.startswith(local) else path
+
+
+def build_mapping(args: argparse.Namespace, dataset_classes: list[str]) -> list[dict[str, Any]]:
+    """The explicit mapping entries the flags describe. ``--images-only``
+    skips every class the preview found."""
+    entries: dict[str, dict[str, Any]] = {}
+
+    def put(name: str, entry: dict[str, Any]) -> None:
+        if name in entries:
+            raise ImportCliError(f'class {name!r} is given more than once')
+        entries[name] = {'dataset_class': name, **entry}
+
+    if args.images_only:
+        for name in dataset_classes:
+            put(name, {'action': 'skip'})
+    for spec in args.map:
+        name, sep, class_id = spec.partition('=')
+        if not sep or not class_id.isdigit():
+            raise ImportCliError(f'--map expects CLASS=ID, got {spec!r}')
+        put(name, {'action': 'map', 'class_id': int(class_id)})
+    for spec in args.create:
+        name, _, new_name = spec.partition('=')
+        put(name, {'action': 'create', 'new_class_name': new_name or name})
+    for name in args.skip:
+        put(name, {'action': 'skip'})
+    for name in args.region:
+        put(name, {'action': 'region'})
+    return list(entries.values())
+
+
+def _request_body(args: argparse.Namespace, mapping: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        'source': {'path': apply_path_map(args.dataset, args.path_map), 'format': args.format},
+        'mapping': mapping,
+        'accept_suggestions': args.accept_suggestions,
+        'options': {
+            'processing': args.processing,
+            'label_trust': args.label_trust,
+            'parents': args.parents,
+            'missing_label': args.missing_label,
+            'freeze_test_split': args.freeze,
+            'name': args.name,
+            'force': args.force,
+        },
+    }
+
+
+def _check(resp: httpx.Response) -> dict[str, Any]:
+    if resp.status_code >= 400:
+        detail = (
+            resp.json().get('detail')
+            if resp.headers.get('content-type', '').startswith('application/json')
+            else resp.text
         )
-        return 1
-    try:
-        found, _names = discover(args.dataset)
-    except DatasetError as exc:
-        logger.error('%s', exc)
-        return 1
-    wanted = [s.strip() for s in args.splits.split(',')] if args.splits else list(found)
-    missing = [s for s in wanted if s not in found]
-    if missing:
-        logger.error('splits not in dataset: %s (found: %s)', missing, sorted(found))
-        return 1
-    splits = {}
-    for name in wanted:
-        samples = load_samples(found[name])
-        if args.limit is not None:
-            samples = stratified_sample(samples, args.limit, args.seed)
-        splits[name] = samples
-    dataset_root = args.dataset.parent if args.dataset.is_file() else args.dataset
-    cfg = ImportConfig(
-        api_base=f'{args.api_base.rstrip("/")}/projects/{args.project}',
-        state_dir=args.state_dir or Path('dataset_import_state') / dataset_root.name,
-        source_prefix=args.source_prefix or dataset_root.name,
-        path_map=args.path_map,
-        batch_size=max(1, args.batch_size),
-        concurrency=max(1, args.concurrency),
-        images_only=args.images_only,
-        force=args.force,
+        raise ImportCliError(
+            f'{resp.request.method} {resp.request.url.path}: {resp.status_code} {detail}'
+        )
+    return resp.json()
+
+
+def write_ingested(client: httpx.Client, base: str, import_id: str, state_dir: Path) -> int:
+    """``ingested/<split>.jsonl`` from the import's ledger entries."""
+    out = state_dir / 'ingested'
+    out.mkdir(parents=True, exist_ok=True)
+    rows: dict[str, list[dict[str, Any]]] = {}
+    page = 1
+    while True:
+        body = _check(
+            client.get(
+                f'{base}/datasets/imports/{import_id}/entries',
+                params={'page': page, 'page_size': 500},
+            )
+        )
+        for e in body['items']:
+            if e['status'] != 'ok':
+                continue
+            rows.setdefault(e.get('split') or 'unsplit', []).append(
+                {
+                    'image': e['rel_path'],
+                    'server_path': e.get('image_path'),
+                    'image_id': e.get('image_id'),
+                    'status': 'success' if e.get('image_created') else 'duplicate',
+                    'positive': e.get('label_state') == 'labeled',
+                }
+            )
+        if page * 500 >= body['total']:
+            break
+        page += 1
+    for split, items in rows.items():
+        (out / f'{split}.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in items))
+    return sum(len(v) for v in rows.values())
+
+
+def poll(
+    client: httpx.Client, base: str, import_id: str, *, interval: float, timeout: float
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last = ''
+    while True:
+        job = _check(client.get(f'{base}/datasets/imports/{import_id}'))
+        prog = job['progress']
+        line = f'{job["status"]}: {prog["images_done"]}/{prog["images_total"]} images'
+        if line != last:
+            logger.info(line)
+            last = line
+        if job['status'] in _TERMINAL:
+            return job
+        if time.monotonic() > deadline:
+            raise ImportCliError(f'timed out waiting for {import_id}')
+        time.sleep(interval)
+
+
+def run(args: argparse.Namespace, client: httpx.Client) -> int:
+    base = f'{args.api_base.rstrip("/")}/projects/{args.project}'
+    if args.resume:
+        job = _check(client.post(f'{base}/datasets/imports/{args.resume}/resume'))
+        return _finish(args, client, base, job)
+    preview = _check(client.post(f'{base}/datasets/preview', json=_request_body(args, [])))
+    classes = [c['dataset_class'] for c in preview['classes']]
+    logger.info(
+        'preview: %s, %d images, %d boxes, %d class(es)',
+        preview['format'],
+        preview['totals']['images'],
+        preview['totals']['boxes'],
+        len(classes),
     )
-    for name, samples in splits.items():
-        pos = sum(1 for s in samples if s.positive)
+    for c in preview['classes']:
+        s = c['suggestion']
         logger.info(
-            '%s: %d images, %d positive, %d background', name, len(samples), pos, len(samples) - pos
+            '  %s: %d boxes; suggestion %s (%s)',
+            c['dataset_class'],
+            c['boxes'],
+            s['action'],
+            s['match'],
         )
+    for issue in preview['issues']:
+        logger.info('  [%s] %s x%d', issue['severity'], issue['code'], issue['count'])
     if args.dry_run:
-        return 0
-    async with httpx.AsyncClient() as client:
-        summary = await run(cfg, client, splits)
-    logger.info('summary: %s', json.dumps(summary['total']))
-    logger.info('ingested image lists: %s', cfg.state_dir / 'ingested')
-    return 0 if summary['total']['failed'] == 0 else 2
+        return 1 if preview['blocking'] else 0
+    body = _request_body(args, build_mapping(args, classes))
+    body['expected_import_key'] = None
+    resp = client.post(f'{base}/datasets/imports', json=body)
+    if resp.status_code == 409 and resp.json().get('detail', {}).get('error') == 'import_resumable':
+        import_id = resp.json()['detail']['import_id']
+        logger.info('resuming interrupted import %s', import_id)
+        job = _check(client.post(f'{base}/datasets/imports/{import_id}/resume'))
+    else:
+        job = _check(resp)
+        if job.get('reused'):
+            logger.info('already imported as %s (nothing written)', job['import_id'])
+    return _finish(args, client, base, job)
+
+
+def _finish(args: argparse.Namespace, client: httpx.Client, base: str, job: dict[str, Any]) -> int:
+    job = poll(client, base, job['import_id'], interval=args.poll_interval, timeout=args.timeout)
+    logger.info('%s: %s', job['import_id'], json.dumps(job['report']))
+    if args.state_dir is not None and job['status'] in {'completed', 'completed_with_errors'}:
+        n = write_ingested(client, base, job['import_id'], args.state_dir)
+        logger.info('wrote %d ingested rows under %s/ingested', n, args.state_dir)
+    return 0 if job['status'] in {'completed', 'completed_with_errors'} else 1
 
 
 def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
     args = build_parser().parse_args(argv)
-    # The disabled-labeled-mode guard inside _async_main needs no project
-    # binding (no OpenSearch connection) to fire -- skip bind_script_project
-    # (which does contact OpenSearch to resolve the project) when it is
-    # about to fail loudly anyway, so the failure is immediate/cheap.
-    if args.images_only:
-        bind_script_project(args.project)
-    return asyncio.run(_async_main(args))
+    bind_script_project(args.project)
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            return run(args, client)
+    except (ImportCliError, httpx.HTTPError) as exc:
+        logger.error('%s', exc)
+        return 1
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    raise SystemExit(main())

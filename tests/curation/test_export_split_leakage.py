@@ -30,8 +30,8 @@ from src.services.curation.export import (
     GenericYoloExportService,
     _ExportRow,
     resolve_current_export_dir,
-    stratified_split,
 )
+from src.services.curation.export_split import stratified_split
 
 
 CLASS_NAMES = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']

@@ -219,26 +219,9 @@ async def lifespan(app: FastAPI):
     # Reconcile job state.json files left at status='running' by a killed
     # process; best-effort and isolated per module (see each module's
     # reconcile_orphaned_jobs() docstring).
-    from src.services.curation import embedding_viz, probe_job
-    from src.services.curation.autolabel import job as autolabel_job
-    from src.services.curation.item_scores import job as item_scores_job
-    from src.services.curation.selection import job as selection_job
-    from src.services.projects.bootstrap import for_each_project
+    from src.services.curation.startup_reconcile import reconcile_all_jobs
 
-    for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job, probe_job):
-        for _slug in for_each_project():
-            try:
-                if _module.reconcile_orphaned_jobs():
-                    logger.warning(
-                        'orphaned_job_reconciled', module=_module.__name__, project=_slug
-                    )
-            except Exception as exc:
-                logger.warning(
-                    'orphaned_job_reconcile_skipped',
-                    module=_module.__name__,
-                    project=_slug,
-                    error=str(exc),
-                )
+    reconcile_all_jobs()
 
     # Gap 2 (model export): same idea, different shape — see
     # src.services.model_export's module docstring.

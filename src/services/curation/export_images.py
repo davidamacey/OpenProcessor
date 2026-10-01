@@ -23,19 +23,33 @@ never counted.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import random
 import re
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from src.services.curation.export_support import scroll_hits
+from src.config.project_context import run_in_executor_bound
+from src.core.logging import get_logger
+from src.services.curation.export_readiness import NothingToExportError
+from src.services.curation.export_support import (
+    _copy_or_resize_one,
+    even_stratified_sample,
+    scroll_hits,
+)
+from src.services.detection.frame_dedup import dedup_rows_by_embedding
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from src.config import CurationConfig
     from src.services.curation.export_support import _ExportRow
 
+
+logger = get_logger(__name__)
 
 # Keeps an unlabeled-items query's ``terms`` clause well under OpenSearch's
 # ``index.max_terms_count`` default (65,536).
@@ -178,12 +192,109 @@ async def unlabeled_items_by_image(
     return counts
 
 
+async def copy_export_images(
+    jobs: list[tuple[str, str]],
+    *,
+    resize_mode: Literal['aspect'] | None,
+    image_size: int,
+    max_workers: int,
+) -> dict[str, Any]:
+    """Copy (optionally aspect-resize) every ``(src, dest)`` pair in a
+    process pool; returns the ``image_copy`` manifest block."""
+    if not jobs:
+        return {'attempted': 0, 'copied': 0, 'failed': 0, 'errors': []}
+    loop = asyncio.get_running_loop()
+    copied = 0
+    failed = 0
+    errors: list[str] = []
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        futures = [
+            run_in_executor_bound(
+                loop, pool, _copy_or_resize_one, src, dest, resize_mode, image_size
+            )
+            for src, dest in jobs
+        ]
+        for fut in asyncio.as_completed(futures):
+            _dest, ok, err = await fut
+            if ok:
+                copied += 1
+            else:
+                failed += 1
+                if err:
+                    errors.append(err)
+    return {'attempted': len(jobs), 'copied': copied, 'failed': failed, 'errors': errors[:20]}
+
+
+async def select_export_images(
+    opensearch: Any,
+    config: CurationConfig,
+    rows: list[_ExportRow],
+    *,
+    require_fully_labeled_images: bool,
+    dedup_threshold: float | None,
+    max_images: int | None,
+    seed: int,
+) -> tuple[list[_ExportImage], dict[str, int], dict[str, Any]]:
+    """Group dense-id rows into images, then apply the partial-frame
+    policy, the near-dup collapse and the ``max_images`` cap, in that
+    order -- so a dropped partial frame can't knock out a fully labeled
+    near-duplicate, and the cap lands on exactly ``min(max_images, pool)``
+    images.
+
+    Returns ``(images, unlabeled_by_image, info)``.
+    """
+    images = group_rows_by_image(rows)
+    unlabeled = await unlabeled_items_by_image(
+        opensearch,
+        index=config.items_index,
+        image_ids=[im.image_id for im in images],
+        labeled_item_ids={r.item_id for r in rows},
+    )
+    dropped_partial = 0
+    if require_fully_labeled_images:
+        full = [im for im in images if not unlabeled.get(im.image_id)]
+        dropped_partial = len(images) - len(full)
+        if not full:
+            raise NothingToExportError(
+                f'require_fully_labeled_images: all {len(images)} image(s) with a validated '
+                'object also carry an unreviewed or unexported object; none is fully labeled'
+            )
+        images = full
+    dedup_stats: dict[str, Any] = {'enabled': False}
+    if dedup_threshold is not None:
+        kept, dedup_stats = await dedup_rows_by_embedding(
+            opensearch, images, threshold=dedup_threshold, config=config
+        )
+        images = sorted(kept, key=lambda im: im.image_id)
+
+    sampling_mode = 'all'
+    if max_images is not None and len(images) > max_images:
+        frequency: dict[int, int] = {}
+        for image in images:
+            for obj in image.objects:
+                frequency[obj.export_class_id] = frequency.get(obj.export_class_id, 0) + 1
+        images = even_stratified_sample(
+            images, max_images, lambda im: rarest_class_key(im, frequency), random.Random(seed)
+        )
+        images.sort(key=lambda im: im.image_id)
+        sampling_mode = 'stratified_even'
+        logger.info('export_sampled', n_images=len(images), max_images=max_images)
+    info = {
+        'dedup': dedup_stats,
+        'sampling_mode': sampling_mode,
+        'images_dropped_not_fully_labeled': dropped_partial,
+    }
+    return images, unlabeled, info
+
+
 __all__ = [
     'UNLABELED_QUERY_CHUNK',
+    'copy_export_images',
     'group_rows_by_image',
     'image_file_stem',
     'normalized_box',
     'rarest_class_key',
+    'select_export_images',
     'unlabeled_items_by_image',
     'yolo_line',
 ]

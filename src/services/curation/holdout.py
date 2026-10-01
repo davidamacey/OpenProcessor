@@ -29,7 +29,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException
 
@@ -41,6 +41,10 @@ from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 # out (or all of them, if the class has fewer than this many validated
 # crops) — see Appendix C Decision 1.
 MIN_TEST_PER_CLASS = MIN_TEST_CROPS_PER_CLASS
+
+FreezeKind = Literal['curated', 'import']
+# Where an import freeze's records live, under the holdout state dir.
+IMPORT_FREEZE_DIR = 'imports'
 
 # Composite-agg page size (max distinct (class_id, source) strata per
 # page) and the per-stratum scan page size. Today's cohort (~380 human-
@@ -284,25 +288,32 @@ def persist_freeze_record(
     cohort_spec: dict[str, Any],
     per_class_counts: dict[str, int],
     state_dir: Path | None = None,
+    kind: FreezeKind = 'curated',
 ) -> Path:
     """Write a durable freeze record and return the snapshot path.
 
-    Writes two files under ``state_dir`` (default
-    ``CurationConfig.state_dir/test_holdout/``):
+    ``kind='curated'`` (the default) writes two files under ``state_dir``
+    (default ``CurationConfig.state_dir/test_holdout/``):
 
     - ``<ISO-timestamp>.json`` — an immutable snapshot of this freeze.
     - ``current.json`` — atomically replaced to always point at the latest
       freeze (tmp-write + fsync + rename, same durability contract as
       ``ClassRegistry._atomic_write``).
 
+    ``kind='import'`` (a dataset import freezing its test split, W10.9)
+    writes only the snapshot, under ``<state_dir>/imports/``: an import
+    freeze never replaces ``current.json``, which stays the curated freeze.
+
     Without this, ``test_holdout_sha`` in the API response is a number
     nobody can verify or use to revert a bad freeze.
     """
-    target_dir = state_dir if state_dir is not None else _default_state_dir()
+    base_dir = state_dir if state_dir is not None else _default_state_dir()
+    target_dir = base_dir / IMPORT_FREEZE_DIR if kind == 'import' else base_dir
     target_dir.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(UTC)
     record = {
+        'kind': kind,
         'frozen_at': now.isoformat(),
         'test_holdout_sha': sha,
         'n_frozen': len(crop_ids),
@@ -315,6 +326,8 @@ def persist_freeze_record(
     ts = now.strftime('%Y%m%dT%H%M%S%fZ')
     snapshot_path = target_dir / f'{ts}.json'
     snapshot_path.write_text(payload, encoding='utf-8')
+    if kind == 'import':
+        return snapshot_path
 
     current_path = target_dir / 'current.json'
     tmp_path = target_dir / 'current.json.tmp'
@@ -325,3 +338,22 @@ def persist_freeze_record(
     tmp_path.replace(current_path)
 
     return snapshot_path
+
+
+def mark_freeze_record_undone(snapshot_path: Path) -> None:
+    """Stamp ``undone_at`` on an import freeze record (import undo).
+
+    The record stays on disk as history; ``crop_ids`` are untouched, since
+    the flags themselves are cleared item by item from the import ledger.
+    Raises ``ValueError`` for a record that is not an import freeze (a
+    curated freeze is never undone this way) and ``FileNotFoundError`` for a
+    missing path.
+    """
+    record = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    if not isinstance(record, dict) or record.get('kind') != 'import':
+        msg = f'{snapshot_path} is not an import freeze record'
+        raise ValueError(msg)
+    record['undone_at'] = datetime.now(UTC).isoformat()
+    tmp = snapshot_path.with_suffix('.json.tmp')
+    tmp.write_text(json.dumps(record, indent=2), encoding='utf-8')
+    tmp.replace(snapshot_path)

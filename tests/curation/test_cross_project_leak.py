@@ -100,6 +100,16 @@ def _region_profile_body() -> dict[str, Any]:
     return raw
 
 
+def _dataset_zip(slug: str) -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as zf:
+        zf.writestr(f'{slug}/data.yaml', f'train: images/train\nnames: [{slug}]\n')
+    return buf.getvalue()
+
+
 def route_params(slug: str) -> dict[str, str]:
     """Every path parameter a scoped route may carry, filled with ``slug``'s
     ids. A route with a parameter missing here fails ("unmapped route")."""
@@ -118,6 +128,7 @@ def route_params(slug: str) -> dict[str, str]:
         'artifact': 'results.csv',
         'box_id': 'b1',
         'revision': '1',
+        'import_id': 'imp_20260101T000000_0123abcd',
     }
 
 
@@ -168,6 +179,14 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('POST', '/datasets/preview'): {'json': {'source': {'path': source}}},
+        ('POST', '/datasets/imports'): {'json': {'source': {'path': source}}},
+        ('POST', '/datasets/imports/{import_id}/cancel'): {},
+        ('POST', '/datasets/imports/{import_id}/resume'): {},
+        ('POST', '/datasets/imports/{import_id}/undo'): {'json': {'dry_run': True}},
+        ('POST', '/datasets/uploads'): {
+            'files': [('file', ('d.zip', _dataset_zip(slug), 'application/zip'))]
+        },
         ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
         ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {
@@ -187,6 +206,14 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/regions/batch_box_state'): {
             'json': {'targets': [{'crop_id': item, 'box_id': 'b1'}], 'state': 'accepted'}
         },
+        # W10: unified reprocess. The batch form names one item; the
+        # single forms take their target from the path.
+        ('POST', '/reprocess'): {
+            'json': {'targets': {'crop_ids': [proposal]}, 'scopes': ['region'], 'dry_run': False}
+        },
+        ('POST', '/images/{image_id}/reprocess'): {'json': {'scopes': ['region']}},
+        ('POST', '/crops/{crop_id}/reprocess'): {'json': {'scopes': ['region']}},
+        ('POST', '/reprocess/jobs/{job_id}/cancel'): {'json': {}},
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},
         ('POST', '/review/new_class_proposals/resolve'): {
             'json': {'label': f'{slug}-proposal', 'class_id': 1}
@@ -285,10 +312,22 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.
 NO_WRITE: dict[tuple[str, str], str] = {
+    ('POST', '/datasets/preview'): 'scans a dataset read-only; writes nothing',
+    ('POST', '/datasets/imports'): (
+        'the sweep sends no mapping, so it is refused before anything is claimed; the '
+        'import writes are covered in tests/integration/test_dataset_import_routes.py'
+    ),
+    ('POST', '/datasets/imports/{import_id}/cancel'): 'the sweep has no live import to cancel',
+    ('POST', '/datasets/imports/{import_id}/resume'): 'the sweep has no interrupted import',
+    ('POST', '/datasets/imports/{import_id}/undo'): 'a dry run reads the ledger; writes nothing',
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     ('POST', '/train/preflight'): 'read-only validation under POST',
     ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
+    ('POST', '/reprocess/jobs/{job_id}/cancel'): (
+        'touches a cancel flag only for a live job; the sweep has none (the live path is '
+        'covered in test_reprocess_entrypoints)'
+    ),
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',
@@ -323,6 +362,8 @@ CROP_FOR: dict[tuple[str, str], str] = {
     ('POST', '/crops/{crop_id}/vlm_dismiss'): 'item-0004',
     ('POST', '/crops/{crop_id}/vlm_dismiss/undo'): 'item-0004',
     ('POST', '/crops/{crop_id}/region/undo'): 'item-0005',
+    # an unlocked item: the default item-0001 is a validated set (locked)
+    ('POST', '/crops/{crop_id}/reprocess'): 'item-0002',
 }
 
 # Routes that answer 5xx in the fixture for a reason that is not isolation.
@@ -518,7 +559,36 @@ def _stored_region_profile(env: Any, slug: str) -> None:
     reset_config_stores()
 
 
+def _region_failed_item(env: LeakEnv, slug: str) -> None:
+    """``item-0002`` as an unlocked, machine-failed region (a rejected
+    machine box, not validated): earlier sweep calls may have validated it,
+    and a reprocess skips a validated set, so it must be reset right before
+    each reprocess route that acts on it."""
+    from src.config import get_region_fields
+    from src.config.curation import IndexRole
+
+    F = get_region_fields()
+    index = env.records[slug].resources.indexes[IndexRole.ITEMS]
+    doc = env.transport.store.setdefault(index, {}).setdefault(f'{slug}-item-0002', {})
+    doc[F.status] = 'detection_failed'
+    doc[F.validated] = False
+    doc[F.boxes] = [
+        {
+            'box_id': 'b1',
+            'bbox_norm': [0.1, 0.1, 0.4, 0.4],
+            'state': 'rejected',
+            'score': 0.3,
+            'detector': 'leak_detector',
+            'source': 'detector',
+        }
+    ]
+    doc[F.count] = 0
+    doc[F.rejected_count] = 1
+
+
 PREPARE: dict[tuple[str, str], Any] = {
+    ('POST', '/reprocess'): _region_failed_item,
+    ('POST', '/crops/{crop_id}/reprocess'): _region_failed_item,
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,
     ('DELETE', '/models/{model_name}'): _promoted_model,
     ('PATCH', '/crops/{crop_id}/regions/{box_id}'): _region_box_seeded,

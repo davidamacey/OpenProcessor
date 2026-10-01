@@ -56,13 +56,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
-from scripts.curation.worker.state import _crop_jpeg_from_disk
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
 from src.config.region_state import RegionStatus
-from src.services.curation.region_boxes import box_query, read_boxes
-from src.services.detection.region_embed import embed_region_crops
+from src.services.curation.region_boxes import box_query
+from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
@@ -74,7 +73,6 @@ if TYPE_CHECKING:
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
 _SCROLL_PAGE = 200
-_ENCODE_BATCH = 32
 
 logging.basicConfig(
     level=logging.INFO,
@@ -119,26 +117,6 @@ def _selection_query() -> dict[str, Any]:
             'must_not': [{'exists': {'field': F.embedding}}],
         },
     }
-
-
-def _best_accepted_bbox(source: dict[str, Any], F: Any) -> list[float] | None:
-    """The representative box's ``bbox_norm``, or ``None``.
-
-    See the module docstring: an item-level embedding still needs exactly
-    one representative crop even though ``region_boxes`` may hold several
-    boxes. Prefers the highest-``score`` accepted box; falls back to the
-    highest-``score`` false-positive box (M5) so an FP-only item -- which
-    has no accepted box at all -- still gets a representative crop for
-    the FP centroid store.
-    """
-    boxes = read_boxes(source, F)
-    candidates = [b for b in boxes if b.state == 'accepted']
-    if not candidates:
-        candidates = [b for b in boxes if b.state == RegionStatus.FALSE_POSITIVE.value]
-    if not candidates:
-        return None
-    best = max(candidates, key=lambda b: b.score if b.score is not None else -1.0)
-    return list(best.bbox_norm)
 
 
 async def _scroll_candidates(
@@ -193,42 +171,23 @@ async def _run(
         await pool.initialize()
         pe = PEEncoder(triton_pool=pool)
 
-        n_written = 0
-        n_missing_image = 0
-        n_decode_failed = 0
-        for start in range(0, len(hits), _ENCODE_BATCH):
-            batch = hits[start : start + _ENCODE_BATCH]
-            crop_jpegs: list[bytes] = []
-            doc_ids: list[str] = []
-            for h in batch:
-                source = h.get('_source') or {}
-                image_path = source.get('image_path')
-                bbox = _best_accepted_bbox(source, F)
-                if not image_path or not bbox or len(bbox) != 4:
-                    n_missing_image += 1
-                    continue
-                x1, y1, x2, y2 = (float(v) for v in bbox)
-                jpeg = await asyncio.to_thread(_crop_jpeg_from_disk, image_path, (x1, y1, x2, y2))
-                if jpeg is None:
-                    n_missing_image += 1
-                    continue
-                crop_jpegs.append(jpeg)
-                doc_ids.append(h['_id'])
-
-            if not crop_jpegs:
-                continue
-
-            embeddings = await embed_region_crops(pe, crop_jpegs)
-            bulk: list[dict[str, Any]] = []
-            for doc_id, emb in zip(doc_ids, embeddings, strict=True):
-                if emb is None:
-                    n_decode_failed += 1
-                    continue
-                bulk.append({'update': {'_index': cfg.items_index, '_id': doc_id}})
-                bulk.append({'doc': {F.embedding: emb}})
-                n_written += 1
-            if bulk:
-                await client.bulk(body=bulk, refresh=False)
+        # The per-item work is the unified reprocess's `embed` scope
+        # (src/services/curation/reprocess_embed.py): same crop, same
+        # encoder, same vector, only the region part.
+        by_path: dict[str, EmbedTarget] = {}
+        for h in hits:
+            source = h.get('_source') or {}
+            path = source.get('image_path') or ''
+            target = by_path.setdefault(
+                path, EmbedTarget(image_id=source.get('image_id') or '', image_path=path)
+            )
+            target.items.append((h['_id'], source))
+        counts = await reembed_items(
+            client, pe, list(by_path.values()), parts=frozenset({'region'})
+        )
+        n_written = counts['region_written']
+        n_missing_image = counts['missing_image']
+        n_decode_failed = counts['decode_failed']
 
         try:
             await client.indices.refresh(index=cfg.items_index)

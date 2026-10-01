@@ -77,11 +77,13 @@ def is_locked_box(box: Any) -> bool:
     """True when a region box must never be touched by an automated
     writer: a human created/verdicted/transcribed it
     (:func:`src.services.curation.region_boxes.is_human_owned`), or it
-    came from a dataset import (``source == CANDIDATE_IMPORT``)."""
+    came from a dataset import and is not a mere suggestion (a
+    ``label_trust: suggestion`` import writes ``state: proposed`` boxes with
+    ``source: import``, which the machine pipeline may still replace)."""
     from src.config.region_source import CANDIDATE_IMPORT
     from src.services.curation.region_boxes import is_human_owned as _box_is_human_owned
 
-    return _box_is_human_owned(box) or box.source == CANDIDATE_IMPORT
+    return _box_is_human_owned(box) or (box.source == CANDIDATE_IMPORT and box.state != 'proposed')
 
 
 def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
