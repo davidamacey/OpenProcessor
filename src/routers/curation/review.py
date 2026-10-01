@@ -260,7 +260,7 @@ def _filters(
 IncludeTest = Annotated[bool, Query()]
 TextQ = Annotated[
     str | None,
-    Query(description='Regions tab only: case-insensitive substring search on region_text.'),
+    Query(description='Regions tab only: case-insensitive substring search on any box text.'),
 ]
 MaxRankQ = Annotated[
     int | None,

@@ -17,6 +17,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_labeler import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
@@ -37,7 +38,10 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
         'crop_id': crop_id,
         'image_path': f'/data/{crop_id}.jpg',
         'bbox_norm': [0.1, 0.1, 0.5, 0.5],
-        F.bbox_norm: [0.1, 0.1, 0.5, 0.5],
+        **boxes_write_fields(
+            [RegionBox(box_id='b1', bbox_norm=(0.1, 0.1, 0.5, 0.5), state='proposed')],
+            current_src={},
+        ),
         'class_source': 'item_proposal',
         'class_validated': False,
         **extra,
@@ -55,7 +59,7 @@ class _Labeler:
         ]
 
     async def verify_region(self, _crop: Any) -> Any:
-        return SimpleNamespace(is_region=True, reason='looks real')
+        return SimpleNamespace(is_region=True, reason='looks real', confidence='high')
 
 
 @pytest.mark.asyncio

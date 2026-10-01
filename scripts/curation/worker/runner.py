@@ -35,7 +35,6 @@ from src.services.curation.region_boxes import RegionBox, derive_status, new_box
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
-    RegionCandidate,
     RegionDetector,
     crop_norm_to_source_norm,
 )
@@ -98,7 +97,6 @@ from scripts.curation.worker.verify import (
 from src.config.region_rejection import REJECT_REASON_VERIFIER
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
-    CANDIDATE_DETECTOR_EXISTING,
     CANDIDATE_SEGMENTER,
     CANDIDATE_SEGMENTER_TEXT_HINT,
 )
@@ -294,44 +292,16 @@ def _box_list_doc(
 
 
 def _sync_singular_candidate(t: _ItemTask) -> None:
-    """Mirror ``t.candidates[0]`` onto the legacy singular ``candidate_*``
-    fields.
+    """Point ``t.candidate_source`` at ``t.candidates[0]``'s source.
 
     Kept for the one remaining deliberately single-box consumer:
     ``accept_without_vlm`` (no VLM configured -- nothing can adjudicate
-    between multiple candidates, so only the best one is ever written). A
-    no-op when ``t.candidates`` is empty. For the region-embedding
-    source, see :func:`_sync_accepted_candidate` instead (M3) -- mirroring
-    ``candidates[0]`` here regardless of its eventual verdict is exactly
-    the bug that let a rejected box's crop become the region embedding.
+    between multiple candidates, so only the best one is ever written),
+    which resolves its detector provenance from it. A no-op when
+    ``t.candidates`` is empty.
     """
-    if not t.candidates:
-        return
-    best = t.candidates[0]
-    t.candidate_in_crop = best.bbox_in_crop
-    t.candidate_in_source = best.bbox_in_source
-    t.candidate_score = best.score
-    t.candidate_source = best.source
-
-
-def _sync_accepted_candidate(t: _ItemTask, boxes: list[RegionBox]) -> None:
-    """W8 M3 fix: point the region-embedding source at the FIRST ACCEPTED
-    box, never ``candidates[0]`` (the top-scoring candidate, which the
-    VLM may have rejected while accepting a lower-scoring sibling).
-
-    ``boxes`` must be aligned by position with ``t.candidates`` (the same
-    alignment ``verdicts_to_boxes`` / the per-box text-resolution loop
-    produce). A no-op when no box is accepted -- the item's status is
-    then never ``DETECTED``, so ``embed_written_regions``'s eligibility
-    filter already skips it regardless of what the mirror points at.
-    """
-    for box, cand in zip(boxes, t.candidates, strict=True):
-        if box.state == 'accepted':
-            t.candidate_in_crop = cand.bbox_in_crop
-            t.candidate_in_source = cand.bbox_in_source
-            t.candidate_score = cand.score
-            t.candidate_source = cand.source
-            return
+    if t.candidates:
+        t.candidate_source = t.candidates[0].source
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -404,7 +374,7 @@ async def run(args: argparse.Namespace) -> int:
             logger.warning(
                 'region_embed_disabled_model_not_ready',
                 model=PE_IMAGE_MODEL,
-                detail='region_embedding will not be written this run',
+                detail='region_box_embeddings will not be written this run',
             )
 
     # The VLM class catalog (prompt class list + name -> registry id) is
@@ -871,58 +841,29 @@ async def run(args: argparse.Namespace) -> int:
                 # from this item's STORED ``region_boxes`` -- every box
                 # whose state is ``proposed`` (the real source of truth,
                 # incl. a human's box set via `PUT /crops/{id}/regions`)
-                # -- keeping its box_id, never the legacy single-scalar
-                # fields. A pre-migration item with no stored boxes yet
-                # but a legacy scalar candidate still falls back to that
-                # single candidate (a fresh id, as before).
+                # -- keeping its box_id.
                 proposed_stored = [b for b in t.stored_boxes if b.state == 'proposed']
-                if t.region_status in _PENDING_VERIFICATION_ALIASES and (
-                    proposed_stored or t.detector_region_in_source is not None
-                ):
-                    if proposed_stored:
-                        t.candidates = [
-                            _task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
-                            for b in proposed_stored
-                        ]
-                        # B1: this pass only re-verifies the stored
-                        # `proposed` box(es) -- any sibling (already
-                        # accepted/rejected, or a second proposed box not
-                        # selected here) must be merged back at write
-                        # time, never silently replaced.
-                        t.pending_merge = True
-                        # W8c B1 fix (2026-09-28 re-review): this is the
-                        # ONE place that is a genuine Path-1 re-verify --
-                        # distinct from `pending_merge` alone, which every
-                        # fresh-detection pass below also sets (for its
-                        # own, different, keep-human/replace-machine
-                        # reason). `runner.py`'s not-visible branch reads
-                        # this to resolve the candidate as `rejected`
-                        # (keeping its stored id) instead of writing an
-                        # empty box list.
-                        t.reverify = True
-                    else:
-                        # The outer `if` guarantees this branch only runs
-                        # when `proposed_stored` is empty, so the second
-                        # disjunct (this) must be true -- narrows the type
-                        # for mypy.
-                        assert t.detector_region_in_source is not None
-                        cand_in_crop = _source_to_crop(
-                            t.detector_region_in_source, t.item_bbox_norm
-                        )
-                        t.candidates = _select_candidates(
-                            [
-                                RegionCandidate(
-                                    bbox_norm=cand_in_crop,
-                                    score=t.detector_score,
-                                    source=CANDIDATE_DETECTOR_EXISTING,
-                                )
-                            ],
-                            profile=rt.profile,
-                            item_bbox_norm=t.item_bbox_norm,
-                            detector=rt.profile.detector_model,
-                            detector_version=rt.profile.detector_version,
-                            source=CANDIDATE_DETECTOR_EXISTING,
-                        )
+                if t.region_status in _PENDING_VERIFICATION_ALIASES and proposed_stored:
+                    t.candidates = [
+                        _task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
+                        for b in proposed_stored
+                    ]
+                    # B1: this pass only re-verifies the stored
+                    # `proposed` box(es) -- any sibling (already
+                    # accepted/rejected, or a second proposed box not
+                    # selected here) must be merged back at write
+                    # time, never silently replaced.
+                    t.pending_merge = True
+                    # W8c B1 fix (2026-09-28 re-review): this is the
+                    # ONE place that is a genuine Path-1 re-verify --
+                    # distinct from `pending_merge` alone, which every
+                    # fresh-detection pass below also sets (for its
+                    # own, different, keep-human/replace-machine
+                    # reason). `runner.py`'s not-visible branch reads
+                    # this to resolve the candidate as `rejected`
+                    # (keeping its stored id) instead of writing an
+                    # empty box list.
+                    t.reverify = True
                     _sync_singular_candidate(t)
                     if t.candidates:
                         if rt.vlm_available:
@@ -954,8 +895,7 @@ async def run(args: argparse.Namespace) -> int:
                 # CORRECTION (M2): reaching this line does NOT prove
                 # `region_status` is a `pending_detection` alias -- Path 1's
                 # `if` above only `continue`s when it found something to
-                # re-verify (`proposed_stored` or the legacy
-                # `detector_region_in_source` scalar); a `pending_verification`
+                # re-verify (`proposed_stored`); a `pending_verification`
                 # alias item with neither (which should no longer occur --
                 # `region_requeue.apply_requeue` now re-proposes a box
                 # before ever setting that target status, or skips the item
@@ -967,7 +907,7 @@ async def run(args: argparse.Namespace) -> int:
                     logger.warning(
                         'region_pending_verification_fallthrough',
                         crop_id=t.crop_id,
-                        detail='pending_verification item had no proposed/legacy candidate to '
+                        detail='pending_verification item had no proposed box to '
                         're-verify; running a fresh detection pass instead (M2)',
                     )
                 t.pending_merge = True
@@ -1360,7 +1300,7 @@ async def run(args: argparse.Namespace) -> int:
                             vlm_model=rt.vlm_model,
                             rules=rt.text_rules,
                         )
-                        box = _box_with_resolved_text(box, text_doc, F)
+                        box = _box_with_resolved_text(box, text_doc)
                         # W8 M2: skip-verify never calls the VLM --
                         # verified/auto_confirmed stay False, same as the
                         # pre-W8 skip-verify write.
@@ -1505,7 +1445,6 @@ async def run(args: argparse.Namespace) -> int:
             is retried, never counted toward the cap.
         """
 
-        F = get_region_fields()
         carry: list[_ItemTask] = []
         while True:
             chunk, poisoned = await _drain_chunk(
@@ -1679,7 +1618,6 @@ async def run(args: argparse.Namespace) -> int:
                                             rejection_reason=REJECT_REASON_VERIFIER,
                                         ),
                                         profile=rt.profile,
-                                        F=F,
                                         rules=rt.text_rules,
                                     )
                                     for i, cand in enumerate(t.candidates)
@@ -1690,8 +1628,7 @@ async def run(args: argparse.Namespace) -> int:
                                 )
                             else:
                                 # Fresh detection (`t.reverify` False --
-                                # Path 2/3, or the legacy-scalar Path 1
-                                # fallback, neither of which is re-verifying
+                                # Path 2/3, which is not re-verifying
                                 # a stored box by id): no box, terminal
                                 # no_region_visible. `t.pending_merge` may
                                 # still be True here (a fresh-detection
@@ -1781,7 +1718,7 @@ async def run(args: argparse.Namespace) -> int:
                             # text is validated.
                             boxes = [
                                 resolve_rejected_box_text(
-                                    b, profile=rt.profile, F=F, rules=rt.text_rules
+                                    b, profile=rt.profile, rules=rt.text_rules
                                 )
                                 for b in boxes
                             ]
@@ -1859,7 +1796,7 @@ async def run(args: argparse.Namespace) -> int:
                                 # text reply on a rejected/no-verdict box.
                                 resolved_boxes.append(
                                     resolve_rejected_box_text(
-                                        box, profile=rt.profile, F=F, rules=rt.text_rules
+                                        box, profile=rt.profile, rules=rt.text_rules
                                     )
                                 )
                                 continue
@@ -1889,7 +1826,7 @@ async def run(args: argparse.Namespace) -> int:
                                 profile=rt.profile,
                                 rules=rt.text_rules,
                             )
-                            resolved_boxes.append(_box_with_resolved_text(box, text_doc, F))
+                            resolved_boxes.append(_box_with_resolved_text(box, text_doc))
 
                         class_update = (
                             None
@@ -1901,12 +1838,6 @@ async def run(args: argparse.Namespace) -> int:
                                 vlm_model=rt.vlm_model,
                             )
                         )
-                        # W8 M3 fix: the region-embedding source (and the
-                        # legacy singular candidate_* mirror it reads) must
-                        # point at an ACCEPTED box, never `candidates[0]`
-                        # (the top-scoring candidate, which the VLM may
-                        # have just rejected while accepting a sibling).
-                        _sync_accepted_candidate(t, resolved_boxes)
                         # auto_confirmed is the box-aware rule: >=1 accepted
                         # box AND every accepted box independently passes
                         # the same 2-of-2 auto-confirm policy the pre-W8
@@ -1936,10 +1867,6 @@ async def run(args: argparse.Namespace) -> int:
                                 ),
                             },
                         )
-                        # Preserve the leg's source marker for downstream
-                        # consumers via RegionFields.source.
-                        if t.candidates:
-                            t.update_doc[F.source] = t.candidates[0].source
                         await out_q.put(t)
                     finally:
                         structlog.contextvars.unbind_contextvars('request_id')

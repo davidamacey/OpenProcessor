@@ -181,6 +181,7 @@ _PROCESS_CACHES = (
     ('src.routers.curation.select', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
     ('src.clients.curation_opensearch', '_settings_cache'),
+    ('src.clients.curation_opensearch', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
     # Config-store snapshots (W2): one ConfigStore per project, keyed by
@@ -263,7 +264,6 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     names a detector the way a deployment that exported its own would, so
     the cascade tests exercise every leg.
     """
-    import sys
     from pathlib import Path
 
     from _region_profile_fixture import REFERENCE_REGION_DETECTOR_MODEL
@@ -276,15 +276,7 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', str(example_path))
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
-    # The cascade's no-verdict count is process-wide; a test must not
-    # inherit another test's count for the same crop id.
-    no_verdict = sys.modules.get('scripts.curation.worker.no_verdict')
-    if no_verdict is not None:
-        no_verdict.reset_cascade_counter()
     yield
-    no_verdict = sys.modules.get('scripts.curation.worker.no_verdict')
-    if no_verdict is not None:
-        no_verdict.reset_cascade_counter()
     # Lazy re-resolution: the next accessor call (after monkeypatch restores
     # the env) sees the unconfigured default again.
     profile_registry._reset_registry_for_tests()

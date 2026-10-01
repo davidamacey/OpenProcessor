@@ -531,12 +531,12 @@ def publish_region_verified(
     crop_id: str,
     *,
     region_status: str,
-    region_text: str | None = None,
+    region_count: int | None = None,
 ) -> None:
     """Convenience wrapper for sam-worker region updates. Payload keys are
     the fixed wire names, never the storage field names."""
     get_event_hub().publish(
-        region_event_payload(crop_id, region_status=region_status, region_text=region_text)
+        region_event_payload(crop_id, region_status=region_status, region_count=region_count)
     )
 
 

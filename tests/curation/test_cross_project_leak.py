@@ -174,12 +174,8 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
         ('PUT', '/models/{model_name}/sharing'): {'json': {'shared': True, 'expected_revision': 1}},
-        ('PUT', '/crops/{crop_id}/region'): {'json': {'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}},
         ('PATCH', '/crops/{crop_id}/region_meta'): {
             'json': {'region_rejection_reason': f'{slug}-note'}
-        },
-        ('PUT', '/crops/batch_region'): {
-            'json': {'crop_ids': [proposal], 'region_bbox_norm': [0.1, 0.1, 0.4, 0.4]}
         },
         ('POST', '/regions/batch_status'): {
             'json': {'crop_ids': [item], 'region_status': 'false_positive'}
@@ -651,6 +647,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
     from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
     from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
     from src.services.curation.history import record_class_snapshot
+    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
     F = get_region_fields()
     image_id = f'{slug}-img-0001'
@@ -678,7 +675,14 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
         'class_source': 'proposal',
         'class_validated': False,
     }
-    region_before = {F.bbox_norm: None}
+    region_before: dict[str, Any] = {F.boxes: []}
+
+    def boxes(state: str) -> dict[str, Any]:
+        return boxes_write_fields(
+            [RegionBox(box_id='b1', bbox_norm=(0.2, 0.2, 0.3, 0.3), state=state)],
+            current_src={},
+        )
+
     items = [
         crop(1),
         # An unlabeled proposal: the batch label/move/region routes refuse
@@ -695,13 +699,13 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             class_source='vlm',
             class_validated=False,
             vlm_confidence='high',
-            **{F.bbox_norm: [0.2, 0.2, 0.3, 0.3]},
+            **boxes('proposed'),
         ),
         *(
             crop(
                 n,
+                **boxes('accepted'),
                 **{
-                    F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
                     EDIT_HISTORY_FIELD: record_edit(
                         region_before, kind=EditKind.REGION, writer='human:set_region'
                     ),

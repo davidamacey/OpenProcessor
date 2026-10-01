@@ -135,37 +135,6 @@ class CropDiscardBatchRequest(CropDiscardRequest):
     crop_ids: list[str] = Field(..., max_length=5000)
 
 
-class ItemRegionRequest(BaseModel):
-    """Set or clear the region-of-interest sub-bbox on a single item.
-
-    ``frame`` says which frame ``region_bbox_norm`` is in: ``'source'``
-    (the source image, the stored frame) or ``'parent'`` (the item crop;
-    the server projects it through the item's own ``bbox_norm``).
-    ``None`` clears the box and marks the item
-    ``region_status='no_region_visible'`` (a deliberate human decision,
-    distinct from "not yet detected").
-    """
-
-    model_config = {'extra': 'forbid'}
-
-    region_bbox_norm: tuple[float, float, float, float] | None
-    region_label_source: str = 'human'
-    frame: Literal['source', 'parent'] = 'source'
-
-
-class ItemBatchRegionRequest(BaseModel):
-    """Bulk variant of ItemRegionRequest (e.g. "mark these N items as no
-    region present")."""
-
-    model_config = {'extra': 'forbid'}
-
-    crop_ids: list[str] = Field(..., max_length=5000)
-    region_bbox_norm: tuple[float, float, float, float] | None
-    region_label_source: str = 'human'
-    # 'parent' boxes are projected through each item's own bbox_norm.
-    frame: Literal['source', 'parent'] = 'source'
-
-
 # Region status values an operator may write — the lifecycle entries marked
 # human_writable in src/config/region_state.py (stdlib-only, so the TS
 # contract codegen exports the same set without importing the app).
@@ -504,7 +473,7 @@ class _PublishEvent(BaseModel):
     class_name: str | None = None
     class_source: str | None = None
     region_status: str | None = None
-    region_text: str | None = None
+    region_count: int | None = None
     image_path: str | None = None
     topic: str | None = None
     extra: dict[str, Any] | None = None

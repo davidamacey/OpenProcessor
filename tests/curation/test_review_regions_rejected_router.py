@@ -60,6 +60,7 @@ def _docs() -> dict[str, dict[str, Any]]:
         'rejected1': {
             'crop_id': 'rejected1',
             F.status: 'verify_rejected',
+            F.rejected_count: 1,
             F.max_score: 0.81,
             F.rejection_reason: 'region_visible_elsewhere',
             F.boxes: [
@@ -162,6 +163,7 @@ def test_rejected_items_sort_by_max_score_not_arbitrary_tie(
         'rej_low': {
             'crop_id': 'rej_low',
             F.status: 'verify_rejected',
+            F.rejected_count: 1,
             F.max_score: 0.2,
             F.boxes: [
                 {
@@ -175,6 +177,7 @@ def test_rejected_items_sort_by_max_score_not_arbitrary_tie(
         'rej_high': {
             'crop_id': 'rej_high',
             F.status: 'verify_rejected',
+            F.rejected_count: 1,
             F.max_score: 0.9,
             F.boxes: [
                 {

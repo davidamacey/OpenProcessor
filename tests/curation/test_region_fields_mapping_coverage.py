@@ -29,27 +29,16 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
     props = cop.INDEX_BODIES[IndexRole.ITEMS]['mappings']['properties']
 
     region_attrs_declared = (
-        'bbox_norm',
-        'bbox_frame',
-        'score',
         'verified',
         'reason',
-        'detector',
-        'detector_version',
         'detector_chain',
         'detected_at',
         'verifier',
         'verifier_version',
         'verified_at',
         'rejection_reason',
-        'bbox_norm_legacy',
-        'score_legacy',
         'status_legacy',
         'validated',
-        'embedding',
-        'cluster_id',
-        'cluster_distance',
-        'cluster_subid',
         # This was a domain-named, vendor-named literal (historic)
         # baked into the mapping until it was wired through
         # RegionFields.visible.
@@ -61,11 +50,7 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
         # Sanity: the generic default really is a `region_*` name, not a
         # leaked `roi_*` literal, when using the default singleton.
         if F is RegionFields():
-            assert key.startswith('region_') or attr in (
-                'cluster_id',
-                'cluster_distance',
-                'cluster_subid',
-            )
+            assert key.startswith('region_')
 
 
 def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
@@ -78,27 +63,16 @@ def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
     and the reason no reindex is ever needed for a field rename."""
     custom = RegionFields(
         prefix='roi',
-        bbox_norm='roi_bbox_norm',
-        bbox_frame='roi_bbox_frame',
-        score='roi_score',
         verified='roi_verified',
         reason='roi_reason',
-        detector='roi_detector',
-        detector_version='roi_detector_version',
         detector_chain='roi_detector_chain',
         detected_at='roi_detected_at',
         verifier='roi_verifier',
         verifier_version='roi_verifier_version',
         verified_at='roi_verified_at',
         rejection_reason='roi_rejection_reason',
-        bbox_norm_legacy='roi_bbox_norm_legacy',
-        score_legacy='roi_score_legacy',
         status_legacy='roi_status_legacy',
         validated='roi_validated',
-        embedding='roi_pe_embedding',
-        cluster_id='roi_cluster_id',
-        cluster_distance='roi_cluster_distance',
-        cluster_subid='roi_cluster_subid',
         visible='roi_visible',
     )
     monkeypatch.setattr(cop, 'F', custom)
@@ -106,18 +80,13 @@ def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
     props = rebuilt['mappings']['properties']
 
     for roi_key in (
-        'roi_bbox_norm',
-        'roi_score',
         'roi_verified',
-        'roi_detector',
         'roi_detector_chain',
-        'roi_pe_embedding',
-        'roi_cluster_id',
         'roi_visible',
     ):
         assert roi_key in props, f'expected override key {roi_key!r} after F swap'
 
     # The generic region_* defaults must be gone — proves the builder
     # reads through `F` rather than a cached/hardcoded literal.
-    for region_key in ('region_bbox_norm', 'region_score', 'region_verified', 'region_visible'):
+    for region_key in ('region_verified', 'region_visible'):
         assert region_key not in props

@@ -81,26 +81,9 @@ export interface ItemWire {
   dup_is_representative: boolean | null;
   updated_at: string;
   thumbnail_url: string;
-  region_thumbnail_url: string;
-  region_bbox_norm: number[] | null;
-  region_bbox_in_parent: number[] | null;
-  region_bbox_frame: string | null;
-  region_bbox_correct: boolean | null;
   region_status: string | null;
-  region_score: number | null;
-  region_confidence: unknown;
   region_reason: string | null;
   region_rejection_reason: string | null;
-  region_text: string | null;
-  region_text_raw: string | null;
-  region_text_confidence: number | null;
-  region_text_source: string | null;
-  region_text_engine_version: string | null;
-  region_text_vlm: string | null;
-  region_text_ocr: string | null;
-  region_text_disagreement: boolean | null;
-  region_text_choice: string | null;
-  region_text_vlm_invalid: string | null;
   region_validated: boolean | null;
   region_auto_confirmed: boolean | null;
   region_verified: boolean | null;
@@ -108,24 +91,12 @@ export interface ItemWire {
   region_verifier: string | null;
   region_verifier_version: string | null;
   region_visible: boolean | null;
-  region_detector: string | null;
-  region_detector_version: string | null;
   region_detector_chain: string[] | null;
   region_detected_at: string | null;
   region_profile: string | null;
   region_profile_revision: number | null;
-  region_candidate_bbox_norm: number[] | null;
-  region_candidate_score: number | null;
-  region_candidate_detector: string | null;
-  region_candidate_detector_version: string | null;
-  region_candidate_source: string | null;
-  region_candidate_bbox_in_parent: number[] | null;
-  region_cluster_id: number | null;
-  region_cluster_subid: string | null;
-  region_cluster_distance: number | null;
   region_class_id: number | null;
   region_label_source: string | null;
-  region_source: string | null;
   region_pairing: unknown;
   region_skip_verify: boolean | null;
   region_boxes: Record<string, unknown>[];
@@ -206,26 +177,9 @@ export const ITEM_WIRE_KEYS = [
   'dup_is_representative',
   'updated_at',
   'thumbnail_url',
-  'region_thumbnail_url',
-  'region_bbox_norm',
-  'region_bbox_in_parent',
-  'region_bbox_frame',
-  'region_bbox_correct',
   'region_status',
-  'region_score',
-  'region_confidence',
   'region_reason',
   'region_rejection_reason',
-  'region_text',
-  'region_text_raw',
-  'region_text_confidence',
-  'region_text_source',
-  'region_text_engine_version',
-  'region_text_vlm',
-  'region_text_ocr',
-  'region_text_disagreement',
-  'region_text_choice',
-  'region_text_vlm_invalid',
   'region_validated',
   'region_auto_confirmed',
   'region_verified',
@@ -233,24 +187,12 @@ export const ITEM_WIRE_KEYS = [
   'region_verifier',
   'region_verifier_version',
   'region_visible',
-  'region_detector',
-  'region_detector_version',
   'region_detector_chain',
   'region_detected_at',
   'region_profile',
   'region_profile_revision',
-  'region_candidate_bbox_norm',
-  'region_candidate_score',
-  'region_candidate_detector',
-  'region_candidate_detector_version',
-  'region_candidate_source',
-  'region_candidate_bbox_in_parent',
-  'region_cluster_id',
-  'region_cluster_subid',
-  'region_cluster_distance',
   'region_class_id',
   'region_label_source',
-  'region_source',
   'region_pairing',
   'region_skip_verify',
   'region_boxes',
@@ -264,24 +206,9 @@ export const ITEM_WIRE_KEYS = [
 
 /** Region-of-interest attributes (fixed wire names, whatever the storage names). */
 export const REGION_WIRE_KEYS = [
-  'region_bbox_norm',
-  'region_bbox_frame',
-  'region_bbox_correct',
   'region_status',
-  'region_score',
-  'region_confidence',
   'region_reason',
   'region_rejection_reason',
-  'region_text',
-  'region_text_raw',
-  'region_text_confidence',
-  'region_text_source',
-  'region_text_engine_version',
-  'region_text_vlm',
-  'region_text_ocr',
-  'region_text_disagreement',
-  'region_text_choice',
-  'region_text_vlm_invalid',
   'region_validated',
   'region_auto_confirmed',
   'region_verified',
@@ -289,23 +216,12 @@ export const REGION_WIRE_KEYS = [
   'region_verifier',
   'region_verifier_version',
   'region_visible',
-  'region_detector',
-  'region_detector_version',
   'region_detector_chain',
   'region_detected_at',
   'region_profile',
   'region_profile_revision',
-  'region_candidate_bbox_norm',
-  'region_candidate_score',
-  'region_candidate_detector',
-  'region_candidate_detector_version',
-  'region_candidate_source',
-  'region_cluster_id',
-  'region_cluster_subid',
-  'region_cluster_distance',
   'region_class_id',
   'region_label_source',
-  'region_source',
   'region_pairing',
   'region_skip_verify',
 ] as const satisfies readonly ItemWireKey[];
@@ -320,5 +236,6 @@ export const SEARCH_EXTRA_KEYS = [
   'semantic_score',
 ] as const;
 export const TRAINING_CANDIDATE_EXTRA_KEYS = [
+  'region_box_id',
   'selection_reason',
 ] as const;

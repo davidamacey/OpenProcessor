@@ -112,8 +112,8 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
         event['class_source'] = payload.class_source
     if payload.region_status is not None:
         event[status_key] = payload.region_status
-    if payload.region_text is not None:
-        event[region_wire_key('text')] = payload.region_text
+    if payload.region_count is not None:
+        event['region_count'] = payload.region_count
     if payload.image_path is not None:
         event['image_path'] = payload.image_path
     bound = get_curation_config().project_slug

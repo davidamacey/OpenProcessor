@@ -235,7 +235,12 @@ def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> Non
     spec = specs['region_status']
     assert spec['kind'] == 'enum'
     assert spec['label']
-    assert {o['value'] for o in spec['options']} == {'all', 'detected', 'verify_rejected'}
+    assert {o['value'] for o in spec['options']} == {
+        'all',
+        'detected',
+        'verify_rejected',
+        'has_rejected_box',
+    }
     assert all(o['label'] for o in spec['options'])
     assert regions['filter_defaults']['region_status'] in {o['value'] for o in spec['options']}
     for tab_id, tab in by_id.items():

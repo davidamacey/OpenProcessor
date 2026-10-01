@@ -472,7 +472,7 @@ async def test_a_write_carries_the_identity_of_the_call_not_of_the_runtime_at_wr
 
     F = get_region_fields()
     task = _task()
-    task.update_doc = {F.status: 'detected', F.score: 0.9}
+    task.update_doc = {F.status: 'detected', F.count: 1}
     task.mark_vlm_called(VlmIdentity('old@3', 'org/old-model'))
 
     async def _mget(*, body: dict[str, Any]) -> dict[str, Any]:
@@ -502,7 +502,7 @@ async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -
 
     F = get_region_fields()
     task = _task()
-    task.update_doc = {F.status: 'detected', F.score: 0.9}
+    task.update_doc = {F.status: 'detected', F.count: 1}
 
     async def _mget(*, body: dict[str, Any]) -> dict[str, Any]:
         return make_mget_response({d['_id']: {F.status: 'pending_detection'} for d in body['docs']})

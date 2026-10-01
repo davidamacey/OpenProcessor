@@ -38,6 +38,11 @@
 # were hand-edited here to the new paths ahead of the matching Cropwright
 # commit rather than re-snapshotted. Re-snapshot as usual once the frontend
 # change lands.
+#
+# W8-cleanup Item 3 deleted PUT /crops/{id}/region (the single-box write):
+# its entry below was hand-edited to /crops/{param}/regions (the box-list
+# write that replaces it) ahead of the matching Cropwright commit, same as
+# the B2 edits above.
 
 /bakeoff/baseline_models
 /bakeoff/eval_datasets
@@ -62,7 +67,7 @@
 /crops/{param}
 /crops/{param}/image
 /crops/{param}/label
-/crops/{param}/region
+/crops/{param}/regions
 /crops/{param}/region_meta
 /crops/{param}/region_thumbnail
 /crops/{param}/review_dismiss

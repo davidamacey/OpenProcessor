@@ -59,47 +59,26 @@ VLM_DISMISS_FIELDS: tuple[str, ...] = (
 
 
 def region_state_fields() -> tuple[str, ...]:
-    """Storage names of every region field a human region write can change.
-
-    W8 pin 4: gains the per-item box-list fields (``boxes``, ``count``,
-    ``rejected_count``, ``max_score``, ``set_complete``) alongside the
-    pre-W8 per-box scalars, so ``POST /crops/{id}/region/undo`` restores
-    whichever shape the write actually touched. The legacy scalars stay
-    in this tuple (deliberately NOT dropped, unlike the AD W8.7 end-state)
-    because the worker pipeline (W8b) still writes them exclusively this
-    pass; dropping them here would silently stop undo from restoring a
-    worker-written region. See the W8 handback report.
+    """Storage names of every region field a human region write can change:
+    the item-level region state plus the box list and its summaries (W8
+    pin 4), so ``POST /crops/{id}/region/undo`` restores the whole prior
+    list. ``region_revision`` and ``region_box_seq`` are never snapshot
+    fields (a restore is itself a write that moves the revision forward,
+    and the box-id high-water mark never decreases); per-box embeddings
+    live in their own field and are keyed by box id, so a restored box
+    finds its vector again.
     """
     F = get_region_fields()
     return (
-        F.bbox_norm,
-        F.bbox_frame,
         F.status,
-        F.score,
         F.verified,
         F.verified_at,
         F.verifier,
         F.verifier_version,
         F.validated,
         F.label_source,
-        F.detector,
-        F.detector_version,
         F.detected_at,
-        F.source,
         F.rejection_reason,
-        F.candidate_bbox_norm,
-        F.candidate_score,
-        F.candidate_detector,
-        F.candidate_detector_version,
-        F.candidate_source,
-        F.text,
-        F.text_source,
-        F.text_confidence,
-        F.text_choice,
-        F.cluster_id,
-        F.cluster_subid,
-        F.cluster_distance,
-        # W8 per-item box list (pin 4).
         F.boxes,
         F.count,
         F.rejected_count,
@@ -158,13 +137,27 @@ def find_edit_undo(history: list[Any] | None, kind: EditKind) -> dict[str, Any] 
     return None
 
 
-def restore_edit_state(entry: dict[str, Any], kind: EditKind) -> dict[str, Any]:
-    """Update-doc fields putting back the state recorded in ``entry``."""
+def restore_edit_state(
+    entry: dict[str, Any], kind: EditKind, *, current: dict[str, Any]
+) -> dict[str, Any]:
+    """Update-doc fields putting back the state recorded in ``entry``.
+
+    ``current`` is the stored doc the restore applies to. A region restore
+    is itself a write over the box list, so ``region_revision`` moves
+    forward from ``current`` (the stale-edit guard must see an undo as a
+    change) -- a snapshot's old revision is never restored. ``region_box_seq``
+    is not a snapshot field either, so the id high-water mark never
+    decreases and a restored list can't collide with a box added since.
+    """
     state = entry.get('state') or {}
     # Only the fields the snapshot recorded: an entry written before a
     # field joined ``state_fields`` says nothing about it, and restoring it
     # as null would erase a value that edit never touched.
-    return {f: state[f] for f in state_fields(kind) if f in state}
+    restored = {f: state[f] for f in state_fields(kind) if f in state}
+    if kind == EditKind.REGION:
+        F = get_region_fields()
+        restored[F.revision] = int(current.get(F.revision) or 0) + 1
+    return restored
 
 
 __all__ = [

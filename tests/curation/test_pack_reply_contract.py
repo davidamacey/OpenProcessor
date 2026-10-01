@@ -20,6 +20,7 @@ runs in production.
 from __future__ import annotations
 
 from src.config.region_fields import get_region_fields
+from src.services.labeling.region_overlay import REPLY_BBOX_CORRECT_KEY, REPLY_CONFIDENCE_KEY
 from src.services.labeling.vlm_labeler import _combined_reply_from_entry
 from src.services.labeling.vlm_prompts import REPLY_KEY_CONTRACT
 
@@ -53,7 +54,7 @@ def test_combined_single_crop_flat_and_one_element_list_parse_identically() -> N
         fields.visible: True,
         'class_id': 2,
         'class_confidence': 'high',
-        fields.boxes: [{'box': 1, fields.bbox_correct: True, fields.confidence: 'high'}],
+        fields.boxes: [{'box': 1, REPLY_BBOX_CORRECT_KEY: True, REPLY_CONFIDENCE_KEY: 'high'}],
     }
     reply = _combined_reply_from_entry(
         flat_entry, img_id='c1', fields=fields, class_names=['a', 'b', 'car'], n_boxes=1
@@ -85,7 +86,7 @@ def test_combined_multi_box_requires_the_list_key_no_flat_fallback() -> None:
     from src.services.labeling.region_overlay import MultiRegionKeysMissingError
 
     fields = get_region_fields()
-    entry = {fields.visible: True, fields.bbox_correct: True}  # flat shape only
+    entry = {fields.visible: True, REPLY_BBOX_CORRECT_KEY: True}  # flat shape only
     try:
         _combined_reply_from_entry(entry, img_id='c1', fields=fields, class_names=None, n_boxes=3)
     except MultiRegionKeysMissingError:

@@ -342,7 +342,6 @@ async def test_worker_drops_class_fields_when_class_changed_after_read() -> None
     )
     task.update_doc = {
         F.status: 'detected',
-        F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
         'class_id': 7,
         'class_name': 'sportscar',
         'class_source': 'vlm',

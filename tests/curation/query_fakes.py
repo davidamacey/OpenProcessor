@@ -21,6 +21,11 @@ evaluates the subset of the query DSL those paths use:
   the same way, before running its sub-aggs — so a nested terms agg
   counts BOXES, not items; fine for dry-run reporting, not exact for an
   item with 2+ boxes in the same bucket);
+- ``inner_hits`` on a top-level ``nested`` clause (the matching elements'
+  ``_nested.offset``; a ``size`` above ``max_inner_result_window`` -- 100
+  unless a test sets it through ``indices.put_settings`` -- raises like
+  OpenSearch's 400), and ``top_hits`` inside a nested aggregation with
+  ``docvalue_fields`` (parent ``_id`` + the requested ``fields``);
 - ``count``, ``get``, ``update`` (``if_seq_no`` honoured), ``mget``,
   ``bulk`` (``update`` with ``if_seq_no`` and ``index``), ``indices.refresh``.
 
@@ -82,6 +87,8 @@ def _term_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
 
 
 _REVERSE_NESTED_PARENT_KEY = '__parent_id__'
+_DOC_ID_KEY = '__doc_id__'
+_PARENT_DOC_KEY = '__parent_doc__'
 
 
 def _nested_elements(doc: dict[str, Any], path: str) -> list[dict[str, Any]]:
@@ -96,7 +103,12 @@ def _nested_elements(doc: dict[str, Any], path: str) -> list[dict[str, Any]]:
         return []
     prefix = f'{path}.'
     return [
-        {f'{prefix}{k}': v for k, v in el.items()} | {_REVERSE_NESTED_PARENT_KEY: id(doc)}
+        {f'{prefix}{k}': v for k, v in el.items()}
+        | {
+            _REVERSE_NESTED_PARENT_KEY: id(doc),
+            _DOC_ID_KEY: doc.get(_DOC_ID_KEY),
+            _PARENT_DOC_KEY: doc,
+        }
         for el in elements
         if isinstance(el, dict)
     ]
@@ -155,6 +167,54 @@ def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
     raise NotImplementedError(f'query clause not supported by fake: {query}')
 
 
+def _top_hit(doc: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
+    doc_id = doc.get(_DOC_ID_KEY)
+    visible = {
+        k: v
+        for k, v in doc.items()
+        if k not in (_DOC_ID_KEY, _REVERSE_NESTED_PARENT_KEY, _PARENT_DOC_KEY)
+    }
+    hit: dict[str, Any] = {'_id': doc_id}
+    if spec.get('docvalue_fields'):
+        hit['fields'] = {f: _values(visible, f) for f in spec['docvalue_fields']}
+    if spec.get('_source', True) is not False:
+        hit['_source'] = copy.deepcopy(visible)
+    return hit
+
+
+def _nested_clauses_with_inner_hits(query: Any) -> list[dict[str, Any]]:
+    """Every ``nested`` clause under ``query`` that asks for ``inner_hits``."""
+    found: list[dict[str, Any]] = []
+    if isinstance(query, dict):
+        nested = query.get('nested')
+        if isinstance(nested, dict) and 'inner_hits' in nested:
+            found.append(nested)
+        for value in query.values():
+            found.extend(_nested_clauses_with_inner_hits(value))
+    elif isinstance(query, list):
+        for item in query:
+            found.extend(_nested_clauses_with_inner_hits(item))
+    return found
+
+
+def _sorted_by(
+    docs: list[dict[str, Any]], sort: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
+    """``docs`` ordered by an OpenSearch ``sort`` list (the first key only;
+    ``missing: _last`` / ``_first`` honoured, ``_last`` by default). Without a
+    sort the order is the fake's insertion order, which is what an unsorted
+    ``top_hits`` would not guarantee."""
+    if not sort:
+        return docs
+    ((field, opts),) = sort[0].items()
+    descending = (opts.get('order', 'asc') if isinstance(opts, dict) else opts) == 'desc'
+    missing_first = isinstance(opts, dict) and opts.get('missing') == '_first'
+    present = [d for d in docs if _values(d, field)]
+    absent = [d for d in docs if not _values(d, field)]
+    present.sort(key=lambda d: _values(d, field)[0], reverse=descending)
+    return [*absent, *present] if missing_first else [*present, *absent]
+
+
 def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, spec in aggs.items():
@@ -164,17 +224,24 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             out[name] = {'value': len(distinct)}
             continue
         if 'reverse_nested' in spec:
-            # Count distinct PARENT docs the current group's nested
-            # elements came from, not the elements themselves -- an item
-            # with 2 boxes matching the same terms bucket counts once.
-            parent_ids = {
-                d[_REVERSE_NESTED_PARENT_KEY] for d in docs if _REVERSE_NESTED_PARENT_KEY in d
-            }
-            out[name] = {'doc_count': len(parent_ids) if parent_ids else len(docs)}
+            # The distinct PARENT docs the current group's nested elements
+            # came from, not the elements themselves -- an item with 2 boxes
+            # matching the same terms bucket counts once. Sub-aggs run over
+            # those parents.
+            parents: dict[int, dict[str, Any]] = {}
+            for d in docs:
+                if _PARENT_DOC_KEY in d:
+                    parents.setdefault(d[_REVERSE_NESTED_PARENT_KEY], d[_PARENT_DOC_KEY])
+            parent_docs = list(parents.values()) if parents else docs
+            rn_bucket: dict[str, Any] = {'doc_count': len(parent_docs)}
+            if spec.get('aggs'):
+                rn_bucket.update(_aggregate(parent_docs, spec['aggs']))
+            out[name] = rn_bucket
             continue
         if 'top_hits' in spec:
             size = spec['top_hits'].get('size', 3)
-            out[name] = {'hits': {'hits': [{'_source': copy.deepcopy(d)} for d in docs[:size]]}}
+            ordered = _sorted_by(docs, spec['top_hits'].get('sort'))
+            out[name] = {'hits': {'hits': [_top_hit(d, spec['top_hits']) for d in ordered[:size]]}}
             continue
         if 'composite' in spec:
             csize = spec['composite'].get('size', 10)
@@ -248,6 +315,8 @@ class QueryFakeOpenSearch:
         self.searched_indexes: list[str] = []
         self.bulk_calls = 0
         self.mget_calls = 0
+        self.max_inner_result_window = 100
+        self.settings_puts: list[dict[str, Any]] = []
         self.indices = _Indices(self)
 
     # ------------------------------------------------------------------ helpers
@@ -295,11 +364,40 @@ class QueryFakeOpenSearch:
                 hit['sort'] = [doc.get(sort_field, doc_id)]
             hits.append(hit)
         resp: dict[str, Any] = {'hits': {'total': {'value': len(pool)}, 'hits': hits}}
+        for clause in _nested_clauses_with_inner_hits(body.get('query')):
+            self._attach_inner_hits(resp['hits']['hits'], pool, clause)
         if body.get('aggs'):
-            resp['aggregations'] = _aggregate([doc for _id, doc in pool], body['aggs'])
+            resp['aggregations'] = _aggregate(
+                [{**doc, _DOC_ID_KEY: doc_id} for doc_id, doc in pool], body['aggs']
+            )
         if scroll is not None:
             resp['_scroll_id'] = 'fake-scroll'
         return resp
+
+    def _attach_inner_hits(
+        self,
+        hits: list[dict[str, Any]],
+        pool: list[tuple[str, dict[str, Any]]],
+        clause: dict[str, Any],
+    ) -> None:
+        spec = clause['inner_hits']
+        size = spec.get('size', 3)
+        if size > self.max_inner_result_window:
+            raise ValueError(
+                f'400: inner_hits size {size} exceeds index.max_inner_result_window '
+                f'{self.max_inner_result_window}'
+            )
+        by_id = dict(pool)
+        for hit in hits:
+            doc = by_id[hit['_id']]
+            matched = [
+                {'_nested': {'field': clause['path'], 'offset': i}}
+                for i, el in enumerate(_nested_elements(doc, clause['path']))
+                if matches(el, clause['query'])
+            ]
+            hit.setdefault('inner_hits', {})[spec.get('name', clause['path'])] = {
+                'hits': {'total': {'value': len(matched)}, 'hits': matched[:size]}
+            }
 
     async def scroll(self, *, scroll_id: str, **_kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
@@ -420,3 +518,15 @@ class _Indices:
 
     async def exists(self, *, index: str) -> bool:
         return index in self.parent.store
+
+    async def get_settings(self, *, index: str, **_kw: Any) -> dict[str, Any]:
+        window = str(self.parent.max_inner_result_window)
+        return {index: {'settings': {'index': {'max_inner_result_window': window}}}}
+
+    async def put_settings(self, *, index: str, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+        self.parent.settings_puts.append({'index': index, 'body': body})
+        flat = body.get('index', body)
+        value = flat.get('max_inner_result_window', body.get('index.max_inner_result_window'))
+        if value is not None:
+            self.parent.max_inner_result_window = int(value)
+        return {'acknowledged': True}

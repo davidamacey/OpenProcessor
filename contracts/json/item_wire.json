@@ -7,6 +7,7 @@
       "semantic_score"
     ],
     "training_candidate": [
+      "region_box_id",
       "selection_reason"
     ]
   },
@@ -78,26 +79,9 @@
     "dup_is_representative",
     "updated_at",
     "thumbnail_url",
-    "region_thumbnail_url",
-    "region_bbox_norm",
-    "region_bbox_in_parent",
-    "region_bbox_frame",
-    "region_bbox_correct",
     "region_status",
-    "region_score",
-    "region_confidence",
     "region_reason",
     "region_rejection_reason",
-    "region_text",
-    "region_text_raw",
-    "region_text_confidence",
-    "region_text_source",
-    "region_text_engine_version",
-    "region_text_vlm",
-    "region_text_ocr",
-    "region_text_disagreement",
-    "region_text_choice",
-    "region_text_vlm_invalid",
     "region_validated",
     "region_auto_confirmed",
     "region_verified",
@@ -105,24 +89,12 @@
     "region_verifier",
     "region_verifier_version",
     "region_visible",
-    "region_detector",
-    "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
     "region_profile",
     "region_profile_revision",
-    "region_candidate_bbox_norm",
-    "region_candidate_score",
-    "region_candidate_detector",
-    "region_candidate_detector_version",
-    "region_candidate_source",
-    "region_candidate_bbox_in_parent",
-    "region_cluster_id",
-    "region_cluster_subid",
-    "region_cluster_distance",
     "region_class_id",
     "region_label_source",
-    "region_source",
     "region_pairing",
     "region_skip_verify",
     "region_boxes",
@@ -731,60 +703,6 @@
         "default": null,
         "title": "Region Auto Confirmed"
       },
-      "region_bbox_correct": {
-        "anyOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox Correct"
-      },
-      "region_bbox_frame": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox Frame"
-      },
-      "region_bbox_in_parent": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox In Parent"
-      },
-      "region_bbox_norm": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox Norm"
-      },
       "region_boxes": {
         "items": {
           "additionalProperties": true,
@@ -792,84 +710,6 @@
         },
         "title": "Region Boxes",
         "type": "array"
-      },
-      "region_candidate_bbox_in_parent": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Bbox In Parent"
-      },
-      "region_candidate_bbox_norm": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Bbox Norm"
-      },
-      "region_candidate_detector": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Detector"
-      },
-      "region_candidate_detector_version": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Detector Version"
-      },
-      "region_candidate_score": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Score"
-      },
-      "region_candidate_source": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Source"
       },
       "region_class_id": {
         "anyOf": [
@@ -882,46 +722,6 @@
         ],
         "default": null,
         "title": "Region Class Id"
-      },
-      "region_cluster_distance": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Cluster Distance"
-      },
-      "region_cluster_id": {
-        "anyOf": [
-          {
-            "type": "integer"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Cluster Id"
-      },
-      "region_cluster_subid": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Cluster Subid"
-      },
-      "region_confidence": {
-        "default": null,
-        "title": "Region Confidence"
       },
       "region_count": {
         "default": 0,
@@ -940,18 +740,6 @@
         "default": null,
         "title": "Region Detected At"
       },
-      "region_detector": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Detector"
-      },
       "region_detector_chain": {
         "anyOf": [
           {
@@ -966,18 +754,6 @@
         ],
         "default": null,
         "title": "Region Detector Chain"
-      },
-      "region_detector_version": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Detector Version"
       },
       "region_label_source": {
         "anyOf": [
@@ -1065,18 +841,6 @@
         "title": "Region Revision",
         "type": "integer"
       },
-      "region_score": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Score"
-      },
       "region_set_complete": {
         "anyOf": [
           {
@@ -1101,18 +865,6 @@
         "default": null,
         "title": "Region Skip Verify"
       },
-      "region_source": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Source"
-      },
       "region_status": {
         "anyOf": [
           {
@@ -1124,131 +876,6 @@
         ],
         "default": null,
         "title": "Region Status"
-      },
-      "region_text": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text"
-      },
-      "region_text_choice": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Choice"
-      },
-      "region_text_confidence": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Confidence"
-      },
-      "region_text_disagreement": {
-        "anyOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Disagreement"
-      },
-      "region_text_engine_version": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Engine Version"
-      },
-      "region_text_ocr": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Ocr"
-      },
-      "region_text_raw": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Raw"
-      },
-      "region_text_source": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Source"
-      },
-      "region_text_vlm": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Vlm"
-      },
-      "region_text_vlm_invalid": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Vlm Invalid"
-      },
-      "region_thumbnail_url": {
-        "default": "",
-        "title": "Region Thumbnail Url",
-        "type": "string"
       },
       "region_validated": {
         "anyOf": [
@@ -1487,26 +1114,11 @@
     "title": "ItemDoc",
     "type": "object"
   },
-  "notes": "Every item-returning endpoint emits exactly item_keys (all always present; nullable per json_schema), plus that endpoint's extra_keys. region_keys is the region-of-interest subset; region_thumbnail_url is a server-built URL, not a region attribute.",
+  "notes": "Every item-returning endpoint emits exactly item_keys (all always present; nullable per json_schema), plus that endpoint's extra_keys. region_keys is the item-level region subset; a box's own data (geometry, score, detector, text, cluster, thumbnail_url) is an element of region_boxes.",
   "region_keys": [
-    "region_bbox_norm",
-    "region_bbox_frame",
-    "region_bbox_correct",
     "region_status",
-    "region_score",
-    "region_confidence",
     "region_reason",
     "region_rejection_reason",
-    "region_text",
-    "region_text_raw",
-    "region_text_confidence",
-    "region_text_source",
-    "region_text_engine_version",
-    "region_text_vlm",
-    "region_text_ocr",
-    "region_text_disagreement",
-    "region_text_choice",
-    "region_text_vlm_invalid",
     "region_validated",
     "region_auto_confirmed",
     "region_verified",
@@ -1514,23 +1126,12 @@
     "region_verifier",
     "region_verifier_version",
     "region_visible",
-    "region_detector",
-    "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
     "region_profile",
     "region_profile_revision",
-    "region_candidate_bbox_norm",
-    "region_candidate_score",
-    "region_candidate_detector",
-    "region_candidate_detector_version",
-    "region_candidate_source",
-    "region_cluster_id",
-    "region_cluster_subid",
-    "region_cluster_distance",
     "region_class_id",
     "region_label_source",
-    "region_source",
     "region_pairing",
     "region_skip_verify"
   ],

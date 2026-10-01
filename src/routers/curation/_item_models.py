@@ -140,30 +140,9 @@ class ItemDoc(BaseModel):
     dup_is_representative: bool | None = None
     updated_at: str = ''
     thumbnail_url: str = ''
-    region_thumbnail_url: str = ''
-    region_bbox_norm: list[float] | None = None
-    # Derived: the region box in the item-crop frame (xyxy, [0, 1]); null
-    # when there is no region or no usable item box.
-    region_bbox_in_parent: list[float] | None = None
-    region_bbox_frame: str | None = None
-    region_bbox_correct: bool | None = None
     region_status: str | None = None
-    region_score: float | None = None
-    region_confidence: Any = None
     region_reason: str | None = None
     region_rejection_reason: str | None = None
-    region_text: str | None = None
-    region_text_raw: str | None = None
-    region_text_confidence: float | None = None
-    region_text_source: str | None = None
-    region_text_engine_version: str | None = None
-    region_text_vlm: str | None = None
-    region_text_ocr: str | None = None
-    region_text_disagreement: bool | None = None
-    # Why the chosen region_text won, and why the VLM's reading (kept in
-    # region_text_vlm) was rejected as not text; see GET /regions/vocabulary.
-    region_text_choice: str | None = None
-    region_text_vlm_invalid: str | None = None
     # Human validation only (a human confirmed / drew / rejected it).
     region_validated: bool | None = None
     # The worker's auto-confirm policy accepted the box: an accepted but
@@ -174,8 +153,6 @@ class ItemDoc(BaseModel):
     region_verifier: str | None = None
     region_verifier_version: str | None = None
     region_visible: bool | None = None
-    region_detector: str | None = None
-    region_detector_version: str | None = None
     region_detector_chain: list[str] | None = None
     region_detected_at: str | None = None
     # Config-store provenance (W2): the activated region profile
@@ -183,29 +160,14 @@ class ItemDoc(BaseModel):
     # item never touched by a config-store-hot-reloadable worker write.
     region_profile: str | None = None
     region_profile_revision: int | None = None
-    # A detector box the verifier rejected (region_status verify_rejected),
-    # kept for review: never an accepted region. A human confirm (PATCH
-    # region_meta region_status=detected, or PUT region with this box)
-    # promotes it to region_bbox_norm with this provenance.
-    region_candidate_bbox_norm: list[float] | None = None
-    region_candidate_score: float | None = None
-    region_candidate_detector: str | None = None
-    region_candidate_detector_version: str | None = None
-    region_candidate_source: str | None = None
-    # Derived: the candidate box in the item-crop frame (xyxy, [0, 1]).
-    region_candidate_bbox_in_parent: list[float] | None = None
-    region_cluster_id: int | None = None
-    region_cluster_subid: str | None = None
-    region_cluster_distance: float | None = None
     region_class_id: int | None = None
     region_label_source: str | None = None
-    region_source: str | None = None
     region_pairing: Any = None
     region_skip_verify: bool | None = None
-    # W8a: the per-item box list plus its item-level summary fields
-    # (additive alongside the legacy per-box scalars above -- see the
-    # W8a handback report for why those are not removed yet). Element
-    # keys are fixed strings, not RegionFields-indirected (W8.2).
+    # The per-item box list plus its item-level summary fields. A box's own
+    # data (state, geometry in both frames, score, detector, text, cluster
+    # placement, thumbnail_url) is an element; element keys are fixed
+    # strings, not RegionFields-indirected (W8.2).
     region_boxes: list[dict[str, Any]] = Field(default_factory=list)
     region_count: int = 0
     region_rejected_count: int = 0

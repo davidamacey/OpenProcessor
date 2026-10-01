@@ -32,7 +32,6 @@ def fake_os() -> _FakeRegionOS:
             'crop-1': {
                 'crop_id': 'crop-1',
                 F.status: 'pending_detection',
-                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
                 F.boxes: [
                     {
                         'box_id': 'b1',
@@ -106,6 +105,43 @@ def test_put_regions_omitting_a_box_deletes_it(
     stored = fake_os._docs['crop-1'][F.boxes]
     assert [b['box_id'] for b in stored] == ['b1']
     assert fake_os._docs['crop-1'][F.count] == 1
+
+
+def test_put_regions_prunes_the_embedding_of_a_moved_and_of_a_deleted_box(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    from src.services.curation.region_box_embeddings import entry_for
+    from src.services.curation.region_boxes import read_boxes
+
+    doc = fake_os._docs['crop-1']
+    doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
+
+    # Move b1, omit (delete) b2.
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.25, 0.25]}]},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert fake_os._docs['crop-1'][F.box_embeddings] == []
+
+
+def test_put_regions_keeps_the_embedding_of_a_box_it_leaves_alone(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    from src.services.curation.region_box_embeddings import entry_for
+    from src.services.curation.region_boxes import read_boxes
+
+    doc = fake_os._docs['crop-1']
+    doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
+
+    resp = app_client.put(
+        '/curation/projects/default/crops/crop-1/regions',
+        json={'boxes': [{'box_id': 'b1'}, {'box_id': 'b2'}]},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert [e['box_id'] for e in fake_os._docs['crop-1'][F.box_embeddings]] == ['b1', 'b2']
 
 
 def test_put_regions_new_box_defaults_to_accepted(
@@ -290,16 +326,38 @@ def test_patch_region_box_stale_revision_is_409(
 def test_batch_box_state_flips_only_named_boxes(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    # b1 is accepted and b2 proposed; rejecting b1 must leave b2 proposed.
     resp = app_client.post(
         '/curation/projects/default/regions/batch_box_state',
-        json={'targets': [{'crop_id': 'crop-1', 'box_id': 'b2'}], 'state': 'accepted'},
+        json={'targets': [{'crop_id': 'crop-1', 'box_id': 'b1'}], 'state': 'rejected'},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['updated'] == 1
     stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
-    assert stored['b2']['state'] == 'accepted'
-    assert stored['b1']['state'] == 'accepted'
+    assert stored['b1']['state'] == 'rejected'
+    assert stored['b2']['state'] == 'proposed'
+    assert stored['b2'].get('rejection_reason') is None
+
+
+def test_batch_box_state_serves_one_row_per_targeted_box(app_client: TestClient) -> None:
+    resp = app_client.post(
+        '/curation/projects/default/regions/batch_box_state',
+        json={
+            'targets': [
+                {'crop_id': 'crop-1', 'box_id': 'b1'},
+                {'crop_id': 'crop-1', 'box_id': 'b2'},
+            ],
+            'state': 'rejected',
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()['items']
+    assert [(r['crop_id'], r['region_box_id']) for r in rows] == [
+        ('crop-1', 'b1'),
+        ('crop-1', 'b2'),
+    ]
+    assert all(r['region_boxes'][0]['state'] == 'rejected' for r in rows)
 
 
 def test_batch_box_state_unknown_box_id_is_invalid_not_updated(

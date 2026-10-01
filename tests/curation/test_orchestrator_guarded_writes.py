@@ -1,29 +1,25 @@
-"""The clustering orchestrator's bulk writers must never clobber a
+"""The class-clustering orchestrator's bulk writers must never clobber a
 concurrent human label/verification/exclusion.
 
-Five writers fetch candidates, spend seconds-to-minutes fitting a model,
-then bulk-write ``cluster_id``/``cluster_subid`` back. Before this fix each
-one sent a blind ``{'doc': {...}}`` update, so a human write landing during
-the fit was silently overwritten. Every writer now sends a guarded
-painless ``script`` update instead: noop when the doc's current state
-shows human ownership.
+Two writers fetch candidates, spend seconds-to-minutes fitting a model,
+then bulk-write ``cluster_id``/``cluster_subid`` back. A blind
+``{'doc': {...}}`` update would silently overwrite a human write that
+landed during the fit, so both (``cluster_residuals``,
+``assign_only_residuals``) share :func:`_guarded_class_cluster_write`, a
+painless ``script`` update that noops when the doc's current state shows
+human ownership; ``_bulk_update_subids`` (item refine) has its own "doc
+moved to a different cluster" guard. The region-box clustering writers are
+guarded in ``region_box_rows.write_box_edits`` (see
+``test_region_box_clustering.py``).
 
-Two writers share :func:`_guarded_class_cluster_write` (class
-clustering: ``cluster_residuals``, ``assign_only_residuals``); two share
-:func:`_guarded_region_write` (region clustering: ``cluster_region_residuals``,
-``auto_assign_fp_from_centroids``); ``_bulk_update_subids`` (refine, both
-domains) has its own "doc moved to a different cluster" guard.
-
-The guard logic itself lives in a single ``GuardClause`` list per writer
-kind (``CLASS_CLUSTER_WRITE_GUARD_CLAUSES`` /
-``_region_write_guard_clauses``), rendered into painless text by
+The guard logic lives in a single ``GuardClause`` list
+(``CLASS_CLUSTER_WRITE_GUARD_CLAUSES``), rendered into painless text by
 ``_guard_condition_painless`` and evaluated in plain Python by
 ``_guard_condition_matches`` -- both read off the *same* list, so there is
 nothing for a "predicate vs. script text" consistency test to catch
 drifting apart; the tests below instead prove the list matches
-``is_locked_class`` (class writes) and ``fp_candidate_must_not``
-(region writes), and that the writers actually build ``script`` actions,
-not ``doc`` actions.
+``is_locked_class`` and that the writers actually build ``script``
+actions, not ``doc`` actions.
 """
 
 from __future__ import annotations
@@ -33,7 +29,6 @@ from typing import Any
 import pytest
 
 from src.clients.occ import is_locked_class
-from src.config import get_region_fields
 from src.services.curation.clustering import orchestrator as orch
 
 
@@ -138,56 +133,6 @@ def test_class_cluster_write_guard_applies_to_a_normal_doc() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Region write guard (cluster_region_residuals / auto_assign_fp_from_centroids)
-# ---------------------------------------------------------------------------
-
-
-def test_guarded_region_write_builds_a_script_action_not_doc() -> None:
-    F = get_region_fields()
-    action = orch._guarded_region_write(F, {F.cluster_id: 3, F.cluster_subid: None})
-    assert 'script' in action
-    assert 'doc' not in action
-    src = action['script']['source']
-    assert f"ctx._source['{F.cluster_id}'] = params.v0" in src
-    assert f"ctx._source.remove('{F.cluster_subid}')" in src
-
-
-def test_region_write_guard_clauses_match_fp_candidate_must_not_human_terms() -> None:
-    """fp_candidate_must_not() is the existing OpenSearch-query-side human
-    guard for region writes; _region_write_guard_clauses is its bulk-write
-    counterpart. Cross-check they name the same fields/values."""
-    F = get_region_fields()
-    query_clauses = orch.fp_candidate_must_not()
-    query_terms = {
-        (k, v) for c in query_clauses for k, v in c.get('term', {}).items() if k != F.status
-    }
-    assert (F.label_source, 'human') in query_terms
-    assert (F.verifier, 'human') in query_terms
-
-    write_clauses = orch._region_write_guard_clauses(F)
-    write_terms = {(field, value) for field, op, value in write_clauses if op == 'eq'}
-    assert (F.label_source, 'human') in write_terms
-    assert (F.verifier, 'human') in write_terms
-    # The write guard additionally noops on a human-*validated* region —
-    # stricter than the FP-centroid query filter, which deliberately does
-    # NOT exclude VLM-validated regions (see fp_candidate_must_not's
-    # docstring) but a human validation is always final.
-    assert (F.validated, True) in write_terms
-
-
-def test_region_write_guard_noops_a_human_verified_doc() -> None:
-    F = get_region_fields()
-    human_doc = {F.verifier: 'human', F.label_source: 'model'}
-    assert orch._guard_condition_matches(orch._region_write_guard_clauses(F), human_doc)
-
-
-def test_region_write_guard_applies_to_a_normal_doc() -> None:
-    F = get_region_fields()
-    normal_doc = {F.verifier: 'vlm', F.label_source: 'model', F.validated: False}
-    assert not orch._guard_condition_matches(orch._region_write_guard_clauses(F), normal_doc)
-
-
-# ---------------------------------------------------------------------------
 # _bulk_update_subids — chunking, refresh, and the cluster-moved guard
 # ---------------------------------------------------------------------------
 
@@ -216,9 +161,7 @@ async def test_bulk_update_subids_chunks_at_1000_actions_with_one_final_refresh(
     client = _RecordingBulkOS()
     updates = [(f'crop{i}', f'42{chr(97 + i % 26)}') for i in range(1500)]
 
-    n = await orch._bulk_update_subids(
-        client, updates, cluster_id_field='cluster_id', expected_cluster_id=42
-    )
+    n = await orch._bulk_update_subids(client, updates, expected_cluster_id=42)
 
     assert n == 1500
     # 1500 updates at chunk_size=1000 -> two bulk() calls.
@@ -234,9 +177,7 @@ async def test_bulk_update_subids_chunks_at_1000_actions_with_one_final_refresh(
 @pytest.mark.asyncio
 async def test_bulk_update_subids_script_noops_if_cluster_id_changed() -> None:
     client = _RecordingBulkOS()
-    await orch._bulk_update_subids(
-        client, [('crop1', '42a')], cluster_id_field='cluster_id', expected_cluster_id=42
-    )
+    await orch._bulk_update_subids(client, [('crop1', '42a')], expected_cluster_id=42)
     action = client.bulk_calls[0]['body'][1]
     assert 'script' in action
     src = action['script']['source']
@@ -263,7 +204,5 @@ async def test_bulk_update_subids_logs_partial_errors_without_raising() -> None:
 
     client = _ErrorBulkOS()
     # Must not raise.
-    n = await orch._bulk_update_subids(
-        client, [('crop1', '42a')], cluster_id_field='cluster_id', expected_cluster_id=42
-    )
+    n = await orch._bulk_update_subids(client, [('crop1', '42a')], expected_cluster_id=42)
     assert n == 1

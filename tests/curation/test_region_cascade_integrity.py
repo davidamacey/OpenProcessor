@@ -734,7 +734,7 @@ class TestOnePassPerItem:
             class_name='sedan',
             group='cars',
         )
-        task.update_doc = {F.status: 'detected', F.text: 'AGAIN'}
+        task.update_doc = {F.status: 'detected', F.reason: 'again'}
         task.detection_trace = ['det:hit']
         n_written, _ = await worker._bulk_update(fake_os, [task])  # type: ignore[arg-type]
         assert n_written == 0
@@ -768,7 +768,7 @@ class TestChainFormatMatchesReaders:
         ]
         assert all(_CANONICAL.match(e) for e in chain), chain
 
-        query, _ = _training_candidate_query('detector_blind_spots', profile)
+        query, _box, _ = _training_candidate_query('detector_blind_spots', profile)
         chain_terms = [
             clause['term'][F.detector_chain]
             for clause in query['bool']['filter']
@@ -783,7 +783,7 @@ class TestChainFormatMatchesReaders:
 
         F = get_region_fields()
         profile = _profile()
-        query, _ = _training_candidate_query('disagreement', profile)
+        query, _box, _ = _training_candidate_query('disagreement', profile)
         terms = [
             c['term'][F.detector_chain]
             for c in query['bool']['filter']

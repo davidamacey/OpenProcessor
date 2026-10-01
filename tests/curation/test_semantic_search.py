@@ -410,6 +410,6 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
     assert set(body['_source']['excludes']) == {
         'pe_embedding',
         'backbone_embedding',
-        'region_embedding',
+        'region_box_embeddings',
         'class_id_history',
     }

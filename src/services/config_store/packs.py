@@ -25,6 +25,7 @@ from src.services.config_store.index import (
     save_config as _save_config,
 )
 from src.services.config_store.store import StoredConfig
+from src.services.labeling.region_overlay import REPLY_TEXT_KEY
 from src.services.labeling.vlm_prompts import BUILT_IN_PACKS, PromptPack
 
 
@@ -67,7 +68,7 @@ def _content_etag(name: str, body: dict[str, Any]) -> str:
 def _asks_region_text(body: dict[str, Any]) -> bool:
     for f in ('combined_user_template', 'combined_batch_rules', 'region_user', 'region_batch_user'):
         text = str(body.get(f) or '')
-        if 'region_text' in text or '"text"' in text:
+        if REPLY_TEXT_KEY in text or '"text"' in text:
             return True
     return False
 

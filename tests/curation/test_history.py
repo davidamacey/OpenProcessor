@@ -376,7 +376,6 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
         'label_source': 'vlm',
         'class_validated': False,
         F.status: 'detected',
-        F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
     }
 
     source = {

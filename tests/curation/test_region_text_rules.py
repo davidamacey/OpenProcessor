@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
-from scripts.curation.worker.verify import _region_write_doc
 from src.config import DetectionProfile, get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.region_text import (
@@ -195,23 +194,6 @@ class TestChooser:
 
 
 class TestWriters:
-    @pytest.mark.usefixtures('reference_region_profile')
-    def test_direct_vlm_text_write_drops_a_non_reading(self) -> None:
-        doc = _region_write_doc(
-            region_in_source=(0.1, 0.1, 0.2, 0.2),
-            score=0.9,
-            detector='det',
-            detector_version='1',
-            chain=[],
-            region_text_reply='999',
-            region_text_confidence='high',
-            verifier='vlm-model',
-        )
-        assert F.text not in doc
-        assert doc[F.text_vlm] == '999'
-        assert doc[F.text_vlm_invalid] == 'sequence'
-        assert doc[F.text_choice] == 'no_valid_reading'
-
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('reference_region_profile')
     async def test_worker_replaces_a_prompt_example_with_the_ocr_reading(

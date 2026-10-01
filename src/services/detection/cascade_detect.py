@@ -34,7 +34,6 @@ import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
-from src.config import DetectionProfile, get_region_fields
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox
 from src.services.detection.profile_registry import ensure_env_region_profile
 from src.services.detection.region_text import OcrLine
@@ -42,6 +41,7 @@ from src.services.detection.region_text import OcrLine
 
 if TYPE_CHECKING:
     from src.clients.triton_pool import AsyncTritonPool
+    from src.config import DetectionProfile
 
 
 logger = logging.getLogger(__name__)
@@ -148,39 +148,6 @@ def is_plausible_region_bbox(
         if vw <= 0.0 or vh <= 0.0:
             return False, 'parent_bbox_degenerate'
     return True, 'ok'
-
-
-def region_provenance(
-    detector: str,
-    detector_version: str,
-    *,
-    bbox_frame: str = 'source',
-    verifier: str | None = None,
-    verifier_version: str | None = None,
-    detected_at: str | None = None,
-    verified_at: str | None = None,
-) -> dict[str, Any]:
-    """Build the region-provenance dict to merge into every region update_doc.
-
-    Always emits ``RegionFields.detector``, ``.detector_version``,
-    ``.bbox_frame``, and ``.detected_at``. Verifier fields are included
-    only when supplied — the cascade writers use this for the
-    VLM-verified path, the human-PUT writer uses it to stamp itself as
-    its own verifier.
-    """
-    fields = get_region_fields()
-    doc: dict[str, Any] = {
-        fields.detector: detector,
-        fields.detector_version: detector_version,
-        fields.bbox_frame: bbox_frame,
-        fields.detected_at: detected_at or _now_iso(),
-    }
-    if verifier is not None:
-        doc[fields.verifier] = verifier
-        if verifier_version is not None:
-            doc[fields.verifier_version] = verifier_version
-        doc[fields.verified_at] = verified_at or doc[fields.detected_at]
-    return doc
 
 
 def class_provenance(
@@ -1349,5 +1316,4 @@ __all__ = [
     'class_provenance',
     'crop_norm_to_source_norm',
     'is_plausible_region_bbox',
-    'region_provenance',
 ]

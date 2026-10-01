@@ -12,6 +12,7 @@ import string
 from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any
 
+from src.services.labeling.region_overlay import REPLY_TEXT_KEY
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT, PromptPack
 
 
@@ -47,7 +48,7 @@ _MAP_FIELDS = ('class_descriptions', 'synonyms')
 #: bypassed multi-box mismatch would silently drop verdicts.
 BYPASSABLE_CODES: frozenset[str] = frozenset()
 
-_TEXT_ASKING_KEYS = ('region_text', 'text')
+_TEXT_ASKING_KEYS = (REPLY_TEXT_KEY, 'text')
 
 
 def _issue(

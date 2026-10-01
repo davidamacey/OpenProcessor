@@ -16,9 +16,10 @@ under the other.
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, ORJSONResponse, Response
 
 from src.config import get_curation_config, get_region_fields
@@ -32,6 +33,7 @@ from src.services.curation.image_serving import (
     resolve_safe_path,
     serve_source_image,
 )
+from src.services.curation.region_boxes import read_boxes
 
 
 if TYPE_CHECKING:
@@ -55,6 +57,17 @@ router = APIRouter(
 
 # Shared headers for image responses — 1h cache, public.
 _IMAGE_CACHE_HEADERS = {'Cache-Control': 'public, max-age=3600'}
+
+
+def _region_thumbnail_headers(image_path: Any, bbox: Any, size: int) -> dict[str, str]:
+    """Revalidate-every-time headers for a box close-up. The URL is only
+    ``crop_id`` + ``box_id`` and a human can move the box, so a fixed
+    max-age would show the old crop; the ETag names the image, geometry and
+    size, so an unmoved box is a cheap 304 and a moved one is a new body."""
+    tag = hashlib.sha1(
+        f'{image_path}|{list(bbox)}|{size}'.encode(), usedforsecurity=False
+    ).hexdigest()[:16]
+    return {'Cache-Control': 'no-cache', 'ETag': f'"{tag}"'}
 
 
 # =============================================================================
@@ -194,30 +207,35 @@ async def crop_full_image(
 @crops_router.get('/{crop_id}/region_thumbnail')
 async def crop_region_thumbnail(
     crop_id: str,
+    request: Request,
     opensearch: OpenSearchDep,
+    box_id: Annotated[str | None, Query(description='The region box to render (required).')] = None,
     size: Annotated[int, Query(ge=32, le=512, description='Square thumbnail size')] = 128,
 ) -> Response:
-    """128px JPEG thumbnail of the crop's region-of-interest sub-bbox.
+    """128px JPEG thumbnail of one region box of the crop.
 
-    Used by the region-verification UI in the labeler. Falls back to the
-    verifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)
-    when there is no accepted region box (``RegionFields.bbox_norm``) --
-    a ``verify_rejected`` item never has the latter, so this route used to
-    404 for every one of them even though the item is still reviewable
-    404 only when the crop has neither box. The cache
-    key includes the box's own coordinates (``ThumbnailCache.get_or_compute``),
-    so a later promotion or re-detection that changes the box never
-    serves a stale image -- it's a different cache key.
+    Used by the region-verification UI in the labeler. ``box_id`` names
+    the box (422 ``box_id_required`` without it, 404 ``unknown_box_id``
+    for a box the crop does not hold); any state renders, a rejected box
+    included, since a rejected box is still reviewable. The cache key
+    and the ``ETag`` include the box's own coordinates
+    (``ThumbnailCache.get_or_compute``), so a later edit or re-detection
+    that changes the box never serves a stale image; the response is
+    ``no-cache`` and a matching ``If-None-Match`` gets a 304.
     """
+    if not box_id:
+        raise HTTPException(status_code=422, detail={'error': 'box_id_required'})
     crop = await _fetch_crop(crop_id, opensearch)
-    fields = get_region_fields()
-    region_bbox = crop.get(fields.bbox_norm)
-    if not region_bbox or len(region_bbox) != 4:
-        region_bbox = crop.get(fields.candidate_bbox_norm)
-    if not region_bbox or len(region_bbox) != 4:
-        raise HTTPException(status_code=404, detail='crop has no region bbox')
+    region_bbox = next(
+        (b.bbox_norm for b in read_boxes(crop, get_region_fields()) if b.box_id == box_id), None
+    )
+    if region_bbox is None:
+        raise HTTPException(status_code=404, detail={'error': 'unknown_box_id'})
 
     image_path = _resolve_image_for_crop(crop)
+    headers = _region_thumbnail_headers(image_path, region_bbox, size)
+    if request.headers.get('if-none-match') == headers['ETag']:
+        return Response(status_code=304, headers=headers)
 
     try:
         jpeg = THUMBNAIL_CACHE.get_or_compute(image_path, tuple(region_bbox), size=size)
@@ -231,7 +249,7 @@ async def crop_region_thumbnail(
             status_code=500, detail=f'region thumbnail render failed: {exc}'
         ) from exc
 
-    return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
+    return Response(content=jpeg, media_type='image/jpeg', headers=headers)
 
 
 __all__ = ['crops_router', 'router']
