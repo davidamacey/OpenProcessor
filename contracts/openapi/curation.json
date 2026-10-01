@@ -13644,7 +13644,7 @@
       "VocabularyDetector": {
         "properties": {
           "filterable": {
-            "description": "True for values that can appear in stored region_detector.",
+            "description": "True for values that can appear as a stored box detector.",
             "title": "Filterable",
             "type": "boolean"
           },
@@ -24099,7 +24099,7 @@
             }
           },
           {
-            "description": "Regions tab only: case-insensitive substring search on region_text.",
+            "description": "Regions tab only: case-insensitive substring search on any box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -24112,7 +24112,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions tab only: case-insensitive substring search on region_text.",
+              "description": "Regions tab only: case-insensitive substring search on any box text.",
               "title": "Text"
             }
           },
@@ -24387,7 +24387,7 @@
             }
           },
           {
-            "description": "Regions tab only: case-insensitive substring search on region_text.",
+            "description": "Regions tab only: case-insensitive substring search on any box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -24400,7 +24400,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions tab only: case-insensitive substring search on region_text.",
+              "description": "Regions tab only: case-insensitive substring search on any box text.",
               "title": "Text"
             }
           },

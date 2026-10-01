@@ -17,7 +17,7 @@ class VocabularyDetector(BaseModel):
     label: str
     role: str
     filterable: bool = Field(
-        description='True for values that can appear in stored region_detector.'
+        description='True for values that can appear as a stored box detector.'
     )
 
 

@@ -374,7 +374,7 @@ async def run(args: argparse.Namespace) -> int:
             logger.warning(
                 'region_embed_disabled_model_not_ready',
                 model=PE_IMAGE_MODEL,
-                detail='region_embedding will not be written this run',
+                detail='region_box_embeddings will not be written this run',
             )
 
     # The VLM class catalog (prompt class list + name -> registry id) is
