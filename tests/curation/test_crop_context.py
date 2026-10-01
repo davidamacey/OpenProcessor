@@ -195,3 +195,21 @@ def test_dismissed_list_and_undismiss() -> None:
     assert fake.docs(ITEMS)['b1'].get('review_dismissed_at') is None
     r = client.get('/curation/projects/default/crops', params={'review_dismissed': 'true'})
     assert r.json()['crops'] == []
+
+
+def test_the_documented_context_model_matches_what_is_served() -> None:
+    """``CropContextResponse`` is documentation only; this pins it to the
+    handler's output so the OpenAPI contract cannot drift from the wire."""
+    from src.routers.curation.crop_context import CropContextImage, CropContextResponse
+
+    served = _client(_fake()).get('/curation/projects/default/crops/a1/context').json()
+
+    assert set(served) == set(CropContextResponse.model_fields)
+    assert set(served['image']) == set(CropContextImage.model_fields)
+    parsed = CropContextResponse.model_validate(served)
+    assert [i.crop_id for i in parsed.items] == ['a1', 'a2']
+    openapi = _client(_fake()).app.openapi()
+    ref = openapi['paths']['/curation/projects/{project}/crops/{crop_id}/context']['get'][
+        'responses'
+    ]['200']['content']['application/json']['schema']
+    assert ref['$ref'].endswith('/CropContextResponse')

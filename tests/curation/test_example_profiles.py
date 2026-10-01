@@ -86,6 +86,7 @@ class TestExampleRegionProfiles:
         assert profile.parent_classes == frozenset({'car'})
         assert profile.segmenter_text_prompt == 'wheel'
         assert profile.region_class_name == 'wheel'
+        assert profile.max_regions_per_item == 4
 
     def test_license_plate_keeps_its_text_rules_explicitly(self) -> None:
         profile = region_profile_from_file(
@@ -118,3 +119,17 @@ class TestExamplePromptPacks:
         assert 'wheel (tire plus rim)' in pack.region_user
         assert pack.class_descriptions == {}
         assert pack.synonyms == {}
+
+
+class TestExampleWheelBakeoffProfile:
+    def test_loads_by_path_with_a_wheel_class_and_the_car_context(self) -> None:
+        from scripts.curation.bakeoff.profile import resolve_profile
+
+        profile = resolve_profile(str(_EXAMPLES / 'bakeoff' / 'vehicle_wheel' / 'profile.json'))
+        assert profile.name == 'vehicle_wheel'
+        assert profile.class_names == ('wheel',)
+        assert profile.context_class_ids == (2,)  # COCO car
+        assert profile.triton_model == ''
+        assert profile.baselines_path in ('', None)
+        assert profile.converter_modules == ()
+        assert profile.backend_modules == ()

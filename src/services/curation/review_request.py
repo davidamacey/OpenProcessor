@@ -36,6 +36,9 @@ class ReviewFilters:
     conf_max: float | None = None
     region_status: str | None = None
     combine_conflict: bool = False
+    import_id: str | None = None
+    dataset_split: str | None = None
+    on_negative_frame: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -96,6 +99,13 @@ async def build_review_request(
         must.append({'term': {'source': filters.source}})
     if filters.combine_conflict:
         must.append({'term': {'combine_conflict': True}})
+    if filters.on_negative_frame is not None:
+        must.append(review_queries.negative_frame_clause(filters.on_negative_frame))
+    honoured = review_queries.tab_filters(tab)
+    if filters.import_id and 'import_id' in honoured:
+        must.append({'term': {'import_ids': filters.import_id}})
+    if filters.dataset_split and 'dataset_split' in honoured:
+        must.append({'term': {'dataset_split': filters.dataset_split}})
     band = confidence_band(filters.conf_min, filters.conf_max)
     if band is not None:
         must.append(band)

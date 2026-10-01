@@ -10,6 +10,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from scripts.curation.worker.cascade import _source_to_crop
 from scripts.curation.worker.state import region_profile
 from src.config import get_region_fields
 from src.config.region_rejection import (
@@ -32,6 +33,7 @@ from src.services.detection.cascade_detect import (
 
 
 if TYPE_CHECKING:
+    from src.config import DetectionProfile
     from src.services.labeling.region_overlay import VlmBoxVerdict
     from src.services.labeling.vlm_labeler import VlmCombinedReply
 
@@ -74,7 +76,9 @@ _SKIP_VLM_VERIFY_SECONDARY_SCORE = float(os.environ.get('OP_SEGMENTER_SKIP_VERIF
 # disable the skip entirely (everything still goes through the VLM).
 
 
-def _bbox_shape_is_plausible(bbox_in_crop: tuple[float, float, float, float]) -> bool:
+def _bbox_shape_is_plausible(
+    bbox_in_crop: tuple[float, float, float, float], profile: DetectionProfile | None = None
+) -> bool:
     """True if the crop-frame bbox is plausibly a region of interest.
 
     Thin wrapper over :func:`is_plausible_region_bbox` (Phase A3). The
@@ -82,14 +86,15 @@ def _bbox_shape_is_plausible(bbox_in_crop: tuple[float, float, float, float]) ->
     the boolean signature for internal call sites and adds the
     auto-confirm-specific minimum area floor
     (``DetectionProfile.auto_confirm_area_frac[0]``) which the canonical
-    gate does not enforce.
+    gate does not enforce. ``profile`` defaults to the active profile; a
+    caller running someone else's profile (a test run of a draft) passes it.
     """
     ok, _reason = is_plausible_region_bbox(bbox_in_crop)
     if not ok:
         return False
     x1, y1, x2, y2 = bbox_in_crop
     area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
-    return area >= region_profile().auto_confirm_area_frac[0]
+    return area >= (profile or region_profile()).auto_confirm_area_frac[0]
 
 
 def _combined_class_update(
@@ -202,6 +207,7 @@ async def _auto_confirm_or_pending(
     sam_score: float,
     bbox_in_crop: tuple[float, float, float, float],
     vlm_high_conf: bool,
+    profile: DetectionProfile | None = None,
 ) -> bool:
     """Decide whether the worker's auto-confirm policy accepts the box.
 
@@ -226,7 +232,7 @@ async def _auto_confirm_or_pending(
     # lower-confidence fallbacks below.
     if vlm_high_conf:
         return True
-    if not _bbox_shape_is_plausible(bbox_in_crop):
+    if not _bbox_shape_is_plausible(bbox_in_crop, profile):
         return False
     return sam_score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE
 
@@ -259,6 +265,27 @@ class TaskBoxInput:
     box_id: str | None = None
     hint_text: str | None = None
     hint_text_confidence: float | None = None
+
+
+def task_box_from_stored(
+    box: RegionBox, *, item_bbox_norm: tuple[float, float, float, float]
+) -> TaskBoxInput:
+    """W8 B1 fix: wrap one stored ``proposed`` box as a VLM re-verify
+    candidate, preserving its ``box_id`` (never minting a fresh one --
+    this is the same box, going back through verification, not a new
+    detection) plus its stored score/detector/source. The real source of
+    truth for Path 1 (``pending_verification``), never the legacy
+    single-scalar fields.
+    """
+    return TaskBoxInput(
+        bbox_in_crop=_source_to_crop(box.bbox_norm, item_bbox_norm),
+        bbox_in_source=box.bbox_norm,
+        score=box.score or 0.0,
+        detector=box.detector or 'human',
+        detector_version=box.detector_version or '1',
+        source=box.source or 'human',
+        box_id=box.box_id,
+    )
 
 
 def verdicts_to_boxes(
@@ -397,7 +424,11 @@ def item_verification_fields(
     return doc
 
 
-async def boxes_auto_confirmed(boxes: list[RegionBox], candidates: list[TaskBoxInput]) -> bool:
+async def boxes_auto_confirmed(
+    boxes: list[RegionBox],
+    candidates: list[TaskBoxInput],
+    profile: DetectionProfile | None = None,
+) -> bool:
     """W8 M2: the box-aware ``auto_confirmed`` rule.
 
     At least one accepted box, AND every accepted box independently
@@ -415,6 +446,7 @@ async def boxes_auto_confirmed(boxes: list[RegionBox], candidates: list[TaskBoxI
             sam_score=cand.score,
             bbox_in_crop=cand.bbox_in_crop,
             vlm_high_conf=box.confidence == 'high',
+            profile=profile,
         )
         if not ok:
             return False

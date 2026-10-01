@@ -559,3 +559,100 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
 # and the CLI's exit(3) branch remain as defensive code (still directly
 # unit-tested via to_source_frame in test_frames_source_crop_and_unknown)
 # but have no live end-to-end trigger left to test.
+
+
+# =============================================================================
+# --import-id cohort (W10)
+# =============================================================================
+
+SERVER = '/server/ds/images/test'
+
+
+def _entries() -> list[dict[str, Any]]:
+    ok = {'status': 'ok', 'split': 'test'}
+    return [
+        {
+            **ok,
+            'rel_path': 'images/test/hit.jpg',
+            'image_id': 'h',
+            'image_path': f'{SERVER}/hit.jpg',
+        },
+        {**ok, 'rel_path': 'images/test/bg.jpg', 'image_id': 'b', 'image_path': f'{SERVER}/bg.jpg'},
+        # an entry the import failed on, and one that never got an image: neither is scored
+        {
+            'status': 'failed',
+            'split': 'test',
+            'rel_path': 'images/test/nolabel.jpg',
+            'image_id': None,
+        },
+        {**ok, 'rel_path': 'images/test/gone.jpg', 'image_id': None},
+    ]
+
+
+def test_import_cohort_scores_exactly_the_imported_frames(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    mod = _cli()
+    data = _dataset(tmp_path / 'ds')
+    seen: dict[str, Any] = {}
+
+    def fake_fetch(api, project, import_id, splits):
+        seen.update(api=api, project=project, import_id=import_id, splits=splits)
+        return _entries()
+
+    monkeypatch.setattr(mod, 'fetch_import_entries', fake_fetch)
+    out = tmp_path / 'out'
+    argv = [
+        '--dataset', str(data), '--import-id', 'imp_1', '--splits', 'test',
+        '--api', 'http://api.test', '--out-dir', str(out),
+    ]  # fmt: skip
+    assert _run_cli(monkeypatch, _cli_fake(tmp_path), argv) == 0
+    assert seen == {
+        'api': 'http://api.test',
+        'project': 'default',
+        'import_id': 'imp_1',
+        'splits': ['test'],
+    }
+    t = json.loads((out / 'summary.json').read_text())['total']
+    # 2 written frames (the failed and the image-less entries are not frames)
+    assert (t['images'], t['not_ingested'], t['tp'], t['background_fp_regions']) == (2, 0, 1, 1)
+    assert t['recall'] == 1.0
+
+
+def test_import_cohort_with_nothing_written_is_a_clear_error(monkeypatch, tmp_path: Path) -> None:
+    mod = _cli()
+    data = _dataset(tmp_path / 'ds')
+    monkeypatch.setattr(mod, 'fetch_import_entries', lambda *_a: [{'status': 'failed'}])
+    argv = ['--dataset', str(data), '--import-id', 'imp_1', '--out-dir', str(tmp_path / 'o')]
+    assert _run_cli(monkeypatch, _cli_fake(tmp_path), argv) == 1
+
+
+def test_fetch_import_entries_pages_and_filters_by_split(monkeypatch) -> None:
+    mod = _cli()
+    calls: list[dict[str, Any]] = []
+
+    class _Resp:
+        status_code = 200
+
+        def __init__(self, body: dict[str, Any]) -> None:
+            self._body = body
+
+        def json(self) -> dict[str, Any]:
+            return self._body
+
+    def fake_get(url, params, timeout):
+        calls.append({'url': url, **params})
+        return _Resp(
+            {
+                'items': [{'rel_path': f'{params["split"]}{params["page"]}'}],
+                'total': 501 if params['split'] == 'train' else 1,
+            }
+        )
+
+    import requests
+
+    monkeypatch.setattr(requests, 'get', fake_get)
+    rows = mod.fetch_import_entries('http://api.test/', 'p', 'imp_1', ['train', 'test'])
+    assert [r['rel_path'] for r in rows] == ['train1', 'train2', 'test1']
+    assert calls[0]['url'] == 'http://api.test/curation/projects/p/datasets/imports/imp_1/entries'
+    assert [c['page'] for c in calls] == [1, 2, 1]

@@ -333,17 +333,24 @@ def curation_app(
     *,
     registry: Any = None,
     pe_encoder: Any = None,
+    state_dir: Path | None = None,
 ) -> Iterator[TestClient]:
-    """The real app with the OpenSearch/Triton/PE/registry boundary faked."""
+    """The real app with the OpenSearch/Triton/PE/registry boundary faked.
+
+    ``registry='project'`` leaves the class registry unfaked: each request
+    resolves the bound project's own ``class_registry.json``, as in
+    production. ``state_dir`` replaces the shared ``$TMP/op_test_state``."""
     import src.main as main_module
     from src.core.dependencies import get_async_triton, get_opensearch
     from src.routers.curation._common import _raw_opensearch_dep, _registry_dep
 
     reg = registry if registry is not None else FakeRegistry()
+    per_project_registry = registry == 'project'
     main_module.app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     main_module.app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
     main_module.app.dependency_overrides[get_async_triton] = lambda: fake_triton
-    main_module.app.dependency_overrides[_registry_dep] = lambda: reg
+    if not per_project_registry:
+        main_module.app.dependency_overrides[_registry_dep] = lambda: reg
 
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
     # ingest.py's service factory reaches AppResources.async_triton_pool /
@@ -366,7 +373,7 @@ def curation_app(
     # singleton to rebuild so it picks this env var up.
     import src.config.curation as curation_config_mod
 
-    monkeypatch.setenv('OP_STATE_DIR', str(temp_root / 'op_test_state'))
+    monkeypatch.setenv('OP_STATE_DIR', str(state_dir or temp_root / 'op_test_state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     try:

@@ -16,8 +16,9 @@ Wire contract (the shipped client's expectations, which this server is
 built to match):
 
 * ``POST /segment`` — request ``{crop_jpeg_b64, text_prompt,
-  max_candidates, min_score}``, response ``{candidates: [{bbox_norm, score,
-  mask_iou}], ...}``.
+  max_candidates, min_score, return_masks}``, response ``{candidates:
+  [{bbox_norm, score, mask_iou, mask_polygon}], ...}`` (``mask_polygon`` is
+  only filled when ``return_masks`` is set).
 * ``POST /segment/batch`` — the same thing for N images in one round trip.
 * ``GET /health`` — ``loaded`` flips true once the model pool is up; also
   serves ``max_candidates`` (the server's top-K ceiling) and
@@ -119,6 +120,12 @@ class SegmentRequest(BaseModel):
         " (``GET /health``'s ``default_min_score``, the upstream"
         ' ``Sam3Processor.confidence_threshold``). Unset = the processor default.',
     )
+    return_masks: bool = Field(
+        default=False,
+        description="Also return each candidate's ``mask_polygon`` (its mask's largest"
+        ' external contour, simplified, <= 256 points, normalized to the submitted'
+        ' image). Null when the mask head is disabled (``SEGMENTER_ENABLE_MASKS=0``).',
+    )
 
 
 class BatchSegmentRequest(BaseModel):
@@ -148,6 +155,11 @@ class SegmentCandidate(BaseModel):
         default=None,
         description='Rectangularity (mask area / mask-bbox area); null when the'
         ' mask head is disabled via SEGMENTER_ENABLE_MASKS=0.',
+    )
+    mask_polygon: list[tuple[float, float]] | None = Field(
+        default=None,
+        description='Largest external contour of the mask, normalized to the submitted image;'
+        ' only present when the request set ``return_masks`` and the mask head is on.',
     )
 
 
@@ -210,7 +222,12 @@ def _decode_all(items: Sequence[str]) -> list[Image.Image]:
 
 def _to_wire(candidates: list[Candidate]) -> list[SegmentCandidate]:
     return [
-        SegmentCandidate(bbox_norm=c.bbox_norm, score=c.score, mask_iou=c.mask_iou)
+        SegmentCandidate(
+            bbox_norm=c.bbox_norm,
+            score=c.score,
+            mask_iou=c.mask_iou,
+            mask_polygon=None if c.mask_polygon is None else list(c.mask_polygon),
+        )
         for c in candidates
     ]
 
@@ -227,7 +244,12 @@ def _require_ready() -> None:
 
 
 async def _run(
-    images: Sequence[Image.Image], prompt: str, top_k: int, min_score: float | None = None
+    images: Sequence[Image.Image],
+    prompt: str,
+    top_k: int,
+    min_score: float | None = None,
+    *,
+    return_masks: bool = False,
 ) -> list[list[Candidate]]:
     """Acquire a processor and run the batch on it, off the event loop.
 
@@ -238,7 +260,12 @@ async def _run(
     _require_ready()
     async with _pool.acquire(min_score=min_score) as processor:
         return await asyncio.to_thread(
-            sam3_backend.segment_images, processor, images, prompt, top_k
+            sam3_backend.segment_images,
+            processor,
+            images,
+            prompt,
+            top_k,
+            return_masks=return_masks,
         )
 
 
@@ -268,7 +295,9 @@ async def segment(req: SegmentRequest) -> SegmentResponse:
     _require_ready()
     images = _decode_all([req.crop_jpeg_b64])
     t0 = time.perf_counter()
-    per_image = await _run(images, req.text_prompt, req.max_candidates, req.min_score)
+    per_image = await _run(
+        images, req.text_prompt, req.max_candidates, req.min_score, return_masks=req.return_masks
+    )
     elapsed = (time.perf_counter() - t0) * 1000.0
     return SegmentResponse(
         candidates=_to_wire(per_image[0]),

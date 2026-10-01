@@ -22,6 +22,7 @@ from src.config.region_rejection import compose_rejection_reason
 from src.config.region_state import RegionStatus
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.ingest_class_sources import (
+    LABEL_IMPORT_CLASS_SOURCE,
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
@@ -41,6 +42,7 @@ KNOWN_TABS: tuple[str, ...] = (
     'primary_low_conf',
     'classifier_blind_spots',
     'new_class_proposals',
+    'imported',
 )
 
 # A display label + description per tab, so the frontend stops
@@ -73,6 +75,10 @@ TAB_LABELS: dict[str, tuple[str, str]] = {
         'New class proposals',
         'Needs a class the registry does not have yet',
     ),
+    'imported': (
+        'Imported labels',
+        'Validated labels that came from a dataset import: spot-check them',
+    ),
 }
 
 
@@ -90,9 +96,13 @@ COMMON_FILTERS: tuple[str, ...] = (
     'conf_min',
     'conf_max',
     'combine_conflict',
+    'on_negative_frame',
 )
 # Tab-only filters, on top of COMMON_FILTERS.
-TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text', 'region_status')}
+TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {
+    'regions': ('text', 'region_status'),
+    'imported': ('import_id', 'dataset_split'),
+}
 # A filter value a tab applies when the client omits it (the two
 # "primary subject" tabs are rank-limited by definition).
 PRIMARY_SUBJECT_MAX_RANK = 2
@@ -125,7 +135,37 @@ REGION_STATUS_FILTER_VALUES: frozenset[str] = frozenset(
 # Self-describing specs for filters with a fixed, enumerable value set,
 # keyed by query parameter. Served as ``filter_specs`` on
 # ``GET /review/tabs`` so the frontend renders any enum filter generically.
+DATASET_SPLIT_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
+    {'value': 'train', 'label': 'Train'},
+    {'value': 'val', 'label': 'Validation'},
+    {'value': 'test', 'label': 'Test'},
+)
+ON_NEGATIVE_FRAME_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
+    {'value': 'true', 'label': 'Only items on a reviewed-negative frame'},
+    {'value': 'false', 'label': 'Hide items on a reviewed-negative frame'},
+)
+
+
+def negative_frame_clause(on_negative_frame: bool) -> dict[str, Any]:
+    """The one definition of the ``on_negative_frame`` filter, shared by
+    ``GET /crops`` and the review queue."""
+    marked: dict[str, Any] = {'term': {'on_negative_frame': True}}
+    return marked if on_negative_frame else {'bool': {'must_not': marked}}
+
+
 FILTER_SPECS: dict[str, dict[str, Any]] = {
+    'on_negative_frame': {
+        'param': 'on_negative_frame',
+        'kind': 'enum',
+        'label': 'Negative frames',
+        'options': ON_NEGATIVE_FRAME_FILTER_OPTIONS,
+    },
+    'dataset_split': {
+        'param': 'dataset_split',
+        'kind': 'enum',
+        'label': 'Split',
+        'options': DATASET_SPLIT_FILTER_OPTIONS,
+    },
     'region_status': {
         'param': 'region_status',
         'kind': 'enum',
@@ -592,6 +632,20 @@ def build_tab_query(
         must_not.append({'term': {VLM_CLASS_EMPTY_REASON_FIELD: EmptyClassReason.NO_ANSWER.value}})
         must_not.append({'exists': {'field': 'class_id'}})
         reason = 'needs a class the registry does not have yet'
+    elif tab == 'imported':
+        # Spot-check queue for labels a dataset import wrote: validated by
+        # construction (the user asserts them as ground truth), so this tab
+        # inverts the default "not validated" rule. A dismissed or excluded
+        # item stays out; a frozen test split stays out unless include_test.
+        must.append({'term': {'class_source': LABEL_IMPORT_CLASS_SOURCE}})
+        must.append({'term': {'class_validated': True}})
+        must_not = [
+            {'exists': {'field': 'review_dismissed_at'}},
+            {'term': {'class_excluded': True}},
+        ]
+        if not include_test:
+            must_not.append({'term': {'test_holdout': True}})
+        reason = 'imported label: spot check'
     else:
         raise HTTPException(
             status_code=400,
@@ -611,6 +665,7 @@ def build_tab_query(
 
 __all__ = [
     'COMMON_FILTERS',
+    'DATASET_SPLIT_FILTER_OPTIONS',
     'FILTER_SPECS',
     'KNOWN_TABS',
     'REGION_STATUS_FILTER_OPTIONS',
@@ -620,6 +675,7 @@ __all__ = [
     'TAB_LABELS',
     'build_tab_query',
     'mismatch_reason',
+    'negative_frame_clause',
     'region_reason',
     'review_tab_catalog',
     'tab_filters',

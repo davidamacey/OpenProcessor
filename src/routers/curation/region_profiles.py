@@ -54,15 +54,13 @@ def _registry_class_names() -> frozenset[str]:
 
 
 async def _segmenter_health_fn() -> tuple[str, str | None]:
-    import os
-
     from src.routers.curation._models_segmenter import _segmenter_health
+    from src.services.detection.segmenter_http import first_segmenter_url
 
-    url = os.environ.get('OP_SEGMENTER_URL', '').strip()
-    if not url:
+    url = first_segmenter_url()
+    if url is None:
         return 'unavailable', 'OP_SEGMENTER_URL is not configured'
-    first_url = url.split(',')[0].strip().rstrip('/')
-    return await _segmenter_health(first_url)
+    return await _segmenter_health(url)
 
 
 def _effective(profile: Any) -> RegionProfileEffective:
@@ -246,35 +244,6 @@ def _project_slug() -> str | None:
         return get_curation_config().project_slug
     except Exception:  # pragma: no cover - defensive; always bound in routes
         return None
-
-
-# =============================================================================
-# POST /region_profiles/test
-# =============================================================================
-
-
-@router.post('/region_profiles/test')
-async def test_region_profile(body: RegionProfileValidateRequest, opensearch: OpenSearchDep) -> Any:
-    """Preview a draft/saved profile's effective legs and run its
-    validator. Scope note (documented deviation, mirrors W3's
-    ``/prompt_packs/test``): no live crop/segmenter/detector round-trip;
-    ``/prompt_packs/test`` already covers the VLM leg's prompt preview.
-    Never writes."""
-    store = get_config_store()
-    await store.ensure_fresh(opensearch)
-    profile = _decode_or_none(body.name or 'draft', body.body.model_dump())
-    report = await validate_profile(
-        None,
-        body.body.model_dump(),
-        get_repository_index=None,
-        segmenter_health=_segmenter_health_fn,
-        class_names=_registry_class_names(),
-        project_slug=_project_slug(),
-    )
-    return {
-        'effective': _effective(profile).model_dump() if profile is not None else None,
-        'validation': report.model_dump(),
-    }
 
 
 # =============================================================================

@@ -8,6 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **W5/W6/W10 review fixes** (`w5_w6_review_2026-10-01`).
+  - **`POST /region_profiles/test` prompt override.** `segmenter_text_prompt`
+    on the default (active-profile) path is now validated by the same
+    `validate_profile` call as the named and draft paths: over 200 characters,
+    multiple lines or empty answers 422 `profile_invalid` and nothing reaches
+    the segmenter (it used to forward any length).
+  - **`crop_ids` is capped** at 64 on `POST /prompt_packs/test`
+    (422 `too_many_crop_ids`, checked before any lookup), and
+    `region_verify` checks the per-call image capacity before decoding any box.
+  - **A malformed segmenter reply** (bad `mask_polygon`, non-numeric `score` or
+    box) is a `SegmenterCallError`, so the test route answers 502
+    `segmenter_error` instead of a 500.
+  - **`on_negative_frame` review filter.** `GET /review/{tab}` and its locate
+    twin take `on_negative_frame` (true = only items on an imported
+    reviewed-negative frame, false = hide them) on every tab, served as a
+    `filter_specs` entry on `GET /review/tabs`; `GET /crops` shares the one
+    clause.
+  - **Fixture tooling** refuses an image `file_name` that carries a path
+    (`build_import_fixture.py`, `fetch_coco_subset.py`); two guards no caller
+    needed were removed (`select_negatives` `exclude_ids`, the `status`
+    check in `eval_regions_vs_gt.py`).
+  - **Tests.** The region-route tests now cover the external-VLM
+    acknowledgement refusal, segmenter and VLM `test_busy`, `test_timeout`,
+    `vlm_transport_error` and `detector_error`. The wheel E2E asserts the
+    provenance stamps, text-free boxes and `detector == 'sam3'`, performs a
+    human edit through `PUT /crops/{id}/regions`, and runs `POST
+    /train/preflight` on the export. A fixture test checks COCO class names
+    against the YAML names independently of the builder.
+  - **Deferred.** `scripts/datasets/manifests/coco_car_60.json` and
+    `coco_import_96.json` are not generated (they need network access; run
+    `make sample-coco-cars` on a networked host and commit them);
+    `test_pinned_manifest_is_sixty_cc_by_cars` skips with that reason until
+    then. The plan's `region_set_complete: false` car and the export's
+    `skipped_incomplete_sets` manifest key are not in the E2E: neither the
+    worker nor the export has a code path for them yet, so there is nothing to
+    assert offline.
 - **W10 round-3 review fixes** (`w10_p4_review_2026-10-01`).
   - **`data.yaml` tagged scalars.** `names: [!!bool abc]` (KeyError) and
     `[!!timestamp abc]` (AttributeError) escaped `load_bounded_yaml` and made
@@ -465,6 +501,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Items 3-6 entries below.)
 
 ### Added
+- **W5: test a draft on stored crops.** `POST /prompt_packs/test` and `POST
+  /region_profiles/test` run a draft or saved pack / profile / VLM endpoint
+  against crops already in the project and return what the worker would
+  decide, without writing anything.
+  - Pack test: the production VLM labeler runs on the chosen crops through
+    the one VLM gate (mode `test`); the response carries the exact request
+    text and reply (a capture of the worker's own call, not a copy of its
+    prompt code), whether the reply parsed, and per crop the parsed answer and
+    the `ItemDoc` the worker would write.
+  - Profile test (one crop): the detector leg (Triton) and the segmenter leg
+    (with mask polygons), each with every candidate, whether it was selected
+    and why it was dropped (floor / NMS / cap), using the worker's own
+    selection; an optional `verify` leg sends the selected boxes to the VLM.
+    `preview_basis` says whether VLM verdicts or the plain selection decided
+    what is accepted in the returned `preview_item`.
+  - Guards: read-only (nothing is indexed, updated or enqueued), project
+    scoped (a crop id from another project is `crop_not_found`), at most 4
+    concurrent segmenter calls and 2 concurrent VLM runs
+    (`429 test_busy`), a 60 s bound (`504 test_timeout`), and a crop cap
+    (`422 too_many_crops`).
+  - New error codes: `crop_not_found`, `test_busy`, `test_timeout`,
+    `vlm_transport_error`, `no_box_to_verify`, `too_many_crops`, `pack_invalid`,
+    `profile_invalid`, `segmenter_error`, `detector_error`; `ConfigErrorDetail`
+    gains `crop_ids`.
+  - The segmenter service accepts `return_masks` and returns a simplified
+    `mask_polygon` (at most 256 points) per candidate.
+  - Not implemented in the profile test: the OCR text-hint leg and the
+    `read_text` leg. A profile that reads text previews boxes only; its text
+    is left to the worker.
+- **W6: the wheel example, offline and live.**
+  - `make sample-coco-cars` (60 CC BY COCO car images, pinned by
+    `scripts/datasets/manifests/coco_car_60.json`; the manifest itself is
+    generated on a host with network access and is not yet committed),
+    `examples/bakeoff/vehicle_wheel/profile.json`, and a `max_regions_per_item`
+    of 4 on the `vehicle_wheel` region profile example.
+  - `tests/integration/test_wheel_example_e2e.py`: create a project through
+    `POST /curation/projects`, import the fixture through `/datasets/imports`,
+    activate the example profile and pack through the config routes, run the
+    region worker, export wheels; asserts the `default` project is never
+    written and that class identity holds by name at every hop (fakes only at
+    the OpenSearch, Triton, segmenter and VLM boundaries).
+  - `scripts/examples/wheel_example_live.py` and a walk-through in
+    `docs/CURATION.md` for the live stack (not run in CI).
+- **Import fixture tooling** (`make sample-coco-import`).
+  `fetch_coco_subset.py` gains `--val-only` and `--negatives N` (frames with
+  no box of the chosen classes; their other annotations stay in
+  `coco_gt.json`, and crowd boxes are now kept in it, flagged `iscrowd`).
+  `scripts/datasets/build_import_fixture.py` writes four layouts of one
+  dataset (`yolo/`, `coco/`, `yolo_region/`, `yolo_region_only/`) and a
+  `FIXTURE.json` of expected counts and issues, checked against the real
+  dataset scanner in tests. The wheel boxes in the region layouts are
+  synthetic geometry derived from car boxes, not annotations.
+- **Import review and browse.**
+  - `GET /review/imported` lists validated labels a dataset import wrote, with
+    `import_id` and `dataset_split` filters and a served empty reason
+    (`/review/tabs` also serves `empty_state.has_imported_labels`).
+  - `GET /crops` gains `import_id` (labels or proposals of that import),
+    `dataset_split`, `on_negative_frame` and `proposed_by_import`.
+  - `GET /stats/dataset` gains `validated_by_import`, `labeled.by_import` and
+    `regions.{by_import,verified_by_import,validated_by_import}`. An import no
+    longer counts as the VLM in `regions.verified_by_vlm`, and an imported
+    label is no longer in `labeled.other`.
+  - The item wire serves `origin_project`, `origin_item_id`, `origin_image_id`,
+    `origin_split`, `combine_conflict`, `combine_conflict_origins` and
+    `combine_merged_origins`.
+  - `eval_regions_vs_gt.py --import-id` scores exactly the frames of a
+    dataset import (cohort read from the import's entries route; ground truth
+    from the dataset's label files).
 - **W8-cleanup Items 5-6: per-box embeddings, clustering and FP, and row
   shapes** (`docs/design/openprocessor_internal/any_domain_plan.md`
   W8.10 / W8.12):
@@ -696,6 +800,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `nc == max + 1` is accepted.
 
 ### Removed
+- **W5: the render-only behaviour of `POST /prompt_packs/test` and `POST
+  /region_profiles/test`.** The old handlers rendered the draft's prompts, or
+  its effective legs and validation report, and never touched a crop; the
+  routes now run on stored crops (see Added), with new request and response
+  models, and the old `PackTest*` models and the profile route's
+  `RegionProfileValidateRequest` body are gone from them.
 - **W8-cleanup Items 4-6 (breaking, no back-compat): every item-level
   per-box region scalar is gone** — from `RegionFields` (`bbox_norm`,
   `bbox_frame`, `bbox_correct`, `score`, `confidence`, `source`, `detector`,

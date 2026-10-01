@@ -113,6 +113,18 @@ ErrorCode = Literal[
     'unknown_catalog_id',
     'vlm_catalog_does_not_fit',
     'probe_busy',
+    # W5: the test-on-crop routes
+    'crop_not_found',
+    'test_busy',
+    'test_timeout',
+    'vlm_transport_error',
+    'no_box_to_verify',
+    'too_many_crops',
+    'too_many_crop_ids',
+    'pack_invalid',
+    'profile_invalid',
+    'segmenter_error',
+    'detector_error',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
@@ -314,6 +326,8 @@ class ConfigErrorDetail(BaseModel):
     requested: str | None = None
     endpoint: str | None = None
     activate_via: str | None = None
+    # W5: 404 crop_not_found names every crop id the project does not have.
+    crop_ids: list[str] | None = None
 
 
 class ApiErrorResponse(BaseModel):

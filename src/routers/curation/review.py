@@ -26,6 +26,23 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resolves the aliases
+    BlurQ,
+    ClassIdQ,
+    CombineConflictQ,
+    ConfQ,
+    DatasetSplitQ,
+    ImportIdQ,
+    IncludeTest,
+    MaxRankQ,
+    MistakeQ,
+    NearDupQ,
+    OnNegativeFrameQ,
+    RegionStatusQ,
+    SortQ,
+    SourceQ,
+    TextQ,
+)
 from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_empty_reason, review_queries
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
@@ -240,6 +257,9 @@ def _filters(
     conf_max: float | None,
     region_status: str | None,
     combine_conflict: bool,
+    import_id: str | None,
+    dataset_split: str | None,
+    on_negative_frame: bool | None,
 ) -> ReviewFilters:
     return ReviewFilters(
         include_test=include_test,
@@ -254,61 +274,10 @@ def _filters(
         conf_max=conf_max,
         region_status=region_status,
         combine_conflict=combine_conflict,
+        import_id=import_id,
+        dataset_split=dataset_split,
+        on_negative_frame=on_negative_frame,
     )
-
-
-# Filter params shared by the queue and locate routes (Annotated defaults,
-# so direct Python callers get plain values).
-IncludeTest = Annotated[bool, Query()]
-TextQ = Annotated[
-    str | None,
-    Query(description='Regions tab only: case-insensitive substring search on any box text.'),
-]
-MaxRankQ = Annotated[
-    int | None,
-    Query(
-        ge=1,
-        description=(
-            'Keep crop_rank_in_image <= this (every tab). Omitted: no limit, '
-            "except a tab's served filter_defaults (GET /review/tabs)."
-        ),
-    ),
-]
-BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
-MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]
-NearDupQ = Annotated[bool, Query(description='Hide non-representative near-duplicates.')]
-ClassIdQ = Annotated[int | None, Query(description='Only items of this class.')]
-SourceQ = Annotated[str | None, Query(description='Only items with this ingest source tag.')]
-ConfQ = Annotated[float | None, Query(ge=0.0, le=1.0, description='Inclusive confidence band.')]
-RegionStatusQ = Annotated[
-    str | None,
-    Query(
-        description=(
-            "Regions tab only (ignored elsewhere). One of 'all' (default: "
-            'accepted-but-unvalidated boxes plus a verifier-rejected '
-            "candidate that still has a box), 'detected', 'verify_rejected'. "
-            'See GET /review/tabs filter_specs (param region_status).'
-        )
-    ),
-]
-CombineConflictQ = Annotated[
-    bool,
-    Query(
-        description=(
-            'Only items a project combine flagged: sources disagreed on the box and the '
-            "first-listed source's label was kept (combine_conflict)."
-        )
-    ),
-]
-SortQ = Annotated[
-    str | None,
-    Query(
-        description=(
-            'Review-sort id from GET /curation/methods (axis=sort). Omitted or '
-            "'default': the tab's own default. Unknown / shadow / disabled -> 400."
-        )
-    ),
-]
 
 
 async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearch: Any) -> Any:
@@ -355,6 +324,9 @@ async def review_queue(
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
     combine_conflict: CombineConflictQ = False,
+    import_id: ImportIdQ = None,
+    dataset_split: DatasetSplitQ = None,
+    on_negative_frame: OnNegativeFrameQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
 
@@ -381,6 +353,9 @@ async def review_queue(
         conf_max,
         region_status,
         combine_conflict,
+        import_id,
+        dataset_split,
+        on_negative_frame,
     )
     guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
@@ -465,6 +440,9 @@ async def review_locate(
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
     combine_conflict: CombineConflictQ = False,
+    import_id: ImportIdQ = None,
+    dataset_split: DatasetSplitQ = None,
+    on_negative_frame: OnNegativeFrameQ = None,
 ) -> dict[str, Any]:
     """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
     for the same filters and sort.
@@ -489,6 +467,9 @@ async def review_locate(
         conf_max,
         region_status,
         combine_conflict,
+        import_id,
+        dataset_split,
+        on_negative_frame,
     )
     req = await _request(tab, filters, sort, opensearch)
     out: dict[str, Any] = {

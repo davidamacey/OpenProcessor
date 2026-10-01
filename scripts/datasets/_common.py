@@ -32,6 +32,15 @@ class FetchError(RuntimeError):
     """Raised for anything that should abort the fetch with a clear message."""
 
 
+def require_basename(file_name: str) -> str:
+    """``file_name`` when it is a plain file name; a dataset-supplied name is
+    joined under an output directory, so any path component is refused."""
+    if not file_name or file_name in {'.', '..'} or '/' in file_name or '\\' in file_name:
+        msg = f'refusing the non-basename image file_name {file_name!r}'
+        raise FetchError(msg)
+    return file_name
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open('rb') as f:

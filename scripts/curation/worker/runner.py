@@ -21,17 +21,14 @@ import structlog
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
-from src.services.curation.ingest_class_sources import (
-    CLUSTER_MAJORITY_CLASS_SOURCE,
-    classifier_class_sources,
-)
+from src.services.curation.crop_bytes import cache_stats as crop_cache_stats
 from src.services.curation.metrics import (
     OP_STAGE_A_SEGMENTER_DURATION_SECONDS,
     OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS,
     OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS,
     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
-from src.services.curation.region_boxes import RegionBox, derive_status, new_box_placeholder
+from src.services.curation.region_boxes import RegionBox, new_box_placeholder
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
@@ -40,20 +37,15 @@ from src.services.detection.cascade_detect import (
 )
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.detection.region_candidates import select_region_candidates
-from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 
 
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker import state
 from scripts.curation.worker.bulk_writer import _bulk_update
-from scripts.curation.worker.cascade import (
-    SegmenterAllHostsDown,
-    _resegment_from_text_hint,
-    _source_to_crop,
-)
+from scripts.curation.worker.cascade import SegmenterAllHostsDown, _resegment_from_text_hint
+from scripts.curation.worker.combined_resolve import resolve_combined_reply, should_classify
 from scripts.curation.worker.fairness import (
     FairnessScheduler,
     fetch_pending_multi_project,
@@ -67,10 +59,8 @@ from scripts.curation.worker.region_text_stage import (
     _box_with_resolved_text,
     accept_without_vlm,
     apply_region_text,
-    apply_text_hint_fallback,
     item_text_fields,
     read_item_lines,
-    resolve_rejected_box_text,
 )
 from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
@@ -89,12 +79,9 @@ from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
     TaskBoxInput,
     _bbox_shape_is_plausible,
-    _combined_class_update,
-    boxes_auto_confirmed,
     item_verification_fields,
-    verdicts_to_boxes,
+    task_box_from_stored,
 )
-from src.config.region_rejection import REJECT_REASON_VERIFIER
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
     CANDIDATE_SEGMENTER,
@@ -136,41 +123,22 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
     return runner
 
 
-# High-conf primary-classifier cohort skips classification in the
-# combined call (the caller already has a trusted class). Same
-# threshold as the legacy cascade's combined-cohort gate
-# (combined.py: _CLASSIFIER_LOW_CONF_THRESHOLD).
-_CLASSIFIER_HIGH_CONF_THRESHOLD = 0.80
-
 # How long the producer remembers a released crop. Only has to outlive the
 # slowest single pending search.
 _RELEASED_AT_TTL_S = 300.0
 
 
 def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
-    """Decide whether to ask the VLM for the item class on this crop.
-
-    Module-level (not a ``run()`` closure) so it's directly unit-testable
-    — see ``tests/curation/test_write_guards.py``.
-
-    Returns False (skip classification) when the registry didn't load,
-    the crop was already confirmed by a human (P0-2 human-label
-    guard — a human verdict must never be silently reclassified), the
-    crop is a frozen test_holdout crop (P0-3 — class-field guard only;
-    region fields stay unconditional, see ``_build_pending_query``), OR
-    the crop already carries a high-confidence primary / cluster-primary
-    class label. Otherwise returns True and the combined prompt asks
-    the VLM to fill ``class_id``.
-    """
-    if not registry_loaded:
-        return False
-    if t.class_validated or t.class_source.startswith('human'):
-        return False
-    if t.test_holdout:
-        return False
-    return not (
-        t.class_source in (classifier_class_sources() | {CLUSTER_MAJORITY_CLASS_SOURCE})
-        and t.class_confidence >= _CLASSIFIER_HIGH_CONF_THRESHOLD
+    """Whether the combined prompt asks the VLM for this task's item class
+    (:func:`~scripts.curation.worker.combined_resolve.should_classify` over
+    the task's class state). Module-level so it is directly unit-testable --
+    see ``tests/curation/test_write_guards.py``."""
+    return should_classify(
+        class_validated=t.class_validated,
+        stored_class_source=t.class_source,
+        test_holdout=t.test_holdout,
+        class_confidence=t.class_confidence,
+        registry_loaded=registry_loaded,
     )
 
 
@@ -212,27 +180,6 @@ def _select_candidates(
         )
         for c in sel.selected
     ]
-
-
-def _task_box_from_stored(
-    box: RegionBox, *, item_bbox_norm: tuple[float, float, float, float]
-) -> TaskBoxInput:
-    """W8 B1 fix: wrap one stored ``proposed`` box as a VLM re-verify
-    candidate, preserving its ``box_id`` (never minting a fresh one --
-    this is the same box, going back through verification, not a new
-    detection) plus its stored score/detector/source. The real source of
-    truth for Path 1 (``pending_verification``), never the legacy
-    single-scalar fields.
-    """
-    return TaskBoxInput(
-        bbox_in_crop=_source_to_crop(box.bbox_norm, item_bbox_norm),
-        bbox_in_source=box.bbox_norm,
-        score=box.score or 0.0,
-        detector=box.detector or 'human',
-        detector_version=box.detector_version or '1',
-        source=box.source or 'human',
-        box_id=box.box_id,
-    )
 
 
 def _box_list_doc(
@@ -845,7 +792,7 @@ async def run(args: argparse.Namespace) -> int:
                 proposed_stored = [b for b in t.stored_boxes if b.state == 'proposed']
                 if t.region_status in _PENDING_VERIFICATION_ALIASES and proposed_stored:
                     t.candidates = [
-                        _task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
+                        task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
                         for b in proposed_stored
                     ]
                     # B1: this pass only re-verifies the stored
@@ -1578,98 +1525,21 @@ async def run(args: argparse.Namespace) -> int:
                         if f'{actor}:hit' not in t.detection_trace:
                             t.detection_trace.append(f'{actor}:hit')
 
-                        if reply is not None and not reply.region_visible:
-                            # region_visible=False — no region in this crop,
-                            # regardless of any per-box verdict.
-                            metrics['combined_no_region_visible'] += 1
-                            t.detection_trace.append(f'{actor}:combined_no_region_visible')
-                            if t.reverify:
-                                # R-B1 fix (2026-09-27 re-review, "fix-pass
-                                # confirmation"; keyed off `t.reverify`, not
-                                # `t.pending_merge`, since 2026-09-28 -- see
-                                # B1): this pass is RE-VERIFYING stored
-                                # `proposed` box(es) (Path 1). Writing an
-                                # empty box list here never touches their
-                                # stored ids -- `merge_boxes_for_write`
-                                # leaves any stored box absent from the new
-                                # list completely untouched -- so a human-
-                                # proposed box the VLM says isn't visible
-                                # stayed `proposed` forever: every poll made
-                                # another VLM call and bumped the revision,
-                                # unbounded (the review's livelock probe).
-                                # Resolve each re-verified candidate as
-                                # `rejected`, keeping its id, so a human can
-                                # still reverse the verdict from the review
-                                # queue -- the merged status then comes from
-                                # `derive_status` over the FULL list, same as
-                                # every other verdict branch, and is always
-                                # a TERMINAL status (verify_rejected unless a
-                                # sibling box is in a different state).
-                                visible_false_boxes = [
-                                    resolve_rejected_box_text(
-                                        RegionBox(
-                                            box_id=cand.box_id or new_box_placeholder(i),
-                                            bbox_norm=cand.bbox_in_source,
-                                            state='rejected',
-                                            score=cand.score,
-                                            detector=cand.detector,
-                                            detector_version=cand.detector_version,
-                                            source=cand.source,
-                                            rejection_reason=REJECT_REASON_VERIFIER,
-                                        ),
-                                        profile=rt.profile,
-                                        rules=rt.text_rules,
-                                    )
-                                    for i, cand in enumerate(t.candidates)
-                                ]
-                                visible_false_status = derive_status(
-                                    visible_false_boxes,
-                                    empty_status=RegionStatus.NO_REGION_VISIBLE,
-                                )
-                            else:
-                                # Fresh detection (`t.reverify` False --
-                                # Path 2/3, which is not re-verifying
-                                # a stored box by id): no box, terminal
-                                # no_region_visible. `t.pending_merge` may
-                                # still be True here (a fresh-detection
-                                # pass keeping human-owned siblings, M1) --
-                                # that only affects which MACHINE boxes
-                                # `bulk_writer._merge` replaces, never this
-                                # branch's own empty result.
-                                visible_false_boxes = []
-                                visible_false_status = RegionStatus.NO_REGION_VISIBLE
-                            t.update_doc = _box_list_doc(
-                                t,
-                                visible_false_boxes,
-                                visible_false_status,
-                                extra={
-                                    **_combined_class_update(
-                                        reply,
-                                        effective_class_names,
-                                        name_to_id=name_to_id,
-                                        vlm_model=rt.vlm_model,
-                                    ),
-                                    # R-M4 fix: `verified` means the VLM
-                                    # CONFIRMED a region -- never true on
-                                    # this branch, since no box here is
-                                    # ever accepted.
-                                    **item_verification_fields(verified=False, verifier=None),
-                                },
-                            )
-                            combined_no_verdict.clear(t.crop_id)
-                            await out_q.put(t)
-                            continue
-
-                        no_verdicts = [
-                            VlmBoxVerdict(box=i, bbox_correct=None, confidence=None)
-                            for i in range(1, len(t.candidates) + 1)
-                        ]
-                        boxes, status, extra = verdicts_to_boxes(
+                        resolution = await resolve_combined_reply(
                             t.candidates,
-                            reply.region_boxes if reply is not None else no_verdicts,
+                            reply,
                             item_bbox_norm=t.item_bbox_norm,
+                            reverify=t.reverify,
+                            effective_class_names=effective_class_names,
+                            name_to_id=name_to_id,
+                            vlm_model=rt.vlm_model,
+                            profile=rt.profile,
+                            rules=rt.text_rules,
+                            ocr=rt.ocr_recognizer,
+                            crop_jpeg=t.crop_jpeg,
+                            crop_id=t.crop_id,
                         )
-                        if extra.get('no_verdict'):
+                        if resolution.outcome == 'no_verdict':
                             # No candidate got any verdict at all -- the
                             # entry is missing/unparseable, or the VLM saw
                             # a region but answered null/nothing on every
@@ -1705,167 +1575,31 @@ async def run(args: argparse.Namespace) -> int:
                                 request_id=t.request_id,
                                 attempts=no_verdict_cap,
                             )
-                            boxes, status, _extra = verdicts_to_boxes(
+                            resolution = await resolve_combined_reply(
                                 t.candidates,
-                                reply.region_boxes if reply is not None else no_verdicts,
-                                item_bbox_norm=t.item_bbox_norm,
-                                force_resolve=True,
-                            )
-                            # W8 M6: every box here is rejected (force_resolve
-                            # only ever resolves a no-verdict box as
-                            # rejected) -- never leak a raw, unvalidated
-                            # VLM text reply the way an accepted box's
-                            # text is validated.
-                            boxes = [
-                                resolve_rejected_box_text(
-                                    b, profile=rt.profile, rules=rt.text_rules
-                                )
-                                for b in boxes
-                            ]
-                            class_update = (
-                                None
-                                if reply is None
-                                else _combined_class_update(
-                                    reply,
-                                    effective_class_names,
-                                    name_to_id=name_to_id,
-                                    vlm_model=rt.vlm_model,
-                                )
-                            )
-                            # Same trace-tagging as the ordinary verdict
-                            # path below -- the cap-reached write is still
-                            # a combined-stage reject/accept and must show
-                            # up in the detector chain the same way.
-                            if any(b.rejection_reason == REJECT_REASON_VERIFIER for b in boxes):
-                                metrics['combined_bbox_wrong'] += 1
-                            if any(b.state == 'accepted' for b in boxes):
-                                t.detection_trace.append(f'{actor}:combined_verify_ok')
-                            elif len(boxes) == 1 and boxes[0].rejection_reason:
-                                t.detection_trace.append(
-                                    f'{actor}:combined_verify_reject:{boxes[0].rejection_reason}'
-                                )
-                            else:
-                                t.detection_trace.append(f'{actor}:combined_verify_reject')
-                            # force_resolve=True above always resolves a
-                            # real status (never the early-return
-                            # no-verdict sentinel) -- narrows the type for
-                            # mypy.
-                            assert status is not None
-                            # R-M4 fix: `verified` means the VLM CONFIRMED a
-                            # region (>=1 accepted box), never merely "a
-                            # reply was received" -- force_resolve only ever
-                            # resolves a no-verdict box as rejected, so every
-                            # box here is rejected and `verified` is always
-                            # False; auto_confirmed is likewise always False.
-                            t.update_doc = _box_list_doc(
-                                t,
-                                boxes,
-                                status,
-                                extra={
-                                    **(class_update or {}),
-                                    **item_verification_fields(
-                                        verified=any(b.state == 'accepted' for b in boxes),
-                                        verifier=rt.vlm_model,
-                                    ),
-                                },
-                            )
-                            await out_q.put(t)
-                            continue
-                        combined_no_verdict.clear(t.crop_id)
-
-                        if any(b.rejection_reason == REJECT_REASON_VERIFIER for b in boxes):
-                            metrics['combined_bbox_wrong'] += 1
-                        if any(b.state == 'accepted' for b in boxes):
-                            t.detection_trace.append(f'{actor}:combined_verify_ok')
-                        elif len(boxes) == 1 and boxes[0].rejection_reason:
-                            t.detection_trace.append(
-                                f'{actor}:combined_verify_reject:{boxes[0].rejection_reason}'
-                            )
-                        else:
-                            t.detection_trace.append(f'{actor}:combined_verify_reject')
-
-                        # Per-box text resolution (VLM + OCR fallback) for
-                        # every accepted box, using that box's own
-                        # crop-frame bbox. Rejected/no-verdict boxes keep
-                        # verdicts_to_boxes' simpler text (the verdict's
-                        # own text_reply, or the candidate's OCR hint).
-                        resolved_boxes: list[RegionBox] = []
-                        for box, cand in zip(boxes, t.candidates, strict=True):
-                            if box.state != 'accepted':
-                                # W8 M6: never leak a raw, unvalidated VLM
-                                # text reply on a rejected/no-verdict box.
-                                resolved_boxes.append(
-                                    resolve_rejected_box_text(
-                                        box, profile=rt.profile, rules=rt.text_rules
-                                    )
-                                )
-                                continue
-                            text_doc: dict[str, Any] = {}
-                            await apply_region_text(
-                                text_doc,
-                                ocr=rt.ocr_recognizer,
-                                crop_jpeg=t.crop_jpeg,
-                                region_in_crop=cand.bbox_in_crop,
-                                profile=rt.profile,
-                                crop_id=t.crop_id,
-                                vlm_text=box.text,
-                                vlm_confidence=box.confidence,
-                                vlm_available=True,
-                                vlm_model=rt.vlm_model,
-                                rules=rt.text_rules,
-                            )
-                            # Text-hint OCR fallback (text_reader='vlm'
-                            # only -- other modes already read the
-                            # region): the VLM read nothing but the
-                            # item-crop OCR hit that seeded this box did.
-                            # Forward it so the box stays searchable.
-                            apply_text_hint_fallback(
-                                text_doc,
-                                text=cand.hint_text,
-                                confidence=cand.hint_text_confidence,
-                                profile=rt.profile,
-                                rules=rt.text_rules,
-                            )
-                            resolved_boxes.append(_box_with_resolved_text(box, text_doc))
-
-                        class_update = (
-                            None
-                            if reply is None
-                            else _combined_class_update(
                                 reply,
-                                effective_class_names,
+                                item_bbox_norm=t.item_bbox_norm,
+                                reverify=t.reverify,
+                                effective_class_names=effective_class_names,
                                 name_to_id=name_to_id,
                                 vlm_model=rt.vlm_model,
+                                profile=rt.profile,
+                                rules=rt.text_rules,
+                                ocr=rt.ocr_recognizer,
+                                crop_jpeg=t.crop_jpeg,
+                                crop_id=t.crop_id,
+                                force_resolve=True,
                             )
-                        )
-                        # auto_confirmed is the box-aware rule: >=1 accepted
-                        # box AND every accepted box independently passes
-                        # the same 2-of-2 auto-confirm policy the pre-W8
-                        # single-box path used.
-                        auto_confirmed = await boxes_auto_confirmed(resolved_boxes, t.candidates)
-                        # We're past the ``extra.get('no_verdict')`` branch
-                        # above (which always ``continue``s) -- verdicts_to_boxes
-                        # only returns a None status alongside that sentinel,
-                        # so a real status is guaranteed here too.
-                        assert status is not None
-                        # R-M4 fix: `verified` means the VLM CONFIRMED a
-                        # region -- at least one accepted box -- never just
-                        # "a reply was received" (which is also true for an
-                        # all-rejected verdict set, e.g. every candidate
-                        # rejected as region_visible_elsewhere).
-                        any_accepted = any(b.state == 'accepted' for b in resolved_boxes)
+                        else:
+                            combined_no_verdict.clear(t.crop_id)
+                        if resolution.no_region_visible:
+                            metrics['combined_no_region_visible'] += 1
+                        if resolution.bbox_wrong:
+                            metrics['combined_bbox_wrong'] += 1
+                        t.detection_trace.extend(resolution.trace)
+                        assert resolution.status is not None
                         t.update_doc = _box_list_doc(
-                            t,
-                            resolved_boxes,
-                            status,
-                            extra={
-                                **(class_update or {}),
-                                **item_verification_fields(
-                                    verified=any_accepted,
-                                    verifier=rt.vlm_model,
-                                    auto_confirmed=auto_confirmed,
-                                ),
-                            },
+                            t, resolution.boxes, resolution.status, extra=resolution.extra
                         )
                         await out_q.put(t)
                     finally:
@@ -1993,8 +1727,9 @@ async def run(args: argparse.Namespace) -> int:
             now = time.monotonic()
             window_processed = metrics['total_processed'] - last_processed
             window_cps = window_processed / max(now - last_t, 1e-6)
-            cache_total = state._cache_hits + state._cache_misses
-            hit_rate = state._cache_hits / cache_total if cache_total > 0 else 0.0
+            cache_hits, cache_misses = crop_cache_stats()
+            cache_total = cache_hits + cache_misses
+            hit_rate = cache_hits / cache_total if cache_total > 0 else 0.0
             async with in_flight_lock:
                 in_flight_count = len(in_flight)
             vis_total = metrics['vlm_visible_kept'] + metrics['vlm_visible_skipped']
@@ -2014,8 +1749,8 @@ async def run(args: argparse.Namespace) -> int:
                 in_flight=in_flight_count,
                 window_cps=round(window_cps, 2),
                 session_processed=metrics['total_processed'],
-                cache_hits=state._cache_hits,
-                cache_misses=state._cache_misses,
+                cache_hits=cache_hits,
+                cache_misses=cache_misses,
                 cache_hit_rate=round(hit_rate, 3),
                 vlm_visible_kept=metrics['vlm_visible_kept'],
                 vlm_visible_skipped=metrics['vlm_visible_skipped'],

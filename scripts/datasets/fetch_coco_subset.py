@@ -52,6 +52,13 @@ Usage::
     python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va_readme \\
         --n 200 --seed 20260925 \\
         --manifest scripts/datasets/manifests/coco_va_200.json
+
+    # Import fixture: val2017 only, plus 12 frames with no box of the chosen
+    # classes (their other annotations stay in coco_gt.json). One pin covers
+    # positives and negatives; crowd boxes stay in coco_gt.json, flagged.
+    python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_import \\
+        --classes car,truck,bus --per-class 28 --negatives 12 --val-only --licenses by \\
+        --manifest scripts/datasets/manifests/coco_import_96.json
 """
 
 from __future__ import annotations
@@ -74,6 +81,7 @@ from scripts.datasets._common import (
     FetchError,
     download,
     load_pinned_manifest,
+    require_basename,
     seeded_sample,
     sha256_file,
     write_csv,
@@ -248,6 +256,44 @@ def select_side_sets(
     return out
 
 
+def select_negatives(
+    images: list[dict[str, Any]],
+    annotations: list[dict[str, Any]],
+    target_class_ids: set[int],
+    license_id_to_name: dict[int, str],
+    allowed_license_names: set[str],
+    split: str,
+    n: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Seeded sample of allowed-license images with no box (crowd included)
+    of any target class. Their other-category annotations are kept in
+    ``coco_gt.json``, so they are negatives only for the chosen classes."""
+    annotated = {a['image_id'] for a in annotations if a['category_id'] in target_class_ids}
+    pool = []
+    for im in images:
+        if im['id'] in annotated:
+            continue
+        lic_name = license_id_to_name.get(im['license'])
+        if lic_name not in allowed_license_names:
+            continue
+        pool.append(
+            {
+                'image_id': im['id'],
+                'file_name': im['file_name'],
+                'split': split,
+                'primary_class': '',
+                'license_name': lic_name,
+                'flickr_url': im.get('flickr_url', ''),
+                'coco_url': im.get('coco_url', ''),
+                'width': im['width'],
+                'height': im['height'],
+            }
+        )
+    pool.sort(key=lambda r: r['image_id'])
+    return sorted(seeded_sample(pool, n, seed + 200), key=lambda r: r['image_id'])
+
+
 def verify_or_write_manifest(manifest_path: Path, selected: list[dict[str, Any]]) -> None:
     """Compare ``selected`` against the committed pin, or write it if this
     is the first run (bootstrap). Raises on drift."""
@@ -301,7 +347,7 @@ def ensure_annotations(cache_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
 def download_images(rows: list[dict[str, Any]], images_dir: Path) -> None:
     for row in rows:
         url = IMAGE_URL_TMPL[row['split']].format(file_name=row['file_name'])
-        dest = images_dir / row['file_name']
+        dest = images_dir / require_basename(row['file_name'])
         download(url, dest)
         row['sha256'] = sha256_file(dest)
 
@@ -364,6 +410,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         '--manifest', type=Path, default=None, help='Pinned manifest path (verify or write)'
     )
+    p.add_argument(
+        '--val-only',
+        action='store_true',
+        help='Select from val2017 only (small, fast; never tops up from train2017)',
+    )
+    p.add_argument(
+        '--negatives',
+        type=int,
+        default=0,
+        help='Also select N val2017 images with no box of any --classes class (full annotations kept)',
+    )
     p.add_argument('--cache-dir', type=Path, default=Path('cache/datasets'))
     p.add_argument(
         '--skip-download', action='store_true', help='Compute selection/manifests only, no images'
@@ -404,6 +461,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     val_primary = primary_class_per_image(
         val_data['images'], val_data['annotations'], category_id_to_name, target_class_ids
     )
+    if args.val_only:
+        train_data = {**train_data, 'images': [], 'annotations': []}
     train_primary = primary_class_per_image(
         train_data['images'], train_data['annotations'], category_id_to_name, target_class_ids
     )
@@ -415,26 +474,65 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     selected = select_per_class(val_pool, train_pool, classes, per_class, args.seed)
-    if args.manifest is not None:
-        verify_or_write_manifest(args.manifest, selected)
 
     side_selected = select_side_sets(
         val_pool, train_pool, {r['image_id'] for r in selected}, side_sets, args.seed
     )
 
+    negatives: list[dict[str, Any]] = []
+    if args.negatives > 0:
+        negatives = select_negatives(
+            val_data['images'],
+            val_data['annotations'],
+            target_class_ids,
+            license_id_to_name,
+            allowed_licenses,
+            'val2017',
+            args.negatives,
+            args.seed,
+        )
+        if len(negatives) < args.negatives:
+            logger.warning('only %d/%d negative images available', len(negatives), args.negatives)
+    if args.manifest is not None:
+        # One pin covers the positives and the negatives (``primary_class``
+        # is '' for a negative) so a drifting negative draw is also caught.
+        verify_or_write_manifest(
+            args.manifest, sorted([*selected, *negatives], key=lambda r: r['image_id'])
+        )
+
     args.out.mkdir(parents=True, exist_ok=True)
     if not args.skip_download:
         download_images(selected, args.out / 'images')
+        download_images(negatives, args.out / 'images')
         for name, rows in side_selected.items():
             download_images(rows, args.out / name)
 
     annotations_by_image: dict[int, list[dict[str, Any]]] = {}
     for split_data in (val_data, train_data):
         for ann in split_data['annotations']:
-            if ann['category_id'] in target_class_ids and not ann.get('iscrowd', 0):
+            # Crowd boxes stay (flagged ``iscrowd``): the file is COCO-faithful, and
+            # the import fixture exercises ``coco_crowd_skipped`` from them.
+            if ann['category_id'] in target_class_ids:
                 annotations_by_image.setdefault(ann['image_id'], []).append(ann)
     categories = [{'id': category_name_to_id[c], 'name': c} for c in classes]
-    write_coco_gt(args.out / 'coco_gt.json', selected, annotations_by_image, categories)
+    if negatives:
+        # A negative keeps every annotation it has (other categories), so the
+        # ground truth stays COCO-faithful; it is negative only for ``classes``.
+        negative_ids = {r['image_id'] for r in negatives}
+        for ann in val_data['annotations']:
+            if ann['image_id'] in negative_ids:
+                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
+        used_cat_ids = {
+            a['category_id'] for i in negative_ids for a in annotations_by_image.get(i, [])
+        }
+        categories = [
+            {'id': c['id'], 'name': c['name']}
+            for c in val_data['categories']
+            if c['name'] in classes or c['id'] in used_cat_ids
+        ]
+    write_coco_gt(
+        args.out / 'coco_gt.json', [*selected, *negatives], annotations_by_image, categories
+    )
 
     write_csv(
         args.out / 'ATTRIBUTION.csv',
@@ -445,7 +543,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 'license_name': r['license_name'],
                 'flickr_url': r['flickr_url'],
             }
-            for r in selected
+            for r in [*selected, *negatives]
         ),
         ('image_id', 'file_name', 'license_name', 'flickr_url'),
     )
@@ -472,6 +570,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         'n_selected': len(selected),
         'class_counts': {c: sum(1 for r in selected if r['primary_class'] == c) for c in classes},
         'side_sets': {name: len(rows) for name, rows in side_selected.items()},
+        'n_negatives': len(negatives),
+        'negative_image_ids': [r['image_id'] for r in negatives],
+        'val_only': bool(args.val_only),
     }
     write_json(args.out / 'SELECTION.json', summary)
     logger.info('done: %s', json.dumps(summary))

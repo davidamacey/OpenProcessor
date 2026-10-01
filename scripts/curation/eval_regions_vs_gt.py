@@ -26,6 +26,13 @@ GT box, worst first) and ``false_positives.jsonl``; a table goes to stdout.
 
 Cohort, in order of precedence:
 
+* ``--import-id`` — a dataset import of this project (``POST
+  /datasets/imports``): the frames it wrote, read from ``GET
+  /datasets/imports/{id}/entries`` on ``--api`` (``--splits`` narrows to
+  e.g. ``test``). Ground truth is the dataset's own label files at each
+  entry's ``rel_path`` under ``--dataset``, so the evaluated frames are
+  exactly the imported ones and a frame the import skipped or failed is
+  never scored;
 * ``--state-dir`` — the import state dir; reads ``ingested/<split>.jsonl``
   (carries each image's ``image_id``, so content duplicates ingested under
   another path still resolve);
@@ -37,6 +44,10 @@ server-side path (``--path-map LOCAL=SERVER`` if the dataset is mounted
 elsewhere on the server; unnecessary when both see the same path). Field and
 index names follow ``RegionFields`` (``OP_REGION_FIELD_*``) and
 ``CurationConfig`` (``OP_*``).
+
+    # Or, for a dataset imported through the API:
+    python3 scripts/curation/eval_regions_vs_gt.py --dataset DS/data.yaml \\
+        --import-id imp_20260101T000000_ab12cd34 --splits test --api http://localhost:4603
 
     # After: import_labeled_dataset.py --dataset DS --images-only --splits test \\
     #            --state-dir ./state/regions
@@ -66,6 +77,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
+from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 from scripts.curation.ingest_upload import map_identifier, parse_path_map
 from scripts.curation.yolo_dataset import DatasetError, discover, label_path_for
 from src.config import RegionStatus, get_curation_config, get_region_fields
@@ -141,10 +153,76 @@ def _dedupe_cohort(cohort: list[CohortImage]) -> list[CohortImage]:
     return deduped
 
 
+IMPORT_ENTRY_PAGE_SIZE = 500
+
+
+def fetch_import_entries(
+    api: str, project: str, import_id: str, splits: list[str] | None
+) -> list[dict[str, Any]]:
+    """Every ledger entry of one import, paged, optionally limited to ``splits``."""
+    import requests
+
+    url = scoped_url(
+        api.rstrip('/'), curation_api_prefix(), project, f'/datasets/imports/{import_id}/entries'
+    )
+    out: list[dict[str, Any]] = []
+    for split in splits or [None]:  # type: ignore[list-item]
+        page = 1
+        while True:
+            params: dict[str, Any] = {'page': page, 'page_size': IMPORT_ENTRY_PAGE_SIZE}
+            if split is not None:
+                params['split'] = split
+            response = requests.get(url, params=params, timeout=60)
+            if response.status_code != 200:
+                raise DatasetError(f'GET {url} -> {response.status_code}: {response.text[:200]}')
+            body = response.json()
+            out.extend(body['items'])
+            if page * IMPORT_ENTRY_PAGE_SIZE >= body['total']:
+                break
+            page += 1
+    return out
+
+
+def cohort_from_import(
+    entries: list[dict[str, Any]],
+    dataset_root: Path,
+    *,
+    path_map: tuple[str, str] | None,
+    class_ids: list[int] | None,
+) -> list[CohortImage]:
+    """Frames of an import: ground truth from the dataset's label file at each
+    entry's ``rel_path``; the index join from the entry's own ``image_id`` /
+    ``image_path`` (so a frame the import reused from another path still
+    resolves). Entries without an ``image_id`` are skipped."""
+    cohort = []
+    for e in entries:
+        if not e.get('image_id'):
+            continue
+        cohort.append(
+            _entry(
+                dataset_root / e['rel_path'],
+                e.get('split') or '',
+                path_map=path_map,
+                class_ids=class_ids,
+                server_path=e.get('image_path'),
+                image_id=e['image_id'],
+            )
+        )
+    return _dedupe_cohort(cohort)
+
+
 def build_cohort(args: argparse.Namespace) -> list[CohortImage]:
-    """Resolve the evaluated frames from state dir / image list / dataset."""
+    """Resolve the evaluated frames from an import / state dir / image list / dataset."""
     kw: dict[str, Any] = {'path_map': args.path_map, 'class_ids': args.gt_class or None}
     wanted = [s.strip() for s in args.splits.split(',')] if args.splits else None
+
+    if getattr(args, 'import_id', None):
+        entries = fetch_import_entries(args.api, args.project, args.import_id, wanted)
+        root = args.dataset if args.dataset.is_dir() else args.dataset.parent
+        cohort = cohort_from_import(entries, root, **kw)
+        if not cohort:
+            raise DatasetError(f'import {args.import_id}: no written frames in the selected splits')
+        return cohort
 
     if args.state_dir is not None:
         ingested = args.state_dir / 'ingested'
@@ -277,6 +355,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument('--dataset', required=True, type=Path, help='data.yaml or dataset root')
     p.add_argument('--splits', default=None, help='Comma-separated subset (default: all)')
+    p.add_argument(
+        '--import-id',
+        default=None,
+        help='Cohort = the frames of this dataset import (GET /datasets/imports/{id}/entries)',
+    )
+    p.add_argument(
+        '--api',
+        default=os.environ.get('OP_API', 'http://localhost:4603'),
+        help='API base URL for --import-id (default: $OP_API, else http://localhost:4603)',
+    )
     p.add_argument('--state-dir', type=Path, default=None, help='Import state dir (cohort)')
     p.add_argument('--image-list', type=Path, default=None, help='File of local image paths')
     p.add_argument(

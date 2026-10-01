@@ -184,6 +184,15 @@ class ItemDoc(BaseModel):
     on_negative_frame: bool = False
     import_standalone_region: bool = False
     proposal_chain: list[str] = Field(default_factory=list)
+    # Project-combine provenance: the source project / item / image / split a
+    # copied item came from, and a label conflict left for a human.
+    origin_project: str | None = None
+    origin_item_id: str | None = None
+    origin_image_id: str | None = None
+    origin_split: str | None = None
+    combine_conflict: bool = False
+    combine_conflict_origins: list[str] = Field(default_factory=list)
+    combine_merged_origins: list[str] = Field(default_factory=list)
     # Every OCR line read on the item crop ([] when none / not yet read).
     item_text_lines: list[ItemTextLine] = Field(default_factory=list)
 

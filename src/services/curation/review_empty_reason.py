@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.config import IndexRole, get_curation_config, index_name
+from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 
 
 # Tabs whose own selection requires a probe-scored item
@@ -36,6 +37,13 @@ async def _field_has_any_value(opensearch: Any, field: str) -> bool:
     return int(resp.get('count', 0)) > 0
 
 
+async def _imported_labels_exist(opensearch: Any) -> bool:
+    resp = await opensearch.count(
+        index=_items_index(), body={'query': {'term': {'class_source': LABEL_IMPORT_CLASS_SOURCE}}}
+    )
+    return int(resp.get('count', 0)) > 0
+
+
 async def compute_empty_reason(tab: str, filters: Any, opensearch: Any) -> str:
     """A real-state reason for a zero-result ``GET /review/{tab}``:
 
@@ -45,6 +53,9 @@ async def compute_empty_reason(tab: str, filters: Any, opensearch: Any) -> str:
       ever been scored -> "item scores never computed";
     - ``new_class_proposals`` with nothing pending -> "no unclassified
       proposals";
+    - ``imported`` with an import filter set -> "no imported labels match
+      these filters", with no imported label at all -> "no imported labels:
+      import a dataset first";
     - otherwise -> "no items match".
     """
     probe_field = _PROBE_GATED_TABS.get(tab)
@@ -56,6 +67,11 @@ async def compute_empty_reason(tab: str, filters: Any, opensearch: Any) -> str:
         return 'item scores never computed'
     if tab == 'new_class_proposals':
         return 'no unclassified proposals'
+    if tab == 'imported':
+        if getattr(filters, 'import_id', None) or getattr(filters, 'dataset_split', None):
+            return 'no imported labels match these filters'
+        if not await _imported_labels_exist(opensearch):
+            return 'no imported labels: import a dataset first'
     return 'no items match'
 
 
@@ -66,6 +82,7 @@ async def review_tabs_empty_state(opensearch: Any) -> dict[str, bool]:
     return {
         'has_probe_predictions': await _field_has_any_value(opensearch, 'probe_pred_entropy'),
         'has_item_scores': await _field_has_any_value(opensearch, 'mistakenness_score'),
+        'has_imported_labels': await _imported_labels_exist(opensearch),
     }
 
 
