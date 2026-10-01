@@ -50,13 +50,10 @@ class ItemPlan:
     holdout_prior: bool | None = None
 
 
-def plan_item_labels(
-    existing: list[dict[str, Any]],
-    boxes: list[tuple[LabelBox, MapTarget]],
-    *,
-    image_id: str,
-) -> list[ItemPlan]:
-    """One :class:`ItemPlan` per labeled box, in box order.
+def match_existing(
+    existing: list[dict[str, Any]], boxes: list[LabelBox], *, image_id: str
+) -> list[dict[str, Any] | None]:
+    """For each box, the existing item it matches (or ``None``).
 
     A box matches the existing item with the same ``crop_id``, else the
     unclaimed one with the highest IoU >= :data:`LABEL_IOU_MATCH` (ties:
@@ -64,8 +61,8 @@ def plan_item_labels(
     """
     by_id = {str(d['crop_id']): d for d in existing if d.get('crop_id')}
     claimed: set[str] = set()
-    plans: list[ItemPlan] = []
-    for box, target in boxes:
+    matches: list[dict[str, Any] | None] = []
+    for box in boxes:
         cid = make_crop_id(image_id, list(box.bbox_norm))
         match: dict[str, Any] | None = None
         if cid in by_id and cid not in claimed:
@@ -79,11 +76,27 @@ def plan_item_labels(
                 score = iou(tuple(other_box), box.bbox_norm)  # type: ignore[arg-type]
                 if score >= LABEL_IOU_MATCH and score > best:
                     best, match = score, by_id[other_id]
+        if match is not None:
+            claimed.add(str(match['crop_id']))
+        matches.append(match)
+    return matches
+
+
+def plan_item_labels(
+    existing: list[dict[str, Any]],
+    boxes: list[tuple[LabelBox, MapTarget]],
+    *,
+    image_id: str,
+) -> list[ItemPlan]:
+    """One :class:`ItemPlan` per labeled box, in box order."""
+    matches = match_existing(existing, [box for box, _ in boxes], image_id=image_id)
+    plans: list[ItemPlan] = []
+    for (box, target), match in zip(boxes, matches, strict=True):
         if match is None:
+            cid = make_crop_id(image_id, list(box.bbox_norm))
             plans.append(ItemPlan(box, target, cid, 'created'))
-            continue
-        claimed.add(str(match['crop_id']))
-        plans.append(_plan_existing(box, target, match))
+        else:
+            plans.append(_plan_existing(box, target, match))
     return plans
 
 

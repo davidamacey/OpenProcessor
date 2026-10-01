@@ -18,6 +18,7 @@ from src.clients.occ import occ_update_one
 from src.clients.occ_locks import is_human_marker
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
+from src.services.curation.dataset_import import reconcile
 from src.services.curation.edit_history import (
     EDIT_HISTORY_FIELD,
     EditKind,
@@ -65,6 +66,7 @@ class UndoReport:
     dry_run: bool
     items_deleted: int = 0
     items_restored: int = 0
+    items_reinstated: int = 0
     items_kept_human_edited: int = 0
     items_kept_shared: int = 0
     class_labels_removed: int = 0
@@ -322,6 +324,12 @@ async def undo_import(
         seen: set[str] = set()
         for entry in entries:
             cid = entry['crop_id']
+            if entry.get('action') == reconcile.ACTION:
+                if cid not in docs:
+                    report.items_reinstated += 1
+                    if not dry_run:
+                        await _reinstate(ctx, cid, entry['doc'])
+                continue
             if cid in seen or cid not in docs:
                 continue
             seen.add(cid)
@@ -374,6 +382,16 @@ async def _delete_decided(
         report.sample('kept_human_edited', cid)
         await _write(ctx, cid, entry, boxes)
     return skipped
+
+
+async def _reinstate(ctx: UndoContext, crop_id: str, doc: dict[str, Any]) -> None:
+    """Put back an item a later import's reconcile removed (kept whole in
+    that import's ledger)."""
+    resp = await ctx.opensearch.bulk(
+        body=[{'index': {'_index': ctx.items_index, '_id': crop_id}}, doc], refresh=False
+    )
+    if resp.get('errors'):
+        raise RuntimeError(f'could not reinstate {crop_id}: {resp.get("items", [])[:1]}')
 
 
 async def _write(

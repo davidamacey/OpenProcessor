@@ -143,6 +143,7 @@ class DatasetImportReportWire(BaseModel):
     proposals_merged: int = 0
     holdout_frozen: int = 0
     label_conflicts_locked: int = 0
+    items_reconciled_removed: int = 0
     disagreements: DisagreementsWire = Field(default_factory=DisagreementsWire)
 
 
@@ -164,6 +165,7 @@ class DatasetUndoReportWire(BaseModel):
     dry_run: bool
     items_deleted: int = 0
     items_restored: int = 0
+    items_reinstated: int = 0
     items_kept_human_edited: int = 0
     items_kept_shared: int = 0
     class_labels_removed: int = 0

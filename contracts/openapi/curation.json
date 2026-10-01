@@ -4382,6 +4382,11 @@
             "title": "Items Noop",
             "type": "integer"
           },
+          "items_reconciled_removed": {
+            "default": 0,
+            "title": "Items Reconciled Removed",
+            "type": "integer"
+          },
           "items_updated": {
             "default": 0,
             "title": "Items Updated",
@@ -5050,6 +5055,11 @@
           "items_kept_shared": {
             "default": 0,
             "title": "Items Kept Shared",
+            "type": "integer"
+          },
+          "items_reinstated": {
+            "default": 0,
+            "title": "Items Reinstated",
             "type": "integer"
           },
           "items_restored": {

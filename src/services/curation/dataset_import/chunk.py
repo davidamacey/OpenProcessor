@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from src.clients.occ import occ_update_one
 from src.core.logging import get_logger
 from src.services.curation.class_label import ItemLabel
-from src.services.curation.dataset_import import region_labels
+from src.services.curation.dataset_import import reconcile, region_labels
 from src.services.curation.dataset_import.image_load import ImageLoadError, load_image_bytes
 from src.services.curation.dataset_import.item_labels import (
     ItemPlan,
@@ -235,6 +235,9 @@ async def _import_one(
     existing = await _items_for_image(ctx, img.image_id)
     plans = plan_item_labels(existing, boxes.items, image_id=img.image_id)
     _apply_prior_actions(plans, prior)
+    dropped = await reconcile.dropped_entries(
+        ctx, existing, entry, plans, image_id=img.image_id, prior=prior
+    )
 
     detections: list[DetectedItem] = []
     if ctx.uses_detector:
@@ -311,7 +314,8 @@ async def _import_one(
                 'holdout_prior': p.holdout_prior,
             }
             for p in plans
-        ],
+        ]
+        + dropped,
     }
     store.append_ledger(chunk, row)
 
@@ -333,6 +337,7 @@ async def _import_one(
         await _stamp_existing_image(ctx, img.image_id, entry, state)
     await stamp_matched_noops(ctx, plans)
     updates = await apply_item_updates(ctx, entry, plans, now)
+    report.items_reconciled_removed += await reconcile.remove_dropped(ctx, dropped)
 
     ledger_items = list(row['items'])
     cids = outcome.crop_ids

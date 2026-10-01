@@ -27,6 +27,7 @@ _COUNTERS = (
     'proposals_merged',
     'holdout_frozen',
     'label_conflicts_locked',
+    'items_reconciled_removed',
 )
 
 
@@ -49,6 +50,7 @@ class ImportReport:
     proposals_merged: int = 0
     holdout_frozen: int = 0
     label_conflicts_locked: int = 0
+    items_reconciled_removed: int = 0
     disagreement_counts: dict[str, int] = field(
         default_factory=lambda: {'mismatches': 0, 'missed_labels': 0, 'unmatched_detections': 0}
     )
