@@ -52,6 +52,7 @@ from src.services.curation.metrics import (
     OP_SEGMENTER_REQUEST_WAIT_SECONDS,
 )
 from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.segmenter_http import DEFAULT_MAX_CANDIDATES
 
 
 logger = get_logger('curation_worker')
@@ -115,7 +116,7 @@ class SegmenterClient:
         *,
         client: httpx.AsyncClient | None = None,
         timeout_s: float = 30.0,
-        max_candidates: int = 4,
+        max_candidates: int = DEFAULT_MAX_CANDIDATES,
         text_prompt: str = '',
         source_name: str,
     ) -> None:

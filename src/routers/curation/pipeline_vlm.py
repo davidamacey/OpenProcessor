@@ -14,7 +14,7 @@ by id from any process.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.routers.curation._config_common_models import api_error
 from src.services.config_store.vlm_gate import current_pack_and_profile, enforce_vlm_gate
@@ -27,6 +27,9 @@ from src.services.labeling.vlm_endpoints import (
     resolve_vlm_source,
 )
 
+
+if TYPE_CHECKING:
+    from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 
 VLM_DESC = (
     'Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the '
@@ -108,6 +111,38 @@ async def resolve_run_vlm(
     return RunVlm(endpoint.name, endpoint.revision, endpoint)
 
 
+async def resolve_test_vlm(
+    opensearch: Any,
+    *,
+    name: str | None,
+    revision: int | None,
+    draft: VlmEndpointBody | None,
+    acknowledge_external: bool,
+    pack: Any,
+    profile: Any,
+) -> VlmEndpoint:
+    """The endpoint a test-on-crop run (W5) sends a real crop to: a draft
+    body, ``name`` (+ ``revision``), or the project's active endpoint, through
+    the ONE gate (mode ``test``: validity / SSRF, the external-images
+    acknowledgement, secrets by reference, the pack pairing). 409
+    ``vlm_not_configured`` when none is given and the project's VLM is off."""
+    if name is not None and draft is not None:
+        raise api_error(422, 'validation_failed', 'give vlm_name or vlm_draft, not both')
+    await refresh_vlm_state(opensearch)
+    try:
+        endpoint = await resolve_vlm_source(opensearch, name, revision, draft)
+    except VlmEndpointUnavailableError as exc:
+        raise api_error(409, 'vlm_endpoint_unavailable', str(exc)) from exc
+    if endpoint is None:
+        if name is not None:
+            raise _unknown(name if revision is None else f'{name}@{revision}')
+        raise labeler_unavailable(VlmEndpointUnavailableError(NO_VLM_MESSAGE))
+    await enforce_vlm_gate(
+        endpoint, mode='test', acknowledge_external=acknowledge_external, pack=pack, profile=profile
+    )
+    return endpoint
+
+
 def labeler_unavailable(exc: Exception) -> Any:
     """The ``api_error`` for a labeler that could not be built: 409
     ``vlm_not_configured`` when the project's VLM is off, else 409
@@ -172,4 +207,5 @@ __all__ = [
     'labeler_unavailable',
     'require_run_vlm',
     'resolve_run_vlm',
+    'resolve_test_vlm',
 ]

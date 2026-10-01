@@ -20,6 +20,10 @@ from typing import Any
 import httpx
 
 
+#: How many candidates the worker asks the segmenter for per crop (its client
+#: default); a test run asks for the same, so it shows what the worker sees.
+DEFAULT_MAX_CANDIDATES = 4
+
 #: Wall-clock bound for one test call (the segmenter's own cold start is
 #: reported by ``GET /health``, not waited out here).
 DEFAULT_TIMEOUT_S = 30.0
@@ -103,6 +107,7 @@ async def segment_once(
 
 
 __all__ = [
+    'DEFAULT_MAX_CANDIDATES',
     'DEFAULT_TIMEOUT_S',
     'SegmentCandidateData',
     'SegmenterCallError',

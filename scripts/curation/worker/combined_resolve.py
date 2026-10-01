@@ -229,7 +229,7 @@ async def resolve_combined_reply(
     # `auto_confirmed`: >=1 accepted box AND every accepted box passes the
     # 2-of-2 auto-confirm policy. `verified`: the VLM confirmed a region
     # (at least one accepted box), not merely "a reply was received".
-    auto_confirmed = await boxes_auto_confirmed(resolved, candidates)
+    auto_confirmed = await boxes_auto_confirmed(resolved, candidates, profile)
     return CombinedResolution(
         outcome='resolved',
         boxes=resolved,

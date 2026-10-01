@@ -12,10 +12,6 @@ from typing import Any
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._config_common_models import ActiveRef, api_error
 from src.routers.curation._prompt_pack_models import (
-    PackTestPackRef,
-    PackTestPrompt,
-    PackTestRequest,
-    PackTestResponse,
     PromptPackActivateRequest,
     PromptPackBody,
     PromptPackCallSchema,
@@ -48,7 +44,7 @@ from src.services.config_store.packs import (
     rollback_pack,
     save_pack,
 )
-from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT, PromptPack
+from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT
 
 
 _PLACEHOLDER_HELP: dict[str, str] = {
@@ -208,89 +204,6 @@ async def validate_prompt_pack_route(
         class_names=_registry_class_names(),
     )
     return report.model_dump()
-
-
-# =============================================================================
-# POST /prompt_packs/test
-# =============================================================================
-
-
-def _render_prompt(pack: PromptPack, call: str, class_names: list[str]) -> PackTestPrompt:
-    contract = REPLY_KEY_CONTRACT.get(call)
-    if contract is None:
-        raise api_error(422, 'validation_failed', f'unknown call {call!r}')
-    system_field = contract['fields'][0]
-    user_field = contract['fields'][-1]
-    system = getattr(pack, system_field, '')
-    user_template = getattr(pack, user_field, '')
-    class_csv = ', '.join(class_names) if class_names else '(no classes configured)'
-    try:
-        if call in ('classify', 'open_classify'):
-            user_text = user_template.format(class_names_csv=class_csv)
-        elif call in ('combined', 'combined_batch'):
-            user_text = user_template.format(
-                class_block=f'Class names: {class_csv}\n',
-                region_block='[preview only -- no live crop supplied]\n',
-            )
-        else:
-            user_text = user_template
-    except (KeyError, IndexError, ValueError):
-        user_text = user_template
-    return PackTestPrompt(system=system, user_text=user_text)
-
-
-@router.post('/prompt_packs/test', response_model=PackTestResponse)
-async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> PackTestResponse:
-    """Render the requested call's prompt for a draft/saved/active pack.
-
-    Scope note (documented deviation): this preview renders the exact
-    system/user text a call would send, and runs the same validator as
-    every other write path, but does not itself round-trip a live crop
-    through the VLM -- wiring image resolution + a raw VLM completion
-    into this route is out of this wave's scope; ``raw_reply``/
-    ``latency_ms`` are always ``null``. Never writes.
-    """
-    store = get_config_store()
-    await store.ensure_fresh(opensearch)
-
-    if body.draft is not None:
-        data = body.draft.model_dump()
-        data['name'] = body.pack_name or 'draft'
-        pack = PromptPack.from_dict(data)
-        ref_name, ref_revision, is_draft = body.pack_name, None, True
-    elif body.pack_name:
-        record = build_record(body.pack_name, revision=body.pack_revision)
-        if record is None:
-            record = await get_revision_record(opensearch, body.pack_name, body.pack_revision or 0)
-        if record is None:
-            raise api_error(404, 'not_found', f'{body.pack_name!r} is not a known pack')
-        pack = PromptPack.from_dict({**record.body, 'name': body.pack_name})
-        ref_name, ref_revision, is_draft = body.pack_name, record.revision, False
-    else:
-        from src.services.labeling.vlm_prompts import active_prompt_pack
-
-        pack = active_prompt_pack()
-        ref_name, ref_revision, is_draft = pack.name, None, False
-
-    class_names = (
-        body.class_names if body.class_names is not None else sorted(_registry_class_names())
-    )
-    prompt = _render_prompt(pack, body.call, class_names)
-    report = validate_pack(
-        None,
-        pack.to_dict(),
-        profile=_resolve_profile(body.profile_name),
-        class_names=_registry_class_names(),
-    )
-    return PackTestResponse(
-        call=body.call,
-        pack=PackTestPackRef(name=ref_name, revision=ref_revision, draft=is_draft),
-        prompt=prompt,
-        raw_reply=None,
-        reasoning=None,
-        latency_ms=None,
-        validation=report,
-    )
 
 
 # =============================================================================

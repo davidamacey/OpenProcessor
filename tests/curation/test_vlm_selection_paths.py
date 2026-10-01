@@ -50,6 +50,28 @@ RUN_ROUTES: dict[tuple[str, str], dict[str, Any]] = {
 }
 
 
+#: The test-on-crop routes name an endpoint in the BODY (``vlm_name`` +
+#: ``vlm_revision`` / ``vlm_draft``), not with ``?vlm=``; the request each one
+#: needs to reach the VLM gate.
+TEST_ROUTES: dict[tuple[str, str], dict[str, Any]] = {
+    ('POST', '/prompt_packs/test'): {'call': 'classify', 'crop_ids': ['c1']},
+    ('POST', '/region_profiles/test'): {
+        'crop_id': 'c1',
+        'verify': True,
+        'draft': {
+            'detector_model': '',
+            'text_reader': 'none',
+            'text_hint_enabled': False,
+            'ocr_pipeline_model': '',
+            'segmenter_text_prompt': 'wheel',
+            'region_class_name': 'wheel',
+            'display_name': 'Wheels',
+            'display_name_singular': 'Wheel',
+        },
+    },
+}
+
+
 @pytest.fixture
 def rebound(vlm_api, reference_region_profile):
     """A good stored endpoint (``rebound``), then the DNS answer turns bad."""
@@ -148,6 +170,54 @@ def test_per_run_selection_of_an_unknown_endpoint_is_a_422(rebound, route: tuple
     assert response.status_code == 422, response.text
     assert _detail(response)['error'] == 'unknown_vlm'
     assert 'good' in _detail(response)['valid_ids']
+
+
+@pytest.mark.parametrize('route', sorted(TEST_ROUTES))
+def test_test_on_crop_selection_refuses(rebound, monkeypatch, route: tuple[str, str]) -> None:
+    """A test run sends a real crop to the endpoint it names, so every way of
+    naming one -- by name, by pinned revision, as an unsaved draft -- is
+    refused for the rebound address, before any crop is read."""
+    monkeypatch.setenv('OP_SEGMENTER_URL', 'http://seg.test:8000')
+    from curation.conftest import HybridOpenSearch
+    from curation.query_fakes import QueryFakeOpenSearch
+    from src.routers.curation import _raw_opensearch_dep
+
+    hybrid = HybridOpenSearch(rebound.fake_os, QueryFakeOpenSearch({}))
+    rebound.client.app.dependency_overrides[_raw_opensearch_dep] = lambda: hybrid
+    method, template = route
+    url = SCOPED + template
+    base = TEST_ROUTES[route]
+
+    def call(**vlm: Any) -> Any:
+        return rebound.lenient.request(method, url, json={**base, **vlm})
+
+    good = call(vlm_name='good')
+    assert good.status_code != 422, 'the positive control must get past the VLM gate: ' + good.text
+    assert good.status_code == 404, good.text  # on to the crop lookup (there is no item store)
+    _refused_for_the_address(call(vlm_name=REBOUND))
+    _refused_for_the_address(call(vlm_name=REBOUND, vlm_revision=1))
+    _refused_for_the_address(
+        call(vlm_draft={'base_url': 'http://rebound.example.com/v1', 'model': 'm'})
+    )
+
+
+def test_every_route_naming_an_endpoint_in_its_body_is_walked() -> None:
+    from src.main import app
+
+    found: set[tuple[str, str]] = set()
+    for route in app.routes:
+        if not isinstance(route, APIRoute) or '/projects/{project}' not in route.path:
+            continue
+        field = getattr(route, 'body_field', None)
+        model = field.field_info.annotation if field is not None else None
+        if 'vlm_name' not in getattr(model, 'model_fields', {}):
+            continue
+        for method in route.methods - {'HEAD'}:
+            found.add((method, route.path.split('/projects/{project}', 1)[1]))
+    assert found == set(TEST_ROUTES), (
+        f'routes naming a VLM endpoint in the body that this walk does not cover: '
+        f'{sorted(found - set(TEST_ROUTES))}; walked but gone: {sorted(set(TEST_ROUTES) - found)}'
+    )
 
 
 def test_the_clone_of_a_project_refuses(rebound, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -190,3 +190,12 @@ class HybridOpenSearch:
     async def exists(self, index: str, **_kw: Any) -> bool:
         del index
         return True
+
+
+@pytest.fixture
+def stack(vlm_api: VlmApi, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The test-on-crop stack (W5): the app, an item store, a fake VLM and
+    a fake segmenter. See ``curation.config_test_stack``."""
+    from curation.config_test_stack import build_stack
+
+    return build_stack(vlm_api, tmp_path, monkeypatch)

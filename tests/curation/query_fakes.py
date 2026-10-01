@@ -318,6 +318,9 @@ class QueryFakeOpenSearch:
         self.searched_indexes: list[str] = []
         self.bulk_calls = 0
         self.mget_calls = 0
+        #: Every call that could change a document (update / bulk), so a
+        #: read-only route can assert it made none.
+        self.write_calls = 0
         self.max_inner_result_window = 100
         self.settings_puts: list[dict[str, Any]] = []
         self.indices = _Indices(self)
@@ -435,6 +438,7 @@ class QueryFakeOpenSearch:
     ) -> dict[str, Any]:
         if if_seq_no is not None and if_seq_no != self.seq.get((index, id), 1):
             raise _ConflictError('409 version conflict')
+        self.write_calls += 1
         self.docs(index)[id].update(copy.deepcopy(body['doc']))
         self._bump(index, id)
         return {'result': 'updated'}
@@ -465,6 +469,7 @@ class QueryFakeOpenSearch:
 
     async def bulk(self, *, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
         self.bulk_calls += 1
+        self.write_calls += 1
         items = []
         errors = False
         lines = iter(body)

@@ -270,7 +270,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             'json': {'name': f'{slug}-newpack', 'body': _prompt_pack_body()}
         },
         ('POST', '/prompt_packs/validate'): {'json': {'name': None, 'body': _prompt_pack_body()}},
-        ('POST', '/prompt_packs/test'): {'json': {'call': 'region_visible'}},
+        ('POST', '/prompt_packs/test'): {'json': {'call': 'region_visible', 'crop_ids': [item]}},
         ('POST', '/prompt_packs/active/rollback'): {'json': {'expected_active': None}},
         ('POST', '/prompt_packs/{name}/clone'): {
             'json': {'new_name': f'{slug}-clone', 'source': 'stored'}
@@ -293,7 +293,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/region_profiles/validate_segmenter_prompt'): {
             'json': {'text_prompt': 'test region', 'sole_leg': True}
         },
-        ('POST', '/region_profiles/test'): {'json': {'name': None, 'body': _region_profile_body()}},
+        ('POST', '/region_profiles/test'): {
+            'json': {'crop_id': item, 'draft': _region_profile_body()}
+        },
         ('POST', '/region_profiles/active/rollback'): {'json': {'expected_active': None}},
         ('POST', '/region_profiles/deactivate'): {'json': {'expected_active': None}},
         ('POST', '/region_profiles/{name}/clone'): {
@@ -351,10 +353,16 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/unarchive'): 'mutates the shared project registry doc, not project data',
     ('POST', '/clone_settings'): 'mutates the shared project registry doc, not project data',
     ('POST', '/prompt_packs/validate'): 'dry-run report; never writes',
-    ('POST', '/prompt_packs/test'): 'renders a prompt preview; never writes',
+    (
+        'POST',
+        '/prompt_packs/test',
+    ): 'runs a pack call over a stored crop and previews; never writes',
     ('POST', '/region_profiles/validate'): 'dry-run report; never writes',
     ('POST', '/region_profiles/validate_segmenter_prompt'): 'dry-run report; never writes',
-    ('POST', '/region_profiles/test'): 'renders an effective-legs preview; never writes',
+    (
+        'POST',
+        '/region_profiles/test',
+    ): 'runs a profile over a stored crop and previews; never writes',
 }
 
 # Routes whose ``{crop_id}`` is a seeded item other than ``-item-0001``,
@@ -369,6 +377,11 @@ CROP_FOR: dict[tuple[str, str], str] = {
 
 # Routes that answer 5xx in the fixture for a reason that is not isolation.
 EXPECTED_5XX: dict[tuple[str, str], str] = {
+    ('POST', '/region_profiles/test'): (
+        '502 segmenter_error: the sweep has no network, so the only leg of the draft '
+        'profile cannot run (a total leg failure is a 502 by design); the item is read '
+        'from the bound project before that'
+    ),
     ('DELETE', '/models/{model_name}'): (
         '502: the dead in-process Triton never confirms the unload, so the route '
         'refuses to delete the (own, ownership-checked) model dir'

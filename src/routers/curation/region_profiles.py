@@ -247,35 +247,6 @@ def _project_slug() -> str | None:
 
 
 # =============================================================================
-# POST /region_profiles/test
-# =============================================================================
-
-
-@router.post('/region_profiles/test')
-async def test_region_profile(body: RegionProfileValidateRequest, opensearch: OpenSearchDep) -> Any:
-    """Preview a draft/saved profile's effective legs and run its
-    validator. Scope note (documented deviation, mirrors W3's
-    ``/prompt_packs/test``): no live crop/segmenter/detector round-trip;
-    ``/prompt_packs/test`` already covers the VLM leg's prompt preview.
-    Never writes."""
-    store = get_config_store()
-    await store.ensure_fresh(opensearch)
-    profile = _decode_or_none(body.name or 'draft', body.body.model_dump())
-    report = await validate_profile(
-        None,
-        body.body.model_dump(),
-        get_repository_index=None,
-        segmenter_health=_segmenter_health_fn,
-        class_names=_registry_class_names(),
-        project_slug=_project_slug(),
-    )
-    return {
-        'effective': _effective(profile).model_dump() if profile is not None else None,
-        'validation': report.model_dump(),
-    }
-
-
-# =============================================================================
 # GET /region_profiles/active[/impact], rollback, deactivate
 # =============================================================================
 

@@ -177,45 +177,9 @@ class PromptPackSchema(BaseModel):
     )
 
 
-class PackTestRequest(BaseModel):
-    pack_name: str | None = None
-    pack_revision: int | None = None
-    draft: PromptPackBody | None = None
-    call: str
-    crop_ids: list[str] = Field(default_factory=list)
-    use_region_box: str = 'current'
-    class_names: list[str] | None = None
-    profile_name: str | None = None
-
-
-class PackTestPackRef(BaseModel):
-    name: str | None
-    revision: int | None
-    draft: bool
-
-
-class PackTestPrompt(BaseModel):
-    system: str
-    user_text: str
-
-
-class PackTestResponse(BaseModel):
-    call: str
-    pack: PackTestPackRef
-    prompt: PackTestPrompt
-    raw_reply: str | None = None
-    reasoning: str | None = None
-    latency_ms: float | None = None
-    validation: ValidationReport
-
-
 __all__ = [
     'ActiveConfigResponse',
     'PackSourceWire',
-    'PackTestPackRef',
-    'PackTestPrompt',
-    'PackTestRequest',
-    'PackTestResponse',
     'PromptPackActivateRequest',
     'PromptPackBody',
     'PromptPackCallSchema',

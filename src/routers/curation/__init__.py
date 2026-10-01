@@ -18,6 +18,7 @@ import src.routers.curation.bakeoff
 import src.routers.curation.classes
 import src.routers.curation.clusters
 import src.routers.curation.cohorts
+import src.routers.curation.config_test
 import src.routers.curation.config_vocabulary
 import src.routers.curation.crop_context
 import src.routers.curation.crops

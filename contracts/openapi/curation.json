@@ -2802,6 +2802,20 @@
             ],
             "title": "Class Name"
           },
+          "crop_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
           "current": {
             "anyOf": [
               {
@@ -2906,7 +2920,17 @@
               "no_local_vlm",
               "unknown_catalog_id",
               "vlm_catalog_does_not_fit",
-              "probe_busy"
+              "probe_busy",
+              "crop_not_found",
+              "test_busy",
+              "test_timeout",
+              "vlm_transport_error",
+              "no_region_box",
+              "too_many_crops",
+              "pack_invalid",
+              "profile_invalid",
+              "segmenter_error",
+              "detector_error"
             ],
             "title": "Error",
             "type": "string"
@@ -3343,6 +3367,97 @@
           "region_status"
         ],
         "title": "CropBatchStatusRequest",
+        "type": "object"
+      },
+      "CropContextImage": {
+        "description": "The source frame's record: ``width`` / ``height`` fall back to the\nimage file header when the images index lacks them.",
+        "properties": {
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Path"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "image_id"
+        ],
+        "title": "CropContextImage",
+        "type": "object"
+      },
+      "CropContextResponse": {
+        "description": "``GET /crops/{id}/context``. Documentation model only (the handler\nreturns plain dicts, so a stored value of an unexpected type never 500s;\na test pins the keys): ``image`` is ``null`` when the images index has no\nrecord of the frame, ``items`` are wire items ordered by\n``crop_rank_in_image``, at most 500.",
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CropContextImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "image",
+          "items"
+        ],
+        "title": "CropContextResponse",
         "type": "object"
       },
       "CropDiscardBatchRequest": {
@@ -9491,6 +9606,66 @@
         "title": "OcrModelEntry",
         "type": "object"
       },
+      "PackTestCropResult": {
+        "properties": {
+          "box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Id"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "parsed": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parsed"
+          },
+          "preview_item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped"
+          }
+        },
+        "required": [
+          "crop_id"
+        ],
+        "title": "PackTestCropResult",
+        "type": "object"
+      },
       "PackTestPackRef": {
         "properties": {
           "draft": {
@@ -9531,12 +9706,26 @@
       "PackTestPrompt": {
         "properties": {
           "system": {
-            "title": "System",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System"
           },
           "user_text": {
-            "title": "User Text",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Text"
           }
         },
         "required": [
@@ -9547,8 +9736,22 @@
         "type": "object"
       },
       "PackTestRequest": {
+        "additionalProperties": false,
+        "description": "Run ``call`` of a pack over stored crops. Pack source: exactly one of\n``pack_name`` (+ ``pack_revision``) or ``draft``; none = the active pack.",
         "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
           "call": {
+            "enum": [
+              "combined",
+              "classify",
+              "open_classify",
+              "region_verify",
+              "region_visible"
+            ],
             "title": "Call",
             "type": "string"
           },
@@ -9618,8 +9821,44 @@
           },
           "use_region_box": {
             "default": "current",
+            "enum": [
+              "current",
+              "none"
+            ],
             "title": "Use Region Box",
             "type": "string"
+          },
+          "vlm_draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmEndpointBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vlm_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Name"
+          },
+          "vlm_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Revision"
           }
         },
         "required": [
@@ -9631,22 +9870,37 @@
       "PackTestResponse": {
         "properties": {
           "call": {
+            "enum": [
+              "combined",
+              "classify",
+              "open_classify",
+              "region_verify",
+              "region_visible"
+            ],
             "title": "Call",
             "type": "string"
           },
           "latency_ms": {
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "pack": {
+            "$ref": "#/components/schemas/PackTestPackRef"
+          },
+          "parse_error": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Latency Ms"
+            "title": "Parse Error"
           },
-          "pack": {
-            "$ref": "#/components/schemas/PackTestPackRef"
+          "parse_ok": {
+            "title": "Parse Ok",
+            "type": "boolean"
           },
           "prompt": {
             "$ref": "#/components/schemas/PackTestPrompt"
@@ -9673,17 +9927,82 @@
             ],
             "title": "Reasoning"
           },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PackTestCropResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
           "validation": {
             "$ref": "#/components/schemas/ValidationReport"
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/PackTestVlmRef"
           }
         },
         "required": [
           "call",
           "pack",
+          "vlm",
           "prompt",
+          "raw_reply",
+          "reasoning",
+          "latency_ms",
+          "parse_ok",
+          "parse_error",
+          "results",
           "validation"
         ],
         "title": "PackTestResponse",
+        "type": "object"
+      },
+      "PackTestVlmRef": {
+        "description": "The endpoint that answered: ``endpoint`` is its ``name@revision`` ref\n(``_draft@<sha>`` for a draft, ``env@<sha>`` for the built-in).",
+        "properties": {
+          "draft": {
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "endpoint",
+          "model",
+          "name",
+          "revision",
+          "draft"
+        ],
+        "title": "PackTestVlmRef",
         "type": "object"
       },
       "PatchProjectRequest": {
@@ -13791,6 +14110,748 @@
           "page_size"
         ],
         "title": "RegionRowPage",
+        "type": "object"
+      },
+      "RegionTestCandidate": {
+        "description": "One raw candidate of a leg, as a complete region-box wire element\n(``box_id`` is ``null``: ids are assigned on write) plus what the\nselection did with it.",
+        "properties": {
+          "bbox_correct": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Correct"
+          },
+          "bbox_in_parent": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox In Parent"
+          },
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Id"
+          },
+          "candidate_index": {
+            "title": "Candidate Index",
+            "type": "integer"
+          },
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Distance"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "detected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detected At"
+          },
+          "detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector"
+          },
+          "detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Version"
+          },
+          "drop_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "below_min_score",
+                  "nms",
+                  "over_max"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drop Reason"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "mask_iou": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Iou"
+          },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
+          "mask_polygon_in_parent": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon In Parent"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "state": {
+            "const": "proposed",
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "text_choice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Choice"
+          },
+          "text_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Confidence"
+          },
+          "text_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Disagreement"
+          },
+          "text_engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Engine Version"
+          },
+          "text_ocr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Ocr"
+          },
+          "text_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Raw"
+          },
+          "text_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Source"
+          },
+          "text_vlm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Vlm"
+          },
+          "text_vlm_invalid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Vlm Invalid"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          }
+        },
+        "required": [
+          "box_id",
+          "bbox_norm",
+          "state",
+          "score",
+          "detector",
+          "detector_version",
+          "source",
+          "bbox_correct",
+          "confidence",
+          "rejection_reason",
+          "text",
+          "text_raw",
+          "text_source",
+          "text_engine_version",
+          "text_confidence",
+          "text_vlm",
+          "text_ocr",
+          "text_choice",
+          "text_vlm_invalid",
+          "text_disagreement",
+          "cluster_id",
+          "cluster_subid",
+          "cluster_distance",
+          "detected_at",
+          "locked",
+          "bbox_in_parent",
+          "thumbnail_url",
+          "candidate_index",
+          "selected",
+          "drop_reason",
+          "mask_iou",
+          "mask_polygon",
+          "mask_polygon_in_parent"
+        ],
+        "title": "RegionTestCandidate",
+        "type": "object"
+      },
+      "RegionTestLeg": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RegionTestCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Ms"
+          },
+          "leg": {
+            "enum": [
+              "detector",
+              "segmenter"
+            ],
+            "title": "Leg",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "skipped",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "leg",
+          "status"
+        ],
+        "title": "RegionTestLeg",
+        "type": "object"
+      },
+      "RegionTestProfileRef": {
+        "properties": {
+          "draft": {
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "draft"
+        ],
+        "title": "RegionTestProfileRef",
+        "type": "object"
+      },
+      "RegionTestRequest": {
+        "additionalProperties": false,
+        "description": "Run a region profile's legs over one stored crop. Profile source: at\nmost one of ``profile_name`` (+ ``profile_revision``) or ``draft``; none\n= the active profile.",
+        "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionProfileBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          },
+          "profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Revision"
+          },
+          "prompt_pack_draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptPackBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_pack_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack Name"
+          },
+          "prompt_pack_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack Revision"
+          },
+          "segmenter_text_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segmenter Text Prompt"
+          },
+          "verify": {
+            "default": false,
+            "title": "Verify",
+            "type": "boolean"
+          },
+          "vlm_draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VlmEndpointBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vlm_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Name"
+          },
+          "vlm_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Revision"
+          }
+        },
+        "required": [
+          "crop_id"
+        ],
+        "title": "RegionTestRequest",
+        "type": "object"
+      },
+      "RegionTestResponse": {
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "item_eligible": {
+            "title": "Item Eligible",
+            "type": "boolean"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/RegionTestLeg"
+            },
+            "title": "Legs",
+            "type": "array"
+          },
+          "preview_basis": {
+            "enum": [
+              "selection_accepted",
+              "vlm_verdicts"
+            ],
+            "title": "Preview Basis",
+            "type": "string"
+          },
+          "preview_item": {
+            "$ref": "#/components/schemas/ItemDoc"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/RegionTestProfileRef"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          },
+          "verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionTestVerify"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "crop_id",
+          "profile",
+          "item_eligible",
+          "legs",
+          "preview_basis",
+          "preview_item",
+          "validation"
+        ],
+        "title": "RegionTestResponse",
+        "type": "object"
+      },
+      "RegionTestVerify": {
+        "properties": {
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "pack": {
+            "$ref": "#/components/schemas/PackTestPackRef"
+          },
+          "parse_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Error"
+          },
+          "parse_ok": {
+            "title": "Parse Ok",
+            "type": "boolean"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PackTestPrompt"
+          },
+          "raw_reply": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Reply"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/PackTestVlmRef"
+          }
+        },
+        "required": [
+          "pack",
+          "vlm",
+          "prompt",
+          "raw_reply",
+          "reasoning",
+          "latency_ms",
+          "parse_ok",
+          "parse_error"
+        ],
+        "title": "RegionTestVerify",
         "type": "object"
       },
       "RegionVocabularyResponse": {
@@ -22602,9 +23663,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Crop Image Context Curation Projects  Project  Crops  Crop Id  Context Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CropContextResponse"
                 }
               }
             },
@@ -27320,7 +28379,7 @@
     },
     "/curation/projects/{project}/prompt_packs/test": {
       "post": {
-        "description": "Render the requested call's prompt for a draft/saved/active pack.\n\nScope note (documented deviation): this preview renders the exact\nsystem/user text a call would send, and runs the same validator as\nevery other write path, but does not itself round-trip a live crop\nthrough the VLM -- wiring image resolution + a raw VLM completion\ninto this route is out of this wave's scope; ``raw_reply``/\n``latency_ms`` are always ``null``. Never writes.",
+        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``no_region_box``; 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
         "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
         "parameters": [
           {
@@ -28169,7 +29228,7 @@
     },
     "/curation/projects/{project}/region_profiles/test": {
       "post": {
-        "description": "Preview a draft/saved profile's effective legs and run its\nvalidator. Scope note (documented deviation, mirrors W3's\n``/prompt_packs/test``): no live crop/segmenter/detector round-trip;\n``/prompt_packs/test`` already covers the VLM leg's prompt preview.\nNever writes.",
+        "description": "Run a profile's detector and segmenter legs over one stored crop, show\nevery raw candidate with what the worker's selection does with it, and the\nitem as the worker would leave it (optionally with the combined VLM call).\n\nA leg that fails is reported on that leg (200); only when no leg ran at all\nis it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;\n409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429\n``test_busy``. Writes nothing.",
         "operationId": "test_region_profile_curation_projects__project__region_profiles_test_post",
         "parameters": [
           {
@@ -28186,7 +29245,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegionProfileValidateRequest"
+                "$ref": "#/components/schemas/RegionTestRequest"
               }
             }
           },
@@ -28197,7 +29256,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Test Region Profile Curation Projects  Project  Region Profiles Test Post"
+                  "$ref": "#/components/schemas/RegionTestResponse"
                 }
               }
             },

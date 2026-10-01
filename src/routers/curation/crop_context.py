@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import HTTPException
+from pydantic import BaseModel
 
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -14,6 +15,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic field type
 from src.services.curation.wire import (
     item_list_source_excludes,
     item_source_excludes,
@@ -22,6 +24,29 @@ from src.services.curation.wire import (
 
 
 _MAX_SIBLINGS = 500
+
+
+class CropContextImage(BaseModel):
+    """The source frame's record: ``width`` / ``height`` fall back to the
+    image file header when the images index lacks them."""
+
+    image_id: str
+    image_path: str | None = None
+    width: int | None = None
+    height: int | None = None
+    source: str = ''
+    indexed_at: str | None = None
+
+
+class CropContextResponse(BaseModel):
+    """``GET /crops/{id}/context``. Documentation model only (the handler
+    returns plain dicts, so a stored value of an unexpected type never 500s;
+    a test pins the keys): ``image`` is ``null`` when the images index has no
+    record of the frame, ``items`` are wire items ordered by
+    ``crop_rank_in_image``, at most 500."""
+
+    image: CropContextImage | None
+    items: list[ItemDoc]
 
 
 def _pixel_size_from_header(image_path: str) -> tuple[int, int] | None:
@@ -62,7 +87,9 @@ async def _get_source(opensearch: Any, index: str, doc_id: str, **kw: Any) -> di
     return resp.get('_source') or {}
 
 
-@router.get('/crops/{crop_id}/context')
+@router.get(
+    '/crops/{crop_id}/context', response_model=None, responses={200: {'model': CropContextResponse}}
+)
 async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
     """The item's source image and every item detected in it.
 
