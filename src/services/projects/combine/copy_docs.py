@@ -58,11 +58,13 @@ def target_image_path(
 
     An upload-root file moves to the same relative place under the target's
     upload root (so deleting the source never breaks the target); any other
-    path (an archive root) is referenced as it is.
+    path (an archive root) is referenced as it is. The path is resolved
+    first, so a ``..`` that climbs out of the upload root is not an upload-root
+    file, and one that stays inside is judged by where it really lands.
     """
-    path = Path(source_path)
+    path = Path(source_path).resolve()
     with contextlib.suppress(ValueError):
-        rel = path.relative_to(source_upload_root)
+        rel = path.relative_to(source_upload_root.resolve())
         return str(target_upload_root / rel), path
     return source_path, None
 
