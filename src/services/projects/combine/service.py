@@ -240,6 +240,14 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
                 'a source can no longer be combined',
                 report=report_of(errors),
             )
+        states = [await source_state(client, r) for r in sources]
+        if compute_preview_sha(plan.request, states) != store.read_request().get('preview_sha'):
+            raise api_error(
+                409,
+                'preview_stale',
+                'a source changed since the preview this combine was started from; '
+                'start a new combine',
+            )
         target, _seq, _term = await get_record_with_seq(client, state['target'])
         if target is None or target.status != 'building':
             raise api_error(

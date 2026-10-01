@@ -122,3 +122,17 @@ async def test_blocking_file_work_runs_off_the_event_loop(
     await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     assert seen.keys() == {'copy', 'hash'}
     assert main not in seen.values()
+
+
+@pytest.mark.asyncio
+async def test_resume_refuses_when_a_source_changed_since_the_preview(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, spawned = await _interrupted(world, monkeypatch)
+    world.add_image('cars-a', items=[{'cls': 'car', 'bbox': [0.1, 0.1, 0.4, 0.4]}])
+    with pytest.raises(HTTPException) as refused:
+        await svc.resume(world.fake, store.import_id)
+    assert refused.value.status_code == 409
+    assert refused.value.detail['error'] == 'preview_stale'  # type: ignore[index]
+    assert not spawned
+    assert store.job.read()['status'] == 'interrupted'
