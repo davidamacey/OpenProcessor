@@ -22,7 +22,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.project_context import project_jobs_dir
+from src.config.project_context import mark_project_dir, project_jobs_dir
 from src.services.curation.dataset_import.limits import imports_base_dir
 from src.services.curation.file_job import FileJob
 
@@ -44,7 +44,7 @@ UNDOABLE_STATUSES = frozenset(
 
 def imports_root() -> Path:
     """The bound project's imports dir (raises ``ProjectNotBound`` unbound)."""
-    return project_jobs_dir(imports_base_dir())
+    return mark_project_dir(project_jobs_dir(imports_base_dir()))
 
 
 def valid_import_id(value: str) -> bool:

@@ -2096,3 +2096,68 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     assert 'pack:from-alpha-pack' not in source_docs
     assert 'profile:from-alpha-profile' in target_docs
     assert 'profile:from-alpha-profile' not in source_docs
+
+
+def test_import_state_of_alpha_is_invisible_to_beta_and_a_misplaced_dir_is_refused(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Imports, uploads and reprocess jobs are filesystem state the route
+    sweep cannot see leak. Each project's dir carries a ``.project`` marker."""
+    import shutil
+
+    from src.config.project_context import ProjectDirMismatchError, bind_project
+    from src.services.curation.dataset_import.store import (
+        ImportStore,
+        imports_root,
+        list_stores,
+        open_store,
+    )
+
+    monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(leak_env.root / 'imports'))
+    import_id = 'imp_20260101T000000_0123abcd'
+    with bind_project(leak_env.records['alpha']):
+        ImportStore(imports_root() / import_id).job.write({'status': 'completed'})
+        assert open_store(import_id) is not None
+        alpha_dir = imports_root()
+        assert (alpha_dir / '.project').read_text() == 'alpha'
+    with bind_project(leak_env.records['beta']):
+        assert open_store(import_id) is None
+        assert list_stores() == []
+        beta_dir = imports_root()
+    assert beta_dir != alpha_dir
+    # alpha's directory copied under beta's path: refused, not served.
+    shutil.rmtree(beta_dir)
+    shutil.copytree(alpha_dir, beta_dir)
+    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
+        open_store(import_id)
+
+
+def test_reprocess_and_upload_dirs_are_marked_with_their_project(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+    import zipfile
+
+    from src.config.project_context import ProjectDirMismatchError, bind_project
+    from src.services.curation import reprocess_job
+    from src.services.curation.dataset_import.upload import datasets_root, receive_archive
+
+    monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(leak_env.root / 'reprocess'))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as zf:
+        zf.writestr('ds/data.yaml', 'names: [a]')
+
+    async def upload(record: Any) -> None:
+        async def body() -> Any:
+            yield buf.getvalue()
+
+        await receive_archive(body(), upload_root=record.resources.upload_root)
+
+    with bind_project(leak_env.records['alpha']):
+        assert (reprocess_job.jobs_root() / '.project').read_text() == 'alpha'
+        asyncio.run(upload(leak_env.records['alpha']))
+        alpha_uploads = datasets_root(leak_env.records['alpha'].resources.upload_root)
+        assert (alpha_uploads / '.project').read_text() == 'alpha'
+    # beta handed alpha's upload root: refused
+    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
+        asyncio.run(upload(leak_env.records['alpha']))

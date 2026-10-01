@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
+from src.config.project_context import mark_project_dir
 from src.services.curation.dataset_import import limits
 from src.services.curation.dataset_import.paths import resolve_ref
 
@@ -228,7 +229,7 @@ async def receive_archive(stream: AsyncIterator[bytes], *, upload_root: Path) ->
     ``OP_DATASET_UPLOAD_MAX_BYTES`` and :class:`ArchiveInvalidError` for an
     unsafe archive (nothing is left extracted).
     """
-    root = datasets_root(upload_root)
+    root = mark_project_dir(datasets_root(upload_root))
     incoming = root / '.incoming'
     incoming.mkdir(parents=True, exist_ok=True)
     cap = limits.upload_max_bytes()

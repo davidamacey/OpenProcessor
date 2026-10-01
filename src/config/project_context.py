@@ -124,6 +124,29 @@ def project_jobs_dir(base: Path) -> Path:
     return base / 'projects' / current_project().record.slug
 
 
+class ProjectDirMismatchError(RuntimeError):
+    """A per-project state dir is marked as another project's."""
+
+
+def mark_project_dir(directory: Path) -> Path:
+    """Create ``directory`` and stamp it with the bound project's slug in
+    ``.project``. Filesystem state (imports, uploads, reprocess jobs) has no
+    index to scope it, so the marker is what makes a dir that was mounted,
+    copied or symlinked under the wrong project detectable: a marker naming
+    another slug raises rather than being read or written."""
+    slug = current_project().record.slug
+    directory.mkdir(parents=True, exist_ok=True)
+    marker = directory / '.project'
+    try:
+        found = marker.read_text(encoding='utf-8').strip()
+    except FileNotFoundError:
+        marker.write_text(slug, encoding='utf-8')
+        return directory
+    if found != slug:
+        raise ProjectDirMismatchError(f'{directory} belongs to project {found!r}, not {slug!r}')
+    return directory
+
+
 def project_api_base() -> str:
     """``{api_prefix}/projects/{bound slug}`` -- the base every served URL
     (and forward-looking route) is built from."""

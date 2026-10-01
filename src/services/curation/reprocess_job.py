@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
-from src.config.project_context import current_project, project_jobs_dir
+from src.config.project_context import current_project, mark_project_dir, project_jobs_dir
 from src.core.logging import get_logger
 from src.services.curation.file_job import FileJob, heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
@@ -56,7 +56,9 @@ class ReprocessBusyError(Exception):
 def jobs_root() -> Path:
     """The bound project's reprocess jobs dir (resolved per call so tests
     can ``monkeypatch.setenv``)."""
-    return project_jobs_dir(Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
+    return mark_project_dir(
+        project_jobs_dir(Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
+    )
 
 
 def _job(job_id: str) -> FileJob:
