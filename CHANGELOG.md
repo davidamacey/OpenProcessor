@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     of the region set (`validated` + `verifier == human`), a human class and a
     human box all keep the item. Both paths used narrower tests and deleted
     such items.
+  - **One live worker per combine job.** `resume` refuses while this process
+    still holds a live task for the job, even when its heartbeat has gone
+    stale. Every worker writes a fresh `claim` into the job state when it
+    starts and re-checks it before each chunk and before it finishes: a worker
+    that was taken over stops (no chunk mark, no state write, and its caller
+    does not settle the target). Across processes the check and the write
+    after it are not atomic, so a fenced worker can finish the chunk it is in
+    (idempotent writes: repeated work, not duplicates).
+  - Tests pinned: a conflicting delete is retried then reported skipped, never
+    swallowed; the combine resume source gate asserts its own error code; a
+    cancelled combine resumed through `service.resume` runs to completion.
 - **W10 finish and combine review fixes** (review `w10_p4_review_2026-10-01`).
   - **Delete-time lock re-check.** `item_delete.delete_items` is the one delete
     path: it re-reads each document, asks the caller whether it is still

@@ -171,7 +171,7 @@ async def _run(
     """Run the job, then settle the target: ``active`` on success, ``failed`` on
     a failure; a cancelled or interrupted job leaves it ``building`` so it can
     resume."""
-    await run_combine(
+    owned = await run_combine(
         client,
         store=store,
         plan=load_plan(store),
@@ -179,6 +179,8 @@ async def _run(
         target=target,
         embedding_dim=get_curation_config().encoder_embedding_dim,
     )
+    if not owned:
+        return
     status = store.job.read().get('status')
     if status in job_store.COMPLETED_STATUSES or status == 'failed':
         try:
@@ -216,13 +218,20 @@ def cancel(job_id: str) -> dict[str, Any]:
 async def resume(client: Any, job_id: str) -> dict[str, Any]:
     """Resume an interrupted or cancelled combine. One worker per job: the
     claim (the ``queued`` write) is made under the job's start lock, and the
-    sources go through the same :func:`resolve_sources` gate as a start."""
+    sources go through the same :func:`resolve_sources` gate as a start. A job
+    whose worker is still alive in this process is not resumable, stale
+    heartbeat or not; across processes the worker that notices a newer claim
+    stops at its next chunk (:func:`~src.services.projects.combine.execute.
+    ensure_owner`)."""
     store = job_store.open_job(job_id)
     if store is None:
         raise api_error(404, 'combine_not_found', f"no combine job '{job_id}'")
     with exclusive_start_lock(store.directory / 'start.lock') as acquired:
         if not acquired:
             raise api_error(409, 'combine_not_resumable', 'the job is already being resumed')
+        running = _TASKS.get(job_id)
+        if running is not None and not running.done():
+            raise api_error(409, 'combine_not_resumable', 'a worker for this job is still running')
         state = job_state(job_id)
         if state.get('status') not in job_store.RESUMABLE_STATUSES:
             raise api_error(

@@ -62,9 +62,10 @@ async def test_undo_keeps_an_item_edited_between_the_reread_and_the_delete(
         return await real_bulk(body=body, **kw)
 
     monkeypatch.setattr(h.os, 'bulk', edit_then_bulk)
-    await undo_import(h.undo_context(store.import_id), store, dry_run=False)
+    report = await undo_import(h.undo_context(store.import_id), store, dry_run=False)
     assert victim in h.items
     assert h.items[victim]['class_source'] == 'human'
+    assert (report.items_deleted, report.items_kept_human_edited) == (1, 1)
 
 
 @pytest.mark.asyncio

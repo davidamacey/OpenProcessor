@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import uuid
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -35,8 +36,28 @@ from src.services.projects.combine.plan import Analysis, duplicates_from_wire, d
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
     from src.services.curation.dataset_import.store import ImportStore
+    from src.services.curation.file_job import FileJob
 
 logger = get_logger(__name__)
+
+
+class FencedError(Exception):
+    """Another worker has claimed this job since this one started."""
+
+
+def ensure_owner(job: FileJob, claim: str) -> None:
+    """Raise :class:`FencedError` unless ``claim`` is still the job's claim.
+
+    Every worker writes a fresh claim into the job state when it starts
+    (:func:`run_combine`) and re-checks it at each chunk boundary, so a worker
+    that stalled past the stale heartbeat window and was taken over stops at
+    its next boundary instead of writing alongside its successor. The check
+    and the write after it are not atomic across processes: a fenced worker
+    can still finish the chunk it is in (chunk writes are deterministic-id
+    ``index`` ops, so that is repeated work, not duplicates).
+    """
+    if job.read().get('claim') != claim:
+        raise FencedError(claim)
 
 
 @dataclass
@@ -163,16 +184,21 @@ async def run_combine(
     sources: list[ProjectRecord],
     target: ProjectRecord,
     embedding_dim: int,
-) -> None:
+) -> bool:
     """Run (or resume) one combine to a terminal job status. Never raises:
-    a failure is recorded as ``failed`` with its error."""
+    a failure is recorded as ``failed`` with its error. ``False`` when another
+    worker claimed the job meanwhile (:class:`FencedError`): this one wrote
+    nothing after that and its caller must not settle the target."""
     job = store.job
     job_id = store.import_id
+    claim = uuid.uuid4().hex
     job.touch_heartbeat()
     ticker = asyncio.create_task(heartbeat_ticker(job))
     try:
         done = store.chunks_done()
-        job.update(status='running', phase='registry', total=plan.images_total, error=None)
+        job.update(
+            status='running', phase='registry', total=plan.images_total, error=None, claim=claim
+        )
         ids = build_target_registry(target, plan.mapping.target_classes)
         saved = store.read_mapping()
         saved['target_class_ids'] = ids
@@ -192,21 +218,29 @@ async def run_combine(
             duplicates=plan.duplicates,
             originals=plan.originals,
         )
-        if await _copy_all(ctx, store, plan, done):
-            return
-        await _finish(ctx, store)
+        if not await _copy_all(ctx, store, plan, done, claim):
+            ensure_owner(job, claim)
+            await _finish(ctx, store)
+    except FencedError:
+        logger.warning('combine_worker_fenced', job_id=job_id, claim=claim)
+        return False
     except Exception as exc:
         logger.error('combine_failed', job_id=job_id, error=str(exc))
+        try:
+            ensure_owner(job, claim)
+        except FencedError:
+            return False
         job.update(status='failed', error=str(exc)[:300], finished_at=now_iso())
     finally:
         ticker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await ticker
         _publish(job_id, target.slug, job.read())
+    return True
 
 
 async def _copy_all(
-    ctx: CopyContext, store: ImportStore, plan: Plan, done: dict[int, dict[str, Any]]
+    ctx: CopyContext, store: ImportStore, plan: Plan, done: dict[int, dict[str, Any]], claim: str
 ) -> bool:
     """Every unfinished chunk; ``True`` when the job was cancelled."""
     job = store.job
@@ -226,10 +260,12 @@ async def _copy_all(
             start_after=resume.get(source_index),
         )
         async for page in pages:
+            ensure_owner(job, claim)
             if job.cancel_requested():
                 job.update(status='cancelled', finished_at=now_iso())
                 return True
             counts = await copy_page(ctx, source_index, page)
+            ensure_owner(job, claim)
             store.mark_chunk_done(
                 chunk, {'source': source_index, 'last': page[-1].image_id, **counts}
             )
@@ -270,4 +306,12 @@ async def _finish(ctx: CopyContext, store: ImportStore) -> None:
     )
 
 
-__all__ = ['Plan', 'build_target_registry', 'load_plan', 'persist_plan', 'run_combine']
+__all__ = [
+    'FencedError',
+    'Plan',
+    'build_target_registry',
+    'ensure_owner',
+    'load_plan',
+    'persist_plan',
+    'run_combine',
+]

@@ -70,6 +70,7 @@ async def test_resume_refuses_a_source_that_preview_refuses(
     with pytest.raises(HTTPException) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
+    assert refused.value.detail['error'] == 'combine_not_resumable'  # type: ignore[index]
     assert not spawned
     assert store.job.read()['status'] == 'interrupted'
 
@@ -86,6 +87,7 @@ async def test_resume_refuses_a_source_busy_with_another_job(
     with pytest.raises(HTTPException) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
+    assert refused.value.detail['error'] == 'combine_not_resumable'  # type: ignore[index]
     assert not spawned
 
 
@@ -136,3 +138,35 @@ async def test_resume_refuses_when_a_source_changed_since_the_preview(
     assert refused.value.detail['error'] == 'preview_stale'  # type: ignore[index]
     assert not spawned
     assert store.job.read()['status'] == 'interrupted'
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_job_resumed_through_the_service_runs_to_completion(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.projects import lifecycle
+
+    real_spawn = svc._spawn
+    store, _spawned = await _interrupted(world, monkeypatch)
+    monkeypatch.setattr(svc, '_spawn', real_spawn)  # a real worker this time
+    target = world.records['combined']
+
+    async def get_target(_client: Any, _slug: str) -> tuple[Any, int, int]:
+        return target, 1, 1
+
+    async def finish_building(_client: Any, _target: Any, *, ok: bool) -> None:
+        assert ok
+
+    monkeypatch.setattr(svc, 'get_record_with_seq', get_target)
+    monkeypatch.setattr(lifecycle, 'finish_building', finish_building)
+    store.job.update(status='cancelled')
+    store.job.request_cancel()
+    assert store.job.cancel_requested()
+
+    await svc.resume(world.fake, store.import_id)
+    for _ in range(200):
+        if store.job.read()['status'] == 'completed':
+            break
+        await asyncio.sleep(0.05)
+    assert store.job.read()['status'] == 'completed'
+    assert not store.job.cancel_requested()
