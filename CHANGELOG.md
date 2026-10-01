@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- Full v0.1.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
+  `INSTALLATION.md`, `docs/CURATION.md`, `docs/ARCHITECTURE.md`,
+  `docs/opensearch_schema_design.md`, `docs/design/curation_api_contract.md` (every
+  path in `contracts/openapi/curation.json`) and `docs/design/curation_design_rationale.md`.
+  They cover isolated projects, the config store and per-project settings, prompt
+  packs, region profiles, multi-box regions, keymaps, VLM endpoint selection and the
+  `openprocessor vlm` CLI, dataset import, unified `/reprocess`, combine projects,
+  test-on-crop routes, the lock rule, class identity by name and the car-to-wheel
+  example.
+- Docs site: new Guides and About sections (13 guides plus a Vision and goals page),
+  rewritten configuration and API reference pages, and refreshed diagram specs.
+  Cropwright walkthroughs are marked `Screenshot pending: Cropwright`. The site build
+  was not run (no `node_modules` offline).
+- New `scripts/docs/check_docs_vs_code.py` (tests: `tests/test_docs_vs_code.py`,
+  `tests/test_doc_links.py`) fails when a doc names a route that is not in the
+  OpenAPI contract or the app, an `OP_*` variable no code reads, or a link or
+  anchor that does not resolve.
+
 ### Fixed
 - **W5/W6/W10 review fixes** (`w5_w6_review_2026-10-01`).
   - **`POST /region_profiles/test` prompt override.** `segmenter_text_prompt`
