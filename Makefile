@@ -1168,6 +1168,21 @@ sample-coco-readme: ## Fetch the small public COCO sample set for the README qui
 	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va_readme \
 		--n 200 --manifest scripts/datasets/manifests/coco_va_200.json
 
+.PHONY: sample-coco-cars
+sample-coco-cars: ## Fetch the public COCO car subset for the wheel example (60 images; CC BY 2.0 images, CC BY 4.0 annotations)
+	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_car \
+		--classes car --per-class 60 --licenses by --seed 20260925 \
+		--manifest scripts/datasets/manifests/coco_car_60.json
+
+.PHONY: sample-coco-import
+sample-coco-import: ## Fetch the public COCO import fixture (96 val2017 images, CC BY) and build the 4 dataset layouts
+	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_import \
+		--classes car,truck,bus --per-class 28 --negatives 12 --val-only \
+		--licenses by --seed 20260925 \
+		--manifest scripts/datasets/manifests/coco_import_96.json
+	$(PYTHON) scripts/datasets/build_import_fixture.py \
+		--src data/samples/coco_import --out data/samples/import_fixture
+
 .PHONY: sample-plates
 sample-plates: ## Fetch the public Open Images V7 "Vehicle registration plate" sample set (300 images)
 	$(PYTHON) scripts/datasets/fetch_openimages_plates.py --out data/samples/oi_plates \
@@ -1212,4 +1227,4 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
         curation-up curation-down curation-logs curation-status curation-seed \
-        sample-coco sample-coco-readme sample-plates sample-clean
+        sample-coco sample-coco-readme sample-coco-cars sample-coco-import sample-plates sample-clean

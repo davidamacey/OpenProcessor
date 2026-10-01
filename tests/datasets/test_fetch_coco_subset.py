@@ -11,7 +11,7 @@ CI run).
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -221,3 +221,125 @@ def test_parse_side_sets() -> None:
 def test_parse_side_sets_rejects_malformed_entry() -> None:
     with pytest.raises(f.FetchError):
         f.parse_side_sets('upload=notanumber')
+
+
+# --- --negatives / --val-only --------------------------------------------------
+
+_LICENSES: list[dict[str, Any]] = [
+    {'id': LIC_BY_NC_SA, 'name': 'Attribution-NonCommercial-ShareAlike License'},
+    {'id': LIC_BY, 'name': 'Attribution License'},
+]
+_CATEGORIES: list[dict[str, Any]] = [{'id': 3, 'name': 'car'}, {'id': 1, 'name': 'person'}]
+
+
+def _annotation_split(first_id: int, *, with_cars: int, empty: int, person_only: int):
+    images, anns = [], []
+    nxt = first_id
+    for _ in range(with_cars):
+        images.append(_image(nxt, f'{nxt}.jpg', LIC_BY))
+        anns.append(_ann(nxt, 3, [10, 10, 300, 300]))
+        nxt += 1
+    for _ in range(person_only):
+        images.append(_image(nxt, f'{nxt}.jpg', LIC_BY))
+        anns.append(_ann(nxt, 1, [10, 10, 300, 300]))
+        nxt += 1
+    for i in range(empty):
+        # Every other empty frame carries a disallowed license.
+        images.append(_image(nxt, f'{nxt}.jpg', LIC_BY if i % 2 == 0 else LIC_BY_NC_SA))
+        nxt += 1
+    return images, anns
+
+
+def test_select_negatives_excludes_target_class_frames_and_bad_licenses() -> None:
+    images, anns = _annotation_split(1, with_cars=2, empty=6, person_only=2)
+    lic = {lic['id']: lic['name'] for lic in _LICENSES}
+    out = f.select_negatives(
+        images, anns, {3}, lic, {'Attribution License'}, 'val2017', 10, 7, set()
+    )
+    ids = {r['image_id'] for r in out}
+    # cars 1-2 carry the target class; person-only frames 3-4 do not, so they
+    # are negatives for ``car`` (full annotations kept); of empties 5..10 only
+    # the BY ones (5, 7, 9) survive the license filter.
+    assert ids == {3, 4, 5, 7, 9}
+    assert all(r['primary_class'] == '' for r in out)
+
+
+def test_select_negatives_is_seeded_and_capped() -> None:
+    images, anns = _annotation_split(1, with_cars=0, empty=40, person_only=0)
+    lic = {lic['id']: lic['name'] for lic in _LICENSES}
+    kw: dict[str, Any] = {
+        'target_class_ids': {3},
+        'license_id_to_name': lic,
+        'allowed_license_names': {'Attribution License'},
+    }
+    a = f.select_negatives(images, anns, split='val2017', n=5, seed=3, exclude_ids=set(), **kw)
+    b = f.select_negatives(images, anns, split='val2017', n=5, seed=3, exclude_ids=set(), **kw)
+    c = f.select_negatives(images, anns, split='val2017', n=5, seed=4, exclude_ids=set(), **kw)
+    assert a == b
+    assert len(a) == 5
+    assert a != c
+
+
+def _stub_annotations(monkeypatch: pytest.MonkeyPatch) -> None:
+    val_images, val_anns = _annotation_split(1, with_cars=3, empty=6, person_only=1)
+    train_images, train_anns = _annotation_split(1000, with_cars=5, empty=0, person_only=0)
+    val = {
+        'images': val_images,
+        'annotations': val_anns,
+        'categories': _CATEGORIES,
+        'licenses': _LICENSES,
+    }
+    train = {
+        'images': train_images,
+        'annotations': train_anns,
+        'categories': _CATEGORIES,
+        'licenses': _LICENSES,
+    }
+    monkeypatch.setattr(f, 'ensure_annotations', lambda _cache: (val, train))
+
+
+def _args(tmp_path: Path, *extra: str):
+    return f.build_parser().parse_args(
+        [
+            '--out',
+            str(tmp_path / 'out'),
+            '--classes',
+            'car',
+            '--per-class',
+            '6',
+            '--licenses',
+            'by',
+            '--skip-download',
+            *extra,
+        ]
+    )
+
+
+def test_run_val_only_never_tops_up_from_train(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_annotations(monkeypatch)
+    topped = f.run(_args(tmp_path))
+    assert topped['n_selected'] == 6  # 3 val + 3 train
+    val_only = f.run(_args(tmp_path, '--val-only'))
+    assert val_only['n_selected'] == 3
+    assert val_only['val_only'] is True
+
+
+def test_run_negatives_written_with_attribution_and_pinned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_annotations(monkeypatch)
+    manifest = tmp_path / 'm' / 'pin.json'
+    summary = f.run(_args(tmp_path, '--val-only', '--negatives', '2', '--manifest', str(manifest)))
+    assert summary['n_negatives'] == 2
+    neg_csv = (tmp_path / 'out' / 'ATTRIBUTION.csv').read_text()
+    assert neg_csv.count('Attribution License') == 3 + 2  # 3 cars + 2 negatives
+    pinned = json.loads(manifest.read_text())
+    assert [r['primary_class'] for r in pinned].count('') == 2
+    gt = json.loads((tmp_path / 'out' / 'coco_gt.json').read_text())
+    neg_ids = set(summary['negative_image_ids'])
+    assert neg_ids <= {i['id'] for i in gt['images']}
+    assert not [a for a in gt['annotations'] if a['image_id'] in neg_ids and a['category_id'] == 3]
+    # a second run with the same seed must verify cleanly against the pin
+    f.run(_args(tmp_path, '--val-only', '--negatives', '2', '--manifest', str(manifest)))

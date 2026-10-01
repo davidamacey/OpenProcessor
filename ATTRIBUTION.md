@@ -248,6 +248,28 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
   per-image author/license/URL to `data/samples/coco_va/ATTRIBUTION.csv`.
 - **Used for:** the main 10-class vehicle+animal sample set (`make sample-coco`) and the README quick-start subset (`make sample-coco-readme`).
 
+### COCO 2017 car subset (wheel example)
+
+- **What:** the pinned 60-image car subset behind the vehicle/wheel example
+  (`make sample-coco-cars`, manifest `scripts/datasets/manifests/coco_car_60.json`).
+- **Images:** CC BY 2.0 via Flickr, fetched with `--licenses by` only (attribution-only,
+  so derived crops and exports shipped in docs carry no ShareAlike obligation).
+  Per-image author / license / URL is written to `data/samples/coco_car/ATTRIBUTION.csv`.
+- **Annotations:** CC BY 4.0 (COCO Consortium).
+- **Note:** COCO has no wheel labels. Wheel boxes in the example come from the pipeline and
+  human review; no COCO image is committed to this repository.
+
+### COCO 2017 import fixture
+
+- **What:** the pinned 96-image val2017 fixture for dataset-import testing
+  (`make sample-coco-import`, manifest `scripts/datasets/manifests/coco_import_96.json`):
+  28 images each of car / truck / bus plus 12 images with no box of those classes.
+- **Images:** CC BY 2.0 via Flickr (`--licenses by`, `--val-only`); per-image credit in
+  `ATTRIBUTION.csv`, copied into every generated variant.
+- **Annotations:** CC BY 4.0 (COCO Consortium) for the `yolo/` and `coco/` variants.
+- **Synthetic geometry:** the `yolo_region/` and `yolo_region_only/` variants contain wheel
+  boxes computed from COCO car boxes. They are not COCO annotations and not wheel ground truth.
+
 ### Open Images V7
 
 - **Source:** https://storage.googleapis.com/openimages/web/factsfigures_v7.html
