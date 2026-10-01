@@ -125,3 +125,23 @@ def test_no_broken_relative_markdown_links() -> None:
     assert not broken, 'dangling relative markdown links found:\n' + '\n'.join(
         f'  {md_file}: ]({target})' for md_file, target in broken
     )
+
+
+def test_docs_site_links_and_anchors_resolve() -> None:
+    """Every relative link (any file type, ``.md``/``.mdx`` docs included) and
+    every ``#anchor`` into a markdown doc must resolve.
+
+    The resolver lives in ``scripts/docs/check_docs_vs_code.py``, which also
+    checks routes and env vars (``tests/test_docs_vs_code.py``).
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        '_check_docs_links', REPO_ROOT / 'scripts' / 'docs' / 'check_docs_vs_code.py'
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    errors = checker.check_links()
+    assert not errors, 'broken doc links/anchors:\n' + '\n'.join(f'  {e}' for e in errors)
