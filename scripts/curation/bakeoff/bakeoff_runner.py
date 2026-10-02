@@ -396,9 +396,8 @@ def _pending_job_files(jobs_dir: Path) -> list[Path]:
     Sorted by mtime across all dirs so one project's queue can't starve
     another's (FIFO, one job at a time, matching the trainer's
     cross-project fairness)."""
-    project_dirs_glob = jobs_dir.parent / 'projects' / '*' / 'bakeoff_jobs'
     candidates = list(jobs_dir.glob('*.job.json')) + list(
-        project_dirs_glob.parent.glob('*/bakeoff_jobs/*.job.json')
+        (jobs_dir.parent / 'projects').glob('*/bakeoff_jobs/*.job.json')
     )
     return sorted(candidates, key=lambda p: p.stat().st_mtime)
 
