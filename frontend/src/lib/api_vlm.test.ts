@@ -3,7 +3,7 @@
  * encoding, query and body, through the real `apiFetch` (fetch stubbed).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX } from '$lib/api';
+import { API_PREFIX, setScopedPrefix } from '$lib/api';
 import {
   activateVlm,
   clearLocalVlmSelection,
@@ -34,7 +34,12 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+const PROJECT = `${API_PREFIX}/projects/alpha`;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setScopedPrefix(API_PREFIX);
+});
 
 function capture(body: unknown = {}, status = 200) {
   const fetchMock = vi
@@ -56,7 +61,8 @@ function capture(body: unknown = {}, status = 200) {
 const GLOBAL = `${API_PREFIX}/vlm`;
 
 describe('global registry routes (never project-scoped)', () => {
-  it('list / schema / catalog / local are plain GETs', async () => {
+  it('list / schema / catalog / local are plain GETs, whatever project is active', async () => {
+    setScopedPrefix(PROJECT);
     for (const [fn, path] of [
       [() => listVlmEndpoints(), '/endpoints'],
       [() => getVlmEndpointSchema(), '/endpoints/schema'],
@@ -70,6 +76,7 @@ describe('global registry routes (never project-scoped)', () => {
   });
 
   it('endpoint reads encode the name', async () => {
+    setScopedPrefix(PROJECT);
     let call = capture(docFixture());
     await getVlmEndpoint('a b/c');
     expect(call().url).toBe(`${GLOBAL}/endpoints/a%20b%2Fc`);
@@ -82,6 +89,7 @@ describe('global registry routes (never project-scoped)', () => {
   });
 
   it('validate posts the body with the probe flag on the query', async () => {
+    setScopedPrefix(PROJECT);
     let call = capture({});
     await validateVlmEndpoint({ name: null, body: bodyFixture() });
     expect(call()).toMatchObject({
@@ -95,6 +103,7 @@ describe('global registry routes (never project-scoped)', () => {
   });
 
   it('create, update, clone, probe and delete', async () => {
+    setScopedPrefix(PROJECT);
     let call = capture(docFixture(), 201);
     await createVlmEndpoint({ name: 'n', description: 'd', body: bodyFixture() });
     expect(call()).toMatchObject({
@@ -135,6 +144,7 @@ describe('global registry routes (never project-scoped)', () => {
   });
 
   it('local select posts {catalog_id, force?}; clear is a DELETE', async () => {
+    setScopedPrefix(PROJECT);
     let call = capture({}, 202);
     await selectLocalVlm({ catalog_id: 'vision-7b', force: true });
     expect(call()).toMatchObject({
@@ -149,13 +159,12 @@ describe('global registry routes (never project-scoped)', () => {
 });
 
 describe('project-scoped activation routes', () => {
-  // `setScopedPrefix` defaults to API_PREFIX in tests, so a scoped URL is
-  // `${API_PREFIX}${path}`; what matters is the path under it.
-  it('active read, activate, rollback, deactivate', async () => {
+  it('active read, activate, rollback, deactivate go under the active project', async () => {
+    setScopedPrefix(PROJECT);
     let call = capture({});
     await getActiveVlm();
     expect(call()).toMatchObject({
-      url: `${API_PREFIX}/vlm/endpoints/active`,
+      url: `${PROJECT}/vlm/endpoints/active`,
       method: 'GET',
     });
     call = capture({});
@@ -167,7 +176,7 @@ describe('project-scoped activation routes', () => {
       acknowledge_external: true,
     });
     expect(call()).toMatchObject({
-      url: `${API_PREFIX}/vlm/endpoints/a%20b/activate`,
+      url: `${PROJECT}/vlm/endpoints/a%20b/activate`,
       method: 'POST',
       body: {
         revision: 3,
@@ -179,14 +188,14 @@ describe('project-scoped activation routes', () => {
     call = capture({});
     await rollbackVlm({ expected_active: expected });
     expect(call()).toMatchObject({
-      url: `${API_PREFIX}/vlm/endpoints/active/rollback`,
+      url: `${PROJECT}/vlm/endpoints/active/rollback`,
       method: 'POST',
       body: { expected_active: expected },
     });
     call = capture({});
     await deactivateVlm({ expected_active: expected });
     expect(call()).toMatchObject({
-      url: `${API_PREFIX}/vlm/endpoints/deactivate`,
+      url: `${PROJECT}/vlm/endpoints/deactivate`,
       method: 'POST',
       body: { expected_active: expected },
     });

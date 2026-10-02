@@ -275,6 +275,11 @@ describe('vlm axis (W9)', () => {
     expect(vlmNeedsAcknowledgement(by('local_vlm'))).toBe(false);
     expect(vlmNeedsAcknowledgement(by('cloud_ack'))).toBe(false);
     expect(vlmNeedsAcknowledgement(by('off'))).toBe(false);
+    // An external entry whose acknowledgement state is unknown (null) is the
+    // server's call, not blocked here.
+    expect(
+      vlmNeedsAcknowledgement({ ...by('cloud_vlm'), default_ack_recorded: null }),
+    ).toBe(false);
   });
 
   it('the option view carries the served status and warning; only the unacknowledged one is disabled', () => {

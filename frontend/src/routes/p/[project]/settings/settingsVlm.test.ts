@@ -203,6 +203,38 @@ describe('/settings VLM dropdown', () => {
     expect(vlmSelect()).toBeDefined();
   });
 
+  it('a non-422 refusal (409 vlm_endpoint_unavailable) shows the served message and the page stays', async () => {
+    putResponse = () =>
+      json(
+        {
+          detail: {
+            error: 'vlm_endpoint_unavailable',
+            message: 'local_vlm is unreachable right now.',
+          },
+        },
+        409,
+      );
+    await render();
+    const select = vlmSelect();
+    select.value = 'off';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Save' && !b.disabled)!
+      .click();
+    flushSync();
+    [...document.querySelectorAll('[role="dialog"] button')]
+      .find((b) => b.textContent?.trim() === 'Confirm')!
+      .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => expect(q('settings-save-error')).not.toBeNull());
+    expect(q('settings-save-error')?.textContent).toContain(
+      'local_vlm is unreachable right now.',
+    );
+    // Not the load-error replacement: the control and its Save are still there.
+    expect(target.textContent).not.toContain('Retry');
+    expect(vlmSelect()).toBeDefined();
+  });
+
   it('unknown_vlm names the requested and valid ids', async () => {
     putResponse = () =>
       json(
