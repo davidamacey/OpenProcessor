@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `PUT /models/{name}/sharing` fills `used_by` from every other project's live active
+  detection profile (read-only, one project at a time, configs index only) instead of
+  always `[]`. Unsharing a model another project runs on is `409 in_use` (naming the
+  projects) unless `force`; if a project cannot be read it is `503 config_store_unavailable`
+  unless `force` (#39).
 - **Release version is 0.1.0 everywhere** (#39): `VERSION`, `pyproject.toml`,
   `docs-site/package.json` (and its lockfile), the compose default image tag, the roadmap
   and the installer test double all say 0.1.0 (they said 0.3.0 while the docs and the

@@ -395,6 +395,15 @@ EXPECTED_5XX: dict[tuple[str, str], str] = {
 # ``bind_path_project``, so their OpenSearch calls (all against the shared
 # ``op_projects`` registry doc) are correctly unbound (``try_current_project()
 # is None``) rather than bound to the slug in the URL.
+# Routes that GET documents from OTHER projects' ``configs`` index by design,
+# each read inside a read-only bind of the project it reads: the model-sharing
+# route names which projects run a detector profile on the model. Nothing
+# else of another project (items, images, labels) may be reached, and no
+# write.
+CROSS_PROJECT_CONFIG_READS: frozenset[tuple[str, str]] = frozenset(
+    {('PUT', '/models/{model_name}/sharing')}
+)
+
 UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
     {
         ('DELETE', ''),
@@ -1643,6 +1652,8 @@ def _sweep(
     """Call every scoped route (or those ``only`` accepts) as ``slug``.
     Returns (leaks, routes that wrote, the OpenSearch request shapes each
     route issued, counted per index role)."""
+    from src.config.curation import IndexRole
+
     app, records = env.app, env.records
     own_indexes = set(records[slug].resources.indexes.values())
     foreign_indexes = {
@@ -1650,6 +1661,11 @@ def _sweep(
         for other, record in records.items()
         if other != slug
         for name in record.resources.indexes.values()
+    }
+    foreign_configs = {
+        record.resources.indexes[IndexRole.CONFIGS]: other
+        for other, record in records.items()
+        if other != slug
     }
     foreign_markers = [m for other in SLUGS if other != slug for m in _markers(other)]
     bodies = route_bodies(slug, records[slug].resources.export_root)
@@ -1694,6 +1710,12 @@ def _sweep(
         )
 
         for bound, _verb, os_url, index in route_accesses:
+            if (
+                key in CROSS_PROJECT_CONFIG_READS
+                and _verb == 'GET'
+                and foreign_configs.get(index) == bound
+            ):
+                continue
             if index == '*' or index in foreign_indexes:
                 leaks.append(
                     f'{tag}: bound={bound} reached {foreign_indexes.get(index, "every")!r} '

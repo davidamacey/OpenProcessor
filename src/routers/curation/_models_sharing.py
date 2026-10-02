@@ -14,8 +14,9 @@ from fastapi import Query
 from pydantic import BaseModel
 
 from src.config.curation import get_curation_config
-from src.routers.curation._common import logger, router
+from src.routers.curation._common import OpenSearchDep, logger, router
 from src.routers.curation._config_common_models import api_error
+from src.services.config_store.project_usage import active_detector_users
 from src.services.training.promote_json import SharingRevisionConflictError, update_sharing
 
 
@@ -47,6 +48,7 @@ class ModelSharingResponse(BaseModel):
 async def set_model_sharing(
     model_name: str,
     payload: ModelSharingRequest,
+    opensearch: OpenSearchDep,
     force: Annotated[
         bool,
         Query(description='Bypass the in-use refusal when unsharing (logged)'),
@@ -54,7 +56,9 @@ async def set_model_sharing(
 ) -> ModelSharingResponse:
     """Opt a promoted model into (or out of) cross-project sharing. Only
     the owning project may call this -- 404 for anyone else, matching
-    every other ownership check in this router."""
+    every other ownership check in this router. ``used_by`` lists the other
+    projects whose active detection profile uses the model; unsharing while
+    there are any is 409 ``in_use`` unless ``force``."""
     from src.services.training.promoted_models import project_owns_model
 
     project = get_curation_config().project_slug
@@ -68,12 +72,22 @@ async def set_model_sharing(
 
     # Unsharing while another project's active detector profile still
     # names this model would silently break that project's pipeline.
-    # TODO(W4/profile_validation, out of scope here): a real cross-project
-    # "who has this as their active detector_model" scan needs each
-    # project's own bound DetectionProfile read, which the profile-CRUD
-    # wave (W4) owns. used_by is always [] until that lands; unsharing is
-    # never refused here yet.
-    used_by: list[ModelSharingUser] = []
+    try:
+        users = await active_detector_users(opensearch, model_name)
+    except Exception as exc:
+        if not payload.shared and not force:
+            raise api_error(
+                503,
+                'config_store_unavailable',
+                'could not read every project to see who uses this model; retry, or pass force',
+            ) from exc
+        logger.warning('model_users_unreadable', model_name=model_name, error=str(exc))
+        users = []
+    used_by = [
+        ModelSharingUser(project=slug, profile=profile)
+        for slug, profile in users
+        if slug != project
+    ]
     if not payload.shared and used_by and not force:
         raise api_error(
             409,

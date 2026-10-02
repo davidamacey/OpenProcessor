@@ -27282,7 +27282,7 @@
     },
     "/curation/projects/{project}/models/{model_name}/sharing": {
       "put": {
-        "description": "Opt a promoted model into (or out of) cross-project sharing. Only\nthe owning project may call this -- 404 for anyone else, matching\nevery other ownership check in this router.",
+        "description": "Opt a promoted model into (or out of) cross-project sharing. Only\nthe owning project may call this -- 404 for anyone else, matching\nevery other ownership check in this router. ``used_by`` lists the other\nprojects whose active detection profile uses the model; unsharing while\nthere are any is 409 ``in_use`` unless ``force``.",
         "operationId": "set_model_sharing_curation_projects__project__models__model_name__sharing_put",
         "parameters": [
           {
