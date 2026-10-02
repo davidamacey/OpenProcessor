@@ -182,3 +182,25 @@ describe('RegionProfileSchema', () => {
     for (const c of served) expect(CHOICES_FROM as readonly string[]).toContain(c);
   });
 });
+
+describe('PUT /settings for the activation-backed axes', () => {
+  it('the body is {defaults} and a null clears an axis (prompt_pack/detection_profile/vlm)', () => {
+    expect(declared('CurationSettingsUpdateRequest')).toEqual(['defaults']);
+    const defaults = schemas['CurationSettingsUpdateRequest']!.properties![
+      'defaults'
+    ] as {
+      additionalProperties: { anyOf: { type: string }[] };
+    };
+    expect(defaults.additionalProperties.anyOf.map((a) => a.type).sort()).toEqual([
+      'null',
+      'string',
+    ]);
+  });
+
+  it('GET /settings serves an open string map (activation names, `off`)', () => {
+    const defaults = schemas['CurationSettingsResponse']!.properties!['defaults'] as {
+      additionalProperties: { type: string };
+    };
+    expect(defaults.additionalProperties.type).toBe('string');
+  });
+});

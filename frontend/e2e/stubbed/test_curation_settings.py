@@ -110,7 +110,7 @@ def test_curation_settings(stub, page, app_url):
 
     options_text = page.locator("select option").all_inner_texts()
     assert "HDBSCAN probe sort" not in " ".join(options_text), "the shadow sort must not be among the options"
-    assert page.get_by_text("Set by the backend's startup config").count() == 0
+    assert page.get_by_text("Not settable on this backend").count() == 0
 
     sort_select = selects.nth(1)
     sort_select.select_option("uncertainty_entropy")
@@ -143,14 +143,37 @@ def test_curation_settings(stub, page, app_url):
     register(stub, METHODS_WITH_ASSIST_AXES, 200, SETTINGS_EMPTY)
 
     page.goto(f"{app_url}/p/default/settings")
-    page.get_by_text("Set by the backend's startup config").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_text("Not settable on this backend").first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     assert page.get_by_text("grounding_v2").count() > 0
     assert page.get_by_text("warehouse_v1").count() > 0
     expect(page.locator("select")).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
-    advisory_heading = page.get_by_text("Set by the backend's startup config")
+    advisory_heading = page.get_by_text("Not settable on this backend")
     advisory_section = advisory_heading.locator("xpath=ancestor::section[1]")
     assert advisory_section.get_by_role("button", name="Save").count() == 0
+
+    # ================================================================
+    # Pass 3b — detection_profile is activation-backed and settable; a
+    # served `off` (explicit deactivation) is shown, not swallowed.
+    # ================================================================
+    stub.console_errors.clear()
+    methods_settable = {
+        "strategies": [
+            *METHODS_TODAY["strategies"],
+            {"id": "grounding_v2", "axis": "detection_profile", "settable": True, "label": "grounding_v2", "status": "stable"},
+        ],
+        "flags": {},
+    }
+    register(
+        stub,
+        methods_settable,
+        200,
+        {"defaults": {"detection_profile": "off"}, "updated_at": None, "updated_by": None},
+    )
+    page.goto(f"{app_url}/p/default/settings")
+    page.get_by_text("Detection profile").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert page.get_by_text("Not settable on this backend").count() == 0
+    expect(page.locator("select option", has_text="off (served")).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
 
     # ================================================================
     # Pass 4 — 422 surfaces the server's own words.

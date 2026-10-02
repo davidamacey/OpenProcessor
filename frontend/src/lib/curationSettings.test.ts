@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   advisoryAxes,
+  unofferedServedValue,
   axisOptions,
   axisSpec,
   EMPTY_CURATION_SETTINGS,
@@ -331,5 +332,17 @@ describe('vlm axis (W9)', () => {
     expect(
       axisCopy({ axes: [{ axis: 'sort', label: 'x', description: 'y' }] }, spec).label,
     ).toBe(spec.label);
+  });
+});
+
+describe('unofferedServedValue', () => {
+  const opts = [{ id: 'a' }, { id: 'b' }];
+  it('returns a served value the dropdown does not offer (e.g. an explicit off)', () => {
+    expect(unofferedServedValue('off', opts)).toBe('off');
+  });
+  it('is null for an offered or absent value', () => {
+    expect(unofferedServedValue('a', opts)).toBeNull();
+    expect(unofferedServedValue(null, opts)).toBeNull();
+    expect(unofferedServedValue('', opts)).toBeNull();
   });
 });

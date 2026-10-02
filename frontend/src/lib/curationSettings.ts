@@ -119,9 +119,9 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
     label: 'Detection profile',
     bucket: 'detection_profiles',
     blurb:
-      'Display only. Exactly one profile is active per backend process, selected at ' +
-      'startup from config — no endpoint reads a per-request or shared selection, ' +
-      'so setting a default here would change what /methods reports and nothing else.',
+      "The project's active detection profile. Saving activates that profile, the same " +
+      'activation as Region profiles (the server gates it and answers for it); ' +
+      'it is read from the activation record, not a stored default.',
     irreversibleWarning: null,
   },
   {
@@ -266,6 +266,21 @@ export function axisOptions(
   return spec.axis === 'vlm'
     ? pickableVlmEntries(entries as VlmMethodInfo[])
     : selectableAxisEntries(entries);
+}
+
+/**
+ * A served value the dropdown has no option for (e.g. `off`, an explicit
+ * detection-profile deactivation, which `GET /settings` reports from the
+ * activation record). Rendered verbatim as a disabled option rather than
+ * letting the select silently show a different entry; `null` when the
+ * value is absent or offered.
+ */
+export function unofferedServedValue(
+  value: string | null,
+  options: readonly { id: string }[],
+): string | null {
+  if (!value) return null;
+  return options.some((o) => o.id === value) ? null : value;
 }
 
 /**
