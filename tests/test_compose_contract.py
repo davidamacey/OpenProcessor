@@ -902,12 +902,14 @@ def test_no_service_reads_a_host_port_var_as_its_own_container_config() -> None:
 COMPOSE = REPO_ROOT / 'docker-compose.yml'
 SERVER = 'python3 -m vllm.entrypoints.openai.api_server'
 
-#: The argv the vlm service ran before W9 (docker-compose.yml at b3163f8c).
+#: The argv the vlm service ran before W9 (docker-compose.yml at b3163f8c), with
+#: --max-model-len raised from 8192 to 16384 (an 8-image combined batch plus its
+#: 6144 output tokens does not fit in 8192 -- found live).
 PRE_W9_ARGV = [
     '--model=google/gemma-4-E4B-it',
     '--served-model-name=gemma-4-e4b',
     '--dtype=bfloat16',
-    '--max-model-len=8192',
+    '--max-model-len=16384',
     '--gpu-memory-utilization=0.4',
     '--limit-mm-per-prompt={"image":8,"audio":0}',
     '--chat-template=/vllm-workspace/examples/tool_chat_template_gemma4.jinja',

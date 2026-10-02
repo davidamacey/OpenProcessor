@@ -83,8 +83,20 @@ def main() -> int:
 
     print('2. activate the example region profile and prompt pack')
     for kind in ('region_profiles', 'prompt_packs'):
-        call('POST', f'{scoped}/{kind}', json={'name': 'wheel_example', 'body': example_body(kind)})
-        call('POST', f'{scoped}/{kind}/wheel_example/activate', json={'expected_active': None})
+        created = requests.post(
+            f'{scoped}/{kind}',
+            json={'name': 'wheel_example', 'body': example_body(kind)},
+            timeout=TIMEOUT,
+        )
+        if created.status_code not in (201, 409):  # 409: a previous run saved it
+            sys.exit(f'POST {scoped}/{kind} -> {created.status_code}: {created.text[:500]}')
+        active = call('GET', f'{scoped}/{kind}/active')['active']
+        if active['name'] != 'wheel_example':
+            call(
+                'POST',
+                f'{scoped}/{kind}/wheel_example/activate',
+                json={'expected_active': active if active['name'] else None},
+            )
 
     print('3. ingest the car images (the primary detector proposes the cars)')
     files = sorted(p.name for p in args.host_dir.glob('*.jpg'))

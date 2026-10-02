@@ -682,7 +682,7 @@ services:
       - VLM_MODEL=${VLM_MODEL:-google/gemma-4-E4B-it}
       - VLM_SERVED_MODEL_NAME=${VLM_SERVED_MODEL_NAME:-gemma-4-e4b}
       - VLM_DTYPE=${VLM_DTYPE:-bfloat16}
-      - VLM_MAX_MODEL_LEN=${VLM_MAX_MODEL_LEN:-8192}
+      - VLM_MAX_MODEL_LEN=${VLM_MAX_MODEL_LEN:-16384}
       # Fraction of this GPU's VRAM vLLM may claim. Lower it to share the
       # GPU with Triton/the segmenter/training; see docs/CURATION.md
       # "VLM VRAM budget" for worked numbers per card size.

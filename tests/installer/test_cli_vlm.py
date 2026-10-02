@@ -96,7 +96,7 @@ def test_use_rewrites_env_recreates_the_vlm_probes_and_unpauses(
     assert '@sha256:' in (env_value(stack, 'VLM_IMAGE') or '')
     assert env_value(stack, 'VLM_REASONING_PARSER') == ''  # set but empty: no parser
     assert env_value(stack, 'VLM_CHAT_TEMPLATE') == ''
-    assert env_value(stack, 'VLM_MAX_MODEL_LEN') == '8192'
+    assert env_value(stack, 'VLM_MAX_MODEL_LEN') == '16384'
     assert env_value(stack, 'VLM_LIMIT_MM_IMAGES') == '8'
     assert env_value(stack, 'OP_VLM_MAX_IMAGES_PER_CALL') == '8'
     # clamp((vram_gb - 3) / card_gb, 0.2, 0.9): 17 GB on a 48 GB card
