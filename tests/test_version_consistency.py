@@ -64,3 +64,8 @@ def test_the_roadmap_ships_the_current_release() -> None:
     roadmap = json.loads((ROOT / 'docs-site/src/data/roadmap.json').read_text())
     shipped = [r['version'] for r in roadmap['releases'] if r['stage'] == 'shipped']
     assert shipped == [f'v{VERSION}']
+
+
+def test_the_installer_script_reports_the_current_release() -> None:
+    script = (ROOT / 'setup-openprocessor.sh').read_text()
+    assert re.search(rf'^SCRIPT_VERSION="{re.escape(VERSION)}"$', script, re.M)
