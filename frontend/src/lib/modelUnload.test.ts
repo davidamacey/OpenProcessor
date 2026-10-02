@@ -9,10 +9,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { ApiError } from './api';
 import {
   showsProtectedChip,
   unloadButtonState,
   unloadConfirmMessage,
+  unloadFailureMessage,
   unloadForceConfirmMessage,
 } from './modelUnload';
 
@@ -137,5 +139,24 @@ describe('unloadForceConfirmMessage', () => {
     expect(unloadForceConfirmMessage({ name: 'vehicle_classifier_trt' })).toMatch(
       /vehicle_classifier_trt/,
     );
+  });
+});
+
+describe('unloadFailureMessage', () => {
+  it('shows the served 403 / 409 detail verbatim, without the transport prefix', () => {
+    const detail403 =
+      "'widget_det' is the configured region detector and cannot be unloaded";
+    const detail409 =
+      "'clip_image' is a core pipeline model; pass force=true to unload it";
+    expect(
+      unloadFailureMessage(
+        new ApiError(403, '/curation/models/widget_det', { detail: detail403 }),
+      ),
+    ).toBe(`Unload failed: ${detail403}`);
+    expect(
+      unloadFailureMessage(
+        new ApiError(409, '/curation/models/clip_image', { detail: detail409 }),
+      ),
+    ).toBe(`Unload failed: ${detail409}`);
   });
 });

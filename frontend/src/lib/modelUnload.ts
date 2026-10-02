@@ -14,6 +14,7 @@
  * would be a second, driftable copy of the real guard.
  */
 
+import { projectErrorText } from './api';
 import type { ModelInfo } from './types';
 
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
@@ -78,4 +79,14 @@ export function unloadConfirmMessage(
 /** Second confirmation shown only for `force-required` models. */
 export function unloadForceConfirmMessage(model: Pick<ModelInfo, 'name'>): string {
   return `Really force-unload ${model.name}? This is your last chance to back out.`;
+}
+
+/**
+ * The toast for a refused unload: the server's own `detail` verbatim (403
+ * for the configured detector/OCR even with `force`, 409 for a core model
+ * without it; nothing is deleted when refused), not the transport
+ * wrapper's "API 403 <url>" prefix.
+ */
+export function unloadFailureMessage(e: unknown): string {
+  return `Unload failed: ${projectErrorText(e)}`;
 }

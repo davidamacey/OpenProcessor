@@ -139,6 +139,7 @@
               <th class="py-0.5 pr-3 font-normal">Host</th>
               <th class="py-0.5 pr-3 font-normal">{copy.appliedColumn}</th>
               <th class="py-0.5 pr-3 font-normal">Config revision</th>
+              <th class="py-0.5 pr-3 font-normal">Applied at</th>
               <th class="py-0.5 font-normal"></th>
             </tr>
           </thead>
@@ -149,6 +150,9 @@
                 <td class="py-0.5 pr-3 font-mono">{r.host}</td>
                 <td class="py-0.5 pr-3 font-mono">{refText(r[copy.appliedRef])}</td>
                 <td class="py-0.5 pr-3 font-mono">{r.applied_config_revision}</td>
+                <td class="py-0.5 pr-3 font-mono" data-testid="applied-at"
+                  >{formatTimestamp(r.applied_at)}</td
+                >
                 <td class="py-0.5">
                   {#if r.lagging}
                     <span

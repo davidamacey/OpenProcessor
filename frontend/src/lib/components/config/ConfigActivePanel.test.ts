@@ -65,6 +65,9 @@ describe('ConfigActivePanel (region-profile words)', () => {
     expect(q('active-ref')?.textContent).toBe('widget_tag r2');
     expect(q('active-applied')?.textContent).toContain('Profile');
     expect(q('active-applied')?.textContent).toContain('widget_tag r2');
+    // The served worker host and when it applied (both blank before f14f4ddc).
+    expect(q('active-applied')?.textContent).toContain('worker-1');
+    expect(q('applied-at')?.textContent).toBe('2026-09-26 12:05:02 UTC');
     expect(q('extra-action')).not.toBeNull();
   });
 
