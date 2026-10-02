@@ -4,13 +4,15 @@
  */
 import type {
   ActiveConfigResponse,
+  ConfigRevisionList,
+  ValidationIssue,
+  ValidationReport,
+} from '$lib/types_config';
+import type {
   PackTestResponse,
   PromptPackDoc,
   PromptPackList,
-  PromptPackRevisionList,
   PromptPackSchema,
-  ValidationIssue,
-  ValidationReport,
 } from '$lib/types_packs';
 
 export const cleanReport = (): ValidationReport => ({
@@ -228,7 +230,7 @@ export function activeFixture(
   };
 }
 
-export function revisionsFixture(): PromptPackRevisionList {
+export function revisionsFixture(): ConfigRevisionList {
   return {
     name: 'widget_tag',
     revisions: [

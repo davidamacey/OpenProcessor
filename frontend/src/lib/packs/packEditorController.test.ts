@@ -16,14 +16,10 @@ import {
   revisionsFixture,
   schemaFixture,
 } from '$lib/test/fixtures/promptPacks';
-import type { ValidationReport } from '$lib/types_packs';
-import {
-  createPackEditor,
-  issuesForField,
-  unplacedIssues,
-  VALIDATE_DEBOUNCE_MS,
-  type PackEditorDeps,
-} from './packEditorController.svelte';
+import type { ValidationReport } from '$lib/types_config';
+import { VALIDATE_DEBOUNCE_MS } from '$lib/config/configEditor.svelte';
+import { issuesForField, unplacedIssues } from '$lib/config/validationIssues';
+import { createPackEditor, type PackEditorDeps } from './packEditorController.svelte';
 
 function refusal(status: number, detail: Record<string, unknown>): ApiError {
   return new ApiError(status, '/x', { detail });

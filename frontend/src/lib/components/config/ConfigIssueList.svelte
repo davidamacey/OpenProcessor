@@ -4,7 +4,7 @@
    * severity, message, code, and the field path when asked. Nothing here
    * decides whether an issue blocks; `bypassable` is shown as served.
    */
-  import type { ValidationIssue } from '$lib/types_packs';
+  import type { ValidationIssue } from '$lib/types_config';
 
   interface Props {
     issues: ValidationIssue[];
@@ -22,11 +22,11 @@
 </script>
 
 {#if issues.length > 0}
-  <ul class="space-y-1" data-testid="pack-issues">
+  <ul class="space-y-1" data-testid="config-issues">
     {#each issues as i, idx (idx)}
       <li
         class="rounded border px-2 py-1 text-xs {TONE[i.severity] ?? TONE.info}"
-        data-testid="pack-issue"
+        data-testid="config-issue"
         data-code={i.code}
         data-severity={i.severity}
       >

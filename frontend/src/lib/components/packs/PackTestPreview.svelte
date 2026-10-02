@@ -5,7 +5,7 @@
    * source-image context with the tested item replaced by the preview,
    * rendered by `SourceImageOverlay` (§7.6 item 3). Nothing is written.
    */
-  import { getCropContext, packErrorText } from '$lib/api';
+  import { getCropContext, configErrorText } from '$lib/api';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
   import type { Crop, CropContextResponse } from '$lib/types';
 
@@ -33,7 +33,7 @@
       })
       .catch((e) => {
         if ((e as Error)?.name === 'AbortError') return;
-        error = packErrorText(e);
+        error = configErrorText(e);
       });
     return () => ctl.abort();
   });

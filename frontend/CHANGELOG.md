@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Region-profile editor and config vocabulary (OpenProcessor W4).** New
+  `/settings/region-profiles` lists the project's region profiles and
+  templates with the active profile (confirm-gated Rollback and Turn
+  off), the served activation impact with a confirm-gated Re-run of the
+  served `suggested_reprocess` (dry run first, through `POST /reprocess`),
+  Clone, confirm-gated Delete, and a read-only "Models and sources" panel
+  from `GET /config/vocabulary`. `/settings/region-profiles/[name]` edits
+  a profile from the served schema (groups, types, ranges, advanced
+  fields, `applies_when` dimming from the saved revision's `effective`),
+  with model pickers from the served vocabulary (`choice.id` stored,
+  `empty_choice` offered, other projects' shared detectors on request),
+  the served segmenter cap and floor beside the segmenter fields, live
+  validation, "Check the draft for activation", revisions and restore,
+  and pinned activation ("Activate anyway" only when the served report
+  allows force). A successful activation re-polls `/health`, so the
+  existing "reload to apply" notice fires. Absent until the backend
+  serves `GET /region_profiles` (a one-shot probe per project); routes in
+  `PENDING_BACKEND_W4` until the W4 contract sync. The prompt-pack
+  editor's activate/rollback state, save column, revisions, dialogs,
+  issue list and availability gate are now shared config components
+  (`src/lib/config`, `src/lib/components/config`) used by both editors
+  (`packErrorDetail`/`packErrorText` are now
+  `configErrorDetail`/`configErrorText`), and the shared stale-snapshot
+  banner no longer reads "last known ctl."
 - **Prompt-pack editor (OpenProcessor W3; test-on-crop W5).** New
   `/settings/prompt-packs` lists the project's VLM prompt packs and
   templates with the active pack (confirm-gated Rollback), Clone and

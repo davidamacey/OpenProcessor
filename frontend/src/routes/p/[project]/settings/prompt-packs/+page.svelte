@@ -9,11 +9,12 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
-  import PackIssueList from '$components/packs/PackIssueList.svelte';
-  import PacksGate from '$components/packs/PacksGate.svelte';
+  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigGate from '$components/config/ConfigGate.svelte';
   import { formatTimestamp } from '$lib/formatDate';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
-  import { createPackList, type CloneSource } from '$lib/packs/packListController.svelte';
+  import type { CloneSource } from '$lib/config/configList.svelte';
+  import { createPackList } from '$lib/packs/packListController.svelte';
   import { projectHref } from '$lib/projectPaths';
   import type { PromptPackSummary } from '$lib/types_packs';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -32,20 +33,16 @@
   });
 
   let cloneFrom = $state<CloneSource | null>(null);
-  let cloneName = $state('');
-  let cloneDescription = $state('');
   let deleting = $state<PromptPackSummary | null>(null);
 
   function openClone(from: CloneSource): void {
     list.clearClone();
     cloneFrom = from;
-    cloneName = '';
-    cloneDescription = '';
   }
 
-  async function doClone(): Promise<void> {
+  async function doClone(name: string, description: string): Promise<void> {
     if (!cloneFrom) return;
-    const doc = await list.clone(cloneFrom, cloneName, cloneDescription);
+    const doc = await list.clone(cloneFrom, name, description);
     if (!doc) return;
     cloneFrom = null;
     toastStore.success(`Created ${doc.name}`);
@@ -78,7 +75,12 @@
     regions. Open a pack to edit it, test it on a crop and make it the active one.
   </p>
 
-  <PacksGate>
+  <ConfigGate
+    store={packsAvailability}
+    what="prompt packs"
+    unavailableText="Prompt-pack editing is not available on this backend."
+    testid="packs-unavailable"
+  >
     <PackActivePanel ctl={list.active} onrollback={() => list.rollback()} />
 
     {#if list.loadError && !list.list}
@@ -183,40 +185,20 @@
         </section>
       {/if}
     {/if}
-  </PacksGate>
+  </ConfigGate>
 </div>
 
 {#if cloneFrom}
-  <ConfirmDialog
+  <ConfigCloneDialog
     title="Clone {cloneFrom.name}{cloneFrom.source === 'template' ? ' (template)' : ''}"
-    confirmLabel="Clone"
+    nameLabel="New pack name"
+    withDescription
     busy={list.busy}
-    confirmDisabled={cloneName.trim() === ''}
-    onconfirm={() => void doClone()}
+    error={list.cloneError}
+    report={list.cloneReport}
+    onconfirm={(name, description) => void doClone(name, description)}
     oncancel={() => (cloneFrom = null)}
-  >
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
-      New pack name
-      <input
-        class="input input-sm font-mono"
-        bind:value={cloneName}
-        data-testid="clone-name"
-      />
-    </label>
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
-      Description (optional)
-      <input class="input input-sm" bind:value={cloneDescription} />
-    </label>
-    {#if list.cloneError}
-      <p class="text-red-300" data-testid="clone-error">{list.cloneError}</p>
-    {/if}
-    {#if list.cloneReport}
-      <PackIssueList
-        issues={[...list.cloneReport.errors, ...list.cloneReport.warnings]}
-        showField
-      />
-    {/if}
-  </ConfirmDialog>
+  />
 {/if}
 
 {#if deleting}

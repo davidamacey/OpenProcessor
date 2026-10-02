@@ -368,6 +368,12 @@ class Stub:
         # a backend without W3, where every pack surface is absent — so
         # existing tests stay green; test_prompt_packs.py overrides it.
         self.on("GET", r"/prompt_packs(\?|$)", (404, {"detail": "Not Found"}))
+        # W4 (region-profile CRUD): /settings and the profile pages probe
+        # `GET {prefix}/region_profiles` once per project. Defaults to a
+        # 404 — a backend without W4, where every profile surface is
+        # absent — so existing tests stay green; test_region_profiles.py
+        # overrides it.
+        self.on("GET", r"/region_profiles(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 

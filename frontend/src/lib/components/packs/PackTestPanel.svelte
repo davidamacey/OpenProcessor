@@ -8,7 +8,7 @@
   import { getThumbUrl } from '$lib/api';
   import { createPackTest } from '$lib/packs/packTestController.svelte';
   import type { PackSchemaCall, PromptPackBody } from '$lib/types_packs';
-  import PackIssueList from './PackIssueList.svelte';
+  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import PackTestPreview from './PackTestPreview.svelte';
 
   interface Props {
@@ -115,7 +115,7 @@
       <div class="space-y-1" data-testid="test-error">
         <p class="text-red-300">{t.error}</p>
         {#if t.errorReport}
-          <PackIssueList
+          <ConfigIssueList
             issues={[...t.errorReport.errors, ...t.errorReport.warnings]}
             showField
           />
@@ -151,7 +151,7 @@
           <dd class="font-mono">{r.latency_ms} ms</dd>
         </dl>
         {#if r.validation}
-          <PackIssueList
+          <ConfigIssueList
             issues={[...r.validation.errors, ...r.validation.warnings]}
             showField
           />

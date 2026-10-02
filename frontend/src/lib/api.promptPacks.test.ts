@@ -17,8 +17,8 @@ import {
   getPromptPackRevisions,
   getPromptPackSchema,
   listPromptPacks,
-  packErrorDetail,
-  packErrorText,
+  configErrorDetail,
+  configErrorText,
   rollbackPromptPack,
   testPromptPack,
   updatePromptPack,
@@ -171,7 +171,7 @@ describe('W3 wrappers hit the scoped routes', () => {
   });
 });
 
-describe('packErrorDetail / packErrorText', () => {
+describe('configErrorDetail / configErrorText', () => {
   const err = (status: number, body: unknown) => new ApiError(status, `${P}/x`, body);
 
   it('reads a structured refusal and shows its served message', () => {
@@ -182,20 +182,20 @@ describe('packErrorDetail / packErrorText', () => {
         current_revision: 3,
       },
     });
-    expect(packErrorDetail(e)).toMatchObject({
+    expect(configErrorDetail(e)).toMatchObject({
       error: 'revision_conflict',
       current_revision: 3,
     });
-    expect(packErrorText(e)).toBe('Someone saved revision 3 first.');
+    expect(configErrorText(e)).toBe('Someone saved revision 3 first.');
   });
 
   it('falls back to the generic detail for a plain or pydantic error', () => {
     const plain = err(400, { detail: 'bad' });
-    expect(packErrorDetail(plain)).toBeNull();
-    expect(packErrorText(plain)).toBe('bad');
+    expect(configErrorDetail(plain)).toBeNull();
+    expect(configErrorText(plain)).toBe('bad');
     const list = err(422, { detail: [{ loc: ['body', 'call'], msg: 'Field required' }] });
-    expect(packErrorDetail(list)).toBeNull();
-    expect(packErrorText(list)).toBe('call: Field required');
-    expect(packErrorText(new Error('network down'))).toBe('network down');
+    expect(configErrorDetail(list)).toBeNull();
+    expect(configErrorText(list)).toBe('call: Field required');
+    expect(configErrorText(new Error('network down'))).toBe('network down');
   });
 });

@@ -5,12 +5,9 @@
    * use it, and the served issues on it. `kind: "text"` is a textarea,
    * `kind: "map"` a key/value list. No client rule checks the value.
    */
-  import type {
-    PackFieldValue,
-    PackSchemaField,
-    ValidationIssue,
-  } from '$lib/types_packs';
-  import PackIssueList from './PackIssueList.svelte';
+  import type { ValidationIssue } from '$lib/types_config';
+  import type { PackFieldValue, PackSchemaField } from '$lib/types_packs';
+  import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
 
   interface Props {
     field: PackSchemaField;
@@ -158,5 +155,5 @@
   {#if field.used_by.length > 0}
     <p class="text-[11px] text-zinc-500">used by: {field.used_by.join(', ')}</p>
   {/if}
-  <PackIssueList {issues} showField={isMap} />
+  <ConfigIssueList {issues} showField={isMap} />
 </div>

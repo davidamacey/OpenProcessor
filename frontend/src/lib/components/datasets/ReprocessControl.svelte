@@ -15,7 +15,7 @@
     type ReprocessTarget,
   } from '$lib/datasets/reprocessController.svelte';
   import type { Crop } from '$lib/types';
-  import type { ReprocessResponse } from '$lib/types_import';
+  import ReprocessCounts from './ReprocessCounts.svelte';
 
   interface Props {
     target: ReprocessTarget;
@@ -70,32 +70,6 @@
   const scopeLabel = (id: string): string =>
     vocab?.scopes.find((s) => s.id === id)?.label ?? id;
 </script>
-
-{#snippet counts(res: ReprocessResponse)}
-  <table class="w-full text-left text-xs" data-testid="reprocess-counts">
-    <thead class="text-zinc-500">
-      <tr>
-        <th class="py-0.5 pr-3">Scope</th>
-        <th class="py-0.5 pr-3 text-right">Selected</th>
-        <th class="py-0.5 pr-3 text-right">Locked, skipped</th>
-        <th class="py-0.5 text-right">Queued</th>
-      </tr>
-    </thead>
-    <tbody class="font-mono">
-      {#each res.scopes as s (s.scope)}
-        <tr class="border-t border-zinc-800">
-          <td class="py-0.5 pr-3 font-sans">{scopeLabel(s.scope)}</td>
-          <td class="py-0.5 pr-3 text-right">{s.selected.toLocaleString()}</td>
-          <td class="py-0.5 pr-3 text-right">{s.locked_skipped.toLocaleString()}</td>
-          <td class="py-0.5 text-right">{s.queued.toLocaleString()}</td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-  {#if res.message}
-    <p class="text-xs text-zinc-300" data-testid="reprocess-message">{res.message}</p>
-  {/if}
-{/snippet}
 
 {#if vocab}
   <button
@@ -175,12 +149,12 @@
 
       {#if f.dryRun && !f.result}
         <div class="space-y-1" data-testid="reprocess-dry-run">
-          {@render counts(f.dryRun)}
+          <ReprocessCounts res={f.dryRun} {scopeLabel} />
         </div>
       {/if}
       {#if f.result}
         <div class="space-y-1" data-testid="reprocess-result">
-          {@render counts(f.result)}
+          <ReprocessCounts res={f.result} {scopeLabel} />
           {#if f.job}
             <p class="text-xs text-zinc-300" data-testid="reprocess-job">
               Job <code class="font-mono">{f.job.job_id}</code>:

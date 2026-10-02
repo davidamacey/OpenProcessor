@@ -223,10 +223,39 @@ const PENDING_BACKEND_W3: Array<{ path: string; method: string }> = [
   { path: '/prompt_packs/test', method: 'POST' },
 ];
 
+/**
+ * OpenProcessor W4 (region-profile CRUD and the config vocabulary,
+ * any_domain_plan.md §4.2 / §7.3 / §7.4) — built against the frozen spec
+ * before the backend implements it (docs/design/
+ * w4-profile-editor-ui-plan-2026-09-27.md). DELETE THIS LIST when
+ * `npm run contract:sync` vendors W4; every route then has to resolve for
+ * real.
+ */
+const PENDING_BACKEND_W4: Array<{ path: string; method: string }> = [
+  { path: '/region_profiles', method: 'GET' },
+  { path: '/region_profiles/schema', method: 'GET' },
+  { path: '/region_profiles/validate', method: 'POST' },
+  { path: '/region_profiles/*', method: 'GET' },
+  { path: '/region_profiles/*', method: 'PUT' },
+  { path: '/region_profiles/*', method: 'DELETE' },
+  { path: '/region_profiles/*/revisions', method: 'GET' },
+  { path: '/region_profiles/*/revisions/*', method: 'GET' },
+  { path: '/region_profiles/*/clone', method: 'POST' },
+  { path: '/region_profiles/active', method: 'GET' },
+  { path: '/region_profiles/*/activate', method: 'POST' },
+  { path: '/region_profiles/active/rollback', method: 'POST' },
+  { path: '/region_profiles/deactivate', method: 'POST' },
+  { path: '/region_profiles/active/impact', method: 'GET' },
+  { path: '/config/vocabulary', method: 'GET' },
+];
+
 function isPendingBackend(path: string, method: string): boolean {
-  return [...PENDING_BACKEND, ...PENDING_BACKEND_W10, ...PENDING_BACKEND_W3].some(
-    (p) => p.path === path && p.method === method,
-  );
+  return [
+    ...PENDING_BACKEND,
+    ...PENDING_BACKEND_W10,
+    ...PENDING_BACKEND_W3,
+    ...PENDING_BACKEND_W4,
+  ].some((p) => p.path === path && p.method === method);
 }
 
 interface ResolvedCall {
