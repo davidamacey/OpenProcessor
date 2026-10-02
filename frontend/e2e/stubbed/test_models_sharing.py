@@ -108,6 +108,7 @@ class Models:
                 "error": "in_use",
                 "message": f"'widget_det' is still used by {len(self.in_use_projects)} other project(s)",
                 "projects": self.in_use_projects,
+                "used_by": [{"project": p, "profile": "tag"} for p in self.in_use_projects],
             }})
         if self.unreadable and not body["shared"] and not forced:
             return (503, {"detail": {
@@ -221,7 +222,7 @@ def test_unshare_in_use_shows_served_projects_and_confirm_gates_force(stub, page
     page.get_by_test_id("model-share-toggle-widget_det").click()
     page.get_by_test_id("share-model-confirm").click()
     page.get_by_test_id("share-model-in-use").wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert "beta" in page.get_by_test_id("share-model-in-use").inner_text()
+    assert "beta (tag)" in page.get_by_test_id("share-model-in-use").inner_text()
     assert "still used by 1 other project(s)" in page.get_by_test_id("share-model-error").inner_text()
 
     page.get_by_test_id("share-model-force").click()
