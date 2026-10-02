@@ -133,11 +133,13 @@ def live_project(live_url: str) -> dict[str, Any]:
     backend, but this tier fails closed rather than guessing a prefix).
     """
     payload = global_api_get(live_url, "/projects")
-    default_slug = payload["default_slug"]
+    # CROPWRIGHT_LIVE_PROJECT points the (read-only) tier at a project that
+    # holds data when the served default is empty; it must still be a served slug.
+    default_slug = os.environ.get("CROPWRIGHT_LIVE_PROJECT") or payload["default_slug"]
     match = next((p for p in payload["projects"] if p["slug"] == default_slug), None)
     if match is None:
         pytest.skip(
-            f"live tier skipped: default project {default_slug!r} not present in "
+            f"live tier skipped: project {default_slug!r} not present in "
             f"GET {API_PREFIX}/projects response"
         )
     assert match is not None  # for type-checkers
