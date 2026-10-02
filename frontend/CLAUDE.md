@@ -375,8 +375,12 @@ before the backend ships it.
   `schema.calls[].testable` calls. Sends the draft or the saved revision,
   the call, crop ids, `use_region_box` only when chosen, and the VLM
   selection (`vlmSelection`: `vlm_name` / `vlm_revision` /
-  `acknowledge_external`) only when one is set (nothing sets it until the
-  VLM picker is mounted on the panel; `vlm_draft` is never sent). Renders
+  `acknowledge_external`) only when one is set. `TestVlmPicker` (the W9
+  `VlmRunPicker`, no-pick option "Active endpoint") sets it:
+  `toTestVlmSelection` (`src/lib/configTest/vlmSelection.ts`) sends
+  `vlm_name` with `vlm_revision: null`, and `acknowledge_external: true`
+  only once the served external warning is ticked; `vlm_draft` is never
+  sent. Renders
   the served pack and VLM refs (`name@revision`, `endpoint`, `model`,
   "draft"), latency, top-level parse state, validation, the prompt, raw
   reply and reasoning, and per crop the thumbnail, `box_id`, the served
@@ -454,7 +458,8 @@ on the shared config machinery listed under "Prompt-pack editor".
   whenever the editor loads. One crop id, the unsaved draft or the saved
   revision (read-only profiles and a viewed revision offer saved only), a
   segmenter prompt override sent only when non-empty, "Verify with the
-  VLM" (`verify: true` only when ticked), and the `vlmSelection` hook.
+  VLM" (`verify: true` only when ticked), and, while verify is on, the same
+  `TestVlmPicker` (the selection is sent only with `verify`).
   Renders the served profile ref, "not eligible" (`item_eligible: false`,
   no served reason, question W5-2), validation, the legs (served status,
   reason, time; a candidate table of score / selected / drop reason / mask

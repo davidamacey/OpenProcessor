@@ -95,6 +95,15 @@ describe('ProfileTest', () => {
     expect(test.mock.calls[1]![0]).not.toHaveProperty('vlm_name');
   });
 
+  it('does not send the VLM selection unless the verify pass is on', async () => {
+    const test = vi.fn().mockResolvedValue(response());
+    const t = createProfileTest(test);
+    t.cropId = 'c_1';
+    t.vlmSelection = { vlm_name: 'remote_a', vlm_revision: null };
+    await t.run(ctx);
+    expect(test.mock.calls[0]![0]).not.toHaveProperty('vlm_name');
+  });
+
   it('savedOnly forces the saved source and gives back the operator choice after', () => {
     const t = createProfileTest(vi.fn());
     t.setSavedOnly(true);

@@ -13,6 +13,7 @@
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import TestPreviewItem from '$components/config/TestPreviewItem.svelte';
   import TestRefs from '$components/configTest/TestRefs.svelte';
+  import TestVlmPicker from '$components/configTest/TestVlmPicker.svelte';
 
   interface Props {
     calls: PackSchemaCall[];
@@ -100,6 +101,13 @@
           <option value="none">none: no boxes</option>
         </select>
       </label>
+      <div class="sm:col-span-2">
+        <TestVlmPicker
+          selection={t.vlmSelection}
+          disabled={t.running}
+          onchange={(next) => (t.vlmSelection = next)}
+        />
+      </div>
     </div>
     <div>
       <button

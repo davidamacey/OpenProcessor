@@ -23,6 +23,7 @@
   import { toastStore } from '$stores/toast.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
   import type { Crop } from '$lib/types';
+  import { slotOf } from '$lib/annotations/cropSlots';
   import MultiBoxCanvas from './MultiBoxCanvas.svelte';
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
@@ -49,6 +50,16 @@
   const activeSlot = $derived(slot);
   const editorThumbSize = $derived(
     thumbSize ?? activeSlot?.capabilities.subBox?.editor.thumbSize ?? 512,
+  );
+
+  // The served per-box `locked` flag, by box id, for the canvas's lock
+  // glyph (the editable working set carries no `locked`).
+  const lockedBoxIds = $derived<Set<string>>(
+    new Set(
+      (slotOf(crop, activeSlot)?.subBoxes ?? [])
+        .filter((b) => b.locked === true && b.boxId != null)
+        .map((b) => b.boxId as string),
+    ),
   );
 
   const multiBox = createMultiBoxRegionController(() => activeSlot);
@@ -133,6 +144,7 @@
           box: b.box!,
           state: b.state,
           label: `${activeSlot.label.title} (${multiBoxStateLabel(b.state)})`,
+          locked: b.boxId != null && lockedBoxIds.has(b.boxId),
         }))}
       selectedIndex={multiBox.selectedIndex}
       busy={multiBox.busy}

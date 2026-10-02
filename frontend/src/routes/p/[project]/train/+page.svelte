@@ -1531,6 +1531,8 @@
                           crop={item as RegionBrowseItem}
                           slot={cohortSlot}
                           onclick={(p) => openCohortItem(group, activeCohort, p)}
+                          onreprocessed={() =>
+                            void loadCohortPreview(group, activeCohort)}
                           compact
                         />
                       {/if}
@@ -1538,6 +1540,7 @@
                       <CropCard
                         crop={item as Crop}
                         onclick={(c) => openCohortItem(group, activeCohort, c)}
+                        onreprocessed={() => void loadCohortPreview(group, activeCohort)}
                       />
                     {/if}
                   {/each}

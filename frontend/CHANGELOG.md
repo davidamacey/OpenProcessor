@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **VLM picker on the test-on-crop panels (W9 x W5).** The pack test panel
+  and, while "Verify with the VLM" is on, the region-profile test panel
+  mount the per-run VLM picker (no-pick option reads "Active endpoint").
+  A pick is sent as `vlm_name` with `vlm_revision: null`, plus
+  `acknowledge_external: true` only once the operator ticks the served
+  external-endpoint warning; nothing is sent for the default. The unsaved
+  VLM draft (`vlm_draft`) stays out of scope.
+
 - **VLM models (OpenProcessor W9).** A deployment-wide VLM endpoint registry
   with per-project activation. New `/settings/models` (the project's active
   endpoint with Rollback and Turn off and the served VLM health, the
@@ -72,53 +80,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   details; and "Reprocess image..." on a card's expanded view and on slot
   cards (`POST /images/{image_id}/reprocess`), with `/clusters/[id]`
   adopting the served items.
-
-### Changed
-
-- **W10 types pinned to the contract; Reprocess now appears against the
-  real backend.** `types_import.ts` is re-typed field-for-field from the
-  vendored OpenAPI (`/datasets/formats` serves `processing_modes`,
-  `parents_modes`, `trust_levels`, `upload_limits` and `{value, label,
-description}` choices; a failed job's `error` is a string; the report and
-  undo report gained their new counts). Reprocess was gated on a
-  `formats.reprocess` block the backend never serves, so it was absent; it
-  is now present whenever the import API is served, with its scope and
-  region-mode ids pinned to the contract enums, no lock-rule sentence and
-  no summary message (the served counts are what show). The archive input
-  no longer filters by a served extension list (none is served).
-- **Contract sync to OpenProcessor f582aa05; every route resolves for real.**
-  All `PENDING_BACKEND*` allow-lists and `it.todo` entries are gone, so every
-  scanned call site must resolve in the vendored OpenAPI. `findOperation`
-  no longer lets a literal path segment (for example `region`) match an
-  OpenAPI path parameter, which had hidden the removed `PUT /crops/{id}/region`
-  route; it now picks the candidate with the most literal matches.
-- **Multi-box regions on the real wire.** `region_boxes[]` with per-box
-  state, score, detector, verdict, lock, cluster, text and thumbnail;
-  item `region_count`/`region_rejected_count`/`region_max_score`/
-  `region_set_complete`/`region_revision`. Writes use `PUT /crops/{id}/regions`,
-  `PATCH /crops/{id}/regions/{box_id}`, `PUT /crops/batch_regions` and
-  `POST /regions/batch_box_state`, send `expected_region_revision` and adopt
-  the item a 409 `region_conflict` returns. The single-box keys and the
-  `PUT /crops/{id}/region` / `batch_region` callers, `setSlotBox`,
-  `BboxCanvas`, `bboxFrames`, `viewBox` and the item-level `region_text` are
-  removed; a tier-2 scalar-box slot is read-only. The gallery gained a "Box
-  state" filter and a `rows_truncated` chip. `MultiBoxCanvas` keys resolve
-  through the keymap (a rebound delete key was previously ignored).
-  `region_profile.limits` (`max_boxes_per_write`) is required on the served
-  profile and `RegionProfileSummary` moved to the split schema.
-- **Ingest batch**: removed the label-import and mismatch request/response
-  fields the backend no longer serves (`label_txt_path`, `label_source`,
-  `detect_mismatches`, `labels_imported`, `mismatches`, `missed_labels`,
-  `unmatched_detections`) and the UI that showed them.
-- **Projects P3 wire.** `ProjectSummary.paused` drives the `/projects` chip and
-  Pause/Resume buttons (no per-row `/pause` reads); `paused_by`/`reason`
-  show in the switcher tooltip; `keymap_clone_conflicts` is toasted after a
-  clone; global `project.paused`/`project.resumed` events update the store.
-  Model sharing reads the served `owned`/`sharing_revision`, foreign models
-  are `unloadable:false`, and VLM rows show their `active` state.
-  `ActiveConfigResponse.source`/`activated_at`/`applied` are required.
-
-### Added
 
 - **Region-profile editor and config vocabulary (OpenProcessor W4).** New
   `/settings/region-profiles` lists the project's region profiles and
@@ -196,6 +157,49 @@ description}` choices; a failed job's `error` is a string; the report and
 
 ### Changed
 
+- **W10 types pinned to the contract; Reprocess now appears against the
+  real backend.** `types_import.ts` is re-typed field-for-field from the
+  vendored OpenAPI (`/datasets/formats` serves `processing_modes`,
+  `parents_modes`, `trust_levels`, `upload_limits` and `{value, label,
+description}` choices; a failed job's `error` is a string; the report and
+  undo report gained their new counts). Reprocess was gated on a
+  `formats.reprocess` block the backend never serves, so it was absent; it
+  is now present whenever the import API is served, with its scope and
+  region-mode ids pinned to the contract enums, no lock-rule sentence and
+  no summary message (the served counts are what show). The archive input
+  no longer filters by a served extension list (none is served).
+- **Contract sync to OpenProcessor f582aa05; every route resolves for real.**
+  All `PENDING_BACKEND*` allow-lists and `it.todo` entries are gone, so every
+  scanned call site must resolve in the vendored OpenAPI. `findOperation`
+  no longer lets a literal path segment (for example `region`) match an
+  OpenAPI path parameter, which had hidden the removed `PUT /crops/{id}/region`
+  route; it now picks the candidate with the most literal matches.
+- **Multi-box regions on the real wire.** `region_boxes[]` with per-box
+  state, score, detector, verdict, lock, cluster, text and thumbnail;
+  item `region_count`/`region_rejected_count`/`region_max_score`/
+  `region_set_complete`/`region_revision`. Writes use `PUT /crops/{id}/regions`,
+  `PATCH /crops/{id}/regions/{box_id}`, `PUT /crops/batch_regions` and
+  `POST /regions/batch_box_state`, send `expected_region_revision` and adopt
+  the item a 409 `region_conflict` returns. The single-box keys and the
+  `PUT /crops/{id}/region` / `batch_region` callers, `setSlotBox`,
+  `BboxCanvas`, `bboxFrames`, `viewBox` and the item-level `region_text` are
+  removed; a tier-2 scalar-box slot is read-only. The gallery gained a "Box
+  state" filter and a `rows_truncated` chip. `MultiBoxCanvas` keys resolve
+  through the keymap (a rebound delete key was previously ignored).
+  `region_profile.limits` (`max_boxes_per_write`) is required on the served
+  profile and `RegionProfileSummary` moved to the split schema.
+- **Ingest batch**: removed the label-import and mismatch request/response
+  fields the backend no longer serves (`label_txt_path`, `label_source`,
+  `detect_mismatches`, `labels_imported`, `mismatches`, `missed_labels`,
+  `unmatched_detections`) and the UI that showed them.
+- **Projects P3 wire.** `ProjectSummary.paused` drives the `/projects` chip and
+  Pause/Resume buttons (no per-row `/pause` reads); `paused_by`/`reason`
+  show in the switcher tooltip; `keymap_clone_conflicts` is toasted after a
+  clone; global `project.paused`/`project.resumed` events update the store.
+  Model sharing reads the served `owned`/`sharing_revision`, foreign models
+  are `unloadable:false`, and VLM rows show their `active` state.
+  `ActiveConfigResponse.source`/`activated_at`/`applied` are required.
+
 - **Archive / Unarchive on `/projects` follow the served `archivable` /
   `unarchivable` flags** (vendored from OpenProcessor be20dc40) instead of
   being inferred from `writable` / `selectable`.
@@ -226,7 +230,31 @@ description}` choices; a failed job's `error` is a string; the report and
   documented entry for `GET .../keymap` 404ing against a
   pre-OpenProcessor-W2b deployment.
 
+- **Bind address is configurable.** The compose port is now
+  `${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}`. The
+  default serves this machine and the local network; set `127.0.0.1` to
+  limit it to this machine. Each GitHub release now attaches
+  `docker-compose.yml`, `.env.example` and a `SHA256SUMS` for them, taken
+  from the tagged commit, for OpenProcessor's one-line installer.
+- **Faster test runs.** `npm run test:e2e` now builds and serves the app
+  once, then runs the stubbed Playwright suite across parallel pytest-xdist
+  workers. That's about 40 s instead of about 160 s for 101 tests, and the
+  worker count is set with `E2E_WORKERS`. The pre-push unit-test hook no
+  longer caps vitest at 4 workers, which cut it from about 1 min 44 s to
+  about 31 s. `test_keymap_absent_when_404` now waits on the real key and
+  request instead of fixed sleeps; it flaked under parallel load.
+
 ### Fixed
+
+- **Test-on-crop source-image preview no longer spills over the result.**
+  The overlay sat in an auto-height parent, so its image grew to the card
+  width and covered the rows below; it now lives in a bounded column
+  (`h-72`, `max-w-xl`) and the profile panel keeps its two previews side
+  by side. A stubbed e2e with a real PNG asserts the image and box layer
+  stay inside the column.
+- **Image Reprocess from the region gallery and `/train` cohort previews
+  refreshes the grid** (the cards were rendered without `onreprocessed`),
+  and the region box editor now shows the lock glyph on locked boxes.
 
 - **Confirm dialogs close on Esc again after a busy Confirm.** While a
   dialog's Confirm button is busy it is disabled, which drops keyboard focus
@@ -261,24 +289,6 @@ description}` choices; a failed job's `error` is a string; the report and
     links (MLflow, Grafana, Prometheus, OpenSearch) that `resolve()`
     cannot handle (it only resolves in-app SvelteKit routes) — wrapped
     in `eslint-disable`/`eslint-enable` pairs with a reason instead.
-
-### Changed
-
-- **Bind address is configurable.** The compose port is now
-  `${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}`. The
-  default serves this machine and the local network; set `127.0.0.1` to
-  limit it to this machine. Each GitHub release now attaches
-  `docker-compose.yml`, `.env.example` and a `SHA256SUMS` for them, taken
-  from the tagged commit, for OpenProcessor's one-line installer.
-- **Faster test runs.** `npm run test:e2e` now builds and serves the app
-  once, then runs the stubbed Playwright suite across parallel pytest-xdist
-  workers. That's about 40 s instead of about 160 s for 101 tests, and the
-  worker count is set with `E2E_WORKERS`. The pre-push unit-test hook no
-  longer caps vitest at 4 workers, which cut it from about 1 min 44 s to
-  about 31 s. `test_keymap_absent_when_404` now waits on the real key and
-  request instead of fixed sleeps; it flaked under parallel load.
-
-### Fixed
 
 - **Stubbed e2e suite no longer flakes under pytest-xdist parallel
   load.** Every fixed `page.wait_for_timeout(...)` sleep across

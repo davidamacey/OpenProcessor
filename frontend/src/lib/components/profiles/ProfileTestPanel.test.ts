@@ -12,7 +12,48 @@ import {
   regionTestResponseFixture,
   packTestResponseFixture,
 } from '$lib/test/fixtures/configTest';
+import { EMPTY_METHODS, parseMethodsResponse } from '$lib/strategies';
+import { strategiesStore } from '$stores/strategies.svelte';
 import ProfileTestPanel from './ProfileTestPanel.svelte';
+
+const VLM_WIRE = {
+  strategies: [
+    {
+      id: 'local_vlm',
+      axis: 'vlm',
+      label: 'Local VLM',
+      status: 'stable',
+      endpoint_status_label: 'Ready',
+      per_run_ack_required: false,
+    },
+    {
+      id: 'cloud_vlm',
+      axis: 'vlm',
+      label: 'Cloud VLM',
+      status: 'experimental',
+      warning: 'Crops leave the deployment.',
+      per_run_ack_required: true,
+    },
+  ],
+};
+
+function pickVlm(target: HTMLElement, id: string) {
+  const select = target.querySelector<HTMLSelectElement>(
+    '[data-testid="vlm-run-select"]',
+  )!;
+  select.value = id;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+}
+
+function tickAck(target: HTMLElement) {
+  const box = target.querySelector<HTMLInputElement>(
+    '[data-testid="vlm-run-ack-checkbox"]',
+  )!;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -91,6 +132,8 @@ afterEach(() => {
   instance = undefined;
   target?.remove();
   vi.unstubAllGlobals();
+  strategiesStore.methods = EMPTY_METHODS;
+  strategiesStore.loaded = false;
 });
 
 describe('ProfileTestPanel', () => {
@@ -314,5 +357,60 @@ describe('ProfileTestPanel', () => {
     await run();
     expect(q('test-error')?.textContent).toContain('Another test is running.');
     expect(q('test-missing-ids')).toBeNull();
+  });
+
+  describe('VLM picker', () => {
+    function check(verify: boolean) {
+      const el = q('test-verify') as HTMLInputElement;
+      el.checked = verify;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      flushSync();
+    }
+
+    it('shows only while the verify pass is on, and only when /methods serves a vlm axis', () => {
+      serve(() => json(regionTestResponseFixture()));
+      strategiesStore.loaded = true;
+      render();
+      expect(q('test-vlm-picker')).toBeNull();
+      check(true);
+      expect(q('test-vlm-picker')?.querySelector('select')).toBeNull();
+      unmount(instance!);
+      target.remove();
+      strategiesStore.methods = parseMethodsResponse(VLM_WIRE);
+      render();
+      check(true);
+      expect(q('vlm-run-select')).not.toBeNull();
+      check(false);
+      expect(q('test-vlm-picker')).toBeNull();
+    });
+
+    it('sends the picked endpoint and the ticked acknowledgement with verify', async () => {
+      serve(() => json(regionTestResponseFixture()));
+      strategiesStore.methods = parseMethodsResponse(VLM_WIRE);
+      strategiesStore.loaded = true;
+      render();
+      check(true);
+      pickVlm(target, 'cloud_vlm');
+      expect(q('vlm-run-ack')?.textContent).toContain('Crops leave the deployment.');
+      tickAck(target);
+      await run();
+      expect(testBodies[0]).toMatchObject({
+        verify: true,
+        vlm_name: 'cloud_vlm',
+        vlm_revision: null,
+        acknowledge_external: true,
+      });
+    });
+
+    it('sends no vlm field when left on the active endpoint', async () => {
+      serve(() => json(regionTestResponseFixture()));
+      strategiesStore.methods = parseMethodsResponse(VLM_WIRE);
+      strategiesStore.loaded = true;
+      render();
+      check(true);
+      await run();
+      expect(testBodies[0]).toMatchObject({ verify: true });
+      expect(testBodies[0]).not.toHaveProperty('vlm_name');
+    });
   });
 });

@@ -421,3 +421,53 @@ def test_feature_absent_on_a_plain_404(stub, page, app_url):
     seen = stub.handled + stub.unhandled
     combine = [(m, p) for (m, p) in seen if "/projects/combine" in p]
     assert combine and all(m == "GET" and p.endswith("/projects/combine/__probe__") for (m, p) in combine), combine
+
+
+def test_conflict_review_link_leads_to_a_review_that_sends_the_filter(stub, page, app_url):
+    """Cross-feature walk (plan §6 I-2): the finished job's "Review flagged
+    conflicts" link opens `/review` with `combine_conflict=true` sent to the
+    served queue, and a combined item's Details show its origin rows and the
+    VLM provenance rows."""
+    from test_import_leftovers import review_item, review_requests, serve_review, tabs_with_imported
+
+    completed = job(status="completed", phase="done", done=20, finished_at="2026-10-01T12:05:00Z", report={})
+    serve_combine(stub, jobs=[completed])
+    merged = project(API_PREFIX, "merged")
+    stub.on(
+        "GET",
+        r"^/curation/projects$",
+        projects_response(API_PREFIX, [project(API_PREFIX, "default", is_default=True, deletable=False), merged]),
+    )
+    stub.on("GET", r"/projects/merged$", merged)
+    seen = serve_review(stub, tabs_with_imported())
+
+    def combined_items(request: Any, _m: Any):
+        seen.append({"path": [urlparse(request.url).path], **parse_qs(urlparse(request.url).query)})
+        item = review_item(
+            0,
+            origin_project="widgets-a",
+            origin_item_id="it_77",
+            combine_conflict=True,
+            vlm_endpoint="env@abc123",
+            vlm_model="example/vision-model",
+        )
+        return (200, {"items": [item], "total": 1, "page": 1, "page_size": 30})
+
+    stub.on("GET", r"/review/(?!tabs)", combined_items)
+    stub.on("GET", r"/crops/[^/]+/history$", {"crop_id": "crop-0", "entries": []})
+
+    page.goto(f"{app_url}/projects/combine/{JOB_ID}")
+    link = page.get_by_test_id("combine-review-conflicts")
+    expect(link).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    with page.expect_response(lambda r: "/review/all" in r.url, timeout=ACTION_TIMEOUT_MS):
+        link.click()
+    reqs = review_requests(seen, "all")
+    assert reqs and reqs[0]["combine_conflict"] == ["true"], (seen, page.url)
+    expect(page.get_by_test_id("filter-chip-combine-conflict")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+
+    page.get_by_role("button", name="Details").click()
+    expect(page.get_by_test_id("combine-origin-project")).to_contain_text("widgets-a", timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("combine-origin-conflict")).to_be_visible()
+    expect(page.get_by_test_id("combine-origin-item")).to_have_text("it_77")
+    expect(page.get_by_test_id("vlm-provenance-endpoint")).to_have_text("env@abc123")
+    expect(page.get_by_test_id("vlm-provenance-model")).to_have_text("example/vision-model")

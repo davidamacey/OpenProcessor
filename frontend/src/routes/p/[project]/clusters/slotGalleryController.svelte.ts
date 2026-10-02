@@ -638,12 +638,24 @@ export function createSlotGalleryController(slot: SlotSpec) {
     });
   }
 
+  /**
+   * `onreprocessed` for a card's image Reprocess: the served items are
+   * merged into the cards already loaded (later pages included), then the
+   * first page is re-fetched, since re-detection can add, move or drop the
+   * regions an image contributes.
+   */
+  async function adoptReprocessed(items: Crop[]): Promise<void> {
+    mergeUndoneItems(items);
+    await pager.loadPage(pager.firstPage);
+  }
+
   async function undoLastAction(): Promise<void> {
     const crops = await undoStore.undoLast();
     mergeUndoneItems(crops);
   }
 
   return {
+    adoptReprocessed,
     get slot() {
       return slot;
     },

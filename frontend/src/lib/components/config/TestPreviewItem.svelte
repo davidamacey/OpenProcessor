@@ -43,7 +43,9 @@
   });
 </script>
 
-<div data-testid="test-preview-item">
+<!-- A definite height: SourceImageOverlay sizes its image with percentages,
+     which collapse to the image's natural size under an auto-height parent. -->
+<div class="h-72 w-full max-w-xl" data-testid="test-preview-item">
   {#if error}
     <p class="text-xs text-red-300">Could not load the source image: {error}</p>
   {:else if context}
@@ -52,7 +54,7 @@
       {context}
       maxDim={800}
       {extraShapes}
-      class="max-h-80 w-full"
+      class="h-full w-full"
     />
   {:else}
     <p class="text-xs text-zinc-500">Loading the source image…</p>

@@ -21,10 +21,19 @@
     vlm: string | null;
     acknowledgeExternal: boolean;
     disabled?: boolean;
+    /** The no-pick option's label: "Project default" on a run, "Active
+     *  endpoint" on a test (both send nothing). */
+    defaultLabel?: string;
     onchange: (next: { vlm: string | null; acknowledgeExternal: boolean }) => void;
   }
 
-  let { vlm, acknowledgeExternal, disabled = false, onchange }: Props = $props();
+  let {
+    vlm,
+    acknowledgeExternal,
+    disabled = false,
+    defaultLabel = 'Project default',
+    onchange,
+  }: Props = $props();
 
   $effect(() => {
     void strategiesStore.init();
@@ -52,7 +61,7 @@
         data-testid="vlm-run-select"
         onchange={(e) => pick((e.currentTarget as HTMLSelectElement).value)}
       >
-        <option value="">Project default</option>
+        <option value="">{defaultLabel}</option>
         {#each entries as e (e.id)}
           <option value={e.id}
             >{e.label}{e.endpoint_status_label

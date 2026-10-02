@@ -471,6 +471,7 @@
             selected={gallery.sel.has(p.crop_id)}
             onclick={gallery.toggleSelect}
             onedit={gallery.openEditor}
+            onreprocessed={(items) => void gallery.adoptReprocessed(items)}
             onmarkfp={(c) =>
               gallery.selectedCluster != null
                 ? gallery.applyBoxState([c.crop_id], gallery.falsePositiveBoxState())

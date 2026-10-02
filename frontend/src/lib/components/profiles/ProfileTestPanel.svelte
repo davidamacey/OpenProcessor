@@ -12,6 +12,7 @@
   import TestPreviewItem from '$components/config/TestPreviewItem.svelte';
   import CropFrameShapes from '$components/configTest/CropFrameShapes.svelte';
   import TestRefs from '$components/configTest/TestRefs.svelte';
+  import TestVlmPicker from '$components/configTest/TestVlmPicker.svelte';
   import ProfileTestLegs from '$components/profiles/ProfileTestLegs.svelte';
   import { candidateShapes } from '$lib/configTest/overlayShapes';
   import { refText } from '$lib/configTest/refText';
@@ -104,6 +105,15 @@
       <input type="checkbox" bind:checked={t.verify} data-testid="test-verify" />
       Verify with the VLM (uses the active prompt pack)
     </label>
+    {#if t.verify}
+      <div class="sm:col-span-2">
+        <TestVlmPicker
+          selection={t.vlmSelection}
+          disabled={t.running}
+          onchange={(next) => (t.vlmSelection = next)}
+        />
+      </div>
+    {/if}
   </div>
   <div>
     <button
@@ -155,7 +165,7 @@
         <h3 class="mb-1 text-xs font-semibold text-zinc-300">
           {PREVIEW_HEADINGS[r.preview_basis]}
         </h3>
-        <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div class="grid gap-3 lg:grid-cols-[minmax(0,36rem)_auto] lg:justify-start">
           <TestPreviewItem preview={r.preview} extraShapes={sourceShapes} />
           {#if parentShapes.length > 0}
             <div>

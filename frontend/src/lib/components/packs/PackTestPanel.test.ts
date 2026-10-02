@@ -10,7 +10,48 @@ import { API_PREFIX } from '$lib/api';
 import { packTestResponseFixture } from '$lib/test/fixtures/configTest';
 import { schemaFixture } from '$lib/test/fixtures/promptPacks';
 import type { PackSchemaCall } from '$lib/types_packs';
+import { EMPTY_METHODS, parseMethodsResponse } from '$lib/strategies';
+import { strategiesStore } from '$stores/strategies.svelte';
 import PackTestPanel from './PackTestPanel.svelte';
+
+const VLM_WIRE = {
+  strategies: [
+    {
+      id: 'local_vlm',
+      axis: 'vlm',
+      label: 'Local VLM',
+      status: 'stable',
+      endpoint_status_label: 'Ready',
+      per_run_ack_required: false,
+    },
+    {
+      id: 'cloud_vlm',
+      axis: 'vlm',
+      label: 'Cloud VLM',
+      status: 'experimental',
+      warning: 'Crops leave the deployment.',
+      per_run_ack_required: true,
+    },
+  ],
+};
+
+function pickVlm(target: HTMLElement, id: string) {
+  const select = target.querySelector<HTMLSelectElement>(
+    '[data-testid="vlm-run-select"]',
+  )!;
+  select.value = id;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+}
+
+function tickAck(target: HTMLElement) {
+  const box = target.querySelector<HTMLInputElement>(
+    '[data-testid="vlm-run-ack-checkbox"]',
+  )!;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -27,6 +68,8 @@ afterEach(() => {
   instance = undefined;
   target?.remove();
   vi.unstubAllGlobals();
+  strategiesStore.methods = EMPTY_METHODS;
+  strategiesStore.loaded = false;
 });
 
 function render(calls: PackSchemaCall[], savedOnly = false) {
@@ -190,5 +233,75 @@ describe('PackTestPanel', () => {
         'Another test is running. Try again.',
       ),
     );
+  });
+
+  describe('VLM picker', () => {
+    async function runWith(setup: () => void) {
+      strategiesStore.methods = parseMethodsResponse(VLM_WIRE);
+      strategiesStore.loaded = true;
+      const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
+        String(url).endsWith('/prompt_packs/test')
+          ? json(packTestResponseFixture())
+          : json({ image: { image_id: 'img_1', width: 10, height: 10 }, items: [] }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      render(schemaFixture().calls);
+      const ids = q('test-crop-ids') as HTMLInputElement;
+      ids.value = 'c_123';
+      ids.dispatchEvent(new Event('input', { bubbles: true }));
+      setup();
+      flushSync();
+      (q('test-run') as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(q('test-result')).not.toBeNull());
+      const call = fetchMock.mock.calls.find(([u]) =>
+        String(u).endsWith('/prompt_packs/test'),
+      )!;
+      return JSON.parse(String(call[1]!.body)) as Record<string, unknown>;
+    }
+
+    it('is absent when /methods serves no vlm axis', () => {
+      render(schemaFixture().calls);
+      expect(q('test-vlm-picker')?.querySelector('select')).toBeNull();
+    });
+
+    it('offers "Active endpoint" first and sends no vlm field when left there', async () => {
+      const body = await runWith(() => {
+        const opts = [
+          ...target.querySelectorAll('[data-testid="vlm-run-select"] option'),
+        ];
+        expect(opts.map((o) => o.textContent?.trim())).toEqual([
+          'Active endpoint',
+          'Local VLM · Ready',
+          'Cloud VLM',
+        ]);
+      });
+      expect(body).not.toHaveProperty('vlm_name');
+      expect(body).not.toHaveProperty('acknowledge_external');
+    });
+
+    it('sends the picked endpoint by name with a null revision', async () => {
+      const body = await runWith(() => pickVlm(target, 'local_vlm'));
+      expect(body).toMatchObject({ vlm_name: 'local_vlm', vlm_revision: null });
+      expect(body).not.toHaveProperty('acknowledge_external');
+    });
+
+    it('an external endpoint shows its served warning and sends the acknowledgement once ticked', async () => {
+      const body = await runWith(() => {
+        pickVlm(target, 'cloud_vlm');
+        expect(q('vlm-run-ack')?.textContent).toContain('Crops leave the deployment.');
+        tickAck(target);
+      });
+      expect(body).toMatchObject({
+        vlm_name: 'cloud_vlm',
+        vlm_revision: null,
+        acknowledge_external: true,
+      });
+    });
+
+    it('does not send an acknowledgement that was not ticked', async () => {
+      const body = await runWith(() => pickVlm(target, 'cloud_vlm'));
+      expect(body).toMatchObject({ vlm_name: 'cloud_vlm' });
+      expect(body).not.toHaveProperty('acknowledge_external');
+    });
   });
 });

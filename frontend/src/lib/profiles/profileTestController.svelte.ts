@@ -86,7 +86,8 @@ export class ProfileTest {
       req.segmenter_text_prompt = this.segmenterPrompt;
     }
     if (this.verify) req.verify = true;
-    if (this.vlmSelection) Object.assign(req, this.vlmSelection);
+    // The VLM only answers the verify pass.
+    if (this.verify && this.vlmSelection) Object.assign(req, this.vlmSelection);
     return req;
   }
 
