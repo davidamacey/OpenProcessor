@@ -27,6 +27,7 @@ function setup(responses: ReturnType<typeof combineJob>[] | (() => Promise<never
   );
   const resumeCombine = vi.fn(async () => combineJob({ status: 'queued' }));
   const runCombineNextStep = vi.fn(async () => ({}));
+  const getProject = vi.fn(async () => ({ status: 'active' }));
   let emit: (e: ProjectEvent) => void = () => {};
   const close = vi.fn();
   const subscribe: CombineJobDeps['subscribe'] = (onEvent) => {
@@ -39,6 +40,7 @@ function setup(responses: ReturnType<typeof combineJob>[] | (() => Promise<never
     resumeCombine: resumeCombine as unknown as CombineJobDeps['resumeCombine'],
     runCombineNextStep:
       runCombineNextStep as unknown as CombineJobDeps['runCombineNextStep'],
+    getProject: getProject as unknown as CombineJobDeps['getProject'],
     projectOf: (slug) =>
       slug === 'merged' ? { prefix: '/curation/projects/merged' } : null,
     subscribe,
@@ -49,6 +51,7 @@ function setup(responses: ReturnType<typeof combineJob>[] | (() => Promise<never
     cancelCombine,
     resumeCombine,
     runCombineNextStep,
+    getProject,
     close,
     emit: (e: ProjectEvent) => emit(e),
   };
@@ -272,5 +275,93 @@ describe('actions', () => {
     expect(await job.runNextStep(step)).toBe(false);
     expect(job.lastStep).toBeNull();
     expect(job.actionError).toBe('rebuild already running');
+  });
+});
+
+describe('target readiness gate', () => {
+  const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+  const done = () => combineJob({ status: 'completed', phase: 'done' });
+
+  it('stays disabled while the target is building, enables on active, then stops reading', async () => {
+    const { job, getProject } = setup([done()]);
+    getProject
+      .mockResolvedValueOnce({ status: 'building' })
+      .mockResolvedValueOnce({ status: 'building' })
+      .mockResolvedValueOnce({ status: 'active' });
+    job.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getProject).toHaveBeenCalledWith('merged');
+    expect(job.targetStatus).toBe('building');
+    expect(job.canRunNextStep).toBe(false);
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS);
+    expect(job.canRunNextStep).toBe(false);
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS);
+    expect(job.targetStatus).toBe('active');
+    expect(job.canRunNextStep).toBe(true);
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS * 5);
+    expect(getProject).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not read the target while the job is not completed', async () => {
+    const { job, getProject } = setup([combineJob({ status: 'running' })]);
+    job.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getProject).not.toHaveBeenCalled();
+    expect(job.canRunNextStep).toBe(false);
+  });
+
+  it('a non-building, non-active status stops the poll and keeps steps disabled', async () => {
+    const { job, getProject } = setup([done()]);
+    getProject.mockResolvedValue({ status: 'failed' });
+    job.start();
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS * 3);
+    expect(getProject).toHaveBeenCalledTimes(1);
+    expect(job.targetStatus).toBe('failed');
+    expect(job.canRunNextStep).toBe(false);
+  });
+
+  it('stop() ends the target poll', async () => {
+    const { job, getProject } = setup([done()]);
+    getProject.mockResolvedValue({ status: 'building' });
+    job.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getProject).toHaveBeenCalledTimes(1);
+    job.stop();
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS * 5);
+    expect(getProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed target read is retried', async () => {
+    const { job, getProject } = setup([done()]);
+    getProject.mockRejectedValueOnce(new ApiError(500, '/u', { detail: 'x' }));
+    job.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(job.canRunNextStep).toBe(false);
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS);
+    expect(job.canRunNextStep).toBe(true);
+  });
+
+  it('a 409 project_building shows the served message and the retry still works', async () => {
+    const { job, runCombineNextStep, getProject } = setup([done()]);
+    await job.load();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(job.canRunNextStep).toBe(true);
+    runCombineNextStep.mockRejectedValueOnce(
+      new ApiError(409, '/u', {
+        detail: {
+          error: 'project_building',
+          message: "project 'merged' is still being created",
+        },
+      }),
+    );
+    getProject.mockResolvedValueOnce({ status: 'building' });
+    expect(await job.runNextStep(step)).toBe(false);
+    expect(job.actionError).toContain("project 'merged' is still being created");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(job.canRunNextStep).toBe(false);
+    await vi.advanceTimersByTimeAsync(COMBINE_POLL_MS);
+    expect(job.canRunNextStep).toBe(true);
+    expect(await job.runNextStep(step)).toBe(true);
+    expect(job.actionError).toBeNull();
   });
 });

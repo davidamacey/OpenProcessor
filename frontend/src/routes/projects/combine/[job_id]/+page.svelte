@@ -18,6 +18,7 @@
   import { createProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import type { CombineNextStep } from '$lib/types_combine';
   import type { ProjectSummary } from '$lib/types_projects';
+  import CombineNextSteps from '$components/combine/CombineNextSteps.svelte';
   import CombineStepResult from '$components/combine/CombineStepResult.svelte';
   import { projectsStore } from '$stores/projects.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -207,15 +208,12 @@
             href={resolve(projectHref('/review?tab=all&combine_conflict=true', target))}
             data-testid="combine-review-conflicts">Review flagged conflicts</a
           >
-          {#each served.next_steps ?? [] as step (step.action)}
-            <button
-              type="button"
-              class="btn"
-              title={step.reason}
-              data-testid="combine-next-step-{step.action}"
-              onclick={() => (pendingStep = step)}>{combineLabel(step.action)}</button
-            >
-          {/each}
+          <CombineNextSteps
+            steps={served.next_steps ?? []}
+            ready={job.canRunNextStep}
+            targetStatus={job.targetStatus}
+            onpick={(step) => (pendingStep = step)}
+          />
         {/if}
         {#if job.failed && targetProject}
           <button

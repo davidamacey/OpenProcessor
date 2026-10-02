@@ -268,6 +268,7 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
         ],
     )
     serve_combine(stub, jobs=[job(status="running"), completed])
+    stub.on("GET", r"/projects/merged$", (200, {**project(API_PREFIX, "merged"), "resources": {}}))
     ran: list[tuple[str, str]] = []
 
     def next_step(request: Any, _m: Any):
@@ -300,6 +301,37 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
     expect(page.get_by_test_id("combine-step-result-status")).to_have_text("No residuals")
     expect(result.locator('[data-result-key="n_residuals"]')).to_have_text("0")
     expect(page.get_by_text("Ran Recluster")).to_be_visible()
+
+
+def test_next_steps_wait_for_the_target_to_be_active(stub, page, app_url):
+    serve_projects(stub, merged=project(API_PREFIX, "merged", status="building"))
+    completed = job(
+        status="completed",
+        phase="done",
+        done=20,
+        next_steps=[{"action": "recluster", "method": "POST", "path": "/cluster/umap/rebuild", "reason": "r"}],
+    )
+    serve_combine(stub, jobs=[completed])
+    state = {"status": "building"}
+    stub.on(
+        "GET",
+        r"/projects/merged$",
+        lambda _r, _m: (200, {**project(API_PREFIX, "merged", status=state["status"]), "resources": {}}),
+    )
+    stub.on("POST", r"/projects/merged/cluster/umap/rebuild$", (200, {"status": "no_residuals"}))
+
+    page.goto(f"{app_url}/projects/combine/{JOB_ID}")
+    button = page.get_by_test_id("combine-next-step-recluster")
+    expect(page.get_by_test_id("combine-job-status")).to_have_text("Completed", timeout=ACTION_TIMEOUT_MS)
+    expect(button).to_be_disabled()
+    expect(page.get_by_test_id("combine-next-step-target-status")).to_have_text("Target project: Building")
+    state["status"] = "active"
+    expect(button).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("combine-next-step-target-status")).to_have_count(0)
+    button.click()
+    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/projects/merged/cluster/umap/rebuild")):
+        page.get_by_role("button", name="Run", exact=True).click()
+    expect(page.get_by_test_id("combine-step-result")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
 
 def test_preview_stale_re_previews(stub, page, app_url):
