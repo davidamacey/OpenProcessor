@@ -246,7 +246,7 @@ discovered-in-production surprises.
 
 None of this blocks the core loop of ingest or import, browse, cluster,
 review, label and export. It limits how turnkey the subsystem is for an
-arbitrary deployment, which is why it is labelled experimental for v0.1.0;
+arbitrary deployment, which is why it is labelled experimental for v0.4.0;
 see `docs/CURATION.md`.
 
 ## 7. Labeling-assist selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model

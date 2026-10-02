@@ -1,7 +1,7 @@
 # OpenProcessor: Vision and Goals
 
 This document is the canonical statement of what OpenProcessor is for, what
-the v0.1.0 release must deliver, and the standards the codebase is held to.
+the v0.4.0 release must deliver, and the standards the codebase is held to.
 It exists so that anyone — human or AI agent — working in this repository
 can orient quickly: `CLAUDE.md` and `README.md` both link here rather than
 restating it.
@@ -28,10 +28,10 @@ Every stage is designed to be reused across domains by *configuring* it
 (detection profiles, prompt packs, class registries) rather than by
 forking the code per domain.
 
-**Explicit owner scope decision:** the full v0.1.0 feature set below was
+**Explicit owner scope decision:** the full v0.4.0 feature set below was
 deliberately *not* trimmed to ship faster. Nothing here is a stretch goal.
 
-## What "done" means for v0.1.0
+## What "done" means for v0.4.0
 
 - **Multiple isolated projects.** Each project is its own dataset
   workspace — its own indexes, its own directories, its own class
@@ -104,7 +104,7 @@ release.
   touching data integrity, isolation, or security — an independent review
   before it lands, not batched into one release-day merge.
 
-## What's explicitly out of scope for v0.1.0, and why
+## What's explicitly out of scope for v0.4.0, and why
 
 These are real, tracked commitments, not abandoned ideas — they are
 sequenced deliberately rather than included now:
@@ -119,7 +119,7 @@ sequenced deliberately rather than included now:
   the legos" in a photo with zero prior lego training data). This needs
   its own design pass — data model, storage shape, and a full-image vs.
   crop-region trigger — before implementation, so it's deliberately queued
-  after the v0.1.0 release.
+  after the v0.4.0 release.
 - **Deep GPU / Triton inference optimization** (issue #40). Batching
   strategy, GPU utilization, and a zero-copy pipeline (decode once, keep
   data resident on the GPU across models) are real, planned work — but
