@@ -292,6 +292,8 @@ const GLOBAL_EVENT_TYPES = [
   'project.archived',
   'project.unarchived',
   'project.deleted',
+  'project.paused',
+  'project.resumed',
   'combine.progress',
 ];
 

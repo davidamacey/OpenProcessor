@@ -7,8 +7,12 @@
    * don't carry across projects). The switch itself is the `/p/[project]`
    * layout's job — this component only navigates. Nothing is persisted.
    *
-   * The "paused" chip is the ACTIVE project's served pipeline-pause flag
-   * (`projectPauseStore`, read by the `/p/[project]` layout).
+   * The "paused" chip is the ACTIVE project's served pause state: the
+   * `GET {prefix}/pause` answer (`projectPauseStore`, read by the
+   * `/p/[project]` layout and refreshed on a `project.paused`/`resumed`
+   * event — it includes a global GPU-training claim, with its served
+   * `paused_by` and `reason` in the tooltip), falling back to the served
+   * summary's own `paused` until that read lands.
    *
    * The "custom keys" badge is the ACTIVE project's served keymap
    * `is_default === false` (already loaded, so it costs nothing); other
@@ -28,10 +32,22 @@
   const current = $derived(projectsStore.current);
   const options = $derived(projectsStore.selectable);
   const customKeys = $derived(keymapStore.source === 'served' && !keymapStore.isDefault);
-  /** The active project's served pipeline-pause flag (`GET {prefix}/pause`). */
-  const paused = $derived(
-    current ? projectPauseStore.pausedFor(current.slug) === true : false,
+  const pauseState = $derived(
+    current ? projectPauseStore.stateFor(current.slug) : undefined,
   );
+  const paused = $derived(pauseState ? pauseState.paused : (current?.paused ?? false));
+  /** The served cause of the pause, verbatim: who holds it and the
+   *  server's own sentence for a claim-only pause. */
+  const pausedTitle = $derived.by(() => {
+    const base =
+      "This project's pipeline is paused: workers skip it until it's resumed on the Projects page";
+    if (!pauseState) return base;
+    const parts = [base];
+    if (pauseState.paused_by.length > 0)
+      parts.push(`Paused by: ${pauseState.paused_by.join(', ')}`);
+    if (pauseState.reason) parts.push(pauseState.reason);
+    return parts.join('. ');
+  });
 
   function choose(slug: string): void {
     open = false;
@@ -77,7 +93,7 @@
     {#if paused}
       <span
         class="shrink-0 rounded bg-amber-950/60 px-1 text-[10px] uppercase tracking-wide text-amber-300"
-        title="This project's pipeline is paused: workers skip it until it's resumed on the Projects page"
+        title={pausedTitle}
         data-testid="project-switcher-paused">paused</span
       >
     {/if}

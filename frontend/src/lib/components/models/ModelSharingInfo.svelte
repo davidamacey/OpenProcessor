@@ -5,9 +5,9 @@
    *
    * - another project's shared model: a project chip (the served project
    *   list's display name for that slug, else the slug) and "shared";
-   * - the active project's own promoted model: its served sharing state
-   *   and, when the served sharing revision is present, the owner-only
-   *   toggle (`onshare` opens the confirm dialog);
+   * - the active project's own promoted model (served `owned`): its served
+   *   sharing state and, when the served sharing revision is present, the
+   *   owner-only toggle (`onshare` opens the confirm dialog);
    * - the served `class_mapping`: "N classes map", the served unmapped
    *   names, and a lazily loaded name-by-name mapping. Class ids never
    *   cross projects, so none is rendered.
@@ -23,15 +23,14 @@
 
   interface Props {
     model: ModelInfo;
-    activeSlug: string | null;
     /** Display name for a served project slug, when the list carries it. */
     projectName: (slug: string) => string;
     sharing: ModelSharing;
     onshare: (m: ModelInfo) => void;
   }
-  let { model, activeSlug, projectName, sharing, onshare }: Props = $props();
+  let { model, projectName, sharing, onshare }: Props = $props();
 
-  const role = $derived(sharingRole(model, activeSlug));
+  const role = $derived(sharingRole(model));
   const mappingState = $derived(sharing.mapping(model.name));
 </script>
 
@@ -57,7 +56,7 @@
         <span class="text-zinc-400" data-testid="model-sharing-state"
           >{model.shared ? 'Shared with other projects' : 'Not shared'}</span
         >
-        {#if canToggleSharing(model, activeSlug)}
+        {#if canToggleSharing(model)}
           <button
             type="button"
             class="btn btn-sm"

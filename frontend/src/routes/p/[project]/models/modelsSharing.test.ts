@@ -39,6 +39,8 @@ const BASE = {
   optional: false,
   shared: false,
   project: null as string | null,
+  owned: false,
+  sharing_revision: null as number | null,
   class_mapping: null as unknown,
 };
 
@@ -95,6 +97,7 @@ beforeEach(() => {
       name: 'own_det',
       friendly_name: 'own_det (promoted)',
       project: ACTIVE.slug,
+      owned: true,
       shared: false,
       sharing_revision: 4,
       class_mapping: { mapped_count: 3, unmapped: [] },
@@ -104,15 +107,30 @@ beforeEach(() => {
       name: 'own_legacy',
       friendly_name: 'own_legacy (promoted)',
       project: ACTIVE.slug,
+      owned: true,
       shared: true,
+      sharing_revision: null,
       class_mapping: null,
+    },
+    {
+      // A legacy promote.json with no `project`: the server still says it
+      // owns it, so the toggle shows (it used to hide for a null project).
+      ...BASE,
+      name: 'own_unstamped',
+      friendly_name: 'own_unstamped (promoted)',
+      project: null,
+      owned: true,
+      shared: false,
+      sharing_revision: 1,
     },
     {
       ...BASE,
       name: 'beta__det',
       friendly_name: 'beta__det (shared by beta)',
       project: 'beta',
+      owned: false,
       shared: true,
+      unloadable: false,
       class_mapping: { mapped_count: 2, unmapped: ['van', 'bus'] },
     },
     { ...BASE, name: 'encoder', friendly_name: 'Encoder' },
@@ -206,6 +224,11 @@ describe('/models sharing', () => {
     );
     expect(mine.querySelector('[data-testid="model-unmapped"]')).toBeNull();
 
+    // Owned by the server's own verdict even with no served `project`.
+    expect(q('model-share-toggle-own_unstamped')!.textContent).toBe(
+      'Share with other projects',
+    );
+
     // Own model WITHOUT a served revision: state, but no toggle.
     expect(q('model-sharing-own_legacy')!.textContent).toContain(
       'Shared with other projects',
@@ -227,6 +250,17 @@ describe('/models sharing', () => {
 
     // No project, no class list: no sharing section at all.
     expect(q('model-sharing-encoder')).toBeNull();
+  });
+
+  it("another project's model offers no Unload: the server serves unloadable: false for it", async () => {
+    await render();
+    const unloadButtons = (testId: string) =>
+      [...q(testId)!.closest('li')!.querySelectorAll('button')].filter(
+        (b) => b.textContent?.trim() === 'Unload',
+      );
+    // The foreign model's card has no Unload; the owned one does.
+    expect(unloadButtons('model-sharing-beta__det')).toHaveLength(0);
+    expect(unloadButtons('model-sharing-own_det').length).toBeGreaterThan(0);
   });
 
   it('share is confirm-gated and sends the served revision, then reloads', async () => {

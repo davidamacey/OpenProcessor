@@ -3,10 +3,10 @@
    * Piece 11 (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
    * §A.6) — server-path ingest for images already reachable inside the
    * API container. `POST {API_PREFIX}/ingest/batch` predates OpenProcessor
-   * #36; what #36 (BA-2/BA-5) added is the served `source_roots` list
-   * this panel is gated on, the served `batch.max_items` cap, and the
-   * `label_txt_path` root guard so a client-typed path can't escape the
-   * configured roots any more than the image path itself could.
+   * #36; what #36 (BA-2) added is the served `source_roots` list this
+   * panel is gated on and the served `batch.max_items` cap. The request
+   * carries only an image path and a source tag: labeled data comes in
+   * through the dataset import (`/datasets`), not through this call.
    *
    * One synchronous `POST /ingest/batch` call per submit — not chunked
    * like the upload run controller, since a server-path batch has no
@@ -25,9 +25,6 @@
 
   let source = $state('batch');
   let pathsText = $state('');
-  let labelTxtPathsText = $state('');
-  let labelSource = $state('human');
-  let detectMismatches = $state(false);
   let submitting = $state(false);
   let result = $state<BatchIngestResponse | null>(null);
   let submitError = $state<string | null>(null);
@@ -41,7 +38,6 @@
   }
 
   const paths = $derived(splitLines(pathsText));
-  const labelPaths = $derived(splitLines(labelTxtPathsText));
   const overLimit = $derived(paths.length > config.batchMaxItems);
 
   const failedResults = $derived(
@@ -73,13 +69,7 @@
     errorKindFilter = null;
     try {
       result = await ingestBatch({
-        items: paths.map((path, i) => ({
-          path,
-          source,
-          label_txt_path: labelPaths[i] || null,
-        })),
-        label_source: labelSource,
-        detect_mismatches: detectMismatches,
+        items: paths.map((path) => ({ path, source })),
       });
       toastStore.success(
         `Batch ingest ${result.status}: ${result.summary.successful} ingested, ` +
@@ -112,18 +102,6 @@
       Source tag
       <input class="input input-sm block" bind:value={source} disabled={submitting} />
     </label>
-    <label class="text-xs text-zinc-400">
-      Label source
-      <input
-        class="input input-sm block"
-        bind:value={labelSource}
-        disabled={submitting}
-      />
-    </label>
-    <label class="flex items-center gap-1.5 text-xs text-zinc-400">
-      <input type="checkbox" bind:checked={detectMismatches} disabled={submitting} />
-      Detect label/detector mismatches
-    </label>
   </div>
 
   <label class="block text-xs text-zinc-400">
@@ -133,15 +111,6 @@
       bind:value={pathsText}
       disabled={submitting}></textarea>
   </label>
-  <label class="block text-xs text-zinc-400">
-    Companion YOLO .txt label paths (optional, one per line — aligned by line number with
-    the image paths above)
-    <textarea
-      class="input block h-16 w-full font-mono text-xs"
-      bind:value={labelTxtPathsText}
-      disabled={submitting}></textarea>
-  </label>
-
   {#if overLimit}
     <p class="text-xs text-red-300">
       {paths.length} paths exceeds this backend's per-request limit of {config.batchMaxItems}
@@ -173,9 +142,6 @@
       <span class="chip">duplicate {result.summary.duplicates}</span>
       <span class="chip">failed {result.summary.failed}</span>
       <span class="chip">crops indexed {result.summary.crops_indexed}</span>
-      {#if result.summary.labels_imported > 0}
-        <span class="chip">labels imported {result.summary.labels_imported}</span>
-      {/if}
       {#if (result.summary.secondary_detector_failures ?? 0) > 0}
         <span
           class="chip border-amber-700 text-amber-200"

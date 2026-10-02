@@ -39,10 +39,6 @@ describe('IngestRunPanel', () => {
         successful: 0,
         duplicates: 0,
         failed: 1,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 0,
       },
       results: [
@@ -58,7 +54,6 @@ describe('IngestRunPanel', () => {
           source_identifier: 'upload/a.jpg',
         },
       ],
-      disagreements: [],
     });
     instance = mount(IngestRunPanel, {
       target,
@@ -86,10 +81,6 @@ describe('IngestRunPanel', () => {
         successful: 0,
         duplicates: 0,
         failed: 1,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 0,
       },
       results: [
@@ -105,7 +96,6 @@ describe('IngestRunPanel', () => {
           source_identifier: 'upload/a.jpg',
         },
       ],
-      disagreements: [],
     });
     let capturedBlob: Blob | null = null;
     const originalCreateObjectURL = URL.createObjectURL;
@@ -177,10 +167,6 @@ describe('IngestRunPanel', () => {
         successful: 1,
         duplicates: 0,
         failed: 0,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 2,
         secondary_detector_failures: 1,
       },
@@ -198,7 +184,6 @@ describe('IngestRunPanel', () => {
           secondary_detector_error: 'DEADLINE_EXCEEDED after 30s',
         },
       ],
-      disagreements: [],
     });
     instance = mount(IngestRunPanel, {
       target,

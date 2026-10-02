@@ -88,6 +88,7 @@ def project(api_prefix: str, slug: str, **over: Any) -> dict[str, Any]:
         "archivable": over.get("status", "active") == "active",
         "unarchivable": over.get("status") == "archived",
         "revision": 1,
+        "paused": False,
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
         "counts": {"images": 0, "items": 0, "validated": 0},

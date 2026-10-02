@@ -35,7 +35,6 @@
   const sharingModel = $derived(
     sharingName ? (models.find((m) => m.name === sharingName) ?? null) : null,
   );
-  const activeSlug = $derived(projectsStore.current?.slug ?? null);
 
   function projectName(slug: string): string {
     return projectsStore.list.find((p) => p.slug === slug)?.display_name ?? slug;
@@ -203,6 +202,18 @@
             >
               {m.kind}
             </span>
+            {#if m.kind === 'vlm' && m.active}
+              <!-- Served: this registered endpoint is the project's active one. -->
+              <span
+                class="rounded border border-emerald-800 bg-emerald-950/50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-emerald-200"
+                data-testid="model-vlm-active"
+                title={m.active_in?.length
+                  ? `Active in ${m.active_in.join(', ')}`
+                  : 'Active'}
+              >
+                active
+              </span>
+            {/if}
           </div>
 
           <p class="mb-3 text-sm text-zinc-300">{m.role}</p>
@@ -274,7 +285,6 @@
 
           <ModelSharingInfo
             model={m}
-            {activeSlug}
             {projectName}
             {sharing}
             onshare={(target) => (sharingName = target.name)}

@@ -30,6 +30,7 @@ export function testProject(
     archivable: status === 'active',
     unarchivable: status === 'archived',
     revision: 3,
+    paused: false,
     created_at: '2026-09-26T12:00:00Z',
     updated_at: '2026-09-26T12:00:00Z',
     counts: { images: 10, items: 20, validated: 5 },

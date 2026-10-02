@@ -161,9 +161,15 @@ describe('ProjectSwitcher', () => {
       'fetch',
       vi.fn(async (url: string) => {
         seen.push(String(url));
-        return new Response(JSON.stringify({ project: 'default', paused: served }), {
-          headers: { 'content-type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({
+            project: 'default',
+            paused: served,
+            paused_by: served ? ['project'] : [],
+            reason: null,
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        );
       }),
     );
     render();
@@ -178,5 +184,42 @@ describe('ProjectSwitcher', () => {
     await projectPauseStore.load(DEFAULT);
     flushSync();
     expect(chip()).toBeNull();
+  });
+
+  it("the chip reads the served summary's paused before the pause read lands", () => {
+    projectsStore.list = projectsStore.list.map((p) =>
+      p.slug === 'default' ? { ...p, paused: true } : p,
+    );
+    projectsStore.select(projectsStore.list.find((p) => p.slug === 'default')!);
+    render();
+    expect(
+      target.querySelector('[data-testid="project-switcher-paused"]')?.textContent,
+    ).toBe('paused');
+  });
+
+  it('a global GPU-training pause shows the served paused_by and reason, verbatim', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              project: 'default',
+              paused: true,
+              paused_by: ['gpu_training'],
+              reason: 'GPU training claim active (cuda_visible_devices=0)',
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
+    render();
+    await projectPauseStore.load(DEFAULT);
+    flushSync();
+    const title = target
+      .querySelector('[data-testid="project-switcher-paused"]')!
+      .getAttribute('title')!;
+    expect(title).toContain('Paused by: gpu_training');
+    expect(title).toContain('GPU training claim active (cuda_visible_devices=0)');
   });
 });

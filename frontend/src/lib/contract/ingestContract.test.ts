@@ -57,10 +57,6 @@ describe('ingest contract', () => {
       'successful',
       'duplicates',
       'failed',
-      'mismatches',
-      'missed_labels',
-      'unmatched_detections',
-      'labels_imported',
       'crops_indexed',
       'secondary_detector_failures',
     ] satisfies (keyof BatchIngestSummary)[];
@@ -72,7 +68,6 @@ describe('ingest contract', () => {
       'status',
       'summary',
       'results',
-      'disagreements',
     ] satisfies (keyof BatchIngestResponse)[];
     // The generated schema name is mangled by the module path FastAPI
     // resolved the model from (two `BatchIngestResponse`-titled models

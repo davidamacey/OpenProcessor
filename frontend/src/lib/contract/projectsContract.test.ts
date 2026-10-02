@@ -31,6 +31,7 @@ const SUMMARY = {
   archivable: true,
   unarchivable: true,
   revision: true,
+  paused: true,
   created_at: true,
   updated_at: true,
   counts: true,
@@ -78,10 +79,19 @@ const CASES: [string, string[]][] = [
   ['ProjectLabels', keys({ status: true } satisfies Record<keyof T.ProjectLabels, true>)],
   [
     'ProjectLifecycleResponse',
-    keys({ project: true, warnings: true } satisfies Record<
+    keys({ project: true, warnings: true, keymap_clone_conflicts: true } satisfies Record<
       keyof T.ProjectLifecycleResponse,
       true
     >),
+  ],
+  [
+    'KeymapCloneConflictWire',
+    keys({
+      action_id: true,
+      combo: true,
+      class_id: true,
+      class_name: true,
+    } satisfies Record<keyof T.KeymapCloneConflict, true>),
   ],
   [
     'ProjectWarning',
@@ -118,7 +128,7 @@ const CASES: [string, string[]][] = [
   ],
   [
     'PipelinePauseState',
-    keys({ project: true, paused: true } satisfies Record<
+    keys({ project: true, paused: true, paused_by: true, reason: true } satisfies Record<
       keyof T.PipelinePauseState,
       true
     >),
