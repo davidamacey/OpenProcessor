@@ -43,6 +43,17 @@ EMBEDDED_BOX_STATES: tuple[str, ...] = (
 )
 
 
+def box_vector_source_includes(F: RegionFields | None = None) -> list[str]:
+    """The ``_source`` includes that read the per-box vectors back.
+
+    A search (or scroll) whose ``_source`` names the nested field itself
+    (``region_box_embeddings``) gets the number ``1`` instead of each vector on
+    an index with derived source (OpenSearch 3.6); the leaf paths return the
+    real values. Every search that needs the vectors uses this list."""
+    F = F or get_region_fields()
+    return [f'{F.box_embeddings}.{leaf}' for leaf in ('box_id', 'bbox_norm', 'embedding')]
+
+
 def embeddable(boxes: Iterable[RegionBox]) -> list[RegionBox]:
     """The boxes that carry a vector: accepted and false-positive ones."""
     return [b for b in boxes if b.state in EMBEDDED_BOX_STATES]
@@ -153,7 +164,10 @@ async def write_box_embeddings(
         if not pending:
             break
         docs = await mget_crops(
-            client, list(pending), index=index, source_includes=[F.boxes, F.box_embeddings]
+            client,
+            list(pending),
+            index=index,
+            source_includes=[F.boxes, *box_vector_source_includes(F)],
         )
         body: list[dict[str, Any]] = []
         order: list[str] = []
@@ -223,6 +237,7 @@ async def prune_box_embeddings(
 
 __all__ = [
     'EMBEDDED_BOX_STATES',
+    'box_vector_source_includes',
     'current_vectors',
     'embeddable',
     'entry_for',

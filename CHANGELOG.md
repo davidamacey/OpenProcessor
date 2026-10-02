@@ -29,6 +29,13 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
   anchor that does not resolve.
 
 ### Fixed
+- k-NN indexes are created with OpenSearch's derived source again (the setting that
+  turned it off is removed), cutting every vector from about 25 KB to 8.4 KB on disk
+  (3x). The per-box vector scan (box clustering, false-positive centroids) now reads
+  `region_box_embeddings.box_id/bbox_norm/embedding` instead of the bare nested path,
+  the only form that returned the number `1` instead of a vector. Tests fail if a kNN
+  index disables derived source or a search names the bare nested path. Existing
+  indexes created with the old setting need recreating (fresh stacks only).
 - `POST /models/{name}/unload` goes through the same unload guard as the delete routes
   (403 for the configured detector and the OCR models even with `force`, 409 for core
   models without `force`; it gained the `force` query parameter). It unloaded the OCR
