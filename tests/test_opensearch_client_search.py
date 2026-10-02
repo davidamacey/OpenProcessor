@@ -192,3 +192,55 @@ class TestIndexStats:
         stats = await client.get_all_index_stats()
 
         assert stats[IndexName.GLOBAL.value] == {'exists': False, 'doc_count': 0, 'size_bytes': 0}
+
+
+class TestOcrSearch:
+    """Found live: ``POST /ocr/search`` queried ``full_text``/``texts`` -- fields
+    the OCR index does not have -- and ``/search/ocr`` read keys the client
+    never returned, so OCR search matched nothing useful."""
+
+    @pytest.mark.asyncio
+    async def test_queries_the_text_fields_the_index_has(self, client: OpenSearchClient) -> None:
+        client.client.search = AsyncMock(
+            return_value={
+                'hits': {
+                    'hits': [
+                        {
+                            '_score': 1.5,
+                            '_source': {
+                                'image_id': 'img-1',
+                                'image_path': 'a.jpg',
+                                'text': 'CAUTION',
+                                'box_normalized': [0.1, 0.2, 0.3, 0.4],
+                            },
+                        }
+                    ]
+                },
+                'aggregations': {'images': {'value': 7}},
+            }
+        )
+
+        results, total = await client.search_ocr_page('caution', offset=20, size=10)
+
+        call = client.client.search.await_args
+        assert call is not None
+        body = call.kwargs['body']
+        assert body['from'] == 20
+        assert body['size'] == 10
+        assert 'match' in body['query']['bool']['should'][0]
+        assert 'text' in body['query']['bool']['should'][0]['match']
+        assert total == 7
+        assert results[0]['text'] == 'CAUTION'
+        assert results[0]['image_id'] == 'img-1'
+        assert results[0]['box_normalized'] == [0.1, 0.2, 0.3, 0.4]
+
+    @pytest.mark.asyncio
+    async def test_exact_matches_the_whole_line_only(self, client: OpenSearchClient) -> None:
+        client.client.search = AsyncMock(return_value={'hits': {'hits': []}})
+
+        await client.search_ocr_page('STOP', exact=True)
+
+        call = client.client.search.await_args
+        assert call is not None
+        body = call.kwargs['body']
+        assert body['query']['bool']['should'] == [{'term': {'text_raw': {'value': 'STOP'}}}]

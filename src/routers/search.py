@@ -567,9 +567,8 @@ async def search_by_ocr(
                 image_path=r.get('image_path'),
                 score=r.get('score', 0.0),
                 metadata=r.get('metadata'),
-                matched_text=r.get('matched_text', r.get('full_text', '')),
-                text_box=r.get('text_box'),
-                full_text=r.get('full_text'),
+                matched_text=r.get('text', ''),
+                text_box=r.get('box_normalized'),
             )
             for r in results
         ]

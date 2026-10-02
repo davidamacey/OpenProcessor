@@ -589,7 +589,7 @@ class OpenSearchClient:
                     'number_of_shards': 1,
                     'number_of_replicas': 0,
                     # OpenSearch rejects max_gram - min_gram > 1 unless raised.
-                    'max_ngram_diff': 2,
+                    'max_ngram_diff': 13,
                 },
                 'analysis': {
                     'analyzer': {
@@ -603,7 +603,11 @@ class OpenSearchClient:
                         'trigram_filter': {
                             'type': 'ngram',
                             'min_gram': 2,
-                            'max_gram': 4,
+                            # The query is analysed with `standard` (one term
+                            # per word), so a word only matches if it was
+                            # indexed whole: grams must reach the longest
+                            # word worth searching for.
+                            'max_gram': 15,
                         },
                     },
                 },
@@ -2144,85 +2148,74 @@ class OpenSearchClient:
     async def search_ocr(
         self, query_text: str, top_k: int = 10, min_score: float = 0.3
     ) -> list[dict[str, Any]]:
+        """Images whose OCR text matches ``query_text``, best first (one hit
+        per image). See :meth:`search_ocr_page`."""
+        results, _total = await self.search_ocr_page(query_text, size=top_k, min_score=min_score)
+        return results
+
+    async def search_ocr_page(
+        self,
+        query_text: str,
+        *,
+        offset: int = 0,
+        size: int = 10,
+        min_score: float = 0.0,
+        exact: bool = False,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """One page of OCR matches and the number of distinct images that
+        match. The best-matching text line represents each image.
+
+        ``exact`` matches the whole recognised line verbatim (``text_raw``);
+        otherwise a line matches on any word of the query (prefix/substring
+        up to the n-gram width) and a verbatim line ranks first.
         """
-        Search OCR index for images containing specific text.
-
-        Args:
-            query_text: Text to search for
-            top_k: Maximum number of results
-            min_score: Minimum relevance score
-
-        Returns:
-            List of matching documents with OCR text and metadata
-
-        Returns:
-            List of matching documents with OCR text and metadata
-        """
+        if exact:
+            should: list[dict[str, Any]] = [{'term': {'text_raw': {'value': query_text}}}]
+        else:
+            should = [
+                {'match': {'text': {'query': query_text, 'boost': 2.0}}},
+                {'term': {'text_raw': {'value': query_text, 'boost': 3.0}}},
+            ]
+        body: dict[str, Any] = {
+            'from': offset,
+            'size': size,
+            'query': {'bool': {'should': should, 'minimum_should_match': 1}},
+            'collapse': {'field': 'image_id'},
+            'aggs': {'images': {'cardinality': {'field': 'image_id'}}},
+            '_source': [
+                'image_id',
+                'image_path',
+                'text',
+                'text_raw',
+                'det_score',
+                'rec_score',
+                'box_normalized',
+                'metadata',
+            ],
+        }
+        if min_score > 0:
+            body['min_score'] = min_score
         try:
-            query = {
-                'size': top_k,
-                'min_score': min_score,
-                'query': {
-                    'bool': {
-                        'should': [
-                            {
-                                'match': {
-                                    'text': {
-                                        'query': query_text,
-                                        'boost': 2.0,
-                                    }
-                                }
-                            },
-                            {
-                                'term': {
-                                    'text_raw': {
-                                        'value': query_text,
-                                        'boost': 3.0,
-                                    }
-                                }
-                            },
-                        ],
-                        'minimum_should_match': 1,
-                    }
-                },
-                'collapse': {
-                    'field': 'image_id',
-                },
-                '_source': [
-                    'image_id',
-                    'image_path',
-                    'text',
-                    'text_raw',
-                    'det_score',
-                    'rec_score',
-                    'box_normalized',
-                    'metadata',
-                ],
-            }
-
-            response = await self.client.search(index=IndexName.OCR.value, body=query)
-
-            results = []
-            for hit in response.get('hits', {}).get('hits', []):
-                source = hit['_source']
-                results.append(
-                    {
-                        'image_id': source.get('image_id', ''),
-                        'image_path': source.get('image_path'),
-                        'score': hit.get('_score', 0.0),
-                        'text': source.get('text', ''),
-                        'box_normalized': source.get('box_normalized'),
-                        'det_score': source.get('det_score'),
-                        'rec_score': source.get('rec_score'),
-                        'metadata': source.get('metadata'),
-                    }
-                )
-
-            return results
-
+            response = await self.client.search(index=IndexName.OCR.value, body=body)
         except Exception as e:
             logger.error(f'OCR search failed: {e}')
-            return []
+            return [], 0
+
+        results = [
+            {
+                'image_id': hit['_source'].get('image_id', ''),
+                'image_path': hit['_source'].get('image_path'),
+                'score': hit.get('_score', 0.0),
+                'text': hit['_source'].get('text', ''),
+                'box_normalized': hit['_source'].get('box_normalized'),
+                'det_score': hit['_source'].get('det_score'),
+                'rec_score': hit['_source'].get('rec_score'),
+                'metadata': hit['_source'].get('metadata'),
+            }
+            for hit in response.get('hits', {}).get('hits', [])
+        ]
+        total = int(response.get('aggregations', {}).get('images', {}).get('value', 0))
+        return results, total
 
 
 # Convenience function for standalone usage
