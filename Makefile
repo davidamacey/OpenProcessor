@@ -284,6 +284,10 @@ contracts-check: ## Fail if any committed API contract under contracts/ is stale
 release-dry-run: ## Build + Trivy-scan every published image; push nothing
 	scripts/release/build_and_publish.sh --dry-run
 
+.PHONY: release-verify
+release-verify: ## Build the release assets to a temp dir and dry-run the installer on them (publishes nothing)
+	scripts/release/verify_release_assets.sh
+
 .PHONY: release
 release: ## Build + Trivy-scan + push every published image; writes images.lock
 	scripts/release/build_and_publish.sh --push
