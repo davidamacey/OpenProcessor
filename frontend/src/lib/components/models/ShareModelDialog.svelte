@@ -5,13 +5,22 @@
    * `model` is the page's CURRENT served entry, so after a
    * `revision_conflict` reload the next confirm carries the fresh served
    * revision. A refusal shows the served message verbatim; a 409 `in_use`
-   * lists the served projects and offers the served `force`.
+   * lists the served projects and a 503 `config_store_unavailable` (the
+   * server could not read every project) says so; both offer the served
+   * `force` behind a two-step confirm, the 503 also a plain retry.
    */
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
-  import { shareConfirmText, unshareConfirmText } from '$lib/modelSharing';
+  import {
+    forceUnshareText,
+    forceUnshareUnreadableText,
+    shareConfirmText,
+    unshareConfirmText,
+    usedByText,
+  } from '$lib/modelSharing';
   import type { ModelSharing } from '$lib/models/modelSharingController.svelte';
   import type { ModelInfo } from '$lib/types';
+  import type { ModelSharingUser } from '$lib/types_models';
   import { toastStore } from '$stores/toast.svelte';
 
   interface Props {
@@ -23,7 +32,9 @@
 
   let errorText = $state<string | null>(null);
   let conflict = $state(false);
-  let inUse = $state<string[] | null>(null);
+  let inUse = $state<ModelSharingUser[] | null>(null);
+  let unreadable = $state(false);
+  let forceArmed = $state(false);
   let openFor = $state<string | null>(null);
 
   $effect(() => {
@@ -33,6 +44,8 @@
       errorText = null;
       conflict = false;
       inUse = null;
+      unreadable = false;
+      forceArmed = false;
     }
   });
 
@@ -47,14 +60,16 @@
         (res.response.shared
           ? `${res.response.name} is shared with other projects.`
           : `${res.response.name} is no longer shared.`) +
-          (users.length ? ` Used by: ${users.map((u) => u.project).join(', ')}.` : ''),
+          (users.length ? ` Used by: ${usedByText(users)}.` : ''),
       );
       onclose();
       return;
     }
+    forceArmed = false;
     errorText = res.message;
     conflict = res.code === 'revision_conflict';
-    inUse = res.code === 'in_use' ? res.projects : null;
+    inUse = res.code === 'in_use' ? res.usedBy : null;
+    unreadable = res.code === 'config_store_unavailable' && model.shared;
   }
 </script>
 
@@ -92,19 +107,43 @@
               Reloaded the latest sharing state. Confirm again to apply it.
             </p>
           {/if}
-          {#if inUse}
-            {#if inUse.length}
+          {#if inUse || unreadable}
+            {#if inUse?.length}
               <p class="mt-1 text-zinc-400" data-testid="share-model-in-use">
-                Used by: {inUse.join(', ')}
+                Used by: {usedByText(inUse)}
               </p>
             {/if}
-            <button
-              type="button"
-              class="btn btn-sm mt-2 text-red-300"
-              data-testid="share-model-force"
-              disabled={busy}
-              onclick={() => void confirm(true)}>Stop sharing anyway</button
-            >
+            {#if forceArmed}
+              <p class="mt-2 text-amber-300" data-testid="share-model-force-warning">
+                {inUse
+                  ? forceUnshareText(inUse.map((u) => u.project))
+                  : forceUnshareUnreadableText()}
+              </p>
+              <button
+                type="button"
+                class="btn btn-sm mt-2 text-red-300"
+                data-testid="share-model-force-confirm"
+                disabled={busy}
+                onclick={() => void confirm(true)}>Confirm: unshare anyway</button
+              >
+            {:else}
+              <button
+                type="button"
+                class="btn btn-sm mt-2 text-red-300"
+                data-testid="share-model-force"
+                disabled={busy}
+                onclick={() => (forceArmed = true)}>Unshare anyway</button
+              >
+            {/if}
+            {#if unreadable}
+              <button
+                type="button"
+                class="btn btn-sm ml-2 mt-2"
+                data-testid="share-model-retry"
+                disabled={busy}
+                onclick={() => void confirm()}>Retry</button
+              >
+            {/if}
           {/if}
         </div>
       {/if}

@@ -5,6 +5,7 @@
     showsProtectedChip,
     unloadButtonState,
     unloadConfirmMessage,
+    unloadFailureMessage,
     unloadForceConfirmMessage,
   } from '$lib/modelUnload';
   import { toastStore } from '$stores/toast.svelte';
@@ -128,7 +129,7 @@
       );
       await refresh();
     } catch (e) {
-      toastStore.error(`Unload failed: ${(e as Error).message}`);
+      toastStore.error(unloadFailureMessage(e));
     } finally {
       unloadingName = null;
     }

@@ -386,7 +386,7 @@ const CASES: [string, string[]][] = [
     >),
   ],
   [
-    'ReprocessRequest',
+    'ReprocessRequest-Input',
     keys({
       targets: true,
       scopes: true,
@@ -469,7 +469,7 @@ describe('Reprocess vocabulary is pinned to the request enums', () => {
       enumOf('ReprocessOneRequest', 'scopes', true),
     );
     expect([...REPROCESS_SCOPES].sort()).toEqual(
-      enumOf('ReprocessRequest', 'scopes', true),
+      enumOf('ReprocessRequest-Input', 'scopes', true),
     );
     expect(REPROCESS_SCOPES.length).toBeGreaterThan(0);
   });
@@ -478,7 +478,9 @@ describe('Reprocess vocabulary is pinned to the request enums', () => {
     expect([...REGION_MODES].sort()).toEqual(
       enumOf('ReprocessOneRequest', 'region_mode'),
     );
-    expect([...REGION_MODES].sort()).toEqual(enumOf('ReprocessRequest', 'region_mode'));
+    expect([...REGION_MODES].sort()).toEqual(
+      enumOf('ReprocessRequest-Input', 'region_mode'),
+    );
     expect(REGION_MODES.length).toBeGreaterThan(0);
   });
 });
@@ -527,7 +529,7 @@ describe('Reprocess request bodies send only declared keys', () => {
       region_mode: 'redetect',
       dry_run: true,
     });
-    const allowed = declared('ReprocessRequest');
+    const allowed = declared('ReprocessRequest-Input');
     for (const k of Object.keys(calls()[0]![1])) expect(allowed).toContain(k);
   });
 

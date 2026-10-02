@@ -7,8 +7,10 @@ import type { ActivePanelCopy } from '$components/config/ConfigActivePanel.svelt
 export const PROFILE_ACTIVE_COPY: ActivePanelCopy = {
   title: 'Active region profile',
   noneText: 'off: region detection is off',
+  noneEnvText: 'None: no region profile configured (region detection off)',
   appliedColumn: 'Profile',
   appliedRef: 'profile',
+  appliedNoneText: 'none',
   rollbackTitle: 'Roll back the active region profile',
   rollbackBlurb:
     'Items still waiting are detected with the profile you roll back to. Items already processed keep their results. Workers switch at their next quiet point.',

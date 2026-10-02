@@ -17,7 +17,11 @@ import {
   setModelSharing,
 } from '$lib/api';
 import type { ModelInfo } from '$lib/types';
-import type { ModelClassMappingResponse, ModelSharingResponse } from '$lib/types_models';
+import type {
+  ModelClassMappingResponse,
+  ModelSharingResponse,
+  ModelSharingUser,
+} from '$lib/types_models';
 
 export type SharingResult =
   | { ok: true; response: ModelSharingResponse }
@@ -26,8 +30,8 @@ export type SharingResult =
       /** The served `detail.error`, or `null` for an unstructured error. */
       code: string | null;
       message: string;
-      /** The served `detail.projects` on a 409 `in_use`. */
-      projects: string[];
+      /** The served `detail.used_by` on a 409 `in_use`. */
+      usedBy: ModelSharingUser[];
     };
 
 export type MappingState =
@@ -57,7 +61,7 @@ export function createModelSharing(opts: { reload: () => Promise<void> }) {
           ok: false,
           code: null,
           message: 'The server did not send this model’s sharing revision.',
-          projects: [],
+          usedBy: [],
         };
       }
       pending = m.name;
@@ -76,7 +80,7 @@ export function createModelSharing(opts: { reload: () => Promise<void> }) {
           ok: false,
           code: detail?.error ?? null,
           message: projectErrorText(e),
-          projects: detail?.projects ?? [],
+          usedBy: detail?.used_by ?? [],
         };
       } finally {
         pending = null;

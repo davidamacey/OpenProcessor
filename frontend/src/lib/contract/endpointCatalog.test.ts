@@ -161,14 +161,11 @@ const MANUAL_OVERRIDES: Array<{
     scan: 'projectPrefix',
     marker: 'export function runCombineNextStep(',
     // step.method/step.path: a finished combine job's served `next_steps`
-    // entry, run against the target project's own prefix. The ONE step the
-    // backend serves today is `POST /clusters/train` (recluster), which is
-    // NOT a route in the vendored curation OpenAPI at f582aa05 (only the
-    // unscoped `/clusters/train/{index}` exists elsewhere), so the plan's
-    // literal override cannot pass this check. The anchor below is the real
-    // clustering entry point the app already uses; the frontend itself
-    // sends whatever path is served. Reported to the backend as a bug.
-    path: '/pipeline/auto_label/start',
+    // entry, run against the target project's own prefix. The step the
+    // backend serves is `POST /cluster/umap/rebuild` (recluster; OpenProcessor
+    // f14f4ddc, project-relative, checked against the OpenAPI backend-side).
+    // The frontend sends whatever path is served; this anchors the real route.
+    path: '/cluster/umap/rebuild',
     method: 'POST',
     queryParams: [],
   },

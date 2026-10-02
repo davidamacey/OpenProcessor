@@ -217,6 +217,7 @@ export function activeFixture(
         applied_config_revision: 17,
         profile: { name: 'widget_tag', revision: 3 },
         pack: { name: 'widget_tag', revision: 1 },
+        vlm: null,
         applied_at: '2026-09-26T12:05:02Z',
         lagging: false,
       },

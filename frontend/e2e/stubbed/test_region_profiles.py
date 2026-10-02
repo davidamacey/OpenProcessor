@@ -502,7 +502,10 @@ def test_rollback_and_turn_off_from_the_list(stub, page, app_url):
 
     def deactivate(request: Any, _m: Any):
         deactivations.append(request.post_data_json)
-        state["active"] = active(None, None, previous={"name": "env_tags", "revision": None})
+        state["active"] = {
+            **active(None, None, previous={"name": "env_tags", "revision": None}),
+            "source": "off",
+        }
         return (200, state["active"])
 
     stub.on("POST", r"/region_profiles/active/rollback$", rollback)

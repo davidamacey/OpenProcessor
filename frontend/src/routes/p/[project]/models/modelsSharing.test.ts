@@ -291,12 +291,13 @@ describe('/models sharing', () => {
     );
   });
 
-  it('unsharing warns that another project may be using the model', async () => {
+  it('unsharing says the server names any project using the model', async () => {
     own().shared = true;
     await render();
     click('model-share-toggle-own_det');
     const text = q('share-model-text')!.textContent!;
-    expect(text).toMatch(/another project may be using it/i);
+    expect(text).toMatch(/active detection profile/i);
+    expect(text).not.toMatch(/may be using it/i);
     expect(text).not.toMatch(/\bsafe/i);
   });
 
@@ -329,6 +330,8 @@ describe('/models sharing', () => {
       ),
     );
     expect(q('share-model-reloaded')).not.toBeNull();
+    // A stale revision is not an `in_use` refusal: no force is offered.
+    expect(q('share-model-force')).toBeNull();
     // The reload landed: the dialog now reads the fresh served entry.
     await vi.waitFor(() => expect(statusReads.length).toBeGreaterThanOrEqual(2));
     click('share-model-confirm');
@@ -373,6 +376,7 @@ describe('/models sharing', () => {
                 error: 'in_use',
                 message: "'own_det' is still used by 1 other project(s)",
                 projects: ['beta'],
+                used_by: [{ project: 'beta', profile: 'beta_tags' }],
               },
             },
             409,
@@ -381,15 +385,73 @@ describe('/models sharing', () => {
     click('model-share-toggle-own_det');
     click('share-model-confirm');
     await vi.waitFor(() =>
-      expect(q('share-model-in-use')?.textContent).toContain('beta'),
+      expect(q('share-model-in-use')?.textContent).toContain('beta (beta_tags)'),
     );
     click('share-model-force');
+    // Arming only reveals the warning; nothing is sent until the confirm.
+    expect(q('share-model-force-warning')?.textContent).toContain('beta');
+    expect(writes).toHaveLength(1);
+    click('share-model-force-confirm');
     await vi.waitFor(() => expect(q('share-model-dialog')).toBeNull());
     expect(writes.map((w) => w.url.split('/').slice(-1)[0])).toEqual([
       'sharing',
       'sharing?force=true',
     ]);
     expect(writes[1]!.body).toEqual({ shared: false, expected_revision: 4 });
+  });
+
+  it('an unreadable project (503 config_store_unavailable) offers a retry and a confirm-gated force', async () => {
+    own().shared = true;
+    const accept = putHandler;
+    putHandler = (url, body) =>
+      url.includes('force=true')
+        ? accept(url, body)
+        : json(
+            {
+              detail: {
+                error: 'config_store_unavailable',
+                message:
+                  'could not read every project to see who uses this model; retry, or pass force',
+              },
+            },
+            503,
+          );
+    await render();
+    click('model-share-toggle-own_det');
+    click('share-model-confirm');
+    // apiFetch retries a 5xx with backoff before surfacing it.
+    await vi.waitFor(
+      () => expect(q('share-model-error')?.textContent).toContain('retry, or pass force'),
+      { timeout: 5000 },
+    );
+    expect(q('share-model-retry')).not.toBeNull();
+    expect(q('share-model-in-use')).toBeNull();
+    const before = writes.length;
+    click('share-model-force');
+    expect(q('share-model-force-warning')?.textContent).toContain(
+      'could not check every project',
+    );
+    expect(writes).toHaveLength(before); // arming sends nothing
+    click('share-model-force-confirm');
+    await vi.waitFor(() => expect(q('share-model-dialog')).toBeNull());
+    expect(writes[writes.length - 1]!.url.endsWith('sharing?force=true')).toBe(true);
+    expect(writes[writes.length - 1]!.body).toEqual({
+      shared: false,
+      expected_revision: 4,
+    });
+  });
+
+  it('a 503 while sharing (not unsharing) offers no force', async () => {
+    putHandler = () =>
+      json({ detail: { error: 'config_store_unavailable', message: 'store down' } }, 503);
+    await render();
+    click('model-share-toggle-own_det');
+    click('share-model-confirm');
+    await vi.waitFor(
+      () => expect(q('share-model-error')?.textContent).toContain('store down'),
+      { timeout: 5000 },
+    );
+    expect(q('share-model-force')).toBeNull();
   });
 
   it('the class mapping view shows names and served match labels, never ids', async () => {

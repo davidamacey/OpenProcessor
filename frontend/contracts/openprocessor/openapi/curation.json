@@ -102,6 +102,248 @@
         "title": "AcceptedModel",
         "type": "object"
       },
+      "ActivateResponse": {
+        "description": "``POST /{prompt_packs,region_profiles}/{name}/activate``: the new\nactive state plus the activation gate's validation report.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation"
+        ],
+        "title": "ActivateResponse",
+        "type": "object"
+      },
+      "ActivationImpact": {
+        "description": "§4.6/§7.3.\n\n``suggested_reprocess`` is the explicit re-run for \"every unlocked,\nmachine-written item the active profile@revision did not produce\": a\n:class:`~src.services.curation.reprocess_models.ReprocessRequest` (a dry\nrun) a client POSTs to ``/reprocess`` verbatim; ``stale_items`` is how\nmany items it selects. ``None`` when there is no active profile or\nnothing is stale. Nothing here rewrites an item: the re-run is the\ncaller's explicit action.",
+        "properties": {
+          "by_profile": {
+            "items": {
+              "$ref": "#/components/schemas/ActivationImpactByProfile"
+            },
+            "title": "By Profile",
+            "type": "array"
+          },
+          "items_total": {
+            "title": "Items Total",
+            "type": "integer"
+          },
+          "pending_items": {
+            "title": "Pending Items",
+            "type": "integer"
+          },
+          "pending_not_matching": {
+            "title": "Pending Not Matching",
+            "type": "integer"
+          },
+          "stale_items": {
+            "default": 0,
+            "title": "Stale Items",
+            "type": "integer"
+          },
+          "suggested_reprocess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessRequest-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unseeded_items": {
+            "title": "Unseeded Items",
+            "type": "integer"
+          },
+          "validated_items": {
+            "title": "Validated Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items_total",
+          "by_profile",
+          "validated_items",
+          "unseeded_items",
+          "pending_items",
+          "pending_not_matching"
+        ],
+        "title": "ActivationImpact",
+        "type": "object"
+      },
+      "ActivationImpactByProfile": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "count"
+        ],
+        "title": "ActivationImpactByProfile",
+        "type": "object"
+      },
+      "ActiveConfigResponse": {
+        "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);\nalso the activation-mutation response shape used by W2's settings\nbridge and by ``store.activate``'s callers.\n\n``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies, and ``active.name`` names it), or ``'off'`` (explicitly\ndeactivated -- ``active.name`` is ``None``). Never guessed from\n``active`` alone: ``'env'`` is also nameless when no env default is\nconfigured, but only an explicit deactivation is ``'off'``.\n``activated_at`` is the activation doc's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive ``runtime:*`` doc for this axis (§4.5) -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision"
+        ],
+        "title": "ActiveConfigResponse",
+        "type": "object"
+      },
       "ActiveRef": {
         "description": "``{name, revision}`` for the currently-active config on one axis.\n``name=None`` means the axis is off/unconfigured.",
         "properties": {
@@ -182,8 +424,14 @@
             "$ref": "#/components/schemas/ActiveRef"
           },
           "vlm": {
-            "$ref": "#/components/schemas/ActiveRef",
-            "default": {}
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -191,7 +439,8 @@
           "host",
           "applied_config_revision",
           "profile",
-          "pack"
+          "pack",
+          "vlm"
         ],
         "title": "AppliedRuntime",
         "type": "object"
@@ -2926,6 +3175,7 @@
               "test_timeout",
               "vlm_transport_error",
               "no_box_to_verify",
+              "no_class_names",
               "too_many_crops",
               "too_many_crop_ids",
               "pack_invalid",
@@ -3119,6 +3369,20 @@
               }
             ],
             "title": "Unmapped"
+          },
+          "used_by": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModelSharingUser"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used By"
           },
           "valid_ids": {
             "anyOf": [
@@ -9466,6 +9730,86 @@
         "title": "ModelClassMappingResponse",
         "type": "object"
       },
+      "ModelInUseDetail": {
+        "properties": {
+          "error": {
+            "const": "in_use",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSharingUser"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "projects",
+          "used_by"
+        ],
+        "title": "ModelInUseDetail",
+        "type": "object"
+      },
+      "ModelRevisionConflictDetail": {
+        "properties": {
+          "current_revision": {
+            "title": "Current Revision",
+            "type": "integer"
+          },
+          "error": {
+            "const": "revision_conflict",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "current_revision"
+        ],
+        "title": "ModelRevisionConflictDetail",
+        "type": "object"
+      },
+      "ModelSharingConflictResponse": {
+        "description": "409: another project still uses the model, or a stale ``expected_revision``.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelInUseDetail"
+              },
+              {
+                "$ref": "#/components/schemas/ModelRevisionConflictDetail"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ModelSharingConflictResponse",
+        "type": "object"
+      },
       "ModelSharingRequest": {
         "properties": {
           "expected_revision": {
@@ -9520,7 +9864,40 @@
         "title": "ModelSharingResponse",
         "type": "object"
       },
+      "ModelSharingUnavailableDetail": {
+        "properties": {
+          "error": {
+            "const": "config_store_unavailable",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ModelSharingUnavailableDetail",
+        "type": "object"
+      },
+      "ModelSharingUnavailableResponse": {
+        "description": "503: another project's config could not be read; retry or pass ``force``.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ModelSharingUnavailableDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ModelSharingUnavailableResponse",
+        "type": "object"
+      },
       "ModelSharingUser": {
+        "description": "One other project whose active detection profile uses a shared model.",
         "properties": {
           "profile": {
             "anyOf": [
@@ -12338,6 +12715,85 @@
         "title": "RegionProfileActivateRequest",
         "type": "object"
       },
+      "RegionProfileActivateResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/ActivationImpact"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation",
+          "impact"
+        ],
+        "title": "RegionProfileActivateResponse",
+        "type": "object"
+      },
       "RegionProfileBody": {
         "additionalProperties": true,
         "description": "Every :class:`~src.config.DetectionProfile` field except ``name``,\nJSON-typed (tuples/frozensets round-trip as lists). Defaults mirror\nthe dataclass so a partial draft validates with informative issues\nrather than a pydantic 422.",
@@ -12642,6 +13098,24 @@
         "title": "RegionProfileBody",
         "type": "object"
       },
+      "RegionProfileChoice": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "RegionProfileChoice",
+        "type": "object"
+      },
       "RegionProfileCloneRequest": {
         "properties": {
           "description": {
@@ -12903,6 +13377,160 @@
         "title": "RegionProfileEffective",
         "type": "object"
       },
+      "RegionProfileFieldSchema": {
+        "properties": {
+          "advanced": {
+            "default": false,
+            "title": "Advanced",
+            "type": "boolean"
+          },
+          "applies_when": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detector",
+                  "segmenter",
+                  "reads_text",
+                  "text_hint"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applies When"
+          },
+          "choices_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detectors",
+                  "segmenters",
+                  "ocr_pipeline_models",
+                  "ocr_det_models",
+                  "ocr_rec_models",
+                  "registry_classes",
+                  "text_reader_modes"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices From"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "empty_choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionProfileChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enum": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RegionProfileChoice"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enum"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "help": {
+            "default": "",
+            "title": "Help",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "int",
+              "float",
+              "bool",
+              "enum",
+              "string_list",
+              "int_list",
+              "float_pair",
+              "rgb"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "group",
+          "type",
+          "default"
+        ],
+        "title": "RegionProfileFieldSchema",
+        "type": "object"
+      },
+      "RegionProfileGroup": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "RegionProfileGroup",
+        "type": "object"
+      },
       "RegionProfileLimits": {
         "description": "W8 write-size guards, never hardcoded by a client.",
         "properties": {
@@ -13061,6 +13689,30 @@
           "body"
         ],
         "title": "RegionProfileSaveRequest",
+        "type": "object"
+      },
+      "RegionProfileSchema": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/RegionProfileFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/RegionProfileGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields",
+          "groups"
+        ],
+        "title": "RegionProfileSchema",
         "type": "object"
       },
       "RegionProfileTemplateSummary": {
@@ -15395,7 +16047,49 @@
         "title": "ReprocessOneRequest",
         "type": "object"
       },
-      "ReprocessRequest": {
+      "ReprocessRequest-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "region_mode": {
+            "default": "redetect",
+            "enum": [
+              "redetect",
+              "reverify"
+            ],
+            "title": "Region Mode",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "detect",
+                "region",
+                "vlm",
+                "embed"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/ReprocessTargets"
+          }
+        },
+        "required": [
+          "targets",
+          "scopes"
+        ],
+        "title": "ReprocessRequest",
+        "type": "object"
+      },
+      "ReprocessRequest-Output": {
         "additionalProperties": false,
         "properties": {
           "dry_run": {
@@ -27210,7 +27904,7 @@
     },
     "/curation/projects/{project}/models/{model_name}/sharing": {
       "put": {
-        "description": "Opt a promoted model into (or out of) cross-project sharing. Only\nthe owning project may call this -- 404 for anyone else, matching\nevery other ownership check in this router.",
+        "description": "Opt a promoted model into (or out of) cross-project sharing. Only\nthe owning project may call this -- 404 for anyone else, matching\nevery other ownership check in this router. ``used_by`` lists the other\nprojects whose active detection profile uses the model; unsharing while\nthere are any is 409 ``in_use`` unless ``force``.",
         "operationId": "set_model_sharing_curation_projects__project__models__model_name__sharing_put",
         "parameters": [
           {
@@ -27265,6 +27959,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingConflictResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -27274,6 +27978,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingUnavailableResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Set Model Sharing",
@@ -28464,7 +29178,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Active Prompt Pack Route Curation Projects  Project  Prompt Packs Active Get"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -28516,7 +29230,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Rollback Active Prompt Pack Curation Projects  Project  Prompt Packs Active Rollback Post"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -28583,7 +29297,7 @@
     },
     "/curation/projects/{project}/prompt_packs/test": {
       "post": {
-        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify``; 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
+        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify`` /\n``no_class_names`` (classify with an empty registry and no ``class_names``); 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
         "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
         "parameters": [
           {
@@ -28901,7 +29615,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Activate Prompt Pack Route Curation Projects  Project  Prompt Packs  Name  Activate Post"
+                  "$ref": "#/components/schemas/ActivateResponse"
                 }
               }
             },
@@ -29217,7 +29931,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Active Region Profile Route Curation Projects  Project  Region Profiles Active Get"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -29259,7 +29973,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Active Region Profile Impact Curation Projects  Project  Region Profiles Active Impact Get"
+                  "$ref": "#/components/schemas/ActivationImpact"
                 }
               }
             },
@@ -29311,7 +30025,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Rollback Active Region Profile Curation Projects  Project  Region Profiles Active Rollback Post"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -29363,7 +30077,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Deactivate Region Profile Curation Projects  Project  Region Profiles Deactivate Post"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -29405,9 +30119,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Region Profile Schema Curation Projects  Project  Region Profiles Schema Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionProfileSchema"
                 }
               }
             },
@@ -29796,7 +30508,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Activate Region Profile Route Curation Projects  Project  Region Profiles  Name  Activate Post"
+                  "$ref": "#/components/schemas/RegionProfileActivateResponse"
                 }
               }
             },
@@ -31069,7 +31781,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReprocessRequest"
+                "$ref": "#/components/schemas/ReprocessRequest-Input"
               }
             }
           },

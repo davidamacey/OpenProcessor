@@ -15,7 +15,12 @@ import {
 } from '$lib/test/fixtures/regionProfiles';
 import { choiceList } from '$lib/profiles/profileFields';
 import type { ValidationIssue } from '$lib/types_config';
-import type { Choice, ProfileFieldValue, ProfileSchemaField } from '$lib/types_profiles';
+import type {
+  Choice,
+  ProfileFieldType,
+  ProfileFieldValue,
+  ProfileSchemaField,
+} from '$lib/types_profiles';
 import ProfileFieldEditor from './ProfileFieldEditor.svelte';
 
 let target: HTMLDivElement;
@@ -113,6 +118,20 @@ describe('ProfileFieldEditor', () => {
     expect(onchange).toHaveBeenLastCalledWith('ocr');
   });
 
+  it('enum with choices_from and no static enum: the served list is the options', () => {
+    const dynamic: ProfileSchemaField = {
+      ...field('text_reader'),
+      enum: null,
+      choices_from: 'text_reader_modes',
+    };
+    const choices = choiceList(vocabularyFixture(), 'text_reader_modes');
+    const onchange = render({ field: dynamic, value: 'none', choices });
+    const select = q<HTMLSelectElement>('select')!;
+    expect([...select.options].map((o) => o.value)).toEqual(choices!.map((c) => c.id));
+    fire(select, 'ocr', 'change');
+    expect(onchange).toHaveBeenLastCalledWith('ocr');
+  });
+
   it('bool: a checkbox', () => {
     const onchange = render({ field: field('text_hint_enabled'), value: false });
     const box = q<HTMLInputElement>('input[type="checkbox"]')!;
@@ -191,7 +210,7 @@ describe('ProfileFieldEditor', () => {
 
   it('an unknown served type edits as JSON (a non-JSON value is sent raw)', () => {
     const onchange = render({
-      field: { ...field('display_name'), type: 'box_map' },
+      field: { ...field('display_name'), type: 'box_map' as ProfileFieldType },
       value: { a: 1 },
     });
     const ta = q<HTMLTextAreaElement>('[data-testid="field-json"]')!;

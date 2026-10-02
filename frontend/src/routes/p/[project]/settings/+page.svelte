@@ -24,6 +24,7 @@
     axisCopy,
     axisOptions,
     effectiveDefaultId,
+    unofferedServedValue,
     isPinned,
     settableAxes,
     settingsOptionView,
@@ -267,6 +268,11 @@
                     >not set: each view uses its own default</option
                   >
                 {/if}
+                {#if unofferedServedValue(selected, options)}
+                  <option value={selected} disabled
+                    >{selected} (served, not an offered choice)</option
+                  >
+                {/if}
                 {#each options as opt (opt.id)}
                   {@const view = settingsOptionView(spec, opt)}
                   <option value={opt.id} disabled={view.disabled}>
@@ -352,11 +358,11 @@
     {#if advisoryVisible}
       <section class="surface flex flex-col gap-4 border-dashed p-5">
         <h2 class="text-base font-semibold text-zinc-300">
-          Set by the backend's startup config
+          Not settable on this backend
         </h2>
         <p class="text-xs text-zinc-400">
-          These axes are chosen by the backend's startup config, not by a shared default —
-          the settings API rejects one for them. Shown here so you can see what is active.
+          The backend does not accept a shared default for these axes (it marks them not
+          settable). Shown here so you can see what is active.
         </p>
         {#each advisoryAxes(strategiesStore.methods) as spec (spec.axis)}
           {@const options = axisOptions(strategiesStore.methods, spec)}

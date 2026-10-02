@@ -7,6 +7,7 @@
  */
 import { activatePromptPack, getActivePromptPack, rollbackPromptPack } from '$lib/api';
 import { ConfigActive } from '$lib/config/configActive.svelte';
+import type { ActivateResponse } from '$lib/types_config';
 
 export interface PackActiveDeps {
   getActivePromptPack: typeof getActivePromptPack;
@@ -14,7 +15,7 @@ export interface PackActiveDeps {
   rollbackPromptPack: typeof rollbackPromptPack;
 }
 
-export class PackActive extends ConfigActive {
+export class PackActive extends ConfigActive<ActivateResponse> {
   constructor(deps: Partial<PackActiveDeps> = {}) {
     super({
       getActive: () => (deps.getActivePromptPack ?? getActivePromptPack)(),

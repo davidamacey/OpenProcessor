@@ -57,12 +57,18 @@ describe('PackActivePanel', () => {
     expect(q('applied-lagging')).not.toBeNull();
   });
 
-  it('no active pack reads as the deployment default; no previous means no Rollback', async () => {
-    await render(
-      activeFixture({ active: { name: null, revision: null }, previous: null }),
-    );
-    expect(q('active-ref')?.textContent).toContain('the deployment default applies');
-    expect(button('Roll back')).toBeUndefined();
+  it('a nameless pack reads a neutral "none" for every source, with no claim about defaults', async () => {
+    for (const source of ['env', 'off', 'stored'] as const) {
+      await render(
+        activeFixture({ active: { name: null, revision: null }, previous: null, source }),
+      );
+      expect(q('active-ref')?.textContent).toBe('none');
+      expect(target.textContent).not.toContain('deployment default');
+      expect(button('Roll back')).toBeUndefined();
+      unmount(instance!);
+      instance = undefined;
+      target.remove();
+    }
   });
 
   it('Rollback opens a confirm naming both refs, and only the confirm runs it', async () => {

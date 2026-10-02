@@ -348,6 +348,7 @@ export function profileActiveFixture(
         applied_config_revision: 21,
         profile: { name: 'widget_tag', revision: 2 },
         pack: { name: 'widget_tag', revision: 1 },
+        vlm: null,
         applied_at: '2026-09-26T12:05:02Z',
         lagging: false,
       },
@@ -367,6 +368,7 @@ export function impactFixture(over: Partial<ActivationImpact> = {}): ActivationI
     unseeded_items: 850,
     pending_items: 38,
     pending_not_matching: 0,
+    stale_items: 0,
     suggested_reprocess: {
       targets: {
         filter: { profile_not: 'widget_tag', include_detected: true },

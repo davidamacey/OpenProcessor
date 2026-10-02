@@ -8,6 +8,8 @@
  * here is pinned to the vendored OpenAPI yet.
  */
 
+import type { ModelSharingUser } from '$lib/types_models';
+
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
 /** §7.1 `ValidationIssue`. `field` is a dotted path; null = whole body. */
@@ -29,8 +31,11 @@ export interface ValidationReport {
   force_allowed: boolean;
 }
 
-/** §7.1 `ActiveRef`. `name: null` = nothing active on the axis (no pack:
- *  the deployment default applies; no profile: region detection is off).
+/** §7.1 `ActiveRef`. `name: null` = nothing active on the axis (source
+ *  `off`: an explicit deactivation; source `env` with no name: no
+ *  activation and no env default, i.e. for a region profile none is
+ *  configured and the region stage does not run; a pack is never nameless
+ *  with source `env`).
  *  `revision: null` for a source without revisions (builtin, file, env,
  *  registered). */
 export interface ActiveRef {
@@ -42,14 +47,25 @@ export interface ActiveRef {
 export type ConfigSource =
   'builtin' | 'file' | 'stored' | 'template' | 'env' | 'registered' | (string & {});
 
+/** `ActiveConfigResponse.source`: where the active value came from. `off`
+ *  is an explicit deactivation, distinct from `env` (never activated; the
+ *  env/file default applies and `active.name` names it, nameless only when
+ *  no env default is configured). */
+export type ActiveSource = 'stored' | 'env' | 'off';
+
+/** `ActiveConfigResponse.axis`. */
+export type ConfigAxis = 'prompt_pack' | 'detection_profile' | 'vlm';
+
 /** One `applied[]` entry (§7.3 `AppliedRuntime`). */
 export interface AppliedRuntime {
   process: string;
   host: string;
   applied_config_revision: number;
-  profile?: ActiveRef | null;
-  pack?: ActiveRef | null;
-  vlm?: ActiveRef | null;
+  profile: ActiveRef;
+  pack: ActiveRef;
+  /** `null`: the worker never reported a VLM axis. `{name: null,
+   *  revision: null}`: it reported "no VLM". */
+  vlm: ActiveRef | null;
   applied_at: string | null;
   lagging: boolean;
 }
@@ -59,14 +75,20 @@ export interface AppliedRuntime {
  *  backend since W2 landed (`applied` is `[]` when no runtime has
  *  reported); the panels render them as served, never inferred. */
 export interface ActiveConfigResponse {
-  axis: string;
+  axis: ConfigAxis;
   active: ActiveRef;
-  source: ConfigSource;
+  source: ActiveSource;
   activated_at: string | null;
   previous: ActiveRef | null;
   config_revision: number;
   stale: boolean;
   applied: AppliedRuntime[];
+}
+
+/** `POST /prompt_packs/{name}/activate` → 200 (`ActivateResponse`): the new
+ *  active state plus the activation gate's validation report. */
+export interface ActivateResponse extends ActiveConfigResponse {
+  validation: ValidationReport;
 }
 
 /** The fields every config doc (`GET /{resource}/{name}`) carries. */
@@ -143,6 +165,8 @@ export interface ConfigErrorDetail {
   activate_via?: string | null;
   requested?: string | null;
   projects?: string[] | null;
+  /** 409 `in_use` on a model sharing write: each project with its profile. */
+  used_by?: ModelSharingUser[] | null;
   crop_ids?: string[] | null;
   limit?: number | null;
   jobs?: ConfigErrorJobRef[] | null;

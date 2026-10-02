@@ -4,7 +4,7 @@
  * derives a mapping, a count or an owner.
  */
 import type { ModelInfo } from '$lib/types';
-import type { ModelClassMappingSummary } from '$lib/types_models';
+import type { ModelClassMappingSummary, ModelSharingUser } from '$lib/types_models';
 
 /**
  * `owner`: the server says this project owns the model (`owned`), so the
@@ -40,9 +40,28 @@ export function shareConfirmText(name: string): string {
   return `Share ${name} with other projects? They will be able to see and use it; their classes are matched to its classes by name.`;
 }
 
-/** Unsharing is never described as safe: which other projects use a
- *  model isn't served yet (`used_by` stays empty until the backend's
- *  profile wave), so the copy says one may. */
+/** The server checks whether another project's active detection profile
+ *  uses the model and refuses (409 `in_use`, naming the projects) unless
+ *  forced, so the copy promises nothing about safety. */
 export function unshareConfirmText(name: string): string {
-  return `Stop sharing ${name}? Another project may be using it, and the server can't tell yet whether one is; that project would lose access to this model.`;
+  return `Stop sharing ${name}? The server refuses if another project's active detection profile uses it, and tells you which; you can then choose to unshare anyway.`;
+}
+
+/** The served `used_by` rows as `project (profile)`, comma-joined. */
+export function usedByText(users: ModelSharingUser[]): string {
+  return users
+    .map((u) => (u.profile ? `${u.project} (${u.profile})` : u.project))
+    .join(', ');
+}
+
+/** Shown once the operator has armed the forced retry. */
+export function forceUnshareText(projects: string[]): string {
+  return projects.length
+    ? `${projects.join(', ')} will lose access to this model. The override is logged server-side.`
+    : 'Projects using this model will lose access to it. The override is logged server-side.';
+}
+
+/** Warning before a forced unshare when the server could not read every project. */
+export function forceUnshareUnreadableText(): string {
+  return 'The server could not check every project, so a project that uses this model may lose access to it. The override is logged server-side.';
 }

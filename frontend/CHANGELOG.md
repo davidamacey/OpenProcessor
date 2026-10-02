@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Nameless active panel text follows the served source.** A region-profile
+  `active` with no name and source `env` now reads "None: no region profile
+  configured (region detection off)" (no activation and no env default);
+  "off: region detection is off" stays for an explicit `off`. The prompt-pack
+  panel no longer claims "the deployment default applies" for a nameless
+  pack and reads a neutral "none". The VLM panel is unchanged (nameless
+  means off).
+- **Backend finalization (OpenProcessor d00e8957).** Contracts re-vendored.
+  The unshare dialog's in_use refusal names each project with its served
+  profile (`used_by`), and the sharing 409/503 details are typed and pinned
+  (`ModelInUseDetail`, `ModelRevisionConflictDetail`,
+  `ModelSharingUnavailableDetail`); a stale-revision 409 offers no force.
+  `AppliedRuntime.vlm` is required-nullable: the active panels read a null
+  ref as "not reported" and a null VLM name as "no VLM". A region-profile
+  `enum` field whose choices come from `choices_from` (no static `enum`) now
+  renders a select instead of a read-only box.
+- **Combine next step result.** After a confirmed next step (e.g. Recluster)
+  the job view now shows the served response in a "Last next step" block
+  (action, status chip, scalar values, nested values collapsed) until the job
+  changes, and the toast reads "Ran <action>" instead of the stale
+  "Combining into ..." message. Refusals still show the served detail.
+
+### Changed
+
+- **Backend finalization (OpenProcessor f14f4ddc).** Contracts re-vendored.
+  The combine recluster next step is `POST /cluster/umap/rebuild`; the
+  reprocess request schema is `ReprocessRequest-Input`; `ActiveConfigResponse`
+  (axis/source enums), `RegionProfileSchema` (the editor's field types, no
+  open-ended escape hatch) and the `PUT /settings` body for the
+  activation-backed axes are pinned by `activeConfigContract.test.ts`.
+  Unsharing a model shows the served in-use projects and a confirm-gated
+  "Unshare anyway" (`?force=true`); the 503 `config_store_unavailable` message
+  renders verbatim with the same confirm-gated "Unshare anyway" (the backend
+  confirmed force is intended there) plus a plain Retry, and the old "another project may be using it" copy is
+  gone. `/settings` drops the "startup config" copy (`detection_profile` is
+  settable via activation) and shows a served `off`. A refused model unload
+  (403/409) shows the served detail verbatim; the active panels show each
+  worker's `applied_at`.
+- The prompt-pack activate response is typed `ActivateResponse` and the
+  profile one requires `validation` and `impact`; `ActivationImpact` gains
+  `stale_items`. `activeConfigContract.test.ts` pins both activate
+  operations' response schemas and key sets.
+
 ### Added
 
 - **VLM picker on the test-on-crop panels (W9 x W5).** The pack test panel

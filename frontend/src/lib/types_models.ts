@@ -33,9 +33,37 @@ export interface ModelSharingUser {
   profile?: string | null;
 }
 
-/** `PUT {scoped}/models/{name}/sharing` 200. `used_by` lists other
- *  projects using the model — always empty until the backend's profile
- *  wave (W4) can tell, so an empty list is not "nobody uses it". */
+/** `PUT {scoped}/models/{name}/sharing` 409 `in_use` detail
+ *  (`ModelInUseDetail`): another project's active detection profile uses
+ *  the model. `used_by` carries each project with its served profile. */
+export interface ModelInUseDetail {
+  error: 'in_use';
+  message: string;
+  projects: string[];
+  used_by: ModelSharingUser[];
+}
+
+/** 409 `revision_conflict` detail (`ModelRevisionConflictDetail`): a stale
+ *  `expected_revision`. */
+export interface ModelRevisionConflictDetail {
+  error: 'revision_conflict';
+  message: string;
+  current_revision: number;
+}
+
+/** `{detail}` of the 409 (`ModelSharingConflictResponse`). */
+export type ModelSharingConflictDetail = ModelInUseDetail | ModelRevisionConflictDetail;
+
+/** 503 detail (`ModelSharingUnavailableDetail`): another project's config
+ *  could not be read. */
+export interface ModelSharingUnavailableDetail {
+  error: 'config_store_unavailable';
+  message: string;
+}
+
+/** `PUT {scoped}/models/{name}/sharing` 200. `used_by` lists the other
+ *  projects whose ACTIVE detection profile uses the model (served since
+ *  OpenProcessor f14f4ddc; non-empty here only on a forced unshare). */
 export interface ModelSharingResponse {
   name: string;
   project: string;
