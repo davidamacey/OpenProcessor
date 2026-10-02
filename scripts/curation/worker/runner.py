@@ -44,7 +44,8 @@ logger = get_logger('curation_worker')
 
 
 from scripts.curation.worker.bulk_writer import _bulk_update
-from scripts.curation.worker.cascade import SegmenterAllHostsDown, _resegment_from_text_hint
+from scripts.curation.worker.cascade import _resegment_from_text_hint
+from scripts.curation.worker.client import SegmenterUnavailable
 from scripts.curation.worker.combined_resolve import resolve_combined_reply, should_classify
 from scripts.curation.worker.fairness import (
     FairnessScheduler,
@@ -1170,7 +1171,7 @@ async def run(args: argparse.Namespace) -> int:
                 _sam_t0 = time.monotonic()
                 try:
                     raw_sam_cands = await rt.segmenter.segment_multi(t.crop_jpeg)
-                except SegmenterAllHostsDown as exc:
+                except SegmenterUnavailable as exc:
                     # Infrastructure failure (every secondary-segmenter
                     # host UNHEALTHY). Do NOT mark the crop terminal —
                     # leave region_status unchanged so it stays in

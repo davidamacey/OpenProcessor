@@ -21,6 +21,7 @@ import httpx
 import pytest
 
 from scripts.curation.worker.cascade import SegmenterAllHostsDown, SegmenterClient
+from scripts.curation.worker.client import SegmenterUnavailable
 
 
 pytestmark = pytest.mark.integration
@@ -218,4 +219,32 @@ async def test_all_hosts_down_raises() -> None:
     with pytest.raises(SegmenterAllHostsDown):
         await sam.segment(_CROP_BYTES)
 
+    await sam.aclose()
+
+
+@pytest.mark.asyncio
+async def test_segment_multi_failed_request_is_not_an_empty_result() -> None:
+    """A request that failed is infrastructure noise: it must reach the worker
+    as an error (the crop stays pending), never as ``[]`` (a terminal miss),
+    even before the breaker has opened."""
+    sam = _build_client(
+        base_urls='http://sam3-fake-5:7000', handler=_fail_response, now_func=_FakeClock()
+    )
+    with pytest.raises(SegmenterUnavailable):
+        await sam.segment_multi(_CROP_BYTES)
+
+    def _bad_json(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b'not json')
+
+    sam = _build_client(
+        base_urls='http://sam3-fake-6:7000', handler=_bad_json, now_func=_FakeClock()
+    )
+    with pytest.raises(SegmenterUnavailable):
+        await sam.segment_multi(_CROP_BYTES)
+
+    def _empty(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={'candidates': []})
+
+    sam = _build_client(base_urls='http://sam3-fake-7:7000', handler=_empty, now_func=_FakeClock())
+    assert await sam.segment_multi(_CROP_BYTES) == []
     await sam.aclose()

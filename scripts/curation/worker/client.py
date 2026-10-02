@@ -12,7 +12,9 @@ Failure model:
 - Round-robin picks healthy hosts only. After 60s a host enters
   HALF_OPEN — the next caller probes it; success closes the circuit,
   failure re-opens for another 60s.
-- ``SegmenterAllHostsDown`` is raised when every host is UNHEALTHY so the
+- ``SegmenterRequestFailed`` (``segment_multi``) is raised for a request that
+  failed before the breaker opened, and ``SegmenterAllHostsDown`` when every
+  host is UNHEALTHY; both are :class:`SegmenterUnavailable`, so the
   caller can park the crop in ``pending_detection`` rather than
   promoting it to a terminal status on infrastructure noise.
 - ``httpx.ReadTimeout`` and ``httpx.ConnectTimeout`` retry up to 2
@@ -58,7 +60,17 @@ from src.services.detection.segmenter_http import DEFAULT_MAX_CANDIDATES
 logger = get_logger('curation_worker')
 
 
-class SegmenterAllHostsDown(RuntimeError):  # noqa: N818
+class SegmenterUnavailable(RuntimeError):  # noqa: N818
+    """The segmenter could not answer. Never a "found nothing" result: a crop
+    that hit this stays in ``pending_detection`` for a later pass."""
+
+
+class SegmenterRequestFailed(SegmenterUnavailable):
+    """One request failed (transport error, 5xx, undecodable body) before the
+    circuit breaker had opened."""
+
+
+class SegmenterAllHostsDown(SegmenterUnavailable):
     """Raised when every SAM3 host is marked UNHEALTHY by the circuit breaker.
 
     Distinct from "SAM3 returned no candidate" — this is an
@@ -417,9 +429,10 @@ class SegmenterClient:
         service already returns its full ``candidates`` list; this just
         stops discarding everything but the top one. Malformed entries
         (missing/short ``bbox_norm``) are dropped rather than failing the
-        whole response. Raises :class:`SegmenterAllHostsDown` if every
-        host is UNHEALTHY. Returns ``[]`` on a single-host failure, no
-        candidates, or when this client is disabled.
+        whole response. Raises :class:`SegmenterUnavailable` when the request
+        failed or every host is UNHEALTHY (the crop must stay pending, not
+        be finalized as a miss). Returns ``[]`` for no candidates or when
+        this client is disabled.
         """
         if not self.enabled:
             return []
@@ -436,7 +449,7 @@ class SegmenterClient:
         if resp is None:
             self._record_timings(url, t0, timing, outcome='error', t_end=None)
             await self._on_failure(url)
-            return []
+            raise SegmenterRequestFailed(f'segmenter request to {url} failed')
 
         try:
             body = resp.json()
@@ -445,7 +458,9 @@ class SegmenterClient:
             self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
             logger.warning('segmenter_bad_json')
             await self._on_failure(url)
-            return []
+            raise SegmenterRequestFailed(
+                f'segmenter at {url} returned an undecodable body'
+            ) from None
 
         await self._on_success(url)
 
@@ -470,4 +485,9 @@ class SegmenterClient:
         return out
 
 
-__all__ = ['SegmenterAllHostsDown', 'SegmenterClient']
+__all__ = [
+    'SegmenterAllHostsDown',
+    'SegmenterClient',
+    'SegmenterRequestFailed',
+    'SegmenterUnavailable',
+]
