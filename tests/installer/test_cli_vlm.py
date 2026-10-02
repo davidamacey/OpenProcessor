@@ -413,3 +413,15 @@ def test_an_interrupt_removes_the_pause_and_restores_env(shimmed: Shimmed, stack
     assert not (shimmed.state / 'pause_sentinel').exists()
     assert (stack / '.env').read_text() == before
     assert sorted(p.name for p in stack.glob('.env*')) == ['.env']
+
+
+def test_status_desired_line_is_the_requested_model_not_the_served_one(
+    shimmed: Shimmed, stack: Path
+) -> None:
+    (shimmed.state / 'vlm_local.json').write_text(
+        '{"desired":{"catalog_id":"qwen3-vl-4b"},'
+        '"served":{"catalog_id":"gemma-4-e4b","root":"google/gemma-4-E4B-it"}}'
+    )
+    out = cli(shimmed, stack, 'vlm', 'status').stdout
+    desired = next(ln for ln in out.splitlines() if ln.startswith('desired:'))
+    assert desired.split()[-1] == 'qwen3-vl-4b'

@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- Installer and CLI wording: an `images.lock` that still holds a development placeholder
+  digest says so (this checkout is not a release; install one or pass `--image-tag`), and
+  `openprocessor vlm status` prints the requested model on its `desired:` line (it printed
+  the served model's id).
 - `class_mapping_invalid` says what is wrong and how to fix it (`nope: class_mapping_invalid
   (this dataset has no class with that name; ...)`) instead of repeating the bare code.
 - VLM catalog: `qwen3-vl-4b` (measured about 14 GiB resident, multi-box verified live) is

@@ -179,7 +179,9 @@ _vlm_status() {
         return 0
     fi
     printf '%-22s %s\n' "serving (probed):" "$(_vlm_json_field "$body" root)"
-    printf '%-22s %s\n' "desired:" "$(_vlm_json_field "$body" catalog_id)"
+    local desired
+    desired="$(printf '%s' "$body" | sed -n 's/.*"desired":{"catalog_id":"\([^"]*\)".*/\1/p' | head -1)"
+    printf '%-22s %s\n' "desired:" "${desired:-none requested}"
     if [[ "$body" == *'"restart_required":true'* ]]; then
         log_warn "a different model is desired: run 'openprocessor vlm apply'"
     fi
