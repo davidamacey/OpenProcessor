@@ -116,15 +116,4 @@ async def vlm_status_rows() -> list[dict[str, Any]]:
     return rows
 
 
-def external_service_names() -> set[str]:
-    """Every registered endpoint's name AND model id: none of them is a
-    Triton model, so ``DELETE /models/{name}`` must never reach Triton."""
-    names: set[str] = set()
-    for endpoint in available_vlm_endpoints():
-        names.add(endpoint.name)
-        names.add(endpoint.body.model)
-        names.add(endpoint.model_id)
-    return names
-
-
-__all__ = ['external_service_names', 'vlm_status_rows']
+__all__ = ['vlm_status_rows']

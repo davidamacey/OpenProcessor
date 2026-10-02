@@ -21,7 +21,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from src.schemas.models import (
@@ -44,6 +44,7 @@ from src.services.model_export import (
     save_uploaded_file,
     validate_pytorch_model,
 )
+from src.services.model_unload_guard import UnloadRefusedError, check_unload
 from src.services.triton_control import TritonControlService
 
 
@@ -453,7 +454,9 @@ async def unload_model(model_name: str):
 
 
 @router.delete('/{model_name}', response_model=ModelDeleteResponse)
-async def delete_model(model_name: str):
+async def delete_model(
+    model_name: str, force: bool = Query(False, description='Also delete a core pipeline model')
+):
     """
     Delete a model from the repository and unload from Triton.
 
@@ -463,11 +466,24 @@ async def delete_model(model_name: str):
     - TRT End2End model directory (models/{name}_trt_end2end/)
     - the ONNX End2End intermediate the export leaves (models/{name}_end2end/)
 
-    Also unloads the model from Triton if currently loaded.
+    Also unloads the model from Triton if currently loaded. Every Triton model
+    removed goes through the curation unload route's guard first (403 for the
+    configured detector / OCR, 409 for core models without ``force``), and
+    nothing is deleted when any is refused.
     """
     triton = TritonControlService()
     deleted_files = []
     unloaded = False
+    model_dirs = [
+        TRITON_MODELS_DIR / f'{model_name}{suffix}'
+        for suffix in ('_trt', '_trt_end2end', '_end2end')
+        if (TRITON_MODELS_DIR / f'{model_name}{suffix}').exists()
+    ]
+    try:
+        for model_dir in model_dirs:
+            check_unload(model_dir.name, force=force)
+    except UnloadRefusedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     # Delete PyTorch model
     pt_file = PYTORCH_MODELS_DIR / f'{model_name}.pt'
@@ -476,25 +492,22 @@ async def delete_model(model_name: str):
         deleted_files.append(f'pytorch_models/{model_name}.pt')
         logger.info(f'Deleted PyTorch model: {pt_file}')
 
-    # Delete Triton model directories
-    for suffix in ['_trt', '_trt_end2end', '_end2end']:
-        model_dir = TRITON_MODELS_DIR / f'{model_name}{suffix}'
-        if model_dir.exists():
-            # Unload from Triton first
-            success, _ = await triton.unload_model(f'{model_name}{suffix}')
-            if success:
-                unloaded = True
+    for model_dir in model_dirs:
+        # Unload from Triton first
+        success, _ = await triton.unload_model(model_dir.name)
+        if success:
+            unloaded = True
 
-            # Collect files for response
-            deleted_files.extend(
-                str(f.relative_to(TRITON_MODELS_DIR.parent))
-                for f in model_dir.rglob('*')
-                if f.is_file()
-            )
+        # Collect files for response
+        deleted_files.extend(
+            str(f.relative_to(TRITON_MODELS_DIR.parent))
+            for f in model_dir.rglob('*')
+            if f.is_file()
+        )
 
-            # Delete directory
-            shutil.rmtree(model_dir)
-            logger.info(f'Deleted model directory: {model_dir}')
+        # Delete directory
+        shutil.rmtree(model_dir)
+        logger.info(f'Deleted model directory: {model_dir}')
 
     if not deleted_files:
         raise HTTPException(status_code=404, detail=f'Model {model_name} not found')

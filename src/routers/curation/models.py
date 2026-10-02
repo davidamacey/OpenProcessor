@@ -12,7 +12,6 @@ guard for free.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import re
 from typing import Annotated, Any
@@ -21,8 +20,6 @@ import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
-from src.config.settings import TritonModelConfig
 from src.routers.curation._common import logger, router
 from src.routers.curation._models_class_mapping import (
     bound_registry,
@@ -30,11 +27,14 @@ from src.routers.curation._models_class_mapping import (
     listing_fields,
 )
 from src.routers.curation._models_segmenter import build_segmenter_entry
-from src.routers.curation._models_vlm import (
-    external_service_names as external_vlm_names,
-    vlm_status_rows,
-)
+from src.routers.curation._models_vlm import vlm_status_rows
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.model_unload_guard import (
+    UnloadRefusedError,
+    check_unload,
+    core_pipeline_models,
+    is_region_protected_model,
+)
 from src.services.training.promoted_models import (
     _core_models,
     discover_promoted_models,
@@ -47,95 +47,6 @@ from src.services.training.triton_promote import (
     resolve_triton_http_url,
     unload_triton_model,
 )
-
-
-# =============================================================================
-# Unload guard classification
-# =============================================================================
-#
-# Defined here (ahead of `models_status`) so the `/models/status` payload
-# can carry the same `is_region_detector` / `requires_force_to_unload`
-# flags the `DELETE /models/{name}` endpoint enforces below — one source
-# of truth, so the UI never has to re-derive (and possibly drift from)
-# the guard.
-
-# Pipeline models the active configuration depends on for ingest and
-# region detection -- the primary item proposer, the (optional) secondary
-# classifier, the region detector, and OCR det/rec -- never unloadable
-# through the unload endpoint, not even with force=true. "Never touch the
-# configured pipeline's models" is the standing constraint; which models
-# that means is driven by the active ingest/detection profiles, not a
-# hardcoded domain-specific prefix -- the code never names the deployed
-# detector ids; a name is protected only via the active profiles'
-# configured model fields (or the fixed paddleocr_ OCR prefix).
-_REGION_PROTECTED_PREFIXES = ('paddleocr_',)
-
-
-def _region_protected_models() -> frozenset[str]:
-    primary = ingest_primary_profile()
-    secondary = ingest_secondary_profile()
-    region = get_active_region_profile()
-    region_models = (
-        (region.detector_model, region.ocr_det_model, region.ocr_rec_model)
-        if region is not None
-        else ()
-    )
-    names = {
-        name
-        for name in (
-            primary.detector_model,
-            secondary.detector_model if secondary is not None else None,
-            *region_models,
-            TritonModelConfig.OCR_DET_MODEL,
-            TritonModelConfig.OCR_REC_MODEL,
-        )
-        if name
-    }
-    return frozenset(names)
-
-
-def _is_region_protected_model(model_name: str) -> bool:
-    return model_name in _region_protected_models() or model_name.startswith(
-        _REGION_PROTECTED_PREFIXES
-    )
-
-
-def _core_pipeline_models() -> frozenset[str]:
-    """Non-region-detector models currently serving live production traffic.
-
-    Unloading any of these breaks real ingest/search/labeling right now, so
-    they require ``force=true`` (same as the region detector) rather
-    than being hard-blocked — a deliberate re-promote is a legitimate (if
-    rare) operation an operator should still be able to force through the
-    unload endpoint.
-    """
-    return frozenset(
-        {
-            TritonModelConfig.CLIP_IMAGE_MODEL,
-            TritonModelConfig.FACE_DETECT_MODEL,
-            TritonModelConfig.ARCFACE_MODEL,
-        }
-    )
-
-
-def _external_service_model_names() -> frozenset[str]:
-    """Names of external-service roster entries (segmenter, VLM).
-
-    Neither is a Triton model — they're their own HTTP services (see
-    ``build_segmenter_entry`` / the VLM block in ``models_status``, both
-    of which carry ``'unloadable': False``). Shared here so
-    ``DELETE /models/{name}`` rejects them with the same source of truth
-    before ever calling Triton, instead of surfacing a confusing 404 from
-    a repository lookup that was never going to find them.
-    """
-    names: set[str] = set()
-    region = get_active_region_profile()
-    if region is not None and region.segmenter_name:
-        names.add(region.segmenter_name)
-    with contextlib.suppress(Exception):
-        # Best-effort; an unresolvable registry just skips these entries.
-        names |= external_vlm_names()
-    return frozenset(names)
 
 
 _TRITON_METRIC_KEYS: dict[str, str] = {
@@ -267,8 +178,8 @@ async def models_status(
             # Unload guard flags — same source of truth the
             # DELETE /models/{name} endpoint enforces (see
             # _is_region_protected_model / _core_pipeline_models above).
-            'is_region_protected': _is_region_protected_model(name),
-            'requires_force_to_unload': name in _core_pipeline_models(),
+            'is_region_protected': is_region_protected_model(name),
+            'requires_force_to_unload': name in core_pipeline_models(),
             'job_id': job_id,
             'promoted_at': promoted_at,
             # True only for the active region profile's detector when a
@@ -416,36 +327,10 @@ async def unload_model(
             detail=f'{model_name!r} is not a model owned by this project',
         )
 
-    if model_name in _external_service_model_names():
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f'{model_name!r} is an external-service model (segmenter or VLM), '
-                'not a Triton model. It has no Triton repository entry to unload; '
-                'manage it out of band.'
-            ),
-        )
-
-    if _is_region_protected_model(model_name):
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f'{model_name!r} is a region-detector pipeline model (detector or OCR) '
-                'and can never be unloaded through this endpoint, even with '
-                'force=true. Manage it out of band.'
-            ),
-        )
-
-    is_core = model_name in _core_pipeline_models()
-    if is_core and not force:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f'{model_name!r} is a core pipeline model currently serving live '
-                'traffic. Pass force=true to unload it anyway — this WILL break '
-                'live inference for this model until a replacement is loaded.'
-            ),
-        )
+    try:
+        is_core = check_unload(model_name, force=force)
+    except UnloadRefusedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     try:
         result: UnloadResult = await unload_triton_model(model_name)

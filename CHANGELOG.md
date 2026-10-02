@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- **Public `DELETE /models/{name}` has the same guard and `force` as the project-scoped
+  unload route.** It deleted the primary detector's files without a question. Both routes
+  now call one `check_unload` (`src/services/model_unload_guard.py`): the configured
+  detector and OCR models are 403 even with `force`, other core pipeline models are 409
+  unless `?force=true`, and nothing is deleted when any model of the family is refused.
 - `GET /region_profiles/schema` is no longer a placeholder (#39): one typed row per
   profile field (`int`, `float`, `bool`, `string_list`, `int_list`, `float_pair`, `rgb`),
   its group, range, default, choice source, `applies_when` and `advanced` flag, with a
