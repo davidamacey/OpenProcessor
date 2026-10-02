@@ -23,9 +23,10 @@
   const label = $derived(gallery.slot.label);
 </script>
 
-<!-- Region gallery. Regions live as a region_bbox_norm sub-bbox on
-     each item crop (not as their own cluster docs), so this view
-     surfaces them directly with detector provenance + OCR text chips. -->
+<!-- Region gallery. Regions live as a `region_boxes` list on each item
+     crop (not as their own cluster docs); each row is one box, so this
+     view surfaces them directly with detector provenance + OCR text
+     chips. -->
 <div class="flex min-h-0 flex-col gap-3">
   <!-- Sticky header: the filter strip + bulk-action toolbar stay pinned
        to the top of the scroll area, so the verify / false-positive /
@@ -75,6 +76,23 @@
           {/each}
         </select>
       </label>
+      {#if regionStatusesStore.boxStates.length > 0}
+        <label class="flex items-center gap-1.5">
+          <span class="text-zinc-400">Box state</span>
+          <!-- Served `box_states` vocabulary; applies to the same box as
+               every other filter here. -->
+          <select
+            bind:value={gallery.boxStateFilter}
+            class="select-sm"
+            data-testid="box-state-filter"
+          >
+            <option value="">any</option>
+            {#each regionStatusesStore.boxStates as b (b.value)}
+              <option value={b.value}>{b.label}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-400">Min score</span>
         <input
@@ -259,6 +277,19 @@
       >
         {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
         listed
+        {#if gallery.totalRows != null && gallery.totalRows !== gallery.pager.total}
+          <!-- total_rows counts boxes, not items, on a box-selecting
+               request — shown alongside, never replacing, the item total
+               (total stays items so page math holds). -->
+          ({gallery.totalRows.toLocaleString()} boxes)
+        {/if}
+        {#if gallery.rowsTruncated}
+          <span
+            class="text-amber-300"
+            title="An item on this page matched more boxes than the index lists per item; the total still counts them."
+            data-testid="rows-truncated">· some boxes not listed</span
+          >
+        {/if}
       </span>
     </div>
 
@@ -269,13 +300,25 @@
         class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
       >
         <span class="font-medium text-blue-200">{gallery.sel.size} selected</span>
+        {#if gallery.selectedCluster != null}
+          <!-- W8: triage from a cluster is per-box (batch_box_state), never
+               the item-level batch_status, which would flip every sibling
+               box on a multi-box item (docs/design/
+               w8-multibox-frontend-plan-2026-09-26.md, §7.7). -->
+          <span class="text-[11px] text-zinc-500">(per-box)</span>
+        {/if}
         <span class="grow"></span>
         <button
           type="button"
           disabled={gallery.busy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyStatus([...gallery.sel.ids], gallery.falsePositiveState())}
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState(
+                  [...gallery.sel.ids],
+                  gallery.falsePositiveBoxState(),
+                )
+              : gallery.applyStatus([...gallery.sel.ids], gallery.falsePositiveState())}
         >
           ✗ Mark false positive
         </button>
@@ -283,7 +326,10 @@
           type="button"
           disabled={gallery.busy}
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-          onclick={() => gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
+          onclick={() =>
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState([...gallery.sel.ids], gallery.rejectBoxState())
+              : gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
         >
           No {label.singular}
         </button>
@@ -292,7 +338,9 @@
           disabled={gallery.busy}
           class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyStatus([...gallery.sel.ids], gallery.confirmState())}
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState([...gallery.sel.ids], gallery.confirmBoxState())
+              : gallery.applyStatus([...gallery.sel.ids], gallery.confirmState())}
         >
           ✓ Verify
         </button>
@@ -349,7 +397,15 @@
               {:else}
                 <span class="font-semibold text-zinc-200">#{c.id}</span>
               {/if}
-              <span class="text-zinc-400">{c.size.toLocaleString()}</span>
+              <span
+                class="text-zinc-400"
+                title={c.box_count != null && c.box_count !== c.size
+                  ? `${c.size} items, ${c.box_count} boxes (W8 multi-box)`
+                  : undefined}
+              >
+                {c.size.toLocaleString()}{#if c.box_count != null && c.box_count !== c.size}
+                  &nbsp;/&nbsp;{c.box_count.toLocaleString()} boxes{/if}
+              </span>
               {#if c.n_subclusters > 0}
                 <span
                   class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
@@ -416,7 +472,9 @@
             onclick={gallery.toggleSelect}
             onedit={gallery.openEditor}
             onmarkfp={(c) =>
-              gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
+              gallery.selectedCluster != null
+                ? gallery.applyBoxState([c.crop_id], gallery.falsePositiveBoxState())
+                : gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
           />
         {/each}
       </div>

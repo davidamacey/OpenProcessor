@@ -19,8 +19,9 @@ import { parseMethodsResponse, type MethodsResponse } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
 import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
-import type { XYXY, SlotKey, SlotData, SlotSpec, SlotFrame } from './annotations/types';
+import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
+import type { RegionBoxInput } from './annotations/multiBox';
 import {
   isNoRegionProfileDetail,
   notifyRegionProfileUnavailable,
@@ -1244,47 +1245,40 @@ export function cancelVizProjection(
  */
 const REGION_BASE = '/regions';
 
+/** One row of a region browse route (`RegionRow`): the full item plus the
+ *  box the row is about. Every per-box value (geometry, score, detector,
+ *  text, cluster) is an element of `region_boxes`, read through
+ *  `slots[slotKey].subBoxes`; the row's own box is the one whose id equals
+ *  `region_box_id`. */
 export interface RegionBrowseItem {
   crop_id: string;
   id: string;
   image_path: string;
   bbox_norm: number[];
-  region_bbox_norm: number[] | null;
-  region_score: number | null;
   region_status: string | null;
   region_verified: boolean | null;
   region_validated: boolean | null;
-  region_detector: string | null;
-  region_detector_version: string | null;
   region_detector_chain: string[] | null;
-  region_bbox_frame: string | null;
   region_detected_at: string | null;
   region_verifier: string | null;
   region_verifier_version: string | null;
   region_verified_at: string | null;
   region_rejection_reason: string | null;
   region_visible: boolean | null;
-  region_text: string | null;
-  region_text_source: string | null;
-  region_text_confidence: number | null;
   class_id: number | null;
   class_name: string | null;
   cluster_id: number | null;
   /** Parent-crop rank by size in its image (1 = largest). */
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
-  /** Region clustering assignment (independent of the item cluster_id). */
-  region_cluster_id?: number | null;
-  region_cluster_subid?: string | null;
-  region_cluster_distance?: number | null;
   updated_at: string;
   thumbnail_url?: string;
-  region_thumbnail_url?: string;
   selection_reason?: string;
   /** Per-slot capability data — see `Crop.slots` in types.ts. Added by
-   *  `getRegions` via `mapCropSlots`; absent on any row that predates this
-   *  mapping in a stale cache. */
+   *  `getRegions` via `mapCropSlots`. */
   slots?: Record<SlotKey, SlotData>;
+  /** The box this row is about; null for an item-level row. */
+  region_box_id?: string | null;
 }
 
 export interface RegionsPage {
@@ -1294,6 +1288,15 @@ export interface RegionsPage {
   items: RegionBrowseItem[];
   mode?: string;
   selection_reason?: string;
+  /** `RegionRowPage.total_rows` — counts ROWS (boxes, when the request
+   *  selects boxes), vs. `total` which counts ITEMS (the unit pages
+   *  paginate). Shown beside the item count when they differ — see
+   *  `SlotGallery.svelte`'s count chip. */
+  total_rows?: number;
+  /** True when an item on this page matched more boxes than the index
+   *  reports per item, so some of its rows are missing (`total_rows`
+   *  still counts them). */
+  rows_truncated?: boolean;
 }
 
 export interface RegionsQuery {
@@ -1319,6 +1322,9 @@ export interface RegionsQuery {
    *  deployment's vocabulary) — the backend 400s on an unknown value.
    *  Independent of `verified`, which is a boolean, not a status. */
   status?: string;
+  /** Per-box state filter (`GET {API_PREFIX}/regions/statuses` `box_states`
+   *  serves the vocabulary): every box filter applies to the same box. */
+  box_state?: string;
 }
 
 /** `browsePath` is the slot's declared browse collection
@@ -2691,6 +2697,159 @@ export async function undoCropRegionBatch(
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* W8 multi-box region writes (lockstep with the backend's W8; see     */
+/* docs/design/w8-multibox-frontend-plan-2026-09-26.md). Element shapes */
+/* are RegionBoxInput from annotations/multiBox.ts.                     */
+/* ------------------------------------------------------------------ */
+
+/** `PUT /crops/{crop_id}/regions` (W8.8) — replaces the box list on one
+ *  crop. `regionStatus` optionally applies a whole-set status to the
+ *  built list in the same write (Enter-after-edit: `'detected'`). */
+export async function putRegionBoxes(
+  cropId: string,
+  boxes: RegionBoxInput[],
+  opts: { regionStatus?: string; expectedRegionRevision?: number } = {},
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const body: Record<string, unknown> = {
+    boxes,
+    frame: 'parent',
+    region_label_source: 'human',
+  };
+  if (opts.regionStatus != null) body.region_status = opts.regionStatus;
+  if (opts.expectedRegionRevision != null) {
+    body.expected_region_revision = opts.expectedRegionRevision;
+  }
+  const raw = await apiFetch<{ item: RawCrop }>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/regions`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+  return mapRawCrop(raw.item);
+}
+
+/** `PUT /crops/batch_regions` (W8.8) — replaces every listed crop's box
+ *  list with the SAME new boxes (every element must be `box_id: null`;
+ *  typically `boxes: []`, "none visible"). */
+export async function putBatchRegions(
+  cropIds: string[],
+  boxes: Array<{ bbox_norm: [number, number, number, number]; state?: string }>,
+  opts: { regionStatus?: string } = {},
+  signal?: AbortSignal,
+): Promise<void> {
+  assertNonEmptyBatch('batch region replace', cropIds);
+  const body: Record<string, unknown> = { crop_ids: cropIds, boxes };
+  if (opts.regionStatus != null) body.region_status = opts.regionStatus;
+  await apiFetch(
+    `${scoped()}/crops/batch_regions`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `PATCH /crops/{crop_id}/regions/{box_id}` (W8.8) — per-box state/text
+ *  flip. Used by the selected-box accept/reject keymap actions. */
+export async function patchRegionBox(
+  cropId: string,
+  boxId: string,
+  patch: { state?: string; text?: string | null; expectedRegionRevision?: number },
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const body: Record<string, unknown> = {};
+  if (patch.state != null) body.state = patch.state;
+  if (patch.text !== undefined) body.text = patch.text;
+  if (patch.expectedRegionRevision != null) {
+    body.expected_region_revision = patch.expectedRegionRevision;
+  }
+  const raw = await apiFetch<{ item: RawCrop }>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/regions/${encodeURIComponent(boxId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    signal,
+  );
+  return mapRawCrop(raw.item);
+}
+
+/** A stale `expected_region_revision` is `409 region_conflict` on the
+ *  per-item box writes: the body carries the current revision, the
+ *  current box ids and the current `item`, which the caller adopts
+ *  instead of re-deriving anything. */
+export interface RegionConflictDetail {
+  currentRegionRevision: number;
+  currentBoxIds: string[];
+  item: Crop;
+}
+
+export function regionConflictDetail(e: unknown): RegionConflictDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'region_conflict' || !d.item || typeof d.item !== 'object') return null;
+  return {
+    currentRegionRevision:
+      typeof d.current_region_revision === 'number' ? d.current_region_revision : 0,
+    currentBoxIds: Array.isArray(d.current_box_ids)
+      ? d.current_box_ids.filter((x): x is string => typeof x === 'string')
+      : [],
+    item: mapRawCrop(d.item as RawCrop),
+  };
+}
+
+export interface RegionBatchConflict {
+  crop_id: string;
+  error: string;
+  message: string;
+  current_source: string | null;
+  current_region_revision: number;
+  current_box_ids: string[];
+  item: RawCrop;
+}
+
+export interface RegionBatchBoxStateResult {
+  updated: number;
+  invalid: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
+  conflicts: RegionBatchConflict[];
+  items: Crop[];
+}
+
+/** `POST /regions/batch_box_state` (W8.8) — one state on many boxes
+ *  across items (region-gallery triage / a region cluster = a set of
+ *  boxes). Never flips a whole item's other boxes — use `batchRegionStatus`
+ *  for that. */
+export async function postBatchBoxState(
+  targets: Array<{ cropId: string; boxId: string }>,
+  state: string,
+  signal?: AbortSignal,
+): Promise<RegionBatchBoxStateResult> {
+  if (targets.length === 0)
+    throw new Error('postBatchBoxState requires at least one target');
+  type Raw = {
+    updated: number;
+    invalid?: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
+    conflicts?: RegionBatchConflict[];
+    items?: RawCrop[];
+  };
+  const raw = await apiFetch<Raw>(
+    `${scoped()}/regions/batch_box_state`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        targets: targets.map((t) => ({ crop_id: t.cropId, box_id: t.boxId })),
+        state,
+        region_label_source: 'human',
+      }),
+    },
+    signal,
+  );
+  return {
+    updated: raw.updated,
+    invalid: raw.invalid ?? [],
+    conflicts: raw.conflicts ?? [],
+    items: (raw.items ?? []).map(mapRawCrop),
+  };
+}
+
 export interface RegionStatusEntry {
   value: string;
   label: string;
@@ -2701,11 +2860,45 @@ export interface RegionStatusEntry {
   wants_reason: boolean;
 }
 
+/** W8.7: per-box state styling/labels, distinct from the item-level
+ *  `RegionStatusEntry` vocabulary above — a box's `state` is
+ *  `proposed`/`accepted`/`rejected`/`false_positive`, never one of the
+ *  item's `region_status` values. */
+export type BoxStateTone = 'accepted' | 'proposed' | 'rejected' | 'neutral';
+
+export interface BoxStateEntry {
+  value: string;
+  label: string;
+  role: string;
+  human_writable: boolean;
+  exported: boolean;
+  dashed: boolean;
+  dim: boolean;
+  badge: string | null;
+  /**
+   * PENDING_BACKEND_W8 (feat/w8-multibox-lockstep, docs/design/
+   * w8-multibox-frontend-plan-2026-09-26.md): the backend approved this
+   * as a follow-up to the W8.7 `box_states` vocabulary — the served
+   * color/theme mapping for a box state, since `box_states` itself only
+   * ever served `dashed`/`dim`/`badge` (styling flags, no color). Not in
+   * the vendored OpenAPI snapshot yet (no `box_states` schema exists
+   * there at all — `box_states` predates any contract-sync coverage);
+   * remove this note (not widen it) once `npm run contract:sync` picks
+   * it up. Optional so a pre-tone backend (or one that serves an
+   * unrecognized value) renders neutral — see
+   * `regionStatusesStore.boxStateTone()`.
+   */
+  tone?: BoxStateTone;
+}
+
 export interface RegionStatusesResponse {
   statuses: RegionStatusEntry[];
   confirm_status: string;
   reject_status: string;
   false_positive_status: string;
+  /** W8.7: served box-state vocabulary (`GET /regions/statuses`), absent
+   *  on a pre-W8 backend. */
+  box_states?: BoxStateEntry[];
 }
 
 /** The deployment's region-status vocabulary (`GET {API_PREFIX}/regions/statuses`),
@@ -2886,19 +3079,6 @@ export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse>
 }
 
 /**
- * Update or clear the region sub-bbox on a crop.
- *
- * - Pass an `[x1, y1, x2, y2]` tuple in **source-image normalized**
- *   coordinates to set/replace the region box (server records
- *   `region_status='human_confirmed'`).
- * - Pass `null` to clear the region; the backend interprets this as
- *   `region_status='no_region_visible'`.
- *
- * Mirrors `putCropLabel` in shape. Endpoint: `PUT {API_PREFIX}/crops/{id}/region`.
- *
- * Dead code: every call site goes through `setSlotBox(slot, …)` instead.
- */
-/**
  * Fetch a single crop by id from the authoritative store. Used by the
  * review-page "Back" path so the operator sees what was actually
  * persisted rather than a possibly-stale local snapshot. Endpoint:
@@ -2914,56 +3094,13 @@ export async function getCrop(cropId: string, signal?: AbortSignal): Promise<Cro
 }
 
 /**
- * PUT a slot's sub-box via the spec's declared endpoint, or clear it
- * (`xyxy === null`) via `clearBox` when the profile declares a distinct
- * one, falling back to `setBox` with a null box otherwise (the backend's
- * "PUT with a null box clears" contract). The body key is the slot's own
- * `subBox.bboxField`, so a slot's writes use the same wire name its reads
- * do.
- *
- * `frame` says which frame `xyxy` is expressed in: `'source'` (the
- * historical default — the caller has already projected through the
- * parent crop's own bbox) or `'parent'` (the parent-crop-normalized
- * frame an editor draws in; the server does the projection). Passing
- * `'parent'` lets a caller send the box it drew directly, with no
- * client-side projection.
- *
- * Returns the server's authoritative item (unwrapped from `{..., item}`)
- * so the caller can render what was actually persisted rather than
- * re-deriving it.
- */
-export async function setSlotBox(
-  spec: SlotSpec,
-  cropId: string,
-  xyxy: [number, number, number, number] | null,
-  frame: SlotFrame = 'source',
-  signal?: AbortSignal,
-): Promise<Crop> {
-  const path =
-    (xyxy === null ? spec.endpoints.clearBox?.(cropId) : undefined) ??
-    spec.endpoints.setBox?.(cropId);
-  const bboxField = spec.capabilities.subBox?.bboxField;
-  if (!path || !bboxField) {
-    return Promise.reject(
-      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint or subBox field`),
-    );
-  }
-  const res = await apiFetch<{ item: RawCrop }>(
-    `${scoped()}${path}`,
-    { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy, frame }) },
-    signal,
-  );
-  return mapRawCrop(res.item);
-}
-
-/**
- * PATCH a slot's metadata fields (status / text / rejection reason)
- * without touching the bbox. The BODY KEYS are the spec's own wire
- * field names — for a `region_*` slot this produces a body of
- * `region_text` / `region_status` / `region_rejection_reason`, pinned in
- * api.test.ts.
- * Keys whose capability is absent, or whose value is `undefined`
- * (as opposed to `null`, which clears), are omitted.
+ * PATCH a slot's item-level metadata (status / text / rejection reason)
+ * without touching any box. The BODY KEYS are the spec's own wire field
+ * names — for the region slot `region_status` / `region_rejection_reason`
+ * only: its text is per box (no `text.valueField`), written with
+ * `patchRegionBox`, and the backend rejects a `region_text` key. Keys
+ * whose capability is absent, or whose value is `undefined` (as opposed
+ * to `null`, which clears), are omitted.
  */
 export async function patchSlotMeta(
   spec: SlotSpec,
@@ -3023,7 +3160,20 @@ export async function batchRegionStatus(
   signal?: AbortSignal,
 ): Promise<{
   updated: number;
-  conflicts: { crop_id: string; current_source: string | null }[];
+  // W8 (rev3, "one RegionBatchConflict shape across every region batch
+  // route"): a pre-W8 backend serves only {crop_id, current_source}; a
+  // W8 backend serves the full RegionBatchConflict. Typed as a superset
+  // (every RegionBatchConflict field optional here) so both eras read
+  // safely without a second type.
+  conflicts: Array<{
+    crop_id: string;
+    current_source: string | null;
+    error?: string;
+    message?: string;
+    current_region_revision?: number;
+    current_box_ids?: string[];
+    item?: RawCrop;
+  }>;
   invalid: BatchStatusInvalidEntry[];
   items: RegionBrowseItem[];
 }> {
@@ -4145,32 +4295,6 @@ export function getManifestUrl(): string {
  */
 export function getThumbUrl(cropId: string, size: number = 160): string {
   return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
-}
-
-/**
- * URL for an annotation-slot sub-bbox close-up (the region rendered to a
- * tile), same construction convention as {@link getThumbUrl}. Pass
- * `cacheBustKey` (e.g. `Date.now()`) after a bbox edit so the browser
- * doesn't serve the pre-edit crop from its image cache.
- *
- * The segment is `region_thumbnail`, which is the ONLY region-thumbnail
- * route the backend registers (`curation_images.py`'s
- * `@crops_router.get('/{crop_id}/region_thumbnail')`); there is no alias
- * (cropwright_backend_integration_plan.md §3.2: no compatibility surface
- * lands on the contract-owning side).
- *
- * Note the deliberate asymmetry with the JSON key: `/regions` responses
- * carry a field literally named `region_thumbnail_url` whose *value* now
- * points at `…/region_thumbnail`. The key is frozen wire contract; only
- * the path inside it is generic. Do not "fix" the key to match.
- */
-export function getRegionThumbUrl(
-  cropId: string,
-  size: number = 160,
-  cacheBustKey?: string | number | null,
-): string {
-  const base = `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/region_thumbnail?size=${size}`;
-  return cacheBustKey != null ? `${base}&v=${encodeURIComponent(cacheBustKey)}` : base;
 }
 
 export function getSourceImageUrl(cropId: string): string {

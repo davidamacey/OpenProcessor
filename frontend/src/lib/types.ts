@@ -546,7 +546,14 @@ export interface Cluster {
   id: number;
   /** Backend-derived: "class" | "candidate" | "unassigned". */
   cluster_kind: ClusterKind;
+  /** Items with >=1 box in the cluster. For a region cluster (W8), this
+   *  is DISTINCT from `box_count` below — an item can have more than one
+   *  box in the same cluster. */
   size: number;
+  /** W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): boxes
+   *  (rows) in the cluster, region clusters only. Absent on an item
+   *  cluster or a pre-W8 backend. */
+  box_count?: number | null;
   /** class_validated=true count. */
   validated_count: number;
   dominant_class_id: number | null;
@@ -711,6 +718,12 @@ export interface ServedRegionProfile {
    *  enabled for this profile. Informational only today — no UI reads it
    *  yet (see CLAUDE.md). */
   text_hint_enabled: boolean;
+  /** Request-size guards on region box writes — never a labeling rule.
+   *  `max_boxes_per_write` gates the Add-box action (human box lists are
+   *  otherwise unbounded). */
+  limits: {
+    max_boxes_per_write: number;
+  };
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation
@@ -1075,7 +1088,7 @@ export interface KeyboardShortcut {
 
 export type ModelStatus =
   'ready' | 'not_ready' | 'unavailable' | 'not_configured' | 'not_installed';
-export type ModelKind = 'triton' | 'external';
+export type ModelKind = 'triton' | 'vlm' | 'external';
 
 export interface ModelInfo {
   name: string;
@@ -1127,11 +1140,20 @@ export interface ModelInfo {
   /** Served: the model's classes matched by name onto the active
    *  project's registry; `null` for a model with no class list. */
   class_mapping: ModelClassMappingSummary | null;
-  /** The model's sharing revision, sent back as `expected_revision` on
-   *  `PUT .../sharing`. NOT served at OpenProcessor be20dc40 (backend ask
-   *  BA-P2-1, docs/design/projects-p2-sharing-pause-ui-plan-2026-09-27.md
-   *  §5): the owner toggle stays absent while it is undefined. */
-  sharing_revision?: number;
+  /** Served: whether THIS project owns the model (the route's own
+   *  ownership check) — the only thing the owner-only sharing toggle
+   *  reads. `false` for another project's shared model, a base model with
+   *  no promote.json and every external service. */
+  owned: boolean;
+  /** Served: the model's sharing revision, sent back as
+   *  `expected_revision` on `PUT .../sharing`. Non-null only when `owned`. */
+  sharing_revision: number | null;
+  /** Served on a VLM row (`kind: 'vlm'`, one per registered endpoint):
+   *  whether this endpoint is the project's active one, and which
+   *  projects the listing names as running it (the bound project only on
+   *  this scoped route). */
+  active?: boolean;
+  active_in?: string[];
 }
 
 export interface ModelsStatus {
@@ -1224,10 +1246,6 @@ export interface BatchIngestSummary {
   successful: number;
   duplicates: number;
   failed: number;
-  mismatches: number;
-  missed_labels: number;
-  unmatched_detections: number;
-  labels_imported: number;
   crops_indexed: number;
   /** d72cc63: how many results carry a `secondary_detector_error`. */
   secondary_detector_failures?: number;
@@ -1237,7 +1255,6 @@ export interface BatchIngestResponse {
   status: 'success' | 'partial' | 'error';
   summary: BatchIngestSummary;
   results: IngestImageResult[];
-  disagreements: Record<string, unknown>[];
 }
 
 export interface IngestStatusBucket {
@@ -1293,13 +1310,10 @@ export interface IngestPathLookupResponse {
 export interface IngestBatchItem {
   path: string;
   source?: string;
-  label_txt_path?: string | null;
 }
 
 export interface IngestBatchRequest {
   items: IngestBatchItem[];
-  label_source?: string;
-  detect_mismatches?: boolean;
 }
 
 export interface IngestUploadRequest {

@@ -26,6 +26,7 @@ import {
 import type {
   CreateProjectRequest,
   DeleteDryRunResponse,
+  KeymapCloneConflict,
   ProjectCapacity,
   ProjectLabels,
   ProjectLifecycleResponse,
@@ -53,6 +54,21 @@ export function toastWarnings(warnings: ProjectWarning[] | undefined): void {
   for (const w of warnings ?? []) {
     toastStore.push({ kind: 'warn', text: w.message, ttl_ms: 8000 });
   }
+}
+
+/** The keymap clone axis drops any action whose combo is already a class
+ *  hotkey in the target: a report, never a silent unbind. One toast lists
+ *  every served conflict (action id, combo, the class holding the key). */
+export function keymapConflictText(conflicts: KeymapCloneConflict[]): string {
+  const rows = conflicts.map(
+    (c) => `${c.action_id} (${c.combo} is the hotkey of class "${c.class_name}")`,
+  );
+  return `${conflicts.length} keyboard shortcut${conflicts.length === 1 ? ' was' : 's were'} not copied: ${rows.join('; ')}.`;
+}
+
+export function toastKeymapConflicts(conflicts: KeymapCloneConflict[] | undefined): void {
+  if (!conflicts?.length) return;
+  toastStore.push({ kind: 'warn', text: keymapConflictText(conflicts), ttl_ms: 15000 });
 }
 
 function failure(e: unknown): { ok: false; code: string | null; message: string } {
@@ -98,6 +114,7 @@ export function createProjectsAdmin() {
    *  switcher's, so both show the served state (capacity included). */
   async function afterWrite(res: ProjectLifecycleResponse): Promise<ProjectSummary> {
     toastWarnings(res.warnings);
+    toastKeymapConflicts(res.keymap_clone_conflicts);
     projectsStore.adopt(res.project);
     await Promise.all([load(), projectsStore.refresh()]);
     return res.project;

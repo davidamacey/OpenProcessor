@@ -145,8 +145,10 @@ record.
   submits real batches via the pre-existing `POST
 {API_PREFIX}/ingest/batch` (that endpoint predates #36; BA-2 is what
   serves `source_roots`/`max_items` for the gate and client-side cap
-  check, and BA-5 is what guards a submitted `label_txt_path` against
-  the same configured roots as the image path server-side). One
+  check, and the backend's W10 dropped the label-import fields
+  (`label_txt_path`/`label_source`/`detect_mismatches` and the response's
+  `labels_imported`/`mismatches`/`missed_labels`/`unmatched_detections`);
+  the panel sends and shows image paths and a source tag only). One
   synchronous call per submit, not chunked like the upload run
   controller — a server-path batch has no browser-side byte cost, and
   the backend already batches its own detector inference internally.
@@ -183,8 +185,7 @@ ingest-ui-and-acceptance-plan-2026-09-24.md` §A.6). Anyone who can reach
   server-path batch panel above), label, export and train. Expose
   Cropwright (and the OpenProcessor API it proxies) only on a trusted
   network — never the public internet — until the backend adds opt-in
-  auth (BA-5's auth half is still open; only the `label_txt_path` root
-  guard half of BA-5 landed with #36).
+  auth (BA-5's auth half is still open).
 - **Plan deviations** (recorded in the plan doc's own status section
   too):
   - the plan's nginx-413 detection ("`ApiError.detail == null`")
@@ -269,10 +270,8 @@ false`; the served post-write crop is adopted by `CropDetailModal` and
   with `client_max_body_size` from `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
   (default 2048) and a one-hour timeout.
 - **Contract.** Types in `src/lib/types_import.ts`. The routes are in
-  `endpointCatalog.test.ts`'s `PENDING_BACKEND_W10` until the W10 contract
-  sync, which also removes the ingest-batch label fields (the W10 backend
-  422s them) — not before, since `ingestContract.test.ts` pins them to the
-  vendored OpenAPI.
+  vendored OpenAPI and resolve for real in `endpointCatalog.test.ts`; the
+  ingest-batch label fields the W10 backend 422s are gone (see Ingest).
 - **Not yet built:** the served `imported` review tab, lock badges, and
   Reprocess on browse cards / an image view (they wait on the served tab
   and lock-reason shapes).
@@ -326,9 +325,10 @@ before the backend ships it.
   served prompt, raw reply, parsed models and the preview item (through
   `SourceImageOverlay`, the tested item replaced in its context).
 - **Contract:** types in `src/lib/types_packs.ts` (the shared §7.1
-  models live in `src/lib/types_config.ts`); routes in
-  `endpointCatalog.test.ts`'s `PENDING_BACKEND_W3` until the W3/W5
-  contract sync. Refusals render `configErrorText` (the served `message`).
+  models live in `src/lib/types_config.ts`); routes
+  resolve for real in `endpointCatalog.test.ts`; `ActiveConfigResponse`'s
+  `source`/`activated_at`/`applied[]` are required (served since W2) and
+  `AppliedRuntime` also carries the optional `vlm` ref. Refusals render `configErrorText` (the served `message`).
 - **Shared with the region-profile editor** (W4, below): the pack
   modules are thin bindings of `src/lib/config/` (`ConfigActive`,
   `ConfigEditor`, `ConfigList`, `ConfigAvailability`, `validationIssues`)
@@ -388,9 +388,8 @@ on the shared config machinery listed under "Prompt-pack editor".
 - **Not built:** test-on-crop (`POST /region_profiles/test`, W5; the
   profile schema serves no testable flag, W4-Q3), create-from-nothing,
   `validate_segmenter_prompt` (no surface, W4-Q4), `from_project` clone.
-- **Contract:** types in `src/lib/types_profiles.ts`; routes in
-  `endpointCatalog.test.ts`'s `PENDING_BACKEND_W4` until the W4 contract
-  sync. **Tests:** `api.regionProfiles.test.ts`, `profiles/*.test.ts`,
+- **Contract:** types in `src/lib/types_profiles.ts`; routes
+  resolve for real in `endpointCatalog.test.ts`. **Tests:** `api.regionProfiles.test.ts`, `profiles/*.test.ts`,
   `config/configActive.test.ts`, `components/profiles/*.test.ts`,
   `components/config/ConfigActivePanel.test.ts`; conftest serves
   `/region_profiles` 404 by default.
@@ -1000,8 +999,8 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   Fixed form, modal and a11y keys (Enter submits, Esc cancels, ↑↓ in a
   listbox, Tab) are not actions and are not routed through the keymap.
 - **W8 per-box actions** (`review.region.accept_box` / `reject_box`,
-  `box_edit.next_box`) are declared `available: false`, so
-  `registerAction` and `actionFor` ignore them until W8 lands.
+  `box_edit.next_box`) are `available: true`, registered by the
+  multi-box region surface (see "W8 multi-box regions" below).
 - **K2 (2026-09-26): the served keymap is live.** `loadKeymap()`
   (`src/lib/stores/keymap.svelte.ts`) reads the scoped `GET {prefix}
 /keymap` once from the root layout's `load()` and hands the result to
@@ -1029,9 +1028,8 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   always wins a same-key collision with a class hotkey. `setClassHotkey`
   renders the backend's structured 422 `hotkey_reserved`/409
   `hotkey_taken` details (naming the owning action(s)/class) instead of
-  a generic string. The four `/keymap*` routes are a documented
-  pending-backend entry in `endpointCatalog.test.ts`'s contract check
-  until OpenProcessor W2b lands and vendors them.
+  a generic string. The four `/keymap*` routes are vendored and resolve in
+  `endpointCatalog.test.ts` like every other route.
 - **K2b (2026-09-26): per-context overrides.** Plan §0 decision 4 — a
   verb rebind applies on every page by default, with a per-context
   override available. `KeymapCard.svelte` now has two sections: a
@@ -1251,6 +1249,112 @@ and the protected chip is dropped for a model that isn't installed
 (`isInstalled`). An installed-but-unloaded optional model still reads
 "not ready". Covered by `src/routes/p/[project]/models/modelStatus.test.ts`.
 
+## W8 multi-box regions (lockstep branch `feat/w8-multibox-lockstep`)
+
+A region item can carry an **unbounded list of boxes**, not one — the
+owner's binding rule (approved 2026-09-26): "a region is a list per item;
+one element is not a special case." No client cap; the only limit is the
+served `region_profile.limits.max_boxes_per_write` (a request-size guard,
+not a labeling rule). Built against, and merged only alongside, the
+backend's W8 wave (`openprocessor/docs/design/
+openprocessor_internal/any_domain_plan.md` §7.7); see
+`docs/design/w8-multibox-frontend-plan-2026-09-26.md` for the full wire
+model, write-path table and the current gap list.
+
+**No backward compatibility (owner decision, 2026-09-26): the single-box
+scalar region fields are gone, not additive.** `REGION_SUB_BOX` declares
+only `listField: 'region_boxes'` — no `bboxField`/`scoreField`/
+`candidateBboxField`/etc. `readSlot` never runs the legacy scalar-box
+block for a capability that declares `listField`; `region_bbox_norm`,
+`region_candidate_*`, and every other pre-W8 per-box scalar key are gone
+from the wire and from this codebase's reads. A `SubBoxCapability` declares exactly one of `listField` or
+`bboxField` (a read-only scalar box for a tier-2 slot, e.g.
+`aircraftTailNumberSlot`; `parseSlotConfig` rejects both/neither). `setBox`/`clearBox` are gone from
+`REGION_ENDPOINTS` (`PUT /crops/{id}/region` is a removed 410 route).
+
+- `SlotData.subBoxes: SlotBox[]`, populated by `readSlot` from
+  `SubBoxCapability.listField` — `src/lib/annotations/types.ts`/
+  `readSlot.ts`/`servedRegionSlot.ts`. `SlotCard.svelte`,
+  `CropMetaPanel.svelte` and `SourceImageOverlay.svelte` all render every
+  box in `subBoxes` (state-styled: accepted=green, proposed=amber,
+  rejected/false_positive=dashed zinc) — none of them read the region
+  slot's `subBox` (singular) anymore.
+- Pure box-editing/write-body logic in `src/lib/annotations/multiBox.ts`,
+  including the owner-decided **Enter confirms only `proposed` boxes**
+  rule — a whole-set confirm never overrides a per-box decision;
+  `rejected`/`false_positive` boxes are left exactly as they are.
+- `api.ts`: `putRegionBoxes` (`PUT /crops/{id}/regions`), `putBatchRegions`
+  (`PUT /crops/batch_regions`), `patchRegionBox` (`PATCH /crops/{id}/
+regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
+  `postBatchBoxState` (`POST /regions/batch_box_state`, region-cluster
+  triage, called from the gallery's open-cluster toolbar).
+- `MultiBoxCanvas.svelte` — select/add/delete/Tab-cycle/arrow-nudge over
+  an unbounded box list; the only box canvas (`BboxCanvas.svelte` is
+  deleted). Its keys resolve through `keymapStore.actionFor('box_edit', ...)`,
+  so a rebound delete/nudge key applies.
+- `/review`'s region tab is fully wired to `MultiBoxCanvas` +
+  `multiBoxRegionController.svelte.ts` (new controller, following the
+  `reviewController.svelte.ts` extraction convention), in both scan and
+  edit mode — `y`/`r` PATCH the selected box immediately without
+  advancing the queue; Enter confirms proposed boxes and flushes any
+  pending geometry edit in the same write; the on-screen Confirm/Save-
+  bbox buttons (not just the keyboard path) branch on `isMultiBoxSlot`.
+- `keymapFallback.ts`'s `review.region.accept_box`/`reject_box`/
+  `box_edit.next_box` are `available: true` on this branch.
+- `SlotGallery.svelte` shows the served `total_rows` (box count) beside
+  the item count when they differ, and region cluster cards show
+  `box_count` beside `size`; the `has_rejected_box` region-status filter
+  option needs no frontend code (it's one more value in the existing
+  served-enum `region_status` filter). Bulk triage from an open cluster
+  bucket (`gallery.selectedCluster != null`) goes through
+  `applyBoxState()`/`POST /regions/batch_box_state` (per-box targets from
+  each row's `region_box_id`) — never the item-level `batch_status`,
+  which would flip every sibling box; outside a cluster the toolbar is
+  unchanged.
+- `SlotBboxEditor.svelte` (the `CropCard` pencil ✎) is multi-box too —
+  it reuses `MultiBoxCanvas`/`multiBoxRegionController` (a new
+  `saveEdits()` method: a plain `PUT .../regions` with no `region_status`,
+  since this modal has no confirm concept) rather than a second
+  implementation, and opens only for a multi-box slot.
+- The served `region_profile.limits.max_boxes_per_write`
+  (`ServedRegionProfile.limits`, `SubBoxCapability.maxBoxesPerWrite`)
+  gates Add in both `MultiBoxCanvas` instances (`/review`,
+  `SlotBboxEditor`) — never a client-guessed cap (a tier-2 profile replacing the
+  served region slot inherits the served limit, `withServedLimits`).
+- `GET /regions/statuses`' `box_states` vocabulary
+  (`regionStatusesStore.boxStates`/`boxStateInfo`/`boxStateByRole`)
+  supplies box labels and the `dashed` flag when loaded. Each entry also
+  serves `tone` (`'accepted' | 'proposed' | 'rejected' | 'neutral'`,
+  2026-09-26 backend follow-up) — `regionStatusesStore.boxStateTone(state)`
+  resolves it (falling back to `'neutral'` on a pre-tone backend or an
+  unrecognized value), and `toneRingRgb`/`toneBorderClass`/`toneChipClass`
+  (`regionStatuses.svelte.ts`) map a tone to the theme's colors for every
+  ring/chip surface (`/review`, `SlotBboxEditor.svelte`,
+  `SourceImageOverlay.svelte`, `CropMetaPanel.svelte`) — never a client
+  role→color guess when a tone is served.
+- **Contract: real wire (OpenProcessor f582aa05).** Every W8 route, the
+  `region_boxes` element keys (pinned in `wireKeys.test.ts` against the
+  vendored `RegionTestCandidate` schema) and `region_profile.limits` are
+  vendored; no pending-backend allow-list remains. W8's URLs are
+  project-scoped (`scoped()`), and its e2e tests open `/p/default/...`.
+- **Optimistic concurrency.** Every item-level box write sends
+  `expected_region_revision` (the item's served `region_revision`,
+  tracked by `multiBoxRegionController`); a 409 `region_conflict`
+  (`regionConflictDetail`, `api.ts`) carries the current item, which the
+  controller adopts (`onitem`) so the retry carries the fresh revision.
+  The summary fields `region_count`/`region_rejected_count`/
+  `region_max_score`/`region_set_complete` render as served (an incomplete
+  set shows a chip). Per-box detector, verdict, lock, cluster and text
+  come off each `region_boxes[]` element (`SlotBox`); per-box text is
+  written with `PATCH .../regions/{box_id}` — there is no item-level
+  `region_text` any more. The region thumbnail route requires `box_id`
+  (`SlotCard`, from the box's served `thumbnail_url` when present).
+  `PUT /crops/batch_regions` takes no `frame` key. The gallery's "Box
+  state" filter sends `box_state`, and a served `rows_truncated` shows a
+  chip. A tier-2 scalar-box slot (`bboxField`) is now read-only (display,
+  `CropCard` rings, overlay): the backend has no single-box write route,
+  so `setSlotBox`, `BboxCanvas` and the legacy review edit path are gone.
+
 ### Model sharing (projects P2, OpenProcessor be20dc40, 2026-09-27)
 
 `docs/design/projects-p2-sharing-pause-ui-plan-2026-09-27.md`. A promoted
@@ -1273,14 +1377,13 @@ refusals show the served message, a 409 `revision_conflict` reloads the
 list so the retry carries the fresh revision, and a 409 `in_use` lists the
 served projects and offers the served `force`. The unshare copy says
 another project may be using the model (`used_by` stays empty until the
-backend's W4). Two gaps are backend asks in the plan doc: the listing
-doesn't serve the sharing revision yet (`ModelInfo.sharing_revision` is
-optional and the toggle is absent without it, BA-P2-1), and ownership is
-the served `project` compared with the active slug
-(`sharingRole`, `$lib/modelSharing.ts`) until an explicit `owned` flag is
-served (BA-P2-2). Another project's model is still served
-`unloadable: true`, so it shows Unload, which the server refuses with a
-404 (BA-P2-7). `/bakeoff` is unchanged: its lists don't carry other
+backend's W4). The listing serves `owned` and `sharing_revision` (non-null only
+when owned): `sharingRole`/`canToggleSharing` (`$lib/modelSharing.ts`)
+read the served `owned` flag, the toggle is absent without a served
+revision (a model with no stamp yet), and a foreign project's model is
+served `unloadable: false`, so it shows no Unload. VLM rows serve
+`kind: 'vlm'` with `active`/`active_in`, shown as an "active" chip.
+`/bakeoff` is unchanged: its lists don't carry other
 projects' models (BA-P2-3). Tests: `modelSharing.test.ts`,
 `routes/p/[project]/models/modelsSharing.test.ts` (mount),
 `contract/modelsContract.test.ts`, e2e `test_models_sharing.py`.
@@ -2181,13 +2284,16 @@ owner decision) — reconstructable from the URL, so nothing is persisted.
 - **Pipeline pause** (P2, §5.1). `projectPauseStore`
   (`$stores/projectPause.svelte.ts`) holds each project's served
   `GET {prefix}/pause` `paused` by slug; the `/p/[project]` layout reads the
-  active project's after `select()` (not awaited), `/projects` reads every
-  selectable row's, and `PauseProjectDialog.svelte` POSTs `/pause` or
+  active project's after `select()` (not awaited), `/projects` takes each
+  row's from the list's `paused`, and `PauseProjectDialog.svelte` POSTs `/pause` or
   `/resume`. Every call goes through `projectPrefix(project)` (`api.ts`),
-  the project's own served `prefix` — never a slug path. The chip reads
-  "paused" and nothing more: the route serves only the project's own flag,
-  not the global GPU-training claim, and no event announces a pause change
-  (backend asks BA-P2-4/5 in the plan doc).
+  the project's own served `prefix` — never a slug path. `ProjectSummary.paused`
+  is the project's own flag, so `/projects` reads the chip and the
+  Pause/Resume buttons off the list (no per-row `GET /pause`); the pause
+  state's served `paused_by`/`reason` (a global GPU-training claim shows
+  there) render in the switcher tooltip. The global `project.paused`/
+  `project.resumed` events (`projectEvents.ts`) update the store and
+  re-read the list.
 - **`/projects`** — see the Routes table. Wire types in
   `src/lib/types_projects.ts`, pinned key-for-key to the vendored OpenAPI
   by `src/lib/contract/projectsContract.test.ts` (the `DELETE

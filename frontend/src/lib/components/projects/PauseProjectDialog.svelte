@@ -15,8 +15,11 @@
     /** The project, and whether this dialog pauses (true) or resumes it. */
     target: { project: ProjectSummary; pause: boolean } | null;
     onclose: () => void;
+    /** Fires after the server accepted the change, so the caller re-reads
+     *  the served list (whose `paused` is what its chips show). */
+    onchanged?: () => void;
   }
-  let { target, onclose }: Props = $props();
+  let { target, onclose, onchanged }: Props = $props();
 
   let busy = $state(false);
   let errorText = $state<string | null>(null);
@@ -46,6 +49,7 @@
         ? `Paused "${project.display_name}".`
         : `Resumed "${project.display_name}".`,
     );
+    onchanged?.();
     onclose();
   }
 </script>

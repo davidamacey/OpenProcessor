@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Contract sync to OpenProcessor f582aa05; every route resolves for real.**
+  All `PENDING_BACKEND*` allow-lists and `it.todo` entries are gone, so every
+  scanned call site must resolve in the vendored OpenAPI. `findOperation`
+  no longer lets a literal path segment (for example `region`) match an
+  OpenAPI path parameter, which had hidden the removed `PUT /crops/{id}/region`
+  route; it now picks the candidate with the most literal matches.
+- **Multi-box regions on the real wire.** `region_boxes[]` with per-box
+  state, score, detector, verdict, lock, cluster, text and thumbnail;
+  item `region_count`/`region_rejected_count`/`region_max_score`/
+  `region_set_complete`/`region_revision`. Writes use `PUT /crops/{id}/regions`,
+  `PATCH /crops/{id}/regions/{box_id}`, `PUT /crops/batch_regions` and
+  `POST /regions/batch_box_state`, send `expected_region_revision` and adopt
+  the item a 409 `region_conflict` returns. The single-box keys and the
+  `PUT /crops/{id}/region` / `batch_region` callers, `setSlotBox`,
+  `BboxCanvas`, `bboxFrames`, `viewBox` and the item-level `region_text` are
+  removed; a tier-2 scalar-box slot is read-only. The gallery gained a "Box
+  state" filter and a `rows_truncated` chip. `MultiBoxCanvas` keys resolve
+  through the keymap (a rebound delete key was previously ignored).
+  `region_profile.limits` (`max_boxes_per_write`) is required on the served
+  profile and `RegionProfileSummary` moved to the split schema.
+- **Ingest batch**: removed the label-import and mismatch request/response
+  fields the backend no longer serves (`label_txt_path`, `label_source`,
+  `detect_mismatches`, `labels_imported`, `mismatches`, `missed_labels`,
+  `unmatched_detections`) and the UI that showed them.
+- **Projects P3 wire.** `ProjectSummary.paused` drives the `/projects` chip and
+  Pause/Resume buttons (no per-row `/pause` reads); `paused_by`/`reason`
+  show in the switcher tooltip; `keymap_clone_conflicts` is toasted after a
+  clone; global `project.paused`/`project.resumed` events update the store.
+  Model sharing reads the served `owned`/`sharing_revision`, foreign models
+  are `unloadable:false`, and VLM rows show their `active` state.
+  `ActiveConfigResponse.source`/`activated_at`/`applied` are required.
+
 ### Added
 
 - **Region-profile editor and config vocabulary (OpenProcessor W4).** New
@@ -188,6 +222,99 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`test_clusters_display_order_representatives.py`).
 
 ### Added
+
+- **W8 multi-box regions — wire model and write paths (lockstep branch
+  `feat/w8-multibox-lockstep`, built against and merged only alongside the
+  backend's W8 wave; `docs/design/w8-multibox-frontend-plan-2026-09-26.md`).**
+  A region item can now carry an unbounded list of boxes
+  (`ItemDoc.region_boxes: RegionBoxWire[]`), not just one — the owner's
+  binding rule is "a region is a list per item, one element is not a
+  special case." This pass ships, additively (every pre-W8 single-box
+  field stays declared and read, so the shipped `/review` UI is
+  unaffected until it's switched over):
+  - `SlotBox`/`BoxStateInfo` types and `SubBoxCapability.listField`
+    (`src/lib/annotations/types.ts`); `SlotData.subBoxes` populated by
+    `readSlot`'s new `mapRegionBoxWire`/`mapRegionBoxList`
+    (`src/lib/annotations/readSlot.ts`); the served region slot declares
+    `listField: 'region_boxes'` (`servedRegionSlot.ts`).
+  - Pure box-editing logic in `src/lib/annotations/multiBox.ts`
+    (`EditableBox`, selection cycling, add/remove, and the
+    `PUT /crops/{crop_id}/regions` request-body builder implementing the
+    per-element addressing rule: untouched → `{box_id}`, moved →
+    `{box_id, bbox_norm}`, state-changed → `+ state`, new → `{box_id:
+null, bbox_norm}`) plus the owner-decided Enter semantics
+    (`confirmProposedBoxes`: confirms only `proposed` boxes, leaves
+    `rejected`/`false_positive` untouched).
+  - New `api.ts` functions: `putRegionBoxes`, `putBatchRegions`,
+    `patchRegionBox`, `postBatchBoxState` (W8.8's five human edit
+    routes).
+  - `MultiBoxCanvas.svelte` — a sibling to `BboxCanvas.svelte` (which
+    stays single-box) supporting select/add/delete/Tab-cycle over an
+    unbounded box list, no client cap.
+  - `review.region.accept_box`/`reject_box` (`y`/`r`) and
+    `box_edit.next_box` (`Tab`) flip from `available: false` to `true` in
+    `keymapFallback.ts`, reserving those letters via the existing
+    served-keymap union mechanism.
+  - Contract tests gained an explicit, named `PENDING_BACKEND_W8`
+    allow-list (`wireKeys.test.ts`, `servedRegionSlot.test.ts`) and
+    `it.todo` entries (`endpointCatalog.test.ts`) for the wire keys/routes
+    the backend's W8 hasn't merged yet — emptied at the lockstep contract
+    sync, not silently widened.
+  - **Second pass (2026-09-26): full cutover, no backward compatibility.**
+    Per owner confirmation (fresh build, no users), the pre-W8 scalar
+    region fields are deleted, not kept additive: `REGION_SUB_BOX`
+    declares only `listField`; `readSlot` never runs the legacy
+    scalar-box block for a `listField` capability; `setBox`/`clearBox`
+    are gone from `REGION_ENDPOINTS`. `/review`'s region tab is fully
+    wired to `MultiBoxCanvas` + the new `multiBoxRegionController.svelte.ts`
+    (extracted, not piled into the 3000-line page) in both scan and edit
+    mode — `y`/`r` PATCH the selected box immediately, Enter confirms
+    proposed boxes and flushes any pending geometry edit in one write,
+    arrow keys nudge the selected box, and the on-screen Confirm/Save-bbox
+    buttons (a real bug: they were still wired to the legacy single-box
+    functions, keyboard-only worked) now branch correctly too. `SlotCard`,
+    `CropMetaPanel` and `SourceImageOverlay` all render every box in
+    `subBoxes` (state-styled), replacing their single-`subBox` reads for
+    region. `SlotGallery` shows the served `total_rows`/`box_count`
+    alongside item counts; `batchRegionStatus`'s conflict type widened to
+    the full `RegionBatchConflict` shape. `test_region_verify_rejected_confirm.py`
+    rewritten for the real new semantics (confirm-only-proposed, per-box
+    accept/reject, add+confirm in one write, on-screen button parity, Z
+    restoring the whole list via the backend-confirmed one-step undo
+    contract).
+  - **Third pass (2026-09-26): closed every remaining gap.**
+    Region-cluster bulk triage now uses the per-box `batch_box_state`
+    route (`applyBoxState`, `slotGalleryController.svelte.ts`) whenever a
+    cluster bucket is open, instead of the item-level `batch_status` —
+    never the item-level route, which would flip every sibling box.
+    `SlotBboxEditor.svelte` (the `CropCard` pencil ✎) now reuses
+    `MultiBoxCanvas`/`multiBoxRegionController` for the region slot (a new
+    `saveEdits()` controller method — a plain PUT with no `region_status`,
+    since this modal has no confirm concept) instead of being
+    single-box-only/unreachable for region; the single-box path is kept,
+    byte for byte, for a genuine tier-2 single-box slot. The served
+    `region_profile.limits.max_boxes_per_write` now gates the Add-box
+    action in both canvases and renders as "N / max" — never a
+    client-guessed cap. `GET /regions/statuses`' `box_states` vocabulary
+    (label/dashed/dim/badge) is now loaded and preferred over the
+    hardcoded label/dash palette. See the plan doc's third-pass section
+    for the full test list (unit + e2e, each mutation-checked).
+  - **Follow-up (2026-09-26): served `box_states[].tone`.** The backend
+    approved a color signal for `box_states` — `BoxStateEntry.tone`
+    (`'accepted' | 'proposed' | 'rejected' | 'neutral'`, optional).
+    `regionStatusesStore.boxStateTone()` resolves it (falling back to
+    `'neutral'` on a pre-tone backend or an unrecognized state); new
+    `toneRingRgb`/`toneBorderClass`/`toneChipClass` helpers
+    (`regionStatuses.svelte.ts`) are the one place per output shape that
+    maps a tone to a color, replacing the client role→color guess in
+    `+page.svelte`, `SlotBboxEditor.svelte`, `SourceImageOverlay.svelte`
+    and `CropMetaPanel.svelte`. **Fixed a real bug found while adding the
+    mount test**: `SourceImageOverlay.svelte` skipped drawing every
+    region box on a real W8 (list-only) backend — its per-item loop's
+    `if (!sub) continue` guard never ran for a capability that only ever
+    populates `subBoxes`, not the legacy singular `subBox`. Mutation-
+    checked twice (the tone-color mapping and the loop guard fix each
+    independently fail the new test when reverted).
 
 - **Projects UI: every page under `/p/[project]`, a project switcher and
   `/projects` management (P1–P3 surface).** The active project lives in

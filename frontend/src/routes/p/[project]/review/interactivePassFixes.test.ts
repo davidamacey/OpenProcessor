@@ -66,56 +66,29 @@ describe('M2/M12: the crop/region image never collapses to 0px when Details open
   });
 });
 
-describe("B2 (frontend half): confirming an unchanged region box doesn't rewrite provenance", () => {
+describe("B2 (frontend half): confirming an untouched box doesn't rewrite provenance", () => {
+  // The multi-box confirm sends an untouched stored box as `{box_id}` alone
+  // (multiBox.test.ts pins buildRegionsPutBoxes), so the server keeps its
+  // geometry, detector and score verbatim. The only confirm left in the
+  // page is the box-less slot's, a status-only write.
   const confirmFn = src.match(/async function confirmSlot\([\s\S]*?\n {2}\}/)?.[0];
 
-  it('confirmSlot is defined', () => {
+  it('confirmSlot (a slot with no box list) is a status-only PATCH region_meta via patchSlotMeta', () => {
     expect(confirmFn).toBeDefined();
-  });
-
-  it('compares the edited box against the seeded (served) box', () => {
-    expect(confirmFn).toMatch(
-      /const boxUnchanged = _boxesEqual\(editedSlotBox, seededSlotBox\)/,
-    );
-  });
-
-  it('an unchanged box with a served confirm_status sends PATCH region_meta via patchSlotMeta, not PUT region', () => {
-    expect(confirmFn).toMatch(
-      /boxUnchanged &&\s*confirmStatus &&\s*activeSlot\.capabilities\.lifecycle\?\.statusField/,
-    );
     expect(confirmFn).toMatch(
       /await patchSlotMeta\(activeSlot, item\.id, \{ status: confirmStatus \}\);/,
     );
-  });
-
-  it('a changed box still falls through to the PUT region (frame: parent) write', () => {
-    expect(confirmFn).toMatch(
-      /await setSlotBox\(activeSlot, item\.id, tuple, 'parent'\);/,
-    );
+    expect(confirmFn).not.toMatch(/setSlotBox/);
   });
 
   it('confirmStatus is read from the server-served regionStatusesStore, not a client constant', () => {
-    expect(confirmFn).toMatch(
-      /const confirmStatus = regionStatusesStore\.confirmStatus;/,
-    );
+    expect(confirmFn).toMatch(/regionStatusesStore\.confirmStatus \?\?/);
   });
-});
 
-describe('_boxesEqual value equality (used by the B2 fix)', () => {
-  it('is defined as a field-by-field comparison, not reference equality alone', () => {
-    const fn = src.match(/function _boxesEqual\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
-    expect(fn).toMatch(
-      /a\.cx === b\.cx && a\.cy === b\.cy && a\.w === b\.w && a\.h === b\.h/,
-    );
-  });
-});
-
-describe('seededSlotBox is captured every time the box is (re)seeded from the server', () => {
-  it('_seedSlotFromCurrent sets seededSlotBox alongside editedSlotBox', () => {
-    const fn = src.match(/function _seedSlotFromCurrent\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
-    expect(fn).toMatch(/seededSlotBox = editedSlotBox;/);
+  it('the multi-box confirm routes through the controller, never a page-local write', () => {
+    const fn = src.match(/async function confirmMultiBoxSlot\([\s\S]*?\n {2}\}/)?.[0];
+    expect(fn).toMatch(/multiBox\.confirmAndSave\(item\.id\)/);
+    expect(fn).not.toMatch(/putRegionBoxes|patchSlotMeta/);
   });
 });
 
@@ -146,7 +119,7 @@ describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front wh
     );
   });
 
-  it('prompts before the optimistic queue removal / setSlotBox write, not after', () => {
+  it('prompts before the optimistic queue removal / the write, not after', () => {
     expect(fn).toBeDefined();
     // DQ-m6 (2026-09-24 data-quality pass): window.prompt() replaced with
     // an in-app modal (promptForRejectionReason) — a native dialog
@@ -156,10 +129,10 @@ describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front wh
     // coverage.
     const promptIdx = fn!.indexOf('await promptForRejectionReason()');
     const removeIdx = fn!.indexOf('_removeFromQueue(item)');
-    const setBoxIdx = fn!.indexOf('setSlotBox(activeSlot, item.id, null)');
+    const writeIdx = fn!.indexOf('await patchSlotMeta(');
     expect(promptIdx).toBeGreaterThan(-1);
     expect(promptIdx).toBeLessThan(removeIdx);
-    expect(promptIdx).toBeLessThan(setBoxIdx);
+    expect(promptIdx).toBeLessThan(writeIdx);
     expect(fn).not.toMatch(/window\.prompt\(/);
   });
 

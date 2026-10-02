@@ -2,7 +2,7 @@
  * Pure geometry/color helpers for `EmbeddingPlot.svelte` (curation-
  * strategy plan Phase 5, docs/curation-strategy-plan-2026-09.md §2.7/§5.6).
  *
- * Kept out of the component (mirrors the `bboxFrames.ts` /
+ * Kept out of the component (mirrors the
  * `pager.svelte.ts` split — logic that doesn't need Svelte reactivity
  * lives in a plain, independently-testable module) so the lasso-select
  * math and the data->screen projection can be unit tested without a

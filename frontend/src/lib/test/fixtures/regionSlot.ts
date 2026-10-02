@@ -29,6 +29,7 @@ export const WIDGET_TAG_PROFILE: ServedRegionProfile = {
   text_reader: 'ocr',
   reads_text: true,
   text_hint_enabled: false,
+  limits: { max_boxes_per_write: 500 },
 };
 
 export const widgetTagServedSlot: SlotSpec =
@@ -45,6 +46,7 @@ export const WIDGET_TAG_PROFILE_NO_TEXT: ServedRegionProfile = {
   text_reader: 'none',
   reads_text: false,
   text_hint_enabled: false,
+  limits: { max_boxes_per_write: 500 },
 };
 
 export const widgetTagServedSlotNoText: SlotSpec = regionSlotFromServedProfile(

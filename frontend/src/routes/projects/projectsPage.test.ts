@@ -47,9 +47,8 @@ let listed: ProjectSummary[];
 let capacity = testCapacity('ok');
 let handler: Handler = () => undefined;
 let writes: { method: string; url: string; body: unknown }[] = [];
-/** The served pipeline-pause flag per slug (`GET {prefix}/pause`). */
+/** The served per-project pause flag, carried on the `GET /projects` rows. */
 let paused: Record<string, boolean> = {};
-let pauseReads: string[] = [];
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
@@ -89,7 +88,6 @@ beforeEach(() => {
   handler = () => undefined;
   writes = [];
   paused = {};
-  pauseReads = [];
   projectPauseStore.reset();
   toastStore.toasts = [];
   vi.stubGlobal(
@@ -98,12 +96,12 @@ beforeEach(() => {
       const method = init.method ?? 'GET';
       const u = String(url);
       if (method === 'GET' && /\/projects(\?|$)/.test(u)) {
-        return json(testProjectsResponse(listed, { capacity }));
-      }
-      const pauseOf = listed.find((p) => u === `${p.prefix}/pause`);
-      if (method === 'GET' && pauseOf) {
-        pauseReads.push(u);
-        return json({ project: pauseOf.slug, paused: paused[pauseOf.slug] ?? false });
+        return json(
+          testProjectsResponse(
+            listed.map((p) => ({ ...p, paused: paused[p.slug] ?? false })),
+            { capacity },
+          ),
+        );
       }
       writes.push({
         method,
@@ -355,16 +353,11 @@ describe('delete', () => {
 });
 
 describe('pipeline pause', () => {
-  it('reads every selectable row from its own served prefix and shows the served flag', async () => {
+  it('shows the served per-row flag with no per-row pause reads', async () => {
     paused = { alpha: true };
     await render();
     await vi.waitFor(() => expect(q('project-paused-alpha')).not.toBeNull());
     expect(q('project-paused-default')).toBeNull();
-    // Served prefixes, never a slug path assembled here; `wip` is not
-    // selectable, so it is never read.
-    expect([...pauseReads].sort()).toEqual(
-      [`${DEFAULT.prefix}/pause`, `${ALPHA.prefix}/pause`, `${OLD.prefix}/pause`].sort(),
-    );
     // Writable rows offer the opposite of the served flag; the archived
     // row shows no control.
     expect(q('project-resume-alpha')).not.toBeNull();
@@ -372,29 +365,14 @@ describe('pipeline pause', () => {
     expect(q('project-pause-default')).not.toBeNull();
     expect(q('project-pause-old')).toBeNull();
     expect(q('project-resume-old')).toBeNull();
-  });
-
-  it("no control until the row's served state has loaded", async () => {
-    listed = [DEFAULT];
-    // Never answer the pause read.
-    const original = globalThis.fetch;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string, init: RequestInit = {}) =>
-        String(url).endsWith('/pause')
-          ? new Promise<Response>(() => {})
-          : original(url, init),
-      ),
-    );
-    await render();
-    expect(q('project-pause-default')).toBeNull();
-    expect(q('project-resume-default')).toBeNull();
+    expect(writes).toEqual([]);
   });
 
   it("pause is confirm-gated, POSTs the row's served prefix, and shows the chip", async () => {
     handler = (u) =>
       u === `${ALPHA.prefix}/pause`
-        ? json({ project: 'alpha', paused: true })
+        ? ((paused.alpha = true),
+          json({ project: 'alpha', paused: true, paused_by: ['project'], reason: null }))
         : undefined;
     await render();
     await vi.waitFor(() => expect(q('project-pause-alpha')).not.toBeNull());
@@ -414,7 +392,8 @@ describe('pipeline pause', () => {
     paused = { alpha: true };
     handler = (u) =>
       u === `${ALPHA.prefix}/resume`
-        ? json({ project: 'alpha', paused: false })
+        ? ((paused.alpha = false),
+          json({ project: 'alpha', paused: false, paused_by: [], reason: null }))
         : undefined;
     await render();
     await vi.waitFor(() => expect(q('project-resume-alpha')).not.toBeNull());

@@ -102,18 +102,17 @@ describe('no raw region_thumbnail URL construction outside the api.ts helpers', 
 describe('SlotCard.svelte uses the shared helpers, not a bare fallback string', () => {
   const src = readFileSync(path.resolve(libRoot, 'components/SlotCard.svelte'), 'utf-8');
 
-  it('imports getRegionThumbUrl and resolveApiUrl from $lib/api', () => {
-    expect(src).toMatch(/getRegionThumbUrl/);
-    expect(src).toMatch(/resolveApiUrl/);
+  it('resolves the server-supplied box thumbnail_url through resolveApiUrl, not verbatim', () => {
+    expect(src).toMatch(/resolveApiUrl\(box\.thumbnailUrl\)/);
   });
 
-  it('resolves the server-supplied region_thumbnail_url through resolveApiUrl, not verbatim', () => {
-    expect(src).toMatch(/resolveApiUrl\(crop\.region_thumbnail_url\)/);
-  });
-
-  it('falls back to getRegionThumbUrl(crop.crop_id), never a bare template string', () => {
-    expect(src).toMatch(/getRegionThumbUrl\(crop\.crop_id\)/);
+  it("builds an unserved box's URL from the slot's own thumbnail path, never a bare template string", () => {
+    expect(src).toMatch(/thumbCap\.path\(crop\.crop_id, box\.boxId,/);
     expect(src).not.toMatch(RAW_REGION_THUMB_PATTERN);
+  });
+
+  it('falls back to the item thumbnail helper for an item with no box', () => {
+    expect(src).toMatch(/getThumbUrl\(crop\.crop_id\)/);
   });
 });
 
@@ -127,8 +126,8 @@ describe('SlotCard.svelte uses the shared helpers, not a bare fallback string', 
 describe('the served region slot declares the registered region-thumbnail segment', () => {
   it('renders /crops/{id}/region_thumbnail', () => {
     const slot = regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
-    expect(slot.capabilities.subBox?.thumbnail?.path('x', 160)).toMatch(
-      /^\/crops\/x\/region_thumbnail\b/,
+    expect(slot.capabilities.subBox?.thumbnail?.path('x', 'b1', 160)).toBe(
+      '/crops/x/region_thumbnail?box_id=b1&size=160',
     );
   });
 });

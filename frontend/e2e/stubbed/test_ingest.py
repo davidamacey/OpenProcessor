@@ -164,14 +164,9 @@ def test_upload_folder_happy_path(stub, page, app_url):
                 "successful": sum(1 for r in results if r["status"] == "success"),
                 "duplicates": 0,
                 "failed": sum(1 for r in results if r["status"] == "failed"),
-                "mismatches": 0,
-                "missed_labels": 0,
-                "unmatched_detections": 0,
-                "labels_imported": 0,
                 "crops_indexed": 2,
             },
             "results": results,
-            "disagreements": [],
         }
 
     stub.on("POST", r"/ingest/path_lookup", lookup_handler)
@@ -311,10 +306,6 @@ def test_server_path_batch_panel(stub, page, app_url):
                 "successful": 1,
                 "duplicates": 0,
                 "failed": 0,
-                "mismatches": 0,
-                "missed_labels": 0,
-                "unmatched_detections": 0,
-                "labels_imported": 0,
                 "crops_indexed": 3,
             },
             "results": [
@@ -330,7 +321,6 @@ def test_server_path_batch_panel(stub, page, app_url):
                     "source_identifier": None,
                 }
             ],
-            "disagreements": [],
         }
 
     stub.on("POST", r"/ingest/batch", batch_handler)

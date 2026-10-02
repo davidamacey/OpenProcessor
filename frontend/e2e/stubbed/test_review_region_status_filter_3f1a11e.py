@@ -108,35 +108,58 @@ _CANDIDATE_BBOX = [0.15, 0.25, 0.55, 0.75]
 
 
 def needs_human_item() -> dict:
-    # A verify_rejected candidate the verifier never actually judged —
-    # the live backend fact this adoption is pinned against (18 total
-    # under region_status=verify_rejected: 13 model_verdict + 5
-    # verifier_no_verdict).
+    # W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): a rejected
+    # box the verifier never actually judged — no separate "candidate"
+    # shape, just a SlotBox with state: 'rejected' and its own
+    # rejection_reason. The live backend fact this adoption is pinned
+    # against (18 total under region_status=verify_rejected: 13
+    # model_verdict + 5 verifier_no_verdict).
     item = make_item(
         crop_id="tag-needs-human-1",
         image_id="img-1",
         class_id=1,
         class_name=REGION_CLASS,
         thumbnail_url="/curation/crops/tag-needs-human-1/thumbnail",
-        region_bbox_norm=None,
-        region_bbox_in_parent=None,
         region_status="verify_rejected",
-        region_rejection_reason="verifier_no_verdict",
         region_verified=False,
         region_validated=False,
         region_auto_confirmed=False,
-        region_candidate_bbox_norm=_CANDIDATE_BBOX,
-        region_candidate_bbox_in_parent=_CANDIDATE_BBOX,
-        region_candidate_score=0.42,
-        region_candidate_detector="sam3",
-        region_candidate_detector_version="3.0.0",
-        region_candidate_source="segmenter",
+        region_boxes=[
+            {
+                "box_id": "b1",
+                "state": "rejected",
+                "bbox_norm": _CANDIDATE_BBOX,
+                "bbox_in_parent": _CANDIDATE_BBOX,
+                "score": 0.42,
+                "detector": "sam3",
+                "detector_version": "3.0.0",
+                "source": "segmenter",
+                "bbox_correct": None,
+                "confidence": None,
+                "rejection_reason": "verifier_no_verdict",
+                "text": None,
+                "text_raw": None,
+                "text_confidence": None,
+                "text_source": None,
+                "text_engine_version": None,
+                "text_vlm": None,
+                "text_ocr": None,
+                "text_disagreement": None,
+                "text_choice": None,
+                "text_vlm_invalid": None,
+                "cluster_id": None,
+                "cluster_subid": None,
+                "cluster_distance": None,
+                "detected_at": "2026-05-06T07:08:09Z",
+                "thumbnail_url": "/curation/crops/tag-needs-human-1/region_thumbnail?box_id=b1",
+            }
+        ],
     )
     # Every /review/{tab} row also carries the generic `reason` key (m4
     # mismatches) — the backend fact this test pins: it always reads
     # "verifier rejected this candidate (...)" even for a needs_human
-    # item, so the frontend must not render it verbatim once
-    # region_rejection_reason is present.
+    # item, so the frontend must not render it verbatim once the box's
+    # own rejection reason is present.
     item["reason"] = "verifier rejected this candidate (verifier_no_verdict) — needs human review"
     return item
 

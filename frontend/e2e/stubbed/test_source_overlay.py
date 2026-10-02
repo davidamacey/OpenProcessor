@@ -38,10 +38,7 @@ def review_item(i: int) -> dict:
         # per-item box; a region slot's own box/candidate rendering is
         # covered by the component mount test
         # (SourceImageOverlay.test.ts), not duplicated here.
-        region_bbox_norm=None,
-        region_bbox_in_parent=None,
-        region_candidate_bbox_norm=None,
-        region_candidate_bbox_in_parent=None,
+        region_boxes=[],
     )
     item["reason"] = "uncertainty"
     return item

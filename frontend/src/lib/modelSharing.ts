@@ -7,22 +7,24 @@ import type { ModelInfo } from '$lib/types';
 import type { ModelClassMappingSummary } from '$lib/types_models';
 
 /**
- * `owner`: the served `project` is the active project, so the owner-only
- * sharing toggle may render. `foreign`: another project's model (listed
- * only because its owner shared it). `none`: no owning project served
+ * `owner`: the server says this project owns the model (`owned`), so the
+ * owner-only sharing toggle may render. `foreign`: another project's model
+ * (listed only because its owner shared it). `none`: no owning project
  * (a base model or an external service).
  */
 export type SharingRole = 'owner' | 'foreign' | 'none';
 
-export function sharingRole(m: ModelInfo, activeSlug: string | null): SharingRole {
-  if (m.project == null) return 'none';
-  return m.project === activeSlug ? 'owner' : 'foreign';
+export function sharingRole(m: Pick<ModelInfo, 'owned' | 'project'>): SharingRole {
+  if (m.owned) return 'owner';
+  return m.project == null ? 'none' : 'foreign';
 }
 
 /** The toggle needs the served sharing revision to send back as
- *  `expected_revision`; without it (backend ask BA-P2-1) it is absent. */
-export function canToggleSharing(m: ModelInfo, activeSlug: string | null): boolean {
-  return sharingRole(m, activeSlug) === 'owner' && typeof m.sharing_revision === 'number';
+ *  `expected_revision`, which the server serves only for an owned model. */
+export function canToggleSharing(
+  m: Pick<ModelInfo, 'owned' | 'project' | 'sharing_revision'>,
+): boolean {
+  return sharingRole(m) === 'owner' && typeof m.sharing_revision === 'number';
 }
 
 export function mappingText(summary: ModelClassMappingSummary): string {

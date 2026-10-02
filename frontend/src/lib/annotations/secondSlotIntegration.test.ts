@@ -24,7 +24,6 @@ import { buildSlotKeymap, singleCharCombos } from '../review/slotKeymap';
 import {
   humanWritableStates,
   panelLabels,
-  statusClearsBox,
   statusWantsRejectionReason,
 } from '../review/slotPanel';
 import { reservedHotkeyLetters } from '../classHotkey';
@@ -99,7 +98,7 @@ describe('P3.6: registering a second capable slot works with zero production cod
 
   // C6 (Finding D, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
   // §6): /review's inline panel body — not just the tab shell/keymap —
-  // is now slot-generic. These are the executable proof: the same four
+  // is now slot-generic. These are the executable proof: the same
   // slotPanel.ts functions the panel calls produce a completely
   // different, correct result for a second slot, with zero code change.
   it("slotPanel helpers produce the tail-number slot's own vocabulary, not another slot's", () => {
@@ -108,8 +107,6 @@ describe('P3.6: registering a second capable slot works with zero production cod
       { value: 'not_visible', label: 'no tail number visible' },
       { value: 'obscured', label: 'obscured / partial' },
     ]);
-    expect(statusClearsBox(aircraftTailNumberSlot, 'not_visible')).toBe(true);
-    expect(statusClearsBox(aircraftTailNumberSlot, 'no_region_visible')).toBe(false);
     expect(statusWantsRejectionReason(aircraftTailNumberSlot, 'obscured')).toBe(true);
     expect(statusWantsRejectionReason(aircraftTailNumberSlot, 'detected')).toBe(false);
     expect(panelLabels(aircraftTailNumberSlot)).toEqual({

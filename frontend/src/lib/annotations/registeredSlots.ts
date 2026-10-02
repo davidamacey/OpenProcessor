@@ -21,7 +21,7 @@
  * not the served profile's name. A tier-2 slot that never touches a
  * region route is kept either way.
  *
- * Everything else (SlotCard/SlotGallery/BboxCanvas/SlotBboxEditor,
+ * Everything else (SlotCard/SlotGallery/SlotBboxEditor,
  * reviewTabs.ts's REVIEW_TABS, clusters/+page.svelte's class-filter
  * routing, +layout.svelte's sidebar routing) reads from
  * `registeredSlots`/`slotRegistry` rather than naming a slot.
@@ -81,9 +81,7 @@ function declaredPaths(slot: SlotSpec): string[] {
   const e = slot.endpoints;
   const paths: Array<string | undefined> = [
     slot.capabilities.queue?.browsePath,
-    slot.capabilities.subBox?.thumbnail?.path(id, 1),
-    e.setBox?.(id),
-    e.clearBox?.(id),
+    slot.capabilities.subBox?.thumbnail?.path(id, 'b', 1),
     e.patchMeta?.(id),
     e.batchStatus?.(),
   ];
@@ -97,6 +95,20 @@ function declaredPaths(slot: SlotSpec): string[] {
  *  backend answers with 409 when it has no region profile. */
 export function callsRegionRoutes(slot: SlotSpec): boolean {
   return declaredPaths(slot).some((p) => REGION_ROUTE.test(p));
+}
+
+/** A tier-2 slot that replaces the served region slot still gets the
+ *  served write limit: a deployment file never declares it. */
+function withServedLimits(slot: SlotSpec, profile: ServedRegionProfile): SlotSpec {
+  const subBox = slot.capabilities.subBox;
+  if (!subBox?.listField) return slot;
+  return {
+    ...slot,
+    capabilities: {
+      ...slot.capabilities,
+      subBox: { ...subBox, maxBoxesPerWrite: profile.limits.max_boxes_per_write },
+    },
+  };
 }
 
 /**
@@ -121,7 +133,7 @@ export function applyRegionProfileRule(
         `slot "${s.key}" uses region routes, but the backend's region profile is "${profile.name}" — dropped (use key "${profile.name}" to customize the region slot)`,
       );
     } else {
-      kept.push(s);
+      kept.push(withServedLimits(s, profile));
     }
   }
   return { kept, warnings };

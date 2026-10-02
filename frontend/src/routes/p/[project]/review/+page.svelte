@@ -11,7 +11,6 @@
     getThumbUrl,
     locateInReviewQueue,
     selectDiverse,
-    setSlotBox,
     patchSlotMeta,
   } from '$lib/api';
   import { trapFocus } from '$lib/actions/trapFocus';
@@ -19,7 +18,8 @@
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
-  import BboxCanvas from '$lib/components/BboxCanvas.svelte';
+  import MultiBoxCanvas from '$lib/components/MultiBoxCanvas.svelte';
+  import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
   import SourceImageOverlay from '$lib/components/SourceImageOverlay.svelte';
@@ -32,7 +32,6 @@
   import { createReviewQueueController } from '$lib/review/reviewController.svelte';
   import { buildSlotKeymap, rejectKeyGlyph } from '$lib/review/slotKeymap';
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
-  import { computeViewBox } from '$lib/review/viewBox';
   import {
     emptyQueueMessage,
     locateMissMessage,
@@ -43,7 +42,6 @@
   import { NO_OPINION_TEXT, probeOpinion } from '$lib/review/probeOpinion';
   import {
     humanWritableStates,
-    statusClearsBox,
     statusWantsRejectionReason,
     panelLabels,
   } from '$lib/review/slotPanel';
@@ -70,7 +68,6 @@
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { isDiverseOverlayAvailable } from '$lib/strategies';
   import type {
-    BBoxNorm,
     Crop,
     DiverseSelection,
     RegistryClass,
@@ -89,7 +86,7 @@
   import { keymapStore } from '$stores/keymap.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
-  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
@@ -141,6 +138,16 @@
   // hangs every slot-tab call site off, instead of a hand-maintained
   // literal per site.
   const activeSlot = $derived(REVIEW_TABS.find((t) => t.id === tab)?.slot ?? null);
+  // Multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+  // the controller owns the working box set; every item the server returns
+  // (a write, or the current item inside a revision conflict) patches the
+  // queue's own copy so the panel never reads a stale one.
+  const multiBox = createMultiBoxRegionController(() => activeSlot, {
+    onitem: (crop) => {
+      const idx = queue.items.findIndex((x) => x.id === crop.id);
+      if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...crop } as ReviewItem;
+    },
+  });
   // Active quick-filter preset chip on the All tab (null = plain All).
   // Only ever meaningful while tab === 'all' — resolveEffectiveTab drops
   // it for every other tab, and switching tabs clears it outright.
@@ -800,16 +807,27 @@
   onMount(() => stopDiversePolling);
 
   const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
-  // 3f1a11e adoption: a slot-tab item's own `region_rejection_reason`
-  // (when present) is the authoritative, kind-styled explanation — the
-  // generic per-item `reason` string (see the "Reason" row below) always
-  // says "verifier rejected this candidate (…)", wrong wording for a
-  // needs_human item. Only fall back to `current.reason` when there's no
-  // region_rejection_reason at all (core tabs, e.g. the mismatches
-  // preset, which don't carry one).
+  // A slot that declares `listField` (the served region slot, always) uses
+  // MultiBoxCanvas/multiBoxRegionController. A tier-2 slot with only a
+  // scalar `bboxField` is display-only: the backend has no write route for
+  // it, so it has no edit mode.
+  const isMultiBoxSlot = $derived(activeSlot?.capabilities.subBox?.listField != null);
+  // 3f1a11e adoption, updated for W8: the authoritative, kind-styled
+  // explanation for the "Reason" row — the generic per-item `reason`
+  // string (see below) always says "verifier rejected this candidate
+  // (…)", wrong wording for a needs_human item. W8 moved the MACHINE
+  // reason off the item (`region_rejection_reason` is now the reviewer's
+  // free-text note only, per spec) onto each rejected box
+  // (`SlotBox.rejectionReason`) — for a multi-box slot this reads the
+  // first rejected box's reason; a tier-2 single-box slot still reads
+  // the item-level field. Only falls back to `current.reason` when
+  // neither is present (core tabs, e.g. the mismatches preset).
   const currentSlotRejectionReason = $derived<string | null>(
     activeSlot && current
-      ? (slotOf(current, activeSlot)?.lifecycle?.rejectionReason ?? null)
+      ? isMultiBoxSlot
+        ? (slotOf(current, activeSlot)?.subBoxes?.find((b) => b.state === 'rejected')
+            ?.rejectionReason ?? null)
+        : (slotOf(current, activeSlot)?.lifecycle?.rejectionReason ?? null)
       : null,
   );
   // DQ-M8: served role (classSourcesStore, GET {API_PREFIX}/class_sources), not
@@ -1074,17 +1092,10 @@
   }
 
   // -- slot-tab actions -------------------------------------------------
-  // Inline editor — no modal. The canvas is always live; if the user
-  // tweaks the proposed bbox, Confirm saves the edited version. If they
-  // leave it alone, Confirm saves the proposal as-is. The goal is one
-  // keystroke (Enter) per item when scanning thousands of crops.
-  //
-  // editedSlotBox lives in the *crop-local* (parent) frame (the same
-  // space BboxCanvas operates in) — read straight off readSlot's own
-  // projection (slotOf(current, activeSlot)?.subBox?.parent), never
-  // re-derived by hand. The seeding effect re-runs whenever the cursor
-  // advances to a new crop.
-  let editedSlotBox = $state<BBoxNorm | null>(null);
+  // The canvas is always live for a multi-box slot (`multiBox` owns the
+  // working set): tweak boxes, accept/reject one, and Enter confirms the
+  // proposed ones. The goal is one keystroke (Enter) per item when
+  // scanning thousands of crops.
   // DQ-M5: natural pixel size of the currently-rendered crop thumbnail,
   // read back via Svelte's bind:naturalWidth/naturalHeight once the <img>
   // loads. Drives capCropDisplayStyle() so a tiny crop upscales by at most
@@ -1095,20 +1106,6 @@
   const cropDisplayStyle = $derived(
     capCropDisplayStyle(cropNaturalWidth, cropNaturalHeight),
   );
-  // B2 (2026-09-24 interactive pass): the served box at seed time, kept
-  // alongside editedSlotBox so confirmSlot() can tell "operator didn't
-  // touch the box" from "operator edited it" — a same-box confirm must
-  // not go through the same write path as a real edit (see confirmSlot).
-  let seededSlotBox: BBoxNorm | null = null;
-  // dq-region (2026-09-24): true when editedSlotBox above was seeded from
-  // a verifier-rejected CANDIDATE box (no real region box exists yet) —
-  // drives the dashed/candidate rendering and the "rejected — confirm to
-  // accept" hint. Confirming while this is true and the box is otherwise
-  // unchanged still goes through confirmSlot's normal boxUnchanged ->
-  // status-only-PATCH path; the backend promotes the candidate into the
-  // region box itself (candidate_promotion in region_writes.py) — the
-  // frontend never computes that promotion client-side.
-  let editedSlotBoxIsCandidate = $state(false);
   let slotCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(null);
   // Read-only by default: the canvas only becomes interactive when the
   // operator presses E (or clicks Edit bbox). Most cascade-detected
@@ -1117,10 +1114,6 @@
   // tabs. Edit mode resets to false on every cursor advance so the
   // operator always lands on the next item in scan-and-confirm mode.
   let editMode = $state<boolean>(false);
-  /** The crop an edit session belongs to. Enter in edit mode saves the
-   *  box to THIS id, never to whatever `current` has since become. */
-  let editingCropId = $state<string | null>(null);
-  let slotSaving = $state<boolean>(false);
 
   // Inline editors for the slot metadata fields. Seeded from the
   // current crop's SlotData on every cursor advance; saved on blur /
@@ -1183,6 +1176,31 @@
   const undoHint = () =>
     `Press ${kg('review.undo')} to undo, step back with ${kg('review.region.back')}.`;
 
+  // W8 multi-box: per-box state → ring color/dash. The ring color now
+  // reads the served box_states `tone` (backend follow-up to W8.7,
+  // feat/w8-multibox-lockstep) via `toneRingRgb(boxStateTone(state))` —
+  // `boxStateTone` returns 'neutral' on a pre-tone backend or an
+  // unrecognized state, so this never invents a color the server didn't
+  // choose.
+  function multiBoxRingColor(state: string): string {
+    return toneRingRgb(regionStatusesStore.boxStateTone(state));
+  }
+  function multiBoxDashed(state: string): boolean {
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
+    );
+  }
+  function multiBoxStateLabel(state: string): string {
+    const served = regionStatusesStore.boxStateInfo(state)?.label;
+    if (served) return served;
+    if (state === 'accepted') return 'accepted';
+    if (state === 'proposed') return 'awaiting verification';
+    if (state === 'false_positive') return 'false positive';
+    if (state === 'rejected') return 'rejected';
+    return state;
+  }
+
   // Undo stack for slot confirm/reject. Each entry holds the previously
   // confirmed box so "Back" can re-insert the crop into the queue and
   // restore what the user just saved (allowing them to fix a mistake
@@ -1191,12 +1209,6 @@
   interface SlotUndoEntry {
     item: ReviewItem;
     insertAt: number;
-    /**
-     * The sub-box, in the parent-crop-normalized frame, that was sent to
-     * the server for this confirm (frame: 'parent') — null means
-     * "rejected" (not visible).
-     */
-    saved: [number, number, number, number] | null;
   }
   // $state.raw, not $state: deep reactivity would proxy every pushed entry,
   // so _removeSlotUndo could never match the raw object the caller holds.
@@ -1248,59 +1260,40 @@
     );
   }
 
-  function _seedSlotFromCurrent(): void {
-    const slotData = current && activeSlot ? slotOf(current, activeSlot) : null;
-    // dq-region: no real box (rawXyxy null) but a verifier-rejected
-    // candidate exists -> seed the editor from the candidate instead, so
-    // an unchanged Confirm promotes it (see editedSlotBoxIsCandidate's
-    // doc comment above and confirmSlot below).
-    const mainBox = slotData?.subBox?.parent ?? null;
-    const candidateBox =
-      slotData?.subBox?.rawXyxy == null
-        ? (slotData?.subBox?.candidate?.parent ?? null)
-        : null;
-    editedSlotBox = mainBox ?? candidateBox;
-    editedSlotBoxIsCandidate = mainBox == null && candidateBox != null;
-    seededSlotBox = editedSlotBox;
-  }
-
-  /** Value equality on a BBoxNorm, tolerant of null on either side. */
-  function _boxesEqual(a: BBoxNorm | null, b: BBoxNorm | null): boolean {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    return a.cx === b.cx && a.cy === b.cy && a.w === b.w && a.h === b.h;
-  }
-
-  // Slot-centered viewport for the right-side canvas. **Frozen** —
-  // computed once when the crop loads and held steady during edits.
-  // If we derived it from `editedSlotBox` instead, every drag tick
-  // would recompute the zoom and the IMG transform would pan/scale
-  // along with the resize handle, making the box feel like it's
-  // rubber-banding the whole image. The canvas applies viewBox as a
-  // pure display transform; saved coordinates remain in crop-local
-  // frame and project to the slot's stored frame on confirm.
-  const SLOT_VIEW_PADDING = 2.5;
-  let slotViewBox = $state<BBoxNorm | null>(null);
-  function _seedViewBox(): void {
-    // Padding/squaring/clamping math lives in viewBox.ts (Phase 0 seam),
-    // with its own unit tests; the untrack()-wrapped call site (below)
-    // is what actually makes this "frozen" and has to stay here.
-    slotViewBox = computeViewBox(editedSlotBox, SLOT_VIEW_PADDING);
-  }
-
   // Reseed whenever the cursor changes (advancing to next crop) or the
   // tab/items reset. Also exit edit mode so the next item lands in
   // read-only scan mode regardless of where we left the previous one.
   //
-  // The ONLY dependency is the current crop's id. Everything after that
-  // runs untracked: `_seedSlotFromCurrent` reads `editedSlotBox`
-  // (`seededSlotBox = editedSlotBox`), so running it tracked made every
-  // drag tick / arrow nudge re-run this effect, reseed the box from the
-  // server snapshot and drop edit mode — after which further arrows paged
-  // the queue and Enter confirmed a different crop.
+  // The ONLY dependency is the current crop's id: everything after that
+  // runs untracked, so a drag tick or nudge never reseeds the working
+  // set from the server snapshot and drops edit mode.
   $effect(() => {
     const id = current?.id;
     untrack(() => reseedForCrop(id ?? null));
+  });
+
+  /** The served box the operator has selected (a stored box; a new local
+   *  box has no served data yet). */
+  const selectedSlotBox = $derived.by(() => {
+    if (!current || !activeSlot || !isMultiBoxSlot) return null;
+    const id = multiBox.boxes[multiBox.selectedIndex ?? -1]?.boxId ?? null;
+    if (id == null) return null;
+    return slotOf(current, activeSlot)?.subBoxes?.find((b) => b.boxId === id) ?? null;
+  });
+
+  /** The text the reading input starts from: the selected box's reading
+   *  for a multi-box slot, the item-level value for a scalar-box slot. */
+  function seededText(): string {
+    if (!current || !activeSlot) return '';
+    if (isMultiBoxSlot) return selectedSlotBox?.text ?? '';
+    return slotOf(current, activeSlot)?.text?.value ?? '';
+  }
+
+  $effect(() => {
+    const text = seededText();
+    untrack(() => {
+      editedSlotText = text;
+    });
   });
 
   function reseedForCrop(id: string | null): void {
@@ -1309,15 +1302,12 @@
     // rebinds naturalWidth/naturalHeight.
     cropNaturalWidth = 0;
     cropNaturalHeight = 0;
-    _seedSlotFromCurrent();
-    // Freeze the zoom viewport on the just-seeded bbox.
-    _seedViewBox();
     const seedData = current && activeSlot ? slotOf(current, activeSlot) : null;
-    editedSlotText = seedData?.text?.value ?? '';
+    editedSlotText = seededText();
     editedSlotStatus = seedData?.lifecycle?.status ?? '';
     editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
     editMode = false;
-    editingCropId = null;
+    if (isMultiBoxSlot) multiBox.seedFrom(current ?? null);
     void id;
   }
 
@@ -1361,7 +1351,7 @@
       if (current?.id === id) {
         const idx = findIdx();
         const seedData = idx >= 0 ? slotOf(queue.items[idx], activeSlot) : null;
-        editedSlotText = seedData?.text?.value ?? '';
+        editedSlotText = seededText();
         editedSlotStatus = seedData?.lifecycle?.status ?? '';
         editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
       }
@@ -1373,8 +1363,14 @@
 
   async function commitSlotText(): Promise<void> {
     if (!current || !activeSlot) return;
-    const slotData = slotOf(current, activeSlot);
     const next = editedSlotText.trim() || null;
+    if (isMultiBoxSlot) {
+      // A reading is per box: PATCH the selected stored box.
+      if ((selectedSlotBox?.text ?? null) === next) return;
+      await multiBox.setSelectedText(current.id, next);
+      return;
+    }
+    const slotData = slotOf(current, activeSlot);
     if ((slotData?.text?.value ?? null) === next) return;
     await saveSlotMeta({ text: next });
   }
@@ -1384,21 +1380,8 @@
     if (!editedSlotStatus) return;
     const slotData = slotOf(current, activeSlot);
     if (editedSlotStatus === slotData?.lifecycle?.status) return;
-    const id = current.id;
-    // The reject state implies the bbox is gone — call setSlotBox null
-    // to keep the bbox + status in sync (avoids the contradiction of a
-    // reject status with a populated sub-box).
-    if (statusClearsBox(activeSlot, editedSlotStatus, regionStatusesStore.list)) {
-      try {
-        const item = await setSlotBox(activeSlot, id, null);
-        const idx = queue.items.findIndex((x) => x.id === id);
-        if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
-        editedSlotBox = null;
-      } catch (e) {
-        toastStore.error(`Save failed: ${(e as Error).message}`);
-      }
-      return;
-    }
+    // The server decides what a status does to the box list (a
+    // `clears_box` status empties it); the returned item is rendered as is.
     await saveSlotMeta({ status: editedSlotStatus });
   }
 
@@ -1411,119 +1394,62 @@
   }
 
   function toggleEdit(): void {
-    if (!current) return;
+    // Only a multi-box slot has an edit mode; a scalar-box slot is
+    // display-only (the backend has no write route for it).
+    if (!current || !isMultiBoxSlot) return;
     if (editMode) {
       // Cancel-style exit: drop local edits and reseed from server state.
-      _seedSlotFromCurrent();
-      _seedViewBox();
+      multiBox.seedFrom(current);
       editMode = false;
-      editingCropId = null;
       return;
     }
-    // Re-center the zoom on whatever bbox we're about to edit (could
-    // differ from the cursor-advance snapshot if the user already saved
-    // once on this crop and is re-editing).
-    _seedViewBox();
-    editingCropId = current.id;
     editMode = true;
   }
 
-  /** [x1,y1,x2,y2] of `box` (a parent-crop-normalized BBoxNorm), for the
-   *  `frame: 'parent'` write path — no projection through the parent
-   *  item bbox needed; the server does that itself. */
-  function _parentFrameTuple(box: BBoxNorm): [number, number, number, number] {
-    return [
-      box.cx - box.w / 2,
-      box.cy - box.h / 2,
-      box.cx + box.w / 2,
-      box.cy + box.h / 2,
-    ];
-  }
-
-  async function saveBboxAndExit(): Promise<void> {
-    if (!current || !activeSlot) return;
-    if (!editedSlotBox) {
-      toastStore.warn(
-        `No bbox to save — draw one or press ${kg('box_edit.delete_box')} to clear.`,
-      );
-      return;
-    }
-    // Save to the crop the edit session started on. If the queue moved
-    // underneath the session, refuse rather than write a box onto (or
-    // confirm) a different crop.
-    const id = editingCropId ?? current.id;
-    if (id !== current.id) {
-      toastStore.warn('The crop changed while editing; the box was not saved.');
-      editMode = false;
-      editingCropId = null;
-      return;
-    }
-    const tuple = _parentFrameTuple(editedSlotBox);
-    slotSaving = true;
-    try {
-      const item = await setSlotBox(activeSlot, id, tuple, 'parent');
-      const idx = queue.items.findIndex((x) => x.id === id);
-      if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
-      editMode = false;
-      editingCropId = null;
-      // M6: Z reverses a box edit the same way it reverses a confirm/
-      // reject/FP below — see undo.svelte.ts's header comment for why
-      // this shares the one undoStore stack (kind: 'region').
-      undoStore.recordRegionWrites([id]);
-      toastStore.success('Bbox saved.');
-    } catch (e) {
-      toastStore.error(`Save failed: ${(e as Error).message}`);
-    } finally {
-      slotSaving = false;
-    }
-  }
-
+  /** Confirm for a slot with no box list: a status-only write. */
   async function confirmSlot(): Promise<void> {
     if (!current || !activeSlot) return;
-    if (!editedSlotBox) {
-      toastStore.warn(
-        `No ${activeSlot.label.singular} bbox to confirm — drag one in or press ${kg('review.region.reject')} to reject.`,
-      );
-      return;
-    }
+    const confirmStatus =
+      regionStatusesStore.confirmStatus ??
+      activeSlot.capabilities.lifecycle?.confirmState;
+    if (!confirmStatus) return;
     const item = current;
-    const tuple = _parentFrameTuple(editedSlotBox);
-    // Snapshot for "Back" before mutating the queue.
-    const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: tuple };
+    const undoEntry: SlotUndoEntry = { item, insertAt: cursor };
     _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
-    // B2 (2026-09-24 interactive pass): PUT region with the SAME box the
-    // server already had is indistinguishable, server-side, from a human
-    // drawing a fresh box — it rewrites region_detector→"human",
-    // region_score→1.0 and stamps new detected_at/verified_at, destroying
-    // the detector's own provenance every time an operator confirms a
-    // box they didn't touch (the common case). When the box is unchanged
-    // and the deployment serves a confirm_status
-    // (GET {API_PREFIX}/regions/statuses), confirm is a status-only PATCH
-    // instead — it never rewrites the box, so provenance survives. A box
-    // that actually changed still goes through the PUT (frame: 'parent')
-    // write below, since that's a real geometry edit.
-    const boxUnchanged = _boxesEqual(editedSlotBox, seededSlotBox);
-    const confirmStatus = regionStatusesStore.confirmStatus;
     try {
-      if (
-        boxUnchanged &&
-        confirmStatus &&
-        activeSlot.capabilities.lifecycle?.statusField
-      ) {
-        await patchSlotMeta(activeSlot, item.id, { status: confirmStatus });
-      } else {
-        await setSlotBox(activeSlot, item.id, tuple, 'parent');
-      }
-      // M6: Z reverses this write server-side (kind: 'region') —
-      // independent of the step-back stack above, which only re-queues
-      // the crop locally without touching what the server just saved.
+      await patchSlotMeta(activeSlot, item.id, { status: confirmStatus });
       undoStore.recordRegionWrites([item.id]);
       toastStore.success(`${activeSlot.label.title} confirmed. ${undoHint()}`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
       toastStore.error(`Confirm failed: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * W8 multi-box Enter (owner decision): confirms only `proposed` boxes,
+   * leaving `rejected`/`false_positive` siblings exactly as they are, in
+   * the same `PUT /crops/{id}/regions` write as any pending geometry edit
+   * (add/move/delete) — see `multiBoxRegionController.confirmAndSave`.
+   * Only advances the queue on success; a server rejection (e.g. 422
+   * `no_accepted_box`) leaves the crop in view so the operator can accept
+   * a box first (`y`) and press Enter again. Z (undo) is unaffected —
+   * `confirmAndSave` already calls `undoStore.recordRegionWrites`, so the
+   * existing `queueController.undoLast()` restores the whole prior list
+   * via `POST /crops/{id}/region/undo` (backend-confirmed one-step
+   * restore, see the plan doc's "resolved" section).
+   */
+  async function confirmMultiBoxSlot(): Promise<void> {
+    if (!current || !activeSlot) return;
+    const item = current;
+    const restore = _removeFromQueue(item);
+    const { ok } = await multiBox.confirmAndSave(item.id);
+    if (ok) {
+      toastStore.success(`${activeSlot.label.title} confirmed. ${undoHint()}`);
+    } else {
+      restore();
     }
   }
 
@@ -1538,28 +1464,21 @@
     // using the served vocabulary to decide whether to ask at all.
     const rejectStatus =
       regionStatusesStore.rejectStatus ?? activeSlot.capabilities.lifecycle?.rejectState;
+    if (!rejectStatus) return;
     let reason: string | null = null;
-    if (
-      rejectStatus &&
-      statusWantsRejectionReason(activeSlot, rejectStatus, regionStatusesStore.list)
-    ) {
+    if (statusWantsRejectionReason(activeSlot, rejectStatus, regionStatusesStore.list)) {
       reason = await promptForRejectionReason();
     }
-    const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: null };
+    const undoEntry: SlotUndoEntry = { item, insertAt: cursor };
     _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
       // One write, so one Z undoes it: the served reject status clears the
-      // box server-side and carries the reason in the same request.
-      if (rejectStatus) {
-        await patchSlotMeta(activeSlot, item.id, {
-          status: rejectStatus,
-          ...(reason ? { rejectionReason: reason } : {}),
-        });
-      } else {
-        // null bbox = "not visible" per setSlotBox's clear contract.
-        await setSlotBox(activeSlot, item.id, null);
-      }
+      // box list server-side and carries the reason in the same request.
+      await patchSlotMeta(activeSlot, item.id, {
+        status: rejectStatus,
+        ...(reason ? { rejectionReason: reason } : {}),
+      });
       undoStore.recordRegionWrites([item.id]);
       toastStore.success(`${activeSlot.label.title} rejected. ${undoHint()}`);
     } catch (e) {
@@ -1581,7 +1500,7 @@
     // which clears it) — flipping only status. The retained geometry
     // feeds FP analysis and becomes a hard negative in the dedicated
     // training export.
-    const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: null };
+    const undoEntry: SlotUndoEntry = { item, insertAt: cursor };
     _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
@@ -1639,7 +1558,7 @@
       // hand-maintained copy — asserted by slotKeymap.test.ts rather than
       // only readable here.
       for (const entry of buildSlotKeymap(activeSlot, editMode, {
-        confirm: confirmSlot,
+        confirm: isMultiBoxSlot ? confirmMultiBoxSlot : confirmSlot,
         reject: rejectSlot,
         markFalsePositive,
         toggleEdit,
@@ -1648,12 +1567,28 @@
           cursor = Math.min(queue.items.length - 1, cursor + 1);
           maybePrefetch();
         },
-        saveAndExit: saveBboxAndExit,
+        // Enter in edit mode is bound to box_edit.save, not
+        // review.region.confirm — for a multi-box slot both must run the
+        // SAME confirm (owner decision: Enter always confirms, in scan or
+        // edit mode, in one write).
+        saveAndExit: confirmMultiBoxSlot,
       })) {
         reg(entry.actionId, entry.fn, {
           keys: [entry.combo],
           description: entry.description,
         });
+      }
+      if (isMultiBoxSlot && current) {
+        // W8 per-box actions (y/r/Tab) — reserved letters, see
+        // keymapFallback.ts. Available in both scan and edit mode, since
+        // accept/reject/select don't require entering edit.
+        const cropId = current.id;
+        reg('review.region.accept_box', () => multiBox.acceptSelected(cropId));
+        reg('review.region.reject_box', () => multiBox.rejectSelected(cropId));
+        reg('box_edit.next_box', () => multiBox.next());
+        if (editMode) {
+          reg('box_edit.delete_box', () => multiBox.deleteSelected());
+        }
       }
     } else {
       reg('review.queue.confirm', () => {
@@ -1674,7 +1609,7 @@
     }
 
     let canvasKey: ((e: KeyboardEvent) => void) | null = null;
-    if (activeSlot?.capabilities.subBox != null && editMode) {
+    if (isMultiBoxSlot && editMode) {
       // Edit mode only: forward the `box_edit` nudge / right-edge / clear
       // keys into the slot's bbox canvas (it resolves them through the
       // keymap). Outside edit mode arrows page the queue like every other
@@ -2063,24 +1998,22 @@
     <span class="grow"></span>
 
     <span class="hidden text-[11px] text-zinc-500 md:inline">
-      {#if activeSlot?.capabilities.subBox && editMode}
-        <kbd
-          >{kg('box_edit.nudge_up')}{kg('box_edit.nudge_down')}{kg(
-            'box_edit.nudge_left',
-          )}{kg('box_edit.nudge_right')}</kbd
-        >
-        nudge · <kbd>{kg('box_edit.shrink_right')} {kg('box_edit.grow_right')}</kbd> right
-        edge ·
-        <kbd>{kg('box_edit.save')}</kbd> save ·
-        <kbd>{kg('box_edit.cancel')}</kbd> cancel
+      {#if isMultiBoxSlot && activeSlot}
+        <kbd>{kg('review.region.confirm')}</kbd> confirm proposed ·
+        <kbd>{kg('review.region.accept_box')}</kbd> accept box ·
+        <kbd>{kg('review.region.reject_box')}</kbd> reject box ·
+        <kbd>{kg('box_edit.next_box')}</kbd> next box
+        {#if editMode}
+          · <kbd>{kg('box_edit.delete_box')}</kbd> delete box · drag empty area to add
+        {:else}
+          · <kbd>{kg('review.region.edit_box')}</kbd> edit
+        {/if}
+        · <kbd>{kg('review.skip')}</kbd> skip
       {:else if activeSlot}
         <kbd>{kg('review.region.confirm')}</kbd> confirm ·
         <kbd>{rejectKeyGlyph(activeSlot)}</kbd> reject
         {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
           · <kbd>{kg('review.region.false_positive')}</kbd> false-pos
-        {/if}
-        {#if activeSlot.capabilities.subBox}
-          · <kbd>{kg('review.region.edit_box')}</kbd> edit
         {/if}
         · <kbd>{kg('review.skip')}</kbd> skip · <kbd>{kg('review.region.back')}</kbd> back
       {:else}
@@ -2188,7 +2121,7 @@
              picture) already pushed the action buttons 3px past the
              bottom edge — e2e/stubbed/test_review_crop_viewport.py
              pins this exact budget. 210px keeps a region sub-box legible
-             (BboxCanvas is still square-aspect within it) while fitting.
+             (the box canvas is still square-aspect within it) while fitting.
              Verified at 1280×720, 1600×1000 and 1920×1080 — see
              artifacts_local/cw-live/phase-b-fixes/. -->
         <!-- F8 D4: overflow-hidden so a region canvas never paints over the
@@ -2196,35 +2129,33 @@
         <div
           class="flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
         >
-          {#if activeSlot?.capabilities.subBox && editMode}
-            <!-- Edit mode — drag/resize the proposal directly, then hit
-                 Enter to save. Square aspect keeps the canvas math
-                 stable; the read-only default below shows the crop at
-                 natural aspect to match the other review tabs. -->
-            <BboxCanvas
+          {#if isMultiBoxSlot && activeSlot}
+            <!-- W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+                 every box drawn at once, numbered by list position. Same
+                 select/add/delete/Tab interaction in scan and edit mode;
+                 only edit mode allows geometry changes (readonly canvas
+                 in scan). -->
+            <MultiBoxCanvas
               bind:this={slotCanvas}
               cropId={current.id}
-              bind:bbox={editedSlotBox}
-              viewBox={slotViewBox}
-              busy={slotSaving}
-              label={activeSlot.label.title}
-              dashed={editedSlotBoxIsCandidate}
-              class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
-            />
-          {:else if activeSlot?.capabilities.subBox}
-            <!-- Read-only default: same <img> layout as every other tab,
-                 with a thin yellow ring overlay on the proposed bbox.
-                 No grabbable handles, no pointer capture — the bbox is
-                 just shown. Press E to edit. A dashed ring (dq-region,
-                 2026-09-24) marks a verifier-rejected CANDIDATE box (no
-                 region box exists yet) rather than an accepted one. -->
-            <BboxCanvas
-              cropId={current.id}
-              bbox={editedSlotBox}
-              viewBox={slotViewBox}
-              readonly
-              label={activeSlot.label.title}
-              dashed={editedSlotBoxIsCandidate}
+              boxes={multiBox.boxes
+                .filter((b) => b.box != null)
+                .map((b) => ({
+                  box: b.box!,
+                  state: b.state,
+                  label: `${activeSlot!.label.title} (${multiBoxStateLabel(b.state)})`,
+                }))}
+              selectedIndex={multiBox.selectedIndex}
+              busy={multiBox.busy}
+              readonly={!editMode}
+              maxBoxes={multiBox.maxBoxes}
+              ringColorFor={multiBoxRingColor}
+              dashedFor={multiBoxDashed}
+              onselect={(i) => multiBox.select(i)}
+              onnext={() => multiBox.next()}
+              onmove={(_i, box) => multiBox.moveSelected(box)}
+              onadd={(box) => multiBox.addBox(box)}
+              ondelete={() => multiBox.deleteSelected()}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else}
@@ -2261,6 +2192,49 @@
             />
           {/if}
         </div>
+
+        {#if isMultiBoxSlot && activeSlot}
+          <!-- One state chip per box, click to select (mirrors
+               MultiBoxCanvas's numbered rings). The served
+               region_set_complete === false means the VLM reported
+               visible regions that are missing from the list. -->
+          <div class="mt-2 flex flex-wrap gap-1" data-testid="multibox-chips">
+            {#each multiBox.boxes as b, i (b.boxId ?? `new-${i}`)}
+              <button
+                type="button"
+                class="chip {i === multiBox.selectedIndex
+                  ? 'border-sky-500/60 bg-sky-500/15 text-sky-100'
+                  : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
+                onclick={() => multiBox.select(i)}
+              >
+                #{i + 1}
+                {multiBoxStateLabel(b.state)}
+              </button>
+            {/each}
+            {#if multiBox.boxes.length === 0}
+              <span class="text-[11px] text-zinc-500">no boxes</span>
+            {/if}
+            {#if current && slotOf(current, activeSlot)?.boxSet?.setComplete === false}
+              <span
+                class="chip border-amber-500/40 bg-amber-500/15 text-amber-200"
+                title="The VLM reported visible regions that are missing from this list"
+                data-testid="set-incomplete"
+              >
+                set incomplete
+              </span>
+            {/if}
+            {#if multiBox.maxBoxes != null}
+              <!-- W8.8: the served region_profile.limits.max_boxes_per_write —
+                   never a client-guessed cap. -->
+              <span
+                class="text-[11px] text-zinc-500"
+                title="Served limit on boxes per write (region_profile.limits.max_boxes_per_write)"
+              >
+                {multiBox.boxes.length} / {multiBox.maxBoxes} max
+              </span>
+            {/if}
+          </div>
+        {/if}
 
         <!-- Everything below the image scrolls in its own region — the
              image above keeps its floor height regardless of how much
@@ -2497,11 +2471,10 @@
             <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
               <span class="text-zinc-500">{slotLabels.scoreLabel}</span>
               <span class="font-mono text-zinc-200">
-                {#if slotData?.subBox?.score != null}
+                {#if isMultiBoxSlot && selectedSlotBox?.score != null}
+                  {(selectedSlotBox.score * 100).toFixed(1)}%
+                {:else if !isMultiBoxSlot && slotData?.subBox?.score != null}
                   {(slotData.subBox.score * 100).toFixed(1)}%
-                {:else if slotData?.subBox?.candidate?.score != null}
-                  {(slotData.subBox.candidate.score * 100).toFixed(1)}%
-                  <span class="text-[10px] text-zinc-500">(candidate)</span>
                 {:else}
                   —
                 {/if}
@@ -2536,10 +2509,10 @@
                     auto-confirmed
                   </span>
                 {/if}
-                <!-- 3f1a11e adoption: region_bbox_correct is the
-                     verifier's own box-correctness verdict — folded into
-                     this row rather than a new one. -->
-                {#if slotData?.lifecycle?.boxCorrect === false}
+                <!-- The verifier's own box-correctness verdict for the
+                     selected box: false is the "model said wrong box"
+                     signal. -->
+                {#if selectedSlotBox?.bboxCorrect === false}
                   <span
                     class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
                     title="The verifier judged this box incorrect"
@@ -2547,63 +2520,81 @@
                     model: box wrong
                   </span>
                 {/if}
+                {#if selectedSlotBox?.locked}
+                  <span
+                    class="rounded border border-zinc-600 bg-zinc-800 px-1 text-[10px] text-zinc-300"
+                    title="A human created or edited this box; automated stages leave it alone"
+                  >
+                    locked
+                  </span>
+                {/if}
+                {#if slotData?.boxSet?.setComplete === false}
+                  <span
+                    class="rounded border border-amber-500/40 bg-amber-500/15 px-1 text-[10px] text-amber-200"
+                    title="The VLM reported visible regions that are missing from this list"
+                  >
+                    set incomplete
+                  </span>
+                {/if}
               </span>
               <span class="text-zinc-500">Detector</span>
               <span class="flex flex-wrap items-center gap-1.5">
-                {#if slotData?.provenance?.detector}
+                {#if selectedSlotBox?.detector || slotData?.provenance?.detector}
                   <ProvenanceChip
-                    detector={slotData.provenance.detector}
-                    version={slotData.provenance.detectorVersion}
+                    detector={selectedSlotBox?.detector ??
+                      slotData?.provenance?.detector ??
+                      null}
+                    version={selectedSlotBox?.detectorVersion ??
+                      slotData?.provenance?.detectorVersion ??
+                      null}
                   />
-                  {#if slotData.provenance.verifier}
-                    <ProvenanceChip
-                      detector={slotData.provenance.verifier}
-                      tag="verify"
-                      version={slotData.provenance.verifierVersion}
-                      size="sm"
-                    />
-                  {/if}
                 {:else}
                   <span class="text-zinc-500">—</span>
                 {/if}
+                {#if slotData?.provenance?.verifier}
+                  <ProvenanceChip
+                    detector={slotData.provenance.verifier}
+                    tag="verify"
+                    version={slotData.provenance.verifierVersion}
+                    size="sm"
+                  />
+                {/if}
                 <!-- The mistakenness chip lives in the Scores row above, not
                      next to the detector provenance chips. -->
-                {#if editedSlotBoxIsCandidate && !editMode}
-                  {@const candidateKind = regionVocabularyStore.rejectionReasonKind(
-                    slotData?.lifecycle?.rejectionReason,
-                  )}
-                  <!-- dq-region / 3f1a11e adoption: a verifier-rejected
-                       candidate box exists (no region box yet). Confirm
-                       (or F) promotes it. Styled/worded by the served
-                       kind — needs_human (verifier_no_verdict) must never
-                       read as "rejected", since that means the opposite:
-                       needs human review, not a model rejection (that's
-                       region_bbox_correct===false, not this reason id). -->
-                  <span
-                    class={`rounded border px-1.5 py-0.5 text-[10px] ${
-                      candidateKind === 'needs_human'
-                        ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
-                        : candidateKind === 'model_verdict'
-                          ? 'border-red-500/40 bg-red-500/15 text-red-200'
-                          : 'border-amber-500/40 bg-amber-500/15 text-amber-200'
-                    }`}
-                    title={slotData?.lifecycle?.rejectionReason
-                      ? regionVocabularyStore.rejectionReasonLabel(
-                          slotData.lifecycle.rejectionReason,
-                        )
-                      : 'Rejected candidate — Confirm to accept, F for false positive'}
-                  >
-                    {candidateKind === 'needs_human'
-                      ? 'candidate · needs review'
-                      : 'rejected candidate · confirm to accept'}
-                  </span>
-                {:else if !editedSlotBox && !editMode}
-                  <span
-                    class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
-                    title={slotLabels.noBoxHint}
-                  >
-                    no bbox · press {kg('review.region.edit_box')} to draw
-                  </span>
+                {#if isMultiBoxSlot && activeSlot}
+                  <!-- W8: no separate "candidate" concept — a
+                       verifier-rejected box is just a SlotBox with
+                       state: 'rejected' and its own rejectionReason
+                       (owner decision 2026-09-26, no backward
+                       compatibility). Show a needs-review/rejected chip
+                       per rejected box, styled by the served kind, same
+                       as before — worded per-box, not per-item. -->
+                  {#each multiBox.boxes.filter((b) => b.state === 'rejected') as b (b.boxId)}
+                    {@const kind = regionVocabularyStore.rejectionReasonKind(
+                      slotData?.subBoxes?.find((sb) => sb.boxId === b.boxId)
+                        ?.rejectionReason ?? null,
+                    )}
+                    <span
+                      class={`rounded border px-1.5 py-0.5 text-[10px] ${
+                        kind === 'needs_human'
+                          ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
+                          : kind === 'model_verdict'
+                            ? 'border-red-500/40 bg-red-500/15 text-red-200'
+                            : 'border-amber-500/40 bg-amber-500/15 text-amber-200'
+                      }`}
+                    >
+                      {kind === 'needs_human'
+                        ? 'candidate · needs review'
+                        : 'rejected · confirm to accept'}
+                    </span>
+                  {/each}
+                  {#if multiBox.boxes.length === 0 && !editMode}
+                    <span
+                      class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                    >
+                      no boxes · press {kg('review.region.edit_box')} to draw
+                    </span>
+                  {/if}
                 {/if}
               </span>
               {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
@@ -2632,6 +2623,7 @@
                       }
                     }}
                     placeholder={slotLabels.textPlaceholder}
+                    disabled={isMultiBoxSlot && selectedSlotBox == null}
                     spellcheck="false"
                     autocapitalize={activeSlot.capabilities.text?.transform ===
                     'uppercase'
@@ -2642,42 +2634,50 @@
                       ? 'font-mono'
                       : ''}"
                   />
-                  {#if slotData?.text?.source}
-                    <ProvenanceChip detector={slotData.text.source} size="sm" />
+                  {#if isMultiBoxSlot ? selectedSlotBox?.textSource : slotData?.text?.source}
+                    <ProvenanceChip
+                      detector={(isMultiBoxSlot
+                        ? selectedSlotBox?.textSource
+                        : slotData?.text?.source) ?? null}
+                      size="sm"
+                    />
                   {/if}
-                  {#if slotData?.text?.confidence != null}
+                  {#if (isMultiBoxSlot ? selectedSlotBox?.textConfidence : slotData?.text?.confidence) != null}
                     <span class="text-[10px] text-zinc-500">
-                      {(slotData.text.confidence * 100).toFixed(0)}%
+                      {(
+                        ((isMultiBoxSlot
+                          ? selectedSlotBox?.textConfidence
+                          : slotData?.text?.confidence) ?? 0) * 100
+                      ).toFixed(0)}%
                     </span>
                   {/if}
-                  {#if slotData?.text?.disagreement}
+                  {#if selectedSlotBox?.textDisagreement}
                     <span
                       class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
-                      title="vlm: {slotData.text.vlmValue ?? '∅'} · ocr: {slotData.text
-                        .ocrValue ?? '∅'}"
+                      title="vlm: {selectedSlotBox.textVlm ??
+                        '∅'} · ocr: {selectedSlotBox.textOcr ?? '∅'}"
                     >
                       readers disagree
                     </span>
                   {/if}
-                  <!-- dq-region (2026-09-24): why the chosen reading won /
-                     why the VLM's own reading was rejected as not text —
-                     labels are a titlecase-id placeholder until the
-                     backend serves them on GET {API_PREFIX}/regions/vocabulary. -->
-                  {#if slotData?.text?.choice && slotData.text.choice !== 'human'}
+                  <!-- Why the chosen reading won / why the VLM's own
+                       reading was rejected as not text (served
+                       vocabulary ids). -->
+                  {#if selectedSlotBox?.textChoice && selectedSlotBox.textChoice !== 'human'}
                     <span
                       class="rounded border border-zinc-700 bg-zinc-900 px-1 text-[10px] text-zinc-400"
                       title="How this reading was chosen"
                     >
-                      {regionVocabularyStore.textChoiceLabel(slotData.text.choice)}
+                      {regionVocabularyStore.textChoiceLabel(selectedSlotBox.textChoice)}
                     </span>
                   {/if}
-                  {#if slotData?.text?.invalidReason}
+                  {#if selectedSlotBox?.textVlmInvalid}
                     <span
                       class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
                       title="Why the VLM's own reading wasn't used as text"
                     >
                       vlm invalid: {regionVocabularyStore.invalidReasonLabel(
-                        slotData.text.invalidReason,
+                        selectedSlotBox.textVlmInvalid,
                       )}
                     </span>
                   {/if}
@@ -2725,21 +2725,25 @@
                 <button
                   class="btn btn-primary"
                   type="button"
-                  onclick={saveBboxAndExit}
-                  disabled={slotSaving}
+                  onclick={confirmMultiBoxSlot}
+                  disabled={multiBox.busy}
                 >
-                  Save bbox
+                  Save boxes
                 </button>
                 <button
                   class="btn"
                   type="button"
                   onclick={toggleEdit}
-                  disabled={slotSaving}
+                  disabled={multiBox.busy}
                 >
                   Cancel
                 </button>
               {:else}
-                <button class="btn btn-primary" type="button" onclick={confirmSlot}>
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  onclick={isMultiBoxSlot ? confirmMultiBoxSlot : confirmSlot}
+                >
                   {slotLabels.confirmLabel}
                 </button>
                 <button class="btn btn-danger" type="button" onclick={rejectSlot}>
@@ -2759,15 +2763,17 @@
                   </button>
                 {/if}
                 <button class="btn" type="button" onclick={skip}>Skip</button>
-                <button
-                  class="btn"
-                  type="button"
-                  onclick={toggleEdit}
-                  aria-pressed={editMode}
-                  title="Toggle bbox edit mode ({kg('review.region.edit_box')})"
-                >
-                  Edit bbox
-                </button>
+                {#if isMultiBoxSlot}
+                  <button
+                    class="btn"
+                    type="button"
+                    onclick={toggleEdit}
+                    aria-pressed={editMode}
+                    title="Toggle bbox edit mode ({kg('review.region.edit_box')})"
+                  >
+                    Edit boxes
+                  </button>
+                {/if}
                 <button
                   class="btn"
                   type="button"
@@ -2787,7 +2793,7 @@
             {#if slotUndoStack.length > 0}
               <!-- DQ-m6 (docs/design/data-quality-pass-2026-09-24.md):
                    this stack holds confirm, reject AND false-positive
-                   entries (saved: null covers both reject and FP) — the
+                   entries — the
                    footer said "confirmed" unconditionally, so a reject
                    read as "1 confirmed in this session". "Actioned" is
                    accurate for all three. -->

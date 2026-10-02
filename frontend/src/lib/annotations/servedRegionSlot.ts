@@ -22,22 +22,24 @@ import type { SlotSpec, SlotState, SubBoxCapability, TextCapability } from './ty
 
 const encode = encodeURIComponent;
 
-/** Wire field names for the region sub-box, identical for every profile. */
+/**
+ * Wire field names for the region sub-box, identical for every profile.
+ *
+ * Multi-box list only (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+ * the backend serves every region box as an element of `region_boxes`
+ * and no per-box scalar item key exists. `readSlot` never runs the
+ * scalar-box path for a capability that declares `listField`.
+ */
 export const REGION_SUB_BOX: SubBoxCapability = {
-  bboxField: 'region_bbox_norm',
-  storedFrame: 'source',
-  frameField: 'region_bbox_frame',
-  scoreField: 'region_score',
-  visibleField: 'region_visible',
-  bboxInParentField: 'region_bbox_in_parent',
-  candidateBboxField: 'region_candidate_bbox_norm',
-  candidateBboxInParentField: 'region_candidate_bbox_in_parent',
-  candidateScoreField: 'region_candidate_score',
-  candidateDetectorField: 'region_candidate_detector',
-  candidateDetectorVersionField: 'region_candidate_detector_version',
-  candidateSourceField: 'region_candidate_source',
+  listField: 'region_boxes',
+  countField: 'region_count',
+  rejectedCountField: 'region_rejected_count',
+  maxScoreField: 'region_max_score',
+  setCompleteField: 'region_set_complete',
+  revisionField: 'region_revision',
   thumbnail: {
-    path: (id, size) => `/crops/${encode(id)}/region_thumbnail?size=${size}`,
+    path: (id, boxId, size) =>
+      `/crops/${encode(id)}/region_thumbnail?box_id=${encode(boxId)}&size=${size}`,
     aspect: '2 / 1',
     defaultSize: 160,
   },
@@ -49,21 +51,13 @@ export const REGION_SUB_BOX: SubBoxCapability = {
   editor: { thumbSize: 512, viewPadding: 2.5, nudgeStep: 1 / 512 },
 };
 
-/** Wire field names for the region text reading. `label`/`placeholder`
- *  are generic; the served profile carries no text noun. The placeholder
- *  is an instruction, never a sample reading (visual audit R9: a sample
- *  value in an empty field read as a VLM reading). */
+/** The region text capability. A region's text is per box
+ *  (`SlotBox.text`, written through `PATCH /crops/{id}/regions/{box_id}`),
+ *  so no item-level wire field is declared. `label`/`placeholder` are
+ *  generic; the served profile carries no text noun. The placeholder is an
+ *  instruction, never a sample reading (visual audit R9: a sample value in
+ *  an empty field read as a VLM reading). */
 export const REGION_TEXT: TextCapability = {
-  valueField: 'region_text',
-  rawField: 'region_text_raw',
-  sourceField: 'region_text_source',
-  confidenceField: 'region_text_confidence',
-  engineVersionField: 'region_text_engine_version',
-  vlmValueField: 'region_text_vlm',
-  ocrValueField: 'region_text_ocr',
-  disagreementField: 'region_text_disagreement',
-  choiceField: 'region_text_choice',
-  invalidReasonField: 'region_text_vlm_invalid',
   label: 'Text',
   placeholder: 'type the text…',
   transform: 'none',
@@ -128,8 +122,6 @@ export const REGION_WIRE_CAPABILITIES: Pick<
   subBox: REGION_SUB_BOX,
   text: REGION_TEXT,
   provenance: {
-    detectorField: 'region_detector',
-    detectorVersionField: 'region_detector_version',
     chainField: 'region_detector_chain',
     verifierField: 'region_verifier',
     verifierVersionField: 'region_verifier_version',
@@ -143,7 +135,6 @@ export const REGION_WIRE_CAPABILITIES: Pick<
     validatedField: 'region_validated',
     autoConfirmedField: 'region_auto_confirmed',
     rejectionReasonField: 'region_rejection_reason',
-    boxCorrectField: 'region_bbox_correct',
     labelSourceField: 'region_label_source',
     states: REGION_STATES,
     confirmState: 'detected',
@@ -152,9 +143,13 @@ export const REGION_WIRE_CAPABILITIES: Pick<
   },
 };
 
+/**
+ * Box geometry/state/text writes (`putRegionBoxes`/`patchRegionBox`/
+ * `putBatchRegions`/`postBatchBoxState`, `api.ts`) are called directly by
+ * `multiBoxRegionController`, never through `SlotSpec.endpoints`;
+ * `patchMeta`/`batchStatus` are the whole-set status paths.
+ */
 export const REGION_ENDPOINTS: SlotSpec['endpoints'] = {
-  setBox: (id) => `/crops/${encode(id)}/region`,
-  clearBox: (id) => `/crops/${encode(id)}/region`,
   patchMeta: (id) => `/crops/${encode(id)}/region_meta`,
   batchStatus: () => `/regions/batch_status`,
 };
@@ -190,6 +185,7 @@ export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
     },
     capabilities: {
       ...REGION_WIRE_CAPABILITIES,
+      subBox: { ...REGION_SUB_BOX, maxBoxesPerWrite: p.limits.max_boxes_per_write },
       text: hasText ? REGION_TEXT : undefined,
       queue: {
         endpointId: REGION_TAB_ID,

@@ -53,6 +53,10 @@ export interface ProjectSummary {
   /** Optimistic-concurrency token every lifecycle write sends back as
    *  `expected_revision`. */
   revision: number;
+  /** Served: this project's own pipeline-pause flag (`POST {prefix}/pause`).
+   *  Not the global GPU-training claim — `GET {prefix}/pause` reports that
+   *  too, as `paused_by`. */
+  paused: boolean;
   created_at: string;
   updated_at: string;
   counts: ProjectCounts;
@@ -105,11 +109,22 @@ export interface ProjectWarning {
   message: string;
 }
 
+/** One action the `keymap` clone axis dropped from the copy because its
+ *  combo collides with the target's class hotkey — a report, never a
+ *  silent unbind. */
+export interface KeymapCloneConflict {
+  action_id: string;
+  combo: string;
+  class_id: number;
+  class_name: string;
+}
+
 /** Every lifecycle mutation (create 201, PATCH, archive, unarchive,
  *  clone_settings, and a real delete's 202) answers this envelope. */
 export interface ProjectLifecycleResponse {
   project: ProjectSummary;
   warnings?: ProjectWarning[];
+  keymap_clone_conflicts?: KeymapCloneConflict[];
 }
 
 export interface ProjectError {
@@ -185,10 +200,13 @@ export interface ProjectErrorDetail {
 }
 
 /** `GET|POST {prefix}/pause`, `POST {prefix}/resume` (projects P2,
- *  `projects_plan.md` §5.1): the project's own pipeline-pause flag. It
- *  says nothing about WHY workers may be idle (e.g. the global GPU
- *  training claim), so the UI shows `paused` and nothing more. */
+ *  `projects_plan.md` §5.1): `paused` is the project's own flag OR the
+ *  global GPU-training claim holding its workers; `paused_by` names which
+ *  (`'project'`, `'gpu_training'`, both, or none) and `reason` is the
+ *  served sentence for a claim-only pause (null otherwise). */
 export interface PipelinePauseState {
   project: string;
   paused: boolean;
+  paused_by: string[];
+  reason: string | null;
 }

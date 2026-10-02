@@ -33,32 +33,31 @@ function model(over: Partial<ModelInfo>): ModelInfo {
     optional: false,
     project: null,
     shared: false,
+    owned: false,
+    sharing_revision: null,
     class_mapping: null,
     ...over,
   };
 }
 
 describe('sharingRole', () => {
-  it('reads the served project against the active slug', () => {
-    expect(sharingRole(model({ project: 'alpha' }), 'alpha')).toBe('owner');
-    expect(sharingRole(model({ project: 'beta' }), 'alpha')).toBe('foreign');
-    expect(sharingRole(model({ project: null }), 'alpha')).toBe('none');
-    expect(sharingRole(model({ project: 'alpha' }), null)).toBe('foreign');
+  it('reads the served ownership verdict, never the project slug', () => {
+    expect(sharingRole(model({ owned: true, project: 'alpha' }))).toBe('owner');
+    // Owned even when the legacy promote.json names no project.
+    expect(sharingRole(model({ owned: true, project: null }))).toBe('owner');
+    expect(sharingRole(model({ owned: false, project: 'beta' }))).toBe('foreign');
+    expect(sharingRole(model({ owned: false, project: null }))).toBe('none');
   });
 });
 
 describe('canToggleSharing', () => {
   it('needs the served owner AND the served sharing revision', () => {
+    expect(canToggleSharing(model({ owned: true, sharing_revision: 3 }))).toBe(true);
+    expect(canToggleSharing(model({ owned: true, sharing_revision: null }))).toBe(false);
     expect(
-      canToggleSharing(model({ project: 'alpha', sharing_revision: 3 }), 'alpha'),
-    ).toBe(true);
-    expect(canToggleSharing(model({ project: 'alpha' }), 'alpha')).toBe(false);
-    expect(
-      canToggleSharing(model({ project: 'beta', sharing_revision: 3 }), 'alpha'),
+      canToggleSharing(model({ owned: false, project: 'beta', sharing_revision: 3 })),
     ).toBe(false);
-    expect(canToggleSharing(model({ project: null, sharing_revision: 3 }), 'alpha')).toBe(
-      false,
-    );
+    expect(canToggleSharing(model({ owned: false, sharing_revision: 3 }))).toBe(false);
   });
 });
 

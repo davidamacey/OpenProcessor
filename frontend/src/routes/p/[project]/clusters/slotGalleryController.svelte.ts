@@ -23,8 +23,8 @@ import {
   getRegionClusterStatus,
   getRegionFpCentroidStatus,
   getRegions,
-  getRegionThumbUrl,
   getSuspectedFalsePositives,
+  postBatchBoxState,
   refineRegionCluster,
   type RegionBrowseItem,
   type SuspectedFpItem,
@@ -35,6 +35,7 @@ import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
 import type { SlotSpec } from '$lib/annotations/types';
+import { rowBoxOf } from '$lib/annotations/rowBox';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 const GALLERY_PAGE_SIZE = 60;
@@ -52,11 +53,33 @@ export function createSlotGalleryController(slot: SlotSpec) {
     regionStatusesStore.falsePositiveStatus ??
     slot.capabilities.lifecycle?.falsePositiveState;
 
+  // W8.7: per-box `state` triage, a different vocabulary from the
+  // item-level region_status above (`accepted`/`rejected`/
+  // `false_positive`/`proposed`, keyed here by the served `box_states`
+  // entry's `role`). Falls back to the literal role string — the fixed
+  // W8.7 wire vocabulary, not a client guess — for a pre-W8 backend that
+  // hasn't served `box_states` yet.
+  const confirmBoxState = (): string =>
+    regionStatusesStore.boxStateByRole('accepted') ?? 'accepted';
+  const rejectBoxState = (): string =>
+    regionStatusesStore.boxStateByRole('rejected') ?? 'rejected';
+  const falsePositiveBoxState = (): string =>
+    regionStatusesStore.boxStateByRole('false_positive') ?? 'false_positive';
+
   const browsePath = slot.capabilities.queue?.browsePath;
+  // total_rows counts rows (boxes, on a box-selecting request) vs.
+  // pager.total's item count — a side channel since createPager is generic
+  // and only ever reads `.total`. rows_truncated: an item on the page
+  // matched more boxes than the index reports per item.
+  let totalRows = $state<number | null>(null);
+  let rowsTruncated = $state<boolean>(false);
   const pager = createPager<RegionBrowseItem>({
     fetchPage: async (page) => {
       if (!browsePath) throw new Error(`slot "${slot.key}" declares no browse path`);
-      return await getRegions(browsePath, browseQuery(page));
+      const res = await getRegions(browsePath, browseQuery(page));
+      totalRows = res.total_rows ?? null;
+      rowsTruncated = res.rows_truncated ?? false;
+      return res;
     },
     keyOf: (p) => p.crop_id,
   });
@@ -130,14 +153,26 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // hardcoded list — includes verify_rejected (candidate-only rows), the
   // auto-confirmed-but-unreviewed 'detected' rows, etc.
   let statusFilter = $state<string>('');
+  // Per-box state (`GET /regions/statuses` `box_states` vocabulary): every
+  // box filter applies to the same box, so this narrows which boxes the
+  // rows are about.
+  let boxStateFilter = $state<string>('');
+
+  // A row's sub-cluster lives on its own box (`region_boxes[].cluster_subid`),
+  // the one `region_box_id` names.
+  function rowSubid(p: RegionBrowseItem): string | null {
+    return rowBoxOf(p.slots?.[slot.key], p.region_box_id)?.clusterSubid ?? null;
+  }
 
   // Distinct sub-cluster ids present in the loaded regions, sorted lexically so
   // "9a","9aa","9ab"… land in human-expected order.
   const subclusterIds = $derived.by(() => {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
     const set = new Set<string>();
-    for (const p of pager.items)
-      if (p.region_cluster_subid) set.add(p.region_cluster_subid);
+    for (const p of pager.items) {
+      const sub = rowSubid(p);
+      if (sub) set.add(sub);
+    }
     return [...set].sort();
   });
 
@@ -146,7 +181,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
     const m = new Map<string, number>();
     for (const p of pager.items) {
-      const k = p.region_cluster_subid ?? '__none__';
+      const k = rowSubid(p) ?? '__none__';
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
@@ -171,7 +206,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
       const byKey = new Map<string, RegionBrowseItem[]>();
       for (const p of pager.items) {
-        const sub = p.region_cluster_subid ?? '__none__';
+        const sub = rowSubid(p) ?? '__none__';
         let bucket = byKey.get(sub);
         if (!bucket) {
           bucket = [];
@@ -202,6 +237,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       min_score: minScore > 0 ? minScore : undefined,
       text: textQuery || undefined,
       status: statusFilter || undefined,
+      box_state: boxStateFilter || undefined,
       max_rank: maxRank ?? undefined,
       region_cluster_id: selectedCluster ?? undefined,
       // When a single sub-cluster tab is active, filter to it; otherwise (the
@@ -447,8 +483,16 @@ export function createSlotGalleryController(slot: SlotSpec) {
       const conflictCount = res.conflicts?.length ?? 0;
       const invalid = res.invalid ?? [];
       if (conflictCount > 0 || invalid.length > 0) {
+        // W8: a conflict now carries a served `message` (RegionBatchConflict)
+        // on a W8 backend — show it verbatim instead of just a count when
+        // present, since it names the real reason ("The item changed
+        // since it was loaded."). A pre-W8 backend has no `message`, so
+        // this falls back to the bare count exactly as before.
+        const conflictDetail = res.conflicts?.find((c) => c.message)?.message;
         const parts = [
-          conflictCount > 0 ? `${conflictCount} conflicted` : null,
+          conflictCount > 0
+            ? `${conflictCount} conflicted${conflictDetail ? ` (${conflictDetail})` : ''}`
+            : null,
           invalid.length > 0
             ? `${invalid.length} invalid (${invalid.map((i) => i.detail).join('; ')})`
             : null,
@@ -469,8 +513,74 @@ export function createSlotGalleryController(slot: SlotSpec) {
   }
 
   /**
+   * W8: per-box triage over the selected rows (region gallery triage — a
+   * cluster is a set of boxes, W8.8/§7.7). Unlike `applyStatus` above
+   * (whole-item `region_status`, `PATCH region_meta` / `POST
+   * batch_status`), this goes through `POST /regions/batch_box_state`,
+   * which flips only the targeted box on each item, never its siblings —
+   * exactly the spec's rule for triage from a cluster ("never the
+   * item-level batch_status, which would flip every sibling box").
+   * Targets are built from the row's own served `region_box_id`
+   * (`RegionBrowseItem`, W8.10) — a pre-W8 row without one is skipped
+   * rather than silently flipping a whole item.
+   */
+  async function applyBoxState(cropIds: string[], state: string): Promise<void> {
+    if (cropIds.length === 0 || busy) return;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
+    const idSet = new Set(cropIds);
+    const targets = pager.items
+      .filter((p) => idSet.has(p.crop_id) && p.region_box_id != null)
+      .map((p) => ({ cropId: p.crop_id, boxId: p.region_box_id! }));
+    const skipped = cropIds.length - targets.length;
+    if (targets.length === 0) {
+      toastStore.error(
+        `Cannot triage by box: this row has no served box id (pre-W8 backend?).`,
+      );
+      return;
+    }
+    busy = true;
+    sel.clear();
+    try {
+      const res = await postBatchBoxState(targets, state);
+      // A box-state write returns full items (Crop), not gallery rows —
+      // the row grid re-fetches its own page rather than patching rows
+      // in place from a shape the gallery doesn't render (RegionBrowseItem
+      // vs Crop): the triaged boxes typically leave the current bucket
+      // anyway (their state changed), so a refetch is the correct result,
+      // not a shortcut.
+      undoStore.recordRegionWrites(res.items.map((c) => c.id));
+      const invalid = res.invalid ?? [];
+      const conflicts = res.conflicts ?? [];
+      if (invalid.length > 0 || conflicts.length > 0) {
+        const conflictDetail = conflicts.find((c) => c.message)?.message;
+        const parts = [
+          conflicts.length > 0
+            ? `${conflicts.length} conflicted${conflictDetail ? ` (${conflictDetail})` : ''}`
+            : null,
+          invalid.length > 0
+            ? `${invalid.length} invalid (${invalid.map((i) => i.message).join('; ')})`
+            : null,
+          skipped > 0 ? `${skipped} skipped (no box id)` : null,
+        ].filter((s): s is string => s != null);
+        toastStore.error(
+          `${state.replace('_', ' ')}: ${res.updated} updated, ${parts.join(', ')}`,
+        );
+      } else {
+        toastStore.success(
+          `${state.replace('_', ' ')}: ${res.updated} box(es)${skipped > 0 ? `, ${skipped} skipped (no box id)` : ''}`,
+        );
+      }
+      await pager.loadPage(pager.firstPage);
+    } catch (err) {
+      toastStore.error(`Bulk box triage failed: ${(err as Error).message}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  /**
    * `onsave` for `SlotBboxEditor` — the editor has ALREADY performed the
-   * write via `setSlotBox` by the time this fires, and passes back the
+   * write (`PUT /crops/{id}/regions`) by the time this fires, and passes back the
    * server's own returned item. This function only patches the matching
    * card from that item; it must NOT re-PUT the box (a pre-C8 bug — this
    * used to write the box a second time here, redundantly re-sending a
@@ -485,22 +595,21 @@ export function createSlotGalleryController(slot: SlotSpec) {
     editCrop = null;
     const slotData = item.slots?.[slot.key];
     // Patch just this card in place rather than reloading page 1 (which
-    // would wipe the list and reset scroll). The region thumbnail is a
-    // server-rendered URL, so bust its cache to pull the re-cropped box.
+    // would wipe the list and reset scroll). The returned item's slot data
+    // carries the new boxes and revision, which is also what re-crops the
+    // card's thumbnail.
     pager.items = pager.items.map((p) =>
       p.crop_id === cropId
         ? {
             ...p,
             region_status: slotData?.lifecycle?.status ?? p.region_status,
             region_verified: slotData?.lifecycle?.verified ?? p.region_verified,
-            region_bbox_norm: slotData?.subBox?.rawXyxy ?? null,
-            region_bbox_frame: slotData?.subBox?.frame ?? p.region_bbox_frame,
-            region_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
+            slots: { ...p.slots, ...item.slots },
           }
         : p,
     );
-    // M6: the editor's write (setSlotBox, already completed by the time
-    // this fires — see the doc comment above) is undoable via Z too.
+    // M6: the editor's write (already completed by the time this fires —
+    // see the doc comment above) is undoable via Z too.
     undoStore.recordRegionWrites([cropId]);
   }
 
@@ -524,9 +633,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         ...p,
         region_status: slotData?.lifecycle?.status ?? p.region_status,
         region_verified: slotData?.lifecycle?.verified ?? p.region_verified,
-        region_bbox_norm: slotData?.subBox?.rawXyxy ?? null,
-        region_bbox_frame: slotData?.subBox?.frame ?? p.region_bbox_frame,
-        region_thumbnail_url: getRegionThumbUrl(p.crop_id, 160, Date.now()),
+        slots: { ...p.slots, ...restored.slots },
       };
     });
   }
@@ -543,8 +650,18 @@ export function createSlotGalleryController(slot: SlotSpec) {
     confirmState,
     rejectState,
     falsePositiveState,
+    confirmBoxState,
+    rejectBoxState,
+    falsePositiveBoxState,
     get pager() {
       return pager;
+    },
+    /** The served total_rows (see above) — null when absent. */
+    get totalRows() {
+      return totalRows;
+    },
+    get rowsTruncated() {
+      return rowsTruncated;
     },
     get sel() {
       return sel;
@@ -618,6 +735,12 @@ export function createSlotGalleryController(slot: SlotSpec) {
     set textQuery(v: string) {
       textQuery = v;
     },
+    get boxStateFilter() {
+      return boxStateFilter;
+    },
+    set boxStateFilter(v: string) {
+      boxStateFilter = v;
+    },
     get statusFilter() {
       return statusFilter;
     },
@@ -648,6 +771,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     selectAll,
     openEditor,
     applyStatus,
+    applyBoxState,
     saveBox,
     undoLastAction,
   };

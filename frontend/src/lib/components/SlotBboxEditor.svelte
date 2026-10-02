@@ -1,40 +1,31 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
   /**
-   * Single-crop sub-bbox editor (modal) for the given slot
-   * (docs/genericization-plan-2026-09-13.md §3.1, docs/design/
-   * slot-generic-crop-mapping-plan-2026-09-21.md §7.1).
+   * Single-crop box-set editor (modal) for the given region slot
+   * (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
    *
-   * Opens from CropCard's pencil button. Lets a curator draw, drag,
-   * resize, and clear a sub-bbox on top of the parent crop thumbnail,
-   * then saves it back to the API via the active slot's own declared
-   * endpoints (`setSlotBox`).
+   * Opens from CropCard's pencil button. Lets a curator add, move and
+   * delete any number of boxes on top of the parent crop thumbnail (the
+   * same `MultiBoxCanvas`/`multiBoxRegionController` the review page's
+   * region tab uses), then saves the whole list with one
+   * `PUT /crops/{id}/regions` (`frame: 'parent'`: the server does the
+   * projection into the source frame, so this component never does).
    *
-   * Internally we work in the **crop's local (parent) frame** (normalized
-   * [0, 1] inside the parent box) so that pointer math is independent of
-   * the source image. On save we PUT that box straight through with
-   * `frame: 'parent'` — the server does the projection into its own
-   * stored frame, so this component never re-derives it.
+   * Hotkeys (focus inside the modal): the `box_edit` keymap actions via
+   * the canvas, plus Enter to save and Escape to close without saving.
    *
-   * Hotkeys (focus inside the modal): the `box_edit` keymap actions, via
-   * the shared `runBoxEditKey` (`$lib/boxEditKeys`) — right-edge nudge,
-   * whole-box move (1 crop-pixel), clear (saves as the slot's
-   * rejectState), save, and close without saving.
-   *
-   * `onsave` fires AFTER this component has already performed the write
-   * (via `setSlotBox`) — "notify", not "perform the save". It passes the
-   * server's own returned item, so the caller renders what was actually
-   * persisted rather than re-deriving it.
+   * `onsave` fires AFTER this component has already performed the write —
+   * "notify", not "perform the save". It passes the server's own returned
+   * item, so the caller renders what was actually persisted rather than
+   * re-deriving it.
    */
-  import { getThumbUrl, setSlotBox } from '$lib/api';
-  import { bboxNormToXYXY } from '$lib/bboxFrames';
-  import { projectFromParent } from '$lib/annotations/readSlot';
-  import { slotOf } from '$lib/annotations/cropSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { toastStore } from '$stores/toast.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
-  import { runBoxEditKey } from '$lib/boxEditKeys';
-  import type { BBoxNorm, Crop } from '$lib/types';
+  import type { Crop } from '$lib/types';
+  import MultiBoxCanvas from './MultiBoxCanvas.svelte';
+  import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
+  import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
 
   const kg = (id: string) => keymapStore.compactGlyph(id);
 
@@ -60,321 +51,51 @@
     thumbSize ?? activeSlot?.capabilities.subBox?.editor.thumbSize ?? 512,
   );
 
-  // -- state ------------------------------------------------------------
-  // Sub-box in the crop's local (parent) frame ([0, 1]^4). null means "no
-  // box". Seeded from readSlot's own projection (subBox.parent) — never
-  // re-derived by hand — so this works for any storedFrame, not just
-  // 'source'.
-  function seedBox(): BBoxNorm | null {
-    return activeSlot ? (slotOf(crop, activeSlot)?.subBox?.parent ?? null) : null;
-  }
-
-  let boxLocal = $state<BBoxNorm | null>(seedBox());
-  let busy = $state<boolean>(false);
-  let errorText = $state<string | null>(null);
-
-  // The DOM container we track pointer events on; pointer-x/y are
-  // normalized against this rect. The image is rendered with object-
-  // contain inside it so the crop fills the full square.
-  let canvasEl = $state<HTMLDivElement | null>(null);
-
-  // Natural dims of the thumbnail JPEG, captured on <img onload>. The
-  // backend serves aspect-preserved JPEGs, so object-contain inside the
-  // aspect-square canvas letterboxes non-square crops. Pointer math and
-  // the ring must compensate or the box lands in the wrong spot (it
-  // rendered too low for wide item crops). baseDisp is the actual
-  // image rect inside the unit-square canvas: {offX, offY, w, h} ∈ [0,1].
-  // Mirrors BboxCanvas.svelte's baseDisp.
-  let imgNaturalW = $state<number>(0);
-  let imgNaturalH = $state<number>(0);
-  function onImgLoad(e: Event): void {
-    const img = e.currentTarget as HTMLImageElement;
-    imgNaturalW = img.naturalWidth || 0;
-    imgNaturalH = img.naturalHeight || 0;
-  }
-  const baseDisp = $derived.by(() => {
-    if (imgNaturalW <= 0 || imgNaturalH <= 0) {
-      return { offX: 0, offY: 0, w: 1, h: 1 };
-    }
-    const aspect = imgNaturalW / imgNaturalH;
-    if (aspect >= 1) {
-      const h = 1 / aspect;
-      return { offX: 0, offY: (1 - h) / 2, w: 1, h };
-    }
-    const w = aspect;
-    return { offX: (1 - w) / 2, offY: 0, w, h: 1 };
+  const multiBox = createMultiBoxRegionController(() => activeSlot);
+  $effect(() => {
+    multiBox.seedFrom(crop);
   });
 
-  // Drag state ---------------------------------------------------------
-  type DragMode =
-    | 'create' // user dragging from empty canvas — paint a fresh box
-    | 'move' // dragging the whole box body
-    | 'n'
-    | 's'
-    | 'e'
-    | 'w'
-    | 'ne'
-    | 'nw'
-    | 'se'
-    | 'sw';
-
-  interface DragState {
-    mode: DragMode;
-    startX: number; // normalized [0,1] start point
-    startY: number;
-    initialBox: BBoxNorm | null; // box at drag-start (for move / resize math)
+  function multiBoxRingColor(state: string): string {
+    return toneRingRgb(regionStatusesStore.boxStateTone(state));
   }
-
-  let drag = $state<DragState | null>(null);
-
-  // Footer footer-text shows the box in the slot's own stored frame, for
-  // sanity — via the same projectFromParent used at save time.
-  const sourceFrameSummary = $derived.by<string>(() => {
-    if (boxLocal == null) return `no ${activeSlot?.label.singular ?? 'box'}`;
-    if (!crop.bbox_norm) return '(missing parent item box)';
-    if (!activeSlot) return '';
-    const parentXyxy = bboxNormToXYXY(crop.bbox_norm);
-    const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
-    const [x1, y1, x2, y2] = projectFromParent(boxLocal, parentXyxy, frame);
-    return `${frame} [x1=${x1.toFixed(4)}, y1=${y1.toFixed(4)}, x2=${x2.toFixed(4)}, y2=${y2.toFixed(4)}]`;
-  });
-
-  const cropFrameSummary = $derived.by<string>(() => {
-    if (boxLocal == null) return '';
-    const [x1, y1, x2, y2] = bboxNormToXYXY(boxLocal);
-    return `crop [x1=${x1.toFixed(4)}, y1=${y1.toFixed(4)}, x2=${x2.toFixed(4)}, y2=${y2.toFixed(4)}]`;
-  });
-
-  // 1 crop-pixel = 1 / displayed-pixel-width, normalized. We don't have
-  // direct access to the crop's true pixel dimensions client-side, so
-  // approximate via the thumbnail size (close enough for hotkey nudges).
-  const pxStep = $derived(
-    activeSlot?.capabilities.subBox?.editor.nudgeStep ?? 1 / editorThumbSize,
-  );
-
-  // -- pointer math -----------------------------------------------------
-
-  function clientToNorm(e: PointerEvent | MouseEvent): { x: number; y: number } {
-    if (!canvasEl) return { x: 0, y: 0 };
-    const rect = canvasEl.getBoundingClientRect();
-    const w = rect.width || 1;
-    const h = rect.height || 1;
-    // Container-fraction of the pointer, then map onto the letterboxed
-    // image rect so the stored box is in crop-local (image) frame.
-    const cxf = Math.min(1, Math.max(0, (e.clientX - rect.left) / w));
-    const cyf = Math.min(1, Math.max(0, (e.clientY - rect.top) / h));
-    const { offX, offY, w: dW, h: dH } = baseDisp;
-    if (dW <= 0 || dH <= 0) return { x: cxf, y: cyf };
-    return {
-      x: clamp01((cxf - offX) / dW),
-      y: clamp01((cyf - offY) / dH),
-    };
-  }
-
-  function clamp01(x: number): number {
-    return Math.min(1, Math.max(0, x));
-  }
-
-  function normalizeBox(b: BBoxNorm): BBoxNorm {
-    const x1 = clamp01(b.cx - b.w / 2);
-    const y1 = clamp01(b.cy - b.h / 2);
-    const x2 = clamp01(b.cx + b.w / 2);
-    const y2 = clamp01(b.cy + b.h / 2);
-    return {
-      cx: (x1 + x2) / 2,
-      cy: (y1 + y2) / 2,
-      w: Math.max(0, x2 - x1),
-      h: Math.max(0, y2 - y1),
-    };
-  }
-
-  // -- pointer handlers -------------------------------------------------
-
-  function onPointerDownCanvas(e: PointerEvent): void {
-    if (busy) return;
-    e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    const p = clientToNorm(e);
-    if (boxLocal == null) {
-      // Start painting a new box from this point.
-      boxLocal = { cx: p.x, cy: p.y, w: 0, h: 0 };
-      drag = { mode: 'create', startX: p.x, startY: p.y, initialBox: null };
-    } else {
-      // Click-on-body to drag-move.
-      drag = {
-        mode: 'move',
-        startX: p.x,
-        startY: p.y,
-        initialBox: { ...boxLocal },
-      };
-    }
-  }
-
-  function onPointerDownHandle(e: PointerEvent, mode: DragMode): void {
-    if (busy || boxLocal == null) return;
-    e.preventDefault();
-    e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    const p = clientToNorm(e);
-    drag = { mode, startX: p.x, startY: p.y, initialBox: { ...boxLocal } };
-  }
-
-  function onPointerMove(e: PointerEvent): void {
-    if (!drag) return;
-    const p = clientToNorm(e);
-    const dx = p.x - drag.startX;
-    const dy = p.y - drag.startY;
-    if (drag.mode === 'create') {
-      const x1 = Math.min(drag.startX, p.x);
-      const y1 = Math.min(drag.startY, p.y);
-      const x2 = Math.max(drag.startX, p.x);
-      const y2 = Math.max(drag.startY, p.y);
-      boxLocal = normalizeBox({
-        cx: (x1 + x2) / 2,
-        cy: (y1 + y2) / 2,
-        w: x2 - x1,
-        h: y2 - y1,
-      });
-      return;
-    }
-    if (!drag.initialBox) return;
-    const ib = drag.initialBox;
-    if (drag.mode === 'move') {
-      boxLocal = normalizeBox({
-        cx: ib.cx + dx,
-        cy: ib.cy + dy,
-        w: ib.w,
-        h: ib.h,
-      });
-      return;
-    }
-    // Resize via edge / corner. Convert initial box to corners, then
-    // shift the affected sides.
-    let x1 = ib.cx - ib.w / 2;
-    let y1 = ib.cy - ib.h / 2;
-    let x2 = ib.cx + ib.w / 2;
-    let y2 = ib.cy + ib.h / 2;
-    if (drag.mode.includes('n')) y1 = clamp01(y1 + dy);
-    if (drag.mode.includes('s')) y2 = clamp01(y2 + dy);
-    if (drag.mode.includes('w')) x1 = clamp01(x1 + dx);
-    if (drag.mode.includes('e')) x2 = clamp01(x2 + dx);
-    // Keep min < max even if the user crosses over (negative size).
-    const nx1 = Math.min(x1, x2);
-    const nx2 = Math.max(x1, x2);
-    const ny1 = Math.min(y1, y2);
-    const ny2 = Math.max(y1, y2);
-    boxLocal = normalizeBox({
-      cx: (nx1 + nx2) / 2,
-      cy: (ny1 + ny2) / 2,
-      w: nx2 - nx1,
-      h: ny2 - ny1,
-    });
-  }
-
-  function onPointerUp(): void {
-    if (!drag) return;
-    // If the user clicked-without-drag on an empty canvas, boxLocal
-    // ends up as zero-size — drop it so we don't "save" an invisible box.
-    if (boxLocal && (boxLocal.w < 1e-6 || boxLocal.h < 1e-6)) {
-      boxLocal = null;
-    }
-    drag = null;
-  }
-
-  // -- keyboard ---------------------------------------------------------
-
-  function nudgeBox(dx: number, dy: number): void {
-    if (!boxLocal) return;
-    boxLocal = normalizeBox({
-      cx: boxLocal.cx + dx,
-      cy: boxLocal.cy + dy,
-      w: boxLocal.w,
-      h: boxLocal.h,
-    });
-  }
-
-  function nudgeRightEdge(dx: number): void {
-    if (!boxLocal) return;
-    let x1 = boxLocal.cx - boxLocal.w / 2;
-    let x2 = clamp01(boxLocal.cx + boxLocal.w / 2 + dx);
-    if (x2 < x1) {
-      const t = x1;
-      x1 = x2;
-      x2 = t;
-    }
-    boxLocal = normalizeBox({
-      cx: (x1 + x2) / 2,
-      cy: boxLocal.cy,
-      w: x2 - x1,
-      h: boxLocal.h,
-    });
-  }
-
-  function onKeyDown(e: KeyboardEvent): void {
-    if (busy) return;
-    const handled = runBoxEditKey(
-      e,
-      {
-        save,
-        cancel: onclose,
-        nudge: nudgeBox,
-        nudgeRightEdge,
-        deleteBox: () => {
-          boxLocal = null;
-        },
-      },
-      pxStep,
+  function multiBoxDashed(state: string): boolean {
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
     );
-    if (handled) e.preventDefault();
+  }
+  function multiBoxStateLabel(state: string): string {
+    return regionStatusesStore.boxStateInfo(state)?.label ?? state;
   }
 
-  // -- save -------------------------------------------------------------
-
-  async function save(): Promise<void> {
-    if (busy) return;
-    if (!activeSlot) return;
-    errorText = null;
-    busy = true;
-    try {
-      // Clear: PUT null -> backend writes the slot's rejectState.
-      if (boxLocal == null) {
-        const item = await setSlotBox(activeSlot, crop.id, null);
-        toastStore.success(`${activeSlot.label.title} cleared.`);
-        onsave?.(item);
-        return;
-      }
-      // Send the box exactly as drawn, in the crop's local (parent)
-      // frame — the server projects it into its own stored frame.
-      const { cx, cy, w, h } = boxLocal;
-      const tuple: [number, number, number, number] = [
-        cx - w / 2,
-        cy - h / 2,
-        cx + w / 2,
-        cy + h / 2,
-      ];
-      const item = await setSlotBox(activeSlot, crop.id, tuple, 'parent');
+  async function saveMultiBox(): Promise<void> {
+    const { ok, item } = await multiBox.saveEdits(crop.id);
+    if (ok && item) {
       toastStore.success(`${activeSlot.label.title} saved.`);
       onsave?.(item);
-    } catch (e) {
-      errorText = (e as Error).message;
-      toastStore.error(errorText ?? `${activeSlot.label.title} save failed.`);
-    } finally {
-      busy = false;
     }
   }
 
-  // Derived overlay rectangle in % of the canvas.
-  const ringStyle = $derived.by<string>(() => {
-    if (!boxLocal) return 'display:none';
-    // Place the ring inside the letterboxed image rect (inverse of the
-    // map clientToNorm applies on input) so it lines up with the crop.
-    const { offX, offY, w: dW, h: dH } = baseDisp;
-    const x1 = (offX + (boxLocal.cx - boxLocal.w / 2) * dW) * 100;
-    const y1 = (offY + (boxLocal.cy - boxLocal.h / 2) * dH) * 100;
-    const w = boxLocal.w * dW * 100;
-    const h = boxLocal.h * dH * 100;
-    return `left:${x1}%;top:${y1}%;width:${w}%;height:${h}%`;
-  });
+  let multiBoxCanvasEl = $state<MultiBoxCanvas | null>(null);
+
+  function onKeyDown(e: KeyboardEvent): void {
+    if (multiBox.busy) return;
+    // Reuse the review page's own key handling (Tab/Backspace/arrows);
+    // Enter/Escape map to Save/Cancel here, not the review queue's
+    // "confirm" semantics.
+    if (multiBoxCanvasEl?.handleKey(e)) {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void saveMultiBox();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onclose();
+    }
+  }
 </script>
 
 <svelte:window onkeydown={onKeyDown} />
@@ -403,106 +124,65 @@
       <span class="font-mono text-[11px] text-zinc-500">{crop.id}</span>
     </header>
 
-    <!-- Canvas -->
-    <div
-      bind:this={canvasEl}
-      class="relative aspect-square w-full overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none touch-none"
-      onpointerdown={onPointerDownCanvas}
-      onpointermove={onPointerMove}
-      onpointerup={onPointerUp}
-      onpointercancel={onPointerUp}
-      role="application"
-      aria-label="{activeSlot?.label.title ?? 'Box'} bbox canvas"
-    >
-      <img
-        src={getThumbUrl(crop.id, editorThumbSize)}
-        alt="crop preview"
-        draggable="false"
-        onload={onImgLoad}
-        class="pointer-events-none h-full w-full object-contain"
-      />
-
-      {#if boxLocal}
-        <!-- Sub-box ring + drag handles -->
-        <div
-          class="absolute border-2 border-yellow-400 bg-yellow-400/10"
-          style={ringStyle}
+    <MultiBoxCanvas
+      bind:this={multiBoxCanvasEl}
+      cropId={crop.id}
+      boxes={multiBox.boxes
+        .filter((b) => b.box != null)
+        .map((b) => ({
+          box: b.box!,
+          state: b.state,
+          label: `${activeSlot.label.title} (${multiBoxStateLabel(b.state)})`,
+        }))}
+      selectedIndex={multiBox.selectedIndex}
+      busy={multiBox.busy}
+      maxBoxes={multiBox.maxBoxes}
+      ringColorFor={multiBoxRingColor}
+      dashedFor={multiBoxDashed}
+      thumbSize={editorThumbSize}
+      onselect={(i) => multiBox.select(i)}
+      onnext={() => multiBox.next()}
+      onmove={(_i, box) => multiBox.moveSelected(box)}
+      onadd={(box) => multiBox.addBox(box)}
+      ondelete={() => multiBox.deleteSelected()}
+    />
+    <div class="mt-1 flex flex-wrap gap-1">
+      {#each multiBox.boxes as b, i (b.boxId ?? `new-${i}`)}
+        <button
+          type="button"
+          class="rounded border px-1.5 py-0.5 text-[10px] {i === multiBox.selectedIndex
+            ? 'border-sky-500/60 bg-sky-500/15 text-sky-100'
+            : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
+          onclick={() => multiBox.select(i)}
         >
-          <!-- body grab area: covers the full ring interior so onpointerdown on the box body initiates a move -->
-          <div
-            class="absolute inset-0 cursor-move"
-            onpointerdown={(e) => onPointerDownHandle(e, 'move')}
-            role="presentation"
-          ></div>
-          <!-- 4 corner handles -->
-          <div
-            class="absolute -top-1.5 -left-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -top-1.5 -right-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -bottom-1.5 -left-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'se')}
-            role="presentation"
-          ></div>
-          <!-- 4 edge handles -->
-          <div
-            class="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'n')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 's')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'w')}
-            role="presentation"
-          ></div>
-          <div
-            class="absolute top-1/2 -right-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
-            onpointerdown={(e) => onPointerDownHandle(e, 'e')}
-            role="presentation"
-          ></div>
-        </div>
-      {:else}
-        <span
-          class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
+          #{i + 1}
+          {multiBoxStateLabel(b.state)}
+        </button>
+      {/each}
+      {#if multiBox.boxes.length === 0}
+        <span class="text-[11px] text-zinc-500">no boxes — drag to draw one</span>
+      {/if}
+      {#if multiBox.maxBoxes != null}
+        <span class="text-[11px] text-zinc-500"
+          >{multiBox.boxes.length} / {multiBox.maxBoxes} max</span
         >
-          drag to draw a {activeSlot?.label.singular ?? 'box'} box
-        </span>
       {/if}
     </div>
-
-    <!-- Footer: hotkey reference + coord summary -->
+    <!-- Footer: hotkey reference. -->
     <footer class="flex flex-col gap-1 text-[11px] text-zinc-400">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
         <span
-          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.shrink_right')}</kbd>/<kbd
-            class="rounded bg-zinc-800 px-1">{kg('box_edit.grow_right')}</kbd
-          > right edge</span
+          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.next_box')}</kbd> next box</span
+        >
+        <span
+          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.delete_box')}</kbd> delete selected</span
         >
         <span
           ><kbd class="rounded bg-zinc-800 px-1"
             >{kg('box_edit.nudge_left')}{kg('box_edit.nudge_up')}{kg(
               'box_edit.nudge_down',
             )}{kg('box_edit.nudge_right')}</kbd
-          > move</span
-        >
-        <span
-          ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.delete_box')}</kbd> clear</span
+          > nudge selected</span
         >
         <span><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.save')}</kbd> save</span
         >
@@ -510,41 +190,23 @@
           ><kbd class="rounded bg-zinc-800 px-1">{kg('box_edit.cancel')}</kbd> cancel</span
         >
       </div>
-      <div class="font-mono text-[11px] text-zinc-500">
-        {sourceFrameSummary}
-      </div>
-      {#if cropFrameSummary}
-        <div class="font-mono text-[11px] text-zinc-600">{cropFrameSummary}</div>
-      {/if}
-      {#if errorText}
-        <div class="text-red-300">{errorText}</div>
-      {/if}
     </footer>
-
     <div class="flex items-center justify-end gap-2">
       <button
         type="button"
         class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
-        onclick={() => (boxLocal = null)}
-        disabled={busy || boxLocal == null}
-      >
-        Clear
-      </button>
-      <button
-        type="button"
-        class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
         onclick={onclose}
-        disabled={busy}
+        disabled={multiBox.busy}
       >
         Cancel
       </button>
       <button
         type="button"
         class="rounded-md border border-blue-500/60 bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-        onclick={save}
-        disabled={busy}
+        onclick={saveMultiBox}
+        disabled={multiBox.busy}
       >
-        {busy ? 'Saving…' : 'Save'}
+        {multiBox.busy ? 'Saving…' : 'Save'}
       </button>
     </div>
   </div>

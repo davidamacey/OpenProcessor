@@ -42,10 +42,6 @@ function servedResponse(
       successful: 1,
       duplicates: 0,
       failed: 1,
-      mismatches: 0,
-      missed_labels: 0,
-      unmatched_detections: 0,
-      labels_imported: 0,
       crops_indexed: 1,
     },
     results: [
@@ -72,7 +68,6 @@ function servedResponse(
         source_identifier: null,
       },
     ],
-    disagreements: [],
     ...overrides,
   };
 }
@@ -126,6 +121,14 @@ describe('IngestBatchPanel', () => {
       '/data/archive/a.jpg',
       '/data/archive/b.jpg',
     ]);
+    // Only a path and a source tag per item, and nothing else on the
+    // request: labeled data comes in through the dataset import.
+    expect(call).toEqual({
+      items: [
+        { path: '/data/archive/a.jpg', source: 'batch' },
+        { path: '/data/archive/b.jpg', source: 'batch' },
+      ],
+    });
     flushSync();
     await vi.waitFor(() => {
       flushSync();
@@ -158,6 +161,22 @@ describe('IngestBatchPanel', () => {
       expect(target.textContent).toContain('unservable_path');
     });
     expect(target.textContent).toContain('not a servable path');
+  });
+
+  it('offers no label-import controls (one paths box, one source tag)', () => {
+    instance = mount(IngestBatchPanel, {
+      target,
+      props: {
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
+      },
+    });
+    flushSync();
+    expect(target.querySelectorAll('textarea')).toHaveLength(1);
+    expect(target.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(target.textContent).not.toMatch(/label|mismatch/i);
   });
 
   it('blocks submit when the entered path count exceeds the served batch.max_items', () => {

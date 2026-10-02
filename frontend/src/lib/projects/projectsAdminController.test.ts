@@ -114,6 +114,41 @@ describe('create', () => {
     ]);
   });
 
+  it('lists every keymap action the clone axis dropped, from the served keymap_clone_conflicts', async () => {
+    serve((url, init) =>
+      init.method === 'POST'
+        ? json({
+            project: ALPHA,
+            keymap_clone_conflicts: [
+              {
+                action_id: 'review.queue.discard',
+                combo: 'd',
+                class_id: 4,
+                class_name: 'dog',
+              },
+              { action_id: 'cluster.undo', combo: 'z', class_id: 9, class_name: 'zebra' },
+            ],
+          })
+        : undefined,
+    );
+    const res = await createProjectsAdmin().cloneSettings(ALPHA, 'default', ['keymap']);
+    expect(res.ok).toBe(true);
+    const warn = toastStore.toasts.find((t) => t.kind === 'warn');
+    expect(warn?.text).toBe(
+      '2 keyboard shortcuts were not copied: review.queue.discard (d is the hotkey of class "dog"); cluster.undo (z is the hotkey of class "zebra").',
+    );
+  });
+
+  it('shows no toast when no keymap action was dropped (absent or empty)', async () => {
+    serve((url, init) =>
+      init.method === 'POST'
+        ? json({ project: ALPHA, keymap_clone_conflicts: [] })
+        : undefined,
+    );
+    await createProjectsAdmin().cloneSettings(ALPHA, 'default', ['keymap']);
+    expect(toastStore.toasts).toEqual([]);
+  });
+
   it.each([
     ['slug_taken', 409, "a project named 'alpha' already exists"],
     ['slug_retired', 409, "'gone' was used by a deleted project"],

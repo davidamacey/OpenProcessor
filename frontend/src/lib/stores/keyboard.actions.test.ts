@@ -82,17 +82,17 @@ describe('keyboardStore.registerAction', () => {
     expect(reject).toHaveBeenCalledTimes(1);
   });
 
-  it('never registers an unavailable (W8) action', () => {
+  it('registers the W8 per-box accept action now that this branch enables it', () => {
     const accept = vi.fn();
     cleanups.push(
       keyboardStore.registerAction('review.region.accept_box', accept, 'review'),
     );
     keyboardStore.setScope('review');
     press({ key: 'y' });
-    expect(accept).not.toHaveBeenCalled();
+    expect(accept).toHaveBeenCalledTimes(1);
     expect(
       keyboardStore.shortcutsForCurrentScope().some((s) => s.keys.includes('y')),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   // K2 fix (plan §5, item 3): a multi-key action used to print one row

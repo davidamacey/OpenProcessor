@@ -1,7 +1,7 @@
 /**
  * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
  * `saveBox` used to re-PUT the box a second time even though
- * `SlotBboxEditor` had already saved it via `setSlotBox` — a redundant
+ * `SlotBboxEditor` had already saved it (`PUT /crops/{id}/regions`) — a redundant
  * double-write on every region-gallery bbox save. It is now a pure local
  * patch off the server's own returned item: no network call, no `fetch`
  * stub needed, which is itself part of the proof (a lingering second
@@ -15,6 +15,7 @@ import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Crop } from '$lib/types';
 import type { SlotData } from '$lib/annotations/types';
 import type { RegionBrowseItem } from '$lib/api';
+import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
 function fakeCropWithSlot(id: string, slot: SlotData): Crop {
   return {
@@ -42,24 +43,16 @@ function fakeRegionItem(id: string): RegionBrowseItem {
     id,
     image_path: '/img.jpg',
     bbox_norm: [0.3, 0.3, 0.7, 0.7],
-    region_bbox_norm: null,
-    region_score: null,
     region_status: 'pending_verification',
     region_verified: false,
     region_validated: null,
-    region_detector: null,
-    region_detector_version: null,
     region_detector_chain: null,
-    region_bbox_frame: null,
     region_detected_at: null,
     region_verifier: null,
     region_verifier_version: null,
     region_verified_at: null,
     region_rejection_reason: null,
     region_visible: null,
-    region_text: null,
-    region_text_source: null,
-    region_text_confidence: null,
     class_id: 3,
     class_name: 'widget_tag',
     cluster_id: null,
@@ -79,13 +72,20 @@ describe('saveBox — no redundant write', () => {
     const gallery = createSlotGalleryController(widgetTagSlot);
     gallery.editCrop = fakeCropWithSlot('c1', {
       key: widgetTagSlot.key,
-      subBox: {
-        rawXyxy: [0.4, 0.45, 0.6, 0.55],
-        frame: 'source',
-        parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 },
-        score: null,
-        visible: true,
-        candidate: null,
+      subBoxes: [
+        makeSlotBox({
+          boxId: 'b1',
+          state: 'accepted',
+          rawXyxy: [0.4, 0.45, 0.6, 0.55],
+          thumbnailUrl: '/curation/crops/c1/region_thumbnail?box_id=b1',
+        }),
+      ],
+      boxSet: {
+        count: 1,
+        rejectedCount: 0,
+        maxScore: 0.9,
+        setComplete: true,
+        revision: 8,
       },
       lifecycle: {
         status: 'detected',
@@ -94,7 +94,6 @@ describe('saveBox — no redundant write', () => {
         validated: true,
         autoConfirmed: null,
         rejectionReason: null,
-        boxCorrect: null,
       },
     });
     gallery.pager.items = [fakeRegionItem('c1')];
@@ -106,23 +105,27 @@ describe('saveBox — no redundant write', () => {
     const patched = gallery.pager.items.find((p) => p.crop_id === 'c1');
     expect(patched?.region_status).toBe('detected');
     expect(patched?.region_verified).toBe(true);
-    expect(patched?.region_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
+    // The card re-renders from the returned boxes and revision (which is
+    // also what re-crops its thumbnail).
+    const data = patched?.slots?.[widgetTagSlot.key];
+    expect(data?.subBoxes?.[0].rawXyxy).toEqual([0.4, 0.45, 0.6, 0.55]);
+    expect(data?.boxSet?.revision).toBe(8);
   });
 
-  it('a cleared item (no subBox.rawXyxy) patches to the rejectState and clears the bbox', () => {
+  it('a cleared item (no boxes) patches to the served status and empties the box list', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     const gallery = createSlotGalleryController(widgetTagSlot);
     gallery.editCrop = fakeCropWithSlot('c2', {
       key: widgetTagSlot.key,
-      subBox: {
-        rawXyxy: null,
-        frame: 'source',
-        parent: null,
-        score: null,
-        visible: null,
-        candidate: null,
+      subBoxes: [],
+      boxSet: {
+        count: 0,
+        rejectedCount: 0,
+        maxScore: null,
+        setComplete: null,
+        revision: 3,
       },
       lifecycle: {
         status: 'no_region_visible',
@@ -131,16 +134,19 @@ describe('saveBox — no redundant write', () => {
         validated: null,
         autoConfirmed: null,
         rejectionReason: null,
-        boxCorrect: null,
       },
     });
-    gallery.pager.items = [fakeRegionItem('c2')];
+    const before = fakeRegionItem('c2');
+    before.slots = {
+      [widgetTagSlot.key]: { key: widgetTagSlot.key, subBoxes: [makeSlotBox()] },
+    };
+    gallery.pager.items = [before];
 
     gallery.saveBox(gallery.editCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
     const patched = gallery.pager.items.find((p) => p.crop_id === 'c2');
     expect(patched?.region_status).toBe('no_region_visible');
-    expect(patched?.region_bbox_norm).toBeNull();
+    expect(patched?.slots?.[widgetTagSlot.key]?.subBoxes).toEqual([]);
   });
 });

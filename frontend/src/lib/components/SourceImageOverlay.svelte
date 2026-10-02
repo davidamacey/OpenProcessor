@@ -44,8 +44,8 @@
   import type { Crop } from '$lib/types';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
-  import { projectFromParent } from '$lib/annotations/readSlot';
-  import type { BBoxNormLike, XYXY } from '$lib/annotations/types';
+  import type { XYXY } from '$lib/annotations/types';
+  import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
 
   interface Props {
     /** Which crop's context (source image + every item cropped from it) to draw. */
@@ -123,12 +123,40 @@
     return w && h ? `${w} / ${h}` : null;
   });
 
+  /** A box stored relative to its parent crop, as source-image xyxy. */
+  function parentToSource(box: XYXY, parent: XYXY): XYXY {
+    const pw = parent[2] - parent[0];
+    const ph = parent[3] - parent[1];
+    return [
+      parent[0] + box[0] * pw,
+      parent[1] + box[1] * ph,
+      parent[0] + box[2] * pw,
+      parent[1] + box[3] * ph,
+    ];
+  }
+
   function bboxToXyxy(b: { cx: number; cy: number; w: number; h: number }): XYXY {
     return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
   }
 
+  /** W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+   *  per-box state -> ring color/dash. The ring color reads the served
+   *  box_states `tone` (backend follow-up to W8.7) via
+   *  `toneBorderClass(boxStateTone(state))` — 'neutral' on a pre-tone
+   *  backend or an unrecognized state, matching `+page.svelte`'s
+   *  `multiBoxRingColor`. */
+  function multiBoxRingColorClass(state: string): string {
+    return toneBorderClass(regionStatusesStore.boxStateTone(state));
+  }
+  function multiBoxDashed(state: string): boolean {
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
+    );
+  }
+
   interface DrawBox {
-    kind: 'item' | 'region' | 'region-candidate';
+    kind: 'item' | 'region' | 'region-box';
     cropId: string;
     xyxy: XYXY;
     dashed: boolean;
@@ -175,19 +203,17 @@
       if (!slot?.capabilities.subBox) continue;
       const data = slotOf(item, slot);
       const sub = data?.subBox;
-      if (!sub) continue;
+      const boxList = data?.subBoxes ?? [];
       const ring = slot.capabilities.subBox.ring;
 
-      if (sub.parent) {
-        const regionXyxy = projectFromParent(
-          sub.parent as BBoxNormLike,
-          itemXyxy,
-          'source',
-        );
+      // A read-only scalar-box slot (tier 2): one box, stored in either
+      // frame.
+      if (sub?.rawXyxy) {
         out.push({
           kind: 'region',
           cropId: item.id,
-          xyxy: regionXyxy,
+          xyxy:
+            sub.frame === 'source' ? sub.rawXyxy : parentToSource(sub.rawXyxy, itemXyxy),
           dashed: false,
           colorClass: ring.confirmed,
           label: slot.label.title,
@@ -196,28 +222,25 @@
           clickable: false,
         });
       }
-      if (sub.candidate?.parent) {
-        const candidateXyxy = projectFromParent(
-          sub.candidate.parent as BBoxNormLike,
-          itemXyxy,
-          'source',
-        );
+
+      // Multi-box slot: every served box, in the source image's frame
+      // already (`bbox_norm`), numbered by position.
+      boxList.forEach((b, i) => {
+        if (!b.rawXyxy) return;
         out.push({
-          kind: 'region-candidate',
+          kind: 'region-box',
           cropId: item.id,
-          xyxy: candidateXyxy,
-          dashed: true,
-          colorClass: ring.proposed,
-          label: `${slot.label.title} candidate`,
-          tooltip: `${slot.label.title} candidate${
-            sub.candidate.score != null
-              ? ` · ${(sub.candidate.score * 100).toFixed(0)}%`
-              : ''
+          xyxy: b.rawXyxy,
+          dashed: multiBoxDashed(b.state),
+          colorClass: multiBoxRingColorClass(b.state),
+          label: `${slot.label.title} ${i + 1}`,
+          tooltip: `${slot.label.title} ${i + 1} · ${b.state}${
+            b.score != null ? ` · ${(b.score * 100).toFixed(0)}%` : ''
           }`,
           selected: false,
           clickable: false,
         });
-      }
+      });
     }
     return out;
   });

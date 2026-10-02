@@ -303,8 +303,8 @@ function parseThumbnail(
   }
   const template = pathResult.template;
   return {
-    path: (cropId: string, size: number) =>
-      renderPathTemplate(template, { cropId, size }),
+    path: (cropId: string, boxId: string, size: number) =>
+      renderPathTemplate(template, { cropId, boxId, size }),
     aspect,
     defaultSize,
   };
@@ -386,6 +386,17 @@ function parseEditor(
   return { thumbSize, viewPadding, nudgeStep };
 }
 
+const SUBBOX_OPTIONAL_FIELDS = [
+  'frameField',
+  'scoreField',
+  'visibleField',
+  'countField',
+  'rejectedCountField',
+  'maxScoreField',
+  'setCompleteField',
+  'revisionField',
+] as const;
+
 function parseSubBox(
   raw: unknown,
   key: string,
@@ -396,22 +407,30 @@ function parseSubBox(
     errors.push(`slot "${key}": capabilities.subBox must be an object — skipped`);
     return null;
   }
-  if (!isWireField(raw.bboxField)) {
-    errors.push(`slot "${key}": capabilities.subBox.bboxField is required — skipped`);
-    return null;
-  }
-  if (raw.storedFrame !== 'source' && raw.storedFrame !== 'parent') {
+  const hasList = raw.listField !== undefined;
+  if (hasList === (raw.bboxField !== undefined)) {
     errors.push(
-      `slot "${key}": capabilities.subBox.storedFrame must be 'source' or 'parent' — skipped`,
+      `slot "${key}": capabilities.subBox needs exactly one of listField (multi-box) or bboxField (read-only single box) — skipped`,
     );
     return null;
   }
-  for (const f of [
-    'frameField',
-    'scoreField',
-    'visibleField',
-    'bboxInParentField',
-  ] as const) {
+  if (hasList && !isWireField(raw.listField)) {
+    errors.push(`slot "${key}": capabilities.subBox.listField is invalid — skipped`);
+    return null;
+  }
+  if (!hasList) {
+    if (!isWireField(raw.bboxField)) {
+      errors.push(`slot "${key}": capabilities.subBox.bboxField is invalid — skipped`);
+      return null;
+    }
+    if (raw.storedFrame !== 'source' && raw.storedFrame !== 'parent') {
+      errors.push(
+        `slot "${key}": capabilities.subBox.storedFrame must be 'source' or 'parent' — skipped`,
+      );
+      return null;
+    }
+  }
+  for (const f of SUBBOX_OPTIONAL_FIELDS) {
     if (raw[f] !== undefined && !isWireField(raw[f])) {
       errors.push(`slot "${key}": capabilities.subBox.${f} is invalid — skipped`);
       return null;
@@ -424,17 +443,16 @@ function parseSubBox(
   const editor = parseEditor(raw.editor, key, errors);
   if (editor === null) return null;
 
-  const out: SubBoxCapability = {
-    bboxField: raw.bboxField as string,
-    storedFrame: raw.storedFrame,
-    ring,
-    editor,
-  };
-  if (raw.frameField !== undefined) out.frameField = raw.frameField as string;
-  if (raw.scoreField !== undefined) out.scoreField = raw.scoreField as string;
-  if (raw.visibleField !== undefined) out.visibleField = raw.visibleField as string;
-  if (raw.bboxInParentField !== undefined)
-    out.bboxInParentField = raw.bboxInParentField as string;
+  const out: SubBoxCapability = { ring, editor };
+  if (hasList) {
+    out.listField = raw.listField as string;
+  } else {
+    out.bboxField = raw.bboxField as string;
+    out.storedFrame = raw.storedFrame as SubBoxCapability['storedFrame'];
+  }
+  for (const f of SUBBOX_OPTIONAL_FIELDS) {
+    if (raw[f] !== undefined) out[f] = raw[f] as string;
+  }
   if (thumbnail !== undefined) out.thumbnail = thumbnail;
   return out;
 }
@@ -556,11 +574,8 @@ function parseText(
     errors.push(`slot "${key}": capabilities.text must be an object — skipped`);
     return null;
   }
-  if (!isWireField(raw.valueField)) {
-    errors.push(`slot "${key}": capabilities.text.valueField is required — skipped`);
-    return null;
-  }
   for (const f of [
+    'valueField',
     'rawField',
     'sourceField',
     'confidenceField',
@@ -609,10 +624,8 @@ function parseText(
   const vocabulary = parseVocabulary(raw.vocabulary, key, errors);
   if (vocabulary === null) return null;
 
-  const out: TextCapability = {
-    valueField: raw.valueField as string,
-    label: raw.label as string,
-  };
+  const out: TextCapability = { label: raw.label as string };
+  if (raw.valueField !== undefined) out.valueField = raw.valueField as string;
   if (raw.rawField !== undefined) out.rawField = raw.rawField as string;
   if (raw.sourceField !== undefined) out.sourceField = raw.sourceField as string;
   if (raw.confidenceField !== undefined)
@@ -634,6 +647,7 @@ function parseText(
 /* ------------------------------------------------------------------ */
 
 const PROVENANCE_OPTIONAL = [
+  'detectorField',
   'detectorVersionField',
   'chainField',
   'verifierField',
@@ -652,12 +666,6 @@ function parseProvenance(
     errors.push(`slot "${key}": capabilities.provenance must be an object — skipped`);
     return null;
   }
-  if (!isWireField(raw.detectorField)) {
-    errors.push(
-      `slot "${key}": capabilities.provenance.detectorField is required — skipped`,
-    );
-    return null;
-  }
   for (const f of PROVENANCE_OPTIONAL) {
     if (raw[f] !== undefined && !isWireField(raw[f])) {
       errors.push(`slot "${key}": capabilities.provenance.${f} is invalid — skipped`);
@@ -670,10 +678,7 @@ function parseProvenance(
     );
     return null;
   }
-  const out: ProvenanceCapability = {
-    detectorField: raw.detectorField as string,
-    showChainOnCard: raw.showChainOnCard,
-  };
+  const out: ProvenanceCapability = { showChainOnCard: raw.showChainOnCard };
   for (const f of PROVENANCE_OPTIONAL) {
     if (raw[f] !== undefined) out[f] = raw[f] as string;
   }
@@ -815,12 +820,6 @@ function parseLifecycle(
     );
     return null;
   }
-  if (raw.boxCorrectField !== undefined && !isWireField(raw.boxCorrectField)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.boxCorrectField is invalid — skipped`,
-    );
-    return null;
-  }
   const states = parseStates(raw.states, key, errors);
   if (states === null) return null;
   const values = new Set(states.map((s) => s.value));
@@ -856,8 +855,6 @@ function parseLifecycle(
     out.rejectionReasonField = raw.rejectionReasonField as string;
   if (raw.labelSourceField !== undefined)
     out.labelSourceField = raw.labelSourceField as string;
-  if (raw.boxCorrectField !== undefined)
-    out.boxCorrectField = raw.boxCorrectField as string;
   if (raw.falsePositiveState !== undefined)
     out.falsePositiveState = raw.falsePositiveState as string;
   return out;
@@ -1304,7 +1301,7 @@ function parseEndpoints(
     return null;
   }
   const out: SlotEndpoints = {};
-  for (const field of ['setBox', 'clearBox', 'patchMeta'] as const) {
+  for (const field of ['patchMeta'] as const) {
     const fn = parseCropIdEndpoint(raw[field], field, key, errors);
     if (fn === null) return null;
     if (fn !== undefined) out[field] = fn;

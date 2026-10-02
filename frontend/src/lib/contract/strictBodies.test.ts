@@ -55,9 +55,7 @@ describe('strict request bodies send only declared keys', () => {
   it('POST /ingest/batch (IngestBatchRequest + IngestBatchItem)', async () => {
     const cap = captureBody();
     await ingestBatch({
-      items: [{ path: '/data/source/a.jpg', source: 'batch', label_txt_path: null }],
-      label_source: 'human',
-      detect_mismatches: false,
+      items: [{ path: '/data/source/a.jpg', source: 'batch' }],
     });
     const body = cap.calls()[0]!;
     const allowed = declared('IngestBatchRequest');

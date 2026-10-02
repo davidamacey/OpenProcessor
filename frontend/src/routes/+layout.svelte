@@ -10,7 +10,7 @@
   import type { Snippet } from 'svelte';
   import Toast from '$components/Toast.svelte';
   import { subscribeGlobalEvents } from '$lib/sse';
-  import { projectsStore } from '$stores/projects.svelte';
+  import { handleProjectEvent } from '$lib/projects/projectEvents';
 
   interface Props {
     children?: Snippet;
@@ -19,12 +19,15 @@
   let { children, data }: Props = $props();
 
   // The global `project.*` stream keeps the switcher's list fresh: any
-  // project event (created, archived, deleted, ...) re-reads the served
-  // list. Never opened on a blocking projectsError.
+  // project event (created, archived, deleted, paused, ...) re-reads the
+  // served list. A pause or resume also re-reads that project's
+  // `GET {prefix}/pause` (the fuller answer: who holds the pause and why),
+  // so another tab's action shows here. Never opened on a blocking
+  // projectsError.
   $effect(() => {
     if (data.projectsError) return;
     const sub = subscribeGlobalEvents({
-      onEvent: () => void projectsStore.refresh(),
+      onEvent: (event) => void handleProjectEvent(event),
     });
     return () => sub.close();
   });

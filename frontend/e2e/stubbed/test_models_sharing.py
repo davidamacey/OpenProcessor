@@ -47,6 +47,8 @@ def base(name: str, **over: Any) -> dict[str, Any]:
         "unloadable": True,
         "optional": False,
         "project": None,
+        "owned": False,
+        "sharing_revision": None,
         "shared": False,
         "class_mapping": None,
     }
@@ -59,6 +61,7 @@ class Models:
         self.own = base(
             "widget_det",
             project="default",
+            owned=True,
             shared=False,
             sharing_revision=3,
             class_mapping={"mapped_count": 4, "unmapped": []},
@@ -67,7 +70,9 @@ class Models:
             "beta__crate_det",
             friendly_name="beta__crate_det (shared by beta)",
             project="beta",
+            owned=False,
             shared=True,
+            unloadable=False,
             class_mapping={"mapped_count": 2, "unmapped": ["van", "bus"]},
         )
         self.puts: list[tuple[str, Any]] = []

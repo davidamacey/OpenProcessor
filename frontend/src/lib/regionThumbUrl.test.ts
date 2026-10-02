@@ -6,7 +6,7 @@
  * going through `apiBase`, so the browser resolved them against the
  * frontend's OWN origin instead of the configured remote OpenProcessor.
  *
- * `apiBase` (and therefore `getThumbUrl`/`getRegionThumbUrl`/
+ * `apiBase` (and therefore `getThumbUrl`/
  * `resolveApiUrl`) is computed once at module load from
  * `import.meta.env.PUBLIC_TRITON_API_URL`, so exercising the
  * non-empty-base case requires stubbing the env var, resetting the
@@ -32,39 +32,6 @@ async function loadApiWithRemoteBase() {
   mod.setScopedPrefix(mod.API_PREFIX);
   return mod;
 }
-
-describe('getRegionThumbUrl', () => {
-  it('prefixes the configured remote apiBase', async () => {
-    const { getRegionThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(getRegionThumbUrl('abc')).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160`,
-    );
-  });
-
-  it('accepts a custom size', async () => {
-    const { getRegionThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(getRegionThumbUrl('abc', 320)).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=320`,
-    );
-  });
-
-  it('assembles a cache-busting `v` param when a cacheBustKey is passed', async () => {
-    const { getRegionThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(getRegionThumbUrl('abc', 160, 12345)).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160&v=12345`,
-    );
-  });
-
-  it('omits the `v` param entirely when no cacheBustKey is given', async () => {
-    const { getRegionThumbUrl } = await loadApiWithRemoteBase();
-    expect(getRegionThumbUrl('abc')).not.toMatch(/v=/);
-  });
-
-  it('encodes the crop id', async () => {
-    const { getRegionThumbUrl } = await loadApiWithRemoteBase();
-    expect(getRegionThumbUrl('a/b')).toContain('a%2Fb');
-  });
-});
 
 describe('resolveApiUrl', () => {
   it('prefixes a bare relative {API_PREFIX}/... path with the configured remote apiBase', async () => {

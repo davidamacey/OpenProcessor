@@ -31,7 +31,7 @@ describe('regionSlotFromServedProfile', () => {
 
   it('uses only wire keys the backend documents', () => {
     const fields = wireFields(slot.capabilities);
-    expect(fields.length).toBeGreaterThan(20);
+    expect(fields.length).toBeGreaterThan(10);
     expect(fields.filter((f) => !WIRE_KEYS.has(f))).toEqual([]);
   });
 
@@ -71,12 +71,17 @@ describe('regionSlotFromServedProfile', () => {
     expect(REGION_TAB_ID).toBe('regions');
   });
 
-  it('writes through the region routes', () => {
+  it('declares only the whole-set status routes (box writes go through the per-box api helpers)', () => {
     expect(slot.endpoints).toBe(REGION_ENDPOINTS);
-    expect(slot.endpoints.setBox!('a/b')).toBe('/crops/a%2Fb/region');
+    expect(Object.keys(slot.endpoints).sort()).toEqual(['batchStatus', 'patchMeta']);
     expect(slot.endpoints.patchMeta!('a')).toBe('/crops/a/region_meta');
     expect(slot.endpoints.batchStatus!()).toBe('/regions/batch_status');
-    expect(slot.capabilities.subBox).toBe(REGION_WIRE_CAPABILITIES.subBox);
+    // subBox is rebuilt per profile (spread over REGION_SUB_BOX) to carry
+    // the served region_profile.limits.max_boxes_per_write.
+    expect(slot.capabilities.subBox).toEqual({
+      ...REGION_WIRE_CAPABILITIES.subBox,
+      maxBoxesPerWrite: WIDGET_TAG_PROFILE.limits.max_boxes_per_write,
+    });
   });
 
   it('declares no client-side training cohorts (the backend serves them)', () => {
@@ -97,7 +102,9 @@ describe('regionSlotFromServedProfile', () => {
   });
 
   it('has a text capability and text filter when the profile reads text', () => {
-    expect(slot.capabilities.text?.valueField).toBe('region_text');
+    expect(slot.capabilities.text).toBeDefined();
+    // The reading is per box: no item-level text wire field exists.
+    expect(slot.capabilities.text?.valueField).toBeUndefined();
     expect(slot.capabilities.queue?.textFilter?.param).toBe('text');
   });
 

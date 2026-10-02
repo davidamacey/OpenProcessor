@@ -7,6 +7,7 @@
       "semantic_score"
     ],
     "training_candidate": [
+      "region_box_id",
       "selection_reason"
     ]
   },
@@ -32,6 +33,9 @@
     "class_labeled_at",
     "class_labeler",
     "vlm_confidence",
+    "vlm_prompt_pack",
+    "vlm_endpoint",
+    "vlm_model",
     "vlm_class_attempted_at",
     "vlm_class_empty_reason",
     "vlm_raw_class",
@@ -75,26 +79,9 @@
     "dup_is_representative",
     "updated_at",
     "thumbnail_url",
-    "region_thumbnail_url",
-    "region_bbox_norm",
-    "region_bbox_in_parent",
-    "region_bbox_frame",
-    "region_bbox_correct",
     "region_status",
-    "region_score",
-    "region_confidence",
     "region_reason",
     "region_rejection_reason",
-    "region_text",
-    "region_text_raw",
-    "region_text_confidence",
-    "region_text_source",
-    "region_text_engine_version",
-    "region_text_vlm",
-    "region_text_ocr",
-    "region_text_disagreement",
-    "region_text_choice",
-    "region_text_vlm_invalid",
     "region_validated",
     "region_auto_confirmed",
     "region_verified",
@@ -102,24 +89,35 @@
     "region_verifier",
     "region_verifier_version",
     "region_visible",
-    "region_detector",
-    "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
-    "region_candidate_bbox_norm",
-    "region_candidate_score",
-    "region_candidate_detector",
-    "region_candidate_detector_version",
-    "region_candidate_source",
-    "region_candidate_bbox_in_parent",
-    "region_cluster_id",
-    "region_cluster_subid",
-    "region_cluster_distance",
+    "region_profile",
+    "region_profile_revision",
     "region_class_id",
     "region_label_source",
-    "region_source",
     "region_pairing",
     "region_skip_verify",
+    "region_boxes",
+    "region_count",
+    "region_rejected_count",
+    "region_max_score",
+    "region_set_complete",
+    "region_revision",
+    "label_locked",
+    "import_ids",
+    "dataset_split",
+    "imported_at",
+    "proposed_by_import",
+    "on_negative_frame",
+    "import_standalone_region",
+    "proposal_chain",
+    "origin_project",
+    "origin_item_id",
+    "origin_image_id",
+    "origin_split",
+    "combine_conflict",
+    "combine_conflict_origins",
+    "combine_merged_origins",
     "item_text_lines"
   ],
   "json_schema": {
@@ -415,6 +413,25 @@
         "default": null,
         "title": "Cluster Subid"
       },
+      "combine_conflict": {
+        "default": false,
+        "title": "Combine Conflict",
+        "type": "boolean"
+      },
+      "combine_conflict_origins": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Combine Conflict Origins",
+        "type": "array"
+      },
+      "combine_merged_origins": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Combine Merged Origins",
+        "type": "array"
+      },
       "confidence": {
         "default": 0.0,
         "title": "Confidence",
@@ -447,6 +464,18 @@
         ],
         "default": null,
         "title": "Crop Rank In Image"
+      },
+      "dataset_split": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dataset Split"
       },
       "dup_group_id": {
         "default": null,
@@ -514,12 +543,41 @@
         "title": "Image Path",
         "type": "string"
       },
+      "import_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Import Ids",
+        "type": "array"
+      },
+      "import_standalone_region": {
+        "default": false,
+        "title": "Import Standalone Region",
+        "type": "boolean"
+      },
+      "imported_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Imported At"
+      },
       "item_text_lines": {
         "items": {
           "$ref": "#/$defs/ItemTextLine"
         },
         "title": "Item Text Lines",
         "type": "array"
+      },
+      "label_locked": {
+        "default": false,
+        "title": "Label Locked",
+        "type": "boolean"
       },
       "label_source": {
         "anyOf": [
@@ -603,6 +661,59 @@
         "default": null,
         "title": "Needs New Class Note"
       },
+      "on_negative_frame": {
+        "default": false,
+        "title": "On Negative Frame",
+        "type": "boolean"
+      },
+      "origin_image_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Image Id"
+      },
+      "origin_item_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Item Id"
+      },
+      "origin_project": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Project"
+      },
+      "origin_split": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Split"
+      },
       "probe_actionable": {
         "anyOf": [
           {
@@ -679,6 +790,13 @@
         "default": null,
         "title": "Probe Pred Entropy"
       },
+      "proposal_chain": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Proposal Chain",
+        "type": "array"
+      },
       "proposal_name": {
         "anyOf": [
           {
@@ -690,6 +808,18 @@
         ],
         "default": null,
         "title": "Proposal Name"
+      },
+      "proposed_by_import": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposed By Import"
       },
       "proposed_class_id": {
         "anyOf": [
@@ -720,137 +850,13 @@
         "default": null,
         "title": "Region Auto Confirmed"
       },
-      "region_bbox_correct": {
-        "anyOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox Correct"
-      },
-      "region_bbox_frame": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox Frame"
-      },
-      "region_bbox_in_parent": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox In Parent"
-      },
-      "region_bbox_norm": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Bbox Norm"
-      },
-      "region_candidate_bbox_in_parent": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Bbox In Parent"
-      },
-      "region_candidate_bbox_norm": {
-        "anyOf": [
-          {
-            "items": {
-              "type": "number"
-            },
-            "type": "array"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Bbox Norm"
-      },
-      "region_candidate_detector": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Detector"
-      },
-      "region_candidate_detector_version": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Detector Version"
-      },
-      "region_candidate_score": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Score"
-      },
-      "region_candidate_source": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Candidate Source"
+      "region_boxes": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Region Boxes",
+        "type": "array"
       },
       "region_class_id": {
         "anyOf": [
@@ -864,45 +870,10 @@
         "default": null,
         "title": "Region Class Id"
       },
-      "region_cluster_distance": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Cluster Distance"
-      },
-      "region_cluster_id": {
-        "anyOf": [
-          {
-            "type": "integer"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Cluster Id"
-      },
-      "region_cluster_subid": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Cluster Subid"
-      },
-      "region_confidence": {
-        "default": null,
-        "title": "Region Confidence"
+      "region_count": {
+        "default": 0,
+        "title": "Region Count",
+        "type": "integer"
       },
       "region_detected_at": {
         "anyOf": [
@@ -915,18 +886,6 @@
         ],
         "default": null,
         "title": "Region Detected At"
-      },
-      "region_detector": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Detector"
       },
       "region_detector_chain": {
         "anyOf": [
@@ -943,18 +902,6 @@
         "default": null,
         "title": "Region Detector Chain"
       },
-      "region_detector_version": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Detector Version"
-      },
       "region_label_source": {
         "anyOf": [
           {
@@ -967,9 +914,45 @@
         "default": null,
         "title": "Region Label Source"
       },
+      "region_max_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Max Score"
+      },
       "region_pairing": {
         "default": null,
         "title": "Region Pairing"
+      },
+      "region_profile": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Profile"
+      },
+      "region_profile_revision": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Profile Revision"
       },
       "region_reason": {
         "anyOf": [
@@ -983,6 +966,11 @@
         "default": null,
         "title": "Region Reason"
       },
+      "region_rejected_count": {
+        "default": 0,
+        "title": "Region Rejected Count",
+        "type": "integer"
+      },
       "region_rejection_reason": {
         "anyOf": [
           {
@@ -995,17 +983,22 @@
         "default": null,
         "title": "Region Rejection Reason"
       },
-      "region_score": {
+      "region_revision": {
+        "default": 0,
+        "title": "Region Revision",
+        "type": "integer"
+      },
+      "region_set_complete": {
         "anyOf": [
           {
-            "type": "number"
+            "type": "boolean"
           },
           {
             "type": "null"
           }
         ],
         "default": null,
-        "title": "Region Score"
+        "title": "Region Set Complete"
       },
       "region_skip_verify": {
         "anyOf": [
@@ -1019,18 +1012,6 @@
         "default": null,
         "title": "Region Skip Verify"
       },
-      "region_source": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Source"
-      },
       "region_status": {
         "anyOf": [
           {
@@ -1042,131 +1023,6 @@
         ],
         "default": null,
         "title": "Region Status"
-      },
-      "region_text": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text"
-      },
-      "region_text_choice": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Choice"
-      },
-      "region_text_confidence": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Confidence"
-      },
-      "region_text_disagreement": {
-        "anyOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Disagreement"
-      },
-      "region_text_engine_version": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Engine Version"
-      },
-      "region_text_ocr": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Ocr"
-      },
-      "region_text_raw": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Raw"
-      },
-      "region_text_source": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Source"
-      },
-      "region_text_vlm": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Vlm"
-      },
-      "region_text_vlm_invalid": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Region Text Vlm Invalid"
-      },
-      "region_thumbnail_url": {
-        "default": "",
-        "title": "Region Thumbnail Url",
-        "type": "string"
       },
       "region_validated": {
         "anyOf": [
@@ -1325,6 +1181,42 @@
         "default": null,
         "title": "Vlm Confidence"
       },
+      "vlm_endpoint": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Endpoint"
+      },
+      "vlm_model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Model"
+      },
+      "vlm_prompt_pack": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Prompt Pack"
+      },
       "vlm_proposed_class_id": {
         "anyOf": [
           {
@@ -1369,26 +1261,11 @@
     "title": "ItemDoc",
     "type": "object"
   },
-  "notes": "Every item-returning endpoint emits exactly item_keys (all always present; nullable per json_schema), plus that endpoint's extra_keys. region_keys is the region-of-interest subset; region_thumbnail_url is a server-built URL, not a region attribute.",
+  "notes": "Every item-returning endpoint emits exactly item_keys (all always present; nullable per json_schema), plus that endpoint's extra_keys. region_keys is the item-level region subset; a box's own data (geometry, score, detector, text, cluster, thumbnail_url) is an element of region_boxes.",
   "region_keys": [
-    "region_bbox_norm",
-    "region_bbox_frame",
-    "region_bbox_correct",
     "region_status",
-    "region_score",
-    "region_confidence",
     "region_reason",
     "region_rejection_reason",
-    "region_text",
-    "region_text_raw",
-    "region_text_confidence",
-    "region_text_source",
-    "region_text_engine_version",
-    "region_text_vlm",
-    "region_text_ocr",
-    "region_text_disagreement",
-    "region_text_choice",
-    "region_text_vlm_invalid",
     "region_validated",
     "region_auto_confirmed",
     "region_verified",
@@ -1396,21 +1273,12 @@
     "region_verifier",
     "region_verifier_version",
     "region_visible",
-    "region_detector",
-    "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
-    "region_candidate_bbox_norm",
-    "region_candidate_score",
-    "region_candidate_detector",
-    "region_candidate_detector_version",
-    "region_candidate_source",
-    "region_cluster_id",
-    "region_cluster_subid",
-    "region_cluster_distance",
+    "region_profile",
+    "region_profile_revision",
     "region_class_id",
     "region_label_source",
-    "region_source",
     "region_pairing",
     "region_skip_verify"
   ],

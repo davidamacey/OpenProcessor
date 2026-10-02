@@ -1,32 +1,39 @@
 /**
- * Per-project pipeline pause (projects P2, `projects_plan.md` §5.1):
- * the served `paused` flag of each project, keyed by slug. Each project
- * is addressed through its own served `prefix` (`GET|POST {prefix}/pause`,
- * `POST {prefix}/resume`), so `/projects` can pause any row and the
- * switcher can show the active project's chip.
+ * Per-project pipeline pause (projects P2, `projects_plan.md` §5.1): the
+ * last served `PipelinePauseState` of a project, keyed by slug. Each
+ * project is addressed through its own served `prefix` (`GET|POST
+ * {prefix}/pause`, `POST {prefix}/resume`), so `/projects` can pause any
+ * row and the switcher can explain the active project's chip.
  *
- * Thin frontend: the value is exactly what the server last answered.
- * The served state is only the project's own flag — the server doesn't
- * say whether the global GPU-training claim is also holding its
- * workers, so nothing here guesses a reason. Not reset on a project
- * change: it is keyed by slug and every value belongs to its project.
+ * Thin frontend: the value is exactly what the server last answered —
+ * `paused` (the project's own flag OR the global GPU-training claim),
+ * `paused_by` and the served `reason`; nothing here guesses a cause. The
+ * list view's plain `paused` comes from the served `ProjectSummary`, so
+ * `/projects` needs no per-row read. Not reset on a project change: it is
+ * keyed by slug and every value belongs to its project.
  */
 import { SvelteMap } from 'svelte/reactivity';
 import { getProjectPause, pauseProject, projectErrorText, resumeProject } from '$lib/api';
-import type { ProjectSummary } from '$lib/types_projects';
+import type { PipelinePauseState, ProjectSummary } from '$lib/types_projects';
 
 type PauseTarget = Pick<ProjectSummary, 'slug' | 'prefix'>;
 
 export type PauseResult = { ok: true; paused: boolean } | { ok: false; message: string };
 
 class ProjectPauseStore {
-  #paused = new SvelteMap<string, boolean>();
+  #state = new SvelteMap<string, PipelinePauseState>();
   #seq = new Map<string, number>();
+
+  /** The last served pause state for a slug, or `undefined` until it's
+   *  loaded (or when the read failed). */
+  stateFor(slug: string): PipelinePauseState | undefined {
+    return this.#state.get(slug);
+  }
 
   /** The served `paused` for a slug, or `undefined` until it's loaded
    *  (or when the read failed). */
   pausedFor(slug: string): boolean | undefined {
-    return this.#paused.get(slug);
+    return this.#state.get(slug)?.paused;
   }
 
   #bump(slug: string): number {
@@ -41,10 +48,9 @@ class ProjectPauseStore {
     const mine = this.#bump(project.slug);
     try {
       const res = await getProjectPause(project);
-      if (this.#seq.get(project.slug) === mine)
-        this.#paused.set(project.slug, res.paused);
+      if (this.#seq.get(project.slug) === mine) this.#state.set(project.slug, res);
     } catch {
-      if (this.#seq.get(project.slug) === mine) this.#paused.delete(project.slug);
+      if (this.#seq.get(project.slug) === mine) this.#state.delete(project.slug);
     }
   }
 
@@ -53,8 +59,7 @@ class ProjectPauseStore {
     const mine = this.#bump(project.slug);
     try {
       const res = paused ? await pauseProject(project) : await resumeProject(project);
-      if (this.#seq.get(project.slug) === mine)
-        this.#paused.set(project.slug, res.paused);
+      if (this.#seq.get(project.slug) === mine) this.#state.set(project.slug, res);
       return { ok: true, paused: res.paused };
     } catch (e) {
       return { ok: false, message: projectErrorText(e) };
@@ -63,7 +68,7 @@ class ProjectPauseStore {
 
   /** Test-only. */
   reset(): void {
-    this.#paused.clear();
+    this.#state.clear();
     this.#seq.clear();
   }
 }
