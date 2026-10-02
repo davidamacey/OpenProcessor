@@ -197,3 +197,21 @@ def test_update_waits_for_the_state_lock_another_fd_holds(tmp_path: Path) -> Non
     writer.join(10)
     assert done.is_set()
     assert job.read()['status'] == 'queued'
+
+
+def test_undo_keeps_a_box_whose_ledger_row_has_no_bbox() -> None:
+    """Ledgers written before standalone items recorded their box have rows
+    without ``bbox_norm``: undo must keep that box, not crash."""
+    from src.services.curation.dataset_import.undo import CANDIDATE_IMPORT, _import_boxes
+    from src.services.curation.region_boxes import RegionBox
+
+    box = RegionBox(
+        box_id='b1',
+        bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        state='accepted',
+        source=CANDIDATE_IMPORT,
+        detector_version='imp1',
+    )
+    mine, edited = _import_boxes([box], 'imp1', [{'crop_id': 'c', 'box_id': 'b1'}])
+    assert mine == []
+    assert edited == [box]
