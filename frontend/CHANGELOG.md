@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CI green.** The VLM-model activate dialog read its target after `onclose()`
+  had nulled the page's source, throwing an unhandled `TypeError` that failed
+  Vitest's exit code; it now captures the target first. Test panels no longer
+  use an assignment as an arrow's return value (Svelte `state_proxy` warning).
+  The CropCard hover controls (details, edit, view) share one flex row, so the
+  edit pencil no longer sits under "view", and the slot chip no longer covers
+  them. The docs deploy job runs only on the public repository.
 - **Nameless active panel text follows the served source.** A region-profile
   `active` with no name and source `env` now reads "None: no region profile
   configured (region detection off)" (no activation and no env default);

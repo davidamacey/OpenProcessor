@@ -49,6 +49,9 @@
   }
 
   async function run(): Promise<void> {
+    // onclose() can unmount the page's target source (a lazy prop getter), so
+    // read the target once, before anything closes.
+    const done = { ...target };
     const ok = await ed.active.activate(
       target.name,
       target.revision,
@@ -57,7 +60,7 @@
     );
     if (ok) {
       onclose();
-      onactivated?.(target);
+      onactivated?.(done);
     } else if (!ed.active.activateReport?.force_allowed) {
       force = false;
     }

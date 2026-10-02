@@ -61,9 +61,10 @@ jobs:
           path: docs-site/build
 
   deploy:
-    # Only a push to the repo's default branch may publish. A PR run stops
-    # after `build` — advisory only, never touches Pages.
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    # Only a push to the repo's default branch may publish, and only from the
+    # public repository (Pages is not enabled on the private development repo,
+    # where this step failed on every push). A PR run stops after `build`.
+    if: github.repository == 'davidamacey/OpenProcessor' && github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
