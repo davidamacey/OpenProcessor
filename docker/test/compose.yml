@@ -90,6 +90,7 @@ services:
       - ../../src:/app/src:ro
       - ../../scripts:/app/scripts:ro
       - ../../VERSION:/app/VERSION:ro
+      - ./region_profile.json:/region_profile.json:ro
       # Everything the API is allowed to write lives under one bind mount
       # so the test process can assert on the bytes it produced. The
       # previous ad-hoc harness mounted none of these and every registry
@@ -138,9 +139,9 @@ services:
       # classifier class_source (the seeded cls* rows carry it); no model is
       # ever called.
       - OP_INGEST_SECONDARY_DETECTOR_MODEL=seeded_classifier
-      # Region routes 409 without an active region profile; the baked example
-      # profile is the process default the seeded `rgn` cohort is written for.
-      - OP_REGION_PROFILE_PATH=/app/examples/region_profiles/vehicle_wheel.json
+      # Region routes 409 without an active region profile, and the text
+      # routes need a text-bearing one.
+      - OP_REGION_PROFILE_PATH=/region_profile.json
       # W9: this harness has no in-compose vLLM to switch (keeps the live
       # guard's local-model routes on their no_local_vlm path).
       - OP_LOCAL_VLM_ENDPOINT=
