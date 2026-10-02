@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `class_mapping_invalid` says what is wrong and how to fix it (`nope: class_mapping_invalid
+  (this dataset has no class with that name; ...)`) instead of repeating the bare code.
 - VLM catalog: `qwen3-vl-4b` (measured about 14 GiB resident, multi-box verified live) is
   `tested` like `gemma-4-e4b`, so a 36 GB card auto-picks it; the catalog test now requires
   every tested row to carry a measured size note instead of exactly one tested row.

@@ -314,7 +314,7 @@ def _refuse_unmapped_or_blocked(prepared: PreparedImport, body: DatasetImportReq
         raise api_error(
             422,
             'class_mapping_invalid',
-            '; '.join(f'{e.dataset_class}: {e.code}' for e in errors)[:300],
+            '; '.join(e.describe() for e in errors)[:300],
             issues=[issue_to_wire(i) for i in prepared.issues if i.blocking],
             project=_slug(),
         )
