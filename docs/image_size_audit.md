@@ -252,7 +252,7 @@ API container.
    (FROM `runtime-base`) → `api` (FROM `runtime-base`, last).
 3. **Which service uses which image**: `yolo-api` and all curation workers
    → `openprocessor`; new compose service `model-export` (profile
-   `setup`, image `${OP_EXPORT_IMAGE:-.../openprocessor-export:<ver>}`, same
+   `setup`, image `.../openprocessor-export:<ver>` (overridable like the other images), same
    volumes/GPU reservation as `yolo-api`, no ports) → `openprocessor-export`;
    `curation-evaluator` → `openprocessor-evaluator`.
 4. **Installer model setup** (`scripts/lib/model_setup.sh`, installer plan
@@ -262,7 +262,7 @@ API container.
    the seed `cp -rn` and the profile-config step can stay on `yolo-api`.
    `export/preflight.py`'s `import tensorrt` check moves to the export image;
    the API preflight checks `import core` and `torch.cuda` only. Add
-   `OP_EXPORT_IMAGE` to `images.lock`, the `IMAGE_SPECS` table and the
+   an export-image override variable to `images.lock`, the `IMAGE_SPECS` table and the
    compose image-override contract test. `openprocessor repair --images` and
    the Makefile export targets use the same service. Offer `docker image rm`
    of the export image at the end of install (keep by default so re-exports
