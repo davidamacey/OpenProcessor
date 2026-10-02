@@ -16,6 +16,7 @@ from src.routers.curation._common import OpenSearchDep, get_class_registry, rout
 from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
+    RegionProfileActivateResponse,
     RegionProfileBody,
     RegionProfileCreateRequest,
     RegionProfileDeactivateRequest,
@@ -47,7 +48,7 @@ from src.services.config_store.profiles import (
     rollback_profile,
     save_profile,
 )
-from src.services.curation.region_impact import compute_activation_impact
+from src.services.curation.region_impact import ActivationImpact, compute_activation_impact
 
 
 def _registry_class_names() -> frozenset[str]:
@@ -208,13 +209,11 @@ async def get_active_region_profile_route(opensearch: OpenSearchDep) -> ActiveCo
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
-@router.get('/region_profiles/active/impact')
-async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> Any:
+@router.get('/region_profiles/active/impact', response_model=ActivationImpact)
+async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> ActivationImpact:
     from src.services.detection.profile_registry import get_active_region_profile
 
-    return (
-        await compute_activation_impact(opensearch, profile=get_active_region_profile())
-    ).model_dump()
+    return await compute_activation_impact(opensearch, profile=get_active_region_profile())
 
 
 @router.post('/region_profiles/active/rollback', response_model=ActiveConfigResponse)
@@ -481,10 +480,10 @@ async def delete_region_profile_route(
 # =============================================================================
 
 
-@router.post('/region_profiles/{name}/activate')
+@router.post('/region_profiles/{name}/activate', response_model=RegionProfileActivateResponse)
 async def activate_region_profile_route(
     name: str, body: RegionProfileActivateRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> RegionProfileActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
@@ -518,11 +517,7 @@ async def activate_region_profile_route(
 
     response = await build_active_config_response(opensearch, axis='detection_profile')
     impact = await compute_activation_impact(opensearch, profile=get_active_region_profile())
-    return {
-        **response.model_dump(),
-        'impact': impact.model_dump(),
-        'validation': report.model_dump(),
-    }
+    return RegionProfileActivateResponse(**response.model_dump(), impact=impact, validation=report)
 
 
 # POST /region_profiles/{name}/clone lives in _region_profile_clone.py

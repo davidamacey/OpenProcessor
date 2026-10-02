@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private history of this codebase; v0.1.0 is the first public release.
+
 ## [Unreleased]
 
 ### Documentation
@@ -27,6 +29,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `POST /models/{name}/unload` goes through the same unload guard as the delete routes
+  (403 for the configured detector and the OCR models even with `force`, 409 for core
+  models without `force`; it gained the `force` query parameter). It unloaded the OCR
+  models unguarded.
+- `SegmenterClient.segment()` raises `SegmenterRequestFailed` like `segment_multi` when a
+  request fails, and the text-hint sub-crop re-pass leaves the crop pending when the
+  segmenter is unavailable. A failed request used to be recorded as `text_hint:miss`.
+- Undoing a dataset import whose ledger predates per-box ledgering no longer raises
+  `KeyError: 'bbox_norm'`; such a box is kept.
+- The detector's input size read from Triton metadata is re-read every 30 s instead of
+  cached for the life of the process, so a model re-promoted under the same name at
+  another size is picked up without restarting the API workers. The ingest/analyze
+  YOLO+CLIP path (`infer_yolo_clip_cpu`, `/analyze`) now letterboxes to that size too
+  instead of a hard-coded 640. Paths that pre-letterbox to a fixed 640 (the batched
+  `infer_yolo_batch` input in visual search and `cpu_preprocess`) are unchanged.
+- The installer script reports the current release version (it printed 0.2.0).
+- `POST /prompt_packs/{name}/activate`, `POST /region_profiles/{name}/activate` and
+  `GET /region_profiles/active/impact` declare typed responses in the OpenAPI contract.
+
+### Fixed (earlier in this release)
 - `GET /ingest/region_drain` exposes `stall_reason` for a segmenter-only region profile
   too (it reported no dependencies, so the reason stayed null while the segmenter was
   down).

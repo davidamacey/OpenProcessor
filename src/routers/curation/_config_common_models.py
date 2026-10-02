@@ -440,4 +440,11 @@ class ActiveConfigResponse(BaseModel):
     applied: list[AppliedRuntime] = []
 
 
+class ActivateResponse(ActiveConfigResponse):
+    """``POST /{prompt_packs,region_profiles}/{name}/activate``: the new
+    active state plus the activation gate's validation report."""
+
+    validation: ValidationReport
+
+
 ConfigErrorDetail.model_rebuild()

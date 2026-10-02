@@ -10,7 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
+from src.routers.curation._config_common_models import (
+    ActivateResponse,
+    ActiveConfigResponse,
+    ActiveRef,
+    api_error,
+)
 from src.routers.curation._prompt_pack_models import (
     PromptPackActivateRequest,
     PromptPackBody,
@@ -542,10 +547,10 @@ async def delete_prompt_pack_route(
 # =============================================================================
 
 
-@router.post('/prompt_packs/{name}/activate')
+@router.post('/prompt_packs/{name}/activate', response_model=ActivateResponse)
 async def activate_prompt_pack_route(
     name: str, body: PromptPackActivateRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
@@ -576,4 +581,4 @@ async def activate_prompt_pack_route(
         ) from exc
 
     response = await build_active_config_response(opensearch, axis='prompt_pack')
-    return {**response.model_dump(), 'validation': report.model_dump()}
+    return ActivateResponse(**response.model_dump(), validation=report)

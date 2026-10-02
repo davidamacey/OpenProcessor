@@ -102,6 +102,176 @@
         "title": "AcceptedModel",
         "type": "object"
       },
+      "ActivateResponse": {
+        "description": "``POST /{prompt_packs,region_profiles}/{name}/activate``: the new\nactive state plus the activation gate's validation report.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation"
+        ],
+        "title": "ActivateResponse",
+        "type": "object"
+      },
+      "ActivationImpact": {
+        "description": "§4.6/§7.3.\n\n``suggested_reprocess`` is the explicit re-run for \"every unlocked,\nmachine-written item the active profile@revision did not produce\": a\n:class:`~src.services.curation.reprocess_models.ReprocessRequest` (a dry\nrun) a client POSTs to ``/reprocess`` verbatim; ``stale_items`` is how\nmany items it selects. ``None`` when there is no active profile or\nnothing is stale. Nothing here rewrites an item: the re-run is the\ncaller's explicit action.",
+        "properties": {
+          "by_profile": {
+            "items": {
+              "$ref": "#/components/schemas/ActivationImpactByProfile"
+            },
+            "title": "By Profile",
+            "type": "array"
+          },
+          "items_total": {
+            "title": "Items Total",
+            "type": "integer"
+          },
+          "pending_items": {
+            "title": "Pending Items",
+            "type": "integer"
+          },
+          "pending_not_matching": {
+            "title": "Pending Not Matching",
+            "type": "integer"
+          },
+          "stale_items": {
+            "default": 0,
+            "title": "Stale Items",
+            "type": "integer"
+          },
+          "suggested_reprocess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessRequest-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unseeded_items": {
+            "title": "Unseeded Items",
+            "type": "integer"
+          },
+          "validated_items": {
+            "title": "Validated Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items_total",
+          "by_profile",
+          "validated_items",
+          "unseeded_items",
+          "pending_items",
+          "pending_not_matching"
+        ],
+        "title": "ActivationImpact",
+        "type": "object"
+      },
+      "ActivationImpactByProfile": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "count"
+        ],
+        "title": "ActivationImpactByProfile",
+        "type": "object"
+      },
       "ActiveConfigResponse": {
         "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);\nalso the activation-mutation response shape used by W2's settings\nbridge and by ``store.activate``'s callers.\n\n``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies), or ``'off'`` (explicitly deactivated -- ``active.name`` is\n``None``, distinct from ``'env'``'s ``None`` activation doc). Never\nguessed from ``active`` alone: ``'env'`` and ``'off'`` both may\ncarry ``active.name=None`` in the profile axis's off state, but only\nan explicit deactivation is ``'off'``.\n``activated_at`` is the activation doc's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive ``runtime:*`` doc for this axis (§4.5) -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
         "properties": {
@@ -12410,6 +12580,85 @@
         "title": "RegionProfileActivateRequest",
         "type": "object"
       },
+      "RegionProfileActivateResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/ActivationImpact"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation",
+          "impact"
+        ],
+        "title": "RegionProfileActivateResponse",
+        "type": "object"
+      },
       "RegionProfileBody": {
         "additionalProperties": true,
         "description": "Every :class:`~src.config.DetectionProfile` field except ``name``,\nJSON-typed (tuples/frozensets round-trip as lists). Defaults mirror\nthe dataclass so a partial draft validates with informative issues\nrather than a pydantic 422.",
@@ -15663,7 +15912,49 @@
         "title": "ReprocessOneRequest",
         "type": "object"
       },
-      "ReprocessRequest": {
+      "ReprocessRequest-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "region_mode": {
+            "default": "redetect",
+            "enum": [
+              "redetect",
+              "reverify"
+            ],
+            "title": "Region Mode",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "detect",
+                "region",
+                "vlm",
+                "embed"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/ReprocessTargets"
+          }
+        },
+        "required": [
+          "targets",
+          "scopes"
+        ],
+        "title": "ReprocessRequest",
+        "type": "object"
+      },
+      "ReprocessRequest-Output": {
         "additionalProperties": false,
         "properties": {
           "dry_run": {
@@ -29169,7 +29460,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Activate Prompt Pack Route Curation Projects  Project  Prompt Packs  Name  Activate Post"
+                  "$ref": "#/components/schemas/ActivateResponse"
                 }
               }
             },
@@ -29527,7 +29818,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Active Region Profile Impact Curation Projects  Project  Region Profiles Active Impact Get"
+                  "$ref": "#/components/schemas/ActivationImpact"
                 }
               }
             },
@@ -30062,7 +30353,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Activate Region Profile Route Curation Projects  Project  Region Profiles  Name  Activate Post"
+                  "$ref": "#/components/schemas/RegionProfileActivateResponse"
                 }
               }
             },
@@ -31335,7 +31626,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReprocessRequest"
+                "$ref": "#/components/schemas/ReprocessRequest-Input"
               }
             }
           },
