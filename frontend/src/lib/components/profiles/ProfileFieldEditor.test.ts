@@ -147,6 +147,28 @@ describe('ProfileFieldEditor', () => {
     expect(onchange).toHaveBeenLastCalledWith([]);
   });
 
+  it('only a field the schema marks advanced carries the advanced badge', () => {
+    render({ field: field('region_nms_iou'), value: 0.5 });
+    expect(target.textContent).toContain('advanced');
+    unmount(instance!);
+    target.remove();
+    render({ field: field('max_regions_per_item'), value: 4 });
+    expect(target.textContent).not.toContain('advanced');
+  });
+
+  it('int_list: an added entry is stored as a number, and a non-number is refused', () => {
+    const f = { ...field('max_regions_per_item'), type: 'int_list' as const };
+    const onchange = render({ field: f, value: [1] });
+    fire(q('[data-testid="list-add-input"]')!, 'abc');
+    q<HTMLButtonElement>('[data-testid="list-add"]')!.click();
+    flushSync();
+    expect(onchange).not.toHaveBeenCalled();
+    fire(q('[data-testid="list-add-input"]')!, '7');
+    q<HTMLButtonElement>('[data-testid="list-add"]')!.click();
+    flushSync();
+    expect(onchange).toHaveBeenLastCalledWith([1, 7]);
+  });
+
   it('rgb / float_pair: fixed-arity number inputs emit the whole tuple', () => {
     let onchange = render({ field: field('letterbox_fill'), value: [114, 114, 114] });
     const rgb = target.querySelectorAll<HTMLInputElement>(

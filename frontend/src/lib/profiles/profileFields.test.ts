@@ -115,6 +115,12 @@ describe('groupFields', () => {
     expect(g.find((x) => x.id === 'segmenter')!.label).toBe('Segmenter');
   });
 
+  it('drops a served group no row names', () => {
+    const s = profileSchemaFixture();
+    s.groups = [...s.groups, { id: 'unused', label: 'Unused' }];
+    expect(groupFields(s).map((x) => x.id)).not.toContain('unused');
+  });
+
   it('puts a row whose group is not served at the end under its id', () => {
     const s = profileSchemaFixture();
     s.fields.push({ ...s.fields[0]!, field: 'x', group: 'later' });

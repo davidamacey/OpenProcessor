@@ -207,7 +207,8 @@
         <input
           {id}
           class="input input-sm w-56 font-mono"
-          type={field.type === 'int_list' ? 'number' : 'text'}
+          type="text"
+          inputmode={field.type === 'int_list' ? 'numeric' : undefined}
           list={choices ? `${id}-choices` : undefined}
           placeholder={choices ? 'Pick or type a name' : 'Add a value'}
           bind:value={adding}

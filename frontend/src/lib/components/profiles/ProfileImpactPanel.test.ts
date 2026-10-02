@@ -82,6 +82,13 @@ describe('ProfileImpactPanel', () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
+  it('no Re-run without a served suggestion even when Reprocess is served', async () => {
+    serve(() => json(formatsFixture()));
+    await render(impactFixture({ suggested_reprocess: null }));
+    expect(q('profile-impact')).not.toBeNull();
+    expect(q('rerun-open')).toBeNull();
+  });
+
   it('no Re-run when the backend does not serve Reprocess', async () => {
     serve(() => json({ detail: 'Not Found' }, 404));
     await render(impactFixture());

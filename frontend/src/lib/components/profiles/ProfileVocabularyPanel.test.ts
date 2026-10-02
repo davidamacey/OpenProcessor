@@ -64,6 +64,30 @@ describe('ProfileVocabularyPanel', () => {
     expect(q('vocab-vlm')!.textContent).toContain('example/vision-model');
   });
 
+  it('a model that is not ready says so, a ready one does not', () => {
+    const v = vocabularyFixture();
+    v.detectors[1]!.ready = false;
+    v.detectors[1]!.state = 'UNAVAILABLE';
+    render(v);
+    const rows = [...q('vocab-detectors')!.querySelectorAll('tbody tr')].map(
+      (r) => r.textContent ?? '',
+    );
+    expect(rows[0]).not.toContain('not ready');
+    expect(rows[1]).toContain('UNAVAILABLE (not ready)');
+  });
+
+  it('OCR availability is as served', () => {
+    const v = vocabularyFixture();
+    v.ocr.available = true;
+    render(v);
+    expect(target.textContent).toContain('(available)');
+    unmount(instance!);
+    target.remove();
+    v.ocr.available = false;
+    render(v);
+    expect(target.textContent).toContain('(not available)');
+  });
+
   it('no segmenter says so', () => {
     render({ ...vocabularyFixture(), segmenters: [] });
     expect(q('segmenter-status')!.textContent).toContain('No segmenter is configured');

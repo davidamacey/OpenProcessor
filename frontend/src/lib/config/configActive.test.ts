@@ -72,6 +72,17 @@ describe('ConfigActive', () => {
     expect(onchanged).toHaveBeenCalledTimes(1);
   });
 
+  it('force is sent only when the caller passes it (after seeing force_allowed)', async () => {
+    const { ctl, backend } = setup();
+    await ctl.load();
+    await ctl.activate('widget_tag', 3, true);
+    expect(backend.activate).toHaveBeenLastCalledWith('widget_tag', {
+      revision: 3,
+      expected_active: { name: 'widget_tag', revision: 2 },
+      force: true,
+    });
+  });
+
   it('a refusal runs no onchanged, keeps the served message and report, and clears the last activation', async () => {
     const { ctl, backend, onchanged } = setup();
     await ctl.load();
