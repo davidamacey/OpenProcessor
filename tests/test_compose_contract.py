@@ -421,6 +421,19 @@ def test_yolo_api_waits_for_a_healthy_opensearch() -> None:
     assert (depends_on.get('opensearch') or {}).get('condition') == 'service_healthy'
 
 
+def test_triton_accepts_the_clients_idle_keepalive_pings() -> None:
+    """Found live: clients ping every 30 s while idle; Triton refused (idle pings
+    off, 5-minute minimum interval) and sent GOAWAY too_many_pings."""
+    command = _services()['triton-server']['command']
+    assert '--grpc-keepalive-permit-without-calls=true' in command
+    interval = next(
+        int(arg.split('=', 1)[1])
+        for arg in command
+        if arg.startswith('--grpc-http2-min-recv-ping-interval-without-data=')
+    )
+    assert interval <= 30_000
+
+
 def test_yolo_api_has_a_healthcheck() -> None:
     """A `service_healthy` dependency on yolo-api is meaningless without one."""
     services = _services()

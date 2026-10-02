@@ -22,6 +22,12 @@ services:
       - --model-store=/models
       - --backend-config=default-max-batch-size=128
       - --strict-model-config=false
+      # The API and workers ping every 30 s while idle
+      # (src/clients/triton_pool.py); Triton's defaults refuse idle pings
+      # and pings under 5 minutes apart, so every client got a GOAWAY
+      # ("too_many_pings") and reconnected.
+      - --grpc-keepalive-permit-without-calls=true
+      - --grpc-http2-min-recv-ping-interval-without-data=20000
       - --model-control-mode=explicit
       # Serve whatever exported: a missing/failed engine (e.g. the minimal
       # setup profile skips OCR) leaves that model unloaded instead of
