@@ -17,11 +17,17 @@
  * See docs/design/test-audit-2026-09-24.md recommendation 5 and CLAUDE.md's
  * "Development" section.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { availableParallelism, homedir } from 'node:os';
 import { join } from 'node:path';
+import {
+  spawnGroup,
+  startPreview,
+  stopGroup,
+  stopGroupSync,
+} from './lib/previewServer.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const VENV = join(ROOT, 'e2e', '.venv');
@@ -94,17 +100,28 @@ if (isLive || process.env.E2E_APP_URL) {
   console.log('[test:e2e] building …');
   run('npm', ['run', '-s', 'build']);
   const port = await freePort();
-  const preview = spawn(
-    'npx',
-    ['vite', 'preview', '--port', String(port), '--strictPort'],
-    {
-      cwd: ROOT,
-      stdio: 'ignore',
-    },
-  );
-  const stop = () => preview.kill('SIGTERM');
-  process.on('exit', stop);
-  process.on('SIGINT', () => process.exit(130));
+  // Own process group each, stopped as a whole group: a wrapper-only kill
+  // leaves the real `vite preview` running forever (the orphan leak).
+  const preview = startPreview(ROOT, port);
+  let pytest = null;
+  const stopAllSync = () => {
+    if (pytest) stopGroupSync(pytest);
+    stopGroupSync(preview);
+  };
+  process.on('exit', stopAllSync);
+  for (const [sig, code] of [
+    ['SIGINT', 130],
+    ['SIGTERM', 143],
+    ['SIGHUP', 129],
+  ]) {
+    process.on(sig, () => process.exit(code));
+  }
+  for (const ev of ['uncaughtException', 'unhandledRejection']) {
+    process.on(ev, (err) => {
+      console.error(`[test:e2e] ${ev}:`, err);
+      process.exit(1);
+    });
+  }
   const url = `http://localhost:${port}`;
   await waitForServer(url, preview);
   const workers =
@@ -113,17 +130,19 @@ if (isLive || process.env.E2E_APP_URL) {
   console.log(
     `[test:e2e] running pytest ${target} with ${workers} workers against ${url} …`,
   );
-  const res = spawnSync(
-    VENV_PYTEST,
-    [...pytestArgs, '-n', workers, '--dist', 'loadfile'],
-    {
-      stdio: 'inherit',
-      cwd: ROOT,
-      env: { ...process.env, E2E_APP_URL: url },
-    },
-  );
-  stop();
-  process.exit(res.status ?? 1);
+  // Async (not spawnSync) so signal handlers can run while pytest is going.
+  pytest = spawnGroup(VENV_PYTEST, [...pytestArgs, '-n', workers, '--dist', 'loadfile'], {
+    stdio: 'inherit',
+    cwd: ROOT,
+    env: { ...process.env, E2E_APP_URL: url },
+  });
+  const status = await new Promise((resolve) => {
+    pytest.once('error', () => resolve(1));
+    pytest.once('exit', (code, signal) => resolve(code ?? (signal ? 1 : 1)));
+  });
+  await stopGroup(pytest);
+  await stopGroup(preview);
+  process.exit(status);
 }
 
 function freePort() {

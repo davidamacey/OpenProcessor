@@ -111,6 +111,26 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+def _stop_group(proc: subprocess.Popen[str]) -> None:
+    """SIGTERM the server's whole process group, SIGKILL it after a grace."""
+    import os
+    import signal
+
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=15)
+
+
 def _wait_for_server(base_url: str, proc: subprocess.Popen[str], timeout: float = 90) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -123,7 +143,7 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen[str], timeout: float 
         except urllib.error.URLError:
             time.sleep(0.5)
     else:
-        proc.kill()
+        _stop_group(proc)
         raise RuntimeError(f"vite preview did not come up within {timeout}s at {base_url}")
 
     # Warm-up request: the port accepting connections doesn't guarantee the
@@ -175,18 +195,16 @@ def app_url() -> Any:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        # Own process group so the whole tree (npx wrapper + real server)
+        # can be stopped; terminating the wrapper alone orphans the server.
+        start_new_session=True,
     )
     base_url = f"http://localhost:{port}"
     try:
         _wait_for_server(base_url, proc)
         yield base_url
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=15)
+        _stop_group(proc)
 
 
 class Stub:

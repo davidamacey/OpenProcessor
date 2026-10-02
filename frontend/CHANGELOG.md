@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **e2e runs no longer leak `vite preview` servers.** The runner and the
+  conftest fixture started the server through an `npx` wrapper and killed only
+  the wrapper, orphaning one real server per run. Both now spawn the server in
+  its own process group and stop the whole group (SIGTERM, then SIGKILL) on
+  normal exit, failure, SIGINT/SIGTERM/SIGHUP and uncaught errors
+  (`scripts/lib/previewServer.mjs`, covered by `previewServer.test.ts`).
 - **Nameless active panel text follows the served source.** A region-profile
   `active` with no name and source `env` now reads "None: no region profile
   configured (region detection off)" (no activation and no env default);
