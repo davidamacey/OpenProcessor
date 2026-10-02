@@ -40,3 +40,49 @@ raise the cap and re-run.
 The letter is in the reserved set (global actions + every registered
 slot's keymap). Pick a different letter — `/classes` shows the backend's
 detail text verbatim when a bind is rejected server-side.
+
+## A page I expect (Datasets, Prompt packs, Region profiles, Models registry, Combine) isn't there
+
+Each is probed once and shown only when the backend serves it (see
+[Backend feature flags](../configuration/backend-feature-flags.md)). A
+backend that predates the feature, or has it unmounted, gives exactly this
+result. A probe that fails for any other reason shows an error with a
+**Retry** instead.
+
+## "Project not found" or "not available"
+
+The URL's slug isn't in the backend's project list, or the project is
+building, failed or being deleted. Use the links on that page to reach
+`/projects` or the default project. Nothing project-scoped is requested
+until a project is selectable.
+
+## A region screen didn't change after I activated a profile
+
+Region screens aren't hot-swapped. Cropwright shows a **reload to apply**
+notice after an activation, rollback or turn-off; reload the page.
+
+## A save was refused with a conflict
+
+Prompt packs, region profiles, VLM endpoints, keymaps, project edits and box
+edits are all saved against the revision you loaded. Someone (or something,
+such as a reprocess) changed it first. Reload, or choose **Keep my edits**
+where offered, then save again.
+
+## Activating a VLM endpoint is refused
+
+An endpoint that sends crops outside your deployment needs the
+acknowledgement checkbox ticked, and a deployment-wide default needs one
+recorded first. Use **Settings → Models** to acknowledge. See
+[VLM models](../user-guide/vlm-models.md#sending-images-outside-your-deployment).
+
+## A dataset archive upload fails
+
+A file larger than the smaller of the backend's limit and
+`CROPWRIGHT_DATASET_UPLOAD_MAX_MB` is refused before it is sent. Raise the
+env var and restart the container, or import from a folder path the backend
+can read.
+
+## Reprocess skipped items
+
+Items a human has labeled or edited are locked and skipped by design; the
+result shows how many.

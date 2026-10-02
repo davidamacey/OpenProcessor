@@ -37,6 +37,31 @@
   {
     "title": "Multiple projects, one deployment",
     "icon": "folder",
-    "desc": "Each project keeps its own classes, data and curation settings under its own `/p/<project>` URL, switchable from the top bar with guarded create/archive/delete."
+    "desc": "Each project keeps its own classes, data, settings and shortcuts under its own `/p/<project>` URL, switchable from the top bar, with pause, archive, copy-settings and a guarded delete."
+  },
+  {
+    "title": "Import and Reprocess",
+    "icon": "download",
+    "desc": "Bring in an already-labeled dataset with a served preview and by-name class mapping, review it on its own tab, and re-run machine proposals without overwriting human work."
+  },
+  {
+    "title": "Edit the VLM and region setup in-app",
+    "icon": "sliders",
+    "desc": "Prompt-pack and region-profile editors with live validation, revisions, rollback and test-on-a-crop, plus a VLM endpoint registry with per-run selection. API keys are never shown."
+  },
+  {
+    "title": "Multi-box regions",
+    "icon": "boxes",
+    "desc": "Any number of boxes per item, each with its own state, accepted or rejected with one key, and a lock on anything a human has set."
+  },
+  {
+    "title": "Combine and share",
+    "icon": "merge",
+    "desc": "Merge several projects into a new one with a previewed class mapping and an undo, and share trained models between projects by class name."
+  },
+  {
+    "title": "Rebind every shortcut",
+    "icon": "keyboard",
+    "desc": "A per-project keyboard-shortcut editor with verb groups, per-page overrides, locked keys and server-side conflict checks."
   }
 ]

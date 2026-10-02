@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cropwright \u2014 Projects and Config Store",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1180,
+      700
+    ],
+    "views": [
+      {
+        "id": "project-scope",
+        "label": "Project scoping",
+        "focus": [
+          "url",
+          "projectsstore",
+          "scoped",
+          "projectsapi",
+          "projectapi"
+        ],
+        "note": "The active project is the URL. Its served prefix is selected once and every scoped call is built from it; global calls are explicit."
+      },
+      {
+        "id": "config-store",
+        "label": "Per-project config",
+        "focus": [
+          "projectapi",
+          "configdocs",
+          "editors"
+        ],
+        "note": "Packs, profiles, the active VLM and the keymap are revisioned documents the backend stores; editors use the project's prefix."
+      },
+      {
+        "id": "vlm-registry",
+        "label": "Shared VLM registry",
+        "focus": [
+          "vlmregistry",
+          "configdocs",
+          "editors",
+          "secrets"
+        ],
+        "note": "The registry is deployment-wide; each project activates one endpoint. Keys stay in host secrets; only a reference is shown."
+      },
+      {
+        "id": "sharing",
+        "label": "Combine and sharing",
+        "focus": [
+          "projectsapi",
+          "projectapi",
+          "models"
+        ],
+        "note": "Combine builds a new project through the global projects API; promoted models are shared and mapped to classes by name."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "url",
+      "type": "frontend",
+      "label": "URL /p/<slug>/...",
+      "sublabel": "the only record of the active project",
+      "pos": [
+        60,
+        120
+      ],
+      "size": [
+        190,
+        70
+      ]
+    },
+    {
+      "id": "projectsstore",
+      "type": "frontend",
+      "label": "projectsStore + switcher",
+      "sublabel": "selects project, resets caches",
+      "pos": [
+        330,
+        120
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "scoped",
+      "type": "frontend",
+      "label": "scoped() / globalApi()",
+      "sublabel": "fails closed until selected",
+      "pos": [
+        330,
+        260
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "editors",
+      "type": "frontend",
+      "label": "Config editors",
+      "sublabel": "packs, profiles, VLM, keymap",
+      "pos": [
+        60,
+        400
+      ],
+      "size": [
+        190,
+        70
+      ]
+    },
+    {
+      "id": "projectsapi",
+      "type": "backend",
+      "label": "Projects API (global)",
+      "sublabel": "list, lifecycle, combine",
+      "pos": [
+        650,
+        120
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "projectapi",
+      "type": "backend",
+      "label": "Project API (scoped)",
+      "sublabel": "prefix per project",
+      "pos": [
+        650,
+        260
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "configdocs",
+      "type": "database",
+      "label": "Config store",
+      "sublabel": "revisions + active pointer",
+      "pos": [
+        650,
+        400
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "models",
+      "type": "backend",
+      "label": "Models + sharing",
+      "sublabel": "owner, shared, class mapping",
+      "pos": [
+        930,
+        190
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "vlmregistry",
+      "type": "database",
+      "label": "VLM endpoint registry",
+      "sublabel": "shared by every project",
+      "pos": [
+        930,
+        360
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "secrets",
+      "type": "security",
+      "label": "Host secrets",
+      "sublabel": "API keys, never sent to the browser",
+      "pos": [
+        930,
+        500
+      ],
+      "size": [
+        200,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "url-store",
+      "from": "url",
+      "to": "projectsstore",
+      "label": "slug",
+      "variant": "emphasis"
+    },
+    {
+      "id": "store-scoped",
+      "from": "projectsstore",
+      "to": "scoped",
+      "label": "served prefix",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        430,
+        204
+      ]
+    },
+    {
+      "id": "store-projectsapi",
+      "from": "projectsstore",
+      "to": "projectsapi",
+      "label": "list / select",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scoped-projectapi",
+      "from": "scoped",
+      "to": "projectapi",
+      "variant": "emphasis"
+    },
+    {
+      "id": "editors-projectapi",
+      "from": "editors",
+      "to": "projectapi",
+      "label": "validate / save / activate",
+      "variant": "default",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "projectapi-config",
+      "from": "projectapi",
+      "to": "configdocs",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "projectapi-models",
+      "from": "projectapi",
+      "to": "models",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "config-vlm",
+      "from": "configdocs",
+      "to": "vlmregistry",
+      "label": "activate",
+      "variant": "emphasis",
+      "labelAt": [
+        890,
+        396
+      ]
+    },
+    {
+      "id": "vlm-secrets",
+      "from": "vlmregistry",
+      "to": "secrets",
+      "label": "reference only",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        1030,
+        455
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "The URL is the project",
+      "items": [
+        "Nothing about the active project is persisted in the browser",
+        "On a switch every per-project cache resets and a late response for the old project is dropped"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Revisioned, activate-able config",
+      "items": [
+        "Saves create revisions and carry the revision you started from, so a concurrent edit is a conflict, not an overwrite",
+        "Activation pins one revision, can be rolled back, and an impact or validation report precedes it"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Secrets never reach the browser",
+      "items": [
+        "An endpoint stores a reference to a host secret; the app shows the reference and whether the host has it",
+        "An endpoint that sends crops outside the deployment needs an explicit acknowledgement"
+      ]
+    }
+  ]
+}

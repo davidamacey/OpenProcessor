@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation
+
+- **Docs site updated for the v0.1.0 feature set.** New user-guide pages for
+  combine projects, dataset import and Reprocess, the prompt-pack and
+  region-profile editors (with test-on-a-crop), the VLM registry and per-run
+  selection, and multi-box regions; updated Projects (pause, copy settings,
+  archive, guarded delete), Models (sharing and force-unshare), Settings,
+  Review (Imported tab, lock badges), Keyboard shortcuts, the configuration
+  reference (new runtime-settings page, bind address and dataset-upload env
+  vars), operations (project administration, proxy limits) and the FAQ. Two
+  new architecture diagrams (projects and config store; edit, test and
+  activate) and refreshed features, workflow and roadmap data. Screenshot
+  slots are listed as pending in the screenshots page and
+  `screenshot_routes.json`; no images were captured.
+
 ### Fixed
 
 - **e2e runs no longer leak `vite preview` servers.** The runner and the

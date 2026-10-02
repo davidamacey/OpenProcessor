@@ -38,6 +38,12 @@ Points at a folder the backend already has mounted (for example,
 OpenProcessor's sample-data output) rather than uploading bytes through the
 browser.
 
+## Importing an already-labeled dataset
+
+When the backend supports it, a link on this page opens the
+[dataset import wizard](./dataset-import.md), for images that already come
+with labels.
+
 ## Ingest status and region drain
 
 A status table by source, and — with a served region profile — a

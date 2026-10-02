@@ -16,8 +16,10 @@ const sidebars: SidebarsConfig = {
       label: 'User Guide',
       items: [
         'user-guide/projects',
+        'user-guide/combine-projects',
         'user-guide/dashboard',
         'user-guide/ingest',
+        'user-guide/dataset-import',
         'user-guide/clusters',
         'user-guide/review',
         'user-guide/classes',
@@ -26,6 +28,10 @@ const sidebars: SidebarsConfig = {
         'user-guide/bakeoff',
         'user-guide/models',
         'user-guide/settings',
+        'user-guide/prompt-packs',
+        'user-guide/region-profiles',
+        'user-guide/vlm-models',
+        'user-guide/multi-box-regions',
         'user-guide/keyboard-shortcuts',
       ],
     },
@@ -35,6 +41,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'configuration/environment-variables',
         'configuration/backend-feature-flags',
+        'configuration/runtime-settings',
         'configuration/annotation-profiles',
         'configuration/second-instance',
       ],
@@ -44,6 +51,7 @@ const sidebars: SidebarsConfig = {
       label: 'Operations',
       items: [
         'operations/deployment',
+        'operations/project-administration',
         'operations/security',
         'operations/upgrading',
         'operations/troubleshooting',

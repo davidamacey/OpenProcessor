@@ -6,7 +6,7 @@
     "quality_profile": "showcase",
     "viewBox": [1180, 700],
     "views": [
-      { "id": "browser-path", "label": "Browser to API", "focus": ["browser", "nginx", "api"], "note": "One nginx origin proxies exactly one API prefix by container name — the browser never makes a cross-origin request." },
+      { "id": "browser-path", "label": "Browser to API", "focus": ["browser", "nginx", "api"], "note": "One nginx origin proxies one API prefix by container name; every project is served under it. No cross-origin requests." },
       { "id": "api-services", "label": "Behind the API", "focus": ["api", "opensearch", "triton", "vlm", "trainer", "segmenter"], "note": "Cropwright is a pure consumer — OpenSearch, Triton, the VLM, the trainer/evaluator and the segmenter are reached only through the API." },
       { "id": "contract", "label": "Wire contract", "focus": ["api", "contract"], "note": "The frontend's wire format is vendored from the backend's generated contract and checked by tests, not hand-copied." }
     ]
@@ -33,7 +33,7 @@
     { "id": "api-contract", "from": "api", "to": "contract", "label": "generates", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelDy": 24 }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Cropwright owns no database", "items": ["Every read/write goes through the OpenProcessor API's one prefix (default /curation)", "nginx re-resolves the upstream via Docker's embedded DNS every 10s so a backend restart never pins a stale IP"] },
+    { "dot": "cyan", "title": "Cropwright owns no database", "items": ["Every read/write goes through the OpenProcessor API's one prefix (default /curation); each project is served under it", "nginx re-resolves the upstream via Docker's embedded DNS every 10s so a backend restart never pins a stale IP"] },
     { "dot": "rose", "title": "One prefix, substituted at container start", "items": ["PUBLIC_API_PREFIX must equal the API's own OP_API_PREFIX — the API builds some URLs (region thumbnails) from its own prefix", "API_UPSTREAM (default http://op-api:8000) is a Docker container name on the shared network, not a public host"] },
     { "dot": "emerald", "title": "No request authentication (owner decision)", "items": ["Every write — label, discard, export, train, ingest — is reachable by anyone who can reach the nginx origin", "Deploy on a trusted LAN/VPN only, never the public internet, until the backend adds opt-in auth"] }
   ]

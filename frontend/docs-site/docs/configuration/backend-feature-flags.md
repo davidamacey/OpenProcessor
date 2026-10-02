@@ -22,3 +22,14 @@ probes at runtime.
 | `/train` (preflight, launch, promote) | The backend's trainer container/worker running |
 | `/bakeoff` | The backend's on-demand evaluator container, and its `/bakeoff/*` router mounted |
 | `/ingest` browser upload persisting bytes for later browsing | The backend's ingest-upload persistence (a pre-persistence backend shows a banner explaining uploads aren't browsable) |
+| Projects (`/p/<project>`, `/projects`) | The backend's projects API; the project list and each project's served prefix come from it |
+| Combine projects | The backend's combine router mounted (probed once; absent otherwise) |
+| [Dataset import and Reprocess](../user-guide/dataset-import.md) | The backend's `datasets` routes (probed once per project via the formats list) |
+| [Prompt-pack editor](../user-guide/prompt-packs.md) | The backend's prompt-pack routes (probed once per project) |
+| [Region-profile editor](../user-guide/region-profiles.md) | The backend's region-profile routes (probed once per project) |
+| [VLM registry](../user-guide/vlm-models.md) | The backend's VLM endpoint registry (probed once per deployment); per-run VLM pickers follow the `vlm` axis on `/methods` |
+| Test on a crop | Prompt packs: a call the schema marks testable. Region profiles: the profile test route |
+| Imported review tab | The tab served by the backend's review-tab vocabulary |
+| [Keyboard shortcut editor](../user-guide/keyboard-shortcuts.md#customizing-shortcuts) | The backend's keymap routes |
+| Model sharing | The backend's model status serving owner and sharing revision |
+| Multi-box regions | A region profile; the per-write box limit comes from the served profile |

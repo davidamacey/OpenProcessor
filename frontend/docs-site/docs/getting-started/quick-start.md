@@ -36,7 +36,7 @@ Edit `.env` and set, at minimum:
 | `CROPWRIGHT_TAG`    | Image version to run; pin one (e.g. `0.1.0`) for reproducible deploys                     | `latest`                             |
 
 See [Environment variables](../configuration/environment-variables.md) for
-the full list, including white-label and ingest-upload-cap options.
+the full list, including white-label, bind-address and upload-cap options.
 
 ## 3. Start it
 
@@ -77,6 +77,13 @@ make sample-coco-readme   # 200 images, 20 per class
 Then ingest it through `/ingest`'s server-path panel, pointing at the sample
 folder the backend mounts under its configured batch source roots — that
 panel only appears when the backend advertises at least one source root.
+
+## 5. Pick or create a project
+
+Cropwright opens in the deployment's default project. Use the project
+switcher in the top bar, or `/projects`, to create another; see
+[Projects](../user-guide/projects.md). Already have labeled data? Use
+[Dataset import](../user-guide/dataset-import.md).
 
 ## The end-to-end workflow
 

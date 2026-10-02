@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cropwright — Edit, Test and Activate a Config Revision",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "edit", "label": "Edit and validate", "focus": ["draft", "validate", "save"], "note": "The backend validates the draft as you type; a save writes a new revision against the revision you loaded." },
+      { "id": "try", "label": "Test on a crop", "focus": ["save", "test", "vlmpick"], "note": "Test on a crop runs the draft or a saved revision on real crops without saving anything; a VLM can be picked per test." },
+      { "id": "activate", "label": "Activate", "focus": ["save", "activate", "ack", "applied", "reload"], "note": "Activation is confirmed, may need an acknowledgement for an external VLM, and region profiles ask for a reload." }
+    ]
+  },
+  "lanes": [
+    { "id": "operator", "label": "Operator" },
+    { "id": "editor", "label": "Config editor" },
+    { "id": "backend", "label": "OpenProcessor API" }
+  ],
+  "phases": [
+    { "id": "editPhase", "label": "Edit", "fromCol": 0, "toCol": 1, "variant": "default" },
+    { "id": "tryPhase", "label": "Try", "fromCol": 2, "toCol": 3, "variant": "dashed" },
+    { "id": "activatePhase", "label": "Activate", "fromCol": 4, "toCol": 5, "variant": "emphasis" }
+  ],
+  "mainPath": ["draft", "validate", "save", "activate", "applied", "reload"],
+  "nodes": [
+    { "id": "draft", "lane": "operator", "col": 0, "type": "frontend", "label": "Edit draft", "sublabel": "schema-driven form", "width": 140 },
+    { "id": "validate", "lane": "backend", "col": 1, "type": "backend", "label": "Validate", "sublabel": "issues per field", "width": 140 },
+    { "id": "save", "lane": "backend", "col": 2, "type": "database", "label": "Save revision", "sublabel": "expected_revision", "width": 140 },
+    { "id": "test", "lane": "editor", "col": 3, "type": "backend", "label": "Test on a crop", "sublabel": "draft or saved", "width": 140 },
+    { "id": "vlmpick", "lane": "operator", "col": 3, "type": "frontend", "label": "Pick VLM", "sublabel": "optional, per test", "width": 140 },
+    { "id": "activate", "lane": "backend", "col": 4, "type": "backend", "label": "Activate", "sublabel": "pin revision, report", "width": 140 },
+    { "id": "ack", "lane": "operator", "col": 4, "type": "security", "label": "Acknowledge", "sublabel": "external VLM only", "width": 140 },
+    { "id": "applied", "lane": "backend", "col": 5, "type": "database", "label": "Workers applied", "sublabel": "lagging flagged", "width": 140 },
+    { "id": "reload", "lane": "operator", "col": 5, "type": "frontend", "label": "Reload to apply", "sublabel": "region profile only", "width": 140 }
+  ],
+  "edges": [
+    { "id": "draftValidate", "from": "draft", "to": "validate", "label": "debounced", "variant": "emphasis" },
+    { "id": "validateSave", "from": "validate", "to": "save", "variant": "emphasis" },
+    { "id": "saveTest", "from": "save", "to": "test", "variant": "dashed" },
+    { "id": "pickTest", "from": "vlmpick", "to": "test", "variant": "dashed" },
+    { "id": "saveActivate", "from": "save", "to": "activate", "label": "confirm", "variant": "emphasis" },
+    { "id": "ackActivate", "from": "ack", "to": "activate", "variant": "dashed" },
+    { "id": "activateApplied", "from": "activate", "to": "applied", "variant": "emphasis" },
+    { "id": "appliedReload", "from": "applied", "to": "reload", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Nothing is validated in the browser", "items": ["Every issue shown under a field is the backend's own report", "Activation can be refused with a report; force is offered only when the backend says it is allowed"] },
+    { "dot": "rose", "title": "A conflict is not an overwrite", "items": ["Saves and activations carry the revision the page last read", "A conflict offers reload or keep-my-edits"] },
+    { "dot": "emerald", "title": "External VLMs need a deliberate yes", "items": ["The acknowledgement is sent only when ticked, never as false", "API keys are host secrets referenced by name; the app never reads one"] }
+  ]
+}

@@ -33,9 +33,11 @@ validation is never silently rendered broken.
 | Group     | id                    | Type         | What it shows |
 | --------- | --------------------- | ------------ | -------------- |
 | System    | `system-overview`     | architecture | Browser → Cropwright nginx → OpenProcessor API → OpenSearch/Triton/VLM/trainer/segmenter, plus the vendored wire contract. |
+| System    | `projects-config`     | architecture | The URL as the active project, scoped versus global API calls, the revisioned per-project config store, the shared VLM registry (secrets stay on the host), combine and model sharing. |
 | System    | `frontend-modules`    | architecture | Routes, controllers, runes stores, the slot registry (served region profile + tier-2 profiles), `api.ts`, and the contract tests. |
 | Workflows | `labeling-loop`       | workflow     | Ingest → clustering/VLM → clusters → review → classes → export/holdout → train → bake-off → promote → probe predictions feeding back into review. |
 | Workflows | `ingest-upload`       | workflow     | The browser upload run controller: `path_lookup` prefilter, chunk planning, bounded-concurrency upload, 413/422/503 handling, the region-drain gate, and the clustering handoff. |
+| Workflows | `config-activation`   | workflow     | Editing a prompt pack, profile or VLM endpoint: validate, save a revision, test on a crop, activate (with the external-VLM acknowledgement), reload to apply. |
 | Sequences | `review-assign-undo`  | sequence     | A `/review` keypress → optimistic queue update → API write (with rollback on failure) → the Z undo round trip through `undoStore`. |
 
 ## Updating a diagram

@@ -1,13 +1,87 @@
 [
-  {"route": "/dashboard", "name": "dashboard", "wait_for": "main"},
-  {"route": "/ingest", "name": "ingest", "wait_for": "main"},
-  {"route": "/clusters", "name": "clusters", "wait_for": "main"},
-  {"route": "/review?tab=all", "name": "review", "wait_for": "main"},
-  {"route": "/review?tab=regions", "name": "review-regions", "wait_for": "main"},
-  {"route": "/classes", "name": "classes", "wait_for": "main"},
-  {"route": "/export", "name": "export", "wait_for": "main"},
-  {"route": "/train", "name": "train", "wait_for": "main"},
-  {"route": "/bakeoff", "name": "bakeoff", "wait_for": "[data-testid='dataset-picker']"},
-  {"route": "/models", "name": "models", "wait_for": "[data-testid='models-status']"},
-  {"route": "/settings", "name": "settings", "wait_for": "main"}
+  {
+    "route": "/dashboard",
+    "name": "dashboard",
+    "wait_for": "main"
+  },
+  {
+    "route": "/ingest",
+    "name": "ingest",
+    "wait_for": "main"
+  },
+  {
+    "route": "/clusters",
+    "name": "clusters",
+    "wait_for": "main"
+  },
+  {
+    "route": "/review?tab=all",
+    "name": "review",
+    "wait_for": "main"
+  },
+  {
+    "route": "/review?tab=regions",
+    "name": "review-regions",
+    "wait_for": "main"
+  },
+  {
+    "route": "/classes",
+    "name": "classes",
+    "wait_for": "main"
+  },
+  {
+    "route": "/export",
+    "name": "export",
+    "wait_for": "main"
+  },
+  {
+    "route": "/train",
+    "name": "train",
+    "wait_for": "main"
+  },
+  {
+    "route": "/bakeoff",
+    "name": "bakeoff",
+    "wait_for": "[data-testid='dataset-picker']"
+  },
+  {
+    "route": "/models",
+    "name": "models",
+    "wait_for": "[data-testid='models-status']"
+  },
+  {
+    "route": "/settings",
+    "name": "settings",
+    "wait_for": "main"
+  },
+  {
+    "route": "/projects",
+    "name": "projects",
+    "wait_for": "main"
+  },
+  {
+    "route": "/projects/combine",
+    "name": "combine-wizard",
+    "wait_for": "main"
+  },
+  {
+    "route": "/datasets/import",
+    "name": "import-wizard",
+    "wait_for": "main"
+  },
+  {
+    "route": "/settings#keyboard",
+    "name": "settings-keymap",
+    "wait_for": "main"
+  },
+  {
+    "route": "/settings/models",
+    "name": "settings-models",
+    "wait_for": "main"
+  },
+  {
+    "route": "/review?tab=imported",
+    "name": "review-imported",
+    "wait_for": "main"
+  }
 ]
