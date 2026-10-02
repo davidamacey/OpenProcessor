@@ -1153,6 +1153,25 @@ async def run(args: argparse.Namespace) -> int:
         """
 
         F = get_region_fields()
+
+        async def leave_pending_segmenter_down(t: _ItemTask, exc: SegmenterUnavailable) -> None:
+            # Infrastructure failure (a request failed or every secondary-
+            # segmenter host is UNHEALTHY). Do NOT mark the crop terminal --
+            # leave region_status unchanged so it stays in pending_detection
+            # for the next cascade pass once a host recovers. Drop from
+            # in_flight + sleep so the producer can re-fetch and we don't
+            # spin a hot loop while every host is down.
+            logger.error(
+                'stage_a_sam_all_hosts_down',
+                consumer_id=consumer_id,
+                crop_id=t.crop_id,
+                error=str(exc),
+            )
+            async with in_flight_lock:
+                in_flight.discard(t.crop_id)
+            sam_q.task_done()
+            await asyncio.sleep(1.0)
+
         while True:
             t = await sam_q.get()
             if t is None:
@@ -1172,26 +1191,10 @@ async def run(args: argparse.Namespace) -> int:
                 try:
                     raw_sam_cands = await rt.segmenter.segment_multi(t.crop_jpeg)
                 except SegmenterUnavailable as exc:
-                    # Infrastructure failure (every secondary-segmenter
-                    # host UNHEALTHY). Do NOT mark the crop terminal —
-                    # leave region_status unchanged so it stays in
-                    # pending_detection for the next cascade pass once
-                    # a host recovers. Drop from in_flight + sleep so
-                    # the producer can re-fetch and we don't spin a hot
-                    # loop while every host is down.
                     OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(outcome='error').observe(
                         time.monotonic() - _sam_t0
                     )
-                    logger.error(
-                        'stage_a_sam_all_hosts_down',
-                        consumer_id=consumer_id,
-                        crop_id=t.crop_id,
-                        error=str(exc),
-                    )
-                    async with in_flight_lock:
-                        in_flight.discard(t.crop_id)
-                    sam_q.task_done()
-                    await asyncio.sleep(1.0)
+                    await leave_pending_segmenter_down(t, exc)
                     continue
                 except Exception:
                     OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(outcome='error').observe(
@@ -1311,9 +1314,13 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     if ocr_pick is not None:
                         t.detection_trace.append(f'{rt.profile.ocr_rec_model}:text_hint:hit')
-                        sub_cand, _sub_box = await _resegment_from_text_hint(
-                            t.crop_jpeg, ocr_pick.bbox_norm, rt.segmenter
-                        )
+                        try:
+                            sub_cand, _sub_box = await _resegment_from_text_hint(
+                                t.crop_jpeg, ocr_pick.bbox_norm, rt.segmenter
+                            )
+                        except SegmenterUnavailable as exc:
+                            await leave_pending_segmenter_down(t, exc)
+                            continue
                         if sub_cand is not None:
                             t.candidates = [
                                 TaskBoxInput(

@@ -358,69 +358,16 @@ class SegmenterClient:
         OP_SEGMENTER_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
 
     async def segment(self, crop_jpeg: bytes) -> RegionCandidate | None:
-        """Segment one crop. Returns the top candidate in crop frame.
+        """Segment one crop. Returns the top candidate in crop frame, or
+        ``None`` when the segmenter answered with no usable candidate (or
+        this client is disabled and never attempts an HTTP call).
 
-        Raises :class:`SegmenterAllHostsDown` if every host is UNHEALTHY.
-        Returns ``None`` on a single-host failure (recorded against
-        the circuit breaker), when SAM3 returned no candidate, or
-        when this client is disabled — no segmenter configured.
-        The disabled case never attempts an HTTP call.
+        Raises :class:`SegmenterUnavailable` exactly like :meth:`segment_multi`
+        (the one request path): a failed request or every host UNHEALTHY is
+        never reported as "no candidate".
         """
-        if not self.enabled:
-            return None
-        # t0 = entry to segment (before any client-side work).
-        # See module docstring + metrics.py for the wait/inflight/response
-        # decomposition rationale.
-        t0 = self._now()
-        b64 = base64.b64encode(crop_jpeg).decode('ascii')
-        payload = {
-            'crop_jpeg_b64': b64,
-            'text_prompt': self.text_prompt,
-            'max_candidates': self.max_candidates,
-        }
-        url = await self._pick_healthy_url()
-        timing: dict[str, float] = {}
-        resp = await self._post_with_retry(url, payload, timing=timing)
-        if resp is None:
-            self._record_timings(url, t0, timing, outcome='error', t_end=None)
-            await self._on_failure(url)
-            return None
-
-        try:
-            body = resp.json()
-        except ValueError:
-            t_end = self._now()
-            self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
-            logger.warning('segmenter_bad_json')
-            await self._on_failure(url)
-            return None
-
-        await self._on_success(url)
-
-        cands = body.get('candidates') or []
-        if not cands:
-            t_end = self._now()
-            self._record_timings(url, t0, timing, outcome='miss', t_end=t_end)
-            return None
-        top = max(cands, key=lambda c: float(c.get('score') or 0.0))
-        bbox = top.get('bbox_norm')
-        if not bbox or len(bbox) != 4:
-            t_end = self._now()
-            self._record_timings(url, t0, timing, outcome='miss', t_end=t_end)
-            return None
-        t_end = self._now()
-        self._record_timings(url, t0, timing, outcome='hit', t_end=t_end)
-        return RegionCandidate(
-            bbox_norm=(
-                float(bbox[0]),
-                float(bbox[1]),
-                float(bbox[2]),
-                float(bbox[3]),
-            ),
-            score=float(top.get('score') or 0.0),
-            source=self.source_name,
-            rectangularity=(float(top['mask_iou']) if top.get('mask_iou') is not None else None),
-        )
+        cands = await self.segment_multi(crop_jpeg)
+        return max(cands, key=lambda c: c.score) if cands else None
 
     async def segment_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
         """Segment one crop, keeping every candidate (W8 multi-candidate leg).

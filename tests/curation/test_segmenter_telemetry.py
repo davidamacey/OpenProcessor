@@ -17,7 +17,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from scripts.curation.worker.client import SegmenterClient
+from scripts.curation.worker.client import SegmenterClient, SegmenterRequestFailed
 from src.services.curation.metrics import (
     OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS,
     OP_SEGMENTER_REQUEST_RESPONSE_SECONDS,
@@ -126,11 +126,11 @@ async def test_outcome_label_correct_on_hit_miss_error():
 
     hit = await sam.segment(_CROP_BYTES)
     miss = await sam.segment(_CROP_BYTES)
-    err = await sam.segment(_CROP_BYTES)
+    with pytest.raises(SegmenterRequestFailed):
+        await sam.segment(_CROP_BYTES)
 
     assert hit is not None
     assert miss is None
-    assert err is None
 
     after = {
         outcome: _hist_obs_count(OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS, host=host, outcome=outcome)
