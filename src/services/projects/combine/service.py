@@ -171,30 +171,25 @@ async def _run(
     """Run the job, then settle the target: ``active`` on success, ``failed`` on
     a failure; a cancelled or interrupted job leaves it ``building`` so it can
     resume."""
-    owned = await run_combine(
+
+    async def settle(ok: bool) -> None:
+        await lifecycle.finish_building(client, target, ok=ok)
+        if ok:
+            from src.services.curation.event_hub import publish_global_event
+
+            publish_global_event(
+                'project.created', target=target.slug, status='active', revision=target.revision
+            )
+
+    await run_combine(
         client,
         store=store,
         plan=load_plan(store),
         sources=sources,
         target=target,
         embedding_dim=get_curation_config().encoder_embedding_dim,
+        settle=settle,
     )
-    if not owned:
-        return
-    status = store.job.read().get('status')
-    if status in job_store.COMPLETED_STATUSES or status == 'failed':
-        try:
-            await lifecycle.finish_building(client, target, ok=status != 'failed')
-        except Exception as exc:
-            logger.error('combine_finish_failed', job_id=store.import_id, error=str(exc))
-            store.job.update(status='failed', error=f'could not finish the target: {exc}'[:300])
-            return
-        if status != 'failed':
-            from src.services.curation.event_hub import publish_global_event
-
-            publish_global_event(
-                'project.created', target=target.slug, status='active', revision=target.revision
-            )
 
 
 def job_state(job_id: str) -> dict[str, Any]:

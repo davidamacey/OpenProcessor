@@ -204,7 +204,9 @@ async def test_only_the_worker_that_owns_the_job_settles_the_target(
     async def finish_building(_client: Any, _target: Any, *, ok: bool) -> None:
         finished.append(ok)
 
-    async def worker(_client: Any, **_kw: Any) -> bool:
+    async def worker(_client: Any, **kw: Any) -> bool:
+        if owned:
+            await kw['settle'](True)
         return owned
 
     monkeypatch.setattr(svc, 'run_combine', worker)

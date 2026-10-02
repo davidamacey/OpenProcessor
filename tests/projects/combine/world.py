@@ -74,6 +74,7 @@ class World:
         self.registry = StubRegistry(self.records)
         monkeypatch.setattr(registry_module, '_REGISTRY', self.registry)
         self._seed = 0
+        self.settled: list[bool] = []
 
     # ------------------------------------------------------------ projects
 
@@ -257,6 +258,10 @@ async def run_job(
         sources = [world.records[s.project] for s in load_plan(store).request.sources]
         target = world.records[slug]
         store.job.clear_signals()
+
+    async def settle(ok: bool) -> None:
+        world.settled.append(ok)
+
     await run_combine(
         world.fake,
         store=store,
@@ -264,6 +269,7 @@ async def run_job(
         sources=sources,
         target=target,
         embedding_dim=DIM,
+        settle=settle,
     )
     return store, target
 
