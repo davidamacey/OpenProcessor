@@ -15,6 +15,11 @@
    *   state (`GET {prefix}/pause`, read for every `selectable` row) has
    *   loaded; the button offered is the opposite of the served `paused`
    * - Create: disabled only by a served `capacity.status === 'blocked'`
+   * - Combine projects: only when `combineAvailability` says the backend
+   *   mounts the combine router (one-shot probe)
+   * - A project the server says came from a combine (`origin.kind ===
+   *   'combine'` with a `job_id`) links to that job, and its delete is
+   *   labelled "Undo combine" (undoing a combine is deleting the target)
    *
    * State and writes live in `projectsAdminController.svelte.ts`.
    */
@@ -25,6 +30,7 @@
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
   import EditProjectDialog from '$components/projects/EditProjectDialog.svelte';
   import PauseProjectDialog from '$components/projects/PauseProjectDialog.svelte';
+  import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
   import { formatCount } from '$lib/formatCount';
   import { projectHref } from '$lib/projectPaths';
   import {
@@ -49,7 +55,13 @@
 
   onMount(() => {
     void admin.load();
+    void combineAvailability.init();
   });
+
+  /** The combine job a project was made by, when the server says so. */
+  function combineJobOf(p: ProjectSummary): string | null {
+    return p.origin?.kind === 'combine' && p.origin.job_id ? p.origin.job_id : null;
+  }
 
   /** "Back to a project": the active one when there is one, else the
    *  served default. */
@@ -134,6 +146,11 @@
         Show archived
       </label>
       <span class="grow"></span>
+      {#if combineAvailability.available === true}
+        <a href={resolve('/projects/combine')} class="btn" data-testid="projects-combine"
+          >Combine projects…</a
+        >
+      {/if}
       <button
         type="button"
         class="btn btn-primary"
@@ -180,6 +197,15 @@
                 <div class="font-mono text-[11px] text-zinc-500">{p.slug}</div>
                 {#if p.description}
                   <div class="mt-0.5 text-xs text-zinc-400">{p.description}</div>
+                {/if}
+                {#if combineJobOf(p)}
+                  <a
+                    class="mt-0.5 inline-block text-xs text-blue-300 hover:underline"
+                    href={resolve('/projects/combine/[job_id]', {
+                      job_id: encodeURIComponent(combineJobOf(p) ?? ''),
+                    })}
+                    data-testid="project-combine-job-{p.slug}">Combine job</a
+                  >
                 {/if}
               </td>
               <td class="px-3 py-2">
@@ -266,7 +292,8 @@
                       type="button"
                       class="btn btn-sm text-red-300"
                       data-testid="project-delete-{p.slug}"
-                      onclick={() => (deleting = p)}>Delete</button
+                      onclick={() => (deleting = p)}
+                      >{combineJobOf(p) ? 'Undo combine' : 'Delete'}</button
                     >
                   {/if}
                 </div>
@@ -290,7 +317,12 @@
 <CreateProjectDialog open={createOpen} {admin} onclose={() => (createOpen = false)} />
 <EditProjectDialog project={editing} {admin} onclose={() => (editing = null)} />
 <CloneSettingsDialog project={cloning} {admin} onclose={() => (cloning = null)} />
-<DeleteProjectDialog project={deleting} {admin} onclose={() => (deleting = null)} />
+<DeleteProjectDialog
+  project={deleting}
+  {admin}
+  title={deleting && combineJobOf(deleting) ? 'Undo combine' : undefined}
+  onclose={() => (deleting = null)}
+/>
 <PauseProjectDialog
   target={pausing}
   onclose={() => (pausing = null)}

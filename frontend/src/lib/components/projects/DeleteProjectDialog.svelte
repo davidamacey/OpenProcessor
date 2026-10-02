@@ -9,6 +9,9 @@
    * real delete sends it as `confirm`; any refusal (`project_protected`,
    * `project_busy`, `confirm_mismatch`, ...) renders its served message.
    * Only offered at all when the project's served `deletable` is true.
+   * `title` renames the action for a combine target ("Undo combine" —
+   * undoing a combine is deleting the target, projects_plan §6); the dry
+   * run, the typed slug and every refusal are unchanged.
    */
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
@@ -20,8 +23,9 @@
     project: ProjectSummary | null;
     admin: ProjectsAdmin;
     onclose: () => void;
+    title?: string;
   }
-  let { project, admin, onclose }: Props = $props();
+  let { project, admin, onclose, title }: Props = $props();
 
   let report = $state<DeleteDryRunResponse | null>(null);
   let dryRunError = $state<string | null>(null);
@@ -92,7 +96,7 @@
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
-    aria-label="Delete project"
+    aria-label={title ?? 'Delete project'}
     use:focusOnMount
     use:trapFocus={{ onEscape: onclose }}
     tabindex="-1"
@@ -104,7 +108,9 @@
     <div
       class="w-full max-w-lg rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
     >
-      <h3 class="mb-1 text-base font-semibold">Delete {project.display_name}?</h3>
+      <h3 class="mb-1 text-base font-semibold" data-testid="delete-project-title">
+        {title ? `${title}: ${project.display_name}?` : `Delete ${project.display_name}?`}
+      </h3>
       <p class="mb-3 text-xs text-zinc-400">
         This permanently removes the project's data. Its slug
         <span class="font-mono text-zinc-200">{project.slug}</span> can never be reused.
