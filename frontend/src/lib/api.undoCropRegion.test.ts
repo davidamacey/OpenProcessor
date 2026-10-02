@@ -1,13 +1,17 @@
 /**
- * dq-region (2026-09-24): `POST {API_PREFIX}/crops/{id}/region/undo`
+ * W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md; supersedes the
+ * pre-W8 dq-region "candidate" round trip this file originally covered —
+ * a rejected box is just a `SlotBox` with `state: 'rejected'` now, no
+ * separate candidate concept). `POST {API_PREFIX}/crops/{id}/region/undo`
  * (`undoCropRegion`) returns the post-undo item, mapped through
- * `mapRawCrop` -> `mapCropSlots` -> `readSlot` like any other crop — so
- * a Z-undo that reverts a confirm back to `verify_rejected` re-renders
- * the candidate box/rejection-reason from the server's own response,
- * with no client-side reconstruction. This is the "undo restores
- * candidate fields in the UI" contract review/+page.svelte's
- * undoLast()/slotBack() rely on: whatever this function returns is what
- * `queue.items[idx]` gets replaced with directly.
+ * `mapRawCrop` -> `mapCropSlots` -> `readSlot` like any other crop — a
+ * Z-undo that restores an earlier `region_boxes` list re-renders it from
+ * the server's own response, with no client-side reconstruction. This is
+ * the contract `review/+page.svelte`'s `undoLast()` relies on: whatever
+ * this function returns is what `queue.items[idx]` gets replaced with
+ * directly. The backend-confirmed W8 undo contract (owner resolution,
+ * 2026-09-26): one call restores the whole prior `region_boxes` list plus
+ * `region_status`/`region_revision` in one step.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { undoCropRegion, API_PREFIX } from './api';
@@ -33,21 +37,35 @@ afterEach(() => {
   resetDeploymentSlots();
 });
 
-describe('undoCropRegion — dq-region candidate round trip', () => {
-  it('maps the restored candidate box, rejection reason, and text choice onto Crop.slots', async () => {
+describe('undoCropRegion — W8 multi-box round trip', () => {
+  it('maps the restored region_boxes list, item status, revision and per-box text choice onto Crop.slots', async () => {
     const raw = {
       crop_id: 'c1',
       image_path: '/nas/img.jpg',
       bbox_norm: [0, 0, 0.4, 0.2],
-      region_bbox_norm: null,
+      region_boxes: [
+        {
+          box_id: 'b1',
+          state: 'rejected',
+          bbox_norm: [0.1, 0.02, 0.3, 0.06],
+          bbox_in_parent: [0.1, 0.02, 0.3, 0.06],
+          score: 0.55,
+          detector: 'tag_detector_v1',
+          detector_version: null,
+          source: null,
+          bbox_correct: null,
+          confidence: null,
+          rejection_reason: 'sanity_reject:aspect_ratio',
+          text: null,
+          text_choice: 'no_valid_reading',
+          cluster_id: null,
+          thumbnail_url: null,
+        },
+      ],
       region_status: 'verify_rejected',
-      region_rejection_reason: 'sanity_reject:aspect_ratio',
-      region_candidate_bbox_norm: [0.1, 0.02, 0.3, 0.06],
-      region_candidate_score: 0.55,
-      region_candidate_detector: 'tag_detector_v1',
       region_validated: false,
       region_auto_confirmed: false,
-      region_text_choice: 'no_valid_reading',
+      region_revision: 12,
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
 
@@ -58,13 +76,15 @@ describe('undoCropRegion — dq-region candidate round trip', () => {
     expect((init as RequestInit).method).toBe('POST');
 
     const slot = crop.slots?.[widgetTagSlot.key];
-    expect(slot?.subBox?.rawXyxy).toBeNull();
-    expect(slot?.subBox?.candidate?.rawXyxy).toEqual([0.1, 0.02, 0.3, 0.06]);
-    expect(slot?.subBox?.candidate?.score).toBeCloseTo(0.55);
+    expect(slot?.subBoxes).toHaveLength(1);
+    expect(slot?.subBoxes?.[0].state).toBe('rejected');
+    expect(slot?.subBoxes?.[0].rawXyxy).toEqual([0.1, 0.02, 0.3, 0.06]);
+    expect(slot?.subBoxes?.[0].score).toBeCloseTo(0.55);
+    expect(slot?.subBoxes?.[0].rejectionReason).toBe('sanity_reject:aspect_ratio');
     expect(slot?.lifecycle?.status).toBe('verify_rejected');
-    expect(slot?.lifecycle?.rejectionReason).toBe('sanity_reject:aspect_ratio');
     expect(slot?.lifecycle?.validated).toBe(false);
     expect(slot?.lifecycle?.autoConfirmed).toBe(false);
-    expect(slot?.text?.choice).toBe('no_valid_reading');
+    expect(slot?.subBoxes?.[0].textChoice).toBe('no_valid_reading');
+    expect(slot?.boxSet?.revision).toBe(12);
   });
 });

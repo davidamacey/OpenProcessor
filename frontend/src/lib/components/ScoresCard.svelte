@@ -9,16 +9,7 @@
    * `/settings`' own confirm-before-write convention (a deployment-wide
    * operation, never fired straight off a click).
    *
-   * **Absent, not broken, on a pre-`/scores/*` backend.** `supported`
-   * starts `null` (undetermined) — the card renders its shell while the
-   * initial `getScoresCoverage()` is in flight, same as any other
-   * loading state. A 404 sets `supported = false`, and only that state
-   * hides the whole card permanently (`{#if supported !== false}`),
-   * matching `/bakeoff`'s "absent, not disabled" rule for a router the
-   * backend hasn't mounted. Any other failure (network, 5xx) leaves
-   * `supported` at its prior value and shows a retry banner instead,
-   * since that's a real, transient problem worth surfacing, not an
-   * absent feature.
+   * A failed coverage load shows the error with a retry.
    *
    * Scorer ids are never hardcoded — every id this card can select or
    * display comes from `Object.keys(coverage)`, per the task brief.
@@ -45,7 +36,6 @@
 
   const JOB_POLL_MS = 3000;
 
-  let supported = $state<boolean | null>(null);
   let coverage = $state<ScoresCoverage>({});
   let loading = $state(false);
   let loadError = $state<string | null>(null);
@@ -68,29 +58,17 @@
     loading = true;
     try {
       coverage = await getScoresCoverage();
-      supported = true;
       loadError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      if (e instanceof ApiError && e.status === 404) {
-        supported = false;
-        loadError = null;
-      } else {
-        supported = supported ?? null;
-        loadError = (e as Error)?.message ?? 'failed to load curation-score coverage';
-      }
+      loadError = (e as Error)?.message ?? 'failed to load curation-score coverage';
     } finally {
       loading = false;
     }
   }
 
   /** Adopt a compute job already in flight (another tab, or before a
-   *  reload) — same shape as EmbeddingPlot's adoption effect. Only
-   *  checked once coverage has confirmed the backend actually has
-   *  `/scores/*` (`supported === true`) — on a pre-feature backend
-   *  (404, `supported === false`) there is nothing to adopt, and firing
-   *  it anyway would poll a status endpoint that doesn't exist on every
-   *  `/settings` mount, feature or not. */
+   *  reload) — same shape as EmbeddingPlot's adoption effect. */
   async function adoptInFlightJob(): Promise<void> {
     try {
       const st = await getScoresStatus();
@@ -99,7 +77,7 @@
         startJobPoll();
       }
     } catch {
-      // No status endpoint / transient failure — nothing to adopt.
+      // Transient failure — nothing to adopt.
     }
   }
 
@@ -145,7 +123,7 @@
   $effect(() => {
     void (async () => {
       await loadCoverage();
-      if (supported === true) await adoptInFlightJob();
+      if (loadError === null) await adoptInFlightJob();
     })();
     return stopJobPoll;
   });
@@ -209,120 +187,117 @@
   }
 </script>
 
-{#if supported !== false}
-  <section class="surface flex flex-col gap-4 p-5">
-    <div class="flex flex-wrap items-center gap-3">
-      <h2 class="text-base font-semibold">Curation scores</h2>
-      <span class="grow"></span>
-      <button
-        type="button"
-        class="btn"
-        onclick={() => void loadCoverage()}
-        disabled={loading}
-      >
-        {loading ? 'Loading…' : 'Reload'}
-      </button>
-    </div>
+<section class="surface flex flex-col gap-4 p-5">
+  <div class="flex flex-wrap items-center gap-3">
+    <h2 class="text-base font-semibold">Curation scores</h2>
+    <span class="grow"></span>
+    <button
+      type="button"
+      class="btn"
+      onclick={() => void loadCoverage()}
+      disabled={loading}
+    >
+      {loading ? 'Loading…' : 'Reload'}
+    </button>
+  </div>
 
-    <!-- F8 D9: the Uncertainty and Model Disagreements queues are driven by
+  <!-- F8 D9: the Uncertainty and Model Disagreements queues are driven by
          probe predictions (run a probe on /train), not by these scorers. -->
-    <p class="text-xs text-zinc-400" data-testid="scores-intro">
-      Scores are computed on demand, not automatically. The score-based review sorts (for
-      example mistakenness) have nothing to sort by until their scorer has run at least
-      once. Mistakenness also needs model probe predictions; if those are missing, Compute
-      shows the backend's own error below. The Uncertainty and Model Disagreements queues
-      don't depend on these scorers: they fill from probe predictions (run a probe from a
-      finished training run on /train).
+  <p class="text-xs text-zinc-400" data-testid="scores-intro">
+    Scores are computed on demand, not automatically. The score-based review sorts (for
+    example mistakenness) have nothing to sort by until their scorer has run at least
+    once. Mistakenness also needs model probe predictions; if those are missing, Compute
+    shows the backend's own error below. The Uncertainty and Model Disagreements queues
+    don't depend on these scorers: they fill from probe predictions (run a probe from a
+    finished training run on /train).
+  </p>
+
+  {#if loadError}
+    <p
+      class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+    >
+      {loadError}
     </p>
+  {/if}
 
-    {#if loadError}
-      <p
-        class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
-      >
-        {loadError}
-      </p>
-    {/if}
-
-    {#if scorerIds.length === 0 && !loading}
-      <p class="text-sm text-zinc-500">No scorers advertised.</p>
-    {:else}
-      <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-zinc-800 text-xs text-zinc-500">
-            <th class="w-8 py-1.5 font-normal"></th>
-            <th class="py-1.5 font-normal">Scorer</th>
-            <th class="py-1.5 font-normal">Field</th>
-            <th class="py-1.5 font-normal">Scored / total</th>
-            <th class="py-1.5 font-normal">Coverage</th>
+  {#if scorerIds.length === 0 && !loading}
+    <p class="text-sm text-zinc-500">No scorers advertised.</p>
+  {:else}
+    <table class="w-full text-left text-sm">
+      <thead>
+        <tr class="border-b border-zinc-800 text-xs text-zinc-500">
+          <th class="w-8 py-1.5 font-normal"></th>
+          <th class="py-1.5 font-normal">Scorer</th>
+          <th class="py-1.5 font-normal">Field</th>
+          <th class="py-1.5 font-normal">Scored / total</th>
+          <th class="py-1.5 font-normal">Coverage</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each scorerIds as id (id)}
+          {@const entry = coverage[id]}
+          <tr class="border-b border-zinc-900">
+            <td class="py-1.5">
+              <input
+                type="checkbox"
+                checked={!!selected[id]}
+                onchange={() => toggleScorer(id)}
+                aria-label={`Select ${id}`}
+              />
+            </td>
+            <td class="py-1.5 font-mono text-xs">{id}</td>
+            <td class="py-1.5 font-mono text-xs text-zinc-500">{entry?.field ?? '—'}</td>
+            <td class="py-1.5 text-zinc-300">{formatCoverageCounts(entry)}</td>
+            <td class="py-1.5 text-zinc-300">{formatCoveragePct(entry)}</td>
           </tr>
-        </thead>
-        <tbody>
-          {#each scorerIds as id (id)}
-            {@const entry = coverage[id]}
-            <tr class="border-b border-zinc-900">
-              <td class="py-1.5">
-                <input
-                  type="checkbox"
-                  checked={!!selected[id]}
-                  onchange={() => toggleScorer(id)}
-                  aria-label={`Select ${id}`}
-                />
-              </td>
-              <td class="py-1.5 font-mono text-xs">{id}</td>
-              <td class="py-1.5 font-mono text-xs text-zinc-500">{entry?.field ?? '—'}</td
-              >
-              <td class="py-1.5 text-zinc-300">{formatCoverageCounts(entry)}</td>
-              <td class="py-1.5 text-zinc-300">{formatCoveragePct(entry)}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    {/if}
+        {/each}
+      </tbody>
+    </table>
+  {/if}
 
-    <div class="flex flex-wrap items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      class="btn btn-primary"
+      disabled={starting || job !== null || scorerIds.length === 0}
+      onclick={openConfirmAll}
+    >
+      Compute all
+    </button>
+    <button
+      type="button"
+      class="btn"
+      disabled={starting || job !== null || selectedIds.length === 0}
+      onclick={openConfirmSelected}
+    >
+      Compute selected{selectedIds.length ? ` (${selectedIds.length})` : ''}
+    </button>
+    {#if job}
+      <span class="text-xs text-zinc-400">
+        Computing {job.scorers.join(', ') || 'scores'}
+        {job.total
+          ? ` — ${job.processed.toLocaleString()} / ${job.total.toLocaleString()}`
+          : '…'}
+      </span>
       <button
         type="button"
-        class="btn btn-primary"
-        disabled={starting || job !== null || scorerIds.length === 0}
-        onclick={openConfirmAll}
+        class="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
+        onclick={() => void cancelCompute()}
+        disabled={cancelling}
       >
-        Compute all
+        {cancelling ? 'Cancelling…' : 'Cancel'}
       </button>
-      <button
-        type="button"
-        class="btn"
-        disabled={starting || job !== null || selectedIds.length === 0}
-        onclick={openConfirmSelected}
-      >
-        Compute selected{selectedIds.length ? ` (${selectedIds.length})` : ''}
-      </button>
-      {#if job}
-        <span class="text-xs text-zinc-400">
-          Computing {job.scorers.join(', ') || 'scores'}
-          {job.total
-            ? ` — ${job.processed.toLocaleString()} / ${job.total.toLocaleString()}`
-            : '…'}
-        </span>
-        <button
-          type="button"
-          class="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
-          onclick={() => void cancelCompute()}
-          disabled={cancelling}
-        >
-          {cancelling ? 'Cancelling…' : 'Cancel'}
-        </button>
-      {/if}
-    </div>
-
-    {#if computeError}
-      <p
-        class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
-      >
-        {computeError}
-      </p>
     {/if}
-  </section>
-{/if}
+  </div>
+
+  {#if computeError}
+    <p
+      class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+    >
+      {computeError}
+    </p>
+  {/if}
+</section>
 
 {#if confirmScorers !== undefined}
   <!-- svelte-ignore a11y_click_events_have_key_events -->

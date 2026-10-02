@@ -95,6 +95,7 @@ describe('PromoteModal gate failure', () => {
       config_path: '',
       labels_path: '',
       triton_loaded: true,
+      cold_start_expected_on_first_inference: false,
     });
     submitButton().click();
     await vi.waitFor(() => expect(promoteTrainJob).toHaveBeenCalledTimes(2));
@@ -161,6 +162,7 @@ describe('PromoteModal success toast', () => {
     config_path: '/m/config.pbtxt',
     labels_path: '/m/labels.txt',
     triton_loaded: true,
+    cold_start_expected_on_first_inference: false,
   };
 
   async function promoteWith(extra: Record<string, unknown>): Promise<string> {
@@ -184,12 +186,9 @@ describe('PromoteModal success toast', () => {
     expect(msg).toMatch(/first prediction will be slow/i);
   });
 
-  it('says nothing about a cold start when the server says none, or omits the field', async () => {
+  it('says nothing about a cold start when the server says none', async () => {
     expect(await promoteWith({ cold_start_expected_on_first_inference: false })).toBe(
       'Promoted run_1 → Triton',
     );
-    if (instance) unmount(instance);
-    instance = undefined;
-    expect(await promoteWith({})).toBe('Promoted run_1 → Triton');
   });
 });

@@ -126,6 +126,7 @@ export function createBakeoffController(
     try {
       const r = await api.baselines(s.profile || undefined);
       s.baselines = r.baselines ?? [];
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, synchronous lookup set consumed within this function only, never stored in reactive state
       const names = new Set(s.baselines.map((b) => b.name));
       s.selectedBaselines = s.selectedBaselines.filter((n) => names.has(n));
     } catch (e) {

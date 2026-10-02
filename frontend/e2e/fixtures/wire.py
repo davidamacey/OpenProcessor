@@ -48,6 +48,9 @@ REGION_PROFILE: dict[str, Any] = {
     "display_name_singular": "Widget tag",
     "region_class_name": "widget_tag",
     "text_reader": "ocr",
+    "reads_text": True,
+    "text_hint_enabled": False,
+    "limits": {"max_boxes_per_write": 500},
 }
 # What the app derives from it: the bound class, the region tab's `?tab=`
 # id (the backend's own `regions` tab id) and its label (the served
@@ -56,6 +59,96 @@ REGION_CLASS = REGION_PROFILE["region_class_name"]
 REGION_TAB_URL_ID = "regions"
 REGION_TAB_LABEL = REGION_PROFILE["display_name"]
 REGION_SINGULAR_LABEL = REGION_PROFILE["display_name_singular"]
+
+# P1 projects cutover (docs/design/
+# any-domain-rev3-and-projects-contract-review-2026-09-26.md): the
+# GLOBAL `GET {api_prefix}/projects` response every test's root-layout
+# bootstrap reads before anything scoped fires. Every scoped call in the
+# app is then built from this project's own served `prefix` — never
+# assembled client-side — so a stubbed test never has to know the
+# `/projects/{slug}` shape itself beyond this fixture.
+DEFAULT_PROJECT_SLUG = "default"
+
+
+def project(api_prefix: str, slug: str, **over: Any) -> dict[str, Any]:
+    """One served `ProjectSummary`, `prefix` built the way the server builds
+    it. Every non-slug value is overridable (status, writable, selectable,
+    deletable, revision, ...)."""
+    out: dict[str, Any] = {
+        "slug": slug,
+        "display_name": slug.capitalize(),
+        "description": "",
+        "prefix": f"{api_prefix}/projects/{slug}",
+        "status": "active",
+        "writable": True,
+        "selectable": True,
+        "is_default": False,
+        "deletable": True,
+        # The server's own rule (ARCHIVABLE/UNARCHIVABLE_STATUSES); a test
+        # overrides either via **over.
+        "archivable": over.get("status", "active") == "active",
+        "unarchivable": over.get("status") == "archived",
+        "revision": 1,
+        "paused": False,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "counts": {"images": 0, "items": 0, "validated": 0},
+        "origin": None,
+    }
+    out.update(over)
+    return out
+
+
+def default_project(api_prefix: str) -> dict[str, Any]:
+    return project(api_prefix, DEFAULT_PROJECT_SLUG, is_default=True, deletable=False)
+
+
+PROJECT_STATUS_LABELS = {
+    "active": "Active",
+    "archived": "Archived",
+    "building": "Building",
+    "failed": "Failed",
+    "deleting": "Deleting",
+    "deleted": "Deleted",
+}
+
+
+def projects_response(
+    api_prefix: str,
+    projects: list[dict[str, Any]] | None = None,
+    capacity_status: str = "ok",
+) -> dict[str, Any]:
+    return {
+        "default_slug": DEFAULT_PROJECT_SLUG,
+        "projects": projects if projects is not None else [default_project(api_prefix)],
+        "capacity": {
+            "status": capacity_status,
+            "active_shards": 6,
+            "per_project_shards": 6,
+            "soft_limit": 40,
+            "hard_limit": 1000,
+            "heap_max_bytes": 2147483648,
+            "max_shards_per_node": 1000,
+            "data_nodes": 1,
+            "projects_until_soft_limit": 5,
+            "message": f"Served capacity message ({capacity_status}).",
+            "labels": {
+                "ok": "Room for more projects",
+                "warn": "Near the recommended shard budget",
+                "blocked": "No room for another project",
+            },
+        },
+        "limits": {
+            "slug_pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "slug_min": 2,
+            "slug_max": 32,
+            "reserved_slugs": ["all", "combine", "global", "health", "new", "none", "projects", "settings", "vlm"],
+            "retired_slugs": [],
+            "cloneable_axes": ["settings_defaults", "classes"],
+        },
+        "labels": {"status": PROJECT_STATUS_LABELS},
+        "include_archived": False,
+    }
 
 # Every non-default value below is distinct on purpose (same rationale as
 # makeItem.ts): a mapping bug that drops a field to a hardcoded default is
@@ -170,6 +263,34 @@ _EXPLICIT: dict[str, Any] = {
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
+    # W8/W10/W3/W4 item keys (backend f582aa05). `region_boxes` is the real
+    # per-box list; a test passes its own boxes via make_item(region_boxes=...).
+    "vlm_prompt_pack": "tag_pack",
+    "vlm_endpoint": "vlm-main",
+    "vlm_model": "tag-vlm-1",
+    "region_profile": "widget_tag",
+    "region_profile_revision": 2,
+    "region_boxes": [],
+    "region_count": 0,
+    "region_rejected_count": 0,
+    "region_max_score": None,
+    "region_set_complete": None,
+    "region_revision": 0,
+    "label_locked": False,
+    "import_ids": [],
+    "dataset_split": None,
+    "imported_at": None,
+    "proposed_by_import": None,
+    "on_negative_frame": False,
+    "import_standalone_region": False,
+    "proposal_chain": [],
+    "origin_project": None,
+    "origin_item_id": None,
+    "origin_image_id": None,
+    "origin_split": None,
+    "combine_conflict": False,
+    "combine_conflict_origins": [],
+    "combine_merged_origins": [],
     # Backend main 22a3e65 (dq-region), adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
@@ -198,6 +319,7 @@ if _missing:
 DEFAULT_ITEM: dict[str, Any] = {k: _EXPLICIT[k] for k in ITEM_KEYS}
 
 
+
 def make_item(**overrides: Any) -> dict[str, Any]:
     """Return a full item-wire payload (every key in ``item_wire.json``), with overrides applied.
 
@@ -210,3 +332,72 @@ def make_item(**overrides: Any) -> dict[str, Any]:
     item = dict(DEFAULT_ITEM)
     item.update(overrides)
     return item
+
+
+# `GET {API_PREFIX}/review/tabs` (ReviewTabsResponse). Every filter-bar
+# param /review knows; a stubbed tab honours all of them unless a test
+# narrows `filters`.
+REVIEW_FILTER_PARAMS = [
+    "class_id",
+    "source",
+    "conf_min",
+    "conf_max",
+    "text",
+    "max_rank",
+    "min_blur_ratio",
+]
+REVIEW_EMPTY_STATE = {"has_probe_predictions": True, "has_item_scores": True}
+
+
+def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
+    """One served `ReviewTab`, every required field present."""
+    return {
+        "id": tab_id,
+        "label": label,
+        "description": "",
+        "filters": list(REVIEW_FILTER_PARAMS),
+        "filter_defaults": {},
+        "filter_specs": [],
+        **over,
+    }
+
+
+def review_tabs(*tabs: dict[str, Any], empty_state: dict[str, bool] | None = None) -> dict[str, Any]:
+    """A full `ReviewTabsResponse` body."""
+    return {"tabs": list(tabs), "empty_state": empty_state or dict(REVIEW_EMPTY_STATE)}
+
+
+def make_box(box_id: str = "b1", **over: Any) -> dict[str, Any]:
+    """One served `region_boxes[]` element (the vendored `RegionTestCandidate`
+    keys). Every value is overridable; `thumbnail_url` follows the served
+    per-box thumbnail route."""
+    box: dict[str, Any] = {
+        "box_id": box_id,
+        "state": "proposed",
+        "bbox_norm": [0.1, 0.1, 0.3, 0.3],
+        "bbox_in_parent": [0.1, 0.1, 0.3, 0.3],
+        "score": 0.91,
+        "detector": "tag_detector_v1",
+        "detector_version": "1",
+        "source": "detector",
+        "bbox_correct": None,
+        "confidence": None,
+        "rejection_reason": None,
+        "text": None,
+        "text_raw": None,
+        "text_confidence": None,
+        "text_source": None,
+        "text_engine_version": None,
+        "text_vlm": None,
+        "text_ocr": None,
+        "text_disagreement": None,
+        "text_choice": None,
+        "text_vlm_invalid": None,
+        "cluster_id": None,
+        "cluster_subid": None,
+        "cluster_distance": None,
+        "detected_at": "2026-05-06T07:08:09Z",
+        "thumbnail_url": f"/curation/crops/crop-fixture-001/region_thumbnail?box_id={box_id}",
+    }
+    box.update(over)
+    return box

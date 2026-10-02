@@ -23,6 +23,7 @@ import {
   type RejectionReasonEntry,
   type RejectionReasonKind,
 } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 
 /** Titlecases a `snake_case` id as a display-label placeholder for a
  *  vocabulary the backend doesn't serve labels for yet (dq-region
@@ -48,6 +49,7 @@ class RegionVocabularyStore {
   rejectionReasons = $state<RejectionReasonEntry[]>([]);
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   // Chip-rendering call sites resolve an id against any of the three
   // vocabularies at once — a chain entry's head can be a detector, a
@@ -68,9 +70,12 @@ class RegionVocabularyStore {
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
         const res = await getRegionVocabulary();
+        // A load started for the previous project never lands.
+        if (gen !== this.#gen) return;
         this.detectors = res.detectors;
         this.regionSources = res.region_sources;
         this.chainActors = res.chain_actors;
@@ -78,6 +83,7 @@ class RegionVocabularyStore {
         this.textRules = res.text_rules;
         this.rejectionReasons = res.rejection_reasons;
       } catch {
+        if (gen !== this.#gen) return;
         this.detectors = [];
         this.regionSources = [];
         this.chainActors = [];
@@ -85,8 +91,10 @@ class RegionVocabularyStore {
         this.textRules = null;
         this.rejectionReasons = [];
       } finally {
-        this.loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
@@ -169,6 +177,20 @@ class RegionVocabularyStore {
     if (!id) return null;
     return this.#resolveRejectionReason(id)?.kind ?? null;
   }
+
+  /** Project switch: the vocabulary is per project. */
+  resetForProjectChange(): void {
+    this.#gen += 1;
+    this.#inflight = null;
+    this.detectors = [];
+    this.regionSources = [];
+    this.chainActors = [];
+    this.textChoices = [];
+    this.textRules = null;
+    this.rejectionReasons = [];
+    this.loaded = false;
+  }
 }
 
 export const regionVocabularyStore = new RegionVocabularyStore();
+onProjectChange(() => regionVocabularyStore.resetForProjectChange());

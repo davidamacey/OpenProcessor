@@ -17,6 +17,9 @@ import {
   resetDeploymentSlots,
 } from '$lib/annotations/registeredSlots';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
+import { makeSlotBox } from '$lib/test/fixtures/slotBox';
+import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 vi.mock('$lib/api', () => ({
   getCropContext: vi.fn(),
@@ -135,7 +138,31 @@ describe('SourceImageOverlay', () => {
     expect(byId('lbl-c').getAttribute('title')).toContain('unlabeled');
   });
 
-  it('draws a solid region box and a dashed candidate box from slot data', async () => {
+  it('draws every served box at its source-frame position, solid or dashed by state', async () => {
+    regionStatusesStore.boxStates = [
+      {
+        value: 'accepted',
+        label: 'accepted',
+        role: 'accepted',
+        human_writable: true,
+        exported: true,
+        dashed: false,
+        dim: false,
+        badge: null,
+        tone: 'accepted',
+      },
+      {
+        value: 'rejected',
+        label: 'rejected',
+        role: 'rejected',
+        human_writable: true,
+        exported: false,
+        dashed: true,
+        dim: false,
+        badge: null,
+        tone: 'rejected',
+      },
+    ];
     const ctx: CropContextResponse = {
       image: {
         image_id: 'i',
@@ -155,23 +182,24 @@ describe('SourceImageOverlay', () => {
           slots: {
             widget_tag: {
               key: 'widget_tag',
-              subBox: {
-                // Region box centered in the top-left quadrant of the item,
-                // parent-frame-normalized (cx/cy/w/h relative to the item box).
-                parent: { cx: 0.25, cy: 0.25, w: 0.2, h: 0.2 },
-                rawXyxy: null,
-                frame: 'source',
-                score: 0.9,
-                visible: true,
-                candidate: {
+              subBoxes: [
+                // bbox_norm is already source-image-normalized: drawn as is,
+                // never re-projected through the item's own box.
+                makeSlotBox({
+                  boxId: 'b1',
+                  state: 'accepted',
+                  rawXyxy: [0.1, 0.2, 0.3, 0.4],
+                  parent: { cx: 0.25, cy: 0.25, w: 0.2, h: 0.2 },
+                  score: 0.9,
+                }),
+                makeSlotBox({
+                  boxId: 'b2',
+                  state: 'rejected',
+                  rawXyxy: [0.6, 0.6, 0.8, 0.9],
                   parent: { cx: 0.75, cy: 0.75, w: 0.2, h: 0.2 },
-                  rawXyxy: null,
                   score: 0.4,
-                  detector: null,
-                  detectorVersion: null,
-                  source: null,
-                },
-              },
+                }),
+              ],
             },
           },
         } as unknown as Crop,
@@ -181,17 +209,67 @@ describe('SourceImageOverlay', () => {
 
     const el = await render({ cropId: 'region-a' });
 
+    const [first, second] = Array.from(
+      el.querySelectorAll('[data-testid="overlay-box"][data-kind="region-box"]'),
+    ) as HTMLElement[];
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first.className).not.toContain('border-dashed');
+    expect(second.className).toContain('border-dashed');
+    expect(first.style.left).toBe('10%');
+    expect(first.style.top).toBe('20%');
+    expect(first.style.width).toBe('20%');
+    expect(first.getAttribute('title')).toContain('Tag 1');
+    expect(second.getAttribute('title')).toContain('Tag 2');
+    regionStatusesStore.boxStates = [];
+  });
+
+  it('draws a read-only scalar-box slot through the item box when it is stored in the parent frame', async () => {
+    const ctx: CropContextResponse = {
+      image: {
+        image_id: 'i',
+        image_path: '/i.jpg',
+        width: 100,
+        height: 100,
+        source: null,
+        indexed_at: null,
+      },
+      items: [
+        {
+          ...item({
+            id: 'tail-a',
+            class_name: 'widget_a',
+            // Item box: x 0.2..0.6, y 0.2..0.6.
+            bbox_norm: { cx: 0.4, cy: 0.4, w: 0.4, h: 0.4 },
+          }),
+          slots: {
+            aircraft_tail_number: {
+              key: 'aircraft_tail_number',
+              subBox: {
+                // Parent-frame box: right half of the item box.
+                rawXyxy: [0.5, 0, 1, 1],
+                frame: 'parent',
+                parent: { cx: 0.75, cy: 0.5, w: 0.5, h: 1 },
+                score: 0.8,
+                visible: true,
+              },
+            },
+          },
+        } as unknown as Crop,
+      ],
+    };
+    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    installDeploymentSlots([widgetTagSlot, aircraftTailNumberSlot]);
+
+    const el = await render({ cropId: 'tail-a' });
+    resetDeploymentSlots();
+
     const region = el.querySelector(
       '[data-testid="overlay-box"][data-kind="region"]',
     ) as HTMLElement;
-    const candidate = el.querySelector(
-      '[data-testid="overlay-box"][data-kind="region-candidate"]',
-    ) as HTMLElement;
     expect(region).toBeTruthy();
-    expect(candidate).toBeTruthy();
-    expect(region.className).not.toContain('border-dashed');
-    expect(candidate.className).toContain('border-dashed');
-    expect(region.getAttribute('title')).toContain('Tag');
+    expect(region.style.left).toBe('40%');
+    expect(region.style.width).toBe('20%');
   });
 
   it('renders the selected item with a highlight ring and dims the rest', async () => {
@@ -298,5 +376,182 @@ describe('SourceImageOverlay', () => {
 
     expect(getCropContext).not.toHaveBeenCalled();
     expect(el.querySelectorAll('[data-testid="overlay-box"]').length).toBe(1);
+  });
+
+  it('draws a W8 multi-box region ring in the served box_states tone, not the client role fallback', async () => {
+    // Backend follow-up to W8.7 (feat/w8-multibox-lockstep,
+    // docs/design/w8-multibox-frontend-plan-2026-09-26.md): each
+    // box_states entry now serves `tone`. A served `rejected` tone must
+    // win over the role→color guess this file used before (which mapped
+    // a `rejected` box to the same neutral zinc as `false_positive`).
+    regionStatusesStore.boxStates = [
+      {
+        value: 'rejected',
+        label: 'rejected',
+        role: 'rejected',
+        human_writable: true,
+        exported: false,
+        dashed: true,
+        dim: false,
+        badge: null,
+        tone: 'rejected',
+      },
+    ];
+
+    const ctx: CropContextResponse = {
+      image: {
+        image_id: 'i',
+        image_path: '/i.jpg',
+        width: 100,
+        height: 100,
+        source: null,
+        indexed_at: null,
+      },
+      items: [
+        {
+          ...item({
+            id: 'region-mb',
+            class_name: 'widget_a',
+            bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
+          }),
+          slots: {
+            widget_tag: {
+              key: 'widget_tag',
+              subBoxes: [
+                makeSlotBox({
+                  boxId: 'b1',
+                  state: 'rejected',
+                  rawXyxy: [0.1, 0.1, 0.3, 0.3],
+                }),
+              ],
+            },
+          },
+        } as unknown as Crop,
+      ],
+    };
+    vi.mocked(getCropContext).mockResolvedValue(ctx);
+
+    const el = await render({ cropId: 'region-mb' });
+
+    const box = el.querySelector(
+      '[data-testid="overlay-box"][data-kind="region-box"]',
+    ) as HTMLElement;
+    expect(box).toBeTruthy();
+    expect(box.className).toContain('border-red-400');
+    expect(box.className).not.toContain('border-zinc-500');
+
+    regionStatusesStore.boxStates = [];
+  });
+});
+
+describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
+  const ctx = (): CropContextResponse => ({
+    image: {
+      image_id: 'i',
+      image_path: '/i.jpg',
+      width: 100,
+      height: 100,
+      source: null,
+      indexed_at: null,
+    },
+    items: [item({ id: 'crop-1' })],
+  });
+
+  const shapes = [
+    {
+      key: 'detector:0:box',
+      kind: 'box' as const,
+      box: [0.1, 0.2, 0.5, 0.6] as [number, number, number, number],
+      dimmed: false,
+      label: 'detector #0',
+      title: 'detector #0',
+    },
+    {
+      key: 'detector:1:box',
+      kind: 'box' as const,
+      box: [0.6, 0.6, 0.9, 0.9] as [number, number, number, number],
+      dimmed: true,
+      label: 'detector #1',
+      title: 'detector #1 · dropped: Below min score',
+    },
+    {
+      key: 'segmenter:0:poly',
+      kind: 'polygon' as const,
+      points: [
+        [0.2, 0.2],
+        [0.6, 0.2],
+        [0.4, 0.5],
+      ] as [number, number][],
+      dimmed: true,
+      label: 'segmenter #0',
+      title: 'segmenter #0',
+    },
+    {
+      key: 'segmenter:1:poly',
+      kind: 'polygon' as const,
+      points: [
+        [0.3, 0.3],
+        [0.7, 0.3],
+        [0.5, 0.8],
+      ] as [number, number][],
+      dimmed: false,
+      label: 'segmenter #1',
+      title: 'segmenter #1',
+    },
+  ];
+
+  it('draws extra boxes at the served percentages, dimmed ones faint and dashed', async () => {
+    vi.mocked(getCropContext).mockResolvedValue(ctx());
+    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    const boxes = [
+      ...el.querySelectorAll('[data-testid="overlay-extra-box"]'),
+    ] as HTMLElement[];
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]!.style.left).toBe('10%');
+    expect(boxes[0]!.style.top).toBe('20%');
+    expect(boxes[0]!.style.width).toBe('40%');
+    expect(boxes[0]!.style.height).toBe('40%');
+    expect(boxes[0]!.dataset.dimmed).toBe('false');
+    expect(boxes[0]!.className).not.toContain('opacity-40');
+    expect(boxes[1]!.dataset.dimmed).toBe('true');
+    expect(boxes[1]!.className).toContain('opacity-40');
+    expect(boxes[1]!.className).toContain('border-dashed');
+    expect(boxes[1]!.getAttribute('title')).toContain('Below min score');
+    expect(boxes[0]!.textContent).toContain('detector #0');
+  });
+
+  it('draws mask outlines as polygons over a unit viewBox, dimmed ones faint', async () => {
+    vi.mocked(getCropContext).mockResolvedValue(ctx());
+    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    const polys = [
+      ...el.querySelectorAll('[data-testid="overlay-extra-polygon"]'),
+    ] as SVGPolygonElement[];
+    expect(polys).toHaveLength(2);
+    expect(polys[0]!.getAttribute('points')).toBe('0.2,0.2 0.6,0.2 0.4,0.5');
+    expect(polys[0]!.dataset.dimmed).toBe('true');
+    expect(polys[0]!.closest('svg')!.getAttribute('class')).toContain('opacity-40');
+    expect(polys[1]!.dataset.dimmed).toBe('false');
+    expect(polys[1]!.closest('svg')!.getAttribute('class')).not.toContain('opacity-40');
+    expect(polys[0]!.closest('svg')!.getAttribute('viewBox')).toBe('0 0 1 1');
+  });
+
+  it('draws no extra shapes by default, and hides them with the boxes toggle', async () => {
+    vi.mocked(getCropContext).mockResolvedValue(ctx());
+    const plain = await render({ cropId: 'crop-1' });
+    expect(plain.querySelector('[data-testid="overlay-extra-box"]')).toBeNull();
+    expect(plain.querySelector('[data-testid="overlay-extra-polygon"]')).toBeNull();
+    unmount(instance as never);
+    instance = undefined;
+    plain.remove();
+
+    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    expect(el.querySelector('[data-testid="overlay-extra-box"]')).not.toBeNull();
+    const toggle = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('hide boxes'),
+    ) as HTMLButtonElement;
+    toggle.click();
+    flushSync();
+    expect(el.querySelector('[data-testid="overlay-extra-box"]')).toBeNull();
+    expect(el.querySelector('[data-testid="overlay-extra-polygon"]')).toBeNull();
   });
 });

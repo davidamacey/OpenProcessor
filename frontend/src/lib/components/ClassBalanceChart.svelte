@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
    * `/dashboard`'s per-class balance bars (visual audit 2026-09-24, D2).
-   * Bars are sized by trainable crops (served validated minus the served
-   * test holdout); classes at 0 validated collapse into one line and any
+   * Bars are sized by the served `trainable` count, with the served test
+   * holdout alongside; classes at 0 validated collapse into one line and any
    * overflow past `limit` is counted, never silently dropped.
    */
   import { buildClassBalance, type ClassBalanceRow } from '$lib/dashboard/classBalance';
@@ -43,9 +43,7 @@
 {:else}
   {#if view.bars.length > 0}
     <p class="mb-2 text-[11px] text-zinc-500">
-      Bars show trainable crops (validated minus frozen test holdout){holdout
-        ? ''
-        : ' — holdout counts unavailable, so these include any test crops'}.
+      Bars show trainable crops (frozen test holdout and excluded crops left out).
     </p>
     <ul class="space-y-1.5" data-testid="class-balance-bars">
       {#each view.bars as row (row.class_id)}

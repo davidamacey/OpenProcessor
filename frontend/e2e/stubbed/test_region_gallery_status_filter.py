@@ -18,11 +18,12 @@ from playwright.sync_api import expect
 
 CLASSES = [
     {
-        "id": 1,
-        "name": REGION_CLASS,
+        "class_id": 1,
+        "class_name": REGION_CLASS,
+        "kind": "region",
         "group": "widgets",
         "hotkey_letter": "l",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
@@ -72,7 +73,7 @@ def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param
 
     stub.on("GET", r"/regions(\?|$)", regions_handler)
 
-    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
+    page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
 
     select = page.locator('label:has-text("Status") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)

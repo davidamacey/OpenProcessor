@@ -63,12 +63,15 @@ SCREENSHOT_ROOT = ROOT / "artifacts_local" / "cw-live" / "live-shots"
 # as GET, and excluding it would be an arbitrary asymmetry.
 _SAFE_METHODS = {"GET", "HEAD"}
 
-# POSTs the backend documents as side-effect free, allowed by exact path.
-# Keep this minimal: every entry needs a citation to the backend's own
-# docstring/contract saying it doesn't write.
+# POSTs the backend documents as side-effect free, allowed by path suffix
+# (the scoped prefix varies per project, e.g.
+# `/curation/projects/default/train/preflight`, so this matches on the
+# tail rather than a fixed absolute path). Keep this minimal: every entry
+# needs a citation to the backend's own docstring/contract saying it
+# doesn't write.
 #   /train/preflight: OpenProcessor curation_train.py `preflight` — "no side
 #   effects"; /train fires it on mount whenever an export exists.
-_READ_ONLY_POSTS = {f"{API_PREFIX}/train/preflight"}
+_READ_ONLY_POST_SUFFIXES = ("/train/preflight",)
 
 
 def _env_live_url() -> str | None:
@@ -97,7 +100,11 @@ def _require_live_url() -> None:
 
 @pytest.fixture(scope="session")
 def live_url(_require_live_url: None) -> str:
-    """The deployment base URL, preflighted against `{API_PREFIX}/health`.
+    """The deployment base URL, preflighted against the GLOBAL
+    `{API_PREFIX}/health` (never a project-scoped one — the projects
+    cutover moved everything else under a project's own served prefix,
+    but health and `/projects` stay global; see CLAUDE.md's "Projects —
+    /p/[project] routes" section).
 
     Skips (doesn't error) on anything short of a clean 200 — an
     unreachable or unhealthy backend isn't this suite's bug to report.
@@ -114,6 +121,27 @@ def live_url(_require_live_url: None) -> str:
     if status != 200:
         pytest.skip(f"live tier skipped: preflight GET {health_url} returned {status}, not 200")
     return url
+
+
+@pytest.fixture(scope="session")
+def live_project(live_url: str) -> dict[str, Any]:
+    """The default project's `{slug, prefix}`, read once from the GLOBAL
+    `GET {API_PREFIX}/projects` — never built client-side. Every scoped
+    API read in this tier uses `prefix`; every page navigation uses
+    `/p/<slug>/...`. Skips if the served `default_slug` isn't present in
+    the served `projects` list (shouldn't happen against a healthy
+    backend, but this tier fails closed rather than guessing a prefix).
+    """
+    payload = global_api_get(live_url, "/projects")
+    default_slug = payload["default_slug"]
+    match = next((p for p in payload["projects"] if p["slug"] == default_slug), None)
+    if match is None:
+        pytest.skip(
+            f"live tier skipped: default project {default_slug!r} not present in "
+            f"GET {API_PREFIX}/projects response"
+        )
+    assert match is not None  # for type-checkers
+    return {"slug": match["slug"], "prefix": match["prefix"]}
 
 
 @pytest.fixture(scope="session")
@@ -144,25 +172,49 @@ def screenshot_run_dir() -> Path:
 
 
 @pytest.fixture(scope="session")
-def live_region_profile(live_url: str) -> dict[str, Any] | None:
-    """The deployment's served region profile (`{API_PREFIX}/health`
-    `region_profile`, OpenProcessor naming-w2), or None when it has none.
+def live_region_profile(live_url: str, live_project: dict[str, Any]) -> dict[str, Any] | None:
+    """The deployment's served region profile, read from the DEFAULT
+    PROJECT's own scoped `{prefix}/health` `region_profile` field
+    (OpenProcessor naming-w2; region profile is per-project, same as the
+    frontend's `regionProfileStore` reads it — see
+    `src/lib/stores/regionProfile.svelte.ts`), or None when it has none.
     Region-dependent tests read the region class / tab label from here
     rather than assuming one domain."""
-    return api_get(live_url, "/health").get("region_profile")
+    return api_get(live_url, live_project, "/health").get("region_profile")
 
 
-def api_get(live_url: str, path: str) -> Any:
-    """A plain GET against the live backend, outside the browser — used
-    by data-agreement tests to fetch the "expected" side of a comparison.
-    Never anything but GET: this helper doesn't even have a way to send
-    a body or a non-GET method, matching this tier's read-only contract.
-    """
+def _http_get(url: str) -> Any:
     import json
 
-    req = urllib.request.Request(f"{live_url}{API_PREFIX}{path}", method="GET")
+    req = urllib.request.Request(url, method="GET")
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
+
+
+def api_get(live_url: str, live_project: dict[str, Any], path: str) -> Any:
+    """A plain GET against the live backend's default project scope,
+    outside the browser — used by data-agreement tests to fetch the
+    "expected" side of a comparison. Never anything but GET: this helper
+    doesn't even have a way to send a body or a non-GET method, matching
+    this tier's read-only contract. `path` is relative to the project's
+    served `prefix` (e.g. `/stats/dataset`), never `{API_PREFIX}` itself —
+    every non-global route lives only under a project's own prefix.
+    """
+    return _http_get(f"{live_url}{live_project['prefix']}{path}")
+
+
+def global_api_get(live_url: str, path: str) -> Any:
+    """A plain GET against a GLOBAL (never project-scoped) route —
+    `/projects`, the global `/health`, the global `/events` — relative to
+    `{API_PREFIX}` itself."""
+    return _http_get(f"{live_url}{API_PREFIX}{path}")
+
+
+def page_path(live_project: dict[str, Any], path: str) -> str:
+    """`/p/<slug><path>` for the default project — every page navigation
+    in this tier goes through this, never a bare unscoped route (there is
+    no unscoped alias post-cutover)."""
+    return f"/p/{live_project['slug']}{path}"
 
 
 class GuardedPage:
@@ -196,7 +248,7 @@ def guarded_page(live_url: str, page: Any) -> Any:
 
     def _guard_curation(route: Any, request: Any) -> None:
         path = urllib.parse.urlsplit(request.url).path
-        if request.method == "POST" and path in _READ_ONLY_POSTS:
+        if request.method == "POST" and path.endswith(_READ_ONLY_POST_SUFFIXES):
             route.continue_()
             return
         if request.method not in _SAFE_METHODS:
@@ -230,6 +282,17 @@ ALLOWED_4XX_5XX = {
     # expected UI behavior, not a bug — keep this list short and
     # explicit; a route sweep failure should default to "real bug", not
     # "add it to the allow-list".
+    ("GET", r"/keymap$"): (
+        "CLAUDE.md's 'Keyboard shortcuts' section, K2: GET {prefix}/keymap is a "
+        "documented pending-backend route until OpenProcessor W2b lands and vendors "
+        "it. keymapStore.loadKeymap() treats a 404/501 as 'backend predates it' and "
+        "falls back to FALLBACK_KEYMAP silently — this deployment predates W2b."
+    ),
+    ("GET", r"/projects/combine/__probe__$"): (
+        "P4-1 (combineAvailability): the combine router has no list route, so the gate "
+        "probes a sentinel job id. A 404 with detail.error 'combine_not_found' is the "
+        "served 'router is mounted' answer — a 404 is the expected response here."
+    ),
 }
 
 
@@ -282,7 +345,9 @@ def wait_for_stable_text(page: Any, selector: str, settle_ms: int = 800, timeout
     )
 
 
-def agrees_with_retry(live_url: str, path: str, keys: tuple, displayed: int) -> tuple[bool, int, int]:
+def agrees_with_retry(
+    live_url: str, live_project: dict[str, Any], path: str, keys: tuple, displayed: int
+) -> tuple[bool, int, int]:
     """A live deployment can be mutated by another actor mid-test (a
     concurrent labeling smoke test is explicitly expected — see
     CLAUDE.md). Rather than a flaky hard-equal assert, fetch the
@@ -290,8 +355,8 @@ def agrees_with_retry(live_url: str, path: str, keys: tuple, displayed: int) -> 
     have moved between our first API read and the UI read) and accept
     either. Returns (ok, first_expected, second_expected).
     """
-    first = int_field(api_get(live_url, path), *keys)
+    first = int_field(api_get(live_url, live_project, path), *keys)
     if displayed == first:
         return True, first, first
-    second = int_field(api_get(live_url, path), *keys)
+    second = int_field(api_get(live_url, live_project, path), *keys)
     return displayed == second, first, second

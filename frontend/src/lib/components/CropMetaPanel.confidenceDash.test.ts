@@ -3,7 +3,7 @@
  * failed OCR recognition as `confidence: null` (plus a separate failure
  * reason), never a negative sentinel value. This pins that a null
  * confidence on either surface -- the region-slot text reading
- * (`region_text_confidence`) and a per-item OCR line
+ * (a box's `text_confidence`) and a per-item OCR line
  * (`item_text_lines[].confidence`) -- renders as "—", never "0%" or
  * "null%".
  */
@@ -73,17 +73,24 @@ describe('region-slot text confidence: null renders as "—"', () => {
 
   function withRegion(over: Record<string, unknown>): Crop {
     const raw = {
-      region_bbox_norm: [0.4, 0.4, 0.6, 0.6],
       region_status: 'detected',
-      region_score: 0.9,
-      region_text: 'TAG-001',
-      ...over,
+      region_boxes: [
+        {
+          box_id: 'b1',
+          state: 'accepted',
+          bbox_norm: [0.4, 0.4, 0.6, 0.6],
+          bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
+          score: 0.9,
+          text: 'TAG-001',
+          ...over,
+        },
+      ],
     };
     return crop({ slots: mapCropSlots(raw, [0, 0, 1, 1]) } as never);
   }
 
-  it('null region_text_confidence shows "—", never a percentage', () => {
-    const el = render({ crop: withRegion({ region_text_confidence: null }) });
+  it('null box text_confidence shows "—", never a percentage', () => {
+    const el = render({ crop: withRegion({ text_confidence: null }) });
     const text = el.textContent ?? '';
     expect(text).toContain('TAG-001');
     expect(text).toContain('—');
@@ -91,7 +98,7 @@ describe('region-slot text confidence: null renders as "—"', () => {
   });
 
   it('a real confidence still renders as a percentage', () => {
-    const el = render({ crop: withRegion({ region_text_confidence: 0.92 }) });
+    const el = render({ crop: withRegion({ text_confidence: 0.92 }) });
     expect(el.textContent ?? '').toContain('92.0%');
   });
 });

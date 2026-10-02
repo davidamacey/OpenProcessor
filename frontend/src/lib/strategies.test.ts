@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  FALLBACK_METHODS,
+  EMPTY_METHODS,
   hasFieldCoverage,
   isDatasetExportAvailable,
   isDiverseOverlayAvailable,
@@ -9,8 +9,10 @@ import {
   isPromptPackAvailable,
   isScopedAssistAvailable,
   isSemanticSearchAvailable,
+  isVlmSelectable,
   normalizeMethodStatus,
   parseMethodsResponse,
+  pickableVlmEntries,
   selectableAxisEntries,
 } from './strategies';
 import type {
@@ -247,6 +249,8 @@ describe('parseMethodsResponse', () => {
         dataset_exports: [],
         detection_profiles: [],
         prompt_packs: [],
+        vlm: [],
+        axes: [],
       });
     }
   });
@@ -262,6 +266,8 @@ describe('parseMethodsResponse', () => {
         dataset_exports: [],
         detection_profiles: [],
         prompt_packs: [],
+        vlm: [],
+        axes: [],
       });
     }
   });
@@ -477,8 +483,8 @@ describe('isDiverseOverlayAvailable', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
-    expect(isDiverseOverlayAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today)', () => {
+    expect(isDiverseOverlayAvailable(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -538,8 +544,8 @@ describe('isEmbeddingVizAvailable', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
-    expect(isEmbeddingVizAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today)', () => {
+    expect(isEmbeddingVizAvailable(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -594,8 +600,8 @@ describe('isSemanticSearchAvailable', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today — no semantic_search entry)', () => {
-    expect(isSemanticSearchAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today — no semantic_search entry)', () => {
+    expect(isSemanticSearchAvailable(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -656,10 +662,10 @@ describe('isDatasetExportAvailable', () => {
     expect(isDatasetExportAvailable(exports, 'coco')).toBe(false);
   });
 
-  it('never throws on FALLBACK_METHODS.dataset_exports (empty today)', () => {
-    expect(
-      isDatasetExportAvailable(FALLBACK_METHODS.dataset_exports, 'single_class'),
-    ).toBe(false);
+  it('never throws on EMPTY_METHODS.dataset_exports (empty today)', () => {
+    expect(isDatasetExportAvailable(EMPTY_METHODS.dataset_exports, 'single_class')).toBe(
+      false,
+    );
   });
 });
 
@@ -722,8 +728,8 @@ describe('isEmbeddingVizBannerRequired', () => {
     ).toBe(true);
   });
 
-  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
-    expect(isEmbeddingVizBannerRequired(FALLBACK_METHODS.overlays)).toBe(false);
+  it('never throws on EMPTY_METHODS.overlays (empty today)', () => {
+    expect(isEmbeddingVizBannerRequired(EMPTY_METHODS.overlays)).toBe(false);
   });
 });
 
@@ -751,7 +757,7 @@ describe('hasFieldCoverage', () => {
     expect(hasFieldCoverage({ field_coverage: null })).toBe(true);
   });
 
-  it('is true when coverage is undefined/absent (pre-Phase-6 backend, or the FALLBACK_METHODS/synthetic sentinel path)', () => {
+  it('is true when coverage is undefined/absent (the synthetic sentinel path)', () => {
     expect(hasFieldCoverage({})).toBe(true);
     expect(hasFieldCoverage({ field_coverage: undefined })).toBe(true);
   });
@@ -832,52 +838,10 @@ describe('sort dropdown filtering (mirrors StrategyBar.svelte sortOptions)', () 
   });
 });
 
-describe('FALLBACK_METHODS', () => {
-  it('is a stable-only list matching what is actually implemented today', () => {
-    expect(FALLBACK_METHODS.cluster_methods).toEqual([
-      {
-        id: 'ivf',
-        label: 'FAISS IVF-512 (production)',
-        status: 'stable',
-        default: true,
-      },
-    ]);
-    expect(FALLBACK_METHODS.review_sorts).toEqual([
-      {
-        id: 'default',
-        label: 'Recent first',
-        status: 'stable',
-        default: true,
-        field_coverage: null,
-      },
-    ]);
-    expect(FALLBACK_METHODS.overlays).toEqual([]);
-    expect(FALLBACK_METHODS.scores).toEqual([]);
-    expect(FALLBACK_METHODS.dataset_exports).toEqual([]);
-    expect(FALLBACK_METHODS.detection_profiles).toEqual([]);
-    expect(FALLBACK_METHODS.prompt_packs).toEqual([]);
+describe('EMPTY_METHODS', () => {
+  it('advertises nothing on any axis', () => {
+    for (const list of Object.values(EMPTY_METHODS)) expect(list).toEqual([]);
   });
-
-  it('never contains an experimental/shadow/disabled entry', () => {
-    const all = [
-      ...FALLBACK_METHODS.cluster_methods,
-      ...FALLBACK_METHODS.review_sorts,
-      ...FALLBACK_METHODS.overlays,
-      ...FALLBACK_METHODS.scores,
-      ...FALLBACK_METHODS.dataset_exports,
-      ...FALLBACK_METHODS.detection_profiles,
-      ...FALLBACK_METHODS.prompt_packs,
-    ];
-    expect(all.every((m) => m.status === 'stable')).toBe(true);
-  });
-
-  // FALLBACK_METHODS is the already-parsed *output* shape (four buckets),
-  // not a valid raw {API_PREFIX}/methods *input* (the real wire format is a flat
-  // `strategies` array with an `axis` field per entry — see the header
-  // comment on parseMethodsResponse's describe block above). It is
-  // never fed back through the parser in real usage (api.ts's getMethods
-  // returns it directly on a fetch failure), so there is no round-trip
-  // invariant to assert here anymore.
 });
 
 describe('selectableAxisEntries', () => {
@@ -958,8 +922,8 @@ describe('isPromptPackAvailable', () => {
     ).toBe(true);
   });
 
-  it('is false for FALLBACK_METHODS.prompt_packs', () => {
-    expect(isPromptPackAvailable(FALLBACK_METHODS.prompt_packs)).toBe(false);
+  it('is false for EMPTY_METHODS.prompt_packs', () => {
+    expect(isPromptPackAvailable(EMPTY_METHODS.prompt_packs)).toBe(false);
   });
 });
 
@@ -971,8 +935,8 @@ describe('isPromptPackAvailable', () => {
  * is the regression guard for the whole feature.
  */
 describe('isScopedAssistAvailable', () => {
-  it('is false for FALLBACK_METHODS (the /methods-404 path)', () => {
-    expect(isScopedAssistAvailable(FALLBACK_METHODS)).toBe(false);
+  it('is false for EMPTY_METHODS (the /methods-404 path)', () => {
+    expect(isScopedAssistAvailable(EMPTY_METHODS)).toBe(false);
   });
 
   it("is false for today's real backend shape (METHODS_TODAY) — must degrade to fully invisible", () => {
@@ -989,15 +953,15 @@ describe('isScopedAssistAvailable', () => {
   // profiles but no usable prompt pack gets no scope bar.
   it('is false when no prompt pack is usable', () => {
     const packs: PromptPackInfo[] = [{ id: 'legacy', label: 'Legacy', status: 'shadow' }];
-    expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(false);
-    expect(isScopedAssistAvailable({ prompt_packs: [] })).toBe(false);
+    expect(isScopedAssistAvailable({ prompt_packs: packs, vlm: [] })).toBe(false);
+    expect(isScopedAssistAvailable({ prompt_packs: [], vlm: [] })).toBe(false);
   });
 
   it('is true when a prompt pack is usable', () => {
     const packs: PromptPackInfo[] = [
       { id: 'warehouse_v1', label: 'Warehouse', status: 'stable' },
     ];
-    expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(true);
+    expect(isScopedAssistAvailable({ prompt_packs: packs, vlm: [] })).toBe(true);
   });
 });
 
@@ -1019,5 +983,95 @@ describe('settable flag on /methods entries', () => {
     expect(parsed.cluster_methods[0]!.settable).toBe(true);
     expect(parsed.detection_profiles[0]!.settable).toBe(false);
     expect(parsed.prompt_packs[0]!.settable).toBeUndefined();
+  });
+});
+
+describe('vlm axis (W9)', () => {
+  const wire = {
+    strategies: [
+      {
+        id: 'local_vlm',
+        axis: 'vlm',
+        label: 'Local VLM',
+        status: 'stable',
+        default: true,
+        settable: true,
+        endpoint_status: 'ready',
+        endpoint_status_label: 'Ready',
+        sends_images_externally: false,
+        warning: null,
+        default_ack_recorded: null,
+        per_run_ack_required: false,
+      },
+      {
+        id: 'cloud_vlm',
+        axis: 'vlm',
+        label: 'Cloud VLM',
+        status: 'experimental',
+        endpoint_status: 'unprobed',
+        endpoint_status_label: 'Not probed yet',
+        sends_images_externally: true,
+        warning: 'Crops leave the deployment.',
+        default_ack_recorded: false,
+        per_run_ack_required: true,
+      },
+      { id: 'off', axis: 'vlm', label: 'Off', status: 'stable' },
+      { id: 'broken', axis: 'vlm', label: 'Broken', status: 'disabled' },
+    ],
+    axes: [
+      { axis: 'vlm', label: 'VLM endpoint', description: 'Which endpoint reads crops.' },
+      { axis: '', label: 'dropped' },
+      'garbage',
+    ],
+  };
+
+  it('normalizes the served per-entry facts verbatim, with null kept distinct from absent', () => {
+    const parsed = parseMethodsResponse(wire);
+    expect(parsed.vlm.map((e) => e.id)).toEqual([
+      'local_vlm',
+      'cloud_vlm',
+      'off',
+      'broken',
+    ]);
+    const cloud = parsed.vlm.find((e) => e.id === 'cloud_vlm')!;
+    expect(cloud).toMatchObject({
+      endpoint_status: 'unprobed',
+      endpoint_status_label: 'Not probed yet',
+      sends_images_externally: true,
+      warning: 'Crops leave the deployment.',
+      default_ack_recorded: false,
+      per_run_ack_required: true,
+    });
+    const local = parsed.vlm.find((e) => e.id === 'local_vlm')!;
+    expect(local.default_ack_recorded).toBeNull();
+    expect(local.per_run_ack_required).toBe(false);
+    expect(parsed.vlm.find((e) => e.id === 'off')!.default_ack_recorded).toBeUndefined();
+  });
+
+  it('serves the axes[] copy and drops malformed entries', () => {
+    expect(parseMethodsResponse(wire).axes).toEqual([
+      { axis: 'vlm', label: 'VLM endpoint', description: 'Which endpoint reads crops.' },
+    ]);
+    expect(parseMethodsResponse({ strategies: [] }).axes).toEqual([]);
+  });
+
+  it('isVlmSelectable needs at least one entry that is not disabled', () => {
+    const parsed = parseMethodsResponse(wire);
+    expect(isVlmSelectable(parsed)).toBe(true);
+    expect(
+      isVlmSelectable({ vlm: parsed.vlm.filter((e) => e.status === 'disabled') }),
+    ).toBe(false);
+    expect(isVlmSelectable({ vlm: [] })).toBe(false);
+    expect(pickableVlmEntries(parsed.vlm).map((e) => e.id)).toEqual([
+      'local_vlm',
+      'cloud_vlm',
+      'off',
+    ]);
+  });
+
+  it('the scoped-assist bar is available on the vlm axis alone', () => {
+    const parsed = parseMethodsResponse(wire);
+    expect(isScopedAssistAvailable({ prompt_packs: [], vlm: parsed.vlm })).toBe(true);
+    expect(isScopedAssistAvailable({ prompt_packs: [], vlm: [] })).toBe(false);
   });
 });

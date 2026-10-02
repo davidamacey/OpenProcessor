@@ -29,7 +29,8 @@ export const aircraftTailNumberSlot: SlotSpec = {
       storedFrame: 'parent',
       scoreField: 'tail_score',
       thumbnail: {
-        path: (id, s) => `/crops/${encodeURIComponent(id)}/tail_thumbnail?size=${s}`,
+        path: (id, _boxId, s) =>
+          `/crops/${encodeURIComponent(id)}/tail_thumbnail?size=${s}`,
         aspect: '1 / 2',
         defaultSize: 192,
       },
@@ -91,8 +92,6 @@ export const aircraftTailNumberSlot: SlotSpec = {
     },
   },
   endpoints: {
-    setBox: (id) => `/crops/${encodeURIComponent(id)}/tail`,
-    clearBox: (id) => `/crops/${encodeURIComponent(id)}/tail`,
     patchMeta: (id) => `/crops/${encodeURIComponent(id)}/tail_meta`,
   },
   stats: {

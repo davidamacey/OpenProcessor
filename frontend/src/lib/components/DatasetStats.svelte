@@ -179,7 +179,7 @@
       {
         key: 'by_human_drew',
         label: 'Human-drew bbox',
-        count: p.by_human_drew ?? p.by_human,
+        count: p.by_human_drew,
         tone: 'bg-green-500',
       },
       // Regions the operator confirmed (AI proposed the bbox, human
@@ -189,7 +189,7 @@
       {
         key: 'validated_by_human',
         label: 'Confirmed by human',
-        count: p.validated_by_human ?? 0,
+        count: p.validated_by_human,
         tone: 'bg-emerald-500',
       },
     ];
@@ -532,38 +532,34 @@
               {fmt(stats.unlabeled.no_label_source)}
             </dd>
           </div>
-          {#if stats.unlabeled.vlm_no_class != null}
-            <!-- #36 item 2: D1 fix — labeled.* now only counts docs with a
-                 real class_id, so a VLM attempt that couldn't resolve one
-                 shows up here instead of double-counting as "VLM-labeled". -->
-            <div class="flex justify-between">
-              <dt
-                class="text-zinc-400"
-                title="VLM looked at the crop but didn't resolve a class"
-              >
-                VLM, no class
-              </dt>
-              <dd class="font-mono text-red-300">
-                {fmt(stats.unlabeled.vlm_no_class)}
-              </dd>
-            </div>
-          {/if}
-          {#if stats.unlabeled.by_proposal != null}
-            <!-- F-23: detector-proposed crops nothing has classified yet,
-                 a subset of the class-less count above (served here
-                 instead of the old, always-0 labeled.by_proposal). -->
-            <div class="flex justify-between">
-              <dt
-                class="text-zinc-400"
-                title="A detector proposed this crop as an object, but nothing has classified it yet (a subset of the class-less count)"
-              >
-                Detector proposal, no class
-              </dt>
-              <dd class="font-mono text-red-300">
-                {fmt(stats.unlabeled.by_proposal)}
-              </dd>
-            </div>
-          {/if}
+          <!-- #36 item 2: D1 fix — labeled.* now only counts docs with a
+               real class_id, so a VLM attempt that couldn't resolve one
+               shows up here instead of double-counting as "VLM-labeled". -->
+          <div class="flex justify-between">
+            <dt
+              class="text-zinc-400"
+              title="VLM looked at the crop but didn't resolve a class"
+            >
+              VLM, no class
+            </dt>
+            <dd class="font-mono text-red-300">
+              {fmt(stats.unlabeled.vlm_no_class)}
+            </dd>
+          </div>
+          <!-- F-23: detector-proposed crops nothing has classified yet,
+               a subset of the class-less count above (served here
+               instead of the old, always-0 labeled.by_proposal). -->
+          <div class="flex justify-between">
+            <dt
+              class="text-zinc-400"
+              title="A detector proposed this crop as an object, but nothing has classified it yet (a subset of the class-less count)"
+            >
+              Detector proposal, no class
+            </dt>
+            <dd class="font-mono text-red-300">
+              {fmt(stats.unlabeled.by_proposal)}
+            </dd>
+          </div>
         </dl>
         <p class="mt-2 text-xs text-zinc-500">
           Pending detection / verification count region-worklog state, not class labels,

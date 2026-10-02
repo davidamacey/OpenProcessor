@@ -82,11 +82,12 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
             {
                 "classes": [
                     {
-                        "id": CLUSTER_ID,
-                        "name": "mustang",
+                        "class_id": CLUSTER_ID,
+                        "class_name": "mustang",
+                        "kind": "item",
                         "group": "car",
                         "hotkey_letter": "q",
-                        "count": 161,
+                        "sample_count": 161,
                         "validated_count": validated,
                         "cluster_size": 161,
                         "deprecated": False,
@@ -117,7 +118,7 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
 
     stub.on("PUT", r"/crops/batch_label$", batch_label_handler)
 
-    page.goto(f"{app_url}/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
 
     header = page.get_by_title("validated · labeled · cluster total")

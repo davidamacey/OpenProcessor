@@ -76,4 +76,36 @@ describe('createAssistScope', () => {
       'prompt_pack',
     ]);
   });
+
+  it('serializes a picked VLM endpoint under vlm; unset sends nothing', () => {
+    const scope = createAssistScope();
+    expect(scope.toStartParams()).not.toHaveProperty('vlm');
+    scope.vlm = 'cloud_vlm';
+    expect(scope.isDefault).toBe(false);
+    expect(scope.toStartParams()).toEqual({ vlm: 'cloud_vlm' });
+  });
+
+  it('acknowledge_external is sent only when true, never as false', () => {
+    const scope = createAssistScope();
+    scope.vlm = 'cloud_vlm';
+    expect(scope.toStartParams()).not.toHaveProperty('acknowledge_external');
+    scope.acknowledgeExternal = true;
+    expect(scope.toStartParams()).toEqual({
+      vlm: 'cloud_vlm',
+      acknowledge_external: true,
+    });
+    scope.acknowledgeExternal = false;
+    expect(scope.toStartParams()).toEqual({ vlm: 'cloud_vlm' });
+  });
+
+  it('reset() clears the VLM pick and its acknowledgement', () => {
+    const scope = createAssistScope();
+    scope.vlm = 'cloud_vlm';
+    scope.acknowledgeExternal = true;
+    scope.reset();
+    expect(scope.vlm).toBeNull();
+    expect(scope.acknowledgeExternal).toBe(false);
+    expect(scope.isDefault).toBe(true);
+    expect(scope.toStartParams()).toEqual({});
+  });
 });

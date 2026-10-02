@@ -4,23 +4,19 @@
  *
  * Shaped after `strategiesStore` (idempotent `init()`, an `#inflight`
  * promise, a `reset()`, and — critically — ZERO window/document event
- * listeners; it is a data cache, not a UI concern). It differs in three
+ * listeners; it is a data cache, not a UI concern). It differs in two
  * ways, each forced by this endpoint being a WRITE surface rather than
  * read-only capability discovery:
  *
- *  1. It has a `supported` tri-state. `getMethods()` can collapse every
- *     failure into a fallback because a missing capability list has a
- *     correct default; a missing settings record does not — "this
- *     backend has no shared defaults" and "the request failed" need
- *     different words on screen and different affordances.
- *  2. `saveDefault()` rethrows. A failed write is the one thing in this
+ *  1. `saveDefault()` rethrows. A failed write is the one thing in this
  *     app an operator MUST see; `CLAUDE.md`'s data-integrity rule
  *     ("optimistic UI with error rollback toast on API failure") is
  *     satisfied here by not being optimistic at all.
- *  3. No polling. See the plan's §4.3.
+ *  2. No polling. See the plan's §4.3.
  */
 
-import { getCurationSettings, putCurationDefaults, ApiError } from '$lib/api';
+import { getCurationSettings, putCurationDefaults } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import {
   EMPTY_CURATION_SETTINGS,
   axisSpec,
@@ -31,39 +27,37 @@ class CurationSettingsStore {
   settings = $state<CurationSettings>(EMPTY_CURATION_SETTINGS);
   loading = $state<boolean>(false);
   loaded = $state<boolean>(false);
-  /** `null` = not determined yet. `false` = the backend 404'd this route
-   *  (predates the feature). `true` = a real record was read. */
-  supported = $state<boolean | null>(null);
-  /** Load error, distinct from `supported === false`. */
+  /** Load error. */
   error = $state<string | null>(null);
   /** In-flight axis id during a save, for per-control button state. */
   saving = $state<string | null>(null);
 
   #inflight: Promise<void> | null = null;
+  #gen = 0;
 
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;
     this.loading = true;
+    const gen = this.#gen;
     this.#inflight = (async () => {
       try {
-        this.settings = await getCurationSettings();
-        this.supported = true;
+        const settings = await getCurationSettings();
+        // A load started for the previous project never lands.
+        if (gen !== this.#gen) return;
+        this.settings = settings;
         this.error = null;
       } catch (e) {
+        if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
         this.settings = EMPTY_CURATION_SETTINGS;
-        if (e instanceof ApiError && e.status === 404) {
-          this.supported = false;
-          this.error = null;
-        } else {
-          this.supported = null;
-          this.error = (e as Error)?.message ?? 'failed to load settings';
-        }
+        this.error = (e as Error)?.message ?? 'failed to load settings';
       } finally {
-        this.loading = false;
-        this.loaded = true;
-        this.#inflight = null;
+        if (gen === this.#gen) {
+          this.loading = false;
+          this.loaded = true;
+          this.#inflight = null;
+        }
       }
     })();
     return this.#inflight;
@@ -73,9 +67,10 @@ class CurationSettingsStore {
    *  page's explicit "Reload" button — the only refresh path, since
    *  there is no poll. */
   reset(): void {
+    this.#gen += 1;
+    this.loading = false;
     this.settings = EMPTY_CURATION_SETTINGS;
     this.loaded = false;
-    this.supported = null;
     this.error = null;
     this.#inflight = null;
   }
@@ -109,7 +104,6 @@ class CurationSettingsStore {
     try {
       this.settings = await putCurationDefaults({ [axis]: id });
       this.error = null;
-      this.supported = true;
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
         this.error = (e as Error)?.message ?? 'failed to save settings';
@@ -134,7 +128,6 @@ class CurationSettingsStore {
     try {
       this.settings = await putCurationDefaults({ [axis]: null });
       this.error = null;
-      this.supported = true;
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
         this.error = (e as Error)?.message ?? 'failed to clear setting';
@@ -147,3 +140,5 @@ class CurationSettingsStore {
 }
 
 export const curationSettingsStore = new CurationSettingsStore();
+// Settings are per project: a switch re-reads them.
+onProjectChange(() => curationSettingsStore.reset());

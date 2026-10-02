@@ -23,6 +23,10 @@ function makeClass(id: number, name: string, validated: number): RegistryClass {
     validated_count: validated,
     cluster_size: 0,
     added_at: '2026-01-01T00:00:00Z',
+    adequacy: 'block',
+    kind: 'item',
+    trainable: 0,
+    trainable_gap: 0,
   };
 }
 
@@ -73,10 +77,11 @@ describe('ClassSubsetPicker — holdout-aware summary', () => {
   it('shows the served holdout total alongside — never subtracted from — validated crops', () => {
     const holdout: TestHoldoutStats = {
       total: 15,
+      min_test_per_class: 5,
       by_class: [
-        { key: 1, doc_count: 5 },
-        { key: 2, doc_count: 5 },
-        { key: 3, doc_count: 5 },
+        { key: 1, doc_count: 5, deficient: false },
+        { key: 2, doc_count: 5, deficient: false },
+        { key: 3, doc_count: 5, deficient: false },
       ],
     };
     const el = renderPicker({ classes, selected: [1, 2, 3], holdout });
@@ -88,10 +93,11 @@ describe('ClassSubsetPicker — holdout-aware summary', () => {
   it('sums holdout only for the selected classes, not every class in the registry', () => {
     const holdout: TestHoldoutStats = {
       total: 15,
+      min_test_per_class: 5,
       by_class: [
-        { key: 1, doc_count: 5 },
-        { key: 2, doc_count: 5 },
-        { key: 3, doc_count: 5 },
+        { key: 1, doc_count: 5, deficient: false },
+        { key: 2, doc_count: 5, deficient: false },
+        { key: 3, doc_count: 5, deficient: false },
       ],
     };
     const el = renderPicker({ classes, selected: [1], holdout });
@@ -103,7 +109,8 @@ describe('ClassSubsetPicker — holdout-aware summary', () => {
   it('omits the holdout clause when the served total for the selection is 0', () => {
     const holdout: TestHoldoutStats = {
       total: 15,
-      by_class: [{ key: 4, doc_count: 15 }], // none of these are selected
+      min_test_per_class: 5,
+      by_class: [{ key: 4, doc_count: 15, deficient: false }], // none of these are selected
     };
     const el = renderPicker({ classes, selected: [1], holdout });
     expect(el.textContent).toContain('1 class selected · 35 validated crops');
@@ -113,10 +120,11 @@ describe('ClassSubsetPicker — holdout-aware summary', () => {
   it('applies the holdout clause in "all classes" mode too', () => {
     const holdout: TestHoldoutStats = {
       total: 15,
+      min_test_per_class: 5,
       by_class: [
-        { key: 1, doc_count: 5 },
-        { key: 2, doc_count: 5 },
-        { key: 3, doc_count: 5 },
+        { key: 1, doc_count: 5, deficient: false },
+        { key: 2, doc_count: 5, deficient: false },
+        { key: 3, doc_count: 5, deficient: false },
       ],
     };
     const el = renderPicker({ classes, selected: null, holdout });

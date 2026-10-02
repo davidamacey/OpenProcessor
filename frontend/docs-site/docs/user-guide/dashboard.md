@@ -3,7 +3,7 @@ sidebar_position: 1
 title: Dashboard
 ---
 
-# Dashboard (`/dashboard`)
+# Dashboard (`/p/<project>/dashboard`)
 
 Pipeline health at a glance.
 
@@ -18,4 +18,7 @@ Pipeline health at a glance.
 
 <Screenshot name="dashboard-1600.png" alt="Cropwright dashboard" caption="Dashboard — live stats and the clustering/assist trigger" />
 
-`/` itself is not a route — it's a redirect to `/dashboard`.
+`/` itself is not a route — it redirects to the default project's dashboard,
+`/p/<default-project>/dashboard`. See [Projects](./projects.md) for how the
+active project is chosen and how old bare URLs (without a `/p/<project>`
+prefix) resolve.

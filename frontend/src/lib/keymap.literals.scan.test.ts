@@ -35,7 +35,7 @@ const SKIP_FILES = new Set([
 /** Exact substrings allowed in one file, each with its reason. */
 const ALLOWED: Record<string, string[]> = {
   // §1.2: the class picker's listbox keys are fixed form keys.
-  'routes/review/+page.svelte': [
+  'routes/p/[project]/review/+page.svelte': [
     '<kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> assign · <kbd>Esc</kbd> close',
   ],
 };

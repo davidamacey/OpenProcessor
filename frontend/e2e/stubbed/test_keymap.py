@@ -30,11 +30,12 @@ from fixtures.wire import make_item
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "widget",
+        "class_id": 1,
+        "class_name": "widget",
+        "kind": "item",
         "group": None,
         "hotkey_letter": None,
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
@@ -222,7 +223,8 @@ def served_keymap_doc(revision: int = 1) -> dict:
 def register_common(stub) -> None:
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/methods(\?|$)", METHODS)
-    stub.on("GET", r"/scores/coverage(\?|$)", (404, {"detail": "not found"}))
+    stub.on("GET", r"/scores/coverage(\?|$)", {"coverage": {}})
+    stub.on("GET", r"/scores/status(\?|$)", {"status": "idle"})
 
 
 def test_keymap_absent_when_404(stub, page, app_url):
@@ -230,7 +232,7 @@ def test_keymap_absent_when_404(stub, page, app_url):
     # The shared default stub (conftest.py) already serves a 404 for
     # `GET {prefix}/keymap` — no override needed to exercise that path.
 
-    page.goto(f"{app_url}/settings", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/settings", wait_until="domcontentloaded")
     page.wait_for_selector("text=Curation scores", timeout=ACTION_TIMEOUT_MS)
     # Real wait for the page to finish firing its on-mount requests
     # (including the 404'd GET /keymap this assertion depends on) instead
@@ -254,7 +256,7 @@ def test_keymap_absent_when_404(stub, page, app_url):
         dismiss_handler,
     )
 
-    page.goto(f"{app_url}/review", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     # The hint strip renders from the same registrations the key handler
     # uses, so once it shows the discard hint the key is live.
@@ -302,7 +304,7 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.on("POST", r"/keymap/validate(\?|$)", keymap_validate)
     stub.on("PUT", r"/keymap(\?|$)", keymap_put)
 
-    page.goto(f"{app_url}/settings", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/settings", wait_until="domcontentloaded")
     page.wait_for_selector("text=Keyboard shortcuts", timeout=ACTION_TIMEOUT_MS)
 
     # Find the Discard row, remove the default 'd' key, add 'x' instead.
@@ -347,7 +349,7 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.on("GET", r"/review/all(\?|$)", review_handler)
     stub.on("POST", r"/crops/[^/]+/review_dismiss$", dismiss_handler)
 
-    page.goto(f"{app_url}/review", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/p/default/review", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     # The hint strip's own key glyph proves the rebound keymap has loaded
     # before either key is tested below.

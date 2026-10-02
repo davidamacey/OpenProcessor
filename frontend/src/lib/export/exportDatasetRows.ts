@@ -5,10 +5,8 @@
  * (`GET {API_PREFIX}/stats/classes`, `docs/design/
  * logic-moves-adoption-plan-2026-09-24.md` §1.7) — this module never
  * clamps or derives them from `validated_count`. Likewise `testDeficient`
- * prefers the server's per-bucket `deficient` flag
- * (`GET {API_PREFIX}/test_holdout/stats`), falling back to a local
- * count-vs-`min_test_per_class` comparison only when a bucket exists but
- * omits the flag (an older backend). A class with NO holdout bucket at
+ * is the server's per-bucket `deficient` flag
+ * (`GET {API_PREFIX}/test_holdout/stats`). A class with NO holdout bucket at
  * all (e.g. 0 validated crops — never sampled into the holdout in the
  * first place) is never flagged deficient by this module: the server's
  * `by_class` list only ever covers classes it actually considered, and
@@ -18,7 +16,6 @@
  * showed a red "below N test crops" badge on `/export`).
  */
 import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
-import { trainableCount } from '$lib/holdoutCounts';
 
 export interface ExportRow {
   class_id: number;
@@ -26,18 +23,16 @@ export interface ExportRow {
   total: number;
   validated: number;
   aug_target: number;
-  /** Served `aug_gap`; null when the server didn't send one. */
-  gap: number | null;
+  /** Served `aug_gap`. */
+  gap: number;
   test_count: number;
-  /** E1 (visual audit 2026-09-24): validated minus frozen test crops. */
+  /** Served `trainable`. */
   trainable: number;
-  /** Served `aug_gap` with the frozen test crops added back, i.e. the gap
-   *  measured against trainable crops; null when `aug_gap` wasn't served.
-   *  TODO(backend): serve a holdout-excluded gap on `/stats/classes`. */
-  trainableGap: number | null;
+  /** Served `trainable_gap` (shortfall against the per-class hard minimum). */
+  trainableGap: number;
   testDeficient: boolean;
-  /** Served adequacy tier (`block`/`warn`/`ok`); null when unserved (m16). */
-  adequacy: string | null;
+  /** Served adequacy tier (`block`/`warn`/`ok`). */
+  adequacy: string;
 }
 
 export function buildExportRows(
@@ -45,37 +40,24 @@ export function buildExportRows(
   holdout: TestHoldoutStats | null,
 ): ExportRow[] {
   if (!perClass) return [];
-  const minTest = holdout?.min_test_per_class ?? null;
-  const testMap = new Map<number, { count: number; deficient?: boolean }>();
+  const testMap = new Map<number, { count: number; deficient: boolean }>();
   for (const b of holdout?.by_class ?? []) {
     testMap.set(b.key, { count: b.doc_count, deficient: b.deficient });
   }
   return perClass.map((c) => {
-    const validated = c.validated_count ?? 0;
-    const target = c.aug_target ?? 0;
     const test = testMap.get(c.class_id);
-    const testCount = test?.count ?? 0;
-    // #36 item 1: prefer the server's own trainable/trainable_gap (region
-    // counts already excluded from validated_count, X2) over the
-    // client-side validated-minus-holdout math, which is kept only as the
-    // fallback for a backend/export that predates the served fields.
-    const trainable = c.trainable ?? trainableCount(validated, testCount);
-    const trainableGap =
-      c.trainable_gap ?? (c.aug_gap == null ? null : c.aug_gap + testCount);
     return {
       class_id: c.class_id,
       class_name: c.class_name,
-      total: c.count ?? 0,
-      validated,
-      aug_target: target,
-      gap: c.aug_gap ?? null,
-      test_count: testCount,
-      trainable,
-      trainableGap,
-      testDeficient: test
-        ? (test.deficient ?? (minTest != null && test.count < minTest))
-        : false,
-      adequacy: c.adequacy ?? null,
+      total: c.count,
+      validated: c.validated_count,
+      aug_target: c.aug_target,
+      gap: c.aug_gap,
+      test_count: test?.count ?? 0,
+      trainable: c.trainable,
+      trainableGap: c.trainable_gap,
+      testDeficient: test?.deficient ?? false,
+      adequacy: c.adequacy,
     };
   });
 }
@@ -142,4 +124,24 @@ export function splitExportClasses<
   const empty: T[] = [];
   for (const c of counts) (c.train + c.val + c.test > 0 ? withObjects : empty).push(c);
   return { withObjects, empty };
+}
+
+/** Header tooltip for the Gap column: the served `trainable_gap`. */
+export const GAP_COLUMN_TITLE =
+  'Trainable crops still needed to reach the per-class minimum (served trainable_gap)';
+
+/** Header tooltip for the Trainable column: the served `trainable`. */
+export const TRAINABLE_COLUMN_TITLE =
+  'Validated crops training can use: the frozen test holdout and excluded crops are left out (served trainable)';
+
+/**
+ * Per-cell tooltip for the served `trainable_gap`: the shortfall of
+ * `trainable` against the served per-class hard minimum
+ * (`thresholds.block_below`, passed in when `/stats/classes` served it).
+ */
+export function gapCellTitle(gap: number, minimum: number | null): string {
+  const floor = minimum != null ? ` of ${minimum}` : '';
+  return gap <= 0
+    ? `meets the per-class minimum${floor}`
+    : `${gap} more trainable crops needed to reach the per-class minimum${floor}`;
 }

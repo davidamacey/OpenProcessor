@@ -47,7 +47,7 @@ def test_card_shows_current_export_contents_for_explicit_pick(stub, page, app_ur
     stub.on("GET", r"/export/status(\?|$)", EXPORT_STATUS)
     stub.on("GET", r"/export/datasets(\?|$)", DATASETS)
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     select = page.locator("label:has-text('dataset version') select")
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_text("images: train", exact=False).first.wait_for(timeout=10000)

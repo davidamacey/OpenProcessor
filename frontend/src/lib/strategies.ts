@@ -171,9 +171,7 @@ export interface DatasetExportInfo extends MethodInfoBase {
  * `_detection_profile_strategies` unconditionally and yields exactly one
  * entry — one profile selected per backend process at startup — so
  * `isDetectionProfileAvailable`/`isScopedAssistAvailable` can return
- * `true` against a real backend today. `FALLBACK_METHODS.detection_profiles`
- * stays `[]` regardless: that list models the 404/network-failure path,
- * which this correction does not change.
+ * `true` against a real backend today.
  *
  * Deliberately carries no `requires_field`/`field_coverage`: a
  * detection profile is a model/config selection, not a backfilled
@@ -193,6 +191,34 @@ export interface DetectionProfileInfo extends MethodInfoBase {
 export interface PromptPackInfo extends MethodInfoBase {
   /** True on the pack the backend uses when none is requested. */
   default?: boolean;
+}
+
+/**
+ * One VLM endpoint a run can be pointed at, plus the `off` entry
+ * (`axis: 'vlm'`, OpenProcessor W9). Beyond the shared fields it carries
+ * the endpoint's served status and the acknowledgement facts the pickers
+ * read verbatim: whether it sends crops outside the deployment, the served
+ * warning, whether the project default already has a recorded
+ * acknowledgement (`default_ack_recorded`), and whether a run that names
+ * this entry must acknowledge it (`per_run_ack_required`). Nothing here
+ * derives any of them.
+ */
+export interface VlmMethodInfo extends MethodInfoBase {
+  default?: boolean;
+  endpoint_status?: string | null;
+  endpoint_status_label?: string | null;
+  sends_images_externally?: boolean | null;
+  warning?: string | null;
+  default_ack_recorded?: boolean | null;
+  per_run_ack_required?: boolean | null;
+}
+
+/** One axis's served copy (`axes[]` on `/methods`): the label and blurb
+ *  Cropwright shows for it. */
+export interface MethodAxisCopy {
+  axis: string;
+  label: string;
+  description: string;
 }
 
 export interface MethodsResponse {
@@ -215,6 +241,10 @@ export interface MethodsResponse {
   detection_profiles: DetectionProfileInfo[];
   /** `axis: 'prompt_pack'` entries. */
   prompt_packs: PromptPackInfo[];
+  /** `axis: 'vlm'` entries (W9): the registered endpoints plus `off`. */
+  vlm: VlmMethodInfo[];
+  /** Served per-axis copy; empty when the backend serves none. */
+  axes: MethodAxisCopy[];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -223,6 +253,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function optBool(v: unknown): boolean | undefined {
   return typeof v === 'boolean' ? v : undefined;
+}
+
+function optNullableBool(v: unknown): boolean | null | undefined {
+  if (typeof v === 'boolean') return v;
+  return v === null ? null : undefined;
 }
 
 function optString(v: unknown): string | null | undefined {
@@ -273,6 +308,23 @@ function normalizeAxis<T extends MethodInfoBase>(
     const base = normalizeBase(entry);
     if (!base) continue;
     out.push(extra(base, entry));
+  }
+  return out;
+}
+
+/** The served `axes[]` copy; a malformed entry is dropped. */
+function parseAxisCopy(raw: unknown): MethodAxisCopy[] {
+  if (!Array.isArray(raw)) return [];
+  const out: MethodAxisCopy[] = [];
+  for (const e of raw) {
+    if (!isRecord(e)) continue;
+    if (typeof e.axis !== 'string' || !e.axis) continue;
+    if (typeof e.label !== 'string' || !e.label) continue;
+    out.push({
+      axis: e.axis,
+      label: e.label,
+      description: typeof e.description === 'string' ? e.description : '',
+    });
   }
   return out;
 }
@@ -348,6 +400,17 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
       ...base,
       default: optBool(e.default),
     })),
+    vlm: normalizeAxis<VlmMethodInfo>(strategies, 'vlm', (base, e) => ({
+      ...base,
+      default: optBool(e.default),
+      endpoint_status: optString(e.endpoint_status),
+      endpoint_status_label: optString(e.endpoint_status_label),
+      sends_images_externally: optNullableBool(e.sends_images_externally),
+      warning: optString(e.warning),
+      default_ack_recorded: optNullableBool(e.default_ack_recorded),
+      per_run_ack_required: optNullableBool(e.per_run_ack_required),
+    })),
+    axes: parseAxisCopy(rec.axes),
   };
 }
 
@@ -425,11 +488,9 @@ export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
  * (same axis as `diverse`/`viz_projection`), not `review_sorts` — it's an
  * alternate crop pool, not an ordering over the existing one.
  *
- * `FALLBACK_METHODS.overlays` deliberately has no `semantic_search` entry
- * (it doesn't exist in the pre-P2-14 backend this fallback models), so an
- * old/flag-off backend hides the search box entirely rather than showing
- * a control that 404s — same graceful-degradation contract as every other
- * overlay gate in this file.
+ * A flag-off backend advertises no usable `semantic_search` entry, so the
+ * search box stays hidden — same contract as every other overlay gate in
+ * this file.
  */
 export function isSemanticSearchAvailable(overlays: OverlayInfo[]): boolean {
   return overlays.some(
@@ -493,20 +554,36 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  * at all — the single gate `AutoLabelPanel` uses to decide whether the
  * scope bar exists (absent, not disabled).
  *
- * Gated on the `prompt_pack` axis: it arrived in the same backend
+ * Gated on the `prompt_pack` axis or (W9) the `vlm` axis: the pack arrived in the same backend
  * change that made `class_id` on `POST {API_PREFIX}/pipeline/auto_label/start`
- * real, and `class_id` has no capability signal of its own. An unknown
- * query param used to be silently ignored, so an un-gated class picker
- * against an older backend would start a full-pool, hours-long run while
- * the UI claimed it was scoped. Hiding the control until the server
- * advertises the axis is the safe default. (`detection_profile` is not a
+ * real, and `class_id` has no capability signal of its own. Without a
+ * usable pack the scope has nothing to steer, so the control stays
+ * hidden until the server advertises the axis. (`detection_profile` is not a
  * gate: OpenProcessor rejects it per run — region detection is startup
  * config — so it is display-only, on /settings.)
  */
 export function isScopedAssistAvailable(
-  methods: Pick<MethodsResponse, 'prompt_packs'>,
+  methods: Pick<MethodsResponse, 'prompt_packs' | 'vlm'>,
 ): boolean {
-  return isPromptPackAvailable(methods.prompt_packs);
+  return isPromptPackAvailable(methods.prompt_packs) || isVlmSelectable(methods);
+}
+
+/**
+ * The VLM entries a run picker or the settings dropdown may list: every
+ * served entry that is not `disabled` (the endpoint's own readiness is
+ * `endpoint_status`, shown beside it, never used to hide it).
+ */
+export function pickableVlmEntries(entries: VlmMethodInfo[]): VlmMethodInfo[] {
+  return entries.filter((e) => e.status !== 'disabled');
+}
+
+/**
+ * Whether the backend serves a VLM axis with at least one entry to pick:
+ * the single gate for the per-run VLM pickers (absent, not disabled, no
+ * probe). The settings dropdown renders from the same entries.
+ */
+export function isVlmSelectable(methods: Pick<MethodsResponse, 'vlm'>): boolean {
+  return pickableVlmEntries(methods.vlm).length > 0;
 }
 
 /**
@@ -540,63 +617,18 @@ export function hasFieldCoverage(entry: { field_coverage?: number | null }): boo
 }
 
 /**
- * Hardcoded fallback for when `{API_PREFIX}/methods` 404s, or the request fails
- * for any other reason (plan §5.3 — graceful degradation is required so
- * the two repos can deploy independently). This must mirror what's
- * actually implemented **today**, not the target end-state:
- *
- * - `cluster_methods`: only IVF is real as a selectable default
- *   (`cluster_methods/ivf.py`, `DEFAULT_METHOD = 'ivf'` in
- *   `cluster_methods/__init__.py`). AHC/HDBSCAN exist in the backend
- *   registry but are not operator-facing defaults, so they're
- *   deliberately left out rather than guessed at.
- * - `review_sorts`: `review.py` hardcodes `sort = [{updated_at:
- *   desc}]` per tab today; there is no named alternative sort yet
- *   (`review_sorts.py` is Phase 3). One `'default'` entry, marked
- *   default+stable — this is NOT `'representativeness'` /
- *   `'uncertainty'` / any of the Phase-3 sort ids from the plan, since
- *   those don't exist in the backend yet.
- * - `overlays` / `scores`: none of `crop_scores/`, `selection/`,
- *   `embedding_viz.py` exist yet (Phase 1/4/5) — both lists are empty.
+ * The capability list before `GET {API_PREFIX}/methods` has loaded, or
+ * after a failed load: nothing is advertised, so every optional control
+ * stays hidden. Never a guessed stand-in for the served list.
  */
-export const FALLBACK_METHODS: MethodsResponse = {
-  cluster_methods: [
-    {
-      id: 'ivf',
-      label: 'FAISS IVF-512 (production)',
-      status: 'stable',
-      default: true,
-    },
-  ],
-  review_sorts: [
-    {
-      id: 'default',
-      label: 'Recent first',
-      status: 'stable',
-      default: true,
-      // Explicit null, not omitted (audit-remediation plan Phase 6): this
-      // is the 404-fallback path, so field_coverage is "unknown," not
-      // "empty" -- hasFieldCoverage() must keep rendering this entry.
-      field_coverage: null,
-    },
-  ],
+export const EMPTY_METHODS: MethodsResponse = {
+  cluster_methods: [],
+  review_sorts: [],
   overlays: [],
   scores: [],
-  // Empty, NOT `[{id: 'yolo', …}]`. This is the 404/network-failure path,
-  // and the entire point of the export axis is that an optional export
-  // panel stays hidden unless the server affirmatively says it works.
-  // Guessing a kind here would re-introduce exactly the "render a button
-  // that 404s" failure the gate exists to prevent, on the one code path
-  // where we have no information at all. Same reasoning as
-  // `overlays`/`scores` being empty above.
   dataset_exports: [],
-  // Both empty, and for the same reason `dataset_exports` is: this is the
-  // 404/network-failure path, neither axis exists on any backend that
-  // ships today, and the whole point of an optional scoping control is
-  // that it stays invisible unless the server affirmatively says it
-  // works. Guessing a profile/pack id here would make the dashboard
-  // offer a scope the pipeline silently ignores — the exact failure
-  // isScopedAssistAvailable exists to prevent.
   detection_profiles: [],
   prompt_packs: [],
+  vlm: [],
+  axes: [],
 };

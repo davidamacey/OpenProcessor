@@ -57,17 +57,6 @@ export default ts.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
-      // New in eslint-plugin-svelte 3's recommended config (PR #15 major
-      // bump). Both are real, pre-existing debt across ~20 files (raw
-      // <a href>/goto()/replaceState() calls that predate SvelteKit's
-      // resolve() helper, and a handful of native Set/Map instances in
-      // reactive scope that should be SvelteSet/SvelteMap) — not something
-      // to silently fix as a drive-by inside a dependency bump. Downgraded
-      // to warn for now, mirroring transcribe-app/frontend's
-      // eslint.config.js, which hit the exact same two rules on the same
-      // bump; ratchet back to 'error' as each call site is migrated.
-      'svelte/no-navigation-without-resolve': 'warn',
-      'svelte/prefer-svelte-reactivity': 'warn',
     },
   },
   {

@@ -3,6 +3,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import IngestRunPanel from './IngestRunPanel.svelte';
 import { ingestPathLookup, ingestUpload } from '$lib/api';
 import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
+import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 import type { IngestFile } from '$lib/ingest/fileSource';
 
 vi.mock('$lib/api', async () => {
@@ -38,10 +39,6 @@ describe('IngestRunPanel', () => {
         successful: 0,
         duplicates: 0,
         failed: 1,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 0,
       },
       results: [
@@ -57,11 +54,13 @@ describe('IngestRunPanel', () => {
           source_identifier: 'upload/a.jpg',
         },
       ],
-      disagreements: [],
     });
     instance = mount(IngestRunPanel, {
       target,
-      props: { files: [mkFile('a.jpg')], config: resolveIngestConfig(null) },
+      props: {
+        files: [mkFile('a.jpg')],
+        config: resolveIngestConfig(servedIngestConfig()),
+      },
     });
     flushSync();
     const startBtn = [...target.querySelectorAll('button')].find(
@@ -82,10 +81,6 @@ describe('IngestRunPanel', () => {
         successful: 0,
         duplicates: 0,
         failed: 1,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 0,
       },
       results: [
@@ -101,7 +96,6 @@ describe('IngestRunPanel', () => {
           source_identifier: 'upload/a.jpg',
         },
       ],
-      disagreements: [],
     });
     let capturedBlob: Blob | null = null;
     const originalCreateObjectURL = URL.createObjectURL;
@@ -112,7 +106,10 @@ describe('IngestRunPanel', () => {
     URL.revokeObjectURL = vi.fn();
     instance = mount(IngestRunPanel, {
       target,
-      props: { files: [mkFile('a.jpg')], config: resolveIngestConfig(null) },
+      props: {
+        files: [mkFile('a.jpg')],
+        config: resolveIngestConfig(servedIngestConfig()),
+      },
     });
     flushSync();
     const startBtn = [...target.querySelectorAll('button')].find(
@@ -141,7 +138,10 @@ describe('IngestRunPanel', () => {
     vi.mocked(ingestUpload).mockReset();
     instance = mount(IngestRunPanel, {
       target,
-      props: { files: [mkFile('a.jpg')], config: resolveIngestConfig(null) },
+      props: {
+        files: [mkFile('a.jpg')],
+        config: resolveIngestConfig(servedIngestConfig()),
+      },
     });
     flushSync();
     [...target.querySelectorAll('button')]
@@ -167,10 +167,6 @@ describe('IngestRunPanel', () => {
         successful: 1,
         duplicates: 0,
         failed: 0,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 2,
         secondary_detector_failures: 1,
       },
@@ -188,11 +184,13 @@ describe('IngestRunPanel', () => {
           secondary_detector_error: 'DEADLINE_EXCEEDED after 30s',
         },
       ],
-      disagreements: [],
     });
     instance = mount(IngestRunPanel, {
       target,
-      props: { files: [mkFile('a.jpg')], config: resolveIngestConfig(null) },
+      props: {
+        files: [mkFile('a.jpg')],
+        config: resolveIngestConfig(servedIngestConfig()),
+      },
     });
     flushSync();
     [...target.querySelectorAll('button')]

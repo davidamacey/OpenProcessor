@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   humanWritableStates,
-  statusClearsBox,
   statusWantsRejectionReason,
   panelLabels,
 } from './slotPanel';
@@ -80,26 +79,6 @@ describe('humanWritableStates', () => {
     expect(humanWritableStates(widgetTagSlot, [])).toEqual(
       humanWritableStates(widgetTagSlot),
     );
-  });
-});
-
-describe('statusClearsBox', () => {
-  it('widgetTagSlot: only rejectState clears the box', () => {
-    expect(statusClearsBox(widgetTagSlot, 'no_region_visible')).toBe(true);
-    expect(statusClearsBox(widgetTagSlot, 'detected')).toBe(false);
-    expect(statusClearsBox(widgetTagSlot, '')).toBe(false);
-  });
-
-  it("aircraftTailNumberSlot: its own rejectState (not_visible), not another slot's", () => {
-    expect(statusClearsBox(aircraftTailNumberSlot, 'not_visible')).toBe(true);
-    expect(statusClearsBox(aircraftTailNumberSlot, 'no_region_visible')).toBe(false);
-  });
-
-  it('reads clears_box off the served vocabulary when present', () => {
-    expect(statusClearsBox(widgetTagSlot, 'no_region_visible', SERVED)).toBe(true);
-    expect(statusClearsBox(widgetTagSlot, 'detected', SERVED)).toBe(false);
-    // Unknown-to-SERVED value -> false, not a throw.
-    expect(statusClearsBox(widgetTagSlot, 'false_positive', SERVED)).toBe(false);
   });
 });
 

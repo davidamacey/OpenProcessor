@@ -1,6 +1,7 @@
 <script module lang="ts">
   import type { CropContextResponse } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
+  import { onProjectChange } from '$lib/projectChange';
 
   // Per-(project, cropId) cache, shared across every mounted instance:
   // several call sites (review, cluster modal, lightbox) can open the
@@ -11,19 +12,22 @@
   // projects would show another project's cached context. Not evicted —
   // bounded by "crops a human actually opened this session", which is
   // small.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level promise cache, never read reactively by a template/derived; plain Map avoids needless per-entry proxy overhead
   const contextCache = new Map<string, Promise<CropContextResponse>>();
 
   function cacheKey(cropId: string): string {
     return `${activeProjectKey()}:${cropId}`;
   }
 
-  /** Clears every cached context. Called by the (future) project
-   *  switcher so a project change never shows stale, cross-project
-   *  data — see `resetForProjectChange()` on `$lib/stores/undo.svelte`'s
-   *  `undoStore` for the sibling reset on the undo ring buffer. */
+  /** Clears every cached context. Registered below with the
+   *  project-change registry so a project switch never shows stale,
+   *  cross-project data — see `resetForProjectChange()` on
+   *  `$lib/stores/undo.svelte`'s `undoStore` for the sibling reset on
+   *  the undo ring buffer. */
   export function resetForProjectChange(): void {
     contextCache.clear();
   }
+  onProjectChange(resetForProjectChange);
 </script>
 
 <script lang="ts">
@@ -38,10 +42,11 @@
    */
   import { getCropContext, getSourceImageScaled } from '$lib/api';
   import type { Crop } from '$lib/types';
+  import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
-  import { projectFromParent } from '$lib/annotations/readSlot';
-  import type { BBoxNormLike, XYXY } from '$lib/annotations/types';
+  import type { XYXY } from '$lib/annotations/types';
+  import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
 
   interface Props {
     /** Which crop's context (source image + every item cropped from it) to draw. */
@@ -62,6 +67,9 @@
     /** Pre-fetched context (e.g. a caller that already loaded it for its
      *  own purposes) — skips this component's own fetch entirely. */
     context?: CropContextResponse | null;
+    /** Extra shapes in the source-image frame (test-on-crop candidates):
+     *  boxes and mask outlines, `dimmed` ones drawn faint. */
+    extraShapes?: OverlayShape[];
   }
 
   let {
@@ -72,6 +80,7 @@
     class: className = '',
     align = 'center',
     context: providedContext = null,
+    extraShapes = [],
   }: Props = $props();
 
   let fetchedContext = $state<CropContextResponse | null>(null);
@@ -119,12 +128,40 @@
     return w && h ? `${w} / ${h}` : null;
   });
 
+  /** A box stored relative to its parent crop, as source-image xyxy. */
+  function parentToSource(box: XYXY, parent: XYXY): XYXY {
+    const pw = parent[2] - parent[0];
+    const ph = parent[3] - parent[1];
+    return [
+      parent[0] + box[0] * pw,
+      parent[1] + box[1] * ph,
+      parent[0] + box[2] * pw,
+      parent[1] + box[3] * ph,
+    ];
+  }
+
   function bboxToXyxy(b: { cx: number; cy: number; w: number; h: number }): XYXY {
     return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
   }
 
+  /** W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+   *  per-box state -> ring color/dash. The ring color reads the served
+   *  box_states `tone` (backend follow-up to W8.7) via
+   *  `toneBorderClass(boxStateTone(state))` — 'neutral' on a pre-tone
+   *  backend or an unrecognized state, matching `+page.svelte`'s
+   *  `multiBoxRingColor`. */
+  function multiBoxRingColorClass(state: string): string {
+    return toneBorderClass(regionStatusesStore.boxStateTone(state));
+  }
+  function multiBoxDashed(state: string): boolean {
+    return (
+      regionStatusesStore.boxStateInfo(state)?.dashed ??
+      (state === 'rejected' || state === 'false_positive')
+    );
+  }
+
   interface DrawBox {
-    kind: 'item' | 'region' | 'region-candidate';
+    kind: 'item' | 'region' | 'region-box';
     cropId: string;
     xyxy: XYXY;
     dashed: boolean;
@@ -171,19 +208,17 @@
       if (!slot?.capabilities.subBox) continue;
       const data = slotOf(item, slot);
       const sub = data?.subBox;
-      if (!sub) continue;
+      const boxList = data?.subBoxes ?? [];
       const ring = slot.capabilities.subBox.ring;
 
-      if (sub.parent) {
-        const regionXyxy = projectFromParent(
-          sub.parent as BBoxNormLike,
-          itemXyxy,
-          'source',
-        );
+      // A read-only scalar-box slot (tier 2): one box, stored in either
+      // frame.
+      if (sub?.rawXyxy) {
         out.push({
           kind: 'region',
           cropId: item.id,
-          xyxy: regionXyxy,
+          xyxy:
+            sub.frame === 'source' ? sub.rawXyxy : parentToSource(sub.rawXyxy, itemXyxy),
           dashed: false,
           colorClass: ring.confirmed,
           label: slot.label.title,
@@ -192,28 +227,25 @@
           clickable: false,
         });
       }
-      if (sub.candidate?.parent) {
-        const candidateXyxy = projectFromParent(
-          sub.candidate.parent as BBoxNormLike,
-          itemXyxy,
-          'source',
-        );
+
+      // Multi-box slot: every served box, in the source image's frame
+      // already (`bbox_norm`), numbered by position.
+      boxList.forEach((b, i) => {
+        if (!b.rawXyxy) return;
         out.push({
-          kind: 'region-candidate',
+          kind: 'region-box',
           cropId: item.id,
-          xyxy: candidateXyxy,
-          dashed: true,
-          colorClass: ring.proposed,
-          label: `${slot.label.title} candidate`,
-          tooltip: `${slot.label.title} candidate${
-            sub.candidate.score != null
-              ? ` · ${(sub.candidate.score * 100).toFixed(0)}%`
-              : ''
+          xyxy: b.rawXyxy,
+          dashed: multiBoxDashed(b.state),
+          colorClass: multiBoxRingColorClass(b.state),
+          label: `${slot.label.title} ${i + 1}`,
+          tooltip: `${slot.label.title} ${i + 1} · ${b.state}${
+            b.score != null ? ` · ${(b.score * 100).toFixed(0)}%` : ''
           }`,
           selected: false,
           clickable: false,
         });
-      }
+      });
     }
     return out;
   });
@@ -295,6 +327,47 @@
               >
                 {@render boxLabel(b)}
               </div>
+            {/if}
+          {/each}
+          {#each extraShapes as s (s.key)}
+            {#if s.kind === 'box'}
+              {@const [x1, y1, x2, y2] = s.box}
+              <div
+                class="absolute border-2 border-sky-400 {s.dimmed
+                  ? 'border-dashed opacity-40'
+                  : 'z-10'}"
+                style="left:{pct(x1)}; top:{pct(y1)}; width:{pct(x2 - x1)}; height:{pct(
+                  y2 - y1,
+                )};"
+                data-testid="overlay-extra-box"
+                data-dimmed={s.dimmed}
+                title={s.title}
+              >
+                <span
+                  class="absolute -top-4 left-0 rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none whitespace-nowrap text-zinc-100"
+                  >{s.label}</span
+                >
+              </div>
+            {:else}
+              <svg
+                class="absolute inset-0 h-full w-full {s.dimmed ? 'opacity-40' : ''}"
+                viewBox="0 0 1 1"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <polygon
+                  points={s.points.map((q) => `${q[0]},${q[1]}`).join(' ')}
+                  fill="rgba(56, 189, 248, 0.15)"
+                  stroke="rgb(56, 189, 248)"
+                  stroke-width="2"
+                  stroke-dasharray={s.dimmed ? '4 3' : undefined}
+                  vector-effect="non-scaling-stroke"
+                  data-testid="overlay-extra-polygon"
+                  data-dimmed={s.dimmed}
+                >
+                  <title>{s.title}</title>
+                </polygon>
+              </svg>
             {/if}
           {/each}
         </div>

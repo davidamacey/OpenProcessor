@@ -34,9 +34,30 @@ const srcRoot = path.resolve(here, '..', '..');
 const SCANNED_FILES = [
   'lib/api.ts',
   'lib/sse.ts',
-  'routes/export/+page.svelte',
+  'routes/p/[project]/export/+page.svelte',
   'lib/components/SlotCard.svelte',
+  'lib/api_vlm.ts',
+  'lib/api_configTest.ts',
 ] as const;
+
+/** Every file that composes a backend URL through `${globalApi()}` — the
+ *  small set of routes P1 keeps global (never project-scoped): the
+ *  project list itself, and the global health/events used before a
+ *  project is even selected. */
+const GLOBAL_SCANNED_FILES = [
+  'lib/api.ts',
+  'lib/sse.ts',
+  'lib/api_vlm.ts',
+  'lib/api_combine.ts',
+] as const;
+
+/** Every file that composes a backend URL through
+ *  `${projectPrefix(project)}` — a SCOPED route addressed through a
+ *  specific project's own served prefix rather than the active one
+ *  (`/projects` row actions such as pause/resume). Resolved against the
+ *  scoped OpenAPI paths exactly like `${scoped()}`. */
+const PROJECT_PREFIX_MARKER = '${projectPrefix(project)}';
+const PROJECT_PREFIX_SCANNED_FILES = ['lib/api.ts', 'lib/api_combine.ts'] as const;
 
 function read(rel: string): string {
   return readFileSync(path.join(srcRoot, rel), 'utf-8');
@@ -45,15 +66,15 @@ function read(rel: string): string {
 /**
  * A handful of call sites compose the path from a runtime object
  * property (a slot's own declared `endpoints`/`extras.datasetExport`
- * paths — `spec.buildPath`, `spec.statusPath`, `spec.endpoints.setBox`/
- * `patchMeta`/`batchStatus`) rather than a literal or a module-level
+ * paths — `spec.buildPath`, `spec.statusPath`, `spec.endpoints.patchMeta`/
+ * `batchStatus`) rather than a literal or a module-level
  * constant, which `apiCallScanner` can't resolve statically.
  *
  * Each override is anchored to a `marker` — a unique, nearby string
  * (the enclosing function's declaration) that must appear verbatim in
  * the scanned file — and resolves to the nearest scanned call site
- * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchRegionStatus`
- * all happen to share the identical raw template text
+ * *after* that marker. `patchSlotMeta`/`batchRegionStatus`
+ * both happen to share the identical raw template text
  * (`` `${scoped()}${path}` ``), so matching by raw text alone would
  * be ambiguous; matching by (marker, nearest-following-site) is not.
  *
@@ -63,8 +84,13 @@ function read(rel: string): string {
  * `browsePath` parameter, a runtime string, needs a path override).
  */
 const MANUAL_OVERRIDES: Array<{
-  file: (typeof SCANNED_FILES)[number];
+  file:
+    | (typeof SCANNED_FILES)[number]
+    | (typeof GLOBAL_SCANNED_FILES)[number]
+    | (typeof PROJECT_PREFIX_SCANNED_FILES)[number];
   marker: string;
+  /** Which call-site marker the override anchors to; default `'scoped'`. */
+  scan?: 'scoped' | 'projectPrefix';
   path?: string;
   method?: string;
   queryParams?: string[] | null;
@@ -84,15 +110,6 @@ const MANUAL_OVERRIDES: Array<{
     path: '/export/single_class/status',
     method: 'GET',
     queryParams: ['profile_name'],
-  },
-  {
-    file: 'lib/api.ts',
-    marker: 'export async function setSlotBox(',
-    // spec.endpoints.setBox/clearBox — a region slot declares both as
-    // '/crops/{id}/region'.
-    path: '/crops/*/region',
-    method: 'PUT',
-    queryParams: [],
   },
   {
     file: 'lib/api.ts',
@@ -119,38 +136,43 @@ const MANUAL_OVERRIDES: Array<{
     path: '/regions',
   },
   {
+    file: 'lib/api.ts',
+    marker: 'export function runServedNextStep(',
+    // step.method/step.path: a finished import's served `next_steps`
+    // entry (W10.11). The spec's one documented example is
+    // `POST /regions/cluster`; anything else it serves is the server's
+    // own route.
+    path: '/regions/cluster',
+    method: 'POST',
+    queryParams: [],
+  },
+  {
     file: 'lib/components/SlotCard.svelte',
-    marker: 'const thumbUrl = $derived(',
-    // thumbCap.path(id, size) — a region slot declares
-    // '/crops/{id}/region_thumbnail?size={size}'
+    marker: 'const thumbUrl = $derived.by(',
+    // thumbCap.path(id, boxId, size) — a region slot declares
+    // '/crops/{id}/region_thumbnail?box_id={boxId}&size={size}'
     // (capabilities.subBox.thumbnail.path).
     path: '/crops/*/region_thumbnail',
     method: 'GET',
-    queryParams: ['size'],
+    queryParams: ['box_id', 'size'],
+  },
+  {
+    file: 'lib/api_combine.ts',
+    scan: 'projectPrefix',
+    marker: 'export function runCombineNextStep(',
+    // step.method/step.path: a finished combine job's served `next_steps`
+    // entry, run against the target project's own prefix. The ONE step the
+    // backend serves today is `POST /clusters/train` (recluster), which is
+    // NOT a route in the vendored curation OpenAPI at f582aa05 (only the
+    // unscoped `/clusters/train/{index}` exists elsewhere), so the plan's
+    // literal override cannot pass this check. The anchor below is the real
+    // clustering entry point the app already uses; the frontend itself
+    // sends whatever path is served. Reported to the backend as a bug.
+    path: '/pipeline/auto_label/start',
+    method: 'POST',
+    queryParams: [],
   },
 ];
-
-/**
- * Routes proposed to OpenProcessor as a binding wire contract but not yet
- * implemented server-side, so they can't appear in the vendored OpenAPI
- * snapshot yet. Each entry names the plan section that binds it — remove
- * the entry (not widen it) the moment `npm run contract:sync` picks up
- * the real operation; `keymapActions.test.ts` §5.7 is the sibling check
- * that will then start failing loudly if this allow-list is stale.
- *
- * K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §4.1):
- * OpenProcessor W2b hasn't landed the four `/keymap*` routes yet.
- */
-const PENDING_BACKEND: Array<{ path: string; method: string }> = [
-  { path: '/keymap', method: 'GET' },
-  { path: '/keymap', method: 'PUT' },
-  { path: '/keymap/validate', method: 'POST' },
-  { path: '/keymap/reset', method: 'POST' },
-];
-
-function isPendingBackend(path: string, method: string): boolean {
-  return PENDING_BACKEND.some((p) => p.path === path && p.method === method);
-}
 
 interface ResolvedCall {
   file: string;
@@ -160,10 +182,16 @@ interface ResolvedCall {
   raw: string;
 }
 
-function resolveCalls(file: (typeof SCANNED_FILES)[number]): ResolvedCall[] {
+function resolveCalls(file: string, marker: string = '${scoped()}'): ResolvedCall[] {
   const src = read(file);
-  const sites: ApiCallSite[] = scanApiCallSites(src);
-  const overridesForFile = MANUAL_OVERRIDES.filter((o) => o.file === file);
+  const sites: ApiCallSite[] = scanApiCallSites(src, marker);
+  // An override applies only to the scan kind it names (default scoped);
+  // none apply to the ${globalApi()} scan.
+  const overridesForFile = MANUAL_OVERRIDES.filter(
+    (o) =>
+      o.file === file &&
+      (o.scan === 'projectPrefix' ? PROJECT_PREFIX_MARKER : '${scoped()}') === marker,
+  );
 
   // marker -> the index of the nearest scanned site after it.
   const overrideSiteIndex = new Map<number, (typeof overridesForFile)[number]>();
@@ -196,7 +224,52 @@ function resolveCalls(file: (typeof SCANNED_FILES)[number]): ResolvedCall[] {
   });
 }
 
+function grepFilesWith(marker: string): string[] {
+  let out = '';
+  try {
+    out = execFileSync(
+      'grep',
+      ['-rlF', '--include=*.ts', '--include=*.svelte', marker, srcRoot],
+      { encoding: 'utf-8' },
+    );
+  } catch (e) {
+    if ((e as { status?: number }).status !== 1) throw e;
+  }
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((p) => path.relative(srcRoot, p))
+    .filter(
+      (p) => !p.endsWith('.test.ts') && !p.startsWith(path.join('lib', 'contract')),
+    );
+}
+
 describe('endpoint catalog: completeness', () => {
+  it('every per-track wrapper module exists and is in the scanner lists its track needs', () => {
+    const expected: Record<
+      string,
+      { scoped: boolean; global: boolean; prefix: boolean }
+    > = {
+      'lib/api_vlm.ts': { scoped: true, global: true, prefix: false },
+      'lib/api_combine.ts': { scoped: false, global: true, prefix: true },
+      'lib/api_configTest.ts': { scoped: true, global: false, prefix: false },
+    };
+    const sets = {
+      scoped: new Set<string>(SCANNED_FILES),
+      global: new Set<string>(GLOBAL_SCANNED_FILES),
+      prefix: new Set<string>(PROJECT_PREFIX_SCANNED_FILES),
+    };
+    for (const f of TRACK_WRAPPER_FILES) {
+      expect(() => read(f), `${f} does not exist`).not.toThrow();
+      const want = expected[f];
+      expect(sets.scoped.has(f), `${f} in SCANNED_FILES`).toBe(want.scoped);
+      expect(sets.global.has(f), `${f} in GLOBAL_SCANNED_FILES`).toBe(want.global);
+      expect(sets.prefix.has(f), `${f} in PROJECT_PREFIX_SCANNED_FILES`).toBe(
+        want.prefix,
+      );
+    }
+  });
+
   it('scans a non-trivial number of call sites (guards a vacuous pass)', () => {
     const total = SCANNED_FILES.reduce((n, f) => n + resolveCalls(f).length, 0);
     expect(total).toBeGreaterThan(50);
@@ -224,21 +297,73 @@ describe('endpoint catalog: completeness', () => {
     );
     expect(unscanned).toEqual([]);
   });
+
+  it('no other src/ file references ${projectPrefix(project)} outside PROJECT_PREFIX_SCANNED_FILES', () => {
+    const scannedSet = new Set<string>(PROJECT_PREFIX_SCANNED_FILES);
+    expect(
+      grepFilesWith(PROJECT_PREFIX_MARKER).filter((p) => !scannedSet.has(p)),
+    ).toEqual([]);
+  });
+
+  for (const file of PROJECT_PREFIX_SCANNED_FILES) {
+    it(`every projectPrefix() URL in ${file} uses the scanned marker`, () => {
+      // A wrapper that names its parameter anything but `project` would
+      // slip past the marker scan; fail instead of silently skipping it.
+      const src = read(file);
+      const uses = src.match(/\$\{projectPrefix\([^)]*\)\}/g) ?? [];
+      // Wrapper files not yet populated (Step 0 stubs) have nothing to check.
+      if (file !== 'lib/api.ts' && uses.length === 0) return;
+      expect(uses.length).toBeGreaterThan(0);
+      expect(uses.filter((u) => u !== PROJECT_PREFIX_MARKER)).toEqual([]);
+    });
+  }
+
+  it('no other src/ file references ${globalApi()} outside GLOBAL_SCANNED_FILES', () => {
+    let out = '';
+    try {
+      out = execFileSync(
+        'grep',
+        ['-rl', '--include=*.ts', '--include=*.svelte', '${globalApi()}', srcRoot],
+        { encoding: 'utf-8' },
+      );
+    } catch (e) {
+      // grep exits 1 when there are no matches at all — not an error here.
+      if ((e as { status?: number }).status !== 1) throw e;
+    }
+    const hits = out
+      .split('\n')
+      .filter(Boolean)
+      .map((p) => path.relative(srcRoot, p))
+      .filter(
+        (p) => !p.endsWith('.test.ts') && !p.startsWith(path.join('lib', 'contract')),
+      );
+    const scannedSet = new Set<string>(GLOBAL_SCANNED_FILES);
+    const unscanned = hits.filter(
+      (p) => !scannedSet.has(p as (typeof GLOBAL_SCANNED_FILES)[number]),
+    );
+    expect(unscanned).toEqual([]);
+  });
 });
 
 // -- OpenAPI lookup -----------------------------------------------------
 
+interface OpenApiOpDoc {
+  parameters?: Array<{ name?: string }>;
+}
 interface OpenApiDoc {
-  paths: Record<string, Record<string, { parameters?: Array<{ name?: string }> }>>;
+  paths: Record<string, Record<string, OpenApiOpDoc>>;
 }
 const doc = openapi as unknown as OpenApiDoc;
 
 /** OpenAPI paths are absolute under the backend's own prefix
- *  (`/curation/...`, the default `OP_API_PREFIX`). The frontend composes
- *  `${scoped()}/...` where `scoped()` returns `API_PREFIX` by default —
- *  mapping `${scoped()}` -> `/curation` is exactly that default-prefix
- *  identification, matching this project's plan instructions. */
+ *  (`/curation/...`, the default `OP_API_PREFIX`). P1 projects cutover:
+ *  every SCOPED route additionally lives under `/projects/{project}`
+ *  (`GLOBAL_ROUTES` below is the fixed, explicit list of what stays
+ *  global) — `${scoped()}/foo` resolves against
+ *  `/curation/projects/{project}/foo`, `${globalApi()}/foo` against
+ *  `/curation/foo` directly. */
 const OPENAPI_PREFIX = '/curation';
+const SCOPED_OPENAPI_PREFIX = '/curation/projects/*';
 
 function normalizeSegments(p: string): string[] {
   return p
@@ -255,68 +380,141 @@ interface OpenApiOperation {
   params: Set<string>;
 }
 
-function findOperation(frontendPath: string, method: string): OpenApiOperation | null {
-  const wanted = normalizeSegments(frontendPath);
+function findOperation(
+  frontendPath: string,
+  method: string,
+  scope: 'scoped' | 'global' = 'scoped',
+): OpenApiOperation | null {
+  const prefix = scope === 'scoped' ? SCOPED_OPENAPI_PREFIX : OPENAPI_PREFIX;
+  const wanted = normalizeSegments(`${prefix}${frontendPath}`);
+  // A frontend `*` (a runtime id) matches only an OpenAPI path PARAMETER,
+  // never an OpenAPI literal segment; otherwise a literal sibling route
+  // (`/projects/combine/{job_id}`) shadows `/projects/{project}/...` and
+  // the first match carries the wrong parameter list. Among the remaining
+  // candidates the one with the most exactly-equal literal segments wins.
+  let best: { openApiPath: string; op: OpenApiOpDoc; literals: number } | null = null;
   for (const [openApiPath, methods] of Object.entries(doc.paths)) {
     if (!openApiPath.startsWith(OPENAPI_PREFIX)) continue;
-    const opSegs = normalizeSegments(openApiPath.slice(OPENAPI_PREFIX.length));
+    const opSegs = normalizeSegments(openApiPath);
     if (opSegs.length !== wanted.length) continue;
-    const matches = opSegs.every(
-      (seg, i) => seg === '*' || wanted[i] === '*' || seg === wanted[i],
-    );
+    const matches = opSegs.every((seg, i) => seg === '*' || seg === wanted[i]);
     if (!matches) continue;
     const op = methods[method.toLowerCase()];
     if (!op) continue;
-    return {
-      openApiPath,
-      method,
-      params: new Set(
-        (op.parameters ?? []).map((p) => p.name).filter((x): x is string => !!x),
-      ),
-    };
+    const literals = opSegs.filter((seg, i) => seg !== '*' && seg === wanted[i]).length;
+    if (!best || literals > best.literals) best = { openApiPath, op, literals };
   }
-  return null;
+  if (!best) return null;
+  return {
+    openApiPath: best.openApiPath,
+    method,
+    params: new Set(
+      (best.op.parameters ?? []).map((p) => p.name).filter((x): x is string => !!x),
+    ),
+  };
+}
+
+/** Per-track wrapper modules created empty by the Step 0 prelude
+ *  (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md); a track fills them in.
+ *  An empty one is allowed to have zero call sites. */
+const TRACK_WRAPPER_FILES = new Set<string>([
+  'lib/api_vlm.ts',
+  'lib/api_combine.ts',
+  'lib/api_configTest.ts',
+]);
+
+function describeCalls(
+  file: string,
+  calls: ResolvedCall[],
+  scope: 'scoped' | 'global',
+): void {
+  describe(file, () => {
+    it('found at least one call site', () => {
+      if (calls.length === 0 && TRACK_WRAPPER_FILES.has(file.split(' ')[0])) return;
+      expect(calls.length).toBeGreaterThan(0);
+    });
+
+    for (const call of calls) {
+      const label = `${call.method} ${call.path}`;
+      it(`${label} exists in the OpenAPI contract`, () => {
+        const op = findOperation(call.path, call.method, scope);
+        expect(
+          op,
+          `no OpenAPI operation matches ${label} (raw: ${call.raw})`,
+        ).not.toBeNull();
+      });
+
+      it(`${label} — every sent query key is a declared OpenAPI parameter`, () => {
+        if (call.queryParams == null) {
+          // Untyped passthrough (e.g. a bare `Record<string, unknown>`
+          // filter object) the scanner correctly declines to guess at.
+          // Path+method is still checked above.
+          return;
+        }
+        const op = findOperation(call.path, call.method, scope);
+        if (!op) return; // already failed the existence assertion above
+        const undeclared = call.queryParams.filter((k) => !op.params.has(k));
+        expect(undeclared, `${label} sends undeclared params (raw: ${call.raw})`).toEqual(
+          [],
+        );
+      });
+    }
+  });
 }
 
 describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
   for (const file of SCANNED_FILES) {
-    const calls = resolveCalls(file);
-    describe(file, () => {
-      it('found at least one call site', () => {
-        expect(calls.length).toBeGreaterThan(0);
-      });
-
-      for (const call of calls) {
-        const label = `${call.method} ${call.path}`;
-        const pending = isPendingBackend(call.path, call.method);
-        it(`${label} exists in the OpenAPI contract${pending ? ' (skipped: pending backend)' : ''}`, (ctx) => {
-          if (pending) {
-            ctx.skip();
-            return;
-          }
-          const op = findOperation(call.path, call.method);
-          expect(
-            op,
-            `no OpenAPI operation matches ${label} (raw: ${call.raw})`,
-          ).not.toBeNull();
-        });
-
-        it(`${label} — every sent query key is a declared OpenAPI parameter`, () => {
-          if (call.queryParams == null) {
-            // Untyped passthrough (e.g. a bare `Record<string, unknown>`
-            // filter object) the scanner correctly declines to guess at.
-            // Path+method is still checked above.
-            return;
-          }
-          const op = findOperation(call.path, call.method);
-          if (!op) return; // already failed the existence assertion above
-          const undeclared = call.queryParams.filter((k) => !op.params.has(k));
-          expect(
-            undeclared,
-            `${label} sends undeclared params (raw: ${call.raw})`,
-          ).toEqual([]);
-        });
-      }
-    });
+    describeCalls(file, resolveCalls(file), 'scoped');
   }
+});
+
+describe('endpoint catalog: every served-project-prefix call resolves to a real OpenAPI operation', () => {
+  for (const file of PROJECT_PREFIX_SCANNED_FILES) {
+    describeCalls(
+      `${file} (projectPrefix)`,
+      resolveCalls(file, PROJECT_PREFIX_MARKER),
+      'scoped',
+    );
+  }
+});
+
+describe('endpoint catalog: every GLOBAL call resolves to a real OpenAPI operation', () => {
+  for (const file of GLOBAL_SCANNED_FILES) {
+    describeCalls(file, resolveCalls(file, '${globalApi()}'), 'global');
+  }
+});
+
+describe('findOperation matching', () => {
+  it('does not let a literal sibling route (/projects/combine/{job_id}) shadow a project-scoped one', () => {
+    expect(findOperation('/clusters', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/clusters',
+    );
+  });
+
+  it('a frontend wildcard matches only an OpenAPI path parameter, never a literal segment', () => {
+    // `/crops/{id}/regions` must not resolve to `/crops/batch_regions`.
+    expect(findOperation('/crops/*/regions', 'PUT')?.openApiPath).toBe(
+      '/curation/projects/{project}/crops/{crop_id}/regions',
+    );
+    expect(findOperation('/crops/batch_regions', 'PUT')?.openApiPath).toBe(
+      '/curation/projects/{project}/crops/batch_regions',
+    );
+  });
+
+  it('a wildcard resolves to the path-parameter route, not a literal sibling (/active, /tabs)', () => {
+    expect(findOperation('/prompt_packs/*', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/prompt_packs/{name}',
+    );
+    expect(findOperation('/review/*', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/review/{tab}',
+    );
+    expect(findOperation('/prompt_packs/active', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/prompt_packs/active',
+    );
+  });
+
+  it('still reports a missing operation as null (the removed singular region write)', () => {
+    expect(findOperation('/crops/*/region', 'PUT')).toBeNull();
+    expect(findOperation('/crops/batch_region', 'PUT')).toBeNull();
+  });
 });

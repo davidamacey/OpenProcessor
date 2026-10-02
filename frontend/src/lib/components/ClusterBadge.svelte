@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   /**
    * Cluster-origin badge for a search-result crop (global search on
    * `/clusters`, see `CropResultGrid.svelte`). Renders "#{id} ·
@@ -23,7 +25,7 @@
 
   function open(e: MouseEvent): void {
     e.stopPropagation();
-    void goto(`/clusters/${clusterId}`);
+    void goto(resolve(projectHref(`/clusters/${clusterId}`)));
   }
 </script>
 

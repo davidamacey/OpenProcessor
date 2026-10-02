@@ -140,10 +140,10 @@ describe('loadDeploymentProfiles — propagation and memoization', () => {
     ]);
     expect(slotRegistry.byKey('pallet_label')).toBeDefined();
     expect(REVIEW_TABS.map((t) => t.id)).toContain('slot:pallet_label');
-    // The 5 core tabs + one per built-in queue slot + the newly installed
+    // The 6 core tabs (incl. imported) + one per built-in queue slot + the newly installed
     // pallet_label slot tab.
     const builtinQueues = builtinSlots.filter((s) => s.capabilities.queue);
-    expect(REVIEW_TABS).toHaveLength(5 + builtinQueues.length + 1);
+    expect(REVIEW_TABS).toHaveLength(6 + builtinQueues.length + 1);
     expect(tabFromUrlId('pallet_labels')).toBe('slot:pallet_label');
     for (const s of builtinQueues) {
       expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);

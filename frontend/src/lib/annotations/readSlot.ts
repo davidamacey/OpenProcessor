@@ -13,7 +13,7 @@
  * migration; this module is what that migration will call.
  */
 
-import type { SlotSpec, SlotData, XYXY, SlotFrame, BBoxNormLike } from './types';
+import type { SlotSpec, SlotData, SlotBox, XYXY, SlotFrame, BBoxNormLike } from './types';
 
 function pick(raw: Record<string, unknown>, field: string | undefined): unknown {
   return field == null ? undefined : raw[field];
@@ -53,8 +53,7 @@ function projectToParent(
     const [x1, y1, x2, y2] = childSourceXyxy;
     return { cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 };
   }
-  // frame === 'source': project through the parent box, matching
-  // sourceToCropFrame's convention (see bboxFrames.ts).
+  // frame === 'source': project through the parent box.
   const [vx1, vy1, vx2, vy2] = parentSourceXyxy;
   const vw = vx2 - vx1;
   const vh = vy2 - vy1;
@@ -68,36 +67,65 @@ function projectToParent(
   };
 }
 
-/**
- * Inverse of `projectToParent`: given a box already expressed in the
- * PARENT crop's frame (`{cx,cy,w,h}`), returns it as `[x1,y1,x2,y2]` in
- * the frame the slot actually stores (`'source'` or `'parent'`).
- *
- * Needed for saving an edited box back to the wire: the editor UI always
- * works in parent-crop-normalized coordinates, but a slot may store
- * `'source'`-frame boxes, so a straight write would silently corrupt the
- * geometry. `/review` and `SlotBboxEditor.svelte` both hand-rolled this
- * via `cropToSourceFrame`, which hardcodes `'source'` — this is the one
- * documented, slot-generic way to do it.
- */
-export function projectFromParent(
-  parentFrameBox: BBoxNormLike,
-  parentSourceXyxy: XYXY,
-  frame: SlotFrame,
-): XYXY {
-  const { cx, cy, w, h } = parentFrameBox;
-  if (frame === 'parent') {
-    return [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
+/** Maps one `region_boxes` element (the served per-box wire shape, keys
+ *  pinned to the vendored `RegionTestCandidate` schema by
+ *  `contract/wireKeys.test.ts`) to a `SlotBox`. Exported for direct unit
+ *  testing of the mapping independent of a full `readSlot` call. */
+export function mapRegionBoxWire(el: unknown): SlotBox | null {
+  if (el == null || typeof el !== 'object') return null;
+  const r = el as Record<string, unknown>;
+  const rawXyxy = asXyxy(r.bbox_norm);
+  const parentXyxy = asXyxy(r.bbox_in_parent);
+  const parent = parentXyxy
+    ? {
+        cx: (parentXyxy[0] + parentXyxy[2]) / 2,
+        cy: (parentXyxy[1] + parentXyxy[3]) / 2,
+        w: parentXyxy[2] - parentXyxy[0],
+        h: parentXyxy[3] - parentXyxy[1],
+      }
+    : null;
+  return {
+    boxId: asString(r.box_id),
+    state: asString(r.state) ?? 'proposed',
+    rawXyxy,
+    parent,
+    score: asNumber(r.score),
+    detector: asString(r.detector),
+    detectorVersion: asString(r.detector_version),
+    source: asString(r.source),
+    bboxCorrect: asBoolean(r.bbox_correct),
+    confidence: asString(r.confidence),
+    rejectionReason: asString(r.rejection_reason),
+    locked: asBoolean(r.locked),
+    text: asString(r.text),
+    textRaw: asString(r.text_raw),
+    textSource: asString(r.text_source),
+    textConfidence: asNumber(r.text_confidence),
+    textEngineVersion: asString(r.text_engine_version),
+    textVlm: asString(r.text_vlm),
+    textOcr: asString(r.text_ocr),
+    textDisagreement: asBoolean(r.text_disagreement),
+    textChoice: asString(r.text_choice),
+    textVlmInvalid: asString(r.text_vlm_invalid),
+    clusterId: asNumber(r.cluster_id),
+    clusterSubid: asString(r.cluster_subid),
+    clusterDistance: asNumber(r.cluster_distance),
+    detectedAt: asString(r.detected_at),
+    thumbnailUrl: asString(r.thumbnail_url),
+  };
+}
+
+/** Maps the whole `region_boxes` (or equivalent `listField`) array off a
+ *  raw crop. Never throws on a malformed element — an element that isn't
+ *  a plain object is dropped, so one bad row can't blank the whole list. */
+export function mapRegionBoxList(raw: unknown): SlotBox[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SlotBox[] = [];
+  for (const el of raw) {
+    const box = mapRegionBoxWire(el);
+    if (box) out.push(box);
   }
-  // frame === 'source': un-project through the parent box.
-  const [vx1, vy1, vx2, vy2] = parentSourceXyxy;
-  const vw = vx2 - vx1;
-  const vh = vy2 - vy1;
-  const px1 = vx1 + (cx - w / 2) * vw;
-  const py1 = vy1 + (cy - h / 2) * vh;
-  const px2 = vx1 + (cx + w / 2) * vw;
-  const py2 = vy1 + (cy + h / 2) * vh;
-  return [px1, py1, px2, py2];
+  return out;
 }
 
 export function readSlot(
@@ -108,80 +136,46 @@ export function readSlot(
   const out: SlotData = { key: spec.key };
   const cap = spec.capabilities;
 
-  if (cap.subBox) {
+  if (cap.subBox?.listField) {
+    // W8 multi-box list — always an array, [] when none (owner decision:
+    // no backward compatibility with the pre-W8 scalar shape, so this is
+    // the only region box path; the legacy single-box block below never
+    // runs for a capability declaring listField — see next `if`).
+    out.subBoxes = mapRegionBoxList(pick(raw, cap.subBox.listField));
+    out.boxSet = {
+      count: asNumber(pick(raw, cap.subBox.countField)),
+      rejectedCount: asNumber(pick(raw, cap.subBox.rejectedCountField)),
+      maxScore: asNumber(pick(raw, cap.subBox.maxScoreField)),
+      setComplete: asBoolean(pick(raw, cap.subBox.setCompleteField)),
+      revision: asNumber(pick(raw, cap.subBox.revisionField)),
+    };
+  }
+
+  if (cap.subBox && cap.subBox.bboxField != null && cap.subBox.listField == null) {
     const rawXyxy = asXyxy(pick(raw, cap.subBox.bboxField));
     const frameRaw = cap.subBox.frameField
       ? asString(pick(raw, cap.subBox.frameField))
       : null;
     const frame: SlotFrame =
-      frameRaw === 'parent' || frameRaw === 'source' ? frameRaw : cap.subBox.storedFrame;
-    // Prefer the server's own parent-frame projection when it sent one
-    // (regions: region_bbox_in_parent) over projecting rawXyxy ourselves —
-    // one less place client and server geometry can disagree.
-    const servedParentXyxy = cap.subBox.bboxInParentField
-      ? asXyxy(pick(raw, cap.subBox.bboxInParentField))
-      : null;
-    const parent = servedParentXyxy
-      ? {
-          cx: (servedParentXyxy[0] + servedParentXyxy[2]) / 2,
-          cy: (servedParentXyxy[1] + servedParentXyxy[3]) / 2,
-          w: servedParentXyxy[2] - servedParentXyxy[0],
-          h: servedParentXyxy[3] - servedParentXyxy[1],
-        }
-      : rawXyxy
-        ? projectToParent(rawXyxy, parentXyxy, frame)
-        : null;
-    // Candidate: a verifier-rejected box, only meaningful when there's no
-    // real box (mutually exclusive on the wire — see SubBoxCapability's
-    // candidateBboxField doc comment). Same server-projection preference
-    // as the main box above.
-    const candidateRawXyxy = asXyxy(pick(raw, cap.subBox.candidateBboxField));
-    const servedCandidateParentXyxy = cap.subBox.candidateBboxInParentField
-      ? asXyxy(pick(raw, cap.subBox.candidateBboxInParentField))
-      : null;
-    const candidateParent = servedCandidateParentXyxy
-      ? {
-          cx: (servedCandidateParentXyxy[0] + servedCandidateParentXyxy[2]) / 2,
-          cy: (servedCandidateParentXyxy[1] + servedCandidateParentXyxy[3]) / 2,
-          w: servedCandidateParentXyxy[2] - servedCandidateParentXyxy[0],
-          h: servedCandidateParentXyxy[3] - servedCandidateParentXyxy[1],
-        }
-      : candidateRawXyxy
-        ? projectToParent(candidateRawXyxy, parentXyxy, frame)
-        : null;
+      frameRaw === 'parent' || frameRaw === 'source'
+        ? frameRaw
+        : (cap.subBox.storedFrame ?? 'source');
     out.subBox = {
-      parent,
+      parent: rawXyxy ? projectToParent(rawXyxy, parentXyxy, frame) : null,
       rawXyxy,
       frame,
       score: asNumber(pick(raw, cap.subBox.scoreField)),
       visible: asBoolean(pick(raw, cap.subBox.visibleField)),
-      candidate: candidateRawXyxy
-        ? {
-            parent: candidateParent,
-            rawXyxy: candidateRawXyxy,
-            score: asNumber(pick(raw, cap.subBox.candidateScoreField)),
-            detector: asString(pick(raw, cap.subBox.candidateDetectorField)),
-            detectorVersion: asString(
-              pick(raw, cap.subBox.candidateDetectorVersionField),
-            ),
-            source: asString(pick(raw, cap.subBox.candidateSourceField)),
-          }
-        : null,
     };
   }
 
-  if (cap.text) {
+  if (cap.text?.valueField) {
     out.text = {
       value: asString(pick(raw, cap.text.valueField)),
       raw: asString(pick(raw, cap.text.rawField)),
       source: asString(pick(raw, cap.text.sourceField)),
       confidence: asNumber(pick(raw, cap.text.confidenceField)),
       engineVersion: asString(pick(raw, cap.text.engineVersionField)),
-      vlmValue: asString(pick(raw, cap.text.vlmValueField)),
-      ocrValue: asString(pick(raw, cap.text.ocrValueField)),
-      disagreement: asBoolean(pick(raw, cap.text.disagreementField)),
-      choice: asString(pick(raw, cap.text.choiceField)),
-      invalidReason: asString(pick(raw, cap.text.invalidReasonField)),
     };
   }
 
@@ -211,7 +205,6 @@ export function readSlot(
       validated: asBoolean(pick(raw, cap.lifecycle.validatedField)),
       autoConfirmed: asBoolean(pick(raw, cap.lifecycle.autoConfirmedField)),
       rejectionReason: asString(pick(raw, cap.lifecycle.rejectionReasonField)),
-      boxCorrect: asBoolean(pick(raw, cap.lifecycle.boxCorrectField)),
     };
   }
 

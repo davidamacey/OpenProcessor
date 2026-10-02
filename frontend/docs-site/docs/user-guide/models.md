@@ -3,7 +3,7 @@ sidebar_position: 9
 title: Models
 ---
 
-# Model registry (`/models`)
+# Model registry (`/p/<project>/models`)
 
 Live status of every inference service the backend uses — Triton models and
 external services such as the VLM and segmenter — with inference counts and

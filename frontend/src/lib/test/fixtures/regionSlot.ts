@@ -27,9 +27,9 @@ export const WIDGET_TAG_PROFILE: ServedRegionProfile = {
   display_name_singular: 'Widget tag',
   region_class_name: WIDGET_TAG_CLASS,
   text_reader: 'ocr',
-  // Deliberately no `reads_text`/`text_hint_enabled` here — this fixture
-  // doubles as the pre-W1 "legacy backend" case (undefined fields), so
-  // `profileReadsText()`'s fallback path stays exercised.
+  reads_text: true,
+  text_hint_enabled: false,
+  limits: { max_boxes_per_write: 500 },
 };
 
 export const widgetTagServedSlot: SlotSpec =
@@ -46,6 +46,7 @@ export const WIDGET_TAG_PROFILE_NO_TEXT: ServedRegionProfile = {
   text_reader: 'none',
   reads_text: false,
   text_hint_enabled: false,
+  limits: { max_boxes_per_write: 500 },
 };
 
 export const widgetTagServedSlotNoText: SlotSpec = regionSlotFromServedProfile(

@@ -1,19 +1,27 @@
 /**
- * HealthStore — polls {API_PREFIX}/health every 15s and exposes an OK/down indicator.
+ * HealthStore — polls the GLOBAL {globalApi()}/health every 15s for the
+ * top-bar OK/down chip, and the project-SCOPED {scoped()}/health
+ * alongside it to keep `regionProfileStore` (and any other project
+ * facts) fresh (P1 projects cutover — see CLAUDE.md "Health split").
+ * The chip only ever reflects the global read: a project-scoped outage
+ * (e.g. this project's OpenSearch indexes) shouldn't have to also poll
+ * a second global-shaped source for "is the API up at all".
  *
  * Polling auto-stops when the tab is hidden (Page Visibility API) and
  * resumes on focus. A 404/503/network failure flips `ok` to false; the next
  * successful poll restores it.
  */
 
-import { getHealth } from '$lib/api';
-import type { ApiHealth } from '$lib/types';
+import { getGlobalHealth, getHealth } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
+import type { ApiHealth, GlobalHealth } from '$lib/types';
 import { regionProfileStore } from '$stores/regionProfile.svelte';
 
 const POLL_INTERVAL_MS = 15_000;
 
 class HealthStore {
-  health = $state<ApiHealth | null>(null);
+  health = $state<GlobalHealth | null>(null);
+  scopedHealth = $state<ApiHealth | null>(null);
   ok = $state<boolean>(false);
   lastChecked = $state<number | null>(null);
   error = $state<string | null>(null);
@@ -67,6 +75,14 @@ class HealthStore {
     }
   }
 
+  /** Project switch: the scoped half of the poll is per project. Drops
+   *  it and, while the poll is running, re-polls at once (which aborts
+   *  the previous project's in-flight read). */
+  resetForProjectChange(): void {
+    this.scopedHealth = null;
+    if (this.#timer) void this.poll();
+  }
+
   #onVis = (): void => {
     if (document.visibilityState === 'visible') void this.poll();
   };
@@ -76,9 +92,8 @@ class HealthStore {
     const ctrl = new AbortController();
     this.#abort = ctrl;
     try {
-      const h = await getHealth(ctrl.signal);
+      const h = await getGlobalHealth(ctrl.signal);
       this.health = h;
-      regionProfileStore.observe(h?.region_profile);
       // Only 'down' or a network error surfaces the red banner: 'degraded'
       // means a non-critical dependency (e.g. the VLM) is intermittent
       // and labeling still works.
@@ -90,6 +105,18 @@ class HealthStore {
       this.error = (e as Error).message;
     } finally {
       this.lastChecked = Date.now();
+    }
+    // Project-scoped health, alongside the global read above — feeds
+    // regionProfileStore/any project facts. A failure here is silent:
+    // the scoped-health poll only ever refreshes facts the app already
+    // has a fallback for (see regionProfileStore's own unknown/changed
+    // handling), and shouldn't flip the global API-down chip.
+    try {
+      const sh = await getHealth(ctrl.signal);
+      this.scopedHealth = sh;
+      regionProfileStore.observe(sh.region_profile);
+    } catch {
+      // ignore — the global poll above already recorded chip state
     }
   }
 }
@@ -109,3 +136,4 @@ export const HEALTH_CHIP_TEXT: Record<HealthChip, string> = {
 };
 
 export const healthStore = new HealthStore();
+onProjectChange(() => healthStore.resetForProjectChange());

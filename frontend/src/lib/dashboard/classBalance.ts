@@ -15,13 +15,14 @@
  * happened to sort first alphabetically.
  */
 
-import { trainableCount } from '$lib/holdoutCounts';
-
 export interface ClassBalanceRow {
   class_id: number;
   class_name: string;
   count: number;
   validated_count: number;
+  /** Served `trainable` (`GET {API_PREFIX}/stats/classes`): validated crops
+   *  training can use, test holdout and excluded crops already left out. */
+  trainable: number;
 }
 
 export interface ClassBalanceBar {
@@ -47,9 +48,10 @@ export interface ClassBalanceView {
  * D2 (visual audit 2026-09-24): the balance chart drew a 2% bar for every
  * class at 0 (a wall of identical red "0" bars), silently dropped every
  * class past the first 30, and counted frozen test crops as validated.
- * Bars are now only the classes with validated crops, sized by trainable
- * (validated minus served holdout) with the test count shown alongside;
- * zero classes collapse into one count and the overflow into "+N more".
+ * Bars are now only the classes with validated crops, sized by the served
+ * `trainable` with the served test-holdout count shown alongside (display
+ * only, never subtracted client-side); zero classes collapse into one
+ * count and the overflow into "+N more".
  */
 export function buildClassBalance<T extends ClassBalanceRow & { adequacy?: string }>(
   rows: readonly T[],
@@ -60,10 +62,11 @@ export function buildClassBalance<T extends ClassBalanceRow & { adequacy?: strin
   const nonZero = sorted.filter((r) => r.validated_count > 0);
   const zeroCount = sorted.length - nonZero.length;
   const shown = nonZero.slice(0, limit);
-  const withTrainable = shown.map((r) => {
-    const test = holdout.get(r.class_id) ?? 0;
-    return { r, test, trainable: trainableCount(r.validated_count, test) };
-  });
+  const withTrainable = shown.map((r) => ({
+    r,
+    test: holdout.get(r.class_id) ?? 0,
+    trainable: r.trainable,
+  }));
   const max = Math.max(1, ...withTrainable.map((x) => x.trainable));
   return {
     bars: withTrainable.map(({ r, test, trainable }) => ({

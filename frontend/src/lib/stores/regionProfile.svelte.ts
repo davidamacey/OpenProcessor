@@ -10,8 +10,7 @@
  *
  * Seeded once, before first render, by `loadRegionProfile()` from the
  * root layout's `load()`. Only a SUCCESSFUL read seeds: a served
- * `region_profile: null` (or a backend too old to serve the field) means
- * "not configured". A timeout or network error does not (F-78: a slow
+ * `region_profile: null` means "not configured". A timeout or network error does not (F-78: a slow
  * first `/health` used to seed "no profile", the next poll disagreed,
  * and a spurious "reload" toast fired while the region tab was missing).
  * Boot retries with a bounded backoff; if every try fails the store stays
@@ -28,6 +27,7 @@
 
 import { getHealth } from '$lib/api';
 import { installServedRegionProfile } from '$lib/annotations/registeredSlots';
+import { onProjectChange } from '$lib/projectChange';
 import { setRegionProfileUnavailableListener } from '$lib/regionProfileUnavailable';
 import type { ServedRegionProfile } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
@@ -39,20 +39,19 @@ export const REGION_PROFILE_RETRY_DELAYS_MS = [250, 750];
 export const REGION_PROFILE_CHANGED_NOTICE =
   "The backend's region profile changed — reload the page to apply it.";
 
-function normalize(
-  p: ServedRegionProfile | null | undefined,
-): ServedRegionProfile | null {
-  if (!p || typeof p !== 'object' || typeof p.name !== 'string' || !p.name) return null;
+/** The served profile's own fields (dropping anything else on the wire),
+ *  or `null` when none is configured. */
+function normalize(p: ServedRegionProfile | null): ServedRegionProfile | null {
+  if (!p) return null;
   return {
     name: p.name,
-    display_name: typeof p.display_name === 'string' ? p.display_name : '',
-    display_name_singular:
-      typeof p.display_name_singular === 'string' ? p.display_name_singular : '',
-    region_class_name: typeof p.region_class_name === 'string' ? p.region_class_name : '',
-    text_reader: typeof p.text_reader === 'string' ? p.text_reader : '',
-    reads_text: typeof p.reads_text === 'boolean' ? p.reads_text : undefined,
-    text_hint_enabled:
-      typeof p.text_hint_enabled === 'boolean' ? p.text_hint_enabled : undefined,
+    display_name: p.display_name,
+    display_name_singular: p.display_name_singular,
+    region_class_name: p.region_class_name,
+    text_reader: p.text_reader,
+    reads_text: p.reads_text,
+    text_hint_enabled: p.text_hint_enabled,
+    limits: { max_boxes_per_write: p.limits.max_boxes_per_write },
   };
 }
 
@@ -65,7 +64,8 @@ function same(a: ServedRegionProfile | null, b: ServedRegionProfile | null): boo
     a.region_class_name === b.region_class_name &&
     a.text_reader === b.text_reader &&
     a.reads_text === b.reads_text &&
-    a.text_hint_enabled === b.text_hint_enabled
+    a.text_hint_enabled === b.text_hint_enabled &&
+    a.limits.max_boxes_per_write === b.limits.max_boxes_per_write
   );
 }
 
@@ -87,7 +87,7 @@ class RegionProfileStore {
   }
 
   /** Records the profile the UI is built from (a successful read). */
-  seed(p: ServedRegionProfile | null | undefined): void {
+  seed(p: ServedRegionProfile | null): void {
     this.profile = normalize(p);
     this.loaded = true;
     this.unknown = false;
@@ -104,7 +104,7 @@ class RegionProfileStore {
   /** A later successful reading (a `/health` poll, or a region route's
    *  409). Seeds the store when boot never got one; otherwise a reading
    *  that differs from the seeded one raises the reload notice once. */
-  observe(p: ServedRegionProfile | null | undefined): void {
+  observe(p: ServedRegionProfile | null): void {
     if (!this.loaded) {
       if (!this.unknown) return;
       this.seed(p);
@@ -115,6 +115,22 @@ class RegionProfileStore {
     if (same(this.profile, normalize(p))) return;
     this.changed = true;
     toastStore.push({ kind: 'warn', text: REGION_PROFILE_CHANGED_NOTICE, ttl_ms: 0 });
+  }
+
+  /**
+   * Project switch (review §3.8): the served profile is per project, so
+   * a different project's profile is NOT a "change" — the store goes back
+   * to unseeded (no region slot installed, no region route called) and
+   * the `/p/[project]` layout's `loadRegionProfile()` seeds it for the new
+   * project with no reload notice. `seedVersion` keeps counting up so the
+   * keyed page re-mounts.
+   */
+  resetForProjectChange(): void {
+    this.profile = null;
+    this.loaded = false;
+    this.unknown = false;
+    this.changed = false;
+    this.seedVersion += 1;
   }
 
   /** Test-only. */
@@ -132,6 +148,16 @@ export const regionProfileStore = new RegionProfileStore();
 setRegionProfileUnavailableListener(() => regionProfileStore.observe(null));
 
 let inflight: Promise<ServedRegionProfile | null> | null = null;
+/** Bumped on a project switch: a boot load started for the previous
+ *  project must never seed the new one. */
+let loadGeneration = 0;
+
+onProjectChange(() => {
+  loadGeneration += 1;
+  inflight = null;
+  regionProfileStore.resetForProjectChange();
+  installServedRegionProfile(null);
+});
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -150,23 +176,28 @@ export function loadRegionProfile(
 ): Promise<ServedRegionProfile | null> {
   if (regionProfileStore.loaded) return Promise.resolve(regionProfileStore.profile);
   if (inflight) return inflight;
-  inflight = (async () => {
+  const gen = loadGeneration;
+  const run = (async () => {
     for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
       if (attempt > 0) await delay(retryDelaysMs[attempt - 1]!);
+      if (gen !== loadGeneration) return null;
       // A health poll may have seeded the store while we waited.
       if (regionProfileStore.loaded) break;
       try {
         const h = await fetchHealth(AbortSignal.timeout(REGION_PROFILE_TIMEOUT_MS));
-        regionProfileStore.seed(normalize(h?.region_profile));
+        if (gen !== loadGeneration) return null;
+        regionProfileStore.seed(normalize(h.region_profile));
         installServedRegionProfile(regionProfileStore.profile);
         break;
       } catch {
         // Timeout / network error: unknown, not "no profile". Retry.
       }
     }
+    if (gen !== loadGeneration) return null;
     if (!regionProfileStore.loaded) regionProfileStore.markUnknown();
     inflight = null;
     return regionProfileStore.profile;
   })();
-  return inflight;
+  inflight = run;
+  return run;
 }

@@ -129,6 +129,7 @@ export function createGridGroups<T>(opts: GridGroupsOptions<T>): GridGroupsState
   const groups = $derived(override ?? derivedGroups);
 
   function live(): Set<string> {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- freshly built and consumed on each call via .has() only, never persisted
     return opts.liveIds ? opts.liveIds() : new Set(opts.source().map(opts.keyOf));
   }
 
@@ -147,6 +148,7 @@ export function createGridGroups<T>(opts: GridGroupsOptions<T>): GridGroupsState
       // whatever the event was trying to say.
       if (idx === -1) return;
       const ids = live();
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this call, never stored in reactive state
       const seen = new Set<string>();
       const reconciled = items.filter((it) => {
         const id = opts.keyOf(it);

@@ -18,7 +18,7 @@ import type { SubBoxRing } from '../types';
 /** Placeholders legal in a `{API_PREFIX}`-relative path template.
  *  Mirrors `cohorts.ts:22-25`'s rule: "no arbitrary expressions, no
  *  field access." */
-export const PATH_PLACEHOLDERS: readonly string[] = ['cropId', 'size'];
+export const PATH_PLACEHOLDERS: readonly string[] = ['cropId', 'boxId', 'size'];
 
 /** Placeholders legal in a training-cohort endpoint query. Same closed
  *  set `compileCohortQuery` (`../cohorts.ts:253-261`) substitutes. */

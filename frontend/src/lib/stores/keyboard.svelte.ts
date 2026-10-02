@@ -154,6 +154,7 @@ class KeyboardStore {
    * row, sorted by the first (lowest) combo for a stable order.
    */
   shortcutsForCurrentScope(): KeyboardShortcut[] {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this call, never stored in reactive state
     const seen = new Set<string>();
     const out: KeyboardShortcut[] = [];
     for (const r of this.#regs) {

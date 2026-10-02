@@ -1,13 +1,15 @@
 """Live read-only tier: the UI shows what the API actually serves.
 
 Every test here reads a number or a set of labels off the real rendered
-page and compares it against a direct `GET {API_PREFIX}/...` call. A
-concurrent actor (another agent's UI-write smoke test, per this task's
-brief) can change dataset-derived counts between our API read and the
-browser's — `agrees_with_retry` (conftest.py) re-reads the API once on
-a mismatch and accepts either value, so this suite only goes red on a
-genuine frontend/backend disagreement, not a race with someone else's
-writes.
+page and compares it against a direct `GET {prefix}/...` call, scoped to
+the default project's own served prefix (`live_project`, conftest.py) —
+never a bare unscoped path, since the projects cutover removed the
+unscoped alias entirely. A concurrent actor (another agent's UI-write
+smoke test, per this task's brief) can change dataset-derived counts
+between our API read and the browser's — `agrees_with_retry`
+(conftest.py) re-reads the API once on a mismatch and accepts either
+value, so this suite only goes red on a genuine frontend/backend
+disagreement, not a race with someone else's writes.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from conftest import agrees_with_retry, api_get, wait_for_stable_text
+from conftest import agrees_with_retry, api_get, int_field, page_path, wait_for_stable_text
 from fixtures.wire import REGION_TAB_URL_ID
 
 TOTAL_RE = re.compile(r"·\s*([\d,]+)\s*total")  # "#1 · 18 loaded · 18 total"
@@ -30,9 +32,14 @@ def _queue_total(page: Any) -> int:
     return int(m.group(1).replace(",", ""))
 
 
-def test_dashboard_cluster_count_agrees_with_stats_dataset(guarded_page: Any, live_url: str) -> None:
+def test_dashboard_cluster_count_agrees_with_stats_dataset(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    served = int_field(api_get(live_url, live_project, "/stats/dataset"), "clusters", "cluster_count")
+    if served == 0:
+        pytest.skip("the live project has no clusters yet; nothing to agree on")
     page = guarded_page.page
-    page.goto(f"{live_url}/dashboard", wait_until="domcontentloaded")
+    page.goto(f"{live_url}{page_path(live_project, '/dashboard')}", wait_until="domcontentloaded")
     # `data-testid="dataset-cluster-count"` (DatasetStats.svelte) is only
     # in source as of this change — the deployment at CROPWRIGHT_LIVE_URL
     # is a prior build without it (this tier is instructed not to rebuild
@@ -57,42 +64,21 @@ def test_dashboard_cluster_count_agrees_with_stats_dataset(guarded_page: Any, li
     displayed = int(dd.inner_text().strip().replace(",", ""))
 
     ok, first, second = agrees_with_retry(
-        live_url, "/stats/dataset", ("clusters", "cluster_count"), displayed
+        live_url, live_project, "/stats/dataset", ("clusters", "cluster_count"), displayed
     )
     assert ok, (
         f"dashboard 'Clusters (total now)' showed {displayed}, but "
-        f"GET {{API_PREFIX}}/stats/dataset clusters.cluster_count was "
+        f"GET {{prefix}}/stats/dataset clusters.cluster_count was "
         f"{first} (and, on retry, {second})"
     )
 
 
-def test_region_queue_total_agrees_with_review_regions(guarded_page: Any, live_url: str) -> None:
-    page = guarded_page.page
-    page.goto(f"{live_url}/review?tab={REGION_TAB_URL_ID}", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
-    page.wait_for_function(
-        """
-        () => {
-          const el = document.querySelector('[data-testid="queue-counter"]');
-          return !!el && /total/.test(el.textContent);
-        }
-        """,
-        timeout=15_000,
-    )
-    wait_for_stable_text(page, '[data-testid="queue-counter"]')
-    displayed = _queue_total(page)
-
-    ok, first, second = agrees_with_retry(live_url, "/review/regions", ("total",), displayed)
-    assert ok, (
-        f"/review?tab={REGION_TAB_URL_ID} queue-counter showed total={displayed}, but "
-        f"GET {{API_PREFIX}}/review/regions total was {first} (and, on retry, {second})"
-    )
-
-
-def test_region_queue_total_agrees_with_filtered_region_status(guarded_page: Any, live_url: str) -> None:
+def test_region_queue_total_agrees_with_review_regions(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
     page = guarded_page.page
     page.goto(
-        f"{live_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected",
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}')}",
         wait_until="domcontentloaded",
     )
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
@@ -105,7 +91,37 @@ def test_region_queue_total_agrees_with_filtered_region_status(guarded_page: Any
         """,
         timeout=15_000,
     )
-    # ?region_status= only takes effect once GET {API_PREFIX}/review/tabs's
+    wait_for_stable_text(page, '[data-testid="queue-counter"]')
+    displayed = _queue_total(page)
+
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, "/review/regions", ("total",), displayed
+    )
+    assert ok, (
+        f"/review?tab={REGION_TAB_URL_ID} queue-counter showed total={displayed}, but "
+        f"GET {{prefix}}/review/regions total was {first} (and, on retry, {second})"
+    )
+
+
+def test_region_queue_total_agrees_with_filtered_region_status(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    page = guarded_page.page
+    page.goto(
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected')}",
+        wait_until="domcontentloaded",
+    )
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    page.wait_for_function(
+        """
+        () => {
+          const el = document.querySelector('[data-testid="queue-counter"]');
+          return !!el && /total/.test(el.textContent);
+        }
+        """,
+        timeout=15_000,
+    )
+    # ?region_status= only takes effect once GET {prefix}/review/tabs's
     # filter_specs has loaded — the counter briefly shows the *unfiltered*
     # total first (see CLAUDE.md's "Served per-tab filters"). Wait for it
     # to settle before reading it.
@@ -113,23 +129,31 @@ def test_region_queue_total_agrees_with_filtered_region_status(guarded_page: Any
     displayed = _queue_total(page)
 
     ok, first, second = agrees_with_retry(
-        live_url, "/review/regions?region_status=verify_rejected", ("total",), displayed
+        live_url,
+        live_project,
+        "/review/regions?region_status=verify_rejected",
+        ("total",),
+        displayed,
     )
     assert ok, (
         f"/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected queue-counter showed "
-        f"total={displayed}, but GET {{API_PREFIX}}/review/regions?"
+        f"total={displayed}, but GET {{prefix}}/review/regions?"
         f"region_status=verify_rejected total was {first} (and, on retry, {second})"
     )
 
 
 def test_region_tab_label_is_the_served_display_name(
-    guarded_page: Any, live_url: str, live_region_profile: dict[str, Any] | None
+    guarded_page: Any,
+    live_url: str,
+    live_project: dict[str, Any],
+    live_region_profile: dict[str, Any] | None,
 ) -> None:
-    """naming-w2: the region tab exists exactly when `/health` serves a
-    region profile, and reads the served label (the `/review/tabs` entry
-    for `regions` when there is one, else the profile's display_name)."""
+    """naming-w2: the region tab exists exactly when the project's scoped
+    `/health` serves a region profile, and reads the served label (the
+    `/review/tabs` entry for `regions` when there is one, else the
+    profile's display_name)."""
     page = guarded_page.page
-    page.goto(f"{live_url}/review", wait_until="domcontentloaded")
+    page.goto(f"{live_url}{page_path(live_project, '/review')}", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
     labels = [
         re.sub(r"\s+[\d,]+$", "", t.strip())
@@ -139,21 +163,27 @@ def test_region_tab_label_is_the_served_display_name(
         assert len(labels) == 5, labels
         return
     served_tab = next(
-        (t for t in api_get(live_url, "/review/tabs")["tabs"] if t["id"] == "regions"), None
+        (t for t in api_get(live_url, live_project, "/review/tabs")["tabs"] if t["id"] == "regions"),
+        None,
     )
     expected = (served_tab or {}).get("label") or live_region_profile["display_name"]
     assert labels[-1] == expected, (labels, expected)
 
 
-def test_regions_filter_spec_select_matches_served_options(guarded_page: Any, live_url: str) -> None:
-    tabs = api_get(live_url, "/review/tabs")["tabs"]
+def test_regions_filter_spec_select_matches_served_options(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    tabs = api_get(live_url, live_project, "/review/tabs")["tabs"]
     regions_tab = next((t for t in tabs if t["id"] == "regions"), None)
     if regions_tab is None or not regions_tab.get("filter_specs"):
         pytest.skip("backend serves no filter_specs for the regions tab right now")
     specs = regions_tab["filter_specs"]
 
     page = guarded_page.page
-    page.goto(f"{live_url}/review?tab={REGION_TAB_URL_ID}", wait_until="domcontentloaded")
+    page.goto(
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}')}",
+        wait_until="domcontentloaded",
+    )
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
 
     for spec in specs:
@@ -190,13 +220,17 @@ def _resolve_reason_label(reason_id: str, vocab_entries: list[dict]) -> str | No
     return template.format(detail=detail) if template else best["label"]
 
 
-def test_rejection_reason_label_renders_for_a_live_item(guarded_page: Any, live_url: str) -> None:
-    vocab = api_get(live_url, "/regions/vocabulary")
+def test_rejection_reason_label_renders_for_a_live_item(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    vocab = api_get(live_url, live_project, "/regions/vocabulary")
     vocab_entries = vocab.get("rejection_reasons", [])
     if not vocab_entries:
         pytest.skip("backend serves no rejection_reasons vocabulary right now")
 
-    rejected = api_get(live_url, "/review/regions?region_status=verify_rejected&page_size=50")
+    rejected = api_get(
+        live_url, live_project, "/review/regions?region_status=verify_rejected&page_size=50"
+    )
     items = rejected.get("items", [])
     if not items:
         pytest.skip("no verify_rejected items in the live dataset right now")
@@ -212,7 +246,7 @@ def test_rejection_reason_label_renders_for_a_live_item(guarded_page: Any, live_
 
     page = guarded_page.page
     page.goto(
-        f"{live_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected",
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected')}",
         wait_until="domcontentloaded",
     )
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
@@ -231,39 +265,41 @@ def test_rejection_reason_label_renders_for_a_live_item(guarded_page: Any, live_
     )
 
 
-def test_ingest_status_agrees(guarded_page: Any, live_url: str) -> None:
+def test_ingest_status_agrees(guarded_page: Any, live_url: str, live_project: dict[str, Any]) -> None:
     """docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.5 —
-    the /ingest status table's total agrees with GET {API_PREFIX}/ingest/status."""
+    the /ingest status table's total agrees with GET {prefix}/ingest/status."""
     page = guarded_page.page
-    page.goto(f"{live_url}/ingest", wait_until="domcontentloaded")
+    page.goto(f"{live_url}{page_path(live_project, '/ingest')}", wait_until="domcontentloaded")
     total_el = page.locator('[data-testid="ingest-status-total"]')
     total_el.wait_for(timeout=15_000)
     wait_for_stable_text(page, '[data-testid="ingest-status-total"]')
     displayed = int(total_el.inner_text().strip().replace(",", ""))
 
-    ok, first, second = agrees_with_retry(live_url, "/ingest/status", ("total",), displayed)
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, "/ingest/status", ("total",), displayed
+    )
     assert ok, (
         f"/ingest status table showed total={displayed}, but GET "
-        f"{{API_PREFIX}}/ingest/status total was {first} (and, on retry, {second})"
+        f"{{prefix}}/ingest/status total was {first} (and, on retry, {second})"
     )
 
 
-def test_region_drain_agrees(guarded_page: Any, live_url: str) -> None:
+def test_region_drain_agrees(guarded_page: Any, live_url: str, live_project: dict[str, Any]) -> None:
     """The /ingest region-drain panel's total_unfinished agrees with GET
-    {API_PREFIX}/ingest/region_drain. Uses wait_for_stable_text — the
-    value moves during a live cascade, per the plan."""
+    {prefix}/ingest/region_drain. Uses wait_for_stable_text — the value
+    moves during a live cascade, per the plan."""
     page = guarded_page.page
-    page.goto(f"{live_url}/ingest", wait_until="domcontentloaded")
+    page.goto(f"{live_url}{page_path(live_project, '/ingest')}", wait_until="domcontentloaded")
     el = page.locator('[data-testid="region-drain-total-unfinished"]')
     el.wait_for(timeout=15_000)
     wait_for_stable_text(page, '[data-testid="region-drain-total-unfinished"]')
     displayed = int(el.inner_text().strip().replace(",", ""))
 
     ok, first, second = agrees_with_retry(
-        live_url, "/ingest/region_drain", ("total_unfinished",), displayed
+        live_url, live_project, "/ingest/region_drain", ("total_unfinished",), displayed
     )
     assert ok, (
         f"/ingest region-drain panel showed total_unfinished={displayed}, but GET "
-        f"{{API_PREFIX}}/ingest/region_drain total_unfinished was {first} (and, on "
+        f"{{prefix}}/ingest/region_drain total_unfinished was {first} (and, on "
         f"retry, {second})"
     )

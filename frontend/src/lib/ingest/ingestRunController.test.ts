@@ -7,6 +7,7 @@ import type {
 } from '$lib/types';
 import type { IngestFile } from './fileSource';
 import { resolveIngestConfig } from './ingestConfig';
+import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 import { createIngestRun, type IngestRunDeps } from './ingestRunController.svelte';
 
 function mkFile(id: string, size = 10): IngestFile {
@@ -25,10 +26,6 @@ function successResponse(identifiers: string[]): BatchIngestResponse {
       successful: identifiers.length,
       duplicates: 0,
       failed: 0,
-      mismatches: 0,
-      missed_labels: 0,
-      unmatched_detections: 0,
-      labels_imported: 0,
       crops_indexed: identifiers.length,
     },
     results: identifiers.map((image_path) => ({
@@ -42,7 +39,6 @@ function successResponse(identifiers: string[]): BatchIngestResponse {
       error_kind: null,
       source_identifier: image_path,
     })),
-    disagreements: [],
   };
 }
 
@@ -56,7 +52,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-const config = resolveIngestConfig(null);
+const config = resolveIngestConfig(servedIngestConfig());
 
 function baseDeps(overrides: Partial<IngestRunDeps> = {}): IngestRunDeps {
   return {
@@ -243,10 +239,6 @@ describe('createIngestRun — response handling', () => {
         successful: 1,
         duplicates: 1,
         failed: 1,
-        mismatches: 0,
-        missed_labels: 0,
-        unmatched_detections: 0,
-        labels_imported: 0,
         crops_indexed: 1,
       },
       results: [
@@ -284,7 +276,6 @@ describe('createIngestRun — response handling', () => {
           source_identifier: 'src/c.jpg',
         },
       ],
-      disagreements: [],
     }));
     const run = createIngestRun(
       baseDeps({
@@ -321,10 +312,6 @@ describe('createIngestRun — response handling', () => {
           successful: req.identifiers.length,
           duplicates: 0,
           failed: 0,
-          mismatches: 0,
-          missed_labels: 0,
-          unmatched_detections: 0,
-          labels_imported: 0,
           crops_indexed: req.identifiers.length,
         },
         results: req.identifiers.map((identifier, i) => ({
@@ -340,7 +327,6 @@ describe('createIngestRun — response handling', () => {
           error_kind: null,
           source_identifier: identifier,
         })),
-        disagreements: [],
       }),
     );
     const run = createIngestRun(
@@ -375,10 +361,6 @@ describe('createIngestRun — response handling', () => {
           successful: 1,
           duplicates: 1,
           failed: 0,
-          mismatches: 0,
-          missed_labels: 0,
-          unmatched_detections: 0,
-          labels_imported: 0,
           crops_indexed: 1,
         },
         results: [
@@ -406,7 +388,6 @@ describe('createIngestRun — response handling', () => {
             source_identifier: null,
           },
         ],
-        disagreements: [],
       }),
     );
     const run = createIngestRun(
@@ -561,10 +542,6 @@ describe('createIngestRun — retry failed', () => {
             successful: 1,
             duplicates: 0,
             failed: 1,
-            mismatches: 0,
-            missed_labels: 0,
-            unmatched_detections: 0,
-            labels_imported: 0,
             crops_indexed: 1,
           },
           results: [
@@ -591,7 +568,6 @@ describe('createIngestRun — retry failed', () => {
               source_identifier: 'src/b.jpg',
             },
           ],
-          disagreements: [],
         };
       }
       return successResponse(req.identifiers);

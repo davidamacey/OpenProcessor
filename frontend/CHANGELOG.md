@@ -6,7 +6,229 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **VLM picker on the test-on-crop panels (W9 x W5).** The pack test panel
+  and, while "Verify with the VLM" is on, the region-profile test panel
+  mount the per-run VLM picker (no-pick option reads "Active endpoint").
+  A pick is sent as `vlm_name` with `vlm_revision: null`, plus
+  `acknowledge_external: true` only once the operator ticks the served
+  external-endpoint warning; nothing is sent for the default. The unsaved
+  VLM draft (`vlm_draft`) stays out of scope.
+
+- **VLM models (OpenProcessor W9).** A deployment-wide VLM endpoint registry
+  with per-project activation. New `/settings/models` (the project's active
+  endpoint with Rollback and Turn off and the served VLM health, the
+  endpoints table with served labels, a red warning chip for an endpoint that
+  sends crops outside the deployment, Probe, Clone, Delete and the project's
+  Activate here; the local-model catalog with a confirm-gated Switch, a
+  restart banner with the copyable command and a poll that follows the
+  server; every model choice), the endpoint editor
+  (`/settings/models/vlm/[name]`: served schema form, live validation, Test
+  connection, Probe saved, revisions) and create page
+  (`/settings/models/new-endpoint`). Keys are host secrets: only the
+  reference and whether the host has it are ever shown. Activating an
+  external endpoint shows the served warning and an acknowledgement
+  checkbox; `acknowledge_external` is sent only when checked. A per-run VLM
+  picker joins the dashboard's assist bar and the "Run VLM" buttons on the
+  dashboard and `/clusters/[id]` (`vlm=`, `acknowledge_external=`); `/settings`
+  gains a `vlm` dropdown (an unacknowledged external entry is disabled with a
+  link to Settings → Models) and a Models card; `/models` lists one
+  `kind: 'vlm'` row per endpoint; item details show the VLM endpoint, model and
+  prompt pack. All of it is absent until the backend serves W9 (a one-shot
+  probe of `GET /vlm/endpoints`, and the served `/methods` `vlm` axis for the
+  pickers). The shared config machinery was generalized additively
+  (`activate` body extras, event type, optional `active`, activate-dialog
+  acknowledgement).
+
+- **Combine projects (P4).** `/projects/combine` merges several projects into
+  a new one: sources in priority order, a name-based class mapping per source
+  (untouched rows follow the server's suggestions, touched rows never get
+  overwritten), options left to the server's defaults until touched, a
+  debounced served preview, and a confirm-gated Start that sends
+  `expected_preview_sha`. `/projects/combine/[job_id]` follows the job
+  (2 s poll while running, `combine.progress` wake-ups), offers Cancel,
+  Resume, Open project, "Review flagged conflicts" and the served next
+  steps. A combined project on `/projects` links to its job and its delete
+  reads "Undo combine". Combined items show their origin project, item,
+  image and split, with a conflict chip, in the item Details. Absent
+  entirely when the backend does not mount the combine router.
+
+- **Test on a crop for prompt packs and region profiles (W5).** The pack
+  editor's test panel is re-typed to the served contract and now shows the
+  served pack and VLM refs (`name@revision`, endpoint, model), top-level
+  parse state, each crop's parsed answer or served skip reason, and the
+  preview item; a `crop_not_found` refusal names the missing ids in the
+  input. The region-profile editor gains a "Test on a crop" panel
+  (`POST /region_profiles/test`): one crop, the draft or a saved revision,
+  an optional segmenter prompt, and "Verify with the VLM"; it shows each
+  leg's status and its candidates (a dropped one greyed with its served
+  reason), the candidates drawn over the source image (boxes and mask
+  outlines, dropped ones dimmed) and in the crop's own frame from the
+  served parent-frame geometry, the preview under "Selection (not
+  verified)" or "VLM verdicts", and the verify block. Wrappers live in
+  `src/lib/api_configTest.ts`; types are pinned key-for-key by
+  `contract/configTestContract.test.ts`. Both controllers carry a
+  `vlmSelection` hook the VLM picker will fill.
+- **Imported labels in review and browse (W10 leftovers).** An **Imported**
+  review tab, shown only when the backend serves it, with its own empty
+  state linking to the import page; URL-seeded `import_id` and
+  `combine_conflict` filters shown as removable chips and sent only when
+  the tab's served filters list them; "Review imported labels" on the
+  import job view; a lock glyph on a locked label (browse card) or box
+  (slot card, multi-box canvas); import provenance rows in an item's
+  details; and "Reprocess image..." on a card's expanded view and on slot
+  cards (`POST /images/{image_id}/reprocess`), with `/clusters/[id]`
+  adopting the served items.
+
+- **Region-profile editor and config vocabulary (OpenProcessor W4).** New
+  `/settings/region-profiles` lists the project's region profiles and
+  templates with the active profile (confirm-gated Rollback and Turn
+  off), the served activation impact with a confirm-gated Re-run of the
+  served `suggested_reprocess` (dry run first, through `POST /reprocess`),
+  Clone, confirm-gated Delete, and a read-only "Models and sources" panel
+  from `GET /config/vocabulary`. `/settings/region-profiles/[name]` edits
+  a profile from the served schema (groups, types, ranges, advanced
+  fields, `applies_when` dimming from the saved revision's `effective`),
+  with model pickers from the served vocabulary (`choice.id` stored,
+  `empty_choice` offered, other projects' shared detectors on request),
+  the served segmenter cap and floor beside the segmenter fields, live
+  validation, "Check the draft for activation", revisions and restore,
+  and pinned activation ("Activate anyway" only when the served report
+  allows force). A successful activation re-polls `/health`, so the
+  existing "reload to apply" notice fires. Absent until the backend
+  serves `GET /region_profiles` (a one-shot probe per project); routes in
+  `PENDING_BACKEND_W4` until the W4 contract sync. The prompt-pack
+  editor's activate/rollback state, save column, revisions, dialogs,
+  issue list and availability gate are now shared config components
+  (`src/lib/config`, `src/lib/components/config`) used by both editors
+  (`packErrorDetail`/`packErrorText` are now
+  `configErrorDetail`/`configErrorText`), and the shared stale-snapshot
+  banner no longer reads "last known ctl."
+- **Prompt-pack editor (OpenProcessor W3; test-on-crop W5).** New
+  `/settings/prompt-packs` lists the project's VLM prompt packs and
+  templates with the active pack (confirm-gated Rollback), Clone and
+  confirm-gated Delete; `/settings/prompt-packs/[name]` edits a pack from
+  the served schema with live server validation (issues shown under their
+  field), saves new revisions with `expected_revision` (a
+  `revision_conflict` offers reload or keep-my-edits), views and restores
+  old revisions, activates a pinned revision (confirm; "Activate anyway"
+  only when the served report allows force) and, for calls the schema
+  marks `testable`, runs test-on-crop showing the served prompt, raw
+  reply, parsed result and preview item. Absent until the backend serves
+  `GET /prompt_packs` (a one-shot probe per project). Built against the
+  frozen spec; the routes are in `PENDING_BACKEND_W3` until the W3/W5
+  contract sync.
+- **Cross-project model sharing on `/models` (OpenProcessor projects P2,
+  §5.5).** The page lists other projects' shared models
+  (`include_other_projects=true`) with a "from `<project>`" chip, and
+  every model with a served `class_mapping` shows "N classes map", the
+  served unmapped class names and a name-by-name "Class mapping" table
+  (`GET .../models/{name}/class_mapping`); class ids are never shown. The
+  active project's own promoted models show their served sharing state
+  and an owner-only, confirm-gated "Share with other projects" / "Stop
+  sharing" toggle (`PUT .../models/{name}/sharing` with the served
+  revision; a revision conflict reloads, an `in_use` refusal offers the
+  served `force`, every refusal is shown verbatim). The toggle needs the
+  model's sharing revision, which the backend doesn't serve on the
+  listing yet, so it stays absent until it does. Unsharing warns that
+  another project may be using the model.
+- **Per-project pipeline pause.** `/projects` shows a "paused" chip on
+  each project whose served `GET {prefix}/pause` flag is set, and a
+  confirm-gated Pause / Resume pipeline action on writable projects
+  (`POST {prefix}/pause` / `/resume`, through each project's own served
+  prefix). The project switcher shows "paused" for the active project.
+- **Labeled-dataset import and Reprocess (OpenProcessor W10), built ahead
+  of the backend.** A `/p/<slug>/datasets` section: the imports list, the
+  `/datasets/import` wizard (server path or archive upload, a debounced
+  served preview with splits, totals and issues, class mapping by name
+  only with the served suggestions and resolved targets, options sent only
+  when set, confirm-gated Start tied to the preview's `import_key`, every
+  served refusal rendered by its message) and the `/datasets/imports/[id]`
+  job view (follows the served `poll_after_s` and `dataset_import.*`
+  events; cancel, resume and a dry-run-first undo). A Reprocess dialog on
+  the item-detail panel (one crop, the served post-write crop adopted) and
+  the `/clusters/[id]` selection (served dry run, then apply). Every W10
+  surface is absent until the backend serves `GET {prefix}/datasets/formats`
+  (a one-shot per-project probe; W10 has no capability flag). nginx gains a
+  dataset-upload location sized by `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
+  (default 2048). Plan and backend questions:
+  `docs/design/w10-import-reprocess-ui-plan-2026-09-27.md`.
+
 ### Changed
+
+- **W10 types pinned to the contract; Reprocess now appears against the
+  real backend.** `types_import.ts` is re-typed field-for-field from the
+  vendored OpenAPI (`/datasets/formats` serves `processing_modes`,
+  `parents_modes`, `trust_levels`, `upload_limits` and `{value, label,
+description}` choices; a failed job's `error` is a string; the report and
+  undo report gained their new counts). Reprocess was gated on a
+  `formats.reprocess` block the backend never serves, so it was absent; it
+  is now present whenever the import API is served, with its scope and
+  region-mode ids pinned to the contract enums, no lock-rule sentence and
+  no summary message (the served counts are what show). The archive input
+  no longer filters by a served extension list (none is served).
+- **Contract sync to OpenProcessor f582aa05; every route resolves for real.**
+  All `PENDING_BACKEND*` allow-lists and `it.todo` entries are gone, so every
+  scanned call site must resolve in the vendored OpenAPI. `findOperation`
+  no longer lets a literal path segment (for example `region`) match an
+  OpenAPI path parameter, which had hidden the removed `PUT /crops/{id}/region`
+  route; it now picks the candidate with the most literal matches.
+- **Multi-box regions on the real wire.** `region_boxes[]` with per-box
+  state, score, detector, verdict, lock, cluster, text and thumbnail;
+  item `region_count`/`region_rejected_count`/`region_max_score`/
+  `region_set_complete`/`region_revision`. Writes use `PUT /crops/{id}/regions`,
+  `PATCH /crops/{id}/regions/{box_id}`, `PUT /crops/batch_regions` and
+  `POST /regions/batch_box_state`, send `expected_region_revision` and adopt
+  the item a 409 `region_conflict` returns. The single-box keys and the
+  `PUT /crops/{id}/region` / `batch_region` callers, `setSlotBox`,
+  `BboxCanvas`, `bboxFrames`, `viewBox` and the item-level `region_text` are
+  removed; a tier-2 scalar-box slot is read-only. The gallery gained a "Box
+  state" filter and a `rows_truncated` chip. `MultiBoxCanvas` keys resolve
+  through the keymap (a rebound delete key was previously ignored).
+  `region_profile.limits` (`max_boxes_per_write`) is required on the served
+  profile and `RegionProfileSummary` moved to the split schema.
+- **Ingest batch**: removed the label-import and mismatch request/response
+  fields the backend no longer serves (`label_txt_path`, `label_source`,
+  `detect_mismatches`, `labels_imported`, `mismatches`, `missed_labels`,
+  `unmatched_detections`) and the UI that showed them.
+- **Projects P3 wire.** `ProjectSummary.paused` drives the `/projects` chip and
+  Pause/Resume buttons (no per-row `/pause` reads); `paused_by`/`reason`
+  show in the switcher tooltip; `keymap_clone_conflicts` is toasted after a
+  clone; global `project.paused`/`project.resumed` events update the store.
+  Model sharing reads the served `owned`/`sharing_revision`, foreign models
+  are `unloadable:false`, and VLM rows show their `active` state.
+  `ActiveConfigResponse.source`/`activated_at`/`applied` are required.
+
+- **Archive / Unarchive on `/projects` follow the served `archivable` /
+  `unarchivable` flags** (vendored from OpenProcessor be20dc40) instead of
+  being inferred from `writable` / `selectable`.
+
+- **The `/clusters` region gallery picks the false-positive bucket by
+  served `cluster_kind`, not a client id constant.** `SlotGallery.svelte`
+  and `slotGalleryController.svelte.ts` deleted
+  `FALSE_POSITIVE_REGION_CLUSTER_ID` (`-100`) — the FP-only styling (red
+  border, "✗ False positives"/"✗ False-positive cluster" badges) now keys
+  off the selected cluster's own served `cluster_kind === 'false_positive'`
+  (`GET {API_PREFIX}/regions/clusters`), via the controller's new
+  `selectedClusterIsFalsePositive`. A cluster's id sent back to the
+  backend (`region_cluster_id`, refine, etc.) was always the served id
+  and is unchanged; only the FP-detection comparison moved off the id.
+- **`e2e/live/` is project-aware (following the projects cutover).** The
+  live read-only tier now reads a session-scoped `live_project` fixture
+  (`{slug, prefix}`) off the GLOBAL `GET {API_PREFIX}/projects`
+  response's `default_slug` — every direct API read goes through
+  `api_get(live_url, live_project, path)` against that project's own
+  served `prefix`, and every page navigation goes through
+  `page_path(live_project, path)` (`/p/<slug>/...`). The health preflight
+  stays on the GLOBAL `GET {API_PREFIX}/health`; `live_region_profile`
+  now reads the region profile from the project's own scoped `/health`.
+  `test_route_sweep.py` gained `test_global_route_mounts_cleanly` for the
+  one page that stays unscoped, `/projects`. The write guard's
+  read-only-POST allowance now matches `/train/preflight` by path suffix
+  (the scoped prefix varies per project) and `ALLOWED_4XX_5XX` gained a
+  documented entry for `GET .../keymap` 404ing against a
+  pre-OpenProcessor-W2b deployment.
 
 - **Bind address is configurable.** The compose port is now
   `${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}`. The
@@ -23,6 +245,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   request instead of fixed sleeps; it flaked under parallel load.
 
 ### Fixed
+
+- `/projects`: a row left in the served `deleting` (or `building`) status
+  no longer stays stale. While any listed row has a transient status the
+  page re-reads the list every 2 s (stopping when none remain or on
+  unmount) and also re-reads on any global `project.*` event, so a
+  finished delete drops its row without a reload.
+- `/projects` Copy settings dialog: no source project is preselected (Copy
+  stays disabled until one is picked), and a list reload, including the
+  one after submitting, no longer resets the chosen source or ticked axes.
+- **Test-on-crop source-image preview no longer spills over the result.**
+  The overlay sat in an auto-height parent, so its image grew to the card
+  width and covered the rows below; it now lives in a bounded column
+  (`h-72`, `max-w-xl`) and the profile panel keeps its two previews side
+  by side. A stubbed e2e with a real PNG asserts the image and box layer
+  stay inside the column.
+- **Image Reprocess from the region gallery and `/train` cohort previews
+  refreshes the grid** (the cards were rendered without `onreprocessed`),
+  and the region box editor now shows the lock glyph on locked boxes.
+
+- **Confirm dialogs close on Esc again after a busy Confirm.** While a
+  dialog's Confirm button is busy it is disabled, which drops keyboard focus
+  out of the dialog, so Esc and Tab stopped reaching it. Keys that land
+  outside every open dialog now go to the topmost one.
+- **Ingest uploads get the ingest proxy limits again.** Every ingest route
+  is project-scoped (`/projects/<slug>/ingest/...`), but `nginx.conf`'s
+  ingest location still matched the removed unscoped path, so uploads fell
+  through to the general location's 120 s read timeout. The location now
+  matches the scoped path and keeps its 600 s timeout.
+- **`/export` says "1 class with no validated crops"**, not "1 classes",
+  when a single class has none (seen on a fresh install whose registry
+  held only the region class).
+- **Lint debt (#83): `svelte/prefer-svelte-reactivity` and
+  `svelte/no-navigation-without-resolve` restored to `error`.** Both
+  rules were downgraded to `warn` during the eslint-plugin-svelte 3
+  upgrade; all 67 warnings (63 reactivity, 4 navigation) are now fixed
+  and the downgrade override in `eslint.config.js` is gone.
+  - Reactivity: genuinely reactive Map/Set state (`sel.ids` in
+    `$lib/selection.svelte.ts`, the `/clusters` badge-lookup cache, the
+    stale-fetch exclusion guard) converted to `SvelteSet`/`SvelteMap`
+    from `svelte/reactivity`, mutated in place rather than
+    rebuilt-and-reassigned. `selection.svelte.ts`'s selection set is now
+    a single long-lived `SvelteSet`. Every other flagged site was a
+    local, synchronous temporary (a dedup/lookup set or tally map built
+    and consumed within one function/computation, never held in
+    reactive state) or a plain non-reactive cache (module-level promise
+    cache, memoized controller instances, an internal undo-bookkeeping
+    map) — each left as a native `Set`/`Map` with a
+    `eslint-disable-next-line` and a one-line reason, per file.
+  - Navigation: the four flagged `<a href>`s are all external dashboard
+    links (MLflow, Grafana, Prometheus, OpenSearch) that `resolve()`
+    cannot handle (it only resolves in-app SvelteKit routes) — wrapped
+    in `eslint-disable`/`eslint-enable` pairs with a reason instead.
 
 - **Stubbed e2e suite no longer flakes under pytest-xdist parallel
   load.** Every fixed `page.wait_for_timeout(...)` sleep across
@@ -44,6 +318,201 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`test_clusters_display_order_representatives.py`).
 
 ### Added
+
+- **W8 multi-box regions — wire model and write paths (lockstep branch
+  `feat/w8-multibox-lockstep`, built against and merged only alongside the
+  backend's W8 wave; `docs/design/w8-multibox-frontend-plan-2026-09-26.md`).**
+  A region item can now carry an unbounded list of boxes
+  (`ItemDoc.region_boxes: RegionBoxWire[]`), not just one — the owner's
+  binding rule is "a region is a list per item, one element is not a
+  special case." This pass ships, additively (every pre-W8 single-box
+  field stays declared and read, so the shipped `/review` UI is
+  unaffected until it's switched over):
+  - `SlotBox`/`BoxStateInfo` types and `SubBoxCapability.listField`
+    (`src/lib/annotations/types.ts`); `SlotData.subBoxes` populated by
+    `readSlot`'s new `mapRegionBoxWire`/`mapRegionBoxList`
+    (`src/lib/annotations/readSlot.ts`); the served region slot declares
+    `listField: 'region_boxes'` (`servedRegionSlot.ts`).
+  - Pure box-editing logic in `src/lib/annotations/multiBox.ts`
+    (`EditableBox`, selection cycling, add/remove, and the
+    `PUT /crops/{crop_id}/regions` request-body builder implementing the
+    per-element addressing rule: untouched → `{box_id}`, moved →
+    `{box_id, bbox_norm}`, state-changed → `+ state`, new → `{box_id:
+null, bbox_norm}`) plus the owner-decided Enter semantics
+    (`confirmProposedBoxes`: confirms only `proposed` boxes, leaves
+    `rejected`/`false_positive` untouched).
+  - New `api.ts` functions: `putRegionBoxes`, `putBatchRegions`,
+    `patchRegionBox`, `postBatchBoxState` (W8.8's five human edit
+    routes).
+  - `MultiBoxCanvas.svelte` — a sibling to `BboxCanvas.svelte` (which
+    stays single-box) supporting select/add/delete/Tab-cycle over an
+    unbounded box list, no client cap.
+  - `review.region.accept_box`/`reject_box` (`y`/`r`) and
+    `box_edit.next_box` (`Tab`) flip from `available: false` to `true` in
+    `keymapFallback.ts`, reserving those letters via the existing
+    served-keymap union mechanism.
+  - Contract tests gained an explicit, named `PENDING_BACKEND_W8`
+    allow-list (`wireKeys.test.ts`, `servedRegionSlot.test.ts`) and
+    `it.todo` entries (`endpointCatalog.test.ts`) for the wire keys/routes
+    the backend's W8 hasn't merged yet — emptied at the lockstep contract
+    sync, not silently widened.
+  - **Second pass (2026-09-26): full cutover, no backward compatibility.**
+    Per owner confirmation (fresh build, no users), the pre-W8 scalar
+    region fields are deleted, not kept additive: `REGION_SUB_BOX`
+    declares only `listField`; `readSlot` never runs the legacy
+    scalar-box block for a `listField` capability; `setBox`/`clearBox`
+    are gone from `REGION_ENDPOINTS`. `/review`'s region tab is fully
+    wired to `MultiBoxCanvas` + the new `multiBoxRegionController.svelte.ts`
+    (extracted, not piled into the 3000-line page) in both scan and edit
+    mode — `y`/`r` PATCH the selected box immediately, Enter confirms
+    proposed boxes and flushes any pending geometry edit in one write,
+    arrow keys nudge the selected box, and the on-screen Confirm/Save-bbox
+    buttons (a real bug: they were still wired to the legacy single-box
+    functions, keyboard-only worked) now branch correctly too. `SlotCard`,
+    `CropMetaPanel` and `SourceImageOverlay` all render every box in
+    `subBoxes` (state-styled), replacing their single-`subBox` reads for
+    region. `SlotGallery` shows the served `total_rows`/`box_count`
+    alongside item counts; `batchRegionStatus`'s conflict type widened to
+    the full `RegionBatchConflict` shape. `test_region_verify_rejected_confirm.py`
+    rewritten for the real new semantics (confirm-only-proposed, per-box
+    accept/reject, add+confirm in one write, on-screen button parity, Z
+    restoring the whole list via the backend-confirmed one-step undo
+    contract).
+  - **Third pass (2026-09-26): closed every remaining gap.**
+    Region-cluster bulk triage now uses the per-box `batch_box_state`
+    route (`applyBoxState`, `slotGalleryController.svelte.ts`) whenever a
+    cluster bucket is open, instead of the item-level `batch_status` —
+    never the item-level route, which would flip every sibling box.
+    `SlotBboxEditor.svelte` (the `CropCard` pencil ✎) now reuses
+    `MultiBoxCanvas`/`multiBoxRegionController` for the region slot (a new
+    `saveEdits()` controller method — a plain PUT with no `region_status`,
+    since this modal has no confirm concept) instead of being
+    single-box-only/unreachable for region; the single-box path is kept,
+    byte for byte, for a genuine tier-2 single-box slot. The served
+    `region_profile.limits.max_boxes_per_write` now gates the Add-box
+    action in both canvases and renders as "N / max" — never a
+    client-guessed cap. `GET /regions/statuses`' `box_states` vocabulary
+    (label/dashed/dim/badge) is now loaded and preferred over the
+    hardcoded label/dash palette. See the plan doc's third-pass section
+    for the full test list (unit + e2e, each mutation-checked).
+  - **Follow-up (2026-09-26): served `box_states[].tone`.** The backend
+    approved a color signal for `box_states` — `BoxStateEntry.tone`
+    (`'accepted' | 'proposed' | 'rejected' | 'neutral'`, optional).
+    `regionStatusesStore.boxStateTone()` resolves it (falling back to
+    `'neutral'` on a pre-tone backend or an unrecognized state); new
+    `toneRingRgb`/`toneBorderClass`/`toneChipClass` helpers
+    (`regionStatuses.svelte.ts`) are the one place per output shape that
+    maps a tone to a color, replacing the client role→color guess in
+    `+page.svelte`, `SlotBboxEditor.svelte`, `SourceImageOverlay.svelte`
+    and `CropMetaPanel.svelte`. **Fixed a real bug found while adding the
+    mount test**: `SourceImageOverlay.svelte` skipped drawing every
+    region box on a real W8 (list-only) backend — its per-item loop's
+    `if (!sub) continue` guard never ran for a capability that only ever
+    populates `subBoxes`, not the legacy singular `subBox`. Mutation-
+    checked twice (the tone-color mapping and the loop guard fix each
+    independently fail the new test when reverted).
+
+- **Projects UI: every page under `/p/[project]`, a project switcher and
+  `/projects` management (P1–P3 surface).** The active project lives in
+  the URL path only (owner decision; nothing in localStorage).
+  - Every page moved to `/p/<slug>/<section>`. `/` and the bare old
+    paths (`/review?tab=x`, `/clusters/12`) redirect under the served
+    default project with the query string kept, and `/p/<slug>` lands on
+    the dashboard. An unknown or non-selectable slug shows a "project not
+    found / not available" page with links to the project list and the
+    default project, and fires no scoped call.
+  - A top-bar project switcher lists the served selectable projects with
+    served status labels and a "custom keys" badge. Switching keeps the
+    current section and drops ids that don't carry across projects. An
+    archived (not writable) project shows a read-only banner.
+  - On a switch, every per-project cache resets (undo stack, class
+    registry, vocabularies, region profile with no reload notice,
+    settings, keymap, source-overlay cache), and a
+    scoped response that lands after the switch is dropped.
+  - `/projects`: the served list with a Show-archived toggle, the served
+    shard capacity, and create / edit / archive / unarchive / copy
+    settings / delete. Every action is gated on served flags only.
+    Refusals render the served message verbatim, a `revision_conflict`
+    offers a reload, delete shows the served dry run and blocking reasons
+    first, and lifecycle warnings become toasts.
+  - Vendored OpenAPI re-synced from the backend's projects-lifecycle
+    branch (purely additive: the P3 routes and schemas);
+    `types_projects.ts` is pinned to it by `projectsContract.test.ts`.
+  - Tests: unit and mount tests for the path helpers, the store, the
+    stale-response guard, the switcher, the routing loads and every
+    management action's served-error handling (each mutation-checked);
+    stubbed e2e for two-project switching, redirects and `/projects`
+    CRUD, and every existing e2e test moved to `/p/default/...`.
+
+- **Projects P1 follow-up: a real prefix-boundary e2e test.** Every
+  other stubbed e2e route pattern matches by path suffix (`r"/health$"`
+  matches both the global and the scoped health), so none of them could
+  catch a call built from the wrong URL builder. New
+  `e2e/stubbed/test_project_scoping.py` records every request during a
+  `/review` mount and asserts the project list and status-chip health
+  hit the GLOBAL `/curation/projects`/`/curation/health`, region-profile
+  health/`/review/*`/`/classes` hit the scoped
+  `/curation/projects/default/...`, and nothing hits an unscoped
+  `/curation/<scoped-route>`. Mutation-checked: confirmed red when
+  `scoped()` is temporarily forced to return `API_PREFIX`.
+- Restored three bake-off fields (`EvalDatasetClass.registry_class_name`,
+  `BakeoffProfileRow.context_class_names`, `ClassMapping.model_to_eval_names`,
+  OpenProcessor 3cd4ca87, already adopted on this frontend) that the P1
+  contract sync had dropped only because the synced backend branch
+  (`cutover/projects-foundation` @ `dc2b4e0e`) predates that upstream
+  commit. `bakeoffContract.test.ts` now carries an explicit, commented
+  `PENDING_REBASE_FIELDS` allow-list for exactly these three, to be
+  deleted (not widened) once that branch is rebased onto `main` and
+  re-synced.
+
+- **Projects P1 — scoped-only wire, no backward compatibility (owner
+  decision).** OpenProcessor's `cutover/projects-foundation` removes the
+  unscoped `{API_PREFIX}/...` alias entirely: every scoped route now
+  lives under `{API_PREFIX}/projects/{project}/...`, and only
+  `/projects` (list/CRUD), `/health` and `/events` stay global.
+  - `src/lib/api.ts`'s `scoped()` now throws `ProjectNotSelectedError`
+    until `setScopedPrefix()` has run (fails closed, matching the
+    backend's `ProjectNotBound`) — no `default`-prefix fallback baked
+    in.
+  - New `projectsStore` (`src/lib/stores/projects.svelte.ts`) loads
+    `GET {globalApi()}/projects` once at boot, picks the served
+    `is_default: true`/`selectable` project, and seeds
+    `setScopedPrefix()` from its own `prefix` — every scoped call is
+    built from that served value, never assembled client-side. A
+    persistent load failure sets `projectsStore.error`; the root layout
+    (`src/routes/+layout.svelte`) renders a full blocking error state
+    (`data-testid="projects-blocking-error"`) instead of a
+    half-rendered app. No URL param or switcher yet — exactly one active
+    project per session (a later task).
+  - New `src/lib/types_projects.ts` (`ProjectSummary`, `ProjectsResponse`,
+    `ProjectCapacity`, `ProjectLimits`), `getProjects()`/`getGlobalHealth()`
+    (`api.ts`).
+  - **Health split**: the top-bar API status chip now reads the GLOBAL
+    `GET {globalApi()}/health` (`GlobalHealth`, `types.ts`);
+    `regionProfileStore`/project facts still read the project-scoped
+    `GET {scoped()}/health` (`ApiHealth`, now also carrying `project`).
+    `healthStore.poll()` fires both.
+  - **Events split**: new `subscribeGlobalEvents()` (`src/lib/sse.ts`)
+    opens the GLOBAL `GET {globalApi()}/events` stream (`project.*`
+    events, always `project: null`) — held by the root layout to
+    refresh the project list. Item/pipeline SSE
+    (`subscribeCurationEvents`/`subscribePipelineEvents`) stay scoped,
+    unchanged. K2's `config.changed axis=keymap` subscription stays on
+    the scoped stream (the keymap is per-project).
+  - `resetForProjectChange()` hooks (the undo ring buffer,
+    `SourceImageOverlay`'s crop-context cache) are now wired into a
+    central `onProjectChange()` registry in `projectsStore` — unused
+    today (no switcher yet) but ready for it.
+  - Contracts re-synced from OpenProcessor `cutover/projects-foundation`
+    @ `dc2b4e0e`. `endpointCatalog.test.ts`/`apiCallScanner.ts` resolve
+    every `${scoped()}` call against the scoped OpenAPI paths
+    (`/curation/projects/{project}/...`) and every `${globalApi()}` call
+    against the global ones, with the same completeness guard for both.
+  - `e2e/conftest.py`'s `Stub` serves the global `GET {api_prefix}/projects`
+    by default (`e2e/fixtures/wire.py`'s `projects_response()`, one
+    `default` project); every other stubbed route is unchanged since its
+    patterns already match by path suffix, not full path — the fail-closed
+    501 guard is untouched.
 
 - **Configurable keyboard shortcuts — editor + served keymap (K2 of
   `docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md`).**
@@ -445,6 +914,65 @@ compose pull && docker compose up -d` — no `git clone` needed.
 - **Private export tool** `scripts/oss-export/` (`export.sh`,
   `leak-scan.sh`, `exclude.txt`, `leak-patterns.txt`, `overlay/`)
   replaces `scripts/debrand-export.sh`, which is deleted.
+
+### Removed
+
+- **Every client-side fallback for an older backend (#85).** Owner
+  decision: a fresh build with no users targets only the current
+  OpenProcessor wire (the vendored OpenAPI). Plan and evidence:
+  `docs/design/no-backcompat-removal-plan-2026-09-26.md`.
+  - `FALLBACK_METHODS`: `getMethods()` now rejects like every other read
+    and `strategiesStore` starts from (and on a failed load keeps)
+    `EMPTY_METHODS`, so nothing is advertised that the server didn't serve.
+  - The `/settings` "backend predates shared defaults" 404 state and the
+    Curation scores card's absent-on-404 path; a failed read shows its
+    error with a retry.
+  - The bake-off and ingest availability probes: both routers are
+    always mounted, so the nav links and pages always render.
+  - `/ingest`: the interim upload limits used when `/ingest/config`
+    404ed, the null-unknown `persists_bytes` banner and its
+    `PUBLIC_CROPWRIGHT_INGEST_UPLOAD` override, and the `image_path`
+    fallback for upload results without `source_identifier`. The page
+    shows a loading line until the served config loads.
+  - `/train`: the read-only augmentation-preset fallback (and hardcoded
+    `balanced_default`) when `/train/augmentation_presets` 404s, and the
+    pre-cutover val/test label guess for an `eval` without `split`
+    (`evalSplitLabel` labels both from the served split).
+  - Classes: the slot-registry fallback in `isSlotBoundClass` for a class
+    without `kind`, `getClasses`' legacy `id`/`name`/`count` aliases and
+    zeroed-thresholds default, and `/export`'s validated-minus-holdout and
+    local `deficient` fallbacks.
+  - `/models`: the `kind !== 'triton'` rule for an entry without
+    `unloadable`.
+  - Region profile: the `text_reader` heuristic when `reads_text` is
+    absent, and the store's per-field defaults for a profile missing
+    fields.
+  - `/review`: the second `/review/tabs` fetch for `empty_state` and the
+    per-field guards on each tab entry; one `getReviewTabs()` reads the
+    whole served response.
+  - Smaller wire fallbacks: `DatasetStats`' `by_human` region alias, the
+    `/clusters/[id]` header's registry lookup for a cluster without
+    `dominant_class_name` (kept only for a failed card load), and the
+    semantic-search `similarity_score`/`score` keys.
+  - Types now mark as required every field the current contract always
+    serves (class `kind`/`trainable`/`trainable_gap`/`adequacy`,
+    `/stats/classes` rows, holdout `deficient`/`min_test_per_class`,
+    region profile `reads_text`/`text_hint_enabled`, health
+    `region_profile`/`project`, review-tab `filters`/`filter_defaults`/
+    `description`, `eval.split`, promote cold-start flag, freeze
+    `selection`/`percent`/`min_per_class`, model `unloadable`/`optional`,
+    dataset-stats region/unlabeled counters, cluster purity fields).
+    Tests that exercised only a removed fallback are deleted; unit and e2e
+    fixtures now serve the current wire shape.
+  - `getClass()` (unused) and the dashboard's client-side
+    validated-minus-holdout `trainableCount()`: the class-balance bars
+    are sized by the served `trainable`.
+  - Follow-up fixes on the same branch: `/export`'s Gap column tooltips
+    describe the served `trainable_gap` as the shortfall against the
+    served per-class minimum (they said "Aug target minus trainable"),
+    and `/ingest` honours the served `upload.enabled` (one line instead of
+    the upload panel when false) and `batch.enabled` (hides the
+    server-path panel when false).
 
 ### Fixed
 

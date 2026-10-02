@@ -46,13 +46,13 @@ afterEach(() => {
 });
 
 describe('RunResults — val vs test labelling', () => {
-  it('labels the overall eval figures "validation (last epoch)" and per-class "test split" for the real fixture (no eval.split served)', async () => {
+  it('labels the eval figures by the served eval.split', async () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);
     await tick();
     flushSync();
-    expect(el.textContent).toContain('validation (last epoch)');
     expect(el.textContent).toContain('test split (frozen holdout)');
+    expect(el.textContent).not.toContain('validation');
   });
 
   it('V-5: labels the overall eval with the trainer protocol', () => {
@@ -275,7 +275,7 @@ describe('RunResults — confusion matrix', () => {
     const status: TrainJobStatus = {
       ...trainStatusFixture,
       eval: {
-        ...trainStatusFixture.eval,
+        ...trainStatusFixture.eval!,
         confusion_matrix_url: '/curation/train/artifacts/job1/confusion_matrix.png',
       },
     };
@@ -291,7 +291,7 @@ describe('RunResults — confusion matrix', () => {
     const status: TrainJobStatus = {
       ...trainStatusFixture,
       eval: {
-        ...trainStatusFixture.eval,
+        ...trainStatusFixture.eval!,
         split: 'test',
         map50: 0.812,
         val_last: { map50: 0.9191, map50_95: 0.846 },
@@ -342,7 +342,7 @@ describe('RunResults — confusion matrix lightbox', () => {
   const withMatrixUrl: TrainJobStatus = {
     ...trainStatusFixture,
     eval: {
-      ...trainStatusFixture.eval,
+      ...trainStatusFixture.eval!,
       confusion_matrix_url: '/curation/train/artifacts/job1/confusion_matrix.png',
     },
   };

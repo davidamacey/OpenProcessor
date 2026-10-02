@@ -87,7 +87,7 @@ def test_clusters_fetch_representatives_in_display_order(stub, page, app_url):
 
     stub.on("GET", r"/clusters(\?|$)", clusters_handler)
 
-    page.goto(f"{app_url}/clusters")
+    page.goto(f"{app_url}/p/default/clusters")
 
     # Real wait for the per-cluster fetches to land instead of a fixed
     # sleep: poll the stub's own call log (populated synchronously by the

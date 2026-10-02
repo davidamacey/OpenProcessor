@@ -77,7 +77,7 @@ def test_not_configured_status_and_null_counts_render_as_dashes(stub, page, app_
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
-    page.goto(f"{app_url}/models")
+    page.goto(f"{app_url}/p/default/models")
     page.get_by_text("Segmenter", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     card = page.locator("li", has_text="Segmenter")
@@ -95,7 +95,7 @@ def test_region_protected_model_shows_protected_chip_not_an_unload_button(
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
-    page.goto(f"{app_url}/models")
+    page.goto(f"{app_url}/p/default/models")
     page.get_by_text("Primary Item Proposer", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     card = page.locator("li", has_text="Primary Item Proposer")
@@ -112,7 +112,7 @@ def test_external_unloadable_false_model_shows_neither_button_nor_chip(
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
-    page.goto(f"{app_url}/models")
+    page.goto(f"{app_url}/p/default/models")
     page.get_by_text("Segmenter", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     card = page.locator("li", has_text="Segmenter")
@@ -126,7 +126,7 @@ def test_ordinary_unloadable_model_still_offers_a_plain_unload_button(
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/models/status(\?|$)", MODELS)
 
-    page.goto(f"{app_url}/models")
+    page.goto(f"{app_url}/p/default/models")
     page.get_by_text("PE-Core-L14-336 Image Encoder", exact=False).wait_for(
         timeout=ACTION_TIMEOUT_MS
     )

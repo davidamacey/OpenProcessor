@@ -14,24 +14,24 @@ from conftest import ACTION_TIMEOUT_MS
 
 import re
 
-from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item
+from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item, review_tabs
 from test_labeling_flow import CLASSES as ITEM_CLASSES
 from test_labeling_flow import register_base
 
 ROUTES = [
-    "/dashboard",
-    "/ingest",
-    "/clusters",
-    f"/clusters?class={REGION_CLASS}",
-    "/clusters/1",
-    "/review",
-    "/review?tab=regions",
-    "/classes",
-    "/export",
-    "/models",
-    "/train",
-    "/bakeoff",
-    "/settings",
+    "/p/default/dashboard",
+    "/p/default/ingest",
+    "/p/default/clusters",
+    f"/p/default/clusters?class={REGION_CLASS}",
+    "/p/default/clusters/1",
+    "/p/default/review",
+    "/p/default/review?tab=regions",
+    "/p/default/classes",
+    "/p/default/export",
+    "/p/default/models",
+    "/p/default/train",
+    "/p/default/bakeoff",
+    "/p/default/settings",
 ]
 
 CORE_TABS = [
@@ -46,11 +46,13 @@ CORE_TABS = [
 REGION_ROUTE = re.compile(r"/curation/(regions(/|$)|crops/[^/]+/region|ingest/region_drain)")
 
 REGION_CLASS_ROW = {
-    "id": 9,
-    "name": REGION_CLASS,
+    "class_id": 9,
+    "class_name": REGION_CLASS,
+    # No profile: the backend tags nothing as a region class.
+    "kind": "item",
     "group": "widgets",
     "hotkey_letter": None,
-    "count": 40,
+    "sample_count": 40,
     "validated_count": 12,
     "cluster_size": 44,
     "deprecated": False,
@@ -70,9 +72,10 @@ def register_no_profile(stub) -> None:
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": [*ITEM_CLASSES, REGION_CLASS_ROW]})
     stub.on("GET", r"/health$", {"status": "ok", "region_profile": None})
     # The backend omits the region tab without a profile.
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     stub.on("GET", r"/settings(\?|$)", {"settings": {}, "defaults": {}})
-    stub.on("GET", r"/scores/coverage(\?|$)", (404, {"detail": "not found"}))
+    stub.on("GET", r"/scores/coverage(\?|$)", {"coverage": {}})
+    stub.on("GET", r"/scores/status(\?|$)", {"status": "idle"})
     stub.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
 
     # Every item carries region_* values on the wire (the item wire keeps
@@ -119,7 +122,7 @@ def test_region_surfaces_absent(stub, page, app_url):
     register_no_profile(stub)
 
     # /review: exactly the core tabs; a ?tab=regions bookmark opens All.
-    page.goto(f"{app_url}/review?tab=regions")
+    page.goto(f"{app_url}/p/default/review?tab=regions")
     assert tab_labels(page) == CORE_TABS
     # ...and says why, instead of switching to All silently.
     notice = page.get_by_test_id("tab-unavailable")
@@ -127,27 +130,27 @@ def test_region_surfaces_absent(stub, page, app_url):
     assert "no region profile" in notice.inner_text()
 
     # /dashboard: no region detections panel.
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("verifier-confirmed").count() == 0
 
     # /clusters?class=<region class>: the normal class-filtered grid, not
     # a region gallery.
-    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
+    page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
     page.get_by_test_id("class-filter-chip").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_role("button", name=re.compile("⟳")).count() == 0
 
     # /clusters/[id]: crop cards offer no sub-box editor.
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.locator('button[aria-label^="Edit "]').count() == 0
     assert page.get_by_text("✎").count() == 0
 
     # /ingest: no region drain panel.
-    page.goto(f"{app_url}/ingest")
+    page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     # The next line's own real wait (a concrete selector) supersedes the
     # settle sleep that used to sit here.
@@ -162,9 +165,9 @@ def test_served_display_name_labels_the_region_tab(stub, page, app_url):
     register_base(stub)
     # No served label for the region tab: the label must come from the
     # profile's display_name alone.
-    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+    stub.on("GET", r"/review/tabs(\?|$)", review_tabs())
     stub.on("GET", r"/regions/statuses(\?|$)", {"statuses": []})
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     labels = tab_labels(page)
     assert labels == [*CORE_TABS, REGION_PROFILE["display_name"]], labels
     # With a profile, the root layout loads the region vocabularies.

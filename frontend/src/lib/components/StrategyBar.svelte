@@ -145,8 +145,8 @@
     pinnedSortId = null,
   }: Props = $props();
 
-  // getMethods()/init() never throws (404 or any error degrades to
-  // FALLBACK_METHODS) and init() itself is idempotent — safe to call on
+  // init() never throws (a failed load leaves EMPTY_METHODS) and is
+  // idempotent — safe to call on
   // every mount without a guard. No listener is installed by this call.
   $effect(() => {
     void strategiesStore.init();
@@ -182,6 +182,7 @@
       allowedIds || offerDiverse
         ? [...strategiesStore.methods.review_sorts, ...diverseOverlayOnly]
         : strategiesStore.methods.review_sorts;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this computation, never stored in reactive state
     const seen = new Set<string>();
     const deduped = source.filter((s) => {
       if (seen.has(s.id)) return false;

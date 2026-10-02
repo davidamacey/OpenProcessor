@@ -44,6 +44,7 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
   // caches the original item's reason at removal time and reuses it on
   // undo — instead of inventing a "restored by undo" string that was
   // never served by the backend.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal bookkeeping map, never read reactively by a template/derived
   const removedItemReasons = new Map<string, string | null>();
 
   /**

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildExportRows,
+  gapCellTitle,
   hasCurrentMulticlassExport,
   registryArtifactsAvailable,
   isNothingExportable,
@@ -28,6 +29,11 @@ function perClass(
       class_name: 'widget_a',
       count: 8,
       validated_count: 8,
+      adequacy: 'block',
+      aug_target: 500,
+      aug_gap: 492,
+      trainable: 8,
+      trainable_gap: 22,
       ...over,
     },
   ];
@@ -47,11 +53,6 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
     expect(rows[0]).toMatchObject({ aug_target: 50, gap: 42 });
   });
 
-  it('never derives a gap client-side: an omitted aug_gap is null, not aug_target - validated', () => {
-    const rows = buildExportRows(perClass({ aug_target: 500, aug_gap: undefined }), null);
-    expect(rows[0]?.gap).toBeNull();
-  });
-
   it('flags nothing when there are no holdout stats at all', () => {
     const rows = buildExportRows(perClass({}), null);
     expect(rows[0]?.testDeficient).toBe(false);
@@ -69,24 +70,6 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
     const rows = buildExportRows(perClass({}), holdout);
     expect(rows[0]?.testDeficient).toBe(true);
     expect(rows[0]?.test_count).toBe(999);
-  });
-
-  it('falls back to comparing against the served min_test_per_class when a bucket omits "deficient"', () => {
-    const holdout: TestHoldoutStats = {
-      total: 1,
-      min_test_per_class: 10,
-      by_class: [{ key: 8, doc_count: 7 }],
-    };
-    const rows = buildExportRows(perClass({}), holdout);
-    expect(rows[0]?.testDeficient).toBe(true); // 7 < 10
-
-    const holdout2: TestHoldoutStats = {
-      total: 1,
-      min_test_per_class: 5,
-      by_class: [{ key: 8, doc_count: 7 }],
-    };
-    const rows2 = buildExportRows(perClass({}), holdout2);
-    expect(rows2[0]?.testDeficient).toBe(false); // 7 >= 5
   });
 
   it('a class with no test-holdout row at all is deficient against the served minimum, not a hardcoded 5', () => {
@@ -111,12 +94,9 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
     expect(rows[0]?.test_count).toBe(0);
   });
 
-  it('m16: surfaces the served adequacy tier verbatim, null when unserved', () => {
+  it('m16: surfaces the served adequacy tier verbatim', () => {
     const rows = buildExportRows(perClass({ adequacy: 'warn' }), null);
     expect(rows[0]?.adequacy).toBe('warn');
-
-    const rowsUnset = buildExportRows(perClass({}), null);
-    expect(rowsUnset[0]?.adequacy).toBeNull();
   });
 });
 
@@ -184,10 +164,10 @@ function row(over: Partial<ExportRow>): ExportRow {
     total: 10,
     validated: 5,
     aug_target: 0,
-    gap: null,
+    gap: 0,
     test_count: 0,
     trainable: 5,
-    trainableGap: null,
+    trainableGap: 0,
     testDeficient: false,
     adequacy: 'ok',
     ...over,
@@ -225,38 +205,13 @@ describe('isNothingExportable (DQ-M9 frontend half)', () => {
       ]),
     ).toBe(false);
   });
-
-  it('false when adequacy is unserved (null) but validated crops exist — never guesses a threshold', () => {
-    expect(isNothingExportable([row({ validated: 20, adequacy: null })])).toBe(false);
-  });
 });
 
-describe('E1/E2 (visual audit 2026-09-24): trainable vs held out, classes with objects', () => {
-  it('trainable excludes the served frozen test crops and the gap is measured against it', () => {
-    const rows = buildExportRows(
-      perClass({ class_id: 52, validated_count: 35, aug_target: 500, aug_gap: 465 }),
-      { total: 5, by_class: [{ key: 52, doc_count: 5 }] },
-    );
-    expect(rows[0]).toMatchObject({
-      validated: 35,
-      test_count: 5,
-      trainable: 30,
-      gap: 465,
-      trainableGap: 470,
-    });
-  });
-
-  it('trainableGap stays null when aug_gap is not served', () => {
-    const rows = buildExportRows(perClass({ aug_gap: undefined }), null);
-    expect(rows[0]?.trainableGap).toBeNull();
-    expect(rows[0]?.trainable).toBe(8);
-  });
-
-  it('#36 item 1: prefers the served trainable/trainable_gap over client math when present', () => {
-    // Deliberately served numbers that DISAGREE with what the client-side
-    // validated-minus-holdout formula would produce (30/470, per the test
-    // above with the same validated/test_count) — proves the served
-    // fields drive the row, not a recomputation.
+describe('E1/E2 (visual audit 2026-09-24): served trainable, classes with objects', () => {
+  it('uses the served trainable/trainable_gap, never validated-minus-holdout math', () => {
+    // Deliberately served numbers that DISAGREE with what a client-side
+    // validated-minus-holdout formula would produce (30/470) — proves the
+    // served fields drive the row, not a recomputation.
     const rows = buildExportRows(
       perClass({
         class_id: 52,
@@ -266,24 +221,13 @@ describe('E1/E2 (visual audit 2026-09-24): trainable vs held out, classes with o
         trainable: 174,
         trainable_gap: 326,
       }),
-      { total: 5, by_class: [{ key: 52, doc_count: 5 }] },
+      {
+        total: 5,
+        min_test_per_class: 5,
+        by_class: [{ key: 52, doc_count: 5, deficient: false }],
+      },
     );
     expect(rows[0]).toMatchObject({ trainable: 174, trainableGap: 326 });
-  });
-
-  it('falls back to client math when the export/backend predates trainable/trainable_gap', () => {
-    const rows = buildExportRows(
-      perClass({
-        class_id: 52,
-        validated_count: 35,
-        aug_target: 500,
-        aug_gap: 465,
-        trainable: undefined,
-        trainable_gap: undefined,
-      }),
-      { total: 5, by_class: [{ key: 52, doc_count: 5 }] },
-    );
-    expect(rows[0]).toMatchObject({ trainable: 30, trainableGap: 470 });
   });
 
   it('splitExportClasses separates classes with any exported object from empty ones', () => {
@@ -294,5 +238,20 @@ describe('E1/E2 (visual audit 2026-09-24): trainable vs held out, classes with o
     ]);
     expect(withObjects.map((c) => c.class_id)).toEqual([2, 3]);
     expect(empty.map((c) => c.class_id)).toEqual([1]);
+  });
+});
+
+describe('gapCellTitle', () => {
+  it('names the served per-class minimum when known', () => {
+    expect(gapCellTitle(8, 20)).toBe(
+      '8 more trainable crops needed to reach the per-class minimum of 20',
+    );
+    expect(gapCellTitle(0, 20)).toBe('meets the per-class minimum of 20');
+  });
+
+  it('omits the number when the minimum was not served', () => {
+    expect(gapCellTitle(3, null)).toBe(
+      '3 more trainable crops needed to reach the per-class minimum',
+    );
   });
 });

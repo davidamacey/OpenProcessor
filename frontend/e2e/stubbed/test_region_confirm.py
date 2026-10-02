@@ -1,14 +1,13 @@
-"""B2 (frontend half, docs/design/interactive-pass-2026-09-24.md §6):
-confirming a region whose box the operator never touched must go through
-a status-only `PATCH {API_PREFIX}/crops/{id}/region_meta` using the
-served `confirm_status`, not `PUT {API_PREFIX}/crops/{id}/region` with
-the same box — a same-box PUT is indistinguishable, server-side, from a
-human drawing a fresh box, and overwrites the detector's own
-`region_detector`/`region_score` provenance.
-
-Enter on the region tab -> confirmSlot() -> (unchanged box, served
-confirm_status) -> `PATCH {API_PREFIX}/crops/{id}/region_meta` (src/routes/
-review/+page.svelte).
+"""W8 multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
+Supersedes the pre-W8 B2 test this file originally covered: confirming an
+UNCHANGED box must never rewrite the detector's own provenance
+(`region_detector`/`region_score`). Under W8 this is no longer a
+"status-only PATCH region_meta instead of PUT" split — it is the PUT
+element-addressing rule itself (W8.8): a box included with `state` but NO
+`bbox_norm` keeps its stored geometry AND provenance server-side, only its
+state changes. So Enter on an untouched `proposed` box sends exactly one
+`PUT {API_PREFIX}/crops/{id}/regions` with `boxes: [{box_id, state:
+"accepted"}]` — no `bbox_norm` key at all, and no PATCH region_meta.
 """
 
 from __future__ import annotations
@@ -18,85 +17,120 @@ from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
-    {"id": 1, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
+    {"class_id": 1, "class_name": REGION_CLASS, "kind": "region", "group": "widgets", "hotkey_letter": "l", "sample_count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
 
+_BOX_A = [0.1, 0.1, 0.3, 0.3]
+
+
+def _box() -> dict:
+    return {
+        "box_id": "b1",
+        "state": "proposed",
+        "bbox_norm": _BOX_A,
+        "bbox_in_parent": _BOX_A,
+        "score": 0.91,
+        "detector": "tag_detector_v1",
+        "detector_version": "1",
+        "source": "detector",
+        "bbox_correct": None,
+        "confidence": None,
+        "rejection_reason": None,
+        "text": None,
+        "text_raw": None,
+        "text_confidence": None,
+        "text_source": None,
+        "text_engine_version": None,
+        "text_vlm": None,
+        "text_ocr": None,
+        "text_disagreement": None,
+        "text_choice": None,
+        "text_vlm_invalid": None,
+        "cluster_id": None,
+        "cluster_subid": None,
+        "cluster_distance": None,
+        "detected_at": "2026-05-06T07:08:09Z",
+        "thumbnail_url": "/curation/crops/tag-1/region_thumbnail?box_id=b1",
+    }
+
 
 def tag_item() -> dict:
-    # region_bbox_in_parent / region_status / region_detector /
-    # region_score all come from make_item's defaults — an untouched,
-    # detector-found box with real provenance, exactly the case B2
-    # covers (an operator confirming a box that's already correct).
     return make_item(
         crop_id="tag-1",
         image_id="img-1",
         class_id=1,
         class_name=REGION_CLASS,
         thumbnail_url="/curation/crops/tag-1/thumbnail",
+        region_status="pending_verification",
+        region_boxes=[_box()],
     )
 
 
-def test_region_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url):
-    region_calls: list[tuple[str, str, dict]] = []
-    region_meta_calls: list[tuple[str, str, dict]] = []
+def test_region_confirm_unchanged_box_sends_state_only_no_bbox_norm(stub, page, app_url):
+    region_puts: list[tuple[str, dict]] = []
+    region_meta_calls: list[tuple[str, dict]] = []
 
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/methods(\?|$)", METHODS)
-    # The source-image-with-bbox <img> on the left panel.
-    stub.on(
-        "GET",
-        r"/crops/[^/]+/image$",
-        (200, b"", "image/jpeg"),
-    )
+    stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
 
     def review_handler(_request, _match):
         return (200, {"items": [tag_item()], "total": 1, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
-    def region_handler(request, match):
-        region_calls.append((request.method, match.string, request.post_data_json or {}))
-        return (200, {"item": tag_item()})
+    def region_put(request, match):
+        region_puts.append((match.string, request.post_data_json or {}))
+        accepted = _box()
+        accepted["state"] = "accepted"
+        return (
+            200,
+            {
+                "item": make_item(
+                    crop_id="tag-1",
+                    image_id="img-1",
+                    class_id=1,
+                    class_name=REGION_CLASS,
+                    thumbnail_url="/curation/crops/tag-1/thumbnail",
+                    region_status="detected",
+                    region_boxes=[accepted],
+                )
+            },
+        )
 
-    # PUT {API_PREFIX}/crops/{id}/region — must NOT be called for an
-    # unchanged-box confirm.
-    stub.on("PUT", r"/crops/([^/]+)/region$", region_handler)
+    stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
 
-    def region_meta_handler(request, match):
-        region_meta_calls.append((request.method, match.string, request.post_data_json or {}))
-        return (200, {"crop_id": "tag-1", "updated_fields": ["region_status"], "item": tag_item()})
+    def region_meta(request, match):
+        region_meta_calls.append((match.string, request.post_data_json or {}))
+        return (200, {"crop_id": "tag-1", "updated_fields": [], "item": tag_item()})
 
-    stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta_handler)
+    stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta)
 
-    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-
-    # Give the slot canvas a real paint tick to seed editedSlotBox from the
-    # served region_bbox_in_parent before confirming (a client-side $effect,
-    # not a network round trip).
+    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 
     with page.expect_response(
-        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"),
+        lambda r: r.request.method == "PUT" and r.url.endswith("/regions"),
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.keyboard.press("Enter")
 
-    assert region_calls == [], (
-        f"an unchanged-box confirm must not PUT region (rewrites detector provenance): {region_calls}"
+    assert region_meta_calls == [], (
+        f"W8 confirm goes through PUT .../regions, never PATCH region_meta: {region_meta_calls}"
     )
-    assert len(region_meta_calls) == 1, f"Enter should PATCH region_meta exactly once: {region_meta_calls}"
-    method, path, body = region_meta_calls[0]
-    assert method == "PATCH"
-    assert path.endswith("/region_meta")
-    assert "tag-1" in path, path
-    # confirm_status served by the stub's default GET /regions/statuses
-    # (conftest.py) is "detected" — the same value the region slot's
-    # own capabilities.lifecycle.confirmState uses.
-    assert body.get("region_status") == "detected", body
+    assert len(region_puts) == 1, region_puts
+    path, body = region_puts[0]
+    assert path.endswith("/crops/tag-1/regions"), path
+    assert body["region_status"] == "detected", body
+    assert body["boxes"] == [{"box_id": "b1", "state": "accepted"}], (
+        f"an untouched box's confirm must carry state only, no bbox_norm "
+        f"(preserves detector provenance server-side): {body}"
+    )
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected in the region-confirm flow: {errors[:3]}"

@@ -35,6 +35,25 @@ export interface TrapFocusOptions {
   onEscape?: () => void;
 }
 
+interface OpenTrap {
+  node: HTMLElement;
+  handle: (e: KeyboardEvent) => void;
+}
+
+// Open traps, innermost last. A focused button that turns `disabled` (a
+// dialog's busy Confirm) drops focus to <body>, and keys then never reach
+// the dialog's own listener, so a document listener hands any key that
+// landed outside every open trap to the topmost one.
+const openTraps: OpenTrap[] = [];
+
+function onDocumentKeydown(e: KeyboardEvent): void {
+  const top = openTraps[openTraps.length - 1];
+  if (!top) return;
+  const target = e.target instanceof Node ? e.target : null;
+  if (target && openTraps.some((t) => t.node.contains(target))) return;
+  top.handle(e);
+}
+
 export function trapFocus(node: HTMLElement, opts: TrapFocusOptions = {}) {
   let options = opts;
   const previouslyFocused =
@@ -77,6 +96,9 @@ export function trapFocus(node: HTMLElement, opts: TrapFocusOptions = {}) {
   }
 
   node.addEventListener('keydown', onKeydown);
+  const entry: OpenTrap = { node, handle: onKeydown };
+  if (openTraps.length === 0) document.addEventListener('keydown', onDocumentKeydown);
+  openTraps.push(entry);
 
   return {
     update(next: TrapFocusOptions = {}): void {
@@ -84,6 +106,10 @@ export function trapFocus(node: HTMLElement, opts: TrapFocusOptions = {}) {
     },
     destroy(): void {
       node.removeEventListener('keydown', onKeydown);
+      const i = openTraps.indexOf(entry);
+      if (i !== -1) openTraps.splice(i, 1);
+      if (openTraps.length === 0)
+        document.removeEventListener('keydown', onDocumentKeydown);
       if (previouslyFocused && document.contains(previouslyFocused)) {
         previouslyFocused.focus();
       }

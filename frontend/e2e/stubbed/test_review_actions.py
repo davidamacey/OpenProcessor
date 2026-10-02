@@ -15,7 +15,7 @@ from fixtures.wire import make_item
 from playwright.sync_api import expect
 
 CLASSES = [
-    {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+    {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
@@ -54,7 +54,7 @@ def test_review_assign_then_undo(stub, page, app_url):
         items = [review_item(i) for i in range(3)]
         return (200, {"items": items, "total": 3, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
     def label_handler(request, match):
         label_calls.append((request.method, match.string, request.post_data_json or {}))
@@ -74,7 +74,7 @@ def test_review_assign_then_undo(stub, page, app_url):
 
     stub.on("POST", r"/crops/([^/]+)/label/undo$", undo_handler)
 
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()

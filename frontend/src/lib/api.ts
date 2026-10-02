@@ -15,16 +15,13 @@
  * All endpoint URL patterns come from Section "Phase 2D" of the v7 plan.
  */
 
-import {
-  FALLBACK_METHODS,
-  parseMethodsResponse,
-  type MethodsResponse,
-} from './strategies';
+import { parseMethodsResponse, type MethodsResponse } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
 import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
-import type { XYXY, SlotKey, SlotData, SlotSpec, SlotFrame } from './annotations/types';
+import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
+import type { RegionBoxInput } from './annotations/multiBox';
 import {
   isNoRegionProfileDetail,
   notifyRegionProfileUnavailable,
@@ -43,7 +40,6 @@ import type {
   CropRegionUndoBatchResult,
   CropUndoBatchResult,
   ItemTextLine,
-  RegistryClass,
   RegistryClassCreate,
   RegistryClassMerge,
   RegistryClassUpdate,
@@ -55,6 +51,7 @@ import type {
   ExportResult,
   ExportStatus,
   ApiHealth,
+  GlobalHealth,
   ServedRegionProfile,
   SingleClassExportResult,
   SingleClassExportStatus,
@@ -96,6 +93,51 @@ import type {
   TrainManifest,
 } from './types_train';
 import type {
+  DatasetErrorDetail,
+  DatasetFormatsResponse,
+  DatasetImportEntryPage,
+  DatasetImportJob,
+  DatasetImportList,
+  DatasetImportRequest,
+  DatasetIssuePage,
+  DatasetPreview,
+  DatasetPreviewRequest,
+  DatasetUndoReport,
+  DatasetUndoRequest,
+  DatasetUploadResponse,
+  NextStep,
+  ReprocessJob,
+  ReprocessOneRequest,
+  ReprocessRequest,
+  ReprocessResponse,
+} from './types_import';
+import type {
+  ActiveConfigResponse,
+  ActiveRef,
+  ConfigActivateRequest,
+  ConfigCloneRequest,
+  ConfigErrorDetail,
+  ConfigRevisionList,
+  ValidationReport,
+} from './types_config';
+import type {
+  PackUpdateRequest,
+  PackValidateRequest,
+  PromptPackDoc,
+  PromptPackList,
+  PromptPackSchema,
+} from './types_packs';
+import type {
+  ActivationImpact,
+  ConfigVocabulary,
+  ProfileActivateResponse,
+  ProfileUpdateRequest,
+  ProfileValidateRequest,
+  RegionProfileDoc,
+  RegionProfileList,
+  RegionProfileSchema,
+} from './types_profiles';
+import type {
   BakeoffComparison,
   BakeoffMatrix,
   BakeoffProfileList,
@@ -107,6 +149,23 @@ import type {
   EvalDatasetList,
   TrainedModelList,
 } from './types_bakeoff';
+import type {
+  ArchiveRequest,
+  CloneSettingsRequest,
+  CreateProjectRequest,
+  DeleteDryRunResponse,
+  PatchProjectRequest,
+  PipelinePauseState,
+  ProjectErrorDetail,
+  ProjectLifecycleResponse,
+  ProjectRecordResponse,
+  ProjectsResponse,
+} from './types_projects';
+import type {
+  ModelClassMappingResponse,
+  ModelSharingRequest,
+  ModelSharingResponse,
+} from './types_models';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -151,37 +210,69 @@ export function normalizeApiPrefix(raw: string): string {
 export const API_PREFIX: string = normalizeApiPrefix(RAW_API_PREFIX);
 
 /**
- * Groundwork for multi-project support (`docs/design/
- * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7). The
- * backend is moving every scoped route under `{API_PREFIX}/projects/
- * {project}/...`, with a project's served `prefix` coming from a future
- * `GET {API_PREFIX}/projects`; the unscoped routes stay as an alias bound
- * to the `default` project. Every existing call site already builds its
- * URL from this one module-level holder via `scoped()` — flipping the
- * holder later (when a project switcher lands) changes every request
- * with no call-site edits. Today it's pinned to `API_PREFIX` itself, so
- * every built URL is byte-identical to before this groundwork landed.
+ * Multi-project scoping (P1, `docs/design/
+ * any-domain-rev3-and-projects-contract-review-2026-09-26.md` §7;
+ * OWNER DECISION: no backward compatibility with the retired unscoped
+ * `{API_PREFIX}/...` alias). Every route except the GLOBAL ones below
+ * lives under a project's own served `prefix`
+ * (`/curation/projects/{project}/...`, from `GET {globalApi()}/projects`).
+ * There is no `default` fallback prefix baked in here — the active
+ * project is set by `setScopedPrefix()` once `projectsStore.load()`
+ * resolves the default project, and every scoped call made before that
+ * throws (fails closed, matching the backend's `ProjectNotBound`).
  */
-const scopeHolder: { prefix: string } = { prefix: API_PREFIX };
+const scopeHolder: { prefix: string | null; generation: number } = {
+  prefix: null,
+  generation: 0,
+};
+
+export class ProjectNotSelectedError extends Error {
+  constructor() {
+    super('no active project selected yet');
+    this.name = 'ProjectNotSelectedError';
+  }
+}
 
 /**
  * Sets the active project's scoped prefix (e.g. `/curation/projects/
- * acme`). Not called anywhere yet — reserved for the future project
- * switcher. Never persisted (no localStorage): the active project is
- * always live UI state, seeded fresh from the served project list.
+ * default`), as served by `GET {globalApi()}/projects`. Called once by
+ * `projectsStore.load()` at boot; never persisted (no localStorage) —
+ * the active project is always live UI state, seeded fresh from the
+ * served project list every load.
  */
 export function setScopedPrefix(prefix: string): void {
+  if (scopeHolder.prefix === prefix) return;
   scopeHolder.prefix = prefix;
+  scopeHolder.generation += 1;
+}
+
+/** Bumped every time the active project's scoped prefix changes — the
+ *  stale-response guard in `apiFetch` compares a request's start
+ *  generation against the current one. */
+export function scopeGeneration(): number {
+  return scopeHolder.generation;
+}
+
+/**
+ * A scoped response that arrives after the active project changed. It
+ * is an `AbortError` (every call site already treats an abort as "drop
+ * it silently"), so a late answer from the previous project never
+ * renders in the new one.
+ */
+export function staleProjectError(): DOMException {
+  return new DOMException('response from a previous project', 'AbortError');
 }
 
 /**
  * The one function every scoped backend call builds its URL through,
- * e.g. `` `${scoped()}/health` ``. Returns the active project's prefix —
- * today always `API_PREFIX`, so every URL is unchanged. Distinct from
- * `globalApi()` below for the (today nonexistent) handful of endpoints
- * that will stay global once projects land.
+ * e.g. `` `${scoped()}/health` ``. Throws `ProjectNotSelectedError` if
+ * no project has been selected yet — every scoped call site should only
+ * ever run after the root layout's project bootstrap has resolved.
+ * Distinct from `globalApi()` below for the small set of routes that
+ * are never project-scoped (`/projects`, the global `/health`/`/events`).
  */
 export function scoped(): string {
+  if (scopeHolder.prefix === null) throw new ProjectNotSelectedError();
   return scopeHolder.prefix;
 }
 
@@ -194,16 +285,14 @@ export function scoped(): string {
  * for a second, independently-settable holder.
  */
 export function activeProjectKey(): string {
-  return scopeHolder.prefix;
+  return scoped();
 }
 
 /**
- * Builder for endpoints that will stay global (not project-scoped) once
- * projects land — e.g. the future `/projects` list itself. No call site
- * uses this yet: the backend hasn't shipped the split, and guessing
- * which endpoints are global ahead of that would be wrong more often
- * than not. Kept separate from `scoped()` purely so a future call
- * site's intent reads directly off which builder it uses.
+ * Builder for the handful of routes that stay global (never
+ * project-scoped): `/projects` (list/CRUD), the global `/health` and
+ * the global `/events` stream. No call site here builds a scoped URL
+ * from this — it is always `API_PREFIX` itself.
  */
 export function globalApi(): string {
   return API_PREFIX;
@@ -392,12 +481,31 @@ export function resolveApiUrl(url: string): string {
   return `${apiBase}${url}`;
 }
 
+export interface ApiFetchOptions {
+  /** A GLOBAL route (`/projects*`, global `/health`): never dropped as
+   *  stale when the active project changes mid-request. */
+  global?: boolean;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
   signal?: AbortSignal,
+  opts: ApiFetchOptions = {},
 ): Promise<T> {
   const url = resolveApiUrl(path);
+  // Stale-project guard (review §7.1): a scoped request remembers the
+  // project it was built for; if the active project changed before its
+  // response lands, the response is dropped as an AbortError.
+  const startPrefix = scopeHolder.prefix;
+  const startGeneration = scopeHolder.generation;
+  const isScopedCall =
+    !opts.global && startPrefix !== null && path.startsWith(`${startPrefix}/`);
+  const assertFresh = (): void => {
+    if (isScopedCall && scopeHolder.generation !== startGeneration) {
+      throw staleProjectError();
+    }
+  };
   let attempt = 0;
   let lastError: unknown;
   // 1 initial + 3 retries on 5xx => 4 attempts max.
@@ -419,11 +527,15 @@ export async function apiFetch<T>(
           ...(init.headers ?? {}),
         },
       });
+      assertFresh();
       if (res.ok) {
         if (res.status === 204) return undefined as T;
         const ct = res.headers.get('content-type') ?? '';
-        if (ct.includes('application/json')) return (await res.json()) as T;
-        return (await res.text()) as unknown as T;
+        const out = ct.includes('application/json')
+          ? ((await res.json()) as T)
+          : ((await res.text()) as unknown as T);
+        assertFresh();
+        return out;
       }
       let body: unknown = null;
       try {
@@ -449,6 +561,9 @@ export async function apiFetch<T>(
       if (e instanceof DOMException && e.name === 'AbortError') throw e;
       lastError = e;
     }
+    // A retry after the project changed would fetch the OLD project's
+    // URL again — stop instead.
+    assertFresh();
     if (attempt < RETRY_DELAYS_MS.length) {
       // A served `Retry-After` (503 only) replaces this attempt's fixed
       // backoff delay, clamped to MAX_RETRY_AFTER_MS — it never adds an
@@ -482,30 +597,166 @@ export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
   return apiFetch<ApiHealth>(`${scoped()}/health`, {}, signal);
 }
 
+/** `GET {globalApi()}/health` — unscoped, no project bound. Feeds only
+ *  the top-bar API status chip. */
+export function getGlobalHealth(signal?: AbortSignal): Promise<GlobalHealth> {
+  return apiFetch<GlobalHealth>(`${globalApi()}/health`, {}, signal, { global: true });
+}
+
+/** `GET {globalApi()}/projects` — the switcher vocabulary, global
+ *  (unscoped). The one read every project-scoped call depends on: a
+ *  project's `prefix` here is what `setScopedPrefix()` is seeded with.
+ *  `includeArchived` adds the served `archived` projects (the list
+ *  membership per status is the server's, never filtered here). */
+export function getProjects(
+  signal?: AbortSignal,
+  includeArchived = false,
+): Promise<ProjectsResponse> {
+  return apiFetch<ProjectsResponse>(
+    `${globalApi()}/projects${qs({ include_archived: includeArchived ? true : undefined })}`,
+    {},
+    signal,
+    { global: true },
+  );
+}
+
+// -- project lifecycle (P3; all GLOBAL, never scoped) ---------------------
+
+/** `GET {globalApi()}/projects/{slug}` — the record for a slug the
+ *  default list doesn't carry (an archived project's deep link). */
+export function getProject(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<ProjectRecordResponse> {
+  return apiFetch<ProjectRecordResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}`,
+    {},
+    signal,
+    { global: true },
+  );
+}
+
+export function createProject(
+  body: CreateProjectRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function patchProject(
+  slug: string,
+  body: PatchProjectRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function archiveProject(
+  slug: string,
+  body: ArchiveRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/archive`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function unarchiveProject(
+  slug: string,
+  body: ArchiveRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/unarchive`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+export function cloneProjectSettings(
+  slug: string,
+  body: CloneSettingsRequest,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}/clone_settings`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `DELETE …?dry_run=true` — the served report, writes nothing. */
+export function deleteProjectDryRun(slug: string): Promise<DeleteDryRunResponse> {
+  return apiFetch<DeleteDryRunResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}${qs({ dry_run: true })}`,
+    { method: 'DELETE' },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `DELETE …?confirm=<slug>` — a real, guarded delete. Answers 202 with
+ *  the `deleting` record; the removal finishes in the background. */
+export function deleteProject(
+  slug: string,
+  confirm: string,
+): Promise<ProjectLifecycleResponse> {
+  return apiFetch<ProjectLifecycleResponse>(
+    `${globalApi()}/projects/${encodeURIComponent(slug)}${qs({ confirm })}`,
+    { method: 'DELETE' },
+    undefined,
+    { global: true },
+  );
+}
+
 /**
- * Capability discovery for the curation-strategy registries (plan §3/§5.3):
- * which cluster methods / review sorts / overlays / scores the backend
- * currently offers, each with a `stable | experimental | shadow |
- * disabled` status. Phase 0 plumbing only — nothing consumes this yet.
- *
- * **Never rejects.** `{API_PREFIX}/methods` may not exist yet (backend Phase 0
- * lands independently — see `strategies.ts`'s header), and this endpoint
- * is pure capability discovery, not something a caller should have to
- * try/catch around. `apiFetch` already applies the house retry rule (no
- * retry on 4xx, 3 retries with backoff on 5xx/network errors); once that
- * settles, a 404 or any other failure here resolves to `FALLBACK_METHODS`
- * — the hardcoded stable-only list matching what's actually implemented
- * today — instead of throwing. A caller-initiated abort still propagates,
- * since that's a cancellation, not a backend failure.
+ * The structured `{detail: {error, message, ...}}` body every project
+ * route answers an error with (`ConfigErrorDetail`), or `null` when the
+ * error isn't one (a network failure, a plain-string detail, a pydantic
+ * validation list). The UI renders `message` verbatim and branches only
+ * on the served `error` code.
+ */
+export function projectErrorDetail(e: unknown): ProjectErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as ProjectErrorDetail;
+}
+
+/** The text to show for a failed project action: the served `message`
+ *  when the error is structured, else the generic `ApiError.detail`
+ *  (e.g. a joined pydantic validation list), else the error's message. */
+export function projectErrorText(e: unknown): string {
+  const d = projectErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
+}
+
+/**
+ * Capability discovery for the curation-strategy registries: which
+ * cluster methods / review sorts / overlays / scores / exports / assist
+ * axes the backend currently offers, each with a `stable | experimental
+ * | shadow | disabled` status. Rejects on failure like every other read;
+ * `strategiesStore` is the one caller that catches.
  */
 export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse> {
-  try {
-    const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
-    return parseMethodsResponse(raw);
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    return FALLBACK_METHODS;
-  }
+  const raw = await apiFetch<unknown>(`${scoped()}/methods`, {}, signal);
+  return parseMethodsResponse(raw);
 }
 
 // -- shared curation defaults (GET,PUT {API_PREFIX}/settings) -----------
@@ -515,25 +766,10 @@ export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse>
 // docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.
 
 /**
- * Read the deployment's shared curation defaults.
- *
- * **Unlike `getMethods()`, this DOES reject.** That asymmetry is
- * deliberate: `getMethods` is fired from many component mounts and its
- * absence has a meaningful fallback (`FALLBACK_METHODS`), so swallowing
- * failures there is right. This endpoint is fired from exactly one page,
- * and that page must distinguish three outcomes an opaque fallback would
- * fuse into one:
- *
- *   404  -> this backend predates the feature; show "not supported",
- *           render no controls at all
- *   5xx/net -> transient; show the error and offer a retry
- *   200  -> real record (possibly `defaults: {}` when nothing has ever
- *           been written — that is the normal first-run response, NOT an
- *           error)
- *
- * Throwing preserves `ApiError.status`, which is the only thing that can
- * tell those apart. `curationSettingsStore` is the single place that
- * catches.
+ * Read the deployment's shared curation defaults. A `defaults: {}`
+ * record (nothing written yet) is the normal first-run response, not an
+ * error. Rejects on failure; `curationSettingsStore` is the one caller
+ * that catches.
  */
 export async function getCurationSettings(
   signal?: AbortSignal,
@@ -1007,47 +1243,42 @@ export function cancelVizProjection(
  */
 const REGION_BASE = '/regions';
 
+/** One row of a region browse route (`RegionRow`): the full item plus the
+ *  box the row is about. Every per-box value (geometry, score, detector,
+ *  text, cluster) is an element of `region_boxes`, read through
+ *  `slots[slotKey].subBoxes`; the row's own box is the one whose id equals
+ *  `region_box_id`. */
 export interface RegionBrowseItem {
   crop_id: string;
   id: string;
   image_path: string;
+  /** The source image's id; targets an image Reprocess. */
+  image_id?: string;
   bbox_norm: number[];
-  region_bbox_norm: number[] | null;
-  region_score: number | null;
   region_status: string | null;
   region_verified: boolean | null;
   region_validated: boolean | null;
-  region_detector: string | null;
-  region_detector_version: string | null;
   region_detector_chain: string[] | null;
-  region_bbox_frame: string | null;
   region_detected_at: string | null;
   region_verifier: string | null;
   region_verifier_version: string | null;
   region_verified_at: string | null;
   region_rejection_reason: string | null;
   region_visible: boolean | null;
-  region_text: string | null;
-  region_text_source: string | null;
-  region_text_confidence: number | null;
   class_id: number | null;
   class_name: string | null;
   cluster_id: number | null;
   /** Parent-crop rank by size in its image (1 = largest). */
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
-  /** Region clustering assignment (independent of the item cluster_id). */
-  region_cluster_id?: number | null;
-  region_cluster_subid?: string | null;
-  region_cluster_distance?: number | null;
   updated_at: string;
   thumbnail_url?: string;
-  region_thumbnail_url?: string;
   selection_reason?: string;
   /** Per-slot capability data — see `Crop.slots` in types.ts. Added by
-   *  `getRegions` via `mapCropSlots`; absent on any row that predates this
-   *  mapping in a stale cache. */
+   *  `getRegions` via `mapCropSlots`. */
   slots?: Record<SlotKey, SlotData>;
+  /** The box this row is about; null for an item-level row. */
+  region_box_id?: string | null;
 }
 
 export interface RegionsPage {
@@ -1057,6 +1288,15 @@ export interface RegionsPage {
   items: RegionBrowseItem[];
   mode?: string;
   selection_reason?: string;
+  /** `RegionRowPage.total_rows` — counts ROWS (boxes, when the request
+   *  selects boxes), vs. `total` which counts ITEMS (the unit pages
+   *  paginate). Shown beside the item count when they differ — see
+   *  `SlotGallery.svelte`'s count chip. */
+  total_rows?: number;
+  /** True when an item on this page matched more boxes than the index
+   *  reports per item, so some of its rows are missing (`total_rows`
+   *  still counts them). */
+  rows_truncated?: boolean;
 }
 
 export interface RegionsQuery {
@@ -1082,6 +1322,9 @@ export interface RegionsQuery {
    *  deployment's vocabulary) — the backend 400s on an unknown value.
    *  Independent of `verified`, which is a boolean, not a status. */
   status?: string;
+  /** Per-box state filter (`GET {API_PREFIX}/regions/statuses` `box_states`
+   *  serves the vocabulary): every box filter applies to the same box. */
+  box_state?: string;
 }
 
 /** `browsePath` is the slot's declared browse collection
@@ -1299,8 +1542,91 @@ export function getTrainingCohorts(
   );
 }
 
+/**
+ * Every model the active project can see: its own, the base models, and
+ * (projects P2, §5.5) other projects' models their owners shared, each
+ * with the served `project`/`shared`/`class_mapping`.
+ */
 export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
-  return apiFetch<ModelsStatus>(`${scoped()}/models/status`, {}, signal);
+  return apiFetch<ModelsStatus>(
+    `${scoped()}/models/status${qs({ include_other_projects: true })}`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * Opt one of the active project's promoted models into (or out of)
+ * cross-project sharing. Owner only: any other project gets 404
+ * `model_not_found`. 409 `revision_conflict` carries the served
+ * `current_revision`; 409 `in_use` (unsharing while another project uses
+ * it) is bypassed by `force`.
+ */
+export function setModelSharing(
+  modelName: string,
+  body: ModelSharingRequest,
+  force = false,
+  signal?: AbortSignal,
+): Promise<ModelSharingResponse> {
+  return apiFetch<ModelSharingResponse>(
+    `${scoped()}/models/${encodeURIComponent(modelName)}/sharing${qs({ force: force || undefined })}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** How a model's classes map by name onto the active project's registry. */
+export function getModelClassMapping(
+  modelName: string,
+  signal?: AbortSignal,
+): Promise<ModelClassMappingResponse> {
+  return apiFetch<ModelClassMappingResponse>(
+    `${scoped()}/models/${encodeURIComponent(modelName)}/class_mapping`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * A project's own served API prefix, verbatim. The only way to address a
+ * project OTHER than the active one (the `/projects` page acts on each
+ * row's own project): the prefix is the served
+ * `ProjectSummary.prefix`, never assembled from a slug.
+ */
+export function projectPrefix(project: { prefix: string }): string {
+  return project.prefix;
+}
+
+/** `GET {prefix}/pause`. A row action on `/projects`, so `global`: it
+ *  belongs to that row's project, not the active one, and is never
+ *  dropped as stale when the active project changes. */
+export function getProjectPause(
+  project: { prefix: string },
+  signal?: AbortSignal,
+): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(`${projectPrefix(project)}/pause`, {}, signal, {
+    global: true,
+  });
+}
+
+/** `POST {prefix}/pause` — workers skip the project until resumed. */
+export function pauseProject(project: { prefix: string }): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(
+    `${projectPrefix(project)}/pause`,
+    { method: 'POST' },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `POST {prefix}/resume`. */
+export function resumeProject(project: { prefix: string }): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(
+    `${projectPrefix(project)}/resume`,
+    { method: 'POST' },
+    undefined,
+    { global: true },
+  );
 }
 
 /**
@@ -1345,28 +1671,26 @@ export interface DatasetStats {
   regions: {
     /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  region" count (matches the region cluster view). */
-    boxed?: number;
+    boxed: number;
     /** Crops the verifier confirmed carry a real region (region_status='detected'). */
-    confirmed?: number;
+    confirmed: number;
     /** Sum of region_detector credit — includes rejected/failed attempts,
-     *  so it OVERSTATES real regions. Kept for back-compat; not the headline. */
+     *  so it OVERSTATES real regions. Not the headline. */
     total_detected: number;
     by_detector: number;
     by_segmenter: number;
-    /** Legacy alias for ``by_human_drew``. */
-    by_human: number;
     /** Crops where the operator drew a fresh region bbox from scratch. */
-    by_human_drew?: number;
+    by_human_drew: number;
     /** Crops whose region was verified by a human (the Confirm button). */
-    verified_by_human?: number;
+    verified_by_human: number;
     /** Crops whose region was verified by the VLM verifier (auto-verify). */
-    verified_by_vlm?: number;
+    verified_by_vlm: number;
     /**
      * Union: any region the operator touched — drew the bbox OR
      * confirmed an AI-proposed one. The dashboard surfaces this as
      * the honest "you reviewed N regions" number.
      */
-    validated_by_human?: number;
+    validated_by_human: number;
   };
   unlabeled: {
     pending_detection: number;
@@ -1377,22 +1701,20 @@ export interface DatasetStats {
      *  `class_id`). */
     no_label_source: number;
     /** Subset of `no_label_source` the VLM looked at but couldn't (or
-     *  didn't) resolve to a class (#36 item 2). Served alongside
-     *  `no_label_source`; absent on a backend that predates it. */
-    vlm_no_class?: number;
+     *  didn't) resolve to a class (#36 item 2). */
+    vlm_no_class: number;
     /** F-23 (OpenProcessor d72cc63): crops a detector proposed but
      *  nothing has classified yet — a subset of `no_label_source`, like
-     *  `vlm_no_class`. Moved here from the always-0 `labeled.by_proposal`
-     *  (removed). Absent on a backend that predates it. */
-    by_proposal?: number;
+     *  `vlm_no_class`. */
+    by_proposal: number;
   };
   in_progress: {
     region_drain_total_unfinished: number;
     /** V-1 (OpenProcessor d72cc63): a served, human-readable line naming
      *  why the region drain can't progress (a region-profile dependency
      *  is down, and since when). Null when nothing is pending or every
-     *  dependency is ready; absent on an older backend. Rendered verbatim. */
-    region_stall_reason?: string | null;
+     *  dependency is ready. Rendered verbatim. */
+    region_stall_reason: string | null;
   };
   clusters: {
     last_run_at: string | null;
@@ -1424,18 +1746,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
     by_source?: Array<{ key: string; doc_count: number }>;
   };
   type RawClasses = {
-    classes?: Array<{
-      class_id: number;
-      class_name: string;
-      count?: number;
-      sample_count?: number;
-      validated_count?: number;
-      adequacy?: string;
-      aug_target?: number;
-      aug_gap?: number;
-      trainable?: number;
-      trainable_gap?: number;
-    }>;
+    classes: StatsSummary['per_class'];
     thresholds?: ClassThresholds;
   };
   // allSettled, not Promise.all: /stats/dataset can 503 (G1 — the live
@@ -1465,11 +1776,11 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       images_pending: 0,
       last_run_at: null,
     },
-    per_class: (cls.classes ?? []).map((c) => ({
+    per_class: cls.classes.map((c) => ({
       class_id: c.class_id,
       class_name: c.class_name,
-      count: c.count ?? c.sample_count ?? 0,
-      validated_count: c.validated_count ?? 0,
+      count: c.count,
+      validated_count: c.validated_count,
       adequacy: c.adequacy,
       aug_target: c.aug_target,
       aug_gap: c.aug_gap,
@@ -1481,68 +1792,49 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
 }
 
 export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse> {
-  // The API returns `{classes: [{class_id, class_name, group, sample_count,
-  // validated_count, deprecated, adequacy, added_at}, ...], thresholds,
-  // reserved_hotkeys}`. Map `classes` to the labeler's RegistryClass shape,
-  // which uses `id`/`name`/`count`; `thresholds` and `reserved_hotkeys` pass
-  // through verbatim — they're the server's own adequacy/hotkey rules, never
-  // recomputed client-side.
+  // Map the served `ClassEntry` rows to the labeler's RegistryClass shape
+  // (`id`/`name`/`count`); `thresholds` and `reserved_hotkeys` pass through
+  // verbatim — the server's own adequacy/hotkey rules, never recomputed
+  // client-side.
   type RawClass = {
-    class_id?: number;
-    id?: number;
-    class_name?: string;
-    name?: string;
-    group?: string | null;
-    sample_count?: number;
-    count?: number;
-    validated_count?: number;
-    cluster_size?: number;
-    color?: string | null;
-    deprecated?: boolean;
-    added_at?: string;
-    hotkey_letter?: string | null;
-    adequacy?: string;
-    kind?: 'item' | 'region';
-    trainable?: number;
-    trainable_gap?: number;
-    merged_into?: number | null;
+    class_id: number;
+    class_name: string;
+    group: string;
+    sample_count: number;
+    validated_count: number;
+    cluster_size: number;
+    deprecated: boolean;
+    added_at: string | null;
+    hotkey_letter: string | null;
+    adequacy: string;
+    kind: 'item' | 'region';
+    trainable: number;
+    trainable_gap: number;
+    merged_into: number | null;
   };
   const res = await apiFetch<{
     classes: RawClass[];
-    thresholds?: ClassThresholds;
-    reserved_hotkeys?: string[];
+    thresholds: ClassThresholds;
+    reserved_hotkeys: string[];
   }>(`${scoped()}/classes`, {}, signal);
-  const raw = res.classes ?? [];
-  const classes = raw.map((c) => ({
-    id: c.class_id ?? c.id ?? -1,
-    name: c.class_name ?? c.name ?? '',
-    group: c.group ?? null,
-    count: c.sample_count ?? c.count ?? 0,
-    validated_count: c.validated_count ?? 0,
-    cluster_size: c.cluster_size ?? 0,
+  const classes = res.classes.map((c) => ({
+    id: c.class_id,
+    name: c.class_name,
+    group: c.group || null,
+    count: c.sample_count,
+    validated_count: c.validated_count,
+    cluster_size: c.cluster_size,
     added_at: c.added_at ?? '',
-    color: c.color ?? null,
-    deprecated: !!c.deprecated,
-    hotkey_letter: c.hotkey_letter ?? null,
+    color: null,
+    deprecated: c.deprecated,
+    hotkey_letter: c.hotkey_letter,
     adequacy: c.adequacy,
     kind: c.kind,
     trainable: c.trainable,
     trainable_gap: c.trainable_gap,
-    merged_into: c.merged_into ?? null,
+    merged_into: c.merged_into,
   }));
-  // Old-shape (bare array) or pre-cutover backend responses omit these —
-  // an empty threshold/reserved set just means the adequacy chip and the
-  // hotkey guard render as "unknown" until a real response arrives, never
-  // a crash or a client-invented number.
-  const thresholds: ClassThresholds = res.thresholds ?? {
-    block_below: 0,
-    warn_below: 0,
-    min_test_per_class: 0,
-    aug_target_min: 0,
-    aug_target_max: 0,
-  };
-  const reserved_hotkeys = res.reserved_hotkeys ?? [];
-  return { classes, thresholds, reserved_hotkeys };
+  return { classes, thresholds: res.thresholds, reserved_hotkeys: res.reserved_hotkeys };
 }
 
 /** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single
@@ -1566,19 +1858,19 @@ type RawCluster = {
   purity: number | null;
   /** How many members `purity` was computed over (the geometry pass's
    *  coverage for this cluster) — purity is noisy at low n. */
-  purity_n?: number | null;
+  purity_n: number | null;
   /** Always `'nearest_centroid'` today; served so the frontend never
    *  hardcodes what `purity` means. */
-  purity_basis?: string | null;
+  purity_basis: string | null;
   /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
   purity_tier: 'pure' | 'mixed' | 'noisy' | null;
   /** Largest-class share among LABELLED members (the old label-based
    *  "purity" — always 1.0 for a class cluster by construction, which is
    *  exactly why it stopped being called `purity`). `promotable` uses
    *  this, not the geometry-based `purity` above. */
-  label_purity?: number | null;
+  label_purity: number | null;
   /** Share of this cluster's members that have any label at all. */
-  labelled_share?: number | null;
+  labelled_share: number | null;
   /** Server's auto-promote eligibility gate for this cluster. */
   promotable: boolean;
   is_unlabeled: boolean;
@@ -1632,22 +1924,21 @@ function _rawClusterToCluster(
     // members), never the nearest-centroid geometry `purity` below —
     // mapping `purity` here rendered "class_b · 3%" for a cluster that
     // is 616/616 class_b.
-    dominant_pct: c.label_purity ?? null,
+    dominant_pct: c.label_purity,
     dominant_count: c.dominant_count ?? null,
     labelled_count: c.labelled_count ?? null,
     purity: c.purity,
-    purity_n: c.purity_n ?? null,
-    purity_basis: c.purity_basis ?? null,
+    purity_n: c.purity_n,
+    purity_basis: c.purity_basis,
     purity_tier: c.purity_tier ?? null,
-    label_purity: c.label_purity ?? null,
-    labelled_share: c.labelled_share ?? null,
+    label_purity: c.label_purity,
+    labelled_share: c.labelled_share,
     promotable: !!c.promotable,
     core_similarity_min: coreSimilarityMin,
     is_unlabeled: c.is_unlabeled,
     representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
     has_subclusters: c.n_subclusters > 0,
     n_subclusters: c.n_subclusters,
-    sub_clusters: c.n_subclusters,
     updated_at: c.updated_at,
   };
 }
@@ -1812,6 +2103,26 @@ export type RawCrop = {
   excluded_reason?: string | null;
   excluded_at?: string | null;
   item_text_lines?: unknown;
+  // W9 / W10 / P4 item provenance (contract f582aa05 `ItemDoc`); each is
+  // served on every item, a missing key maps to null / false / [].
+  vlm_endpoint?: string | null;
+  vlm_model?: string | null;
+  vlm_prompt_pack?: string | null;
+  label_locked?: boolean;
+  import_ids?: string[];
+  dataset_split?: string | null;
+  imported_at?: string | null;
+  proposed_by_import?: string | null;
+  on_negative_frame?: boolean;
+  import_standalone_region?: boolean;
+  proposal_chain?: string[];
+  origin_project?: string | null;
+  origin_item_id?: string | null;
+  origin_image_id?: string | null;
+  origin_split?: string | null;
+  combine_conflict?: boolean;
+  combine_conflict_origins?: string[];
+  combine_merged_origins?: string[];
 };
 
 /**
@@ -1874,6 +2185,24 @@ export const RAW_CROP_KEYS = [
   'excluded_reason',
   'excluded_at',
   'item_text_lines',
+  'vlm_endpoint',
+  'vlm_model',
+  'vlm_prompt_pack',
+  'label_locked',
+  'import_ids',
+  'dataset_split',
+  'imported_at',
+  'proposed_by_import',
+  'on_negative_frame',
+  'import_standalone_region',
+  'proposal_chain',
+  'origin_project',
+  'origin_item_id',
+  'origin_image_id',
+  'origin_split',
+  'combine_conflict',
+  'combine_conflict_origins',
+  'combine_merged_origins',
 ] as const satisfies readonly (keyof RawCrop)[];
 // Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
 type _RawCropKeysExhaustive =
@@ -1904,11 +2233,17 @@ function asItemTextLines(v: unknown): ItemTextLine[] {
   return out;
 }
 
-function mapRawCrop(c: RawCrop): Crop {
+/** A served string list, tolerantly: anything else (absent, null) is `[]`. */
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+export function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
   const out: Crop = {
     id: c.crop_id,
     source_image_path: c.image_path,
+    image_id: c.image_id || undefined,
     bbox_norm: xyxyToBBoxNorm(bb),
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
@@ -1957,6 +2292,24 @@ function mapRawCrop(c: RawCrop): Crop {
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
     item_text_lines: asItemTextLines(c.item_text_lines),
+    vlm_endpoint: c.vlm_endpoint ?? null,
+    vlm_model: c.vlm_model ?? null,
+    vlm_prompt_pack: c.vlm_prompt_pack ?? null,
+    label_locked: !!c.label_locked,
+    import_ids: asStringArray(c.import_ids),
+    dataset_split: c.dataset_split ?? null,
+    imported_at: c.imported_at ?? null,
+    proposed_by_import: c.proposed_by_import ?? null,
+    on_negative_frame: !!c.on_negative_frame,
+    import_standalone_region: !!c.import_standalone_region,
+    proposal_chain: asStringArray(c.proposal_chain),
+    origin_project: c.origin_project ?? null,
+    origin_item_id: c.origin_item_id ?? null,
+    origin_image_id: c.origin_image_id ?? null,
+    origin_split: c.origin_split ?? null,
+    combine_conflict: !!c.combine_conflict,
+    combine_conflict_origins: asStringArray(c.combine_conflict_origins),
+    combine_merged_origins: asStringArray(c.combine_merged_origins),
     slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
@@ -2406,6 +2759,159 @@ export async function undoCropRegionBatch(
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* W8 multi-box region writes (lockstep with the backend's W8; see     */
+/* docs/design/w8-multibox-frontend-plan-2026-09-26.md). Element shapes */
+/* are RegionBoxInput from annotations/multiBox.ts.                     */
+/* ------------------------------------------------------------------ */
+
+/** `PUT /crops/{crop_id}/regions` (W8.8) — replaces the box list on one
+ *  crop. `regionStatus` optionally applies a whole-set status to the
+ *  built list in the same write (Enter-after-edit: `'detected'`). */
+export async function putRegionBoxes(
+  cropId: string,
+  boxes: RegionBoxInput[],
+  opts: { regionStatus?: string; expectedRegionRevision?: number } = {},
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const body: Record<string, unknown> = {
+    boxes,
+    frame: 'parent',
+    region_label_source: 'human',
+  };
+  if (opts.regionStatus != null) body.region_status = opts.regionStatus;
+  if (opts.expectedRegionRevision != null) {
+    body.expected_region_revision = opts.expectedRegionRevision;
+  }
+  const raw = await apiFetch<{ item: RawCrop }>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/regions`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+  return mapRawCrop(raw.item);
+}
+
+/** `PUT /crops/batch_regions` (W8.8) — replaces every listed crop's box
+ *  list with the SAME new boxes (every element must be `box_id: null`;
+ *  typically `boxes: []`, "none visible"). */
+export async function putBatchRegions(
+  cropIds: string[],
+  boxes: Array<{ bbox_norm: [number, number, number, number]; state?: string }>,
+  opts: { regionStatus?: string } = {},
+  signal?: AbortSignal,
+): Promise<void> {
+  assertNonEmptyBatch('batch region replace', cropIds);
+  const body: Record<string, unknown> = { crop_ids: cropIds, boxes };
+  if (opts.regionStatus != null) body.region_status = opts.regionStatus;
+  await apiFetch(
+    `${scoped()}/crops/batch_regions`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `PATCH /crops/{crop_id}/regions/{box_id}` (W8.8) — per-box state/text
+ *  flip. Used by the selected-box accept/reject keymap actions. */
+export async function patchRegionBox(
+  cropId: string,
+  boxId: string,
+  patch: { state?: string; text?: string | null; expectedRegionRevision?: number },
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const body: Record<string, unknown> = {};
+  if (patch.state != null) body.state = patch.state;
+  if (patch.text !== undefined) body.text = patch.text;
+  if (patch.expectedRegionRevision != null) {
+    body.expected_region_revision = patch.expectedRegionRevision;
+  }
+  const raw = await apiFetch<{ item: RawCrop }>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/regions/${encodeURIComponent(boxId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    signal,
+  );
+  return mapRawCrop(raw.item);
+}
+
+/** A stale `expected_region_revision` is `409 region_conflict` on the
+ *  per-item box writes: the body carries the current revision, the
+ *  current box ids and the current `item`, which the caller adopts
+ *  instead of re-deriving anything. */
+export interface RegionConflictDetail {
+  currentRegionRevision: number;
+  currentBoxIds: string[];
+  item: Crop;
+}
+
+export function regionConflictDetail(e: unknown): RegionConflictDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'region_conflict' || !d.item || typeof d.item !== 'object') return null;
+  return {
+    currentRegionRevision:
+      typeof d.current_region_revision === 'number' ? d.current_region_revision : 0,
+    currentBoxIds: Array.isArray(d.current_box_ids)
+      ? d.current_box_ids.filter((x): x is string => typeof x === 'string')
+      : [],
+    item: mapRawCrop(d.item as RawCrop),
+  };
+}
+
+export interface RegionBatchConflict {
+  crop_id: string;
+  error: string;
+  message: string;
+  current_source: string | null;
+  current_region_revision: number;
+  current_box_ids: string[];
+  item: RawCrop;
+}
+
+export interface RegionBatchBoxStateResult {
+  updated: number;
+  invalid: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
+  conflicts: RegionBatchConflict[];
+  items: Crop[];
+}
+
+/** `POST /regions/batch_box_state` (W8.8) — one state on many boxes
+ *  across items (region-gallery triage / a region cluster = a set of
+ *  boxes). Never flips a whole item's other boxes — use `batchRegionStatus`
+ *  for that. */
+export async function postBatchBoxState(
+  targets: Array<{ cropId: string; boxId: string }>,
+  state: string,
+  signal?: AbortSignal,
+): Promise<RegionBatchBoxStateResult> {
+  if (targets.length === 0)
+    throw new Error('postBatchBoxState requires at least one target');
+  type Raw = {
+    updated: number;
+    invalid?: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
+    conflicts?: RegionBatchConflict[];
+    items?: RawCrop[];
+  };
+  const raw = await apiFetch<Raw>(
+    `${scoped()}/regions/batch_box_state`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        targets: targets.map((t) => ({ crop_id: t.cropId, box_id: t.boxId })),
+        state,
+        region_label_source: 'human',
+      }),
+    },
+    signal,
+  );
+  return {
+    updated: raw.updated,
+    invalid: raw.invalid ?? [],
+    conflicts: raw.conflicts ?? [],
+    items: (raw.items ?? []).map(mapRawCrop),
+  };
+}
+
 export interface RegionStatusEntry {
   value: string;
   label: string;
@@ -2416,11 +2922,45 @@ export interface RegionStatusEntry {
   wants_reason: boolean;
 }
 
+/** W8.7: per-box state styling/labels, distinct from the item-level
+ *  `RegionStatusEntry` vocabulary above — a box's `state` is
+ *  `proposed`/`accepted`/`rejected`/`false_positive`, never one of the
+ *  item's `region_status` values. */
+export type BoxStateTone = 'accepted' | 'proposed' | 'rejected' | 'neutral';
+
+export interface BoxStateEntry {
+  value: string;
+  label: string;
+  role: string;
+  human_writable: boolean;
+  exported: boolean;
+  dashed: boolean;
+  dim: boolean;
+  badge: string | null;
+  /**
+   * PENDING_BACKEND_W8 (feat/w8-multibox-lockstep, docs/design/
+   * w8-multibox-frontend-plan-2026-09-26.md): the backend approved this
+   * as a follow-up to the W8.7 `box_states` vocabulary — the served
+   * color/theme mapping for a box state, since `box_states` itself only
+   * ever served `dashed`/`dim`/`badge` (styling flags, no color). Not in
+   * the vendored OpenAPI snapshot yet (no `box_states` schema exists
+   * there at all — `box_states` predates any contract-sync coverage);
+   * remove this note (not widen it) once `npm run contract:sync` picks
+   * it up. Optional so a pre-tone backend (or one that serves an
+   * unrecognized value) renders neutral — see
+   * `regionStatusesStore.boxStateTone()`.
+   */
+  tone?: BoxStateTone;
+}
+
 export interface RegionStatusesResponse {
   statuses: RegionStatusEntry[];
   confirm_status: string;
   reject_status: string;
   false_positive_status: string;
+  /** W8.7: served box-state vocabulary (`GET /regions/statuses`), absent
+   *  on a pre-W8 backend. */
+  box_states?: BoxStateEntry[];
 }
 
 /** The deployment's region-status vocabulary (`GET {API_PREFIX}/regions/statuses`),
@@ -2564,124 +3104,44 @@ export interface ReviewFilterSpec {
 export interface ReviewTabVocabularyEntry {
   id: string;
   label: string;
-  description?: string;
-  /** Query parameters this tab honours (dq-queues cutover, 2026-09-24) —
-   *  a parameter not listed is accepted and ignored server-side. Drives
-   *  which filter-bar controls render for the active tab. Absent/empty
-   *  means "unknown" — the frontend then shows every control, same as
-   *  before this endpoint carried the field. */
-  filters?: string[];
+  description: string;
+  /** Query parameters this tab honours — a parameter not listed is
+   *  accepted and ignored server-side. Drives which filter-bar controls
+   *  render for the active tab. */
+  filters: string[];
   /** Values the tab applies when a filter is omitted, e.g.
    *  `{max_rank: 2}` for the two primary-subject tabs. */
-  filter_defaults?: Record<string, unknown>;
-  /** Self-describing enum filters this tab honours (3f1a11e adoption) —
-   *  empty for a tab with none, or on an older backend that doesn't
-   *  serve the field yet. */
+  filter_defaults: Record<string, unknown>;
+  /** Self-describing enum filters this tab honours (empty for none). */
   filter_specs: ReviewFilterSpec[];
 }
 
-/** Every review tab's served `id`/`label`/`description`, in `KNOWN_TABS`
- *  order. The frontend keeps its own tab structure/ids (`reviewTabs.ts`)
- *  and only overlays the served label/description on top, falling back to
- *  the static label when the endpoint is absent. */
-export async function getReviewTabsVocabulary(
-  signal?: AbortSignal,
-): Promise<ReviewTabVocabularyEntry[]> {
-  const res = await apiFetch<{ tabs?: ReviewTabVocabularyEntry[] }>(
-    `${scoped()}/review/tabs`,
-    {},
-    signal,
-  );
-  return (res.tabs ?? [])
-    .filter(
-      (t) => typeof t?.id === 'string' && t.id.length > 0 && typeof t.label === 'string',
-    )
-    .map((t) => ({
-      id: t.id,
-      label: t.label,
-      description: t.description,
-      filters: Array.isArray(t.filters)
-        ? t.filters.filter((f): f is string => typeof f === 'string')
-        : undefined,
-      filter_defaults:
-        t.filter_defaults && typeof t.filter_defaults === 'object'
-          ? t.filter_defaults
-          : undefined,
-      filter_specs: Array.isArray(t.filter_specs)
-        ? t.filter_specs
-            .filter(
-              (s): s is ReviewFilterSpec =>
-                !!s &&
-                typeof s.param === 'string' &&
-                s.kind === 'enum' &&
-                typeof s.label === 'string' &&
-                Array.isArray(s.options),
-            )
-            .map((s) => ({
-              param: s.param,
-              kind: 'enum' as const,
-              label: s.label,
-              options: s.options
-                .filter(
-                  (o): o is ReviewFilterOption =>
-                    !!o && typeof o.value === 'string' && typeof o.label === 'string',
-                )
-                .map((o) => ({ value: o.value, label: o.label })),
-            }))
-        : [],
-    }));
-}
-
-/** `empty_state` on `GET {API_PREFIX}/review/tabs` (#36 item 9) — whether
- *  the deployment has ANY probe predictions or item scores at all, so an
+/** `empty_state` on `GET {API_PREFIX}/review/tabs` — whether the
+ *  deployment has ANY probe predictions or item scores at all, so an
  *  empty Uncertainty/Model-disagreements/score-sorted queue can point at
  *  the missing prerequisite (run a probe, compute scores) instead of just
  *  saying "empty". */
 export interface ReviewEmptyState {
   has_probe_predictions: boolean;
   has_item_scores: boolean;
+  /** Whether any labeled-dataset import has written labels (W10). */
+  has_imported_labels: boolean;
 }
 
-/** Sibling read of `GET {API_PREFIX}/review/tabs`'s top-level `empty_state` —
- *  kept as its own call (rather than changing `getReviewTabsVocabulary`'s
- *  return shape) so every existing caller/test of the tabs array is
- *  unaffected; `reviewTabsVocabularyStore.init()` fires both once. `null`
- *  when absent (an older backend) — never invented client-side. */
-export async function getReviewEmptyState(
-  signal?: AbortSignal,
-): Promise<ReviewEmptyState | null> {
-  const res = await apiFetch<{ empty_state?: Partial<ReviewEmptyState> | null }>(
-    `${scoped()}/review/tabs`,
-    {},
-    signal,
-  );
-  const es = res.empty_state;
-  if (!es || typeof es !== 'object') return null;
-  if (
-    typeof es.has_probe_predictions !== 'boolean' ||
-    typeof es.has_item_scores !== 'boolean'
-  ) {
-    return null;
-  }
-  return {
-    has_probe_predictions: es.has_probe_predictions,
-    has_item_scores: es.has_item_scores,
-  };
+/** `GET {API_PREFIX}/review/tabs`. */
+export interface ReviewTabsResponse {
+  tabs: ReviewTabVocabularyEntry[];
+  empty_state: ReviewEmptyState;
 }
 
-/**
- * Update or clear the region sub-bbox on a crop.
- *
- * - Pass an `[x1, y1, x2, y2]` tuple in **source-image normalized**
- *   coordinates to set/replace the region box (server records
- *   `region_status='human_confirmed'`).
- * - Pass `null` to clear the region; the backend interprets this as
- *   `region_status='no_region_visible'`.
- *
- * Mirrors `putCropLabel` in shape. Endpoint: `PUT {API_PREFIX}/crops/{id}/region`.
- *
- * Dead code: every call site goes through `setSlotBox(slot, …)` instead.
- */
+/** Every review tab's served vocabulary, in served order, plus the
+ *  deployment-wide `empty_state`. The frontend keeps its own tab
+ *  structure/ids (`reviewTabs.ts`) and only overlays the served
+ *  label/description/filters on top. */
+export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse> {
+  return apiFetch<ReviewTabsResponse>(`${scoped()}/review/tabs`, {}, signal);
+}
+
 /**
  * Fetch a single crop by id from the authoritative store. Used by the
  * review-page "Back" path so the operator sees what was actually
@@ -2698,56 +3158,13 @@ export async function getCrop(cropId: string, signal?: AbortSignal): Promise<Cro
 }
 
 /**
- * PUT a slot's sub-box via the spec's declared endpoint, or clear it
- * (`xyxy === null`) via `clearBox` when the profile declares a distinct
- * one, falling back to `setBox` with a null box otherwise (the backend's
- * "PUT with a null box clears" contract). The body key is the slot's own
- * `subBox.bboxField`, so a slot's writes use the same wire name its reads
- * do.
- *
- * `frame` says which frame `xyxy` is expressed in: `'source'` (the
- * historical default — the caller has already projected through the
- * parent crop's own bbox) or `'parent'` (the parent-crop-normalized
- * frame an editor draws in; the server does the projection). Passing
- * `'parent'` lets a caller send the box it drew directly, with no
- * client-side projection.
- *
- * Returns the server's authoritative item (unwrapped from `{..., item}`)
- * so the caller can render what was actually persisted rather than
- * re-deriving it.
- */
-export async function setSlotBox(
-  spec: SlotSpec,
-  cropId: string,
-  xyxy: [number, number, number, number] | null,
-  frame: SlotFrame = 'source',
-  signal?: AbortSignal,
-): Promise<Crop> {
-  const path =
-    (xyxy === null ? spec.endpoints.clearBox?.(cropId) : undefined) ??
-    spec.endpoints.setBox?.(cropId);
-  const bboxField = spec.capabilities.subBox?.bboxField;
-  if (!path || !bboxField) {
-    return Promise.reject(
-      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint or subBox field`),
-    );
-  }
-  const res = await apiFetch<{ item: RawCrop }>(
-    `${scoped()}${path}`,
-    { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy, frame }) },
-    signal,
-  );
-  return mapRawCrop(res.item);
-}
-
-/**
- * PATCH a slot's metadata fields (status / text / rejection reason)
- * without touching the bbox. The BODY KEYS are the spec's own wire
- * field names — for a `region_*` slot this produces a body of
- * `region_text` / `region_status` / `region_rejection_reason`, pinned in
- * api.test.ts.
- * Keys whose capability is absent, or whose value is `undefined`
- * (as opposed to `null`, which clears), are omitted.
+ * PATCH a slot's item-level metadata (status / text / rejection reason)
+ * without touching any box. The BODY KEYS are the spec's own wire field
+ * names — for the region slot `region_status` / `region_rejection_reason`
+ * only: its text is per box (no `text.valueField`), written with
+ * `patchRegionBox`, and the backend rejects a `region_text` key. Keys
+ * whose capability is absent, or whose value is `undefined` (as opposed
+ * to `null`, which clears), are omitted.
  */
 export async function patchSlotMeta(
   spec: SlotSpec,
@@ -2807,7 +3224,20 @@ export async function batchRegionStatus(
   signal?: AbortSignal,
 ): Promise<{
   updated: number;
-  conflicts: { crop_id: string; current_source: string | null }[];
+  // W8 (rev3, "one RegionBatchConflict shape across every region batch
+  // route"): a pre-W8 backend serves only {crop_id, current_source}; a
+  // W8 backend serves the full RegionBatchConflict. Typed as a superset
+  // (every RegionBatchConflict field optional here) so both eras read
+  // safely without a second type.
+  conflicts: Array<{
+    crop_id: string;
+    current_source: string | null;
+    error?: string;
+    message?: string;
+    current_region_revision?: number;
+    current_box_ids?: string[];
+    item?: RawCrop;
+  }>;
   invalid: BatchStatusInvalidEntry[];
   items: RegionBrowseItem[];
 }> {
@@ -2838,7 +3268,7 @@ export async function batchRegionStatus(
 
 /**
  * Kick off a VLM-label run scoped to one cluster: `POST
- * {API_PREFIX}/vlm/label_cluster/{cluster_id}[?prompt_pack=]`. The server
+ * {API_PREFIX}/vlm/label_cluster/{cluster_id}[?prompt_pack=&vlm=&acknowledge_external=]`. The server
  * selects every unvalidated, non-holdout, non-excluded member itself —
  * the frontend no longer fetches the crop page or chunks ids client-side
  * (that was the old `{API_PREFIX}/vlm/label_batch` chunk-of-64 loop,
@@ -2850,11 +3280,21 @@ export async function batchRegionStatus(
  */
 export function runVlmOnCluster(
   clusterId: number,
-  promptPack?: string | null,
+  opts: {
+    promptPack?: string | null;
+    /** W9: a registry endpoint name (or `off`) for this run only. */
+    vlm?: string | null;
+    /** Sent only when `true`. */
+    acknowledgeExternal?: boolean;
+  } = {},
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
   return apiFetch<AutoLabelJobState>(
-    `${scoped()}/vlm/label_cluster/${clusterId}${qs({ prompt_pack: promptPack ?? undefined })}`,
+    `${scoped()}/vlm/label_cluster/${clusterId}${qs({
+      prompt_pack: opts.promptPack ?? undefined,
+      vlm: opts.vlm ?? undefined,
+      acknowledge_external: opts.acknowledgeExternal === true ? true : undefined,
+    })}`,
     { method: 'POST' },
     signal,
   );
@@ -3325,12 +3765,8 @@ function parseScoresCoverage(raw: unknown): ScoresCoverage {
 }
 
 /**
- * Per-scorer coverage. **Rejects** on failure (mirrors
- * `getCurationSettings`, not `getMethods`'s swallow-everything
- * contract) — the one caller, the `/settings` scores card, must tell a
- * 404 ("this backend predates `/scores/*`, render no card at all") apart
- * from a transient failure, exactly the three-way split
- * `curationSettingsStore` already draws for the same reason.
+ * Per-scorer coverage. Rejects on failure; the one caller, the
+ * `/settings` scores card, shows the error with a retry.
  */
 export async function getScoresCoverage(signal?: AbortSignal): Promise<ScoresCoverage> {
   const raw = await apiFetch<unknown>(`${scoped()}/scores/coverage`, {}, signal);
@@ -3463,11 +3899,7 @@ export async function searchCrops(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<SearchCrop>> {
-  type RawSearchItem = RawCrop & {
-    similarity_score?: number | null;
-    semantic_score?: number | null;
-    score?: number | null;
-  };
+  type RawSearchItem = RawCrop & { semantic_score: number | null };
   type RawPage = {
     total: number;
     page: number;
@@ -3484,11 +3916,8 @@ export async function searchCrops(
     return {
       ...base,
       // The backend's `_hydrate_item` (OpenProcessor semantic_search.py) sends
-      // the match score as `semantic_score` — `similarity_score`/`score`
-      // are legacy/defensive fallbacks that the live endpoint has never
-      // actually populated. Without the semantic_score read here every
-      // search-result badge silently rendered 0%.
-      similarity_score: it.similarity_score ?? it.semantic_score ?? it.score ?? 0,
+      // the match score as `semantic_score`.
+      similarity_score: it.semantic_score ?? 0,
     };
   });
   return {
@@ -3593,10 +4022,6 @@ export function listDatasets(
 }
 
 // -- classes mutators ----------------------------------------------------
-
-export function getClass(classId: number, signal?: AbortSignal): Promise<RegistryClass> {
-  return apiFetch<RegistryClass>(`${scoped()}/classes/${classId}`, {}, signal);
-}
 
 export function addClass(
   payload: RegistryClassCreate,
@@ -3946,32 +4371,6 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
   return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
 }
 
-/**
- * URL for an annotation-slot sub-bbox close-up (the region rendered to a
- * tile), same construction convention as {@link getThumbUrl}. Pass
- * `cacheBustKey` (e.g. `Date.now()`) after a bbox edit so the browser
- * doesn't serve the pre-edit crop from its image cache.
- *
- * The segment is `region_thumbnail`, which is the ONLY region-thumbnail
- * route the backend registers (`curation_images.py`'s
- * `@crops_router.get('/{crop_id}/region_thumbnail')`); there is no alias
- * (cropwright_backend_integration_plan.md §3.2: no compatibility surface
- * lands on the contract-owning side).
- *
- * Note the deliberate asymmetry with the JSON key: `/regions` responses
- * carry a field literally named `region_thumbnail_url` whose *value* now
- * points at `…/region_thumbnail`. The key is frozen wire contract; only
- * the path inside it is generic. Do not "fix" the key to match.
- */
-export function getRegionThumbUrl(
-  cropId: string,
-  size: number = 160,
-  cacheBustKey?: string | number | null,
-): string {
-  const base = `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/region_thumbnail?size=${size}`;
-  return cacheBustKey != null ? `${base}&v=${encodeURIComponent(cacheBustKey)}` : base;
-}
-
 export function getSourceImageUrl(cropId: string): string {
   return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image`;
 }
@@ -4158,8 +4557,6 @@ export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> 
 /**
  * `GET {API_PREFIX}/train/augmentation_presets` (OpenProcessor df01309) —
  * the trainer's real preset catalog, for `AugmentationPanel`'s picker.
- * 404s on a pre-df01309 backend; callers must catch and degrade to a
- * read-only display rather than a hardcoded id list.
  */
 export function getAugmentationPresets(
   signal?: AbortSignal,
@@ -4317,6 +4714,18 @@ export interface AutoLabelStartParams {
    */
   prompt_pack?: string | null;
   /**
+   * W9: per-run VLM endpoint (a registry name, or `off`) for this job
+   * only; omitted/null = the project's active endpoint. An unknown id is
+   * a 422 `unknown_vlm`. Produced in exactly one place
+   * (`createAssistScope().toStartParams()`).
+   */
+  vlm?: string | null;
+  /**
+   * W9: acknowledges that this run's crops go to an external endpoint.
+   * Sent only when `true` (`startAutoLabel` drops `false`).
+   */
+  acknowledge_external?: boolean;
+  /**
    * G5: `pipeline.py`'s `run_vlm: bool = Query(False)` — the VLM sweep
    * stage is opt-in server-side and defaults off. Previously never sent
    * at all, so a scoped run (a class or pack picked via AssistScopeBar)
@@ -4359,8 +4768,10 @@ export function startAutoLabel(
   params: AutoLabelStartParams = {},
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
+  const { acknowledge_external: ack, ...rest } = params;
+  const sent = ack === true ? { ...rest, acknowledge_external: true } : rest;
   return apiFetch<AutoLabelJobState>(
-    `${scoped()}/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
+    `${scoped()}/pipeline/auto_label/start${qs(sent as Record<string, unknown>)}`,
     { method: 'POST' },
     signal,
   );
@@ -4464,21 +4875,11 @@ export async function ingestBatch(
 }
 
 /**
- * BA-2 (landed, OpenProcessor c5c606f): typed ingest capability + limits,
- * actually enforced by `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`
- * — replaces every interim client constant in `ingestConfig.ts`. A 404
- * (pre-BA-2 backend) resolves to `null`; `resolveIngestConfig(null)` falls
- * back to the documented interim values, same as before this landed.
+ * Typed ingest capability + limits, actually enforced by
+ * `/ingest/upload`/`/ingest/batch`/`/ingest/region_drain`.
  */
-export async function getIngestConfig(
-  signal?: AbortSignal,
-): Promise<IngestConfig | null> {
-  try {
-    return await apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
-    throw e;
-  }
+export function getIngestConfig(signal?: AbortSignal): Promise<IngestConfig> {
+  return apiFetch<IngestConfig>(`${scoped()}/ingest/config`, {}, signal);
 }
 
 // ===========================================================================
@@ -4559,4 +4960,577 @@ export function bakeoffMatrix(
   signal?: AbortSignal,
 ): Promise<BakeoffMatrix> {
   return apiFetch(`${scoped()}/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
+}
+
+// -- labeled-dataset import and Reprocess (OpenProcessor W10) ------------
+//
+// any_domain_plan.md §7.12 / W10.14; docs/design/
+// w10-import-reprocess-ui-plan-2026-09-27.md. Every route is scoped to the
+// active project (the import's target is the path's project; no body
+// carries `project`). A backend without W10 404s `GET /datasets/formats`,
+// which `datasetsAvailability` treats as "not deployed yet".
+
+export function getDatasetFormats(signal?: AbortSignal): Promise<DatasetFormatsResponse> {
+  return apiFetch<DatasetFormatsResponse>(`${scoped()}/datasets/formats`, {}, signal);
+}
+
+/** `POST /datasets/uploads` — one multipart `file` (a .zip/.tar/.tar.gz),
+ *  streamed server-side; the response's `dataset_path` is what the
+ *  preview then reads. */
+export function uploadDatasetArchive(
+  file: File,
+  signal?: AbortSignal,
+): Promise<DatasetUploadResponse> {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  return apiFetch<DatasetUploadResponse>(
+    `${scoped()}/datasets/uploads`,
+    { method: 'POST', body: fd },
+    signal,
+  );
+}
+
+/** Dry run: writes nothing. Dataset problems come back as `issues`,
+ *  never as a 4xx (only a malformed body or a disallowed root 422s). */
+export function previewDataset(
+  body: DatasetPreviewRequest,
+  signal?: AbortSignal,
+): Promise<DatasetPreview> {
+  return apiFetch<DatasetPreview>(
+    `${scoped()}/datasets/preview`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** 202 with a new job, or 200 with the existing one (`reused: true`). */
+export function startDatasetImport(
+  body: DatasetImportRequest,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function listDatasetImports(
+  params: { page?: number; page_size?: number; status?: string | null } = {},
+  signal?: AbortSignal,
+): Promise<DatasetImportList> {
+  return apiFetch<DatasetImportList>(
+    `${scoped()}/datasets/imports${qs({
+      page: params.page,
+      page_size: params.page_size,
+      status: params.status,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImportIssues(
+  importId: string,
+  params: { code?: string | null; page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<DatasetIssuePage> {
+  return apiFetch<DatasetIssuePage>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/issues${qs({
+      code: params.code,
+      page: params.page,
+      page_size: params.page_size,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImportEntries(
+  importId: string,
+  params: {
+    split?: string | null;
+    label_state?: string | null;
+    status?: string | null;
+    page?: number;
+    page_size?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<DatasetImportEntryPage> {
+  return apiFetch<DatasetImportEntryPage>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/entries${qs({
+      split: params.split,
+      label_state: params.label_state,
+      status: params.status,
+      page: params.page,
+      page_size: params.page_size,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+export function resumeDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/resume`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Dry run → `DatasetUndoReport`; apply → 202 `DatasetImportJob`
+ *  (`status: undoing`). */
+export function undoDatasetImport(
+  importId: string,
+  body: DatasetUndoRequest,
+  signal?: AbortSignal,
+): Promise<DatasetUndoReport | DatasetImportJob> {
+  return apiFetch<DatasetUndoReport | DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/undo`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** A finished import's served `next_steps` entry, run as served: its
+ *  `method` against its `path` under the project's prefix, no body
+ *  (plan §8 question 10). */
+export function runServedNextStep(
+  step: NextStep,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `${scoped()}${step.path}`,
+    { method: step.method.toUpperCase() },
+    signal,
+  );
+}
+
+/** Batch Reprocess. `dry_run` defaults to true on the server; the caller
+ *  always sends it explicitly. */
+export function reprocessBatch(
+  body: ReprocessRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse> {
+  return apiFetch<ReprocessResponse>(
+    `${scoped()}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Single-item Reprocess; returns the post-write `items` (mapped like
+ *  every other crop) for the caller to adopt. */
+export async function reprocessCrop(
+  cropId: string,
+  body: ReprocessOneRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse<Crop>> {
+  const res = await apiFetch<ReprocessResponse<RawCrop>>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return { ...res, items: (res.items ?? []).map(mapRawCrop) };
+}
+
+/** Single-image Reprocess (`POST /images/{image_id}/reprocess`); returns
+ *  the post-write `items` of that image, mapped like every other crop. */
+export async function reprocessImage(
+  imageId: string,
+  body: ReprocessOneRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse<Crop>> {
+  const res = await apiFetch<ReprocessResponse<RawCrop>>(
+    `${scoped()}/images/${encodeURIComponent(imageId)}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return { ...res, items: (res.items ?? []).map(mapRawCrop) };
+}
+
+export function getReprocessJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReprocessJob> {
+  return apiFetch<ReprocessJob>(
+    `${scoped()}/reprocess/jobs/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelReprocessJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReprocessJob> {
+  return apiFetch<ReprocessJob>(
+    `${scoped()}/reprocess/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/**
+ * The structured W10 refusal (`{detail: ConfigErrorDetail}` with the
+ * optional `issues`/`unmapped`/`import_id`), or `null` when the error
+ * isn't one. The UI shows `message` and branches only on `error`.
+ */
+export function datasetErrorDetail(e: unknown): DatasetErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as DatasetErrorDetail;
+}
+
+/** The served `message` of a W10 refusal, else the generic detail. */
+export function datasetErrorText(e: unknown): string {
+  const d = datasetErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
+}
+
+// -- Prompt packs (OpenProcessor W3; test-on-crop W5) --------------------
+// any_domain_plan.md §3, §5.1, §7.2, §7.5;
+// docs/design/w3-pack-editor-ui-plan-2026-09-27.md §1.
+
+/** `GET /prompt_packs`: every pack (builtin, file, stored) plus the
+ *  clone-only templates and the active ref. Also the W3 gate's probe. */
+export function listPromptPacks(signal?: AbortSignal): Promise<PromptPackList> {
+  return apiFetch<PromptPackList>(`${scoped()}/prompt_packs`, {}, signal);
+}
+
+export function getPromptPackSchema(signal?: AbortSignal): Promise<PromptPackSchema> {
+  return apiFetch<PromptPackSchema>(`${scoped()}/prompt_packs/schema`, {}, signal);
+}
+
+/** `POST /prompt_packs/validate`: a draft's report. Never writes and
+ *  never 422s; a reserved or taken `name` is an issue in the report. */
+export function validatePromptPack(
+  body: PackValidateRequest,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
+  return apiFetch<ValidationReport>(
+    `${scoped()}/prompt_packs/validate`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function getPromptPack(
+  name: string,
+  signal?: AbortSignal,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}`,
+    {},
+    signal,
+  );
+}
+
+export function getPromptPackRevisions(
+  name: string,
+  signal?: AbortSignal,
+): Promise<ConfigRevisionList> {
+  return apiFetch<ConfigRevisionList>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions`,
+    {},
+    signal,
+  );
+}
+
+export function getPromptPackRevision(
+  name: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions/${encodeURIComponent(String(revision))}`,
+    {},
+    signal,
+  );
+}
+
+/** `POST /prompt_packs/{name}/clone` → 201 the new stored pack. */
+export function clonePromptPack(
+  name: string,
+  body: ConfigCloneRequest,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/clone`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** `PUT /prompt_packs/{name}`: saves a new revision (OCC on
+ *  `expected_revision`; 409 `revision_conflict` carries the current one). */
+export function updatePromptPack(
+  name: string,
+  body: PackUpdateRequest,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(`${scoped()}/prompt_packs/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `DELETE /prompt_packs/{name}?expected_revision=` → 204. */
+export function deletePromptPack(name: string, expectedRevision: number): Promise<void> {
+  return apiFetch<void>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}${qs({ expected_revision: expectedRevision })}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export function getActivePromptPack(signal?: AbortSignal): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/prompt_packs/active`, {}, signal);
+}
+
+/** `POST /prompt_packs/{name}/activate` (OCC on `expected_active`). */
+export function activatePromptPack(
+  name: string,
+  body: ConfigActivateRequest,
+): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/activate`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** `POST /prompt_packs/active/rollback`: re-activates the previous pack. */
+export function rollbackPromptPack(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/prompt_packs/active/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// -- Region profiles and the config vocabulary (OpenProcessor W4) ---------
+// any_domain_plan.md §4, §7.3, §7.4;
+// docs/design/w4-profile-editor-ui-plan-2026-09-27.md §2.
+
+/** `GET /region_profiles?include_templates=true`: every profile (env,
+ *  registered, stored) plus the clone-only templates and the active ref.
+ *  Also the W4 gate's probe. */
+export function listRegionProfiles(signal?: AbortSignal): Promise<RegionProfileList> {
+  return apiFetch<RegionProfileList>(
+    `${scoped()}/region_profiles${qs({ include_templates: true })}`,
+    {},
+    signal,
+  );
+}
+
+export function getRegionProfileSchema(
+  signal?: AbortSignal,
+): Promise<RegionProfileSchema> {
+  return apiFetch<RegionProfileSchema>(`${scoped()}/region_profiles/schema`, {}, signal);
+}
+
+/** `POST /region_profiles/validate`: a draft's report, never a write.
+ *  `forActivation` adds the activation-only checks (§4.3). */
+export function validateRegionProfile(
+  body: ProfileValidateRequest,
+  forActivation: boolean,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
+  return apiFetch<ValidationReport>(
+    `${scoped()}/region_profiles/validate${qs({ for_activation: forActivation })}`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function getRegionProfile(
+  name: string,
+  signal?: AbortSignal,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}`,
+    {},
+    signal,
+  );
+}
+
+export function getRegionProfileRevisions(
+  name: string,
+  signal?: AbortSignal,
+): Promise<ConfigRevisionList> {
+  return apiFetch<ConfigRevisionList>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/revisions`,
+    {},
+    signal,
+  );
+}
+
+export function getRegionProfileRevision(
+  name: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/revisions/${encodeURIComponent(String(revision))}`,
+    {},
+    signal,
+  );
+}
+
+/** `POST /region_profiles/{name}/clone` → 201 the new stored profile. */
+export function cloneRegionProfile(
+  name: string,
+  body: ConfigCloneRequest,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/clone`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/** `PUT /region_profiles/{name}`: saves a new revision. Never changes what
+ *  runs (§4.4); 409 `revision_conflict` carries the current revision. */
+export function updateRegionProfile(
+  name: string,
+  body: ProfileUpdateRequest,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+  );
+}
+
+/** `DELETE /region_profiles/{name}?expected_revision=` → 204 (409 `in_use`
+ *  when it is the active profile). */
+export function deleteRegionProfile(
+  name: string,
+  expectedRevision: number,
+): Promise<void> {
+  return apiFetch<void>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}${qs({ expected_revision: expectedRevision })}`,
+    { method: 'DELETE' },
+  );
+}
+
+/** `GET /region_profiles/active` (axis `detection_profile`; `active.name`
+ *  null = region detection is off). */
+export function getActiveRegionProfile(
+  signal?: AbortSignal,
+): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/region_profiles/active`, {}, signal);
+}
+
+/** `POST /region_profiles/{name}/activate` (OCC on `expected_active`); the
+ *  response adds the served `impact` and `validation`. */
+export function activateRegionProfile(
+  name: string,
+  body: ConfigActivateRequest,
+): Promise<ProfileActivateResponse> {
+  return apiFetch<ProfileActivateResponse>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/activate`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/** `POST /region_profiles/active/rollback`: re-activates the previous one. */
+export function rollbackRegionProfile(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/region_profiles/active/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `POST /region_profiles/deactivate`: region detection off (OCC). */
+export function deactivateRegionProfile(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/region_profiles/deactivate`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `GET /region_profiles/active/impact`: items by the profile@revision that
+ *  produced them, plus the served re-run suggestion (§4.6). */
+export function getRegionProfileImpact(signal?: AbortSignal): Promise<ActivationImpact> {
+  return apiFetch<ActivationImpact>(
+    `${scoped()}/region_profiles/active/impact`,
+    {},
+    signal,
+  );
+}
+
+/** `GET /config/vocabulary`: every model / mode / class list the profile
+ *  editor's pickers render (§7.4). `includeOtherProjects` adds other
+ *  projects' shared detectors (projects_plan.md §5.5). */
+export function getConfigVocabulary(
+  includeOtherProjects: boolean,
+  signal?: AbortSignal,
+): Promise<ConfigVocabulary> {
+  return apiFetch<ConfigVocabulary>(
+    `${scoped()}/config/vocabulary${qs({ include_other_projects: includeOtherProjects || undefined })}`,
+    {},
+    signal,
+  );
+}
+
+/** The structured config-store refusal (`{detail: ConfigErrorDetail}`,
+ *  §7.1) of a prompt-pack or region-profile route, or `null` when the
+ *  error isn't one. The UI shows `message`, branches on `error`. */
+export function configErrorDetail(e: unknown): ConfigErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as ConfigErrorDetail;
+}
+
+/** The served `message` of a config-store refusal, else the generic detail. */
+export function configErrorText(e: unknown): string {
+  const d = configErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
 }

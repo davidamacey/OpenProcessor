@@ -21,6 +21,10 @@ function cls(over: Partial<RegistryClass> & { id: number; name: string }): Regis
     validated_count: 0,
     cluster_size: 0,
     added_at: '2026-01-01T00:00:00Z',
+    adequacy: 'block',
+    kind: 'item',
+    trainable: 0,
+    trainable_gap: 0,
     ...over,
   };
 }
@@ -150,38 +154,12 @@ describe('item-class targets: served kind (#36 item 1)', () => {
       resetDeploymentSlots();
     }
   });
-
-  it('falls back to the slot registry when kind is absent (an older backend)', () => {
-    installServedRegionProfile(WIDGET_TAG_PROFILE);
-    try {
-      expect(isItemClassTarget({ name: WIDGET_TAG_PROFILE.region_class_name })).toBe(
-        false,
-      );
-      expect(isItemClassTarget({ name: 'miata' })).toBe(true);
-    } finally {
-      resetDeploymentSlots();
-    }
-  });
-});
-
-describe('item-class targets with no region profile', () => {
-  it('excludes no class: the region class is only special when the backend serves a profile for it', () => {
-    resetDeploymentSlots();
-    installServedRegionProfile(null);
-    try {
-      expect(isItemClassTarget({ name: WIDGET_TAG_PROFILE.region_class_name })).toBe(
-        true,
-      );
-    } finally {
-      resetDeploymentSlots();
-    }
-  });
 });
 
 // R1 (docs/design/visual-audit-2026-09-24.md): the slot-bound region class
 // topped the picker and quick-assign row (most validated), so `/` + Enter
-// labeled an item as a region. Resolved through the live slot registry,
-// never a hardcoded name.
+// labeled an item as a region. Resolved through the served `kind`, never a
+// hardcoded name.
 describe('item-class targets (visual audit R1)', () => {
   // The served region profile binds the region slot to its class.
   beforeAll(() => installServedRegionProfile(WIDGET_TAG_PROFILE));
@@ -190,7 +168,7 @@ describe('item-class targets (visual audit R1)', () => {
 
   function poolWithSlotClass(): RegistryClass[] {
     return [
-      cls({ id: 80, name: slotClassName, validated_count: 163 }),
+      cls({ id: 80, name: slotClassName, validated_count: 163, kind: 'region' }),
       cls({ id: 1, name: 'miata', validated_count: 35 }),
       cls({ id: 2, name: 'touringbike', validated_count: 0 }),
       cls({ id: 3, name: 'class_b', validated_count: 3 }),
@@ -199,8 +177,8 @@ describe('item-class targets (visual audit R1)', () => {
 
   it('the registry binds at least one slot to a class (precondition)', () => {
     expect(registeredSlots.some((s) => s.bind.className === slotClassName)).toBe(true);
-    expect(isItemClassTarget({ name: slotClassName })).toBe(false);
-    expect(isItemClassTarget({ name: 'miata' })).toBe(true);
+    expect(isItemClassTarget({ name: slotClassName, kind: 'region' })).toBe(false);
+    expect(isItemClassTarget({ name: 'miata', kind: 'item' })).toBe(true);
   });
 
   it('quickAssignClasses never offers the slot-bound class, however validated', () => {

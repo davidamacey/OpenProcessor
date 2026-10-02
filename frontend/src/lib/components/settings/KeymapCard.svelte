@@ -117,6 +117,7 @@
   function groupCanonicalKeys(groupId: string): string[] {
     const members = groupMembers(groupId);
     if (members.length === 0) return [];
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local tally map consumed synchronously within this function, never stored in reactive state
     const counts = new Map<string, number>();
     for (const m of members) {
       const json = JSON.stringify(keysOf(m.id));

@@ -8,17 +8,17 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
-from fixtures.wire import REGION_CLASS, make_item
+from fixtures.wire import REGION_CLASS, make_box, make_item
 
 NARROW = {"width": 800, "height": 1000}
 
 CLUSTER_ID = 64
 
 CLASSES = [
-    {"id": CLUSTER_ID, "name": "class_b", "group": "moto", "hotkey_letter": None,
-     "count": 641, "validated_count": 0, "cluster_size": 616, "deprecated": False},
-    {"id": 80, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": None,
-     "count": 40, "validated_count": 0, "cluster_size": 44, "deprecated": False},
+    {"class_id": CLUSTER_ID, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
+     "sample_count": 641, "validated_count": 0, "cluster_size": 616, "deprecated": False},
+    {"class_id": 80, "class_name": REGION_CLASS, "kind": "region", "group": "widgets", "hotkey_letter": None,
+     "sample_count": 40, "validated_count": 0, "cluster_size": 44, "deprecated": False},
 ]
 
 CLUSTERS = {
@@ -89,7 +89,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
     stub.on("GET", r"/crops(\?|$)",
             {"total": 6, "page": 1, "page_size": 60, "crops": [_crop(i) for i in range(6)]})
 
-    page.goto(f"{app_url}/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
     name = page.locator('[data-testid="class-name"]').first
     name.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check
@@ -126,8 +126,16 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
             image_id=f"img-{i}",
             class_name="class_b_with_a_long_class_name",
             region_detector_chain=long_chain,
-            region_text="65875-LONG-TEXT",
-            region_text_disagreement=True,
+            region_boxes=[
+                make_box(
+                    "b1",
+                    text="65875-LONG-TEXT",
+                    text_vlm="65875-LONG-TEXT",
+                    text_ocr="65875-L0NG-TEXT",
+                    text_disagreement=True,
+                )
+            ],
+            region_count=1,
         )
         for i in range(4)
     ]
@@ -136,7 +144,7 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
     stub.on("GET", r"/clusters(\?|$)", {"clusters": [], "count": 0})
     stub.on("GET", r"/regions(\?|$)", {"items": items, "total": 4})
 
-    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
+    page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
     page.locator('[data-testid="slot-text-value"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check
 
@@ -174,7 +182,7 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
 
     stub.on("GET", r"/regions(\?|$)", {"items": [], "total": 0})
 
-    page.goto(f"{app_url}/clusters")
+    page.goto(f"{app_url}/p/default/clusters")
     sort = page.locator('label:has-text("Sort") select')
     sort.wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -193,7 +201,7 @@ def test_models_updated_label_does_not_overlap_description(stub, page, app_url):
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/models/status", {"models": []})
 
-    page.goto(f"{app_url}/models")
+    page.goto(f"{app_url}/p/default/models")
     status = page.locator('[data-testid="models-status"]')
     status.get_by_text("Updated", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -257,7 +265,7 @@ def test_dashboard_recluster_card_stacks_at_800(stub, page, app_url):
     stub.on("GET", r"/crops(\?|$)", {"total": 0, "page": 1, "page_size": 20, "crops": []})
     stub.on("GET", r"/pipeline/auto_label/status", COMPLETED_JOB)
 
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     desc = page.locator('[data-testid="recluster-description"]')
     desc.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check

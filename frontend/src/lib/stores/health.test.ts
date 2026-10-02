@@ -27,13 +27,17 @@ describe('healthStore.poll feeds the region-profile gate', () => {
   });
 
   function serve(body: unknown): void {
+    // healthStore.poll() now fires two requests (global health for the
+    // chip, scoped health for the region profile) — a fresh Response
+    // per call, since a Response's body can only be read once.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+      vi.fn().mockImplementation(
+        () =>
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
       ),
     );
   }

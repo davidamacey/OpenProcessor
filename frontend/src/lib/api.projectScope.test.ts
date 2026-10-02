@@ -82,8 +82,8 @@ describe('scoped()/globalApi() (multi-project groundwork)', () => {
   it('getMethods() builds its request URL from the current scoped prefix', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        jsonResponse({ cluster_methods: [], review_sorts: [], overlays: [] }),
+      .mockImplementation(() =>
+        Promise.resolve(jsonResponse({ strategies: [], flags: {} })),
       );
     vi.stubGlobal('fetch', fetchMock);
 

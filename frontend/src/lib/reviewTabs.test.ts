@@ -16,6 +16,7 @@ import {
   tabFromUrlId,
   tabHonorsPinnedSortDefault,
   urlIdForTab,
+  visibleReviewTabs,
   type ReviewPresetId,
 } from './reviewTabs';
 
@@ -24,18 +25,19 @@ import {
 const queueSlots = registeredSlots.filter((s) => s.capabilities.queue);
 
 describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
-  it('has the 5 core tabs from the 2026-09 consolidation plus new_class_proposals, then one tab per queue slot', () => {
-    expect(CORE_REVIEW_TABS).toHaveLength(5);
-    expect(REVIEW_TABS).toHaveLength(5 + queueSlots.length);
+  it('has the core tabs from the 2026-09 consolidation plus new_class_proposals and imported, then one tab per queue slot', () => {
+    expect(CORE_REVIEW_TABS).toHaveLength(6);
+    expect(REVIEW_TABS).toHaveLength(6 + queueSlots.length);
   });
 
-  it('is exactly all / uncertainty / model_disagreements / classifier_blind_spots / new_class_proposals / slot:<key>...', () => {
+  it('is exactly all / uncertainty / model_disagreements / classifier_blind_spots / new_class_proposals / imported / slot:<key>...', () => {
     expect(REVIEW_TABS.map((t) => t.id)).toEqual([
       'all',
       'uncertainty',
       'model_disagreements',
       'classifier_blind_spots',
       'new_class_proposals',
+      'imported',
       ...queueSlots.map((s) => `slot:${s.key}`),
     ]);
     // urlId is the bookmark contract — each slot tab keeps its own.
@@ -319,6 +321,8 @@ describe('reviewDeepLink / urlIdForTab', () => {
       tab: 'all',
       cropId: null,
       preset: null,
+      importId: null,
+      combineConflict: false,
       unavailableTab: null,
     });
     expect(reviewDeepLink(new URLSearchParams('tab=nope&crop_id=')).tab).toBe('all');
@@ -352,6 +356,54 @@ describe('reviewDeepLink / urlIdForTab', () => {
     it('absent preset param is null, not undefined-that-happens-to-be-falsy', () => {
       expect(reviewDeepLink(new URLSearchParams('tab=all')).preset).toBeNull();
     });
+  });
+});
+
+describe('the imported tab (W10): offered only when the backend serves it', () => {
+  it('visibleReviewTabs drops imported unless the served vocabulary has it', () => {
+    const none = visibleReviewTabs(REVIEW_TABS, () => false).map((t) => t.id);
+    expect(none).not.toContain('imported');
+    // Every other tab is untouched by the served-only rule.
+    expect(none).toContain('new_class_proposals');
+    expect(none).toHaveLength(REVIEW_TABS.length - 1);
+    const served = visibleReviewTabs(REVIEW_TABS, (id) => id === 'imported').map(
+      (t) => t.id,
+    );
+    expect(served).toContain('imported');
+    expect(served).toHaveLength(REVIEW_TABS.length);
+  });
+
+  it('asks the served vocabulary by the tab endpoint id', () => {
+    const asked: string[] = [];
+    visibleReviewTabs(REVIEW_TABS, (id) => {
+      asked.push(id);
+      return true;
+    });
+    expect(asked).toEqual(['imported']);
+  });
+
+  it('resolves ?tab=imported to the imported tab and its backend endpoint', () => {
+    expect(tabFromUrlId('imported')).toBe('imported');
+    expect(endpointForTab('imported')).toBe('imported');
+  });
+});
+
+describe('reviewDeepLink: URL-seeded non-enum filters', () => {
+  it('reads import_id and combine_conflict=true', () => {
+    const d = reviewDeepLink(
+      new URLSearchParams('tab=imported&import_id=imp_1&combine_conflict=true'),
+    );
+    expect(d.importId).toBe('imp_1');
+    expect(d.combineConflict).toBe(true);
+  });
+
+  it('treats an empty import_id and any other combine_conflict value as unset', () => {
+    const d = reviewDeepLink(new URLSearchParams('import_id=&combine_conflict=false'));
+    expect(d.importId).toBeNull();
+    expect(d.combineConflict).toBe(false);
+    expect(
+      reviewDeepLink(new URLSearchParams('combine_conflict=1')).combineConflict,
+    ).toBe(false);
   });
 });
 

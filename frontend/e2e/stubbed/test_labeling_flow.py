@@ -20,34 +20,36 @@ from playwright.sync_api import expect
 
 ROUTES = [
     "/",
-    "/dashboard",
-    "/clusters",
-    "/clusters/1",
-    "/review",
-    "/classes",
-    "/export",
-    "/models",
-    "/train",
-    "/bakeoff",
+    "/p/default/dashboard",
+    "/p/default/clusters",
+    "/p/default/clusters/1",
+    "/p/default/review",
+    "/p/default/classes",
+    "/p/default/export",
+    "/p/default/models",
+    "/p/default/train",
+    "/p/default/bakeoff",
 ]
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "ducati",
+        "class_id": 1,
+        "class_name": "ducati",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "k",
-        "count": 10,
+        "sample_count": 10,
         "validated_count": 5,
         "cluster_size": 12,
         "deprecated": False,
     },
     {
-        "id": 2,
-        "name": "brand_a",
+        "class_id": 2,
+        "class_name": "brand_a",
+        "kind": "item",
         "group": "moto",
         "hotkey_letter": "j",
-        "count": 8,
+        "sample_count": 8,
         "validated_count": 3,
         "cluster_size": 9,
         "deprecated": False,
@@ -130,7 +132,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     })
     stub.on("GET", r"/stats/dataset(\?|$)", {"total_crops": 3, "validated": 0, "test_holdout": 0, "by_source": {}})
     stub.on("GET", r"/stats/classes(\?|$)", {"classes": []})
-    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": {}})
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": [], "min_test_per_class": 5})
     stub.on("GET", r"/export/status(\?|$)", {"status": "idle", "last_run": None})
     stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
     stub.on("GET", r"/train/status(\?|$)", {"jobs": []})
@@ -158,7 +160,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
             items.append(c)
         return (200, {"items": items, "total": 3, "page": 1, "page_size": 30})
 
-    stub.on("GET", r"/review/", review_handler)
+    stub.on("GET", r"/review/(?!tabs)", review_handler)
 
 
 def _json(request):
@@ -176,7 +178,7 @@ def test_labeling_flow(stub, page, app_url):
     register_base(stub)
 
     # ---- cluster detail page ------------------------------------
-    page.goto(f"{app_url}/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     # wait_for_selector("img") above already blocks until a real crop image
     # is in the DOM, which only happens inside the grid — no extra sleep
@@ -252,7 +254,7 @@ def test_labeling_flow(stub, page, app_url):
 
     # ---- review page --------------------------------------------
     register_base(stub, fail_put_label=True)
-    page.goto(f"{app_url}/review")
+    page.goto(f"{app_url}/p/default/review")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(counter.first).to_contain_text("3 total", timeout=ACTION_TIMEOUT_MS)
@@ -286,7 +288,7 @@ def test_labeling_flow(stub, page, app_url):
         )
 
     # ---- modal backdrops -----------------------------------------
-    page.goto(f"{app_url}/classes")
+    page.goto(f"{app_url}/p/default/classes")
     page.wait_for_selector("main", timeout=ACTION_TIMEOUT_MS)
     add_class_btn = page.get_by_role("button", name="+ Add Class").first
     expect(add_class_btn).to_be_visible(timeout=ACTION_TIMEOUT_MS)

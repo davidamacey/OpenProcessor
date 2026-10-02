@@ -36,24 +36,6 @@ export function humanWritableStates(
 }
 
 /**
- * True when writing `status` means the sub-box must be cleared. Reads
- * the server's own `clears_box` flag when `served` is available,
- * falling back to `status === lifecycle.rejectState` (the pre-existing
- * hardcoded assumption) otherwise.
- */
-export function statusClearsBox(
-  spec: SlotSpec,
-  status: string,
-  served?: readonly RegionStatusEntry[] | null,
-): boolean {
-  if (!status) return false;
-  if (served && served.length > 0) {
-    return served.find((s) => s.value === status)?.clears_box ?? false;
-  }
-  return status === spec.capabilities.lifecycle?.rejectState;
-}
-
-/**
  * True when the rejection-reason input should render for `status`.
  * Reads the server's own `wants_reason` (+ `human_writable`) flags when
  * `served` is available; otherwise falls back to the profile's role ===

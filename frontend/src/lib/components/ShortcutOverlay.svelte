@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import { setClassHotkey } from '$lib/classHotkey';
   import { isAssignableClass } from '$lib/classVisibility';
   import { formatShortcutKey } from '$lib/keyboardDisplay';
@@ -73,7 +75,7 @@
         <div class="flex items-center gap-2">
           {#if keymapAvailability.available !== false}
             <a
-              href="/settings#keyboard"
+              href={resolve(projectHref('/settings#keyboard'))}
               class="text-[11px] text-blue-400 hover:text-blue-300 hover:underline"
               onclick={() => keyboardStore.closeOverlay()}
             >

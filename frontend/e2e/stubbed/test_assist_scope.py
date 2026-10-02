@@ -32,21 +32,23 @@ from playwright.sync_api import expect
 
 CLASSES = [
     {
-        "id": 1,
-        "name": "pallets",
+        "class_id": 1,
+        "class_name": "pallets",
+        "kind": "item",
         "group": "warehouse",
         "hotkey_letter": "p",
-        "count": 40,
+        "sample_count": 40,
         "validated_count": 12,
         "cluster_size": 44,
         "deprecated": False,
     },
     {
-        "id": 2,
-        "name": "forklift",
+        "class_id": 2,
+        "class_name": "forklift",
+        "kind": "item",
         "group": "warehouse",
         "hotkey_letter": "f",
-        "count": 20,
+        "sample_count": 20,
         "validated_count": 5,
         "cluster_size": 22,
         "deprecated": False,
@@ -138,7 +140,7 @@ def test_assist_scope(stub, page, app_url):
     # ================================================================
     starts1 = register_base(stub, METHODS_TODAY)
 
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     start_btn = page.get_by_role("button", name="Recluster now")
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     # Real wait for the dashboard's on-mount requests to finish before the
@@ -171,7 +173,7 @@ def test_assist_scope(stub, page, app_url):
     starts2 = register_base(stub, METHODS_WITH_PROMPT_PACK)
 
     stub.console_errors.clear()
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     chip = page.get_by_text(re.compile(r"^assist:\s*whole dataset"))
     chip.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -224,7 +226,7 @@ def test_assist_scope(stub, page, app_url):
     ), qs
 
     # Re-expand, reset — chip and button return to the unscoped defaults.
-    page.goto(f"{app_url}/dashboard")
+    page.goto(f"{app_url}/p/default/dashboard")
     chip2 = page.get_by_text(re.compile(r"^assist:"))
     chip2.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip2.first.click()

@@ -2,8 +2,8 @@
 frontend-coverage-audit-2026-09-24.md §G10): the compute flow end to end
 against the stub — coverage render, the confirm-before-compute dialog,
 the request body sourced from served scorer ids, polling `/scores/status`
-to completion with a coverage reload, cancel, and the card's absence on a
-pre-`/scores/*` (404) backend.
+to completion with a coverage reload, cancel, and the served-error-with-
+retry state on a pre-`/scores/*` (404) backend.
 """
 
 from __future__ import annotations
@@ -125,24 +125,26 @@ def register(stub, *, coverage_status=200, coverage_body=None):
     return compute_calls
 
 
-def test_scores_card_absent_on_404(stub, page, app_url):
+def test_scores_card_shows_error_with_retry_on_404(stub, page, app_url):
+    # ScoresCard.svelte: "A failed coverage load shows the error with a
+    # retry" — the card itself always renders; it never disappears on a
+    # pre-/scores/* backend, it surfaces the served failure instead.
     register(stub, coverage_status=404)
 
-    page.goto(f"{app_url}/settings")
-    page.get_by_text("Deployment defaults").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f"{app_url}/p/default/settings")
+    page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert page.get_by_text("Curation scores").count() == 0, (
-        "the scores card must be entirely absent on a pre-/scores/* backend, not "
-        "rendered broken/empty"
+    assert page.get_by_text(re.compile("not found", re.I)).count() > 0, (
+        "a failed coverage load should surface the served error on the card"
     )
 
 
 def test_scores_card_compute_all_flow(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
@@ -180,7 +182,7 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
 def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f"{app_url}/settings")
+    page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Curation scores").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 

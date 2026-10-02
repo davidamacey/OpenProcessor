@@ -38,7 +38,6 @@ import {
   selectDiverse,
   startAutoLabel,
 } from './api';
-import { FALLBACK_METHODS } from './strategies';
 
 const URL = `http://localhost:4603${API_PREFIX}/crops/batch_label`;
 
@@ -81,10 +80,8 @@ describe('ApiError', () => {
 });
 
 /**
- * getMethods() must never throw — {API_PREFIX}/methods is optional capability
- * discovery (plan §5.3). A 404 or any other failure resolves to the
- * hardcoded FALLBACK_METHODS instead of rejecting, so a backend that
- * hasn't shipped the endpoint yet can't break app boot.
+ * getMethods() rejects on failure like every other read — there is no
+ * hardcoded capability list to fall back to.
  */
 describe('getMethods', () => {
   const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
@@ -146,11 +143,9 @@ describe('getMethods', () => {
         default: undefined,
       },
     ]);
-    // Real backend response, not the hardcoded fallback.
-    expect(result).not.toEqual(FALLBACK_METHODS);
   });
 
-  it('resolves to FALLBACK_METHODS on a 404, without throwing or retrying', async () => {
+  it('rejects with the ApiError on a 404, without retrying', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -158,21 +153,21 @@ describe('getMethods', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
+    await expect(getMethods()).rejects.toMatchObject({ status: 404 });
     // No retry on 4xx — matches apiFetch's documented "don't retry on 4xx" rule.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('resolves to FALLBACK_METHODS on a network failure, after the normal 5xx/network retry budget', async () => {
+  it('rejects on a network failure, after the normal 5xx/network retry budget', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
+    await expect(getMethods()).rejects.toThrow();
     // apiFetch's retry loop: 1 initial + 3 retries = 4 attempts.
     expect(fetchMock).toHaveBeenCalledTimes(4);
   }, 10_000);
 
-  it('resolves to FALLBACK_METHODS (not throws) on a malformed 200 body', async () => {
+  it('parses a malformed 200 body to empty lists (not a crash)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('not json', {
         status: 200,
@@ -193,6 +188,8 @@ describe('getMethods', () => {
       dataset_exports: [],
       detection_profiles: [],
       prompt_packs: [],
+      vlm: [],
+      axes: [],
     });
   });
 
@@ -717,29 +714,6 @@ describe('searchCrops', () => {
     expect(url).toContain('max_rank=1');
   });
 
-  it('maps similarity_score through onto each item', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          {
-            crop_id: 'c1',
-            image_path: '/x/y.jpg',
-            bbox_norm: [0, 0, 1, 1],
-            similarity_score: 0.91,
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const res = await searchCrops('red widget_a', 1, 30);
-    expect(res.items[0]?.similarity_score).toBe(0.91);
-    expect(res.items[0]?.id).toBe('c1');
-  });
-
   it('maps the live backend field `semantic_score` through onto each item (OpenProcessor _hydrate_item)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -760,66 +734,6 @@ describe('searchCrops', () => {
 
     const res = await searchCrops('red widget_a', 1, 30);
     expect(res.items[0]?.similarity_score).toBe(0.73);
-  });
-
-  it('prefers similarity_score over semantic_score over score when more than one is present', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          {
-            crop_id: 'c1',
-            image_path: '/x/y.jpg',
-            bbox_norm: [0, 0, 1, 1],
-            similarity_score: 0.91,
-            semantic_score: 0.73,
-            score: 0.5,
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    const res1 = await searchCrops('red widget_a', 1, 30);
-    expect(res1.items[0]?.similarity_score).toBe(0.91);
-
-    const fetchMock2 = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          {
-            crop_id: 'c1',
-            image_path: '/x/y.jpg',
-            bbox_norm: [0, 0, 1, 1],
-            semantic_score: 0.73,
-            score: 0.5,
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock2);
-    const res2 = await searchCrops('red widget_a', 1, 30);
-    expect(res2.items[0]?.similarity_score).toBe(0.73);
-  });
-
-  it('falls back to a bare score field if the server sends that instead', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        total: 1,
-        page: 1,
-        page_size: 30,
-        items: [
-          { crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1], score: 0.5 },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const res = await searchCrops('red widget_a', 1, 30);
-    expect(res.items[0]?.similarity_score).toBe(0.5);
   });
 
   it('defaults similarity_score to 0 when the server omits both fields', async () => {
@@ -1544,6 +1458,23 @@ describe('startAutoLabel', () => {
     expect(url).toContain('run_vlm=true');
   });
 
+  it('forwards vlm; acknowledge_external only when true (never =false); neither unset', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ vlm: 'cloud_vlm', acknowledge_external: true });
+    await startAutoLabel({ vlm: 'cloud_vlm', acknowledge_external: false });
+    await startAutoLabel({ vlm: null });
+
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(urls[0]).toContain('vlm=cloud_vlm');
+    expect(urls[0]).toContain('acknowledge_external=true');
+    expect(urls[1]).toContain('vlm=cloud_vlm');
+    expect(urls[1]).not.toContain('acknowledge_external');
+    expect(urls[2]).not.toContain('vlm');
+    expect(urls[2]).not.toContain('acknowledge_external');
+  });
+
   it('omits run_vlm entirely when unset (byte-identical to the pre-G5 request)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -1604,7 +1535,7 @@ describe('runVlmOnCluster', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await runVlmOnCluster(42, 'generic_item_v1');
+    await runVlmOnCluster(42, { promptPack: 'generic_item_v1' });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain('prompt_pack=generic_item_v1');
@@ -1614,10 +1545,26 @@ describe('runVlmOnCluster', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await runVlmOnCluster(42, null);
+    await runVlmOnCluster(42, { promptPack: null });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('prompt_pack');
+  });
+
+  it('forwards vlm and acknowledge_external=true; sends neither unset, never acknowledge_external=false', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runVlmOnCluster(42, { vlm: 'cloud_vlm', acknowledgeExternal: true });
+    await runVlmOnCluster(42, { vlm: 'cloud_vlm', acknowledgeExternal: false });
+    await runVlmOnCluster(42, {});
+
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(urls[0]).toBe(
+      `${API_PREFIX}/vlm/label_cluster/42?vlm=cloud_vlm&acknowledge_external=true`,
+    );
+    expect(urls[1]).toBe(`${API_PREFIX}/vlm/label_cluster/42?vlm=cloud_vlm`);
+    expect(urls[2]).toBe(`${API_PREFIX}/vlm/label_cluster/42`);
   });
 });
 
@@ -2304,7 +2251,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
     expect(result.defaults).toEqual({});
   });
 
-  it('getCurationSettings THROWS on 404 (unlike getMethods, which falls back)', async () => {
+  it('getCurationSettings throws on 404', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -2314,10 +2261,6 @@ describe('getCurationSettings / putCurationDefaults', () => {
 
     await expect(getCurationSettings()).rejects.toBeInstanceOf(ApiError);
     await expect(getCurationSettings()).rejects.toMatchObject({ status: 404 });
-
-    // Contrast: getMethods() on the identical 404 response resolves rather
-    // than rejecting. Same fetch mock, different endpoint contract.
-    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
   });
 });
 

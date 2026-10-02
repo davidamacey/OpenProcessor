@@ -46,13 +46,12 @@ describe('curationSettingsStore', () => {
     expect(docSpy).not.toHaveBeenCalled();
   });
 
-  it('starts at EMPTY_CURATION_SETTINGS with loaded=false, supported=null', () => {
+  it('starts at EMPTY_CURATION_SETTINGS with loaded=false', () => {
     expect(curationSettingsStore.settings).toEqual(EMPTY_CURATION_SETTINGS);
     expect(curationSettingsStore.loaded).toBe(false);
-    expect(curationSettingsStore.supported).toBeNull();
   });
 
-  it('200 -> record loaded, supported true, error null', async () => {
+  it('200 -> record loaded, error null', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -66,12 +65,11 @@ describe('curationSettingsStore', () => {
 
     await curationSettingsStore.init();
 
-    expect(curationSettingsStore.supported).toBe(true);
     expect(curationSettingsStore.error).toBeNull();
     expect(curationSettingsStore.settings.defaults).toEqual({ cluster: 'ivf' });
   });
 
-  it('404 -> supported false, error null, no throw, settings stays empty', async () => {
+  it('404 -> an ordinary load error, no throw, settings stays empty', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -83,12 +81,11 @@ describe('curationSettingsStore', () => {
 
     await expect(curationSettingsStore.init()).resolves.toBeUndefined();
 
-    expect(curationSettingsStore.supported).toBe(false);
-    expect(curationSettingsStore.error).toBeNull();
+    expect(curationSettingsStore.error).toBeTruthy();
     expect(curationSettingsStore.settings).toEqual(EMPTY_CURATION_SETTINGS);
   });
 
-  it('422 on load -> supported null, error contains the server detail', async () => {
+  it('422 on load -> error contains the server detail', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -103,7 +100,6 @@ describe('curationSettingsStore', () => {
 
     await curationSettingsStore.init();
 
-    expect(curationSettingsStore.supported).toBeNull();
     expect(curationSettingsStore.error).toContain(
       "axis 'bogus' does not accept a shared default",
     );

@@ -8,6 +8,7 @@
  */
 
 import { getClasses } from '$lib/api';
+import { onProjectChange } from '$lib/projectChange';
 import { isAssignableClass } from '$lib/classVisibility';
 import type { ClassThresholds, RegistryClass } from '$lib/types';
 
@@ -97,6 +98,24 @@ class ClassesStore {
   }
 
   /**
+   * Project switch: the registry is per project. Drops everything, and
+   * — when a subscriber holds the store — re-reads the new project's
+   * registry right away (`refresh()` aborts the old project's in-flight
+   * read first).
+   */
+  resetForProjectChange(): void {
+    this.#abort?.abort();
+    this.#abort = null;
+    this.classes = [];
+    this.thresholds = EMPTY_THRESHOLDS;
+    this.reservedHotkeys = [];
+    this.lastUpdated = null;
+    this.error = null;
+    this.loading = false;
+    if (this.#refCount > 0) void this.refresh();
+  }
+
+  /**
    * Drop the current cache and re-fetch. Used after add/rename/merge so the
    * UI never displays a stale row briefly. The 30-second poll would catch
    * up on its own; this just makes mutations visible immediately.
@@ -131,3 +150,4 @@ class ClassesStore {
 }
 
 export const classesStore = new ClassesStore();
+onProjectChange(() => classesStore.resetForProjectChange());

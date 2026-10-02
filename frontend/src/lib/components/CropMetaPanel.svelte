@@ -7,13 +7,17 @@
   } from '$lib/types';
   import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
+  import VlmProvenanceRows from './provenance/VlmProvenanceRows.svelte';
+  import ImportProvenanceRows from './provenance/ImportProvenanceRows.svelte';
+  import CombineOriginRows from './provenance/CombineOriginRows.svelte';
+  import ReprocessControl from './datasets/ReprocessControl.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotIsPresent } from '$lib/annotations/types';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
-  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionStatusesStore, toneChipClass } from '$stores/regionStatuses.svelte';
   import { humanizeId } from '$lib/humanizeId';
   import { formatTimestamp } from '$lib/formatDate';
 
@@ -24,9 +28,12 @@
      *  above — hide those rows here instead of repeating them (visual
      *  audit 2026-09-24, R11). */
     embedded?: boolean;
+    /** The served post-write crop after a Reprocess, for the host to
+     *  adopt in place of `crop`. */
+    onreprocessed?: (crop: Crop) => void;
   }
 
-  let { crop, embedded = false }: Props = $props();
+  let { crop, embedded = false, onreprocessed }: Props = $props();
 
   const vlmConf = $derived<string | null>(crop.vlm_confidence ?? null);
   const classSource = $derived<string | null>(crop.class_source ?? null);
@@ -195,6 +202,12 @@
     {/if}
   {/if}
 
+  <!-- Per-feature provenance rows (W9 VLM, W10 import/lock, P4 combine
+       origin): each component renders its own <dt>/<dd> pairs or nothing. -->
+  <VlmProvenanceRows {crop} />
+  <ImportProvenanceRows {crop} />
+  <CombineOriginRows {crop} />
+
   <!-- dq-queues cutover (2026-09-24): `class_confidence` is the served
        confidence of whoever set the LABEL (VLM categorical mapped to a
        number, or the classifier's own score) — distinct from
@@ -264,6 +277,17 @@
   {/if}
 </dl>
 
+<!-- W10 Reprocess (§7.12 item 6): absent unless the backend serves it. -->
+<div class="mt-2">
+  <ReprocessControl
+    target={{ kind: 'crop', cropId: crop.id }}
+    onadopt={(crops) => {
+      const updated = crops.find((c) => c.id === crop.id);
+      if (updated) onreprocessed?.(updated);
+    }}
+  />
+</div>
+
 {#each presentSlots as spec (spec.key)}
   {@const data = slotOf(crop, spec)}
   {#if slotIsPresent(data)}
@@ -289,7 +313,7 @@
              machine-accepted but not yet reviewed). Neither reuses
              region_verified, whose meaning ("a verification pass ran")
              is now a third, distinct thing. -->
-        {#if data?.lifecycle?.validated != null || data?.lifecycle?.autoConfirmed != null || data?.lifecycle?.boxCorrect != null}
+        {#if data?.lifecycle?.validated != null || data?.lifecycle?.autoConfirmed != null}
           <dt class="text-zinc-500">Validation</dt>
           <dd class="flex flex-wrap items-center gap-1.5">
             {#if data.lifecycle.validated}
@@ -307,47 +331,150 @@
             {:else if data.lifecycle.validated != null || data.lifecycle.autoConfirmed != null}
               <span class="text-zinc-500">not yet reviewed</span>
             {/if}
-            <!-- 3f1a11e adoption: region_bbox_correct is the verifier's
-                 own box-correctness verdict — false is the actual "model
-                 said wrong box" signal, distinct from a rejection
-                 reason's kind (which can be an automatic geometry gate
-                 or "needs human" with no model verdict at all). Folded
-                 into this row rather than a new one (mind the review
-                 viewport budget). -->
-            {#if data.lifecycle.boxCorrect === false}
-              <span
-                class="rounded border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200"
-              >
-                model: box wrong
-              </span>
-            {/if}
           </dd>
         {/if}
 
         {#if data?.subBox?.score != null}
           <dt class="text-zinc-500">Score</dt>
           <dd class="font-mono">{pct(data.subBox.score)}</dd>
-        {:else if data?.subBox?.candidate?.score != null}
-          <dt class="text-zinc-500">Score</dt>
-          <dd class="font-mono">
-            {pct(data.subBox.candidate.score)}
-            <span class="text-[10px] text-zinc-500">(candidate)</span>
+        {/if}
+
+        {#if data?.boxSet && data.boxSet.setComplete === false}
+          <dt class="text-zinc-500">Box set</dt>
+          <dd>
+            <span
+              class="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200"
+              title="The VLM reported visible regions that are missing from this list"
+            >
+              incomplete
+            </span>
           </dd>
         {/if}
 
-        {#if data?.subBox?.rawXyxy == null && data?.subBox?.candidate}
-          <!-- Verifier-rejected candidate (dq-region): kept for human
-               review/reversal, not promoted into the region box yet. -->
-          <dt class="text-zinc-500">Candidate</dt>
-          <dd class="flex flex-wrap items-center gap-1.5">
-            {#if data.subBox.candidate.detector}
-              <ProvenanceChip
-                detector={data.subBox.candidate.detector}
-                version={data.subBox.candidate.detectorVersion}
-                size="sm"
-              />
-            {/if}
-            <span class="text-[10px] text-zinc-500">not yet accepted</span>
+        {#if data?.subBoxes && data.subBoxes.length > 0}
+          <!-- One block per box, numbered by its current position in the
+               served list (the id, not the number, is stable). -->
+          <dt class="text-zinc-500">Boxes ({data.subBoxes.length})</dt>
+          <dd class="flex flex-col gap-1.5">
+            {#each data.subBoxes as b, i (b.boxId ?? i)}
+              {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
+                b.rejectionReason,
+              )}
+              <div class="flex flex-col gap-0.5" data-testid="meta-box">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="font-mono text-[10px] text-zinc-500">#{i + 1}</span>
+                  <span
+                    class="rounded border px-1 py-0.5 text-[10px] {toneChipClass(
+                      regionStatusesStore.boxStateTone(b.state),
+                    )}"
+                  >
+                    {regionStatusesStore.boxStateInfo(b.state)?.label ?? b.state}
+                  </span>
+                  {#if b.score != null}
+                    <span class="font-mono text-[10px] text-zinc-500">{pct(b.score)}</span
+                    >
+                  {/if}
+                  {#if b.locked}
+                    <span
+                      class="rounded border border-zinc-600 bg-zinc-800 px-1 text-[10px] text-zinc-300"
+                      title="A human created or edited this box; automated stages leave it alone"
+                    >
+                      locked
+                    </span>
+                  {/if}
+                  <!-- The verifier's own box-correctness verdict: false is
+                       the actual "model said wrong box" signal, distinct
+                       from a rejection reason's kind. -->
+                  {#if b.bboxCorrect === false}
+                    <span
+                      class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+                    >
+                      model: box wrong
+                    </span>
+                  {/if}
+                  {#if b.detector}
+                    <ProvenanceChip
+                      detector={b.detector}
+                      version={b.detectorVersion}
+                      size="sm"
+                    />
+                  {/if}
+                </div>
+                {#if b.rejectionReason}
+                  <div
+                    class="text-[11px] {rejectionKind === 'model_verdict'
+                      ? 'text-red-300'
+                      : rejectionKind === 'needs_human'
+                        ? 'text-zinc-300'
+                        : 'text-amber-300'}"
+                  >
+                    {rejectionKind === 'needs_human'
+                      ? 'Needs review: '
+                      : 'Rejection: '}{regionVocabularyStore.rejectionReasonLabel(
+                      b.rejectionReason,
+                    )}
+                  </div>
+                {/if}
+                {#if b.text != null}
+                  <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span
+                      class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
+                    >
+                      {b.text || '∅'}
+                    </span>
+                    {#if b.textSource}
+                      <ProvenanceChip detector={b.textSource} size="sm" />
+                    {/if}
+                    <span class="font-mono text-[10px] text-zinc-500">
+                      {pct(b.textConfidence)}
+                    </span>
+                    {#if b.textDisagreement}
+                      <span
+                        class="whitespace-nowrap rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                        title="The VLM and OCR readers disagree on this text"
+                      >
+                        readers disagree
+                      </span>
+                    {/if}
+                  </div>
+                {/if}
+                {#if b.textVlm != null || b.textOcr != null}
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                    {#if b.textVlm != null}
+                      <span>
+                        <span class="text-zinc-500">vlm:</span>
+                        <span class="font-mono text-zinc-200">{b.textVlm || '∅'}</span>
+                      </span>
+                    {/if}
+                    {#if b.textOcr != null}
+                      <span>
+                        <span class="text-zinc-500">ocr:</span>
+                        <span class="font-mono text-zinc-200">{b.textOcr || '∅'}</span>
+                      </span>
+                    {/if}
+                  </div>
+                {/if}
+                {#if b.textEngineVersion}
+                  <div class="font-mono text-[10px] text-zinc-500">
+                    text engine {b.textEngineVersion}
+                  </div>
+                {/if}
+                <!-- Why the chosen reading won / why the VLM's own reading
+                     was rejected as not text (served vocabulary ids). -->
+                {#if b.textChoice && b.textChoice !== 'human'}
+                  <div class="text-[11px] text-zinc-300">
+                    Text choice: {regionVocabularyStore.textChoiceLabel(b.textChoice)}
+                  </div>
+                {/if}
+                {#if b.textVlmInvalid}
+                  <div class="text-[11px] text-red-300">
+                    VLM text rejected: {regionVocabularyStore.invalidReasonLabel(
+                      b.textVlmInvalid,
+                    )}
+                  </div>
+                {/if}
+              </div>
+            {/each}
           </dd>
         {/if}
 
@@ -394,55 +521,12 @@
             <span class="font-mono text-[10px] text-zinc-500">
               {pct(data.text.confidence)}
             </span>
-            {#if data.text.disagreement}
-              <span
-                class="whitespace-nowrap rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
-                title="The VLM and OCR readers disagree on this text"
-              >
-                readers disagree
-              </span>
-            {/if}
-          </dd>
-        {/if}
-
-        {#if data?.text?.vlmValue != null || data?.text?.ocrValue != null}
-          <dt class="text-zinc-500">Candidates</dt>
-          <dd class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-            {#if data.text.vlmValue != null}
-              <span>
-                <span class="text-zinc-500">vlm:</span>
-                <span class="font-mono text-zinc-200">{data.text.vlmValue || '∅'}</span>
-              </span>
-            {/if}
-            {#if data.text.ocrValue != null}
-              <span>
-                <span class="text-zinc-500">ocr:</span>
-                <span class="font-mono text-zinc-200">{data.text.ocrValue || '∅'}</span>
-              </span>
-            {/if}
           </dd>
         {/if}
 
         {#if data?.text?.engineVersion}
           <dt class="text-zinc-500">Text engine</dt>
           <dd class="font-mono text-zinc-400">{data.text.engineVersion}</dd>
-        {/if}
-
-        <!-- dq-region: why the chosen reading won / why the VLM's own
-             reading was rejected as not text. Labels are a titlecase-id
-             placeholder until the backend serves real ones on
-             GET {API_PREFIX}/regions/vocabulary. -->
-        {#if data?.text?.choice && data.text.choice !== 'human'}
-          <dt class="text-zinc-500">Text choice</dt>
-          <dd class="text-zinc-300">
-            {regionVocabularyStore.textChoiceLabel(data.text.choice)}
-          </dd>
-        {/if}
-        {#if data?.text?.invalidReason}
-          <dt class="text-zinc-500">VLM text rejected</dt>
-          <dd class="text-red-300">
-            {regionVocabularyStore.invalidReasonLabel(data.text.invalidReason)}
-          </dd>
         {/if}
 
         {#if data?.lifecycle?.rejectionReason}

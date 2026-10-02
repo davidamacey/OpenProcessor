@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  evalOverallLabel,
-  evalPerClassLabel,
+  evalSplitLabel,
   formatMetric,
   formatScalar,
   isTerminalTrainState,
@@ -9,31 +8,20 @@ import {
 } from './trainResults';
 import { trainStatusFixture } from './test/fixtures/trainRun';
 
-describe('evalOverallLabel / evalPerClassLabel', () => {
-  it("labels today's split-less eval: overall as validation (last epoch), per-class as test split", () => {
-    // trainStatusFixture.eval carries no `split` — the real shape the
-    // live backend serves today.
-    expect(evalOverallLabel(trainStatusFixture.eval)).toBe('validation (last epoch)');
-    expect(evalPerClassLabel(trainStatusFixture.eval)).toBe(
-      'test split (frozen holdout)',
-    );
+describe('evalSplitLabel', () => {
+  it('labels split: "test" as the frozen-holdout test split', () => {
+    const ev = { ...trainStatusFixture.eval!, split: 'test' as const };
+    expect(evalSplitLabel(ev)).toBe('test split (frozen holdout)');
   });
 
-  it('labels an upcoming eval with split: "test" as test split for both halves', () => {
-    const ev = { ...trainStatusFixture.eval, split: 'test' as const };
-    expect(evalOverallLabel(ev)).toBe('test split (frozen holdout)');
-    expect(evalPerClassLabel(ev)).toBe('test split (frozen holdout)');
-  });
-
-  it('labels an upcoming eval with split: "val" as validation for both halves', () => {
-    const ev = { ...trainStatusFixture.eval, split: 'val' as const };
-    expect(evalOverallLabel(ev)).toBe('validation');
-    expect(evalPerClassLabel(ev)).toBe('validation');
+  it('labels split: "val" as validation', () => {
+    const ev = { ...trainStatusFixture.eval!, split: 'val' as const };
+    expect(evalSplitLabel(ev)).toBe('validation');
   });
 
   it('returns empty string for a null/undefined eval', () => {
-    expect(evalOverallLabel(null)).toBe('');
-    expect(evalPerClassLabel(undefined)).toBe('');
+    expect(evalSplitLabel(null)).toBe('');
+    expect(evalSplitLabel(undefined)).toBe('');
   });
 });
 

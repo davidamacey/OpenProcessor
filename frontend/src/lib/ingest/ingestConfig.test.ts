@@ -1,39 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { IngestConfig } from '$lib/types';
-import {
-  DOCUMENTED_ACCEPTED_EXTENSIONS,
-  DOCUMENTED_UPLOAD_MAX_IMAGES,
-  resolveIngestConfig,
-} from './ingestConfig';
-
-function servedConfig(overrides: Partial<IngestConfig> = {}): IngestConfig {
-  return {
-    upload: {
-      enabled: true,
-      max_images_per_request: 128,
-      max_bytes_per_request: 500 * 1024 * 1024,
-      accepted_extensions: ['.jpg', '.jpeg', '.png'],
-      persists_bytes: true,
-    },
-    batch: { enabled: true, max_items: 256, source_roots: [] },
-    region_drain: { poll_interval_s: 10, stable_polls: 3 },
-    ...overrides,
-  };
-}
+import { servedIngestConfig as servedConfig } from '$lib/test/fixtures/ingestConfig';
+import { resolveIngestConfig, serverPathIngestAvailable } from './ingestConfig';
 
 describe('resolveIngestConfig', () => {
-  it('falls back to the documented interim constants when nothing is served', () => {
-    const resolved = resolveIngestConfig(null);
-    expect(resolved.uploadMaxImages).toBe(DOCUMENTED_UPLOAD_MAX_IMAGES);
-    expect(resolved.acceptedExtensions).toEqual(DOCUMENTED_ACCEPTED_EXTENSIONS);
-    expect(resolved.uploadEnabled).toBe(true);
-    expect(resolved.batchEnabled).toBe(false);
-    expect(resolved.uploadPersistsBytes).toBeNull();
-    expect(resolved.batchMaxItems).toBeNull();
-    expect(resolved.regionDrainStablePolls).toBeNull();
-  });
-
-  it('prefers every served field over its interim constant (BA-2, c5c606f)', () => {
+  it('resolves every served field', () => {
     const resolved = resolveIngestConfig(
       servedConfig({
         upload: {
@@ -90,5 +60,18 @@ describe('resolveIngestConfig', () => {
       }),
     );
     expect(loose.uploadMaxBytes).toBeLessThan(10 * 1024 * 1024 * 1024);
+  });
+});
+
+describe('serverPathIngestAvailable', () => {
+  const withBatch = (enabled: boolean, source_roots: string[]) =>
+    resolveIngestConfig(
+      servedConfig({ batch: { enabled, max_items: 256, source_roots } }),
+    );
+
+  it('needs both the served batch.enabled and at least one source root', () => {
+    expect(serverPathIngestAvailable(withBatch(true, ['/data']))).toBe(true);
+    expect(serverPathIngestAvailable(withBatch(false, ['/data']))).toBe(false);
+    expect(serverPathIngestAvailable(withBatch(true, []))).toBe(false);
   });
 });

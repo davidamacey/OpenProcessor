@@ -32,8 +32,15 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL
+from fixtures.wire import (
+    REGION_PROFILE,
+    REGION_TAB_LABEL,
+    projects_response,
+    review_tab,
+    review_tabs,
+)
 
 import pytest
 
@@ -213,6 +220,17 @@ class Stub:
         # The served region profile gates every region feature; the
         # default deployment has one (the neutral widget/tag domain).
         # e2e/stubbed/test_no_region_profile.py overrides it with None.
+        # P1 projects cutover: the GLOBAL project list, read once by the
+        # root layout's bootstrap before anything scoped fires. Every
+        # scoped request in the app is then built from this project's own
+        # served `prefix` (`{api_prefix}/projects/default`) — matched by
+        # every OTHER `.on(...)` pattern below purely by suffix, so this
+        # is the only project-aware default the stub needs.
+        self.on(
+            "GET",
+            rf"^{re.escape(api_prefix)}/projects$",
+            projects_response(api_prefix),
+        )
         self.on("GET", r"/health$", {"status": "ok", "region_profile": REGION_PROFILE})
         self.on("GET", r"(thumbnail|region_thumbnail|/source)(/|$|\?)", self._image)
         # K6 (docs/design/k6-frontend-overlay-plan-2026-09-24.md):
@@ -304,17 +322,12 @@ class Stub:
         self.on(
             "GET",
             r"/review/tabs(\?|$)",
-            {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]},
+            review_tabs(review_tab("regions", REGION_TAB_LABEL)),
         )
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
-        # The root layout's ingestAvailability probe fires on every route
-        # (same pattern as bakeoff/runs above) — every existing test needs
-        # this default so the /ingest nav link's probe doesn't 501.
+        # /ingest's own page reads its status table and its config on
+        # mount; defaults so a route sweep through /ingest never 501s.
         self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
-        # BA-2 (OpenProcessor #36, c5c606f): once the probe above confirms
-        # the ingest router is mounted, /ingest's own page fetches
-        # `GET /ingest/config` on mount — every existing test needs this
-        # default too, same reasoning as /ingest/status above.
         self.on(
             "GET",
             r"/ingest/config(\?|$)",
@@ -338,11 +351,49 @@ class Stub:
         # every existing test stays green without editing each one;
         # `test_keymap.py` overrides this per-test with a served document.
         self.on("GET", r"/keymap(\?|$)", (404, {"detail": "not found"}))
+        # Projects P2 (§5.1): the `/p/[project]` layout reads the active
+        # project's served pipeline-pause flag (`GET {prefix}/pause`) on
+        # EVERY route for the switcher's chip, and `/projects` reads it
+        # for every selectable row. Default: not paused.
+        # `test_projects_pause.py` overrides it with a stateful stub.
+        self.on("GET", r"/pause$", self._pause_state)
+        # W10 (dataset import + Reprocess): /ingest, the item-detail panel
+        # and the cluster toolbar probe `GET {prefix}/datasets/formats`
+        # once per project. Defaults to a 404 — a backend without W10,
+        # where every W10 surface is absent — so existing tests stay
+        # green; test_dataset_import.py overrides it with served formats.
+        self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
+        # W3 (prompt-pack CRUD): /settings and the pack pages probe
+        # `GET {prefix}/prompt_packs` once per project. Defaults to a 404 —
+        # a backend without W3, where every pack surface is absent — so
+        # existing tests stay green; test_prompt_packs.py overrides it.
+        self.on("GET", r"/prompt_packs(\?|$)", (404, {"detail": "Not Found"}))
+        # W4 (region-profile CRUD): /settings and the profile pages probe
+        # `GET {prefix}/region_profiles` once per project. Defaults to a
+        # 404 — a backend without W4, where every profile surface is
+        # absent — so existing tests stay green; test_region_profiles.py
+        # overrides it.
+        self.on("GET", r"/region_profiles(\?|$)", (404, {"detail": "Not Found"}))
+        # W9 (VLM endpoint registry): the Settings card and /models probe the
+        # GLOBAL `GET {prefix}/vlm/endpoints` once. Defaults to a 404 — a
+        # backend without W9 — so existing tests stay green; the Track A
+        # specs override it.
+        self.on("GET", r"/vlm/endpoints(\?|$)", (404, {"detail": "Not Found"}))
+        # P4 (combine projects): `/projects` probes
+        # `GET {prefix}/projects/combine/<sentinel>` once. A plain 404 is the
+        # "router not mounted" shape; Track B specs override it.
+        self.on("GET", r"/projects/combine/[^/?]+(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 
     def on(self, method: str, path_regex: str, handler_or_body: Handler | HandlerResult) -> None:
         self._handlers.append((method.upper(), re.compile(path_regex), handler_or_body))
+
+    @staticmethod
+    def _pause_state(request: Any, _match: "re.Match[str]") -> HandlerResult:
+        path = urlparse(request.url).path.rstrip("/")
+        slug = path.split("/")[-2]
+        return {"project": slug, "paused": False, "paused_by": [], "reason": None}
 
     @staticmethod
     def _image(_request: Any, _match: "re.Match[str]") -> HandlerResult:

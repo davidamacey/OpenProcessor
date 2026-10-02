@@ -36,6 +36,7 @@ FINISHED_STATUS = {
     "checkpoint_path": "/var/lib/openprocessor/training_runs/2026-09-24T23-47-55_yolo26n/weights/best.pt",
     "gpu": [{"index": 0, "util_pct": 2, "mem_used_mb": 18155, "mem_total_mb": 49140}],
     "eval": {
+        "split": "test",
         "map50": 0.9191,
         "map50_95": 0.85096,
         "per_class": [
@@ -120,7 +121,7 @@ def test_finished_run_results_render(stub, page, app_url):
     stub.on("GET", r"/train/runs(\?|$)", {"items": [FINISHED_STATUS], "total": 1})
     stub.on("GET", r"/train/manifest/[^/]+(\?|$)", MANIFEST)
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.get_by_text(JOB_ID, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role("button", name="Results")
@@ -129,9 +130,8 @@ def test_finished_run_results_render(stub, page, app_url):
 
     page.get_by_text("Loading manifest", exact=False).wait_for(state="hidden", timeout=10000)
 
-    # Overall (val, today's split-less shape) vs per-class (test) labels.
-    page.get_by_text("validation (last epoch)", exact=False).wait_for(timeout=10000)
-    assert page.get_by_text("test split (frozen holdout)", exact=False).count() > 0
+    # Overall and per-class figures, both labelled by the served eval.split.
+    page.get_by_text("test split (frozen holdout)", exact=False).first.wait_for(timeout=10000)
 
     # Per-class table row.
     assert page.get_by_text("miata", exact=False).count() > 0
@@ -177,7 +177,7 @@ def test_failed_run_shows_served_error(stub, page, app_url):
     stub.on("GET", r"/train/runs(\?|$)", {"items": [failed_status], "total": 1})
     stub.on("GET", r"/train/manifest/[^/]+(\?|$)", (404, {"detail": "not found"}))
 
-    page.goto(f"{app_url}/train")
+    page.goto(f"{app_url}/p/default/train")
     page.get_by_text(failed_job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role("button", name="Results")

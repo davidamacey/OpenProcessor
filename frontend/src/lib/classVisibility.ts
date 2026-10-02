@@ -17,8 +17,6 @@
  * predicate harder to grep for later).
  */
 
-import { slotForClassName } from '$lib/annotations/registeredSlots';
-
 /** Currently hides nothing — see the module header for why this stays a
  *  named predicate instead of being deleted. */
 export function isPickerHiddenClass(_name: string): boolean {
@@ -41,23 +39,12 @@ export function isAssignableClass(cls: { name: string; deprecated?: boolean }): 
 }
 
 /**
- * True if `cls` is bound to a registered annotation slot (its regions are
- * sub-boxes on other items, not items of their own).
- *
- * OpenProcessor #36 item 1 (visual audit R1/X2): `GET {API_PREFIX}/classes`
- * now serves a `kind` (`'item'` | `'region'`) directly — the server's own
- * verdict, read first. The slot registry is kept only as the fallback for
- * a class an older backend doesn't tag (`kind` absent/undefined), so a
- * tier-2 deployment against a pre-#36 backend still excludes its region
- * class correctly.
+ * True if `cls` is a region class (its regions are sub-boxes on other
+ * items, not items of their own) — the served `kind` from
+ * `GET {API_PREFIX}/classes`, never re-derived client-side.
  */
-export function isSlotBoundClass(cls: {
-  name: string;
-  kind?: 'item' | 'region';
-}): boolean {
-  if (cls.kind === 'item') return false;
-  if (cls.kind === 'region') return true;
-  return slotForClassName(cls.name) != null;
+export function isSlotBoundClass(cls: { kind: 'item' | 'region' }): boolean {
+  return cls.kind === 'region';
 }
 
 /**
@@ -70,7 +57,7 @@ export function isSlotBoundClass(cls: {
 export function isItemClassTarget(cls: {
   name: string;
   deprecated?: boolean;
-  kind?: 'item' | 'region';
+  kind: 'item' | 'region';
 }): boolean {
   return isAssignableClass(cls) && !isSlotBoundClass(cls);
 }
