@@ -15,7 +15,7 @@ from src.clients.fast_face_client import get_fast_face_client
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
 from src.config.settings import TritonModelConfig
-from src.utils.cache import get_clip_tokenizer, get_image_cache, get_text_cache
+from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
 from src.utils.image_processing import decode_image, validate_image
 from src.utils.retry import RetryExhaustedError
 
@@ -438,19 +438,8 @@ class InferenceService:
             if cached_embedding is not None:
                 return cached_embedding
 
-        # Tokenize using cached singleton
-        tokenizer = get_clip_tokenizer()
-        tokens = tokenizer(
-            text,
-            padding='max_length',
-            max_length=77,
-            truncation=True,
-            return_tensors='np',
-        )
-
-        # Get Triton client and encode
         client = get_triton_client(self.settings.triton_url)
-        embedding = client.encode_text(tokens['input_ids'])
+        embedding = client.encode_text(clip_text_tokens(text))
 
         # Cache the result
         if use_cache:
