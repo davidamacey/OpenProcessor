@@ -193,6 +193,34 @@ export interface PromptPackInfo extends MethodInfoBase {
   default?: boolean;
 }
 
+/**
+ * One VLM endpoint a run can be pointed at, plus the `off` entry
+ * (`axis: 'vlm'`, OpenProcessor W9). Beyond the shared fields it carries
+ * the endpoint's served status and the acknowledgement facts the pickers
+ * read verbatim: whether it sends crops outside the deployment, the served
+ * warning, whether the project default already has a recorded
+ * acknowledgement (`default_ack_recorded`), and whether a run that names
+ * this entry must acknowledge it (`per_run_ack_required`). Nothing here
+ * derives any of them.
+ */
+export interface VlmMethodInfo extends MethodInfoBase {
+  default?: boolean;
+  endpoint_status?: string | null;
+  endpoint_status_label?: string | null;
+  sends_images_externally?: boolean | null;
+  warning?: string | null;
+  default_ack_recorded?: boolean | null;
+  per_run_ack_required?: boolean | null;
+}
+
+/** One axis's served copy (`axes[]` on `/methods`): the label and blurb
+ *  Cropwright shows for it. */
+export interface MethodAxisCopy {
+  axis: string;
+  label: string;
+  description: string;
+}
+
 export interface MethodsResponse {
   cluster_methods: ClusterMethodInfo[];
   review_sorts: ReviewSortInfo[];
@@ -213,6 +241,10 @@ export interface MethodsResponse {
   detection_profiles: DetectionProfileInfo[];
   /** `axis: 'prompt_pack'` entries. */
   prompt_packs: PromptPackInfo[];
+  /** `axis: 'vlm'` entries (W9): the registered endpoints plus `off`. */
+  vlm: VlmMethodInfo[];
+  /** Served per-axis copy; empty when the backend serves none. */
+  axes: MethodAxisCopy[];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -221,6 +253,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function optBool(v: unknown): boolean | undefined {
   return typeof v === 'boolean' ? v : undefined;
+}
+
+function optNullableBool(v: unknown): boolean | null | undefined {
+  if (typeof v === 'boolean') return v;
+  return v === null ? null : undefined;
 }
 
 function optString(v: unknown): string | null | undefined {
@@ -271,6 +308,23 @@ function normalizeAxis<T extends MethodInfoBase>(
     const base = normalizeBase(entry);
     if (!base) continue;
     out.push(extra(base, entry));
+  }
+  return out;
+}
+
+/** The served `axes[]` copy; a malformed entry is dropped. */
+function parseAxisCopy(raw: unknown): MethodAxisCopy[] {
+  if (!Array.isArray(raw)) return [];
+  const out: MethodAxisCopy[] = [];
+  for (const e of raw) {
+    if (!isRecord(e)) continue;
+    if (typeof e.axis !== 'string' || !e.axis) continue;
+    if (typeof e.label !== 'string' || !e.label) continue;
+    out.push({
+      axis: e.axis,
+      label: e.label,
+      description: typeof e.description === 'string' ? e.description : '',
+    });
   }
   return out;
 }
@@ -346,6 +400,17 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
       ...base,
       default: optBool(e.default),
     })),
+    vlm: normalizeAxis<VlmMethodInfo>(strategies, 'vlm', (base, e) => ({
+      ...base,
+      default: optBool(e.default),
+      endpoint_status: optString(e.endpoint_status),
+      endpoint_status_label: optString(e.endpoint_status_label),
+      sends_images_externally: optNullableBool(e.sends_images_externally),
+      warning: optString(e.warning),
+      default_ack_recorded: optNullableBool(e.default_ack_recorded),
+      per_run_ack_required: optNullableBool(e.per_run_ack_required),
+    })),
+    axes: parseAxisCopy(rec.axes),
   };
 }
 
@@ -489,7 +554,7 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  * at all — the single gate `AutoLabelPanel` uses to decide whether the
  * scope bar exists (absent, not disabled).
  *
- * Gated on the `prompt_pack` axis: it arrived in the same backend
+ * Gated on the `prompt_pack` axis or (W9) the `vlm` axis: the pack arrived in the same backend
  * change that made `class_id` on `POST {API_PREFIX}/pipeline/auto_label/start`
  * real, and `class_id` has no capability signal of its own. Without a
  * usable pack the scope has nothing to steer, so the control stays
@@ -498,9 +563,27 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  * config — so it is display-only, on /settings.)
  */
 export function isScopedAssistAvailable(
-  methods: Pick<MethodsResponse, 'prompt_packs'>,
+  methods: Pick<MethodsResponse, 'prompt_packs' | 'vlm'>,
 ): boolean {
-  return isPromptPackAvailable(methods.prompt_packs);
+  return isPromptPackAvailable(methods.prompt_packs) || isVlmSelectable(methods);
+}
+
+/**
+ * The VLM entries a run picker or the settings dropdown may list: every
+ * served entry that is not `disabled` (the endpoint's own readiness is
+ * `endpoint_status`, shown beside it, never used to hide it).
+ */
+export function pickableVlmEntries(entries: VlmMethodInfo[]): VlmMethodInfo[] {
+  return entries.filter((e) => e.status !== 'disabled');
+}
+
+/**
+ * Whether the backend serves a VLM axis with at least one entry to pick:
+ * the single gate for the per-run VLM pickers (absent, not disabled, no
+ * probe). The settings dropdown renders from the same entries.
+ */
+export function isVlmSelectable(methods: Pick<MethodsResponse, 'vlm'>): boolean {
+  return pickableVlmEntries(methods.vlm).length > 0;
 }
 
 /**
@@ -546,4 +629,6 @@ export const EMPTY_METHODS: MethodsResponse = {
   dataset_exports: [],
   detection_profiles: [],
   prompt_packs: [],
+  vlm: [],
+  axes: [],
 };

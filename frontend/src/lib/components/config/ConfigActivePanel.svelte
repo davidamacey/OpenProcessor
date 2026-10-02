@@ -8,7 +8,7 @@
     /** Header of the applied-runtime column naming the ref. */
     appliedColumn: string;
     /** Which applied-runtime ref this axis names. */
-    appliedRef: 'pack' | 'profile';
+    appliedRef: 'pack' | 'profile' | 'vlm';
     rollbackTitle: string;
     rollbackBlurb: string;
     /** Present for a resource with a deactivate route. */
@@ -40,9 +40,19 @@
     ondeactivate?: () => Promise<boolean>;
     /** Extra actions in the header row. */
     actions?: Snippet;
+    /** Served labels for the `source` ids (a VLM endpoint list's
+     *  `labels.source`); an id with no label prints raw. */
+    sourceLabels?: Record<string, string> | null;
   }
 
-  let { ctl, copy, onrollback, ondeactivate, actions }: Props = $props();
+  let {
+    ctl,
+    copy,
+    onrollback,
+    ondeactivate,
+    actions,
+    sourceLabels = null,
+  }: Props = $props();
 
   let confirming = $state<'rollback' | 'deactivate' | null>(null);
 
@@ -84,7 +94,9 @@
           >{refText(a.active)}</span
         >
       {/if}
-      {#if a.source}<span class="text-xs text-zinc-500">({a.source})</span>{/if}
+      {#if a.source}<span class="text-xs text-zinc-500" data-testid="active-source"
+          >({sourceLabels?.[a.source] ?? a.source})</span
+        >{/if}
       {#if a.activated_at}
         <span class="text-xs text-zinc-500" title={a.activated_at}
           >since {formatTimestamp(a.activated_at)}</span

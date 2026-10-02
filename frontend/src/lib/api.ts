@@ -3265,7 +3265,7 @@ export async function batchRegionStatus(
 
 /**
  * Kick off a VLM-label run scoped to one cluster: `POST
- * {API_PREFIX}/vlm/label_cluster/{cluster_id}[?prompt_pack=]`. The server
+ * {API_PREFIX}/vlm/label_cluster/{cluster_id}[?prompt_pack=&vlm=&acknowledge_external=]`. The server
  * selects every unvalidated, non-holdout, non-excluded member itself —
  * the frontend no longer fetches the crop page or chunks ids client-side
  * (that was the old `{API_PREFIX}/vlm/label_batch` chunk-of-64 loop,
@@ -3277,11 +3277,21 @@ export async function batchRegionStatus(
  */
 export function runVlmOnCluster(
   clusterId: number,
-  promptPack?: string | null,
+  opts: {
+    promptPack?: string | null;
+    /** W9: a registry endpoint name (or `off`) for this run only. */
+    vlm?: string | null;
+    /** Sent only when `true`. */
+    acknowledgeExternal?: boolean;
+  } = {},
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
   return apiFetch<AutoLabelJobState>(
-    `${scoped()}/vlm/label_cluster/${clusterId}${qs({ prompt_pack: promptPack ?? undefined })}`,
+    `${scoped()}/vlm/label_cluster/${clusterId}${qs({
+      prompt_pack: opts.promptPack ?? undefined,
+      vlm: opts.vlm ?? undefined,
+      acknowledge_external: opts.acknowledgeExternal === true ? true : undefined,
+    })}`,
     { method: 'POST' },
     signal,
   );
@@ -4701,6 +4711,18 @@ export interface AutoLabelStartParams {
    */
   prompt_pack?: string | null;
   /**
+   * W9: per-run VLM endpoint (a registry name, or `off`) for this job
+   * only; omitted/null = the project's active endpoint. An unknown id is
+   * a 422 `unknown_vlm`. Produced in exactly one place
+   * (`createAssistScope().toStartParams()`).
+   */
+  vlm?: string | null;
+  /**
+   * W9: acknowledges that this run's crops go to an external endpoint.
+   * Sent only when `true` (`startAutoLabel` drops `false`).
+   */
+  acknowledge_external?: boolean;
+  /**
    * G5: `pipeline.py`'s `run_vlm: bool = Query(False)` — the VLM sweep
    * stage is opt-in server-side and defaults off. Previously never sent
    * at all, so a scoped run (a class or pack picked via AssistScopeBar)
@@ -4743,8 +4765,10 @@ export function startAutoLabel(
   params: AutoLabelStartParams = {},
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
+  const { acknowledge_external: ack, ...rest } = params;
+  const sent = ack === true ? { ...rest, acknowledge_external: true } : rest;
   return apiFetch<AutoLabelJobState>(
-    `${scoped()}/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
+    `${scoped()}/pipeline/auto_label/start${qs(sent as Record<string, unknown>)}`,
     { method: 'POST' },
     signal,
   );

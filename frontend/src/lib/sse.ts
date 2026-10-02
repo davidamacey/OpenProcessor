@@ -295,6 +295,9 @@ const GLOBAL_EVENT_TYPES = [
   'project.paused',
   'project.resumed',
   'combine.progress',
+  // W9: the VLM registry / local-model catalog changed (`axis`:
+  // `registry` | `local_vlm`); the models page re-reads on it.
+  'vlm.changed',
 ];
 
 /**

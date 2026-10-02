@@ -21,6 +21,9 @@
    *                      ranking /review's picker uses. Limits only the
    *                      VLM sweep; clustering still covers the pool.
    *   2. prompt pack   — only when the `prompt_pack` axis is advertised.
+   *   3. VLM endpoint  — only when the `vlm` axis is advertised (W9):
+   *                      `VlmRunPicker`, with the served per-run
+   *                      acknowledgement for an external endpoint.
    * No detection-profile control: region detection runs in the backend's
    * detection worker from startup config, so a per-run profile would
    * change nothing (OpenProcessor rejects the param with a 422).
@@ -29,8 +32,13 @@
    */
 
   import ChevronDownIcon from './ChevronDownIcon.svelte';
+  import VlmRunPicker from './vlm/VlmRunPicker.svelte';
   import { searchClasses } from '$lib/classPicker';
-  import { isPromptPackAvailable, selectableAxisEntries } from '$lib/strategies';
+  import {
+    isPromptPackAvailable,
+    isVlmSelectable,
+    selectableAxisEntries,
+  } from '$lib/strategies';
   import type { AssistScope } from '$lib/assistScope.svelte';
   import type { RegistryClass } from '$lib/types';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -75,11 +83,19 @@
     }
   });
 
+  const vlmAvailable = $derived(isVlmSelectable(strategiesStore.methods));
+  $effect(() => {
+    if (!vlmAvailable && (scope.vlm != null || scope.acknowledgeExternal)) {
+      scope.vlm = null;
+      scope.acknowledgeExternal = false;
+    }
+  });
+
   const selectedClass = $derived(
     scope.classId == null ? null : (classes.find((c) => c.id === scope.classId) ?? null),
   );
   const summary = $derived(
-    [selectedClass ? selectedClass.name : 'whole dataset', scope.promptPack]
+    [selectedClass ? selectedClass.name : 'whole dataset', scope.promptPack, scope.vlm]
       .filter(Boolean)
       .join(' · '),
   );
@@ -104,7 +120,7 @@
         ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
-      title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick its prompt pack"
+      title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick its prompt pack and VLM endpoint"
       {disabled}
     >
       <span class="text-zinc-500">assist:</span>
@@ -176,6 +192,18 @@
           {/each}
         </select>
       </label>
+    {/if}
+
+    {#if vlmAvailable}
+      <VlmRunPicker
+        vlm={scope.vlm}
+        acknowledgeExternal={scope.acknowledgeExternal}
+        {disabled}
+        onchange={(next) => {
+          scope.vlm = next.vlm;
+          scope.acknowledgeExternal = next.acknowledgeExternal;
+        }}
+      />
     {/if}
 
     {#if !scope.isDefault}

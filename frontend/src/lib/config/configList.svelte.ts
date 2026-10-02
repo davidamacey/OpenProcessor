@@ -16,12 +16,14 @@ import type {
 } from '$lib/types_config';
 import type { ConfigActive } from './configActive.svelte';
 
-export interface ConfigListBackend<L, D> {
+export interface ConfigListBackend<L, D, E = CurationEvent> {
   list: () => Promise<L>;
   clone: (name: string, body: ConfigCloneRequest) => Promise<D>;
   remove: (name: string, expectedRevision: number) => Promise<void>;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
-  isEvent: (e: CurationEvent) => boolean;
+  /** `E` is the event type of the stream the resource follows: the scoped
+   *  `CurationEvent`, or (the VLM registry) the global stream's. */
+  subscribe: (onEvent: (e: E) => void) => { close(): void };
+  isEvent: (e: E) => boolean;
 }
 
 /** What the clone dialog clones: a doc, or a template (`source`). */
@@ -30,7 +32,7 @@ export interface CloneSource {
   source: ConfigSource | null;
 }
 
-export class ConfigList<L, D, A extends ConfigActive = ConfigActive> {
+export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = CurationEvent> {
   list = $state<L | null>(null);
   loadError = $state<string | null>(null);
   readonly active: A;
@@ -40,10 +42,10 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive> {
   cloneError = $state<string | null>(null);
   cloneReport = $state<ValidationReport | null>(null);
 
-  protected backend: ConfigListBackend<L, D>;
+  protected backend: ConfigListBackend<L, D, E>;
   #sub: { close(): void } | null = null;
 
-  constructor(backend: ConfigListBackend<L, D>, active: A) {
+  constructor(backend: ConfigListBackend<L, D, E>, active: A) {
     this.backend = backend;
     this.active = active;
   }

@@ -188,6 +188,8 @@ describe('getMethods', () => {
       dataset_exports: [],
       detection_profiles: [],
       prompt_packs: [],
+      vlm: [],
+      axes: [],
     });
   });
 
@@ -1456,6 +1458,23 @@ describe('startAutoLabel', () => {
     expect(url).toContain('run_vlm=true');
   });
 
+  it('forwards vlm; acknowledge_external only when true (never =false); neither unset', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ vlm: 'cloud_vlm', acknowledge_external: true });
+    await startAutoLabel({ vlm: 'cloud_vlm', acknowledge_external: false });
+    await startAutoLabel({ vlm: null });
+
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(urls[0]).toContain('vlm=cloud_vlm');
+    expect(urls[0]).toContain('acknowledge_external=true');
+    expect(urls[1]).toContain('vlm=cloud_vlm');
+    expect(urls[1]).not.toContain('acknowledge_external');
+    expect(urls[2]).not.toContain('vlm');
+    expect(urls[2]).not.toContain('acknowledge_external');
+  });
+
   it('omits run_vlm entirely when unset (byte-identical to the pre-G5 request)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -1516,7 +1535,7 @@ describe('runVlmOnCluster', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await runVlmOnCluster(42, 'generic_item_v1');
+    await runVlmOnCluster(42, { promptPack: 'generic_item_v1' });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain('prompt_pack=generic_item_v1');
@@ -1526,10 +1545,26 @@ describe('runVlmOnCluster', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await runVlmOnCluster(42, null);
+    await runVlmOnCluster(42, { promptPack: null });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('prompt_pack');
+  });
+
+  it('forwards vlm and acknowledge_external=true; sends neither unset, never acknowledge_external=false', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runVlmOnCluster(42, { vlm: 'cloud_vlm', acknowledgeExternal: true });
+    await runVlmOnCluster(42, { vlm: 'cloud_vlm', acknowledgeExternal: false });
+    await runVlmOnCluster(42, {});
+
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(urls[0]).toBe(
+      `${API_PREFIX}/vlm/label_cluster/42?vlm=cloud_vlm&acknowledge_external=true`,
+    );
+    expect(urls[1]).toBe(`${API_PREFIX}/vlm/label_cluster/42?vlm=cloud_vlm`);
+    expect(urls[2]).toBe(`${API_PREFIX}/vlm/label_cluster/42`);
   });
 });
 

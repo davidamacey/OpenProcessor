@@ -225,6 +225,21 @@ export interface VocabVlmEndpoint {
   status: string | null;
   max_images_per_call: number | null;
   active: boolean;
+  /** The served warning of an endpoint that sends images externally. */
+  warning?: string | null;
+}
+
+/** One row of the "every model choice" table (W9.8, §7.8.4). */
+export interface ModelChoice {
+  role: string;
+  label: string;
+  scope: 'per_request' | 'per_run' | 'region_profile' | 'config_store' | 'deployment';
+  current: string | null;
+  dims?: number | null;
+  choices: Choice[];
+  settable: boolean;
+  settable_via?: string | null;
+  reason?: string | null;
 }
 
 export interface VocabTextReaderMode {
@@ -246,15 +261,18 @@ export interface VocabRegistryClass {
 export interface ConfigVocabulary {
   detectors: VocabModel[];
   segmenters: VocabSegmenter[];
-  vlm: { active: ActiveRef | null; endpoints: VocabVlmEndpoint[] };
+  vlm: {
+    active: { name: string | null; revision?: number | null };
+    endpoints: VocabVlmEndpoint[];
+  };
   ocr: {
     available: boolean;
     pipeline_models: VocabModel[];
     det_models: VocabModel[];
     rec_models: VocabModel[];
   };
-  /** W9.8; rendered on the models page (Step 7), not here. */
-  model_choices?: unknown[];
+  /** W9.8; rendered on `/settings/models`. */
+  model_choices: ModelChoice[];
   text_reader_modes: VocabTextReaderMode[];
   registry_classes: VocabRegistryClass[];
   prompt_pack_calls?: Choice[];

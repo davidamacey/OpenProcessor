@@ -9,8 +9,10 @@ import {
   isPromptPackAvailable,
   isScopedAssistAvailable,
   isSemanticSearchAvailable,
+  isVlmSelectable,
   normalizeMethodStatus,
   parseMethodsResponse,
+  pickableVlmEntries,
   selectableAxisEntries,
 } from './strategies';
 import type {
@@ -247,6 +249,8 @@ describe('parseMethodsResponse', () => {
         dataset_exports: [],
         detection_profiles: [],
         prompt_packs: [],
+        vlm: [],
+        axes: [],
       });
     }
   });
@@ -262,6 +266,8 @@ describe('parseMethodsResponse', () => {
         dataset_exports: [],
         detection_profiles: [],
         prompt_packs: [],
+        vlm: [],
+        axes: [],
       });
     }
   });
@@ -947,15 +953,15 @@ describe('isScopedAssistAvailable', () => {
   // profiles but no usable prompt pack gets no scope bar.
   it('is false when no prompt pack is usable', () => {
     const packs: PromptPackInfo[] = [{ id: 'legacy', label: 'Legacy', status: 'shadow' }];
-    expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(false);
-    expect(isScopedAssistAvailable({ prompt_packs: [] })).toBe(false);
+    expect(isScopedAssistAvailable({ prompt_packs: packs, vlm: [] })).toBe(false);
+    expect(isScopedAssistAvailable({ prompt_packs: [], vlm: [] })).toBe(false);
   });
 
   it('is true when a prompt pack is usable', () => {
     const packs: PromptPackInfo[] = [
       { id: 'warehouse_v1', label: 'Warehouse', status: 'stable' },
     ];
-    expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(true);
+    expect(isScopedAssistAvailable({ prompt_packs: packs, vlm: [] })).toBe(true);
   });
 });
 
@@ -977,5 +983,95 @@ describe('settable flag on /methods entries', () => {
     expect(parsed.cluster_methods[0]!.settable).toBe(true);
     expect(parsed.detection_profiles[0]!.settable).toBe(false);
     expect(parsed.prompt_packs[0]!.settable).toBeUndefined();
+  });
+});
+
+describe('vlm axis (W9)', () => {
+  const wire = {
+    strategies: [
+      {
+        id: 'local_vlm',
+        axis: 'vlm',
+        label: 'Local VLM',
+        status: 'stable',
+        default: true,
+        settable: true,
+        endpoint_status: 'ready',
+        endpoint_status_label: 'Ready',
+        sends_images_externally: false,
+        warning: null,
+        default_ack_recorded: null,
+        per_run_ack_required: false,
+      },
+      {
+        id: 'cloud_vlm',
+        axis: 'vlm',
+        label: 'Cloud VLM',
+        status: 'experimental',
+        endpoint_status: 'unprobed',
+        endpoint_status_label: 'Not probed yet',
+        sends_images_externally: true,
+        warning: 'Crops leave the deployment.',
+        default_ack_recorded: false,
+        per_run_ack_required: true,
+      },
+      { id: 'off', axis: 'vlm', label: 'Off', status: 'stable' },
+      { id: 'broken', axis: 'vlm', label: 'Broken', status: 'disabled' },
+    ],
+    axes: [
+      { axis: 'vlm', label: 'VLM endpoint', description: 'Which endpoint reads crops.' },
+      { axis: '', label: 'dropped' },
+      'garbage',
+    ],
+  };
+
+  it('normalizes the served per-entry facts verbatim, with null kept distinct from absent', () => {
+    const parsed = parseMethodsResponse(wire);
+    expect(parsed.vlm.map((e) => e.id)).toEqual([
+      'local_vlm',
+      'cloud_vlm',
+      'off',
+      'broken',
+    ]);
+    const cloud = parsed.vlm.find((e) => e.id === 'cloud_vlm')!;
+    expect(cloud).toMatchObject({
+      endpoint_status: 'unprobed',
+      endpoint_status_label: 'Not probed yet',
+      sends_images_externally: true,
+      warning: 'Crops leave the deployment.',
+      default_ack_recorded: false,
+      per_run_ack_required: true,
+    });
+    const local = parsed.vlm.find((e) => e.id === 'local_vlm')!;
+    expect(local.default_ack_recorded).toBeNull();
+    expect(local.per_run_ack_required).toBe(false);
+    expect(parsed.vlm.find((e) => e.id === 'off')!.default_ack_recorded).toBeUndefined();
+  });
+
+  it('serves the axes[] copy and drops malformed entries', () => {
+    expect(parseMethodsResponse(wire).axes).toEqual([
+      { axis: 'vlm', label: 'VLM endpoint', description: 'Which endpoint reads crops.' },
+    ]);
+    expect(parseMethodsResponse({ strategies: [] }).axes).toEqual([]);
+  });
+
+  it('isVlmSelectable needs at least one entry that is not disabled', () => {
+    const parsed = parseMethodsResponse(wire);
+    expect(isVlmSelectable(parsed)).toBe(true);
+    expect(
+      isVlmSelectable({ vlm: parsed.vlm.filter((e) => e.status === 'disabled') }),
+    ).toBe(false);
+    expect(isVlmSelectable({ vlm: [] })).toBe(false);
+    expect(pickableVlmEntries(parsed.vlm).map((e) => e.id)).toEqual([
+      'local_vlm',
+      'cloud_vlm',
+      'off',
+    ]);
+  });
+
+  it('the scoped-assist bar is available on the vlm axis alone', () => {
+    const parsed = parseMethodsResponse(wire);
+    expect(isScopedAssistAvailable({ prompt_packs: [], vlm: parsed.vlm })).toBe(true);
+    expect(isScopedAssistAvailable({ prompt_packs: [], vlm: [] })).toBe(false);
   });
 });

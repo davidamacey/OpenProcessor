@@ -15,6 +15,7 @@ import type {
   ActiveConfigResponse,
   ActiveRef,
   ConfigActivateRequest,
+  ConfigErrorDetail,
   ValidationReport,
 } from '$lib/types_config';
 
@@ -24,7 +25,10 @@ export interface ConfigActiveBackend<
   W extends ActiveConfigResponse = ActiveConfigResponse,
 > {
   getActive: () => Promise<ActiveConfigResponse>;
-  activate: (name: string, body: ConfigActivateRequest) => Promise<W>;
+  activate: (
+    name: string,
+    body: ConfigActivateRequest & Record<string, unknown>,
+  ) => Promise<W>;
   rollback: (body: { expected_active: ActiveRef }) => Promise<ActiveConfigResponse>;
   /** Absent for a resource without a deactivate route (packs). */
   deactivate?: (body: { expected_active: ActiveRef }) => Promise<ActiveConfigResponse>;
@@ -37,6 +41,9 @@ export class ConfigActive<W extends ActiveConfigResponse = ActiveConfigResponse>
   actionError = $state<string | null>(null);
   /** The served report of a refused activation (422 `validation_failed`). */
   activateReport = $state<ValidationReport | null>(null);
+  /** The served detail of the last refused write (a VLM activation reads
+   *  `vlm_external_not_acknowledged` off it); null after a success. */
+  errorDetail = $state<ConfigErrorDetail | null>(null);
   /** The served response of the last successful activation. */
   lastActivation = $state<W | null>(null);
   /** Runs after every successful write (a profile editor re-polls
@@ -67,6 +74,7 @@ export class ConfigActive<W extends ActiveConfigResponse = ActiveConfigResponse>
   clearAction(): void {
     this.actionError = null;
     this.activateReport = null;
+    this.errorDetail = null;
   }
 
   /** Re-activates the served `previous`. */
@@ -83,17 +91,21 @@ export class ConfigActive<W extends ActiveConfigResponse = ActiveConfigResponse>
     return this.#write((expected) => deactivate({ expected_active: expected }));
   }
 
-  /** Makes `name@revision` the active one. */
+  /** Makes `name@revision` the active one. `extra` is spread into the
+   *  body (a VLM activation's `acknowledge_external`); packs and profiles
+   *  pass nothing. */
   async activate(
     name: string,
     revision: number | null,
     force: boolean,
+    extra?: Record<string, unknown>,
   ): Promise<boolean> {
     return this.#write(async (expected) => {
       const res = await this.#backend.activate(name, {
         revision,
         expected_active: expected,
         force,
+        ...extra,
       });
       this.lastActivation = res;
       return res;
@@ -115,6 +127,7 @@ export class ConfigActive<W extends ActiveConfigResponse = ActiveConfigResponse>
     } catch (e) {
       this.actionError = configErrorText(e);
       const d = configErrorDetail(e);
+      this.errorDetail = d;
       if (d?.report) this.activateReport = d.report;
       if (d?.error === 'active_conflict') await this.load();
       return false;

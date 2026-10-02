@@ -20,11 +20,13 @@
  * empty record.
  */
 
-import type { MethodsResponse, MethodInfoBase } from '$lib/strategies';
-import { selectableAxisEntries } from '$lib/strategies';
+import type { MethodsResponse, MethodInfoBase, VlmMethodInfo } from '$lib/strategies';
+import { pickableVlmEntries, selectableAxisEntries } from '$lib/strategies';
 
-/** The four axes the backend's `SETTABLE_DEFAULT_AXES` accepts on PUT. */
-export type SettingsAxis = 'cluster' | 'sort' | 'detection_profile' | 'prompt_pack';
+/** The axes the backend's `SETTABLE_DEFAULT_AXES` can accept on PUT (each
+ *  is offered only when `/methods` marks one of its entries `settable`). */
+export type SettingsAxis =
+  'cluster' | 'sort' | 'detection_profile' | 'prompt_pack' | 'vlm';
 
 export interface CurationSettings {
   /**
@@ -134,7 +136,62 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
       'that does not pick its own pack on the dashboard.',
     irreversibleWarning: null,
   },
+  {
+    axis: 'vlm',
+    label: 'VLM endpoint',
+    bucket: 'vlm',
+    // The served `/methods` axes[] copy replaces this when present
+    // (`axisCopy`); an external endpoint whose acknowledgement is not yet
+    // recorded cannot be pinned here (the server is the final gate).
+    blurb:
+      'Used by the always-on background VLM labeler and by every run that does not ' +
+      'pick its own endpoint.',
+    irreversibleWarning: null,
+  },
 ];
+
+/** The label and blurb for an axis: the served `/methods` `axes[]` entry
+ *  when there is one, else the spec's own words. */
+export function axisCopy(
+  methods: Pick<MethodsResponse, 'axes'>,
+  spec: SettingsAxisSpec,
+): { label: string; blurb: string } {
+  const served = methods.axes.find((a) => a.axis === spec.axis);
+  return {
+    label: served?.label || spec.label,
+    blurb: served?.description || spec.blurb,
+  };
+}
+
+/** What an axis's dropdown shows beside one option beyond its label:
+ *  `suffix` (the served endpoint status and warning), whether the option is
+ *  `disabled`, and the served `warning` for a chip under the control. Only
+ *  the VLM axis serves these fields; every other axis renders as before. */
+export function settingsOptionView(
+  spec: SettingsAxisSpec,
+  opt: MethodInfoBase,
+): { suffix: string; disabled: boolean; warning: string | null } {
+  if (spec.bucket !== 'vlm') return { suffix: '', disabled: false, warning: null };
+  const v = opt as VlmMethodInfo;
+  const parts: string[] = [];
+  if (v.endpoint_status_label) parts.push(v.endpoint_status_label);
+  if (v.warning) parts.push(`warning: ${v.warning}`);
+  const disabled = vlmNeedsAcknowledgement(v);
+  if (disabled) parts.push('activate it on Settings → Models first');
+  return {
+    suffix: parts.length > 0 ? ` · ${parts.join(' · ')}` : '',
+    disabled,
+    warning: v.warning ?? null,
+  };
+}
+
+/** True for a VLM entry the dropdown must not offer: it sends crops
+ *  outside the deployment and the project default has no recorded
+ *  acknowledgement (so the server would refuse it). The operator
+ *  acknowledges on Settings → Models. */
+export function vlmNeedsAcknowledgement(entry: VlmMethodInfo): boolean {
+  return entry.sends_images_externally === true && entry.default_ack_recorded === false;
+}
 
 /** True when the server marks any of this axis's `/methods` entries
  *  `settable`. */
@@ -205,7 +262,10 @@ export function axisOptions(
   methods: MethodsResponse,
   spec: SettingsAxisSpec,
 ): MethodInfoBase[] {
-  return selectableAxisEntries(methods[spec.bucket] as MethodInfoBase[]);
+  const entries = methods[spec.bucket] as MethodInfoBase[];
+  return spec.axis === 'vlm'
+    ? pickableVlmEntries(entries as VlmMethodInfo[])
+    : selectableAxisEntries(entries);
 }
 
 /**

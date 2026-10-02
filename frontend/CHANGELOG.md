@@ -8,7 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-<!-- track-A W9 -->
+- **VLM models (OpenProcessor W9).** A deployment-wide VLM endpoint registry
+  with per-project activation. New `/settings/models` (the project's active
+  endpoint with Rollback and Turn off and the served VLM health, the
+  endpoints table with served labels, a red warning chip for an endpoint that
+  sends crops outside the deployment, Probe, Clone, Delete and the project's
+  Activate here; the local-model catalog with a confirm-gated Switch, a
+  restart banner with the copyable command and a poll that follows the
+  server; every model choice), the endpoint editor
+  (`/settings/models/vlm/[name]`: served schema form, live validation, Test
+  connection, Probe saved, revisions) and create page
+  (`/settings/models/new-endpoint`). Keys are host secrets: only the
+  reference and whether the host has it are ever shown. Activating an
+  external endpoint shows the served warning and an acknowledgement
+  checkbox; `acknowledge_external` is sent only when checked. A per-run VLM
+  picker joins the dashboard's assist bar and the "Run VLM" buttons on the
+  dashboard and `/clusters/[id]` (`vlm=`, `acknowledge_external=`); `/settings`
+  gains a `vlm` dropdown (an unacknowledged external entry is disabled with a
+  link to Settings → Models) and a Models card; `/models` lists one
+  `kind: 'vlm'` row per endpoint; item details show the VLM endpoint, model and
+  prompt pack. All of it is absent until the backend serves W9 (a one-shot
+  probe of `GET /vlm/endpoints`, and the served `/methods` `vlm` axis for the
+  pickers). The shared config machinery was generalized additively
+  (`activate` body extras, event type, optional `active`, activate-dialog
+  acknowledgement).
 
 - **Combine projects (P4).** `/projects/combine` merges several projects into
   a new one: sources in priority order, a name-based class mapping per source

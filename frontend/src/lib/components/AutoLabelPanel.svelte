@@ -30,6 +30,7 @@
   import AssistScopeBar from './AssistScopeBar.svelte';
   import {
     cancelAutoLabel,
+    configErrorDetail,
     getAutoLabelStatus,
     startAutoLabel,
     unknownStrategyDetail,
@@ -208,14 +209,20 @@
       schedule();
     } catch (e) {
       const msg = (e as Error).message;
-      if (msg.includes('409') || msg.includes('already in progress')) {
-        toastStore.warn('A recluster run is already in progress.');
-        void poll();
-      } else if (unknownStrategyDetail(e)) {
+      const refusal = configErrorDetail(e);
+      if (unknownStrategyDetail(e)) {
         const d = unknownStrategyDetail(e)!;
         toastStore.error(
           `Start failed: unknown ${d.axis.replace('_', ' ')} "${d.requested}" — valid: ${d.valid_ids.join(', ') || 'none'}.`,
         );
+      } else if (refusal) {
+        // A served refusal (`vlm_external_not_acknowledged`,
+        // `vlm_not_configured`, `vlm_endpoint_unavailable`, a pairing
+        // `validation_failed`): its own message, never the generic 409.
+        toastStore.error(`Start failed: ${refusal.message}`);
+      } else if (msg.includes('409') || msg.includes('already in progress')) {
+        toastStore.warn('A recluster run is already in progress.');
+        void poll();
       } else {
         toastStore.error(`Start failed: ${msg}`);
       }
@@ -384,13 +391,13 @@
         </label>
         <label
           class="flex items-center gap-1.5 text-xs text-zinc-300"
-          title="pipeline.py's run_vlm — off by default, matching the backend. Implied automatically when a class or prompt pack is scoped above."
+          title="pipeline.py's run_vlm — off by default, matching the backend. Implied automatically when a class, prompt pack or VLM endpoint is scoped above."
         >
           <input
             type="checkbox"
             class="h-3.5 w-3.5 accent-blue-500"
-            checked={runVlm || scope.classId != null || scope.promptPack != null}
-            disabled={busy || scope.classId != null || scope.promptPack != null}
+            checked={runVlm || !scope.isDefault}
+            disabled={busy || !scope.isDefault}
             onchange={(e) => (runVlm = (e.currentTarget as HTMLInputElement).checked)}
           />
           Run VLM labeling stage

@@ -9,6 +9,11 @@
   } from '$lib/modelUnload';
   import { toastStore } from '$stores/toast.svelte';
   import { isInstalled, modelStatusPill } from '$lib/modelStatus';
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
+  import { vlmAvailability, vlmStatusLabels } from '$lib/vlm/vlmAvailability.svelte';
+  import { vlmRowStatusPill } from '$lib/vlm/vlmStatusPill';
+  import type { StatusPill } from '$lib/modelStatus';
   import type { ModelInfo } from '$lib/types';
   import ModelSharingInfo from '$components/models/ModelSharingInfo.svelte';
   import ShareModelDialog from '$components/models/ShareModelDialog.svelte';
@@ -56,7 +61,16 @@
     }
   }
 
+  /** A VLM row's status is the endpoint's own, named by the served
+   *  labels; every other row keeps the Triton pill. */
+  function pill(m: ModelInfo): StatusPill {
+    return m.kind === 'vlm'
+      ? vlmRowStatusPill(m, vlmStatusLabels.status)
+      : modelStatusPill(m);
+  }
+
   onMount(() => {
+    void vlmAvailability.init();
     refresh();
     timer = setInterval(refresh, REFRESH_MS);
   });
@@ -134,7 +148,8 @@
       <h1 class="text-xl font-semibold tracking-tight">Models</h1>
       <p class="mt-1 text-sm text-zinc-400">
         Inference services that drive the labeling pipeline. Locally-hosted models run on
-        the GPU box; the VLM is an external service. Models other projects shared with
+        the GPU box; each registered VLM endpoint is listed as its own row, and which one
+        a project uses is chosen on Settings → Models. Models other projects shared with
         this one are listed too, with how their classes map onto this project's classes.
         Auto-refreshes every 15 seconds.
       </p>
@@ -183,13 +198,13 @@
                   {m.friendly_name}
                 </h2>
                 <span
-                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {modelStatusPill(
+                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {pill(
                     m,
                   ).className}"
-                  title={modelStatusPill(m).title}
+                  title={pill(m).title}
                   data-testid="model-status-pill"
                 >
-                  {modelStatusPill(m).label}
+                  {pill(m).label}
                 </span>
               </div>
               <p class="mt-1 truncate font-mono text-xs text-zinc-500" title={m.name}>
@@ -246,6 +261,18 @@
               </dt>
               <dd class="font-mono text-zinc-200">{fmtMs(m.avg_latency_ms)}</dd>
             </div>
+            {#if m.kind === 'vlm'}
+              <div class="col-span-2">
+                <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Model</dt>
+                <dd
+                  class="truncate font-mono text-xs text-zinc-300"
+                  title={m.model ?? ''}
+                  data-testid="model-vlm-model"
+                >
+                  {m.model ?? '—'}
+                </dd>
+              </div>
+            {/if}
             {#if m.kind === 'triton'}
               <div>
                 <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
@@ -280,6 +307,16 @@
           {#if m.job_id}
             <p class="mt-3 truncate font-mono text-[11px] text-zinc-500" title={m.job_id}>
               promoted from job {m.job_id}
+            </p>
+          {/if}
+
+          {#if m.kind === 'vlm' && vlmAvailability.available === true}
+            <p class="mt-3 text-xs">
+              <a
+                class="text-blue-300 hover:underline"
+                href={resolve(projectHref('/settings/models'))}
+                data-testid="model-vlm-manage">Manage on Settings → Models</a
+              >
             </p>
           {/if}
 
