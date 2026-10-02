@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `GET /region_profiles/schema` is no longer a placeholder (#39): one typed row per
+  profile field (`int`, `float`, `bool`, `string_list`, `int_list`, `float_pair`, `rgb`),
+  its group, range, default, choice source, `applies_when` and `advanced` flag, with a
+  typed `RegionProfileSchema` response model.
 - **Dataset format auto-detection** (#39): `images/` next to `annotations/*.json` (no
   `labels/` directory) is detected as COCO instead of YOLO; a `labels/` directory still
   marks YOLO. The docs no longer say a COCO layout must name its format.

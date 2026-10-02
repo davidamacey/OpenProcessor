@@ -26,11 +26,13 @@ from src.routers.curation._region_profile_models import (
     RegionProfileRevisionSummary,
     RegionProfileRollbackRequest,
     RegionProfileSaveRequest,
+    RegionProfileSchema,
     RegionProfileSummary,
     RegionProfileTemplateSummary,
     RegionProfileValidateRequest,
     SegmenterPromptValidateRequest,
 )
+from src.routers.curation._region_profile_schema import build_region_profile_schema
 from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
 from src.services.config_store.activation_view import build_active_config_response
 from src.services.config_store.profile_validation import validate_profile
@@ -146,59 +148,9 @@ def _template_names_only() -> list[str]:
 # =============================================================================
 
 
-@router.get('/region_profiles/schema')
-async def get_region_profile_schema() -> dict[str, Any]:
-    # TODO(W3/W4 review 2026-09-28, Minor 5): placeholder -- every field is
-    # 'string'/'advanced'/enum=None regardless of its real type/group, and
-    # `_region_profile_models.py`'s schema dataclasses stay unused.
-    # Tracked for whichever wave next builds the profile editor UI.
-    from dataclasses import fields as dc_fields
-
-    from src.config import DetectionProfile
-    from src.services.config_store.profile_validation import PROFILE_FIELD_RANGES
-
-    choice_fields: dict[str, tuple[str, dict[str, str] | None]] = {
-        'detector_model': ('detectors', {'id': '', 'label': 'No detector leg'}),
-        'segmenter_name': ('segmenters', None),
-        'ocr_pipeline_model': ('ocr_pipeline_models', {'id': '', 'label': 'No OCR pipeline'}),
-        'ocr_det_model': ('ocr_det_models', {'id': '', 'label': 'No OCR detector'}),
-        'ocr_rec_model': ('ocr_rec_models', {'id': '', 'label': 'No OCR recognizer'}),
-        'text_reader': ('text_reader_modes', None),
-    }
-    fields = []
-    for f in dc_fields(DetectionProfile):
-        if f.name == 'name':
-            continue
-        default = f.default if f.default is not None else None
-        choices_from, empty_choice = choice_fields.get(f.name, (None, None))
-        rng = PROFILE_FIELD_RANGES.get(f.name)
-        fields.append(
-            {
-                'field': f.name,
-                'label': f.name.replace('_', ' ').capitalize(),
-                'group': 'advanced',
-                'type': 'string',
-                'default': default if isinstance(default, str | int | float | bool) else None,
-                'min': rng[0] if rng else None,
-                'max': rng[1] if rng else None,
-                'enum': None,
-                'advanced': choices_from is None,
-                'applies_when': None,
-                'choices_from': choices_from,
-                'empty_choice': empty_choice,
-                'help': '',
-            }
-        )
-    groups = [
-        {'id': 'identity', 'label': 'Name and display'},
-        {'id': 'items', 'label': 'Which items'},
-        {'id': 'detector', 'label': 'Detector'},
-        {'id': 'segmenter', 'label': 'Segmenter'},
-        {'id': 'verify', 'label': 'Verification'},
-        {'id': 'text', 'label': 'Text reading'},
-        {'id': 'advanced', 'label': 'Advanced'},
-    ]
-    return {'fields': fields, 'groups': groups}
+@router.get('/region_profiles/schema', response_model=RegionProfileSchema)
+async def get_region_profile_schema() -> RegionProfileSchema:
+    return build_region_profile_schema()
 
 
 # =============================================================================
