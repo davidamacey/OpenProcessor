@@ -130,6 +130,18 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(
     # card (toggling selection) instead of the nested pencil button.
     pencil = page.locator('button[aria-label="Edit widget tag"]')
     pencil.wait_for(timeout=ACTION_TIMEOUT_MS, state="visible")
+    # The pencil must never share pixels with the card's other hover controls
+    # (it once sat under "Expand", which swallowed the click).
+    pb = pencil.bounding_box()
+    assert pb is not None
+    siblings = page.locator('button[aria-label="Expand"], button[aria-label="Show crop details"]')
+    assert siblings.count() >= 1
+    for sibling in siblings.all():
+        sb = sibling.bounding_box()
+        assert sb is not None
+        overlap_x = min(pb["x"] + pb["width"], sb["x"] + sb["width"]) - max(pb["x"], sb["x"])
+        overlap_y = min(pb["y"] + pb["height"], sb["y"] + sb["height"]) - max(pb["y"], sb["y"])
+        assert overlap_x <= 0 or overlap_y <= 0, (pb, sb)
     pencil.click()
 
     canvas = page.get_by_test_id("multibox-canvas")

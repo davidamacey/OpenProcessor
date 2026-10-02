@@ -24,6 +24,8 @@ afterEach(() => {
 async function render(
   ack: { warning: string | null; required: boolean } | undefined,
   activate = vi.fn().mockResolvedValue(activeFixture()),
+  onCloseHook?: () => void,
+  targetOverride?: { name: string; revision: number | null; validation: null },
 ) {
   const active = new ConfigActive({
     getActive: vi.fn().mockResolvedValue(activeFixture()),
@@ -31,13 +33,13 @@ async function render(
     rollback: vi.fn(),
   });
   await active.load();
-  const onclose = vi.fn();
+  const onclose = vi.fn(() => onCloseHook?.());
   const onactivated = vi.fn();
   instance = mount(ConfigActivateDialog, {
     target: document.body,
     props: {
       ed: { active, dirty: false, viewing: null },
-      target: { name: 'cloud_vlm', revision: 1, validation: null },
+      target: targetOverride ?? { name: 'cloud_vlm', revision: 1, validation: null },
       ack,
       blurb: 'Runs use it.',
       onclose,
@@ -114,5 +116,33 @@ describe('ConfigActivateDialog acknowledgement', () => {
     await vi.waitFor(() => expect(q('activate-error')).not.toBeNull());
     expect(q('activate-error')?.textContent).toBe('Acknowledge it first.');
     expect(q('activate-ack')).not.toBeNull();
+  });
+});
+
+describe('ConfigActivateDialog target lifetime', () => {
+  it("hands onactivated the target it activated even when onclose invalidates the caller's source", async () => {
+    // The page passes `target` as an expression over state that onclose() nulls;
+    // reading it after onclose() threw "Cannot read properties of null".
+    let open = true;
+    const target = {
+      get name(): string {
+        if (!open) throw new TypeError("Cannot read properties of null (reading 'name')");
+        return 'cloud_vlm';
+      },
+      revision: 1,
+      validation: null,
+    };
+    const { onactivated } = await render(
+      undefined,
+      undefined,
+      () => (open = false),
+      target,
+    );
+    confirm();
+    await vi.waitFor(() => expect(onactivated).toHaveBeenCalled());
+    expect(onactivated.mock.calls[0]![0]).toMatchObject({
+      name: 'cloud_vlm',
+      revision: 1,
+    });
   });
 });

@@ -105,7 +105,9 @@
         <TestVlmPicker
           selection={t.vlmSelection}
           disabled={t.running}
-          onchange={(next) => (t.vlmSelection = next)}
+          onchange={(next) => {
+            t.vlmSelection = next;
+          }}
         />
       </div>
     </div>

@@ -244,7 +244,7 @@
 
     {#if noSlot}
       <span
-        class="absolute top-1 left-1 rounded-sm border border-zinc-500/60 bg-zinc-700/70 px-1 py-0.5 font-mono text-[10px] text-zinc-200"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-zinc-500/60 bg-zinc-700/70 px-1 py-0.5 font-mono text-[10px] text-zinc-200"
         title="{activeSlot?.label.title ??
           'Slot'} marked as not visible by a human reviewer"
       >
@@ -273,40 +273,10 @@
         ></div>
       {/each}
       <span
-        class="absolute top-1 left-1 rounded-sm border border-blue-400/60 bg-blue-500/30 px-1 py-0.5 font-mono text-[10px] text-white"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-blue-400/60 bg-blue-500/30 px-1 py-0.5 font-mono text-[10px] text-white"
       >
         {activeSlot?.label.singular ?? 'box'}
       </span>
-    {/if}
-
-    {#if activeSlot?.capabilities.subBox?.listField != null}
-      <button
-        type="button"
-        class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
-        onclick={(e) => {
-          e.stopPropagation();
-          editorOpen = true;
-        }}
-        aria-label="Edit {activeSlot.label.singular}"
-        title="Edit {activeSlot.label.singular} (✎)"
-      >
-        ✎
-      </button>
-    {/if}
-
-    {#if ondetail}
-      <button
-        type="button"
-        class="absolute top-1 right-14 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
-        onclick={(e) => {
-          e.stopPropagation();
-          ondetail?.(crop);
-        }}
-        aria-label="Show crop details"
-        title="Details (provenance + metadata)"
-      >
-        ⓘ
-      </button>
     {/if}
 
     {#if conf}
@@ -326,17 +296,54 @@
       </span>
     {/if}
 
-    <button
-      type="button"
-      class="absolute top-1 right-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
-      onclick={(e) => {
-        e.stopPropagation();
-        expanded = true;
-      }}
-      aria-label="Expand"
+    <!-- One flex row for the hover controls: absolutely-positioned siblings at
+         fixed right offsets overlapped (the pencil sat under "view"). -->
+    <div
+      class="absolute top-1 right-1 flex items-center gap-1 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100"
+      data-testid="card-hover-controls"
     >
-      view
-    </button>
+      {#if ondetail}
+        <button
+          type="button"
+          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+          onclick={(e) => {
+            e.stopPropagation();
+            ondetail?.(crop);
+          }}
+          aria-label="Show crop details"
+          title="Details (provenance + metadata)"
+        >
+          ⓘ
+        </button>
+      {/if}
+
+      {#if activeSlot?.capabilities.subBox?.listField != null}
+        <button
+          type="button"
+          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+          onclick={(e) => {
+            e.stopPropagation();
+            editorOpen = true;
+          }}
+          aria-label="Edit {activeSlot.label.singular}"
+          title="Edit {activeSlot.label.singular} (✎)"
+        >
+          ✎
+        </button>
+      {/if}
+
+      <button
+        type="button"
+        class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+        onclick={(e) => {
+          e.stopPropagation();
+          expanded = true;
+        }}
+        aria-label="Expand"
+      >
+        view
+      </button>
+    </div>
   </div>
 
   <!-- K2/K3 (visual audit 2026-09-24): the class name gets the row's
