@@ -137,7 +137,7 @@
       />
       <span class="text-zinc-300">{value === true ? 'on' : 'off'}</span>
     </label>
-  {:else if field.type === 'enum' && field.enum}
+  {:else if field.type === 'enum' && (field.enum ?? choices)}
     <select
       {id}
       class="select select-sm max-w-md {hasError ? 'border-red-500/60' : ''}"
@@ -145,7 +145,7 @@
       disabled={readonly}
       onchange={(e) => onchange((e.currentTarget as HTMLSelectElement).value)}
     >
-      {#each selectOptions(field, field.enum, value) as o (o.id)}
+      {#each selectOptions(field, field.enum ?? choices ?? [], value) as o (o.id)}
         <option value={o.id}>{o.label}</option>
       {/each}
     </select>
