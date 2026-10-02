@@ -117,6 +117,14 @@ async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -
 _CONFIG_STORE_AXES = frozenset({'prompt_pack', 'detection_profile'})
 
 
+def _without_config_store_axes(defaults: dict[str, Any]) -> dict[str, Any]:
+    """A settings-doc key for a config-store axis is a leftover that nothing
+    reads; the activation record alone answers for those axes."""
+    from src.services.curation.strategy_defaults import CONFIG_STORE_AXES
+
+    return {k: v for k, v in defaults.items() if k not in CONFIG_STORE_AXES}
+
+
 async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
     """The active name for each config-store-backed axis, for merging
     into ``GET /settings``'s ``defaults`` map."""
@@ -162,7 +170,9 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
 
     await _ensure_indexes(opensearch)
     doc = await get_curation_settings(opensearch)
-    doc['defaults'] = {**doc.get('defaults', {}), **await _config_store_axis_defaults(opensearch)}
+    doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
+        await _config_store_axis_defaults(opensearch)
+    )
     return CurationSettingsResponse(**doc)
 
 
@@ -246,7 +256,9 @@ async def update_curation_settings_route(
         await _apply_vlm(vlm_plan, opensearch)
 
     doc = await update_curation_settings(opensearch, settings_doc_defaults)
-    doc['defaults'] = {**doc.get('defaults', {}), **await _config_store_axis_defaults(opensearch)}
+    doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
+        await _config_store_axis_defaults(opensearch)
+    )
     logger.info('curation_settings_updated', axes=sorted(body.defaults))
     return CurationSettingsResponse(**doc)
 

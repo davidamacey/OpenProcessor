@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- **A settings-document `prompt_pack` key no longer overrides the active pack**
+  (#32). `prompt_pack`, `detection_profile` and `vlm` defaults are owned by the config
+  store's activation record: `resolve_effective_default` never reads a settings-doc
+  key for them, and `GET /settings` drops any leftover one, so a run that omits
+  `prompt_pack` always uses the pack `GET /settings` reports.
 - **Combine's served next step** is now `POST /cluster/umap/rebuild` under the project
   mount (it was the unscoped core route `POST /clusters/train`, which 404s from a
   project client). Every `next_steps` entry a job report serves is built in

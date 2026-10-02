@@ -249,3 +249,28 @@ def test_put_prompt_pack_activates_a_stored_pack_at_its_real_revision(
     asyncio.run(_refresh())
     assert other_process_store.current.active_pack == ('stored_pack', revision)
     assert other_process_store.current.active_pack != ('stored_pack', 0)
+
+
+@pytest.mark.asyncio
+async def test_settings_doc_key_cannot_override_the_active_pack() -> None:
+    """A stale ``defaults.prompt_pack`` in the settings document (written
+    before the axis moved to the config store) must not change which pack
+    an omitted-``prompt_pack`` run resolves to."""
+    from src.services.curation.strategy_defaults import resolve_effective_default
+    from src.services.labeling.vlm_prompts import GENERIC_REGION_PACK, active_prompt_pack
+
+    assert active_prompt_pack().name != GENERIC_REGION_PACK.name
+    stale = {'defaults': {'prompt_pack': GENERIC_REGION_PACK.name}}
+    resolved = await resolve_effective_default('prompt_pack', settings_doc=stale)
+    assert resolved == active_prompt_pack().name
+
+
+def test_get_settings_hides_a_stale_config_store_key(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale = AsyncMock(
+        return_value={'defaults': {'prompt_pack': 'ghost'}, 'updated_at': None, 'updated_by': None}
+    )
+    monkeypatch.setattr('src.clients.curation_opensearch.get_curation_settings', stale)
+    r = app_client.get('/curation/projects/default/settings')
+    assert 'ghost' not in r.json()['defaults'].values()

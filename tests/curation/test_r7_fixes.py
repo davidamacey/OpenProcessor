@@ -108,17 +108,14 @@ def test_r7_start_job_pipeline_path_also_binds_worker_call_shape() -> None:
 
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
-async def test_r7_omitted_legacy_settings_doc_default_echo_matches_labeler(
+async def test_r7_omitted_stale_settings_doc_pack_is_ignored_and_echo_matches_labeler(
     labeler_spy: list[Any],  # noqa: F811 - pytest fixture param shadows the cross-module import
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Legacy settings doc says 'food_v2', nothing activated in the
-    config store (env/file default is 'pallet_v1'). Omitted
-    ``prompt_pack``: whatever the job echoes in ``summary`` must be
-    exactly what it ran -- before the fix, the echo stayed 'food_v2'
-    (from ``resolve_effective_default``) while the labeler silently ran
-    'pallet_v1' (``active_prompt_pack()``, via the unconditional
-    ``(None, None)``)."""
+    """A leftover settings-doc key says 'food_v2'; nothing is activated in
+    the config store (env/file default is 'pallet_v1'). Omitted
+    ``prompt_pack``: the stale key is ignored (the activation record is the
+    only source of truth) and the job echoes exactly what it ran."""
     from src.routers.curation import pipeline
 
     monkeypatch.setattr(
@@ -129,7 +126,7 @@ async def test_r7_omitted_legacy_settings_doc_default_echo_matches_labeler(
         opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
     )
     ran = [inst._pack.name for inst in labeler_spy]
-    assert summary['prompt_pack'] == 'food_v2'
+    assert summary['prompt_pack'] == 'pallet_v1'
     assert ran == [summary['prompt_pack']]
 
 
@@ -180,7 +177,7 @@ def test_r7_omitted_pack_is_store_active_false_when_never_activated() -> None:
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 @pytest.mark.asyncio
-async def test_r7_start_omitted_legacy_settings_doc_default_not_flagged_omitted(
+async def test_r7_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Same R7-2 guard as ``test_r7_omitted_legacy_settings_doc_default_
@@ -206,7 +203,7 @@ async def test_r7_start_omitted_legacy_settings_doc_default_not_flagged_omitted(
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(opensearch=object())
-    assert captured['prompt_pack'] == 'food_v2'
+    assert captured['prompt_pack'] == 'pallet_v1'
     assert captured['prompt_pack_omitted'] is False
 
 

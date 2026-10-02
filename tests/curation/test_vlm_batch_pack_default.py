@@ -1,6 +1,6 @@
-"""``POST /vlm/verify_region_batch`` and ``/vlm/region_visible_batch`` use the
-``prompt_pack`` settings-doc default (like ``label_batch`` /
-``verify_regions``), not only the ``OP_PROMPT_PACK_PATH`` pack."""
+"""``POST /vlm/verify_region_batch`` and ``/vlm/region_visible_batch`` resolve an
+omitted pack to the active pack (like ``label_batch`` / ``verify_regions``); a
+leftover settings-doc ``prompt_pack`` key does not override it."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ _IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()
 
 
 @pytest.mark.usefixtures('reference_region_profile')
-def test_region_visible_batch_uses_settings_default_pack(
+def test_region_visible_batch_uses_the_active_pack_not_a_stale_settings_key(
     client: tuple[TestClient, list[Any]],
 ) -> None:
     c, requested = client
@@ -80,11 +80,11 @@ def test_region_visible_batch_uses_settings_default_pack(
         json={'items': [{'crop_id': 'a', 'image_b64': _IMG}]},
     )
     assert r.status_code == 200, r.text
-    assert requested == ['food_v2']
+    assert requested == ['pallet_v1']
 
 
 @pytest.mark.usefixtures('reference_region_profile')
-def test_verify_region_batch_uses_settings_default_pack(
+def test_verify_region_batch_uses_the_active_pack_not_a_stale_settings_key(
     client: tuple[TestClient, list[Any]],
 ) -> None:
     c, requested = client
@@ -92,4 +92,4 @@ def test_verify_region_batch_uses_settings_default_pack(
         '/curation/projects/default/vlm/verify_region_batch',
         json={'items': [{'crop_id': 'a', 'region_image_b64': _IMG}]},
     )
-    assert requested == ['food_v2']
+    assert requested == ['pallet_v1']

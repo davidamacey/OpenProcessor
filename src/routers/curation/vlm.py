@@ -129,8 +129,8 @@ def _class_locked(source: dict[str, Any]) -> bool:
 
 
 async def _default_pack_name(opensearch: Any) -> str | None:
-    """The ``prompt_pack`` axis's effective default (settings-doc override
-    when set and advertised, else the process default pack)."""
+    """The ``prompt_pack`` axis's effective default: the config store's
+    active pack, else the process default pack."""
     from src.services.curation.strategy_defaults import resolve_effective_default
 
     return await resolve_effective_default('prompt_pack', opensearch)
