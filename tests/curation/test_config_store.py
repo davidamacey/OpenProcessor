@@ -303,6 +303,7 @@ def test_active_config_response_serves_source_activated_at_and_applied() -> None
                 applied_config_revision=21,
                 profile=ActiveRef(name='vehicle_wheel', revision=3),
                 pack=ActiveRef(name='vehicle_wheel', revision=1),
+                vlm=None,
                 applied_at='2026-09-26T12:00:05Z',
                 lagging=False,
             )
