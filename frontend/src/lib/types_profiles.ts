@@ -98,8 +98,7 @@ export type ProfileFieldType =
   | 'string_list'
   | 'int_list'
   | 'float_pair'
-  | 'rgb'
-  | (string & {});
+  | 'rgb';
 
 /** The §7.3 `choices_from` lists. */
 export type ChoicesFrom =

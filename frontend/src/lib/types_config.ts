@@ -42,6 +42,13 @@ export interface ActiveRef {
 export type ConfigSource =
   'builtin' | 'file' | 'stored' | 'template' | 'env' | 'registered' | (string & {});
 
+/** `ActiveConfigResponse.source`: where the active value came from. `off`
+ *  is an explicit deactivation, distinct from `env` (never activated). */
+export type ActiveSource = 'stored' | 'env' | 'off';
+
+/** `ActiveConfigResponse.axis`. */
+export type ConfigAxis = 'prompt_pack' | 'detection_profile' | 'vlm';
+
 /** One `applied[]` entry (§7.3 `AppliedRuntime`). */
 export interface AppliedRuntime {
   process: string;
@@ -59,9 +66,9 @@ export interface AppliedRuntime {
  *  backend since W2 landed (`applied` is `[]` when no runtime has
  *  reported); the panels render them as served, never inferred. */
 export interface ActiveConfigResponse {
-  axis: string;
+  axis: ConfigAxis;
   active: ActiveRef;
-  source: ConfigSource;
+  source: ActiveSource;
   activated_at: string | null;
   previous: ActiveRef | null;
   config_revision: number;

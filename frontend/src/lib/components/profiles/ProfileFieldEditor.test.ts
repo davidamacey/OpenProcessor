@@ -15,7 +15,12 @@ import {
 } from '$lib/test/fixtures/regionProfiles';
 import { choiceList } from '$lib/profiles/profileFields';
 import type { ValidationIssue } from '$lib/types_config';
-import type { Choice, ProfileFieldValue, ProfileSchemaField } from '$lib/types_profiles';
+import type {
+  Choice,
+  ProfileFieldType,
+  ProfileFieldValue,
+  ProfileSchemaField,
+} from '$lib/types_profiles';
 import ProfileFieldEditor from './ProfileFieldEditor.svelte';
 
 let target: HTMLDivElement;
@@ -191,7 +196,7 @@ describe('ProfileFieldEditor', () => {
 
   it('an unknown served type edits as JSON (a non-JSON value is sent raw)', () => {
     const onchange = render({
-      field: { ...field('display_name'), type: 'box_map' },
+      field: { ...field('display_name'), type: 'box_map' as ProfileFieldType },
       value: { a: 1 },
     });
     const ta = q<HTMLTextAreaElement>('[data-testid="field-json"]')!;
