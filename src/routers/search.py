@@ -114,6 +114,8 @@ class ObjectSearchResponse(BaseModel):
 class OCRSearchResult(SearchResult):
     """Extended search result for OCR text search."""
 
+    # Text relevance is a BM25 score, not a [0, 1] similarity.
+    score: float = Field(..., ge=0.0, description='Text relevance score (BM25, unbounded)')
     matched_text: str = Field(..., description='Text that matched the query')
     text_box: list[float] | None = Field(
         default=None, description='Text bounding box [x1, y1, x2, y2] normalized'
@@ -508,8 +510,7 @@ async def search_by_ocr(
     min_score: float = Query(
         0.5,
         ge=0.0,
-        le=1.0,
-        description='Minimum relevance score threshold',
+        description='Minimum text relevance score (BM25, unbounded)',
     ),
 ) -> OCRSearchResponse:
     """
@@ -533,7 +534,7 @@ async def search_by_ocr(
     Args:
         text: Text to search for in images (supports partial matching)
         top_k: Maximum number of results to return (1-100)
-        min_score: Minimum relevance score threshold (0.0-1.0)
+        min_score: Minimum text relevance score (BM25, unbounded)
 
     Returns:
         OCRSearchResponse with images containing matching text.
