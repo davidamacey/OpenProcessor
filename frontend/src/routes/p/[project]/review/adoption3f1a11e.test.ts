@@ -68,7 +68,7 @@ describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)',
     expect(effectIdx).toBeGreaterThan(-1);
     const effectBody = src.slice(effectIdx, effectIdx + 1500);
     expect(effectBody).toMatch(/void activeEnumParams;/);
-    expect(effectBody).toMatch(/activeEnumParams,\s*\]\);/);
+    expect(effectBody).toMatch(/activeEnumParams,\s*activeUrlFilters,\s*\]\);/);
     expect(effectBody).not.toMatch(/void enumFilterValues;/);
   });
 });

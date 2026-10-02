@@ -58,6 +58,11 @@ class ReviewTabsVocabularyStore {
     return this.#inflight;
   }
 
+  /** Whether the served vocabulary has an entry for this endpoint id. */
+  hasEntry(endpointId: string): boolean {
+    return this.#byId.has(endpointId);
+  }
+
   /** Served label for a tab/preset endpoint id; `fallback` (the tab's own
    *  static label) when not loaded or the served list doesn't know this id. */
   labelFor(endpointId: string, fallback: string): string {

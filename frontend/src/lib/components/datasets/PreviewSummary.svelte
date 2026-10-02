@@ -15,7 +15,7 @@
   let { preview, formats }: Props = $props();
 
   const formatLabel = $derived(
-    formats.formats.find((f) => f.id === preview.format)?.label ?? preview.format,
+    formats.formats.find((f) => f.format === preview.format)?.label ?? preview.format,
   );
   const yesNo = (v: boolean): string => (v ? 'yes' : 'no');
 </script>
@@ -125,7 +125,7 @@
         Profile <span class="text-zinc-200">{r.profile.name}</span>, region class
         <span class="text-zinc-200">{r.region_class_name}</span>, parents from
         <span class="text-zinc-200"
-          >{formats.parents.find((p) => p.id === r.parents_mode)?.label ??
+          >{formats.parents_modes.find((p) => p.value === r.parents_mode)?.label ??
             r.parents_mode}</span
         >; {r.standalone_boxes.toLocaleString()} boxes will become standalone items.
       </p>

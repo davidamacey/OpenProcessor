@@ -1,5 +1,6 @@
 /**
- * ReprocessFlow (W10.13): the batch apply needs a served dry run for the
+ * ReprocessFlow (W10.13): a single image applies from the dialog with dry_run false;
+ * the batch apply needs a served dry run for the
  * current choices; a changed scope invalidates it; `region_mode` is sent
  * only with the region scope; a served job is followed until its
  * `poll_after_s` is null, and can be cancelled.
@@ -15,6 +16,7 @@ function deps() {
   return {
     reprocessBatch: vi.fn(),
     reprocessCrop: vi.fn(),
+    reprocessImage: vi.fn(),
     getReprocessJob: vi.fn(),
     cancelReprocessJob: vi.fn(),
   };
@@ -93,13 +95,34 @@ describe('ReprocessFlow', () => {
     expect(f.canApply).toBe(false);
   });
 
+  it('one image applies with dry_run false and hands back every served item', async () => {
+    const d = deps();
+    d.reprocessImage.mockResolvedValue(
+      reprocessFixture({ dry_run: false, items: [{ id: 'c1' }, { id: 'c2' }] }),
+    );
+    const f = new ReprocessFlow({ kind: 'image', imageId: 'img_1' }, d);
+    expect(f.isBatch).toBe(false);
+    expect(f.count).toBe(1);
+    f.toggleScope('detect', true);
+    f.toggleScope('region', true);
+    f.setRegionMode('reverify');
+    expect(await f.apply()).toEqual([{ id: 'c1' }, { id: 'c2' }]);
+    expect(d.reprocessImage).toHaveBeenCalledWith('img_1', {
+      scopes: ['detect', 'region'],
+      region_mode: 'reverify',
+      dry_run: false,
+    });
+    expect(d.reprocessCrop).not.toHaveBeenCalled();
+    expect(d.reprocessBatch).not.toHaveBeenCalled();
+  });
+
   it('a served request (W4 suggested_reprocess) is sent exactly as served, dry run first', async () => {
     const d = deps();
     d.reprocessBatch.mockResolvedValue(reprocessFixture());
     const request = {
       targets: { filter: { profile_not: 'widget_tag', include_detected: true } },
-      scopes: ['region'],
-      region_mode: 'redetect',
+      scopes: ['region' as const],
+      region_mode: 'redetect' as const,
       dry_run: true,
     };
     const f = new ReprocessFlow({ kind: 'request', request }, d);

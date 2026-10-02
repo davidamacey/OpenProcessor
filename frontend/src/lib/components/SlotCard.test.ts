@@ -4,12 +4,15 @@
  * describes that row's own box (score, reading, detector, state, thumbnail),
  * asserted on the rendered DOM, not a source scan.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotCard from './SlotCard.svelte';
 import type { RegionBrowseItem } from '$lib/api';
 import { regionSlotFromServedProfile } from '$lib/annotations/servedRegionSlot';
 import { widgetTagSlot, WIDGET_TAG_PROFILE_NO_TEXT } from '$lib/test/fixtures/regionSlot';
+import { API_PREFIX } from '$lib/api';
+import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
+import { formatsFixture } from '$lib/test/fixtures/datasetImport';
 
 const wireBox = (over: Record<string, unknown> = {}) => ({
   box_id: 'b1',
@@ -170,5 +173,83 @@ describe('SlotCard — text-free region profile (OpenProcessor W1)', () => {
   it('still renders the text value row (even with no reading yet) for a text-reading slot', () => {
     const el = renderCard(fakeRegionItem({}, [wireBox({ text: null })]));
     expect(el.querySelector('[data-testid="slot-text-value"]')).not.toBeNull();
+  });
+});
+
+describe('SlotCard — W10 box lock glyph', () => {
+  it('shows the lock only when the served box locked is true', () => {
+    const locked = renderCard(fakeRegionItem({}, [wireBox({ locked: true })]));
+    expect(locked.querySelector('[data-testid="box-locked"]')).not.toBeNull();
+    expect(
+      locked.querySelector('[data-testid="box-locked"]')?.getAttribute('title'),
+    ).toBe('Locked');
+  });
+
+  it('shows no lock for false or absent', () => {
+    const el = renderCard(fakeRegionItem({}, [wireBox({ locked: false })]));
+    expect(el.querySelector('[data-testid="box-locked"]')).toBeNull();
+    unmount(instance as never);
+    instance = undefined;
+    target.remove();
+    const el2 = renderCard(fakeRegionItem({}, [wireBox()]));
+    expect(el2.querySelector('[data-testid="box-locked"]')).toBeNull();
+  });
+});
+
+describe('SlotCard — W10 image Reprocess', () => {
+  beforeEach(() => datasetsAvailability.reset());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    datasetsAvailability.reset();
+  });
+
+  function serve(status: number) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url) === `${API_PREFIX}/datasets/formats`
+          ? new Response(
+              JSON.stringify(status === 200 ? formatsFixture() : { detail: 'x' }),
+              {
+                status,
+                headers: { 'content-type': 'application/json' },
+              },
+            )
+          : new Response('{}', { status: 404 }),
+      ),
+    );
+  }
+
+  const entry = (el: HTMLElement) =>
+    el.querySelector(
+      '[data-testid="card-reprocess-image"] [data-testid="reprocess-open"]',
+    );
+
+  it('offers "Reprocess image…" outside the card button when W10 is served', async () => {
+    serve(200);
+    const el = renderCard(fakeRegionItem({ image_id: 'img_1' }));
+    await datasetsAvailability.init();
+    flushSync();
+    const open = entry(el);
+    expect(open?.textContent?.trim()).toBe('Reprocess image…');
+    // A button cannot nest inside the card's own <button>.
+    expect(open?.closest('button[title]')).toBeNull();
+  });
+
+  it('is absent without an image id, or when W10 is not served', async () => {
+    serve(200);
+    const el = renderCard(fakeRegionItem());
+    await datasetsAvailability.init();
+    flushSync();
+    expect(entry(el)).toBeNull();
+    unmount(instance as never);
+    instance = undefined;
+    target.remove();
+    datasetsAvailability.reset();
+    serve(404);
+    const el2 = renderCard(fakeRegionItem({ image_id: 'img_1' }));
+    await datasetsAvailability.init();
+    flushSync();
+    expect(entry(el2)).toBeNull();
   });
 });

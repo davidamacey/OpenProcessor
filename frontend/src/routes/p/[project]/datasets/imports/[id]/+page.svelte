@@ -12,6 +12,7 @@
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { createImportJob, PAGE_SIZE } from '$lib/datasets/importJobController.svelte';
   import { projectHref } from '$lib/projectPaths';
+  import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
   import type { DatasetImportReport, NextStep } from '$lib/types_import';
 
   const importId = $derived(page.params.id ?? '');
@@ -112,10 +113,21 @@
               data-status={j.status}>{job.statusLabel(formats.status_labels)}</span
             >
             <span class="text-xs text-zinc-500">
-              {formats.formats.find((f) => f.id === j.source.format)?.label ??
+              {formats.formats.find((f) => f.format === j.source.format)?.label ??
                 j.source.format}
               · <code class="font-mono">{j.source.root}</code>
             </span>
+            {#if reviewTabsVocabularyStore.hasEntry('imported')}
+              <a
+                class="ml-auto text-xs text-blue-300 underline hover:text-blue-200"
+                data-testid="review-imported-link"
+                href={resolve(
+                  projectHref(
+                    `/review?tab=imported&import_id=${encodeURIComponent(j.import_id)}`,
+                  ),
+                )}>Review imported labels</a
+              >
+            {/if}
           </div>
 
           <div data-testid="job-progress">
@@ -154,7 +166,7 @@
               class="rounded border border-red-900 bg-red-950/30 p-2 text-sm text-red-200"
               data-testid="job-error"
             >
-              {j.error.message}
+              {j.error}
             </p>
           {/if}
 
@@ -244,7 +256,7 @@
                   <td class="py-1 pr-4 text-zinc-300">{m.dataset_class}</td>
                   <td class="py-1 pr-4 text-zinc-500">
                     {formats.mapping_actions.find(
-                      (a) => a.id === (m.kind === 'item' ? 'map' : m.kind),
+                      (a) => a.value === (m.kind === 'item' ? 'map' : m.kind),
                     )?.label ?? m.kind}
                   </td>
                   <td class="py-1 text-zinc-100">{m.class_name ?? '—'}</td>

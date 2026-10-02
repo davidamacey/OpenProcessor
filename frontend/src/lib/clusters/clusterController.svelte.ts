@@ -549,7 +549,19 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     }
   }
 
+  /** Adopt the served post-write items of a Reprocess (every item of the
+   *  reprocessed image): each replaces the grid's copy with the same
+   *  `crop_id`; an id the grid does not hold is ignored (it is not in this
+   *  cluster, or not loaded yet). */
+  function adoptItems(items: Crop[]): void {
+    if (items.length === 0) return;
+    const byId: Record<string, Crop> = Object.fromEntries(items.map((i) => [i.id, i]));
+    cropPager.items = cropPager.items.map((c) => byId[c.id] ?? c);
+    resetGrid();
+  }
+
   return {
+    adoptItems,
     assignClassToSelected,
     handleClassDrop,
     acceptVlmForCrop,

@@ -61,43 +61,43 @@ CLASSES = [
 
 FORMATS: dict[str, Any] = {
     "formats": [
-        {"id": "auto", "label": "Detect automatically"},
-        {"id": "yolo", "label": "YOLO (data.yaml)"},
-        {"id": "coco", "label": "COCO JSON"},
-        {"id": "openprocessor_export", "label": "OpenProcessor export"},
+        {"format": "auto", "label": "Detect automatically"},
+        {"format": "yolo", "label": "YOLO (data.yaml)"},
+        {"format": "coco", "label": "COCO JSON"},
+        {"format": "openprocessor_export", "label": "OpenProcessor export"},
     ],
-    "processing": [
+    "processing_modes": [
         {
-            "id": "none",
+            "value": "none",
             "label": "Import as-is",
             "description": "Index the images and import the labels. No detector or VLM runs.",
         },
         {
-            "id": "propose",
+            "value": "propose",
             "label": "Import and find missed objects",
             "description": "Also run the detector, region and VLM pipeline. Anything the labels missed arrives as a proposal for review; imported labels are never changed.",
         },
     ],
-    "parents": [
-        {"id": "auto", "label": "Automatic"},
-        {"id": "labels", "label": "From the dataset's labels"},
-        {"id": "detect", "label": "Detect them"},
+    "parents_modes": [
+        {"value": "auto", "label": "Automatic", "description": ""},
+        {"value": "labels", "label": "From the dataset's labels", "description": ""},
+        {"value": "detect", "label": "Detect them", "description": ""},
     ],
-    "label_trust": [
-        {"id": "validated", "label": "Trusted (validated)"},
-        {"id": "suggestion", "label": "Suggestions to review"},
+    "trust_levels": [
+        {"value": "validated", "label": "Trusted (validated)", "description": ""},
+        {"value": "suggestion", "label": "Suggestions to review", "description": ""},
     ],
     "mapping_actions": [
-        {"id": "map", "label": "Map to class"},
-        {"id": "create", "label": "Create class"},
-        {"id": "skip", "label": "Skip"},
-        {"id": "region", "label": "Region boxes"},
+        {"value": "map", "label": "Map to class", "description": ""},
+        {"value": "create", "label": "Create class", "description": ""},
+        {"value": "skip", "label": "Skip", "description": ""},
+        {"value": "region", "label": "Region boxes", "description": ""},
     ],
     "match_kinds": [
-        {"id": "exact", "label": "Same name"},
-        {"id": "case_insensitive", "label": "Same name, different case"},
-        {"id": "synonym", "label": "Synonym"},
-        {"id": "none", "label": "No match"},
+        {"value": "exact", "label": "Same name", "description": ""},
+        {"value": "case_insensitive", "label": "Same name, different case", "description": ""},
+        {"value": "synonym", "label": "Synonym", "description": ""},
+        {"value": "none", "label": "No match", "description": ""},
     ],
     "issues": [
         {
@@ -115,7 +115,12 @@ FORMATS: dict[str, Any] = {
             "label": "The old index path would have mislabeled a class",
         },
     ],
-    "upload": {"max_bytes": 2147483648, "max_files": 200000, "accepted": [".zip", ".tar", ".tar.gz"]},
+    "upload_limits": {
+        "max_bytes": 2147483648,
+        "max_files": 200000,
+        "ttl_hours": 24,
+        "preview_max_files": 5000,
+    },
     "status_labels": {
         "queued": "Queued",
         "running": "Importing",
@@ -127,19 +132,6 @@ FORMATS: dict[str, Any] = {
         "interrupted": "Interrupted",
         "undoing": "Undoing",
         "undone": "Undone",
-    },
-    "reprocess": {
-        "scopes": [
-            {"id": "detect", "label": "Detect again", "description": "Re-run the detectors on the image.", "unit": "image"},
-            {"id": "region", "label": "Regions", "description": "Regenerate machine region boxes.", "unit": "item"},
-            {"id": "vlm", "label": "VLM class", "description": "Clear the VLM class so it is asked again.", "unit": "item"},
-            {"id": "embed", "label": "Embeddings", "description": "Recompute the vectors.", "unit": "item"},
-        ],
-        "region_modes": [
-            {"id": "redetect", "label": "Detect again", "description": "Remove machine boxes and detect again."},
-            {"id": "reverify", "label": "Verify again", "description": "Send machine boxes to the verifier again."},
-        ],
-        "lock_rule": "Human and imported labels are never changed. Reprocess only regenerates machine proposals.",
     },
 }
 
@@ -243,6 +235,9 @@ def job(**over: Any) -> dict[str, Any]:
         "report": {
             "images_created": 64,
             "images_reused": 0,
+            "images_failed": 0,
+            "images_skipped": 0,
+            "items_reconciled_removed": 0,
             "items_created": 190,
             "items_updated": 0,
             "items_noop": 0,
@@ -263,7 +258,7 @@ def job(**over: Any) -> dict[str, Any]:
             {"dataset_class": "sprocket", "kind": "item", "class_id": 9, "class_name": "sprocket"},
         ],
         "options": {},
-        "source": {"format": "yolo", "root": "/data/source/widgets/yolo", "source_sha": "a" * 64, "op_export": None},
+        "source": {"format": "yolo", "root": "/data/source/widgets/yolo", "source_sha": "a" * 64},
         "issues_summary": [],
         "undo": None,
         "next_steps": [],
@@ -413,7 +408,7 @@ def test_failed_job_shows_its_served_error(stub, page, app_url):
     failed = job(
         status="failed",
         poll_after_s=None,
-        error={"code": "chunks_failed", "message": "6 consecutive chunks failed: the items index is unavailable."},
+        error="6 consecutive chunks failed: the items index is unavailable.",
     )
     serve_job_sequence(stub, [failed])
 
@@ -484,7 +479,6 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
                     "scopes": [{"scope": "region", "selected": 1, "locked_skipped": 0, "queued": 0, "breakdown": []}],
                     "job": None,
                     "items": [],
-                    "message": "1 item selected; none are locked.",
                 },
             )
         return (
@@ -494,7 +488,6 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
                 "scopes": [{"scope": "region", "selected": 1, "locked_skipped": 0, "queued": 1, "breakdown": []}],
                 "job": None,
                 "items": [],
-                "message": "1 item queued for region detection.",
             },
         )
 
@@ -507,15 +500,23 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
 
     page.get_by_test_id("reprocess-open").click()
     dialog = page.get_by_role("dialog", name="Reprocess")
-    expect(dialog.get_by_test_id("reprocess-lock-rule")).to_have_text(FORMATS["reprocess"]["lock_rule"])
-    dialog.get_by_label("Regions").check()
+    # The backend serves no reprocess vocabulary or lock-rule copy: the
+    # scopes are the contract's enums, labelled from their ids.
+    expect(dialog.get_by_test_id("reprocess-lock-rule")).to_have_count(0)
+    expect(dialog.locator("fieldset label")).to_have_text(["Detect", "Region", "VLM", "Embed"])
+    dialog.get_by_label("Region", exact=True).check()
     dialog.get_by_role("combobox").select_option("redetect")
     with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Check what would run").click()
-    expect(dialog.get_by_test_id("reprocess-dry-run")).to_contain_text("1 item selected; none are locked.")
+    # scope, selected, locked skipped, queued, failed, not found (omitted = em dash)
+    expect(dialog.get_by_test_id("reprocess-dry-run").locator("tbody tr td")).to_have_text(
+        ["Region", "1", "0", "0", "\u2014", "\u2014"]
+    )
     with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Reprocess").click()
-    expect(dialog.get_by_test_id("reprocess-result")).to_contain_text("1 item queued for region detection.")
+    expect(dialog.get_by_test_id("reprocess-result").locator("tbody tr td")).to_have_text(
+        ["Region", "1", "0", "1", "\u2014", "\u2014"]
+    )
 
     selected = bodies[0]["targets"]["crop_ids"]
     assert len(selected) == 1 and selected[0].startswith("crop-"), bodies

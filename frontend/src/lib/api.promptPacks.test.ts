@@ -1,7 +1,6 @@
 /**
  * W3 prompt-pack wrappers (any_domain_plan.md §7.2, §7.5): every route is
- * scoped, every body is sent as given, the test response's preview item
- * is mapped, and the structured `ConfigErrorDetail` refusal surfaces its
+ * scoped, every body is sent as given, and the structured `ConfigErrorDetail` refusal surfaces its
  * served `message`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,11 +19,9 @@ import {
   configErrorDetail,
   configErrorText,
   rollbackPromptPack,
-  testPromptPack,
   updatePromptPack,
   validatePromptPack,
 } from './api';
-import { testResponseFixture } from '$lib/test/fixtures/promptPacks';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -151,23 +148,6 @@ describe('W3 wrappers hit the scoped routes', () => {
       method: 'POST',
       body: { expected_active: REF },
     });
-  });
-
-  it('test posts the request and maps each preview item', async () => {
-    const sent = capture(testResponseFixture());
-    const res = await testPromptPack({
-      draft: { a: 'b' },
-      call: 'classify',
-      crop_ids: ['c_123'],
-    });
-    expect(sent()).toEqual({
-      url: `${P}/test`,
-      method: 'POST',
-      body: { draft: { a: 'b' }, call: 'classify', crop_ids: ['c_123'] },
-    });
-    expect(res.results[0]!.preview?.id).toBe('c_123');
-    expect(res.results[0]!.preview_item).toMatchObject({ crop_id: 'c_123' });
-    expect(res.prompt.user_text).toBe('Pick one of: widget, gadget');
   });
 });
 

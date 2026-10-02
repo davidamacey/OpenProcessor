@@ -2,7 +2,7 @@
  * The activation impact, mounted: the served counts and the by-profile
  * table; "Re-run" only when the server suggests one AND serves W10's
  * Reprocess; the served request goes out as served, dry run first, and
- * the apply only after a confirm; the served counts and message are what
+ * the apply only after a confirm; the served counts are what
  * the operator reads.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +38,10 @@ function serve(formats: () => Response) {
         return json(
           body.dry_run
             ? reprocessFixture()
-            : reprocessFixture({ dry_run: false, message: '12 items queued.' }),
+            : reprocessFixture({
+                dry_run: false,
+                scopes: [{ scope: 'region', selected: 12, locked_skipped: 3, queued: 9 }],
+              }),
         );
       }
       return json({}, 404);
@@ -107,7 +110,8 @@ describe('ProfileImpactPanel', () => {
         body: { ...impact.suggested_reprocess, dry_run: true },
       },
     ]);
-    expect(q('rerun-dry-run')?.textContent).toContain('12 items selected');
+    expect(q('rerun-dry-run')?.textContent).toContain('Region');
+    expect(q('rerun-dry-run')?.textContent).toContain('12');
     q('rerun-apply')!.click();
     flushSync();
     expect(posts).toHaveLength(1);
@@ -121,7 +125,12 @@ describe('ProfileImpactPanel', () => {
       url: `${API_PREFIX}/reprocess`,
       body: { ...impact.suggested_reprocess, dry_run: false },
     });
-    expect(q('rerun-result')?.textContent).toContain('12 items queued.');
+    expect(q('rerun-result')?.textContent).toContain('Region');
+    expect(
+      [...q('rerun-result')!.querySelectorAll('tbody tr td')].map((c) =>
+        c.textContent?.trim(),
+      ),
+    ).toEqual(['Region', '12', '3', '9', '—', '—']);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

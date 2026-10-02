@@ -21,6 +21,7 @@
   import ConfigViewingBanner from '$components/config/ConfigViewingBanner.svelte';
   import ProfileFieldEditor from '$components/profiles/ProfileFieldEditor.svelte';
   import ProfileImpactPanel from '$components/profiles/ProfileImpactPanel.svelte';
+  import ProfileTestPanel from '$components/profiles/ProfileTestPanel.svelte';
   import SegmenterStatus from '$components/profiles/SegmenterStatus.svelte';
   import { issuesForField, unplacedIssues } from '$lib/config/validationIssues';
   import { PROFILE_ACTIVE_COPY } from '$lib/profiles/profileCopy';
@@ -329,6 +330,15 @@
           <ConfigRevisions {ed} />
         </aside>
       </div>
+
+      {#key profileName}
+        <ProfileTestPanel
+          name={d.name}
+          revision={ed.viewing ? ed.viewing.revision : d.revision}
+          savedOnly={!ed.editable}
+          draft={ed.draftBody}
+        />
+      {/key}
     {/if}
   </ConfigGate>
 </div>

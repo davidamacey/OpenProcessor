@@ -7,7 +7,7 @@
  * vite.config.ts's `resolve.conditions: ['browser']`) and assert on the
  * rendered DOM.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import CropCard from './CropCard.svelte';
 import { classSourcesStore } from '$stores/classSources.svelte';
@@ -18,6 +18,9 @@ import {
 } from '$lib/annotations/registeredSlots';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
 import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
+import { API_PREFIX } from '$lib/api';
+import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
+import { formatsFixture, reprocessFixture } from '$lib/test/fixtures/datasetImport';
 
 function baseCrop(overrides: Partial<Crop> = {}): Crop {
   return {
@@ -232,5 +235,132 @@ describe('CropCard — region sub-box editing follows the served region profile 
     expect(editButton(el)?.getAttribute('aria-label')).toBe(
       `Edit ${WIDGET_TAG_PROFILE.display_name_singular.toLowerCase()}`,
     );
+  });
+});
+
+describe('CropCard — W10 label lock badge', () => {
+  const badge = (el: HTMLElement) =>
+    el.querySelector('[data-testid="label-locked-badge"]');
+
+  it('shows the lock only when the served label_locked is true', () => {
+    const locked = renderCard({ crop: baseCrop({ label_locked: true }) });
+    expect(badge(locked)).not.toBeNull();
+    expect(badge(locked)?.getAttribute('title')).toBe('Label locked');
+  });
+
+  it('shows no lock for false or absent', () => {
+    const el = renderCard({ crop: baseCrop({ label_locked: false }) });
+    expect(badge(el)).toBeNull();
+    unmount(instance as never);
+    instance = undefined;
+    target.remove();
+    const el2 = renderCard({ crop: baseCrop() });
+    expect(badge(el2)).toBeNull();
+  });
+});
+
+describe('CropCard — W10 image Reprocess from the expanded view', () => {
+  let posts: Array<{ url: string; body: unknown }>;
+
+  function serve(formatsStatus: number) {
+    posts = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        const u = String(url);
+        const json = (b: unknown, s = 200) =>
+          new Response(JSON.stringify(b), {
+            status: s,
+            headers: { 'content-type': 'application/json' },
+          });
+        if (u === `${API_PREFIX}/datasets/formats`) {
+          return formatsStatus === 200
+            ? json(formatsFixture())
+            : json({ detail: 'Not Found' }, formatsStatus);
+        }
+        if (u.endsWith('/images/img_1/reprocess')) {
+          posts.push({ url: u, body: JSON.parse(String(init.body)) });
+          return json(
+            reprocessFixture({
+              dry_run: false,
+              items: [{ crop_id: 'c1' }, { crop_id: 'c2' }],
+            }),
+          );
+        }
+        return json({ detail: 'Not Found' }, 404);
+      }),
+    );
+  }
+
+  beforeEach(() => datasetsAvailability.reset());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    datasetsAvailability.reset();
+    document.querySelectorAll('[role="dialog"]').forEach((d) => d.remove());
+  });
+
+  const expand = (el: HTMLElement) => {
+    (el.querySelector('button[aria-label="Expand"]') as HTMLButtonElement).click();
+    flushSync();
+  };
+  const entry = () =>
+    document.querySelector(
+      '[data-testid="card-reprocess-image"] [data-testid="reprocess-open"]',
+    ) as HTMLButtonElement | null;
+
+  it('offers "Reprocess image…" when W10 is served and the crop has an image id', async () => {
+    serve(200);
+    const el = renderCard({ crop: baseCrop({ image_id: 'img_1' }) });
+    expand(el);
+    await datasetsAvailability.init();
+    flushSync();
+    expect(entry()?.textContent?.trim()).toBe('Reprocess image…');
+  });
+
+  it('is absent when the crop serves no image id', async () => {
+    serve(200);
+    const el = renderCard({ crop: baseCrop() });
+    expand(el);
+    await datasetsAvailability.init();
+    flushSync();
+    expect(document.querySelector('[data-testid="card-reprocess-image"]')).toBeNull();
+  });
+
+  it('is absent when the backend does not serve W10', async () => {
+    serve(404);
+    const el = renderCard({ crop: baseCrop({ image_id: 'img_1' }) });
+    expand(el);
+    await datasetsAvailability.init();
+    flushSync();
+    expect(entry()).toBeNull();
+  });
+
+  it('applies against the image route and hands every served item to onreprocessed', async () => {
+    serve(200);
+    const onreprocessed = vi.fn();
+    const el = renderCard({ crop: baseCrop({ image_id: 'img_1' }), onreprocessed });
+    expand(el);
+    await datasetsAvailability.init();
+    flushSync();
+    entry()!.click();
+    flushSync();
+    const box = [...document.querySelectorAll('fieldset label')]
+      .find((l) => l.textContent?.includes('Detect'))
+      ?.querySelector('input') as HTMLInputElement;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+    const apply = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Reprocess',
+    ) as HTMLButtonElement;
+    apply.click();
+    await vi.waitFor(() => expect(onreprocessed).toHaveBeenCalled());
+    expect(posts).toEqual([
+      {
+        url: `${API_PREFIX}/images/img_1/reprocess`,
+        body: { scopes: ['detect'], dry_run: false },
+      },
+    ]);
+    expect(onreprocessed.mock.calls[0]![0].map((c: Crop) => c.id)).toEqual(['c1', 'c2']);
   });
 });

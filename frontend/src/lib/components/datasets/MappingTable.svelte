@@ -25,9 +25,11 @@
   const rows = $derived(wizard.preview?.classes ?? []);
   const unmapped = $derived(new Set(wizard.unmappedRows.map((r) => r.dataset_class)));
   const actionLabel = $derived(
-    new Map(formats.mapping_actions.map((a) => [a.id, a.label])),
+    new Map(formats.mapping_actions.map((a) => [a.value, a.label])),
   );
-  const matchLabel = $derived(new Map(formats.match_kinds.map((m) => [m.id, m.label])));
+  const matchLabel = $derived(
+    new Map(formats.match_kinds.map((m) => [m.value, m.label])),
+  );
   // The served info issue says the old index path would have mislabeled
   // something; each row's own served `index_would_have_mapped_to` is the
   // hint (plan §8 question 17: which rows it covers isn't served).
@@ -116,8 +118,8 @@
                 })}
             >
               <option value="">Not chosen</option>
-              {#each formats.mapping_actions as a (a.id)}
-                <option value={a.id}>{a.label}</option>
+              {#each formats.mapping_actions as a (a.value)}
+                <option value={a.value}>{a.label}</option>
               {/each}
             </select>
             {#if choice.action === 'map'}

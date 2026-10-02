@@ -1309,6 +1309,7 @@
                   onacceptVlm={(c) => void controller.acceptVlmForCrop(c)}
                   onrejectVlm={(c) => void controller.rejectVlmForCrop(c)}
                   ondetail={(c) => (detailCrop = c)}
+                  onreprocessed={(items) => controller.adoptItems(items)}
                 />
                 {#if searchModeActive && searchScores.has(crop.id)}
                   <div class="pointer-events-none absolute left-1 top-1 z-10">

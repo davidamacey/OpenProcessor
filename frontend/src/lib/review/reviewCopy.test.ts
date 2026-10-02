@@ -111,6 +111,54 @@ describe('emptyQueueMessage: served empty_reason (#36 item 9)', () => {
     expect(m.link).toBeUndefined();
   });
 
+  describe('the imported tab (W10)', () => {
+    const imported = {
+      ...base,
+      emptyReason: null,
+      sortFallbackReason: null,
+      importedTab: true,
+      datasetsAvailable: true,
+      emptyState: {
+        has_probe_predictions: true,
+        has_item_scores: true,
+        has_imported_labels: false,
+      },
+    };
+
+    it('links to the import page when no import has written labels and W10 is served', () => {
+      expect(emptyQueueMessage(imported).link).toEqual({
+        href: '/datasets/import',
+        text: 'Import a labeled dataset',
+      });
+    });
+
+    it('no link once labels have been imported (a genuinely empty queue)', () => {
+      const m = emptyQueueMessage({
+        ...imported,
+        emptyState: { ...imported.emptyState, has_imported_labels: true },
+      });
+      expect(m.link).toBeUndefined();
+    });
+
+    it('no link when the import page is not served', () => {
+      expect(
+        emptyQueueMessage({ ...imported, datasetsAvailable: false }).link,
+      ).toBeUndefined();
+    });
+
+    it('no link when the flag is absent (an older backend)', () => {
+      const m = emptyQueueMessage({
+        ...imported,
+        emptyState: { has_probe_predictions: true, has_item_scores: true },
+      });
+      expect(m.link).toBeUndefined();
+    });
+
+    it('no link on any other tab, whatever the flag says', () => {
+      expect(emptyQueueMessage({ ...imported, importedTab: false }).link).toBeUndefined();
+    });
+  });
+
   it('no link when emptyState is absent (an older backend)', () => {
     const m = emptyQueueMessage({ ...base, emptyState: null });
     expect(m.link).toBeUndefined();
