@@ -1626,7 +1626,7 @@ class OpenSearchClient:
                     stats[name] = {'exists': False, 'doc_count': 0, 'size_bytes': 0}
                     continue
                 count = await self.client.count(index=name)
-                response = await self.client.indices.stats(index=name, metric='store')
+                response = await self.client.indices.stats(index=name)
                 stats[name] = {
                     'exists': True,
                     'doc_count': int(count['count']),
