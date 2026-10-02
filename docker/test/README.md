@@ -14,9 +14,8 @@ query that silently matches nothing, or a job file nobody writes.
 ## Running it
 
 ```bash
-# From the repo root.
-mkdir -p docker/test/verify-data/jobs
-
+# From the repo root. (verify-data/ is created and chowned by the
+# verify-data-init service; no manual mkdir needed.)
 docker compose -p op-live-verify -f docker/test/compose.yml up -d --wait
 python -m pytest tests/live -q --no-cov -m live
 docker compose -p op-live-verify -f docker/test/compose.yml down -v --remove-orphans
