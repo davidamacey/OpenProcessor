@@ -1043,14 +1043,6 @@ opensearch-indices: ## List OpenSearch indices
 	@echo "OpenSearch Indices:"
 	@curl -s http://localhost:$(OPENSEARCH_PORT)/_cat/indices?v
 
-.PHONY: opensearch-reset-indexes
-opensearch-reset-indexes: ## Reset all OpenSearch indexes (delete and recreate)
-	@echo "Resetting OpenSearch indexes..."
-	@curl -s -X DELETE "http://localhost:$(API_PORT)/index" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message','deleted'))" 2>/dev/null || true
-	@sleep 1
-	@curl -s -X POST "http://localhost:$(API_PORT)/index/create" | python3 -c "import sys,json; print('Indexes created:', json.load(sys.stdin).get('status','unknown'))" 2>/dev/null
-	@echo "Done."
-
 # ==================================================================================
 # Documentation
 # ==================================================================================
@@ -1224,7 +1216,7 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         triton-unload-all triton-models triton-load triton-unload \
         check-all \
         clean clean-all clean-logs clean-bench clean-exports \
-        opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
+        opensearch-reset opensearch-status opensearch-indices \
         info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
         curation-up curation-down curation-logs curation-status curation-seed \

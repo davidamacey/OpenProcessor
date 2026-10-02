@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- **Release version is 0.1.0 everywhere** (#39): `VERSION`, `pyproject.toml`,
+  `docs-site/package.json` (and its lockfile), the compose default image tag, the roadmap
+  and the installer test double all say 0.1.0 (they said 0.3.0 while the docs and the
+  release said v0.1.0). `tests/test_version_consistency.py` pins them together.
+- `make opensearch-reset-indexes` is removed: it called `DELETE /index` and
+  `POST /index/create`, which have never been routes. `tests/test_makefile_routes.py`
+  checks that every API route a Makefile target calls exists.
+- The 0.1.0 changelog entry for the removed item keys now says 106 item keys remain
+  (`contracts/json/item_wire.json`), not 88.
 - **W9 follow-ups** (#38).
   - A malformed `OP_VLM_URL` port (`http://h:abc`) means "no env endpoint" instead of a
     500 from `/vlm/endpoints` and `vlm_configured()`.
@@ -867,7 +876,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `region_text_vlm_invalid`, `region_candidate_*`, `region_cluster_id` /
   `region_cluster_subid` / `region_cluster_distance`,
   `region_bbox_in_parent`, `region_candidate_bbox_in_parent` and the
-  item-level `region_thumbnail_url` (88 item keys now). Nothing in this
+  item-level `region_thumbnail_url` (106 item keys now). Nothing in this
   repository reads them: the data is an element of `region_boxes[]`
   (`bbox_in_parent`, `thumbnail_url` per box). The `crop.region_verified`
   event carries `region_count` instead of `region_text`. The worker no longer
