@@ -28,6 +28,11 @@ of image crops:
   a class per crop or cluster; a human confirms, corrects, or rejects.
 - **A keyboard-first review queue** — class letters, undo, discard and skip
   are single keystrokes, tuned for a labeling session that runs for hours.
+- **Projects** — isolated datasets and settings on one deployment, with
+  combine, model sharing and a guarded delete.
+- **Import and configuration** — bring in labeled datasets, and edit the
+  VLM prompt packs, region profiles, VLM endpoints and keyboard shortcuts
+  in the app, with test-on-a-crop before you activate anything.
 - **A full pipeline cockpit** — ingest, cluster, review, manage classes,
   export a YOLO dataset, train, compare models, and promote — all from one
   app, in that order, in a loop.
