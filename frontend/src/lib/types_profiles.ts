@@ -11,13 +11,12 @@
  */
 
 import type {
-  ActiveConfigResponse,
+  ActivateResponse,
   ActiveRef,
   ConfigDocBase,
   ConfigSource,
   ConfigUpdateRequest,
   ConfigValidateRequest,
-  ValidationReport,
 } from './types_config';
 import type { ReprocessRequest } from './types_import';
 
@@ -172,14 +171,14 @@ export interface ActivationImpact {
   unseeded_items: number;
   pending_items: number;
   pending_not_matching: number;
+  stale_items: number;
   suggested_reprocess?: ReprocessRequest | null;
 }
 
-/** `POST /region_profiles/{name}/activate` → 200 (§7.3). `impact` and
- *  `validation` are optional: W4-Q6. */
-export interface ProfileActivateResponse extends ActiveConfigResponse {
-  impact?: ActivationImpact | null;
-  validation?: ValidationReport | null;
+/** `POST /region_profiles/{name}/activate` → 200 (`RegionProfileActivateResponse`,
+ *  §7.3): `ActivateResponse` plus the activation's `impact`. */
+export interface ProfileActivateResponse extends ActivateResponse {
+  impact: ActivationImpact;
 }
 
 // -- GET /config/vocabulary (§7.4) ------------------------------------------

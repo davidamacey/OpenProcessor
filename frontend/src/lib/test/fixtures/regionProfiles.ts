@@ -367,6 +367,7 @@ export function impactFixture(over: Partial<ActivationImpact> = {}): ActivationI
     unseeded_items: 850,
     pending_items: 38,
     pending_not_matching: 0,
+    stale_items: 0,
     suggested_reprocess: {
       targets: {
         filter: { profile_not: 'widget_tag', include_detected: true },

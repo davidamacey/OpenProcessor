@@ -76,6 +76,12 @@ export interface ActiveConfigResponse {
   applied: AppliedRuntime[];
 }
 
+/** `POST /prompt_packs/{name}/activate` → 200 (`ActivateResponse`): the new
+ *  active state plus the activation gate's validation report. */
+export interface ActivateResponse extends ActiveConfigResponse {
+  validation: ValidationReport;
+}
+
 /** The fields every config doc (`GET /{resource}/{name}`) carries. */
 export interface ConfigDocBase<B> {
   name: string;

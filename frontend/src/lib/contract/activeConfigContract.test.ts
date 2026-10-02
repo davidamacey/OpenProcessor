@@ -8,13 +8,16 @@
 import { describe, expect, it } from 'vitest';
 import spec from '../../../contracts/openprocessor/openapi/curation.json';
 import type {
+  ActivateResponse,
   ActiveConfigResponse,
   ActiveSource,
   AppliedRuntime,
   ConfigAxis,
 } from '$lib/types_config';
 import type {
+  ActivationImpact,
   ChoicesFrom,
+  ProfileActivateResponse,
   AppliesWhen,
   Choice,
   ProfileFieldType,
@@ -131,6 +134,87 @@ describe('ActiveConfigResponse', () => {
     const op = Object.values(entry!)[0]!;
     const body = JSON.stringify(op.responses['200']!.content);
     expect(body).toContain('#/components/schemas/ActiveConfigResponse');
+  });
+});
+
+const activateSchemaRef = (suffix: string): string => {
+  const entry = doc.paths[`/curation/projects/{project}${suffix}`];
+  expect(entry).toBeDefined();
+  const op = entry!['post']!;
+  const content = op.responses['200']!.content as {
+    'application/json': { schema: { $ref: string } };
+  };
+  return content['application/json'].schema.$ref;
+};
+
+describe('activate responses', () => {
+  it('prompt_packs activate publishes ActivateResponse', () => {
+    expect(activateSchemaRef('/prompt_packs/{name}/activate')).toBe(
+      '#/components/schemas/ActivateResponse',
+    );
+  });
+
+  it('region_profiles activate publishes RegionProfileActivateResponse (ActivateResponse + impact)', () => {
+    expect(activateSchemaRef('/region_profiles/{name}/activate')).toBe(
+      '#/components/schemas/RegionProfileActivateResponse',
+    );
+  });
+
+  it('ActivateResponse keys match the schema', () => {
+    expect(
+      keys<keyof ActivateResponse>({
+        axis: true,
+        active: true,
+        source: true,
+        activated_at: true,
+        previous: true,
+        config_revision: true,
+        stale: true,
+        applied: true,
+        validation: true,
+      }),
+    ).toEqual(declared('ActivateResponse'));
+  });
+
+  it('ProfileActivateResponse keys match the schema', () => {
+    expect(
+      keys<keyof ProfileActivateResponse>({
+        axis: true,
+        active: true,
+        source: true,
+        activated_at: true,
+        previous: true,
+        config_revision: true,
+        stale: true,
+        applied: true,
+        validation: true,
+        impact: true,
+      }),
+    ).toEqual(declared('RegionProfileActivateResponse'));
+  });
+
+  it('ActivationImpact keys match the schema', () => {
+    expect(
+      keys<keyof ActivationImpact>({
+        items_total: true,
+        by_profile: true,
+        validated_items: true,
+        unseeded_items: true,
+        pending_items: true,
+        pending_not_matching: true,
+        stale_items: true,
+        suggested_reprocess: true,
+      }),
+    ).toEqual(declared('ActivationImpact'));
+  });
+
+  it('every activate response requires validation (and impact for profiles)', () => {
+    const req = (n: string) =>
+      [...((schemas[n] as { required?: string[] }).required ?? [])].sort();
+    expect(req('ActivateResponse')).toContain('validation');
+    expect(req('RegionProfileActivateResponse')).toEqual(
+      expect.arrayContaining(['validation', 'impact']),
+    );
   });
 });
 

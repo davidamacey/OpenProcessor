@@ -112,6 +112,7 @@ import type {
   ReprocessResponse,
 } from './types_import';
 import type {
+  ActivateResponse,
   ActiveConfigResponse,
   ActiveRef,
   ConfigActivateRequest,
@@ -5325,8 +5326,8 @@ export function getActivePromptPack(signal?: AbortSignal): Promise<ActiveConfigR
 export function activatePromptPack(
   name: string,
   body: ConfigActivateRequest,
-): Promise<ActiveConfigResponse> {
-  return apiFetch<ActiveConfigResponse>(
+): Promise<ActivateResponse> {
+  return apiFetch<ActivateResponse>(
     `${scoped()}/prompt_packs/${encodeURIComponent(name)}/activate`,
     {
       method: 'POST',
