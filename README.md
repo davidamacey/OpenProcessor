@@ -267,6 +267,13 @@ docker compose exec yolo-api python scripts/curation/ingest_walker.py \
   --api-base http://localhost:8000/curation
 ```
 
+A single full dev deployment (dev overlay, GPU arbiter overlay, and the
+curation, segmenter, vlm and training profiles) is one command:
+`make dev-up` to build and start, `make dev-ps` to inspect, `make dev-down`
+to stop (volumes are kept). Set `COMPOSE_PROJECT_NAME`, `OP_IMAGE_REPO` and
+`OP_IMAGE_TAG` in `.env` to keep the locally built image tags separate from
+published ones.
+
 In a source checkout use `make up` and `make` targets, which add the dev
 overlay; in an installed directory run `./openprocessor restart yolo-api` after
 editing `.env`. `make sample-coco` (800 images plus side sets),

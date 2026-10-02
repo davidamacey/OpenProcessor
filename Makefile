@@ -15,6 +15,7 @@ SHELL := /bin/bash
 # checkout, so it always adds that overlay -- detected by src/main.py
 # existing next to the compose file (same check scripts/setup.sh and
 # scripts/openprocessor.sh use).
+DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
 COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
@@ -108,6 +109,18 @@ up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitori
 	@echo "Services starting. Check status with: make status"
 	@echo "API available at: http://localhost:$(API_PORT)"
 	@echo "Grafana dashboard: http://localhost:$(GRAFANA_PORT) (admin/admin)"
+
+.PHONY: dev-up
+dev-up: ensure-host-bind-mount-dirs ## Single canonical dev deployment: dev overlay + GPU arbiter overlay + curation/segmenter/vlm/training profiles
+	$(DEV_COMPOSE) up -d --build
+
+.PHONY: dev-down
+dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
+	$(DEV_COMPOSE) down
+
+.PHONY: dev-ps
+dev-ps: ## Show the dev deployment's containers
+	$(DEV_COMPOSE) ps
 
 .PHONY: down
 down: ## Stop all services
@@ -1223,5 +1236,5 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         opensearch-reset opensearch-status opensearch-indices \
         info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
-        curation-up curation-down curation-logs curation-status curation-seed \
+        dev-up dev-down dev-ps curation-up curation-down curation-logs curation-status curation-seed \
         sample-coco sample-coco-readme sample-coco-cars sample-coco-import sample-plates sample-clean
