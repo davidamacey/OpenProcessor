@@ -49,22 +49,24 @@ export interface AppliedRuntime {
   applied_config_revision: number;
   profile?: ActiveRef | null;
   pack?: ActiveRef | null;
+  vlm?: ActiveRef | null;
   applied_at: string | null;
   lagging: boolean;
 }
 
 /** `GET /{resource}/active`, and the activate / rollback / deactivate
- *  response. `source`, `activated_at` and `applied` are optional: the W2
- *  branch model doesn't carry them yet (W3-Q5, W4-Q5). */
+ *  response. `source`, `activated_at` and `applied` are served by the
+ *  backend since W2 landed (`applied` is `[]` when no runtime has
+ *  reported); the panels render them as served, never inferred. */
 export interface ActiveConfigResponse {
   axis: string;
   active: ActiveRef;
-  source?: ConfigSource | null;
-  activated_at?: string | null;
+  source: ConfigSource;
+  activated_at: string | null;
   previous: ActiveRef | null;
   config_revision: number;
   stale: boolean;
-  applied?: AppliedRuntime[];
+  applied: AppliedRuntime[];
 }
 
 /** The fields every config doc (`GET /{resource}/{name}`) carries. */

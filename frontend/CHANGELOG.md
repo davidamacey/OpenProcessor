@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Contract sync to OpenProcessor f582aa05; every route resolves for real.**
+  All `PENDING_BACKEND*` allow-lists and `it.todo` entries are gone, so every
+  scanned call site must resolve in the vendored OpenAPI. `findOperation`
+  no longer lets a literal path segment (for example `region`) match an
+  OpenAPI path parameter, which had hidden the removed `PUT /crops/{id}/region`
+  route; it now picks the candidate with the most literal matches.
+- **Multi-box regions on the real wire.** `region_boxes[]` with per-box
+  state, score, detector, verdict, lock, cluster, text and thumbnail;
+  item `region_count`/`region_rejected_count`/`region_max_score`/
+  `region_set_complete`/`region_revision`. Writes use `PUT /crops/{id}/regions`,
+  `PATCH /crops/{id}/regions/{box_id}`, `PUT /crops/batch_regions` and
+  `POST /regions/batch_box_state`, send `expected_region_revision` and adopt
+  the item a 409 `region_conflict` returns. The single-box keys and the
+  `PUT /crops/{id}/region` / `batch_region` callers, `setSlotBox`,
+  `BboxCanvas`, `bboxFrames`, `viewBox` and the item-level `region_text` are
+  removed; a tier-2 scalar-box slot is read-only. The gallery gained a "Box
+  state" filter and a `rows_truncated` chip. `MultiBoxCanvas` keys resolve
+  through the keymap (a rebound delete key was previously ignored).
+  `region_profile.limits` (`max_boxes_per_write`) is required on the served
+  profile and `RegionProfileSummary` moved to the split schema.
+- **Ingest batch**: removed the label-import and mismatch request/response
+  fields the backend no longer serves (`label_txt_path`, `label_source`,
+  `detect_mismatches`, `labels_imported`, `mismatches`, `missed_labels`,
+  `unmatched_detections`) and the UI that showed them.
+- **Projects P3 wire.** `ProjectSummary.paused` drives the `/projects` chip and
+  Pause/Resume buttons (no per-row `/pause` reads); `paused_by`/`reason`
+  show in the switcher tooltip; `keymap_clone_conflicts` is toasted after a
+  clone; global `project.paused`/`project.resumed` events update the store.
+  Model sharing reads the served `owned`/`sharing_revision`, foreign models
+  are `unloadable:false`, and VLM rows show their `active` state.
+  `ActiveConfigResponse.source`/`activated_at`/`applied` are required.
+
 ### Added
 
 - **Region-profile editor and config vocabulary (OpenProcessor W4).** New

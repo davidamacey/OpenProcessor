@@ -434,6 +434,18 @@ describe('findOperation matching', () => {
     );
   });
 
+  it('a wildcard resolves to the path-parameter route, not a literal sibling (/active, /tabs)', () => {
+    expect(findOperation('/prompt_packs/*', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/prompt_packs/{name}',
+    );
+    expect(findOperation('/review/*', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/review/{tab}',
+    );
+    expect(findOperation('/prompt_packs/active', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/prompt_packs/active',
+    );
+  });
+
   it('still reports a missing operation as null (the removed singular region write)', () => {
     expect(findOperation('/crops/*/region', 'PUT')).toBeNull();
     expect(findOperation('/crops/batch_region', 'PUT')).toBeNull();
