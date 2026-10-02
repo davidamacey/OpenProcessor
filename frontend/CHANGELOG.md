@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Combine next-step buttons wait for the target project (#23).** They were
+  offered as soon as the job was completed, so a click right then 409'd
+  `project_building`. They now stay disabled, with the target's served status
+  shown, until `GET /projects/{target}` reports `active`; a 409 still shows
+  the served message and leaves the button usable for a retry.
+
 ### Documentation
 
 - **Docs site updated for the v0.1.0 feature set.** New user-guide pages for

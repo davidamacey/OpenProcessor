@@ -2577,6 +2577,11 @@ typed as the backend builds them, every field optional.
   (`CombineStepResult.svelte`: action label, `status` chip, scalar rows,
   nested/long values collapsed; `CombineJob.lastStep`, per job id) with a
   neutral "Ran <action>" toast; a refusal shows the served detail instead.
+  The buttons stay disabled, with "Target project: <served status>" beside
+  them (`CombineNextSteps.svelte`), until the controller's own poll of
+  `GET /projects/{target}` (`CombineJob.targetStatus`, same 2 s interval,
+  stops at any status but `building` or on unmount) reads `active`; a 409
+  `project_building` still shows its served message and re-reads the status.
   Failed: the served error and report plus "Undo combine".
 - **`/projects`.** A project the server says came from a combine
   (`origin.kind === 'combine'` with a `job_id`) links to its job (how a job
