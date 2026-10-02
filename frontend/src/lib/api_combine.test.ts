@@ -85,10 +85,10 @@ describe('combine wrappers', () => {
     const m2 = stub({});
     await runCombineNextStep(
       { prefix: '/curation/projects/merged' },
-      { action: 'recluster', method: 'post', path: '/clusters/train', reason: 'x' },
+      { action: 'recluster', method: 'post', path: '/cluster/umap/rebuild', reason: 'x' },
     );
     const { url, init } = call(m2);
-    expect(url).toBe('/curation/projects/merged/clusters/train');
+    expect(url).toBe('/curation/projects/merged/cluster/umap/rebuild');
     expect(init.method).toBe('POST');
     expect(init.body).toBeUndefined();
   });

@@ -224,7 +224,7 @@ describe('actions', () => {
     const step = {
       action: 'recluster',
       method: 'POST',
-      path: '/clusters/train',
+      path: '/cluster/umap/rebuild',
       reason: 'r',
     };
     const { job, runCombineNextStep } = setup([
@@ -239,7 +239,7 @@ describe('actions', () => {
   });
 
   it('a next step for a target missing from the list does not call anything', async () => {
-    const step = { action: 'recluster', method: 'POST', path: '/clusters/train' };
+    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
     const { job, runCombineNextStep } = setup([
       combineJob({ status: 'completed', target: 'elsewhere' }),
     ]);

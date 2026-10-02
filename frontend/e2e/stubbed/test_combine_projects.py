@@ -262,7 +262,7 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
             {
                 "action": "recluster",
                 "method": "POST",
-                "path": "/clusters/train",
+                "path": "/cluster/umap/rebuild",
                 "reason": "Source clusters were not copied; recluster the combined items.",
             }
         ],
@@ -274,7 +274,7 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
         ran.append((request.method, request.post_data or ""))
         return (200, {})
 
-    stub.on("POST", r"/projects/merged/clusters/train$", next_step)
+    stub.on("POST", r"/projects/merged/cluster/umap/rebuild$", next_step)
 
     page.goto(f"{app_url}/projects/combine/{JOB_ID}")
     expect(page.get_by_test_id("combine-job-status")).to_have_text("Running", timeout=ACTION_TIMEOUT_MS)
@@ -291,7 +291,7 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
     expect(page.get_by_test_id("combine-job-report")).to_contain_text("15")
 
     page.get_by_test_id("combine-next-step-recluster").click()
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/projects/merged/clusters/train")):
+    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/projects/merged/cluster/umap/rebuild")):
         page.get_by_role("button", name="Run", exact=True).click()
     expect(page.get_by_role("button", name="Run", exact=True)).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     assert ran == [("POST", "")]
