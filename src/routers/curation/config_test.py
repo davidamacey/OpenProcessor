@@ -201,7 +201,8 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     ``parse_ok: false`` (the reply did not parse) is a 200 result, not an
     error. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``
     (+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /
-    ``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify``; 404 ``crop_not_found``;
+    ``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify`` /
+    ``no_class_names`` (classify with an empty registry and no ``class_names``); 404 ``crop_not_found``;
     409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.
     Writes nothing."""
     if not body.crop_ids:
@@ -247,6 +248,12 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     if body.class_names is not None:
         class_names = body.class_names
     crops = await _load_crops(opensearch, body.crop_ids)
+    if body.call == 'classify' and not class_names:
+        raise api_error(
+            422,
+            'no_class_names',
+            'classify needs class names: the project registry has none, pass class_names',
+        )
     stamp = _active_profile_stamp() if body.profile_name is None else (body.profile_name, None)
     try:
         with reserve_slot('vlm'):

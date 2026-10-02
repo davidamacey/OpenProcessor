@@ -119,6 +119,7 @@ ErrorCode = Literal[
     'test_timeout',
     'vlm_transport_error',
     'no_box_to_verify',
+    'no_class_names',
     'too_many_crops',
     'too_many_crop_ids',
     'pack_invalid',
