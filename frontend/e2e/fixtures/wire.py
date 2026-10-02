@@ -50,6 +50,7 @@ REGION_PROFILE: dict[str, Any] = {
     "text_reader": "ocr",
     "reads_text": True,
     "text_hint_enabled": False,
+    "limits": {"max_boxes_per_write": 500},
 }
 # What the app derives from it: the bound class, the region tab's `?tab=`
 # id (the backend's own `regions` tab id) and its label (the served
@@ -262,6 +263,34 @@ _EXPLICIT: dict[str, Any] = {
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
+    # W8/W10/W3/W4 item keys (backend f582aa05). `region_boxes` is the real
+    # per-box list; a test passes its own boxes via make_item(region_boxes=...).
+    "vlm_prompt_pack": "tag_pack",
+    "vlm_endpoint": "vlm-main",
+    "vlm_model": "tag-vlm-1",
+    "region_profile": "widget_tag",
+    "region_profile_revision": 2,
+    "region_boxes": [],
+    "region_count": 0,
+    "region_rejected_count": 0,
+    "region_max_score": None,
+    "region_set_complete": None,
+    "region_revision": 0,
+    "label_locked": False,
+    "import_ids": [],
+    "dataset_split": None,
+    "imported_at": None,
+    "proposed_by_import": None,
+    "on_negative_frame": False,
+    "import_standalone_region": False,
+    "proposal_chain": [],
+    "origin_project": None,
+    "origin_item_id": None,
+    "origin_image_id": None,
+    "origin_split": None,
+    "combine_conflict": False,
+    "combine_conflict_origins": [],
+    "combine_merged_origins": [],
     # Backend main 22a3e65 (dq-region), adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
@@ -289,14 +318,6 @@ if _missing:
 
 DEFAULT_ITEM: dict[str, Any] = {k: _EXPLICIT[k] for k in ITEM_KEYS}
 
-# W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
-# w8-multibox-frontend-plan-2026-09-26.md): `region_boxes` isn't in the
-# vendored pre-W8 contract snapshot yet (see wireKeys.test.ts's
-# PENDING_BACKEND_W8), so it can't come from ITEM_KEYS above. Added here,
-# outside the contract-derived dict, purely so e2e fixtures can exercise
-# the new list shape ahead of the lockstep contract sync. Remove this
-# line once `region_boxes` lands in ITEM_KEYS for real.
-DEFAULT_ITEM["region_boxes"] = None
 
 
 def make_item(**overrides: Any) -> dict[str, Any]:
@@ -344,3 +365,39 @@ def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
 def review_tabs(*tabs: dict[str, Any], empty_state: dict[str, bool] | None = None) -> dict[str, Any]:
     """A full `ReviewTabsResponse` body."""
     return {"tabs": list(tabs), "empty_state": empty_state or dict(REVIEW_EMPTY_STATE)}
+
+
+def make_box(box_id: str = "b1", **over: Any) -> dict[str, Any]:
+    """One served `region_boxes[]` element (the vendored `RegionTestCandidate`
+    keys). Every value is overridable; `thumbnail_url` follows the served
+    per-box thumbnail route."""
+    box: dict[str, Any] = {
+        "box_id": box_id,
+        "state": "proposed",
+        "bbox_norm": [0.1, 0.1, 0.3, 0.3],
+        "bbox_in_parent": [0.1, 0.1, 0.3, 0.3],
+        "score": 0.91,
+        "detector": "tag_detector_v1",
+        "detector_version": "1",
+        "source": "detector",
+        "bbox_correct": None,
+        "confidence": None,
+        "rejection_reason": None,
+        "text": None,
+        "text_raw": None,
+        "text_confidence": None,
+        "text_source": None,
+        "text_engine_version": None,
+        "text_vlm": None,
+        "text_ocr": None,
+        "text_disagreement": None,
+        "text_choice": None,
+        "text_vlm_invalid": None,
+        "cluster_id": None,
+        "cluster_subid": None,
+        "cluster_distance": None,
+        "detected_at": "2026-05-06T07:08:09Z",
+        "thumbnail_url": f"/curation/crops/crop-fixture-001/region_thumbnail?box_id={box_id}",
+    }
+    box.update(over)
+    return box

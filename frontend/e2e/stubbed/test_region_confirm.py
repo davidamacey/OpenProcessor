@@ -115,7 +115,7 @@ def test_region_confirm_unchanged_box_sends_state_only_no_bbox_norm(stub, page, 
     wait_for_paint(page)
 
     with page.expect_response(
-        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"),
+        lambda r: r.request.method == "PUT" and r.url.endswith("/regions"),
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.keyboard.press("Enter")

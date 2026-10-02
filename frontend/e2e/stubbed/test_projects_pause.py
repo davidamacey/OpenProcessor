@@ -52,7 +52,16 @@ class Pause:
     def read(self, request: Any, m: Any) -> Any:
         slug = m.group(1)
         self.reads.append(slug)
-        return (200, {"project": slug, "paused": self.paused.get(slug, False)})
+        on = self.paused.get(slug, False)
+        return (
+            200,
+            {
+                "project": slug,
+                "paused": on,
+                "paused_by": ["project"] if on else [],
+                "reason": None,
+            },
+        )
 
     def write(self, request: Any, m: Any) -> Any:
         slug, verb = m.group(1), m.group(2)

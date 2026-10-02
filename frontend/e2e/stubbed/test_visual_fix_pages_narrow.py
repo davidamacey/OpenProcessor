@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
-from fixtures.wire import REGION_CLASS, make_item
+from fixtures.wire import REGION_CLASS, make_box, make_item
 
 NARROW = {"width": 800, "height": 1000}
 
@@ -126,8 +126,16 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
             image_id=f"img-{i}",
             class_name="class_b_with_a_long_class_name",
             region_detector_chain=long_chain,
-            region_text="65875-LONG-TEXT",
-            region_text_disagreement=True,
+            region_boxes=[
+                make_box(
+                    "b1",
+                    text="65875-LONG-TEXT",
+                    text_vlm="65875-LONG-TEXT",
+                    text_ocr="65875-L0NG-TEXT",
+                    text_disagreement=True,
+                )
+            ],
+            region_count=1,
         )
         for i in range(4)
     ]

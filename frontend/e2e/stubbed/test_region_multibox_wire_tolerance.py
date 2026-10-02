@@ -1,28 +1,7 @@
-"""W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
-w8-multibox-frontend-plan-2026-09-26.md): forward-tolerance check, not a
-full new-semantics test.
-
-This branch ships the wire model (SubBoxCapability.listField,
-readSlot -> SlotData.subBoxes, the new PUT/PATCH/batch_box_state api.ts
-functions, MultiBoxCanvas.svelte) but does NOT yet wire the multi-box
-editor into /review's 3000-line +page.svelte in this pass — see the
-plan doc's "deliberately out of scope" section. So there is no new
-Enter-confirms-only-proposed-boxes UI to end-to-end test yet, and
-rewriting test_region_verify_rejected_confirm.py to assert that
-semantics would describe behavior that doesn't exist, which is worse
-than not testing it.
-
-What this DOES verify, honestly: a backend that serves BOTH the legacy
-scalar region_* fields (which is what /review's current UI still reads)
-AND the new `region_boxes` list (W8's ItemDoc addition) doesn't crash the
-page — mapCropSlots/readSlot populate SlotData.subBoxes from the list
-alongside the existing subBox reading, with zero pageerror. This is the
-actual regression risk this branch introduces to the shipped app: does
-adding the new list-reading code path break the page for every existing
-crop shape. It's proved here rather than only by the unit tests in
-src/lib/annotations/multiBox.test.ts and readSlot.test.ts, which don't
-exercise a real page mount.
-"""
+"""W8 multi-box regions: a served `region_boxes` list with a mix of
+accepted and rejected boxes mounts /review's region tab with the multi-box
+canvas and no pageerror (the real wire; the single-box scalar keys no
+longer exist)."""
 
 from __future__ import annotations
 
@@ -60,13 +39,8 @@ def multibox_item() -> dict:
         region_status="detected",
         region_verified=True,
         region_validated=True,
-        # Legacy scalar fields — still what the shipped /review UI reads.
-        region_bbox_norm=_BOX_A,
-        region_bbox_in_parent=_BOX_A,
-        # New W8 list — not yet read by /review's UI, but must not crash
-        # mapCropSlots/readSlot when it's present alongside the legacy
-        # fields (the exact shape a mid-migration backend would serve
-        # per region_boxes_migration.pending).
+        region_count=2,
+        region_rejected_count=1,
         region_boxes=[
             {
                 "box_id": "b1",
@@ -145,8 +119,7 @@ def test_review_region_tab_tolerates_a_served_region_boxes_list(stub, page, app_
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
+    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, (
-        f"a served region_boxes list must not crash the page "
-        f"(no /review UI reads it yet, but mapCropSlots must tolerate it): {errors[:3]}"
-    )
+    assert not errors, f"a served region_boxes list must not crash the page: {errors[:3]}"

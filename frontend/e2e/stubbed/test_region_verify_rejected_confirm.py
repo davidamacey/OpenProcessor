@@ -129,7 +129,7 @@ def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(
     wait_for_paint(page)
 
     with page.expect_response(
-        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"),
+        lambda r: r.request.method == "PUT" and r.url.endswith("/regions"),
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.keyboard.press("Enter")

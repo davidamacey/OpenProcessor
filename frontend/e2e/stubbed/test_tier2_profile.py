@@ -42,6 +42,7 @@ PALLET_REGION_PROFILE = {
     "display_name_singular": "Pallet label",
     "region_class_name": "pallet_label",
     "text_reader": "ocr",
+    "limits": {"max_boxes_per_write": 500},
 }
 EXAMPLE_PROFILE = json.loads((REPO_ROOT / "static" / "annotation-profiles.example.json").read_text())
 MALFORMED_PROFILE = {"version": 1, "slots": [{"key": "bad"}]}

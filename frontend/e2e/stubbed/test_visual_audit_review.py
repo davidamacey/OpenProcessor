@@ -19,6 +19,7 @@ import struct
 import zlib
 
 from fixtures.wire import (
+    make_box,
     REGION_CLASS,
     REGION_TAB_LABEL,
     REGION_TAB_URL_ID,
@@ -318,14 +319,20 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
         class_id=1,
         class_name="miata",
         thumbnail_url="/curation/crops/crop-r1/thumbnail",
-        region_bbox_norm=None,
-        region_bbox_in_parent=None,
         region_status="verify_rejected",
-        region_rejection_reason="verifier_no_verdict",
-        region_text=None,
-        region_candidate_bbox_norm=_CANDIDATE_BBOX,
-        region_candidate_bbox_in_parent=_CANDIDATE_BBOX,
-        region_candidate_score=0.42,
+        region_boxes=[
+            make_box(
+                "b1",
+                state="rejected",
+                bbox_norm=_CANDIDATE_BBOX,
+                bbox_in_parent=_CANDIDATE_BBOX,
+                score=0.42,
+                rejection_reason="verifier_no_verdict",
+                text=None,
+            )
+        ],
+        region_count=1,
+        region_rejected_count=1,
     )
     item["reason"] = "needs human review"
     stub.on(
@@ -335,7 +342,9 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
     )
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    served = page.get_by_test_id("served-rejection-reason")
+    # W8: the reason lives on the rejected box and renders as its served
+    # label in the Reason row, not as a raw id in an editable input.
+    served = page.get_by_text("Verifier gave no verdict").first
     served.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert served.inner_text().startswith("Verifier gave no verdict"), served.inner_text()
     values = page.locator("input").evaluate_all("els => els.map(e => e.value)")

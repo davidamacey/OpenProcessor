@@ -132,7 +132,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
     )
 
     with page.expect_response(
-        lambda r: r.request.method == "PUT" and r.url.endswith("/region"), timeout=ACTION_TIMEOUT_MS
+        lambda r: r.request.method == "PUT" and r.url.endswith("/regions"), timeout=ACTION_TIMEOUT_MS
     ):
         page.keyboard.press("Enter")
 

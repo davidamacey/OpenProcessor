@@ -384,7 +384,7 @@ class Stub:
     def _pause_state(request: Any, _match: "re.Match[str]") -> HandlerResult:
         path = urlparse(request.url).path.rstrip("/")
         slug = path.split("/")[-2]
-        return {"project": slug, "paused": False}
+        return {"project": slug, "paused": False, "paused_by": [], "reason": None}
 
     @staticmethod
     def _image(_request: Any, _match: "re.Match[str]") -> HandlerResult:
