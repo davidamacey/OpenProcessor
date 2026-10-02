@@ -288,6 +288,11 @@ ALLOWED_4XX_5XX = {
         "it. keymapStore.loadKeymap() treats a 404/501 as 'backend predates it' and "
         "falls back to FALLBACK_KEYMAP silently — this deployment predates W2b."
     ),
+    ("GET", r"/projects/combine/__probe__$"): (
+        "P4-1 (combineAvailability): the combine router has no list route, so the gate "
+        "probes a sentinel job id. A 404 with detail.error 'combine_not_found' is the "
+        "served 'router is mounted' answer — a 404 is the expected response here."
+    ),
 }
 
 

@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from conftest import agrees_with_retry, api_get, page_path, wait_for_stable_text
+from conftest import agrees_with_retry, api_get, int_field, page_path, wait_for_stable_text
 from fixtures.wire import REGION_TAB_URL_ID
 
 TOTAL_RE = re.compile(r"·\s*([\d,]+)\s*total")  # "#1 · 18 loaded · 18 total"
@@ -35,6 +35,9 @@ def _queue_total(page: Any) -> int:
 def test_dashboard_cluster_count_agrees_with_stats_dataset(
     guarded_page: Any, live_url: str, live_project: dict[str, Any]
 ) -> None:
+    served = int_field(api_get(live_url, live_project, "/stats/dataset"), "clusters", "cluster_count")
+    if served == 0:
+        pytest.skip("the live project has no clusters yet; nothing to agree on")
     page = guarded_page.page
     page.goto(f"{live_url}{page_path(live_project, '/dashboard')}", wait_until="domcontentloaded")
     # `data-testid="dataset-cluster-count"` (DatasetStats.svelte) is only
