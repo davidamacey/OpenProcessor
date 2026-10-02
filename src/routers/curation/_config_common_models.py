@@ -392,6 +392,24 @@ class AppliedRuntime(BaseModel):
     applied_at: str | None = None
     lagging: bool = False
 
+    @classmethod
+    def from_runtime_doc(cls, doc: dict[str, Any], *, config_revision: int) -> AppliedRuntime:
+        """The record for one ``runtime:<process>:<host>`` doc, which the
+        worker writes flat (``profile`` / ``profile_revision`` / ``pack`` /
+        ``pack_revision`` / ``vlm`` / ``vlm_revision``). The one reader, for
+        every axis's ``/active`` route."""
+        applied_rev = int(doc.get('applied_config_revision') or 0)
+        return cls(
+            process=doc.get('process', 'detection_worker'),
+            host=doc.get('host', ''),
+            applied_config_revision=applied_rev,
+            profile=ActiveRef(name=doc.get('profile'), revision=doc.get('profile_revision')),
+            pack=ActiveRef(name=doc.get('pack'), revision=doc.get('pack_revision')),
+            vlm=ActiveRef(name=doc.get('vlm'), revision=doc.get('vlm_revision')),
+            applied_at=doc.get('applied_at'),
+            lagging=applied_rev < config_revision,
+        )
+
 
 class ActiveConfigResponse(BaseModel):
     """``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);
@@ -420,6 +438,13 @@ class ActiveConfigResponse(BaseModel):
     config_revision: int
     stale: bool = False
     applied: list[AppliedRuntime] = []
+
+
+class ActivateResponse(ActiveConfigResponse):
+    """``POST /{prompt_packs,region_profiles}/{name}/activate``: the new
+    active state plus the activation gate's validation report."""
+
+    validation: ValidationReport
 
 
 ConfigErrorDetail.model_rebuild()

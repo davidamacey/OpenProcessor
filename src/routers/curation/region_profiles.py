@@ -13,9 +13,10 @@ from __future__ import annotations
 from typing import Any
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import ActiveRef, api_error
+from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
+    RegionProfileActivateResponse,
     RegionProfileBody,
     RegionProfileCreateRequest,
     RegionProfileDeactivateRequest,
@@ -26,11 +27,13 @@ from src.routers.curation._region_profile_models import (
     RegionProfileRevisionSummary,
     RegionProfileRollbackRequest,
     RegionProfileSaveRequest,
+    RegionProfileSchema,
     RegionProfileSummary,
     RegionProfileTemplateSummary,
     RegionProfileValidateRequest,
     SegmenterPromptValidateRequest,
 )
+from src.routers.curation._region_profile_schema import build_region_profile_schema
 from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
 from src.services.config_store.activation_view import build_active_config_response
 from src.services.config_store.profile_validation import validate_profile
@@ -45,7 +48,7 @@ from src.services.config_store.profiles import (
     rollback_profile,
     save_profile,
 )
-from src.services.curation.region_impact import compute_activation_impact
+from src.services.curation.region_impact import ActivationImpact, compute_activation_impact
 
 
 def _registry_class_names() -> frozenset[str]:
@@ -146,59 +149,9 @@ def _template_names_only() -> list[str]:
 # =============================================================================
 
 
-@router.get('/region_profiles/schema')
-async def get_region_profile_schema() -> dict[str, Any]:
-    # TODO(W3/W4 review 2026-09-28, Minor 5): placeholder -- every field is
-    # 'string'/'advanced'/enum=None regardless of its real type/group, and
-    # `_region_profile_models.py`'s schema dataclasses stay unused.
-    # Tracked for whichever wave next builds the profile editor UI.
-    from dataclasses import fields as dc_fields
-
-    from src.config import DetectionProfile
-    from src.services.config_store.profile_validation import PROFILE_FIELD_RANGES
-
-    choice_fields: dict[str, tuple[str, dict[str, str] | None]] = {
-        'detector_model': ('detectors', {'id': '', 'label': 'No detector leg'}),
-        'segmenter_name': ('segmenters', None),
-        'ocr_pipeline_model': ('ocr_pipeline_models', {'id': '', 'label': 'No OCR pipeline'}),
-        'ocr_det_model': ('ocr_det_models', {'id': '', 'label': 'No OCR detector'}),
-        'ocr_rec_model': ('ocr_rec_models', {'id': '', 'label': 'No OCR recognizer'}),
-        'text_reader': ('text_reader_modes', None),
-    }
-    fields = []
-    for f in dc_fields(DetectionProfile):
-        if f.name == 'name':
-            continue
-        default = f.default if f.default is not None else None
-        choices_from, empty_choice = choice_fields.get(f.name, (None, None))
-        rng = PROFILE_FIELD_RANGES.get(f.name)
-        fields.append(
-            {
-                'field': f.name,
-                'label': f.name.replace('_', ' ').capitalize(),
-                'group': 'advanced',
-                'type': 'string',
-                'default': default if isinstance(default, str | int | float | bool) else None,
-                'min': rng[0] if rng else None,
-                'max': rng[1] if rng else None,
-                'enum': None,
-                'advanced': choices_from is None,
-                'applies_when': None,
-                'choices_from': choices_from,
-                'empty_choice': empty_choice,
-                'help': '',
-            }
-        )
-    groups = [
-        {'id': 'identity', 'label': 'Name and display'},
-        {'id': 'items', 'label': 'Which items'},
-        {'id': 'detector', 'label': 'Detector'},
-        {'id': 'segmenter', 'label': 'Segmenter'},
-        {'id': 'verify', 'label': 'Verification'},
-        {'id': 'text', 'label': 'Text reading'},
-        {'id': 'advanced', 'label': 'Advanced'},
-    ]
-    return {'fields': fields, 'groups': groups}
+@router.get('/region_profiles/schema', response_model=RegionProfileSchema)
+async def get_region_profile_schema() -> RegionProfileSchema:
+    return build_region_profile_schema()
 
 
 # =============================================================================
@@ -211,7 +164,7 @@ async def validate_region_profile_route(
     body: RegionProfileValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
 ) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     report = await validate_profile(
         body.name,
         body.body.model_dump(),
@@ -251,24 +204,22 @@ def _project_slug() -> str | None:
 # =============================================================================
 
 
-@router.get('/region_profiles/active')
-async def get_active_region_profile_route(opensearch: OpenSearchDep) -> Any:
+@router.get('/region_profiles/active', response_model=ActiveConfigResponse)
+async def get_active_region_profile_route(opensearch: OpenSearchDep) -> ActiveConfigResponse:
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
-@router.get('/region_profiles/active/impact')
-async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> Any:
+@router.get('/region_profiles/active/impact', response_model=ActivationImpact)
+async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> ActivationImpact:
     from src.services.detection.profile_registry import get_active_region_profile
 
-    return (
-        await compute_activation_impact(opensearch, profile=get_active_region_profile())
-    ).model_dump()
+    return await compute_activation_impact(opensearch, profile=get_active_region_profile())
 
 
-@router.post('/region_profiles/active/rollback')
+@router.post('/region_profiles/active/rollback', response_model=ActiveConfigResponse)
 async def rollback_active_region_profile(
     body: RegionProfileRollbackRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
         await rollback_profile(opensearch, expected_active=expected)
@@ -295,10 +246,10 @@ async def rollback_active_region_profile(
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
-@router.post('/region_profiles/deactivate')
+@router.post('/region_profiles/deactivate', response_model=ActiveConfigResponse)
 async def deactivate_region_profile(
     body: RegionProfileDeactivateRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
         await activate_profile(opensearch, name=None, revision=None, expected_active=expected)
@@ -322,7 +273,7 @@ async def list_region_profiles(
     opensearch: OpenSearchDep, include_templates: bool = False
 ) -> RegionProfileList:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     names = all_known_names() - set(_template_names_only())
     records = [build_record(name) for name in sorted(names)]
     templates: list[RegionProfileTemplateSummary] = []
@@ -356,7 +307,7 @@ async def create_region_profile(
     body: RegionProfileCreateRequest, opensearch: OpenSearchDep
 ) -> RegionProfileDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = all_known_names()
     report = await validate_profile(
         body.name,
@@ -396,7 +347,7 @@ async def create_region_profile(
 @router.get('/region_profiles/{name}', response_model=RegionProfileDoc)
 async def get_region_profile_route(name: str, opensearch: OpenSearchDep) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -453,7 +404,7 @@ async def save_region_profile(
     name: str, body: RegionProfileSaveRequest, opensearch: OpenSearchDep
 ) -> RegionProfileDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
@@ -503,7 +454,7 @@ async def delete_region_profile_route(
     from fastapi import Response
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -529,14 +480,14 @@ async def delete_region_profile_route(
 # =============================================================================
 
 
-@router.post('/region_profiles/{name}/activate')
+@router.post('/region_profiles/{name}/activate', response_model=RegionProfileActivateResponse)
 async def activate_region_profile_route(
     name: str, body: RegionProfileActivateRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> RegionProfileActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -566,11 +517,7 @@ async def activate_region_profile_route(
 
     response = await build_active_config_response(opensearch, axis='detection_profile')
     impact = await compute_activation_impact(opensearch, profile=get_active_region_profile())
-    return {
-        **response.model_dump(),
-        'impact': impact.model_dump(),
-        'validation': report.model_dump(),
-    }
+    return RegionProfileActivateResponse(**response.model_dump(), impact=impact, validation=report)
 
 
 # POST /region_profiles/{name}/clone lives in _region_profile_clone.py

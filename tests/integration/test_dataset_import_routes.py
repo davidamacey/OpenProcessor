@@ -297,3 +297,13 @@ def test_preview_of_a_data_yaml_with_a_bad_tagged_scalar_is_an_issue_not_a_500(
     resp = client.post(f'{BASE}/preview', json={'source': {'path': str(root)}})
     assert resp.status_code == 200, resp.text
     assert 'data_yaml_invalid' in {i['code'] for i in resp.json()['issues']}
+
+
+def test_a_bad_mapping_row_says_what_is_wrong(client: TestClient, tmp_path: Path) -> None:
+    body = _body(_dataset(tmp_path))
+    body['mapping'].append({'dataset_class': 'nope', 'action': 'skip'})
+    detail = client.post(f'{BASE}/imports', json=body).json()['detail']
+    assert detail['error'] == 'class_mapping_invalid'
+    assert (
+        'nope: class_mapping_invalid (this dataset has no class with that name' in detail['message']
+    )

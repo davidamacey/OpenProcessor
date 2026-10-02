@@ -40,6 +40,21 @@ def bbox_norm(
     ]
 
 
+def stored_bbox_norm(
+    bbox_norm_values: tuple[float, float, float, float] | list[float], width: int, height: int
+) -> tuple[float, float, float, float]:
+    """The normalized box the index path stores for ``bbox_norm_values``.
+
+    Indexing takes a pixel box and divides it back by the frame size, which
+    can move a value by one float ulp; :func:`crop_id` rounds to 6 decimals,
+    so a box on a rounding edge gets a different id. A caller that must
+    predict the id an item will be stored under derives it from this.
+    """
+    x1, y1, x2, y2 = bbox_norm_values
+    out = bbox_norm((x1 * width, y1 * height, x2 * width, y2 * height), width, height)
+    return (out[0], out[1], out[2], out[3])
+
+
 def crop_id(image_id: str, bbox_norm_values: list[float] | tuple[float, ...]) -> str:
     """Stable crop id = ``sha256(image_id + bbox)[:32]``.
 

@@ -13,11 +13,9 @@ from typing import Any
 
 from opensearchpy.exceptions import NotFoundError
 
-from src.config import get_curation_config
-from src.config.project_context import bind_project
 from src.core.logging import get_logger
 from src.services.config_store.index import get_activation
-from src.services.projects.registry import get_project_registry
+from src.services.config_store.project_usage import read_each_project
 
 
 logger = get_logger(__name__)
@@ -28,17 +26,14 @@ async def activations_by_project(client: Any) -> dict[str, dict[str, Any] | None
     one, so it runs the ``env`` built-in) for every project that has a
     configs index. Raises when a project's doc cannot be read: callers use
     this to REFUSE a delete, so an unreadable project must block it."""
-    registry = get_project_registry()
-    await registry.ensure_fresh()
-    found: dict[str, dict[str, Any] | None] = {}
-    for slug, record in sorted(registry.snapshot().items()):
-        with bind_project(record, read_only=True):
-            index = get_curation_config().configs_index
-            try:
-                found[slug] = await get_activation(client, index, 'vlm')
-            except NotFoundError:
-                found[slug] = None
-    return found
+
+    async def vlm_activation(index: str) -> dict[str, Any] | None:
+        try:
+            return await get_activation(client, index, 'vlm')
+        except NotFoundError:
+            return None
+
+    return await read_each_project(vlm_activation)
 
 
 def slugs_running(activations: dict[str, dict[str, Any] | None], name: str) -> list[str]:

@@ -77,7 +77,7 @@ CW_GH_REPO="${CW_GH_REPO:-attevon-llc/cropwright}"
 OP_IMAGE_NAMESPACE="${OP_IMAGE_NAMESPACE:-davidamacey}"
 OP_DOCS_URL="${OP_DOCS_URL:-}"
 
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.1.0"
 
 EXIT_USAGE=2
 EXIT_COLLISION=3
@@ -1502,7 +1502,11 @@ validate_images_lock() {
     while IFS= read -r line; do
         [[ -z "$line" || "$line" == \#* ]] && continue
         if ! _lock_line_valid "$line"; then
-            log_error "images.lock entry is not a digest-pinned, non-latest image: ${line}"
+            if [[ "$line" =~ @sha256:0+dev[0-9]+$ ]]; then
+                log_error "images.lock still has a development placeholder digest (${line%%=*}): this checkout is not a release. Install a published release (--version vX.Y.Z), or build the images locally and pass --image-tag <tag>."
+            else
+                log_error "images.lock entry is not a digest-pinned, non-latest image: ${line}"
+            fi
             bad=1
         fi
     done < "$lock"

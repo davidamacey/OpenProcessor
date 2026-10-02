@@ -17,6 +17,8 @@ from .conftest import (
     FP_REGION_CLUSTER_ID,
     INDEXES,
     MIXED_CLUSTER_ID,
+    MIXED_PROMOTE_CLUSTER_ID,
+    PROMOTE_CLUSTER_ID,
     PURE_CLUSTER_ID,
     get_doc,
     refresh,
@@ -90,7 +92,7 @@ def _classifier_crop_ids(opensearch: Any, cluster_id: int, limit: int = 5) -> li
             'bool': {
                 'must': [
                     {'term': {'cluster_id': cluster_id}},
-                    {'term': {'class_source': 'classifier_model'}},
+                    {'term': {'class_source': 'secondary_model'}},
                 ],
                 'must_not': [{'term': {'class_validated': True}}],
             }
@@ -170,7 +172,7 @@ def test_cluster_cards_report_kind_purity_and_subclusters(api_client: Any) -> No
 
 
 def test_auto_promote_dry_run_writes_nothing(api_client: Any, opensearch: Any) -> None:
-    sample_ids = _classifier_crop_ids(opensearch, PURE_CLUSTER_ID)
+    sample_ids = _classifier_crop_ids(opensearch, PROMOTE_CLUSTER_ID)
     assert sample_ids, 'precondition: the pure cluster must hold unvalidated classifier rows'
     before = {
         crop_id: get_doc(opensearch, INDEXES['items'], crop_id)['_seq_no'] for crop_id in sample_ids
@@ -180,8 +182,8 @@ def test_auto_promote_dry_run_writes_nothing(api_client: Any, opensearch: Any) -
     assert resp.status_code == 200, resp.text
     body = resp.json()
     promotable = {c['cluster_id']: c for c in body['clusters']}
-    assert promotable[PURE_CLUSTER_ID]['promote'] is True
-    assert promotable[MIXED_CLUSTER_ID]['promote'] is False
+    assert promotable[PROMOTE_CLUSTER_ID]['promote'] is True
+    assert promotable[MIXED_PROMOTE_CLUSTER_ID]['promote'] is False
 
     for crop_id, seq_no in before.items():
         assert get_doc(opensearch, INDEXES['items'], crop_id)['_seq_no'] == seq_no
@@ -190,8 +192,8 @@ def test_auto_promote_dry_run_writes_nothing(api_client: Any, opensearch: Any) -
 def test_auto_promote_apply_validates_only_the_high_purity_cluster(
     api_client: Any, opensearch: Any
 ) -> None:
-    promotable = _classifier_crop_ids(opensearch, PURE_CLUSTER_ID, limit=10)
-    untouched = _classifier_crop_ids(opensearch, MIXED_CLUSTER_ID, limit=5)
+    promotable = _classifier_crop_ids(opensearch, PROMOTE_CLUSTER_ID, limit=10)
+    untouched = _classifier_crop_ids(opensearch, MIXED_PROMOTE_CLUSTER_ID, limit=5)
     assert promotable, 'precondition: the pure cluster must hold promotable rows'
     assert untouched, 'precondition: the mixed cluster must hold unvalidated rows'
 
@@ -208,7 +210,7 @@ def test_auto_promote_apply_validates_only_the_high_purity_cluster(
     for crop_id in untouched:
         src = get_doc(opensearch, INDEXES['items'], crop_id)['_source']
         assert src['class_validated'] is False, crop_id
-        assert src['class_source'] == 'classifier_model'
+        assert src['class_source'] == 'secondary_model'
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.clients.triton_pool import TritonClientManager
 from src.config import get_settings
-from src.utils.cache import get_clip_tokenizer, get_image_cache, get_text_cache
+from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
 
 
 logger = logging.getLogger(__name__)
@@ -161,17 +161,13 @@ class EmbeddingService:
             if cached is not None:
                 return cached
 
-        # Tokenize (using cached singleton - 500ms savings)
-        tokenizer = get_clip_tokenizer()
-        tokens = tokenizer(
-            text, padding='max_length', max_length=77, truncation=True, return_tensors='np'
-        )
+        tokens = clip_text_tokens(text)
 
         # Compute embedding
         client = await self._get_client()
 
         input_tensor = InferInput('text_tokens', [1, 77], 'INT64')
-        input_tensor.set_data_from_numpy(tokens['input_ids'].astype(np.int64))
+        input_tensor.set_data_from_numpy(tokens)
 
         output = InferRequestedOutput('text_embeddings')
 

@@ -20,7 +20,12 @@ from typing import Any
 import httpx
 import pytest
 
-from scripts.curation.worker.cascade import SegmenterAllHostsDown, SegmenterClient
+from scripts.curation.worker.cascade import SegmenterClient
+from scripts.curation.worker.client import (
+    SegmenterAllHostsDown,
+    SegmenterRequestFailed,
+    SegmenterUnavailable,
+)
 
 
 pytestmark = pytest.mark.integration
@@ -94,8 +99,8 @@ async def test_three_failures_open_circuit() -> None:
 
     # 3 failures (each one HTTP 500, no retries — 5xx is not retried).
     for _ in range(3):
-        out = await sam.segment(_CROP_BYTES)
-        assert out is None
+        with pytest.raises(SegmenterRequestFailed):
+            await sam.segment(_CROP_BYTES)
         clock.advance(0.5)
 
     # 4th call must short-circuit — SegmenterAllHostsDown (single host).
@@ -129,7 +134,8 @@ async def test_circuit_recovers_after_60s_window() -> None:
 
     # Open the circuit.
     for _ in range(3):
-        await sam.segment(_CROP_BYTES)
+        with pytest.raises(SegmenterRequestFailed):
+            await sam.segment(_CROP_BYTES)
         clock.advance(0.1)
     with pytest.raises(SegmenterAllHostsDown):
         await sam.segment(_CROP_BYTES)
@@ -211,11 +217,67 @@ async def test_all_hosts_down_raises() -> None:
 
     # 6 failures total (3 per host) trip both circuits.
     for _ in range(6):
-        out = await sam.segment(_CROP_BYTES)
-        assert out is None
+        with pytest.raises(SegmenterRequestFailed):
+            await sam.segment(_CROP_BYTES)
         clock.advance(0.05)
 
     with pytest.raises(SegmenterAllHostsDown):
         await sam.segment(_CROP_BYTES)
 
+    await sam.aclose()
+
+
+@pytest.mark.asyncio
+async def test_segment_multi_failed_request_is_not_an_empty_result() -> None:
+    """A request that failed is infrastructure noise: it must reach the worker
+    as an error (the crop stays pending), never as ``[]`` (a terminal miss),
+    even before the breaker has opened."""
+    sam = _build_client(
+        base_urls='http://sam3-fake-5:7000', handler=_fail_response, now_func=_FakeClock()
+    )
+    with pytest.raises(SegmenterUnavailable):
+        await sam.segment_multi(_CROP_BYTES)
+
+    def _bad_json(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b'not json')
+
+    sam = _build_client(
+        base_urls='http://sam3-fake-6:7000', handler=_bad_json, now_func=_FakeClock()
+    )
+    with pytest.raises(SegmenterUnavailable):
+        await sam.segment_multi(_CROP_BYTES)
+
+    def _empty(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={'candidates': []})
+
+    sam = _build_client(base_urls='http://sam3-fake-7:7000', handler=_empty, now_func=_FakeClock())
+    assert await sam.segment_multi(_CROP_BYTES) == []
+    await sam.aclose()
+
+
+@pytest.mark.asyncio
+async def test_segment_failed_request_is_not_a_no_candidate_miss() -> None:
+    """Same invariant as ``segment_multi`` for the single-candidate path the
+    text-hint re-pass uses: a failed request or undecodable body raises, only
+    an empty candidate list is ``None``."""
+    sam = _build_client(
+        base_urls='http://sam3-fake-8:7000', handler=_fail_response, now_func=_FakeClock()
+    )
+    with pytest.raises(SegmenterRequestFailed):
+        await sam.segment(_CROP_BYTES)
+
+    def _bad_json(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b'not json')
+
+    sam = _build_client(
+        base_urls='http://sam3-fake-9:7000', handler=_bad_json, now_func=_FakeClock()
+    )
+    with pytest.raises(SegmenterRequestFailed):
+        await sam.segment(_CROP_BYTES)
+
+    def _empty(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={'candidates': []})
+
+    sam = _build_client(base_urls='http://sam3-fake-10:7000', handler=_empty, now_func=_FakeClock())
+    assert await sam.segment(_CROP_BYTES) is None
     await sam.aclose()

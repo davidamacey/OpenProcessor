@@ -127,3 +127,13 @@ def test_json_mode_auto_follows_the_probe(monkeypatch: pytest.MonkeyPatch) -> No
     off = env_endpoint(doc)
     assert off is not None
     assert off.json_mode_on is False
+
+
+def test_a_malformed_port_means_not_configured_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.services.labeling.vlm_endpoints import vlm_configured
+
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm:abc/v1')
+    assert env_endpoint() is None
+    assert vlm_configured() is False

@@ -77,6 +77,7 @@ from src.services.curation.export_support import (
     _code_sha,
     _copy_or_resize_one,
     _resolve_source_path,
+    allocate_export_dir,
     atomic_symlink_flip,
     atomic_write_text,
     even_stratified_sample,
@@ -301,7 +302,9 @@ class SingleClassExportService:
                 hard_negative_images=n_hard_neg,
             )
 
-        resolved_dir = Path(export_dir) if export_dir else self._default_export_dir(started)
+        resolved_dir = (
+            Path(export_dir) if export_dir else allocate_export_dir(self._output_root(), started)
+        )
         for split in ('train', 'val', 'test'):
             (resolved_dir / 'images' / split).mkdir(parents=True, exist_ok=True)
             (resolved_dir / 'labels' / split).mkdir(parents=True, exist_ok=True)
@@ -417,9 +420,6 @@ class SingleClassExportService:
 
     def _output_root(self) -> Path:
         return self.profile.output_root or (self.config.export_root / self.profile.name)
-
-    def _default_export_dir(self, started: datetime) -> Path:
-        return self._output_root() / started.strftime('%Y%m%dT%H%M%SZ')
 
     def _resolve_class_names(self) -> list[str]:
         """Dataset class names, ordered to match the dense label ids."""

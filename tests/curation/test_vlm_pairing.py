@@ -308,3 +308,18 @@ def test_active_vlm_pairing_hook_reads_the_active_endpoint(vlm_api) -> None:
     )
     assert off == []
     assert ACTIVE.endswith('/vlm/endpoints')
+
+
+@pytest.mark.parametrize('entry', load_catalog(), ids=lambda e: e.id)
+def test_every_catalog_entry_serves_a_context_its_own_image_cap_fits(entry: Any) -> None:
+    """Found live: the shipped default (8192 tokens, 8 images per call) failed
+    this activation check for the very first pack and profile, so the wheel
+    example could not be activated without ``force``."""
+    probe = good_probe(max_model_len=entry.max_model_len, image_tokens=267)
+    endpoint = _endpoint(catalog_id=entry.id, probe=probe, max_images_per_call=entry.max_images)
+
+    issues = vlm_pairing_issues(
+        endpoint, GENERIC_ITEM_PACK, None, mode='activate', class_names=['car', 'wheel']
+    )
+
+    assert 'vlm_context_too_small' not in _codes(issues)

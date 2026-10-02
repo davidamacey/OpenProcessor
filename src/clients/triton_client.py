@@ -26,6 +26,7 @@ Active models:
 
 import io
 import logging
+import time
 from typing import Any
 
 import cv2
@@ -42,6 +43,8 @@ from src.utils.retry import retry_sync
 
 
 logger = logging.getLogger(__name__)
+
+_MODEL_INFO_TTL_S = 30.0
 
 
 class TritonClient:
@@ -70,10 +73,12 @@ class TritonClient:
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
         self.retry_max_delay = retry_max_delay
-        # Detection-output adapters keyed by model name, resolved lazily
-        # from Triton model metadata (supports YOLO11 end2end 4-tensor and
-        # YOLO26 fused single-tensor engines side by side).
-        self._detection_adapters: dict[str, DetectionAdapter] = {}
+        # Per-model serving facts (output adapter + input size) from Triton
+        # metadata, re-read after ``_MODEL_INFO_TTL_S``: a model re-promoted or
+        # replaced under the same name must not keep its old size, and the API
+        # runs many worker processes, so an in-process invalidation could not
+        # reach them all.
+        self._model_info: dict[str, tuple[float, DetectionAdapter, int]] = {}
         logger.info(f'Unified Triton client initialized (sync, retries={max_retries})')
 
     def _infer_with_retry(self, model_name: str, inputs: list, outputs: list):
@@ -88,14 +93,31 @@ class TritonClient:
             max_delay=self.retry_max_delay,
         )
 
+    def _read_model_info(self, model_name: str) -> tuple[DetectionAdapter, int]:
+        """Output adapter (YOLO11 end2end 4-tensor or YOLO26 fused) and the
+        square input size ``model_name`` was exported at (``images`` is
+        ``[N, 3, H, W]``; 640 when dynamic or absent), cached for
+        ``_MODEL_INFO_TTL_S``. A model promoted at another size would otherwise
+        fail with a shape error."""
+        now = time.monotonic()
+        cached = self._model_info.get(model_name)
+        if cached is not None and cached[0] > now:
+            return cached[1], cached[2]
+        metadata = self.client.get_model_metadata(model_name)
+        adapter = resolve_adapter(metadata)
+        size = self.input_size
+        for tensor in metadata.inputs:
+            dims = [int(d) for d in tensor.shape]
+            if tensor.name == 'images' and len(dims) == 4 and dims[2] > 0:
+                size = dims[2]
+        self._model_info[model_name] = (now + _MODEL_INFO_TTL_S, adapter, size)
+        return adapter, size
+
     def _get_detection_adapter(self, model_name: str) -> DetectionAdapter:
-        """Resolve (and cache) the output adapter for a detection model."""
-        adapter = self._detection_adapters.get(model_name)
-        if adapter is None:
-            metadata = self.client.get_model_metadata(model_name)
-            adapter = resolve_adapter(metadata)
-            self._detection_adapters[model_name] = adapter
-        return adapter
+        return self._read_model_info(model_name)[0]
+
+    def _model_input_size(self, model_name: str) -> int:
+        return self._read_model_info(model_name)[1]
 
     # =========================================================================
     # YOLO End2End: CPU Preprocessing + TensorRT + GPU NMS
@@ -112,47 +134,7 @@ class TritonClient:
         Returns:
             Dict with num_dets, boxes, scores, classes, orig_shape, scale, padding
         """
-        orig_h, orig_w = image_array.shape[:2]
-
-        # Convert BGR to RGB
-        image_rgb = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
-
-        # Ultralytics LetterBox for exact preprocessing match
-        letterbox = LetterBox(
-            new_shape=(self.input_size, self.input_size), auto=False, scaleup=False
-        )
-        img_letterbox = letterbox(image=image_rgb)
-
-        # Calculate transformation parameters
-        scale = min(self.input_size / orig_h, self.input_size / orig_w)
-        scale = min(scale, 1.0)
-
-        new_unpad_w = round(orig_w * scale)
-        new_unpad_h = round(orig_h * scale)
-        pad_w = (self.input_size - new_unpad_w) / 2.0
-        pad_h = (self.input_size - new_unpad_h) / 2.0
-        padding = (pad_w, pad_h)
-
-        # Normalize, HWC->CHW, add batch dim
-        img_norm = img_letterbox.astype(np.float32) / 255.0
-        img_chw = np.transpose(img_norm, (2, 0, 1))
-        input_data = np.expand_dims(img_chw, axis=0)
-
-        inputs = [InferInput('images', input_data.shape, 'FP32')]
-        inputs[0].set_data_from_numpy(input_data)
-
-        adapter = self._get_detection_adapter(model_name)
-        outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
-
-        response = self._infer_with_retry(model_name, inputs, outputs)
-        detections = adapter.parse(response, batch_size=1)[0]
-
-        return {
-            **detections,
-            'orig_shape': (orig_h, orig_w),
-            'scale': scale,
-            'padding': padding,
-        }
+        return self.infer_yolo_end2end_batch([image_array], model_name)[0]
 
     def infer_yolo_end2end_batch(self, images: list, model_name: str) -> list:
         """
@@ -165,9 +147,8 @@ class TritonClient:
         Returns:
             List of dicts with num_dets, boxes, scores, classes, orig_shape, scale, padding
         """
-        letterbox = LetterBox(
-            new_shape=(self.input_size, self.input_size), auto=False, scaleup=False
-        )
+        size = self._model_input_size(model_name)
+        letterbox = LetterBox(new_shape=(size, size), auto=False, scaleup=False)
 
         orig_shapes = []
         scales = []
@@ -181,14 +162,14 @@ class TritonClient:
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img_letterbox = letterbox(image=img_rgb)
 
-            scale = min(self.input_size / orig_h, self.input_size / orig_w)
+            scale = min(size / orig_h, size / orig_w)
             scale = min(scale, 1.0)
             scales.append(scale)
 
             new_unpad_w = round(orig_w * scale)
             new_unpad_h = round(orig_h * scale)
-            pad_w = (self.input_size - new_unpad_w) / 2.0
-            pad_h = (self.input_size - new_unpad_h) / 2.0
+            pad_w = (size - new_unpad_w) / 2.0
+            pad_h = (size - new_unpad_h) / 2.0
             paddings.append((pad_w, pad_h))
 
             img_norm = img_letterbox.astype(np.float32) / 255.0
@@ -212,6 +193,7 @@ class TritonClient:
                 'orig_shape': orig_shapes[i],
                 'scale': scales[i],
                 'padding': paddings[i],
+                'input_size': size,
             }
             for i, detections in enumerate(adapter.parse(response, batch_size))
         ]
@@ -241,15 +223,16 @@ class TritonClient:
         orig_w, orig_h = img.size
         img_array = np.array(img)  # HWC, RGB, uint8
 
-        # YOLO preprocessing (CPU letterbox)
-        yolo_input, scale, padding = self._preprocess_yolo_cpu(img_array)
+        # YOLO preprocessing (CPU letterbox) at the configured detector's own size
+        yolo_model = TritonModelConfig.YOLO_MODEL
+        yolo_size = self._model_input_size(yolo_model)
+        yolo_input, scale, padding = self._preprocess_yolo_cpu(img_array, yolo_size)
 
         # CLIP preprocessing (CPU resize/crop)
         clip_input = self._preprocess_clip_cpu(img_array)
 
         # Run YOLO TRT inference (default detector; adapter handles either
         # the end2end 4-tensor or the fused single-tensor contract)
-        yolo_model = TritonModelConfig.YOLO_MODEL
         adapter = self._get_detection_adapter(yolo_model)
         yolo_inputs = [InferInput('images', yolo_input.shape, 'FP32')]
         yolo_inputs[0].set_data_from_numpy(yolo_input)
@@ -281,7 +264,7 @@ class TritonClient:
                 (orig_h, orig_w),
                 scale,
                 padding,
-                self.input_size,
+                yolo_size,
             ).astype(np.float32)
             from src.services.cpu_preprocess import embed_boxes_from_full_res
 
@@ -295,14 +278,16 @@ class TritonClient:
             'orig_shape': (orig_h, orig_w),
             'scale': scale,
             'padding': padding,
+            'input_size': yolo_size,
             'normalized_boxes': normalized_boxes,
             'box_embeddings': box_embeddings,
         }
 
-    def _preprocess_yolo_cpu(self, img_array: np.ndarray) -> tuple[np.ndarray, float, tuple]:
-        """CPU letterbox preprocessing for YOLO."""
+    def _preprocess_yolo_cpu(
+        self, img_array: np.ndarray, target_size: int
+    ) -> tuple[np.ndarray, float, tuple]:
+        """CPU letterbox preprocessing for YOLO at ``target_size``."""
         orig_h, orig_w = img_array.shape[:2]
-        target_size = self.input_size  # 640
 
         scale = min(target_size / orig_h, target_size / orig_w)
         scale = min(scale, 1.0)
@@ -556,7 +541,9 @@ class TritonClient:
         ``model_name`` the detection came from (see
         :func:`src.utils.affine.format_detections_from_triton`).
         """
-        return format_detections_from_triton(result, input_size=640, model_name=model_name)
+        return format_detections_from_triton(
+            result, input_size=result.get('input_size', 640), model_name=model_name
+        )
 
     # =========================================================================
     # Optimized Batched Inference Methods (Bypass Python BLS)

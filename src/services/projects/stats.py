@@ -44,7 +44,7 @@ async def validated_count(client: Any, items_index: str) -> int | None:
         return None
 
 
-async def _index_count(client: Any, index: str) -> int:
+async def index_count(client: Any, index: str) -> int:
     try:
         resp = await client.count(index=index)
         return int(resp.get('count') or 0)
@@ -85,8 +85,8 @@ async def project_stats(client: Any) -> dict[str, Any]:
     images_idx = images_index()
     classes_idx = classes_index()
 
-    images_count = await _index_count(client, images_idx)
-    items_count = await _index_count(client, items_idx)
+    images_count = await index_count(client, images_idx)
+    items_count = await index_count(client, items_idx)
     validated = await validated_count(client, items_idx)
     from src.config.region_state import RegionStatus
 
@@ -94,7 +94,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
         client, items_idx, 'region_status', RegionStatus.PENDING_DETECTION.value
     )
     holdout_items = await _term_count(client, items_idx, 'holdout', True)
-    classes_count = await _index_count(client, classes_idx)
+    classes_count = await index_count(client, classes_idx)
 
     indexes = []
     for role, name in bound.record.resources.indexes.items():

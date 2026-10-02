@@ -23,6 +23,7 @@ from src.services.curation.region_requeue import (
     apply_requeue_ids,
     requeue_breakdown,
 )
+from src.services.curation.region_scope import parent_classes_clause
 from src.services.curation.reprocess_locks import region_set_locked
 from src.services.curation.reprocess_models import BreakdownRow, ReprocessScopeResult
 from src.services.curation.reprocess_targets import (
@@ -31,6 +32,7 @@ from src.services.curation.reprocess_targets import (
     items_by_terms,
     selector_clauses,
 )
+from src.services.detection.profile_registry import get_active_region_profile
 
 
 if TYPE_CHECKING:
@@ -82,6 +84,10 @@ def region_selections(f: ReprocessFilter, mode: RegionMode) -> list[RequeueSelec
     if detected and not f.include_detected:
         raise ReprocessTargetsError('detected is only selectable with include_detected')
     extra = tuple(selector_clauses(f))
+    # An item with no status is only ever seeded when its class is one of the
+    # active profile's parent classes, so only those can be queued.
+    active = get_active_region_profile()
+    in_scope = parent_classes_clause(active.parent_classes) if active is not None else None
     try:
         return [
             RequeueSelection(
@@ -90,7 +96,7 @@ def region_selections(f: ReprocessFilter, mode: RegionMode) -> list[RequeueSelec
                 detectors=tuple(f.detector),
                 reasons=tuple(f.reason),
                 missing_provenance=f.missing_provenance,
-                extra=extra,
+                extra=(*extra, in_scope) if status is None and in_scope is not None else extra,
                 allow_detected=detected,
             )
             for status in statuses

@@ -58,7 +58,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TritonClient:
     c.max_retries = 1
     c.retry_base_delay = 0.0
     c.retry_max_delay = 0.0
-    c._detection_adapters = {}
+    c._model_info = {}
 
     def fake_infer_with_retry(model_name: str, inputs: list, outputs: list):
         if model_name == 'mobileclip2_s2_image_encoder':
@@ -68,6 +68,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TritonClient:
 
     monkeypatch.setattr(c, '_infer_with_retry', fake_infer_with_retry)
     monkeypatch.setattr(c, '_get_detection_adapter', lambda model_name: _FakeAdapter())  # noqa: ARG005
+    monkeypatch.setattr(c, '_model_input_size', lambda model_name: 640)  # noqa: ARG005
     return c
 
 

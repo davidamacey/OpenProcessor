@@ -90,3 +90,21 @@ def test_never_by_index_category_id_ignored(tmp_path: Path) -> None:
     ann_path = _write(tmp_path, 'instances_train.json', data)
     scan = scan_coco([CocoAnnotationFile(path=ann_path, images_dir=tmp_path)])
     assert scan.entries[0].boxes[0].dataset_class == 'car'
+
+
+def test_images_beside_annotations_is_detected_as_coco(tmp_path: Path) -> None:
+    from src.services.curation.dataset_import.scan import detect_format
+
+    (tmp_path / 'images').mkdir()
+    (tmp_path / 'annotations').mkdir()
+    _write(tmp_path / 'annotations', 'instances_val.json', _base_data())
+    assert detect_format(tmp_path) == 'coco'
+
+
+def test_a_labels_directory_keeps_images_beside_annotations_yolo(tmp_path: Path) -> None:
+    from src.services.curation.dataset_import.scan import detect_format
+
+    for name in ('images', 'labels', 'annotations'):
+        (tmp_path / name).mkdir()
+    _write(tmp_path / 'annotations', 'instances_val.json', _base_data())
+    assert detect_format(tmp_path) == 'yolo'

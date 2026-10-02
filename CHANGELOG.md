@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private history of this codebase; v0.1.0 is the first public release.
+
 ## [Unreleased]
 
 ### Documentation
@@ -27,6 +29,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `POST /models/{name}/unload` goes through the same unload guard as the delete routes
+  (403 for the configured detector and the OCR models even with `force`, 409 for core
+  models without `force`; it gained the `force` query parameter). It unloaded the OCR
+  models unguarded.
+- `SegmenterClient.segment()` raises `SegmenterRequestFailed` like `segment_multi` when a
+  request fails, and the text-hint sub-crop re-pass leaves the crop pending when the
+  segmenter is unavailable. A failed request used to be recorded as `text_hint:miss`.
+- Undoing a dataset import whose ledger predates per-box ledgering no longer raises
+  `KeyError: 'bbox_norm'`; such a box is kept.
+- The detector's input size read from Triton metadata is re-read every 30 s instead of
+  cached for the life of the process, so a model re-promoted under the same name at
+  another size is picked up without restarting the API workers. The ingest/analyze
+  YOLO+CLIP path (`infer_yolo_clip_cpu`, `/analyze`) now letterboxes to that size too
+  instead of a hard-coded 640. Paths that pre-letterbox to a fixed 640 (the batched
+  `infer_yolo_batch` input in visual search and `cpu_preprocess`) are unchanged.
+- The installer script reports the current release version (it printed 0.2.0).
+- `POST /prompt_packs/{name}/activate`, `POST /region_profiles/{name}/activate` and
+  `GET /region_profiles/active/impact` declare typed responses in the OpenAPI contract.
+- `GET /ingest/region_drain` exposes `stall_reason` for a segmenter-only region profile
+  too (it reported no dependencies, so the reason stayed null while the segmenter was
+  down).
+- While OpenSearch is down the client's per-request tracebacks (one per poll per worker)
+  become one `opensearch unreachable` warning with doubling backoff up to 60 s.
+- Installer and CLI wording: an `images.lock` that still holds a development placeholder
+  digest says so (this checkout is not a release; install one or pass `--image-tag`), and
+  `openprocessor vlm status` prints the requested model on its `desired:` line (it printed
+  the served model's id).
+- `class_mapping_invalid` says what is wrong and how to fix it (`nope: class_mapping_invalid
+  (this dataset has no class with that name; ...)`) instead of repeating the bare code.
+- VLM catalog: `qwen3-vl-4b` (measured about 14 GiB resident, multi-box verified live) is
+  `tested` like `gemma-4-e4b`, so a 36 GB card auto-picks it; the catalog test now requires
+  every tested row to carry a measured size note instead of exactly one tested row.
+- `/detect` and `/detect/batch` letterbox to the input size the model was exported at,
+  read from its Triton metadata and cached per model (they always used 640, so a model
+  promoted at another size failed with a Triton shape error).
+- Default training preflight no longer blocks on the active region profile's class: that
+  class (seeded into every project) labels sub-boxes and has no per-item samples, so
+  `include_classes: null` now resolves to the item classes only. Nothing seeds a
+  domain-specific class by itself; the seeded class always comes from the active profile.
+- **Public `DELETE /models/{name}` has the same guard and `force` as the project-scoped
+  unload route.** It deleted the primary detector's files without a question. Both routes
+  now call one `check_unload` (`src/services/model_unload_guard.py`): the configured
+  detector and OCR models are 403 even with `force`, other core pipeline models are 409
+  unless `?force=true`, and nothing is deleted when any model of the family is refused.
+- `GET /region_profiles/schema` is no longer a placeholder (#39): one typed row per
+  profile field (`int`, `float`, `bool`, `string_list`, `int_list`, `float_pair`, `rgb`),
+  its group, range, default, choice source, `applies_when` and `advanced` flag, with a
+  typed `RegionProfileSchema` response model.
+- **Dataset format auto-detection** (#39): `images/` next to `annotations/*.json` (no
+  `labels/` directory) is detected as COCO instead of YOLO; a `labels/` directory still
+  marks YOLO. The docs no longer say a COCO layout must name its format.
+- `POST /reprocess` with `scope: region` and `missing_status` queues, and counts, only
+  the items whose class is one of the active profile's parent classes (it used to count
+  every item with no region status) (#39).
+- `PUT /models/{name}/sharing` fills `used_by` from every other project's live active
+  detection profile (read-only, one project at a time, configs index only) instead of
+  always `[]`. Unsharing a model another project runs on is `409 in_use` (naming the
+  projects) unless `force`; if a project cannot be read it is `503 config_store_unavailable`
+  unless `force` (#39).
+- **Release version is 0.1.0 everywhere** (#39): `VERSION`, `pyproject.toml`,
+  `docs-site/package.json` (and its lockfile), the compose default image tag, the roadmap
+  and the installer test double all say 0.1.0 (they said 0.3.0 while the docs and the
+  release said v0.1.0). `tests/test_version_consistency.py` pins them together.
+- `make opensearch-reset-indexes` is removed: it called `DELETE /index` and
+  `POST /index/create`, which have never been routes. `tests/test_makefile_routes.py`
+  checks that every API route a Makefile target calls exists.
+- The 0.1.0 changelog entry for the removed item keys now says 106 item keys remain
+  (`contracts/json/item_wire.json`), not 88.
+- **W9 follow-ups** (#38).
+  - A malformed `OP_VLM_URL` port (`http://h:abc`) means "no env endpoint" instead of a
+    500 from `/vlm/endpoints` and `vlm_configured()`.
+  - Probe docs are read page by page (`search_after`) so more than 1000 no longer drop
+    off the registry, and a probe doc with no `probe_key` is skipped with a warning.
+  - A labeler the cache evicts keeps its HTTP client open while anything still holds it
+    (a long auto-label job) and is closed once the last reference is gone, replacing the
+    fixed close delay.
+  - The endpoint host check (DNS) runs in a worker thread: `assert_may_connect` for the
+    VLM routes, the auto-label job and the model-status probe, and the labeler's own
+    pre-send re-check no longer resolve on the event loop.
+  - `openprocessor vlm use` undoes its pause and `.env` edit on Ctrl-C or SIGTERM, and
+    recreates the running API and workers when the model's image cap
+    (`OP_VLM_MAX_IMAGES_PER_CALL`) changes, not only on the first alias migration.
+- **A settings-document `prompt_pack` key no longer overrides the active pack**
+  (#32). `prompt_pack`, `detection_profile` and `vlm` defaults are owned by the config
+  store's activation record: `resolve_effective_default` never reads a settings-doc
+  key for them, and `GET /settings` drops any leftover one, so a run that omits
+  `prompt_pack` always uses the pack `GET /settings` reports.
+- **Combine's served next step** is now `POST /cluster/umap/rebuild` under the project
+  mount (it was the unscoped core route `POST /clusters/train`, which 404s from a
+  project client). Every `next_steps` entry a job report serves is built in
+  `src/services/curation/next_steps.py`, and one test resolves each against the
+  published OpenAPI.
+- `GET /prompt_packs/active`, `GET /region_profiles/active` and their rollback and
+  deactivate responses publish the typed `ActiveConfigResponse` schema.
 - **W5/W6/W10 review fixes** (`w5_w6_review_2026-10-01`).
   - **`POST /region_profiles/test` prompt override.** `segmenter_text_prompt`
     on the default (active-profile) path is now validated by the same
@@ -55,11 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     human edit through `PUT /crops/{id}/regions`, and runs `POST
     /train/preflight` on the export. A fixture test checks COCO class names
     against the YAML names independently of the builder.
-  - **Deferred.** `scripts/datasets/manifests/coco_car_60.json` and
-    `coco_import_96.json` are not generated (they need network access; run
-    `make sample-coco-cars` on a networked host and commit them);
-    `test_pinned_manifest_is_sixty_cc_by_cars` skips with that reason until
-    then. The plan's `region_set_complete: false` car and the export's
+  - **Pinned manifests.** `scripts/datasets/manifests/coco_car_60.json` and
+    `coco_import_88.json` were generated live (88, not 96: val2017 has only 20
+    CC BY trucks); `test_pinned_manifest_is_sixty_cc_by_cars` runs against the
+    car pin. The plan's `region_set_complete: false` car and the export's
     `skipped_incomplete_sets` manifest key are not in the E2E: neither the
     worker nor the export has a code path for them yet, so there is nothing to
     assert offline.
@@ -842,7 +937,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `region_text_vlm_invalid`, `region_candidate_*`, `region_cluster_id` /
   `region_cluster_subid` / `region_cluster_distance`,
   `region_bbox_in_parent`, `region_candidate_bbox_in_parent` and the
-  item-level `region_thumbnail_url` (88 item keys now). Nothing in this
+  item-level `region_thumbnail_url` (106 item keys now). Nothing in this
   repository reads them: the data is an element of `region_boxes[]`
   (`bbox_in_parent`, `thumbnail_url` per box). The `crop.region_verified`
   event carries `region_count` instead of `region_text`. The worker no longer

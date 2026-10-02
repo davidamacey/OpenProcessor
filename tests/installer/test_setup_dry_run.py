@@ -748,6 +748,8 @@ def test_committed_placeholder_lock_is_refused_not_installed(
     result = dry(shimmed)
     assert result.returncode == 7
     assert '--image-tag' in result.stderr
+    assert 'development placeholder digest' in result.stderr
+    assert 'this checkout is not a release' in result.stderr
 
 
 def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:

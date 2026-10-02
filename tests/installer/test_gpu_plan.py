@@ -116,11 +116,12 @@ def test_unknown_vlm_id_refused() -> None:
     assert 'not in the VLM catalog' in kv['refuse']
 
 
-def test_36gb_has_no_trainer_by_default_and_no_tested_vlm() -> None:
+def test_36gb_has_no_trainer_by_default_and_picks_the_smaller_tested_vlm() -> None:
     rc, kv, _ = plan([(0, gb(36), 0)])
     assert rc == 0
     assert 'trainer' not in kv['recommended_tiers']
-    assert kv['VLM_CATALOG_ID'] == ''
+    assert kv['VLM_CATALOG_ID'] == 'qwen3-vl-4b'
+    assert kv['vlm_status'] == 'tested'
 
 
 def test_48gb_single_card_picks_the_tested_vlm_after_triton_and_segmenter() -> None:

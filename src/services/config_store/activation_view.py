@@ -55,26 +55,10 @@ async def build_active_config_response(client: Any, *, axis: Axis) -> ActiveConf
         else None
     )
 
-    applied: list[AppliedRuntime] = []
     try:
         docs = await get_runtime_docs(client, store.index, process='detection_worker')
     except Exception:  # pragma: no cover - defensive; applied[] degrades to empty
         docs = []
-    for doc in docs:
-        profile_ref = doc.get('profile') or {}
-        pack_ref = doc.get('pack') or {}
-        applied_rev = int(doc.get('applied_config_revision') or 0)
-        applied.append(
-            AppliedRuntime(
-                process=doc.get('process', 'detection_worker'),
-                host=doc.get('host', ''),
-                applied_config_revision=applied_rev,
-                profile=ActiveRef(**profile_ref) if profile_ref else ActiveRef(),
-                pack=ActiveRef(**pack_ref) if pack_ref else ActiveRef(),
-                applied_at=doc.get('applied_at'),
-                lagging=applied_rev < snapshot.config_revision,
-            )
-        )
 
     return ActiveConfigResponse(
         axis=axis,
@@ -84,7 +68,10 @@ async def build_active_config_response(client: Any, *, axis: Axis) -> ActiveConf
         previous=previous,
         config_revision=snapshot.config_revision,
         stale=snapshot.stale,
-        applied=applied,
+        applied=[
+            AppliedRuntime.from_runtime_doc(d, config_revision=snapshot.config_revision)
+            for d in docs
+        ],
     )
 
 

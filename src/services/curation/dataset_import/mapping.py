@@ -85,6 +85,11 @@ class MappingError:
     dataset_class: str | None = None
     message: str = ''
 
+    def describe(self) -> str:
+        """``class: code (what is wrong)``, the one rendering of an error."""
+        base = f'{self.dataset_class}: {self.code}' if self.dataset_class else self.code
+        return f'{base} ({self.message})' if self.message else base
+
 
 @dataclass
 class ResolvedMapping:
@@ -170,11 +175,19 @@ def resolve_mapping(
     for e in entries:
         if e.dataset_class not in known:
             result.errors.append(
-                MappingError('class_mapping_invalid', e.dataset_class, 'not a dataset class')
+                MappingError(
+                    'class_mapping_invalid',
+                    e.dataset_class,
+                    'this dataset has no class with that name; check the spelling against the preview',
+                )
             )
         elif e.dataset_class in by_class:
             result.errors.append(
-                MappingError('class_mapping_invalid', e.dataset_class, 'mapped more than once')
+                MappingError(
+                    'class_mapping_invalid',
+                    e.dataset_class,
+                    'the mapping lists this class more than once; keep one row',
+                )
             )
         else:
             by_class[e.dataset_class] = e
@@ -210,7 +223,11 @@ def resolve_mapping(
             target = by_id.get(entry.class_id) if entry.class_id is not None else None
             if target is None:
                 result.errors.append(
-                    MappingError('class_mapping_invalid', dataset_class, 'unknown class_id')
+                    MappingError(
+                        'class_mapping_invalid',
+                        dataset_class,
+                        f'action map needs the class_id of an existing project class; got {entry.class_id!r}',
+                    )
                 )
                 continue
             if target.deprecated:
@@ -240,7 +257,13 @@ def resolve_mapping(
             )
             continue
 
-        result.errors.append(MappingError('class_mapping_invalid', dataset_class, entry.action))
+        result.errors.append(
+            MappingError(
+                'class_mapping_invalid',
+                dataset_class,
+                f'unknown action {entry.action!r}; use map, create, skip or region',
+            )
+        )
 
     return result
 

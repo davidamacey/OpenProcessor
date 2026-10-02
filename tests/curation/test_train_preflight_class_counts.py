@@ -89,3 +89,26 @@ async def test_opensearch_failure_returns_zeros_for_every_class() -> None:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_default_target_classes_leave_out_the_region_class(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every project seeds the active profile's region class with no per-item
+    samples; requiring them blocked the default preflight."""
+    from types import SimpleNamespace
+
+    from src.routers import curation_train
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    def entry(class_id: int, name: str) -> SimpleNamespace:
+        return SimpleNamespace(class_id=class_id, class_name=name, deprecated=False)
+
+    profile = get_active_region_profile()
+    assert profile is not None
+    region_name = profile.region_class_name
+    registry = SimpleNamespace(
+        load=lambda: SimpleNamespace(classes=[entry(0, region_name), entry(1, 'car')])
+    )
+    monkeypatch.setattr(curation_train, 'get_class_registry', lambda: registry)
+    spec: Any = SimpleNamespace(include_classes=None)
+    assert curation_train._resolve_target_classes(spec) == [1]

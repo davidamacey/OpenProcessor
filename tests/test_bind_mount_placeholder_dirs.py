@@ -105,3 +105,30 @@ def test_recovery_step_is_documented_for_an_already_root_owned_install() -> None
         'F-71: an install whose test_images/ is already root-owned from '
         'before this fix needs a documented one-time recovery step'
     )
+
+
+def test_secrets_are_gitignored_and_precreated_private() -> None:
+    """Found live: docker auto-created ./secrets/vlm root-owned on first `up`,
+    so `openprocessor vlm key set` could not write a key; and ./secrets was
+    not gitignored, so a key written there could be committed."""
+    assert _git_check_ignore('secrets/vlm/extkey')
+    assert 'secrets/vlm' in MAKEFILE
+
+
+def test_cli_start_precreates_every_bind_mount_dir_as_the_user(tmp_path: Path) -> None:
+    lib = REPO_ROOT / 'scripts' / 'lib' / 'bind_dirs.sh'
+    root = tmp_path / 'deploy'
+    (root / 'src').mkdir(parents=True)
+    (root / 'src' / 'main.py').write_text('')
+
+    subprocess.run(
+        ['bash', '-c', f'source {lib} && ensure_bind_mount_dirs {root}'],
+        check=True,
+        capture_output=True,
+        timeout=10,
+    )
+
+    for rel in ('secrets/vlm', 'data/source', 'cache/huggingface', 'cache/vllm', 'test_images'):
+        assert (root / rel).is_dir(), rel
+    assert (root / 'secrets').stat().st_mode & 0o077 == 0, 'secrets/ must be private'
+    assert 'ensure_bind_mount_dirs "$PROJECT_DIR"' in (REPO_ROOT / 'openprocessor').read_text()

@@ -205,8 +205,8 @@ def omitted_pack_is_store_active(resolved_name: str | None) -> bool:
     ``labeler_resolution_args``'s ``(None, None)`` re-resolution exists
     only to dodge the store-active-pack TOCTOU (R6-1b): the echoed name
     can go STALE between request time and the VLM stage actually running,
-    once a *different* pack is activated. A legacy-settings-doc or
-    env/file default has no such staleness -- nothing "activates" out
+    once a *different* pack is activated. An env/file default
+    has no such staleness -- nothing "activates" out
     from under it -- so forcing it through ``(None, None)`` instead just
     makes the job silently run ``active_prompt_pack()`` (the env/file
     default) while the summary/echo keeps reporting the settings-doc

@@ -135,7 +135,7 @@ def test_start_omitted_resolves_to_settings_default(client: TestClient) -> None:
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 @pytest.mark.asyncio
-async def test_start_honors_settings_doc_default_when_omitted(
+async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.routers.curation import pipeline_start
@@ -153,7 +153,7 @@ async def test_start_honors_settings_doc_default_when_omitted(
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(opensearch=object())
-    assert captured['prompt_pack'] == 'food_v2'
+    assert captured['prompt_pack'] == 'pallet_v1'
 
 
 # =============================================================================

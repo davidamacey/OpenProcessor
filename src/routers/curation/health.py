@@ -77,7 +77,18 @@ async def vlm_status(client: Any = None, *, scoped: bool = True) -> dict[str, An
         if endpoint is None:
             status['detail'] = 'no VLM endpoint is configured'
             return status
-        labeler = _get_vlm_labeler(endpoint=endpoint)
+        from src.services.labeling.vlm_factory import assert_may_connect
+
+        await assert_may_connect(endpoint)
+        if scoped:
+            labeler = _get_vlm_labeler(endpoint=endpoint)
+        else:
+            # A health probe sends no prompt, and the project-scoped pack
+            # lookup `_get_vlm_labeler` does needs a bound project.
+            from src.services.labeling.vlm_factory import labeler_for
+            from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+            labeler = labeler_for(endpoint, GENERIC_ITEM_PACK)
         h = await labeler.health()
         status['reachable'] = h.reachable
         status['model'] = h.model

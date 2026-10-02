@@ -126,7 +126,7 @@ The mapping is a list of `{dataset_class, action, ...}` rows where `action`
 is `map` (`class_id`), `create` (`new_class_name`, `new_class_group`), `skip`
 or `region`. Every class that has boxes needs a decision
 (`422 class_mapping_incomplete` lists the `unmapped` names). A COCO layout
-is not auto-detected: send `source.format: "coco"`.
+(`images/` next to `annotations/*.json`) is detected automatically.
 
 ## Reprocess
 

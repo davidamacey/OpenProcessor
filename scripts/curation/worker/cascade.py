@@ -9,8 +9,7 @@ The pre-W8 single-candidate cascade (``_process_crop`` + its
 (confirmed zero production callers before removal; see the W8 pipeline-
 wiring handback report). This module now only keeps the pending-fetch
 query, the crop/geometry helpers ``runner.py`` still calls, and the
-``SegmenterClient`` / ``SegmenterAllHostsDown`` re-exports other modules
-import from here.
+``SegmenterClient`` re-export other modules import from here.
 """
 
 from __future__ import annotations
@@ -36,8 +35,7 @@ logger = get_logger('curation_worker')
 
 
 from scripts.curation.worker.client import (
-    SegmenterAllHostsDown,  # noqa: F401  # back-compat re-export for runner/tests
-    SegmenterClient,  # noqa: TC001  # runtime back-compat re-export for shim + tests
+    SegmenterClient,  # noqa: TC001  # runtime re-export for shim + tests
 )
 from scripts.curation.worker.state import JPEG_QUALITY, _ItemTask, items_index
 

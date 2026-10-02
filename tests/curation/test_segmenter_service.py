@@ -33,7 +33,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from scripts.curation.worker.client import SegmenterClient
+from scripts.curation.worker.client import SegmenterClient, SegmenterRequestFailed
 from src.services.detection.cascade_detect import crop_norm_to_source_norm
 
 
@@ -229,7 +229,8 @@ class TestClientServerContract:
 
     @pytest.mark.asyncio
     async def test_model_still_loading_is_a_503_the_client_absorbs(self) -> None:
-        """An unloaded pool 503s; the client degrades to ``None``, not an exception.
+        """An unloaded pool 503s; the client raises ``SegmenterRequestFailed``
+        (never a "no candidate" ``None``).
 
         Readiness is checked before the body is decoded, so a malformed
         payload during startup still reports the real problem.
@@ -250,7 +251,8 @@ class TestClientServerContract:
                     text_prompt=_PROMPT,
                     source_name='sam3',
                 )
-                assert await client.segment(_make_jpeg()) is None
+                with pytest.raises(SegmenterRequestFailed):
+                    await client.segment(_make_jpeg())
         finally:
             segmenter._pool = previous
 

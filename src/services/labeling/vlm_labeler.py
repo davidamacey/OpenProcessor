@@ -88,7 +88,7 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     import httpx
 
@@ -706,7 +706,7 @@ class VlmLabeler:
         json_mode: bool = True,
         open_images_per_call: int | None = None,
         identity: VlmIdentity | None = None,
-        egress_check: Callable[[], None] | None = None,
+        egress_check: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         if base_url and not model:
             raise ValueError(
@@ -763,6 +763,18 @@ class VlmLabeler:
 
     # ----- lifecycle -----
 
+    def client_closer(self) -> Callable[[], Awaitable[None]]:
+        """A callable that closes the owned HTTP client and does not reference
+        this labeler (so it can run from the labeler's own finalizer)."""
+        client = self._client
+        if not self._owns_client:
+
+            async def _nothing() -> None:
+                return None
+
+            return _nothing
+        return client.aclose
+
     async def aclose(self) -> None:
         """Close the underlying httpx client (if owned)."""
 
@@ -794,7 +806,7 @@ class VlmLabeler:
 
         try:
             if self._egress_check is not None:
-                self._egress_check()
+                await self._egress_check()
             url = f'{self.base_url}/chat/completions'
             response = await post_chat_with_retry(
                 self._client, url, self._headers, payload, self._bucket

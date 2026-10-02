@@ -82,7 +82,8 @@ help: ## Show this help message
 .PHONY: ensure-host-bind-mount-dirs
 ensure-host-bind-mount-dirs: ## F-29/F-71: pre-create bind-mount source dirs as the invoking (host) user, before compose ever runs. Docker auto-creates a missing bind-mount source root-owned on first 'up', which then blocks any host-user write into it (e.g. 'make download-test-images') -- and, if a tracked placeholder file is ever shipped inside one of these, blocks 'git pull' too (F-71). Run before every 'up' target instead of shipping a tracked file inside them.
 	@mkdir -p test_images data/source cache/huggingface cache/vllm
-	@for d in test_images data/source cache/huggingface cache/vllm; do \
+	@(umask 077; mkdir -p secrets/vlm)
+	@for d in test_images data/source cache/huggingface cache/vllm secrets/vlm; do \
 		owner="$$(stat -c '%U' "$$d" 2>/dev/null || echo unknown)"; \
 		if [ "$$owner" != "$$(id -un)" ] && [ "$$(stat -c '%u' "$$d" 2>/dev/null)" = "0" ]; then \
 			echo "WARNING: $$d is root-owned (likely from a Docker auto-create before this fix)."; \
@@ -1042,14 +1043,6 @@ opensearch-indices: ## List OpenSearch indices
 	@echo "OpenSearch Indices:"
 	@curl -s http://localhost:$(OPENSEARCH_PORT)/_cat/indices?v
 
-.PHONY: opensearch-reset-indexes
-opensearch-reset-indexes: ## Reset all OpenSearch indexes (delete and recreate)
-	@echo "Resetting OpenSearch indexes..."
-	@curl -s -X DELETE "http://localhost:$(API_PORT)/index" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message','deleted'))" 2>/dev/null || true
-	@sleep 1
-	@curl -s -X POST "http://localhost:$(API_PORT)/index/create" | python3 -c "import sys,json; print('Indexes created:', json.load(sys.stdin).get('status','unknown'))" 2>/dev/null
-	@echo "Done."
-
 # ==================================================================================
 # Documentation
 # ==================================================================================
@@ -1175,11 +1168,11 @@ sample-coco-cars: ## Fetch the public COCO car subset for the wheel example (60 
 		--manifest scripts/datasets/manifests/coco_car_60.json
 
 .PHONY: sample-coco-import
-sample-coco-import: ## Fetch the public COCO import fixture (96 val2017 images, CC BY) and build the 4 dataset layouts
+sample-coco-import: ## Fetch the public COCO import fixture (88 val2017 images, CC BY) and build the 4 dataset layouts
 	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_import \
 		--classes car,truck,bus --per-class 28 --negatives 12 --val-only \
 		--licenses by --seed 20260925 \
-		--manifest scripts/datasets/manifests/coco_import_96.json
+		--manifest scripts/datasets/manifests/coco_import_88.json
 	$(PYTHON) scripts/datasets/build_import_fixture.py \
 		--src data/samples/coco_import --out data/samples/import_fixture
 
@@ -1223,7 +1216,7 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         triton-unload-all triton-models triton-load triton-unload \
         check-all \
         clean clean-all clean-logs clean-bench clean-exports \
-        opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
+        opensearch-reset opensearch-status opensearch-indices \
         info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
         curation-up curation-down curation-logs curation-status curation-seed \

@@ -18,11 +18,10 @@ index. A dataset's class order is not trusted across the boundary.
   bounding box), `coco` (instances JSON files, with an images directory per
   file) and `openprocessor_export` (an export written by this system, which
   can be re-imported where it was written). `auto` detects the layout.
-  Detection order: export, then YOLO (a `data.yaml`, an `images/`
-  directory, or a child directory with `images/`), then COCO (an
-  `annotations/` directory with JSON files). A COCO dataset that has
-  `images/` next to `annotations/` is detected as YOLO, so name `coco` in
-  `source.format` for it.
+  Detection order: export, then YOLO (a `data.yaml`), then COCO (an
+  `annotations/` directory with JSON files and no `labels/` directory, which
+  includes `images/` next to `annotations/`), then YOLO (an `images/`
+  directory, or a child directory with `images/`).
 - **Allowed paths.** `source.path` must be absolute and, after symlinks are
   resolved, sit under a configured image source root (`OP_SOURCE_ROOT` and
   `OP_SOURCE_PATH_ALIASES`), the project's upload root, or the project's

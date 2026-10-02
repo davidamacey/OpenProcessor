@@ -57,6 +57,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from opensearchpy import AsyncOpenSearch
+from opensearchpy.exceptions import RequestError
 from opensearchpy.helpers import async_bulk
 
 
@@ -587,6 +588,8 @@ class OpenSearchClient:
                 'index': {
                     'number_of_shards': 1,
                     'number_of_replicas': 0,
+                    # OpenSearch rejects max_gram - min_gram > 1 unless raised.
+                    'max_ngram_diff': 13,
                 },
                 'analysis': {
                     'analyzer': {
@@ -600,7 +603,11 @@ class OpenSearchClient:
                         'trigram_filter': {
                             'type': 'ngram',
                             'min_gram': 2,
-                            'max_gram': 4,
+                            # The query is analysed with `standard` (one term
+                            # per word), so a word only matches if it was
+                            # indexed whole: grams must reach the longest
+                            # word worth searching for.
+                            'max_gram': 15,
                         },
                     },
                 },
@@ -650,6 +657,14 @@ class OpenSearchClient:
             logger.info(f'Index created successfully: {index_name}')
             return True
 
+        except RequestError as e:
+            # Every API worker creates the indexes at startup, so losing the
+            # create race to a sibling means the index exists: success.
+            if e.error == 'resource_already_exists_exception':
+                logger.info(f'Index already exists (created concurrently): {index_name}')
+                return True
+            logger.error(f'Failed to create index {index_name}: {e}')
+            return False
         except Exception as e:
             logger.error(f'Failed to create index {index_name}: {e}')
             return False
@@ -1596,23 +1611,30 @@ class OpenSearchClient:
             return []
 
     async def get_all_index_stats(self) -> dict[str, Any]:
-        """Get statistics for all visual search indexes."""
-        stats = {}
-        for index_name in [IndexName.GLOBAL, IndexName.VEHICLES, IndexName.PEOPLE, IndexName.FACES]:
+        """``{index: {doc_count, size_bytes, exists}}`` for every core index
+        (the shape ``GET /query/stats`` serves).
+
+        The count comes from ``_count`` -- a search, so an idle shard is
+        refreshed first and a just-ingested document is counted -- where
+        ``_stats`` reports only what the last refresh made searchable.
+        """
+        stats: dict[str, Any] = {}
+        for index_name in IndexName:
+            name = index_name.value
             try:
-                exists = await self.client.indices.exists(index=index_name.value)
-                if exists:
-                    response = await self.client.indices.stats(index=index_name.value)
-                    stats[index_name.value] = {
-                        'total_documents': response['_all']['primaries']['docs']['count'],
-                        'index_size_mb': round(
-                            response['_all']['primaries']['store']['size_in_bytes'] / 1024 / 1024, 2
-                        ),
-                    }
-                else:
-                    stats[index_name.value] = {'exists': False}
+                if not await self.client.indices.exists(index=name):
+                    stats[name] = {'exists': False, 'doc_count': 0, 'size_bytes': 0}
+                    continue
+                count = await self.client.count(index=name)
+                response = await self.client.indices.stats(index=name)
+                stats[name] = {
+                    'exists': True,
+                    'doc_count': int(count['count']),
+                    'size_bytes': int(response['_all']['primaries']['store']['size_in_bytes']),
+                }
             except Exception as e:
-                stats[index_name.value] = {'error': str(e)}
+                logger.error(f'Index stats failed for {name}: {e}')
+                stats[name] = {'exists': False, 'doc_count': 0, 'size_bytes': 0, 'error': str(e)}
         return stats
 
     # =========================================================================
@@ -2126,85 +2148,74 @@ class OpenSearchClient:
     async def search_ocr(
         self, query_text: str, top_k: int = 10, min_score: float = 0.3
     ) -> list[dict[str, Any]]:
+        """Images whose OCR text matches ``query_text``, best first (one hit
+        per image). See :meth:`search_ocr_page`."""
+        results, _total = await self.search_ocr_page(query_text, size=top_k, min_score=min_score)
+        return results
+
+    async def search_ocr_page(
+        self,
+        query_text: str,
+        *,
+        offset: int = 0,
+        size: int = 10,
+        min_score: float = 0.0,
+        exact: bool = False,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """One page of OCR matches and the number of distinct images that
+        match. The best-matching text line represents each image.
+
+        ``exact`` matches the whole recognised line verbatim (``text_raw``);
+        otherwise a line matches on any word of the query (prefix/substring
+        up to the n-gram width) and a verbatim line ranks first.
         """
-        Search OCR index for images containing specific text.
-
-        Args:
-            query_text: Text to search for
-            top_k: Maximum number of results
-            min_score: Minimum relevance score
-
-        Returns:
-            List of matching documents with OCR text and metadata
-
-        Returns:
-            List of matching documents with OCR text and metadata
-        """
+        if exact:
+            should: list[dict[str, Any]] = [{'term': {'text_raw': {'value': query_text}}}]
+        else:
+            should = [
+                {'match': {'text': {'query': query_text, 'boost': 2.0}}},
+                {'term': {'text_raw': {'value': query_text, 'boost': 3.0}}},
+            ]
+        body: dict[str, Any] = {
+            'from': offset,
+            'size': size,
+            'query': {'bool': {'should': should, 'minimum_should_match': 1}},
+            'collapse': {'field': 'image_id'},
+            'aggs': {'images': {'cardinality': {'field': 'image_id'}}},
+            '_source': [
+                'image_id',
+                'image_path',
+                'text',
+                'text_raw',
+                'det_score',
+                'rec_score',
+                'box_normalized',
+                'metadata',
+            ],
+        }
+        if min_score > 0:
+            body['min_score'] = min_score
         try:
-            query = {
-                'size': top_k,
-                'min_score': min_score,
-                'query': {
-                    'bool': {
-                        'should': [
-                            {
-                                'match': {
-                                    'text': {
-                                        'query': query_text,
-                                        'boost': 2.0,
-                                    }
-                                }
-                            },
-                            {
-                                'term': {
-                                    'text_raw': {
-                                        'value': query_text,
-                                        'boost': 3.0,
-                                    }
-                                }
-                            },
-                        ],
-                        'minimum_should_match': 1,
-                    }
-                },
-                'collapse': {
-                    'field': 'image_id',
-                },
-                '_source': [
-                    'image_id',
-                    'image_path',
-                    'text',
-                    'text_raw',
-                    'det_score',
-                    'rec_score',
-                    'box_normalized',
-                    'metadata',
-                ],
-            }
-
-            response = await self.client.search(index=IndexName.OCR.value, body=query)
-
-            results = []
-            for hit in response.get('hits', {}).get('hits', []):
-                source = hit['_source']
-                results.append(
-                    {
-                        'image_id': source.get('image_id', ''),
-                        'image_path': source.get('image_path'),
-                        'score': hit.get('_score', 0.0),
-                        'text': source.get('text', ''),
-                        'box_normalized': source.get('box_normalized'),
-                        'det_score': source.get('det_score'),
-                        'rec_score': source.get('rec_score'),
-                        'metadata': source.get('metadata'),
-                    }
-                )
-
-            return results
-
+            response = await self.client.search(index=IndexName.OCR.value, body=body)
         except Exception as e:
             logger.error(f'OCR search failed: {e}')
-            return []
+            return [], 0
+
+        results = [
+            {
+                'image_id': hit['_source'].get('image_id', ''),
+                'image_path': hit['_source'].get('image_path'),
+                'score': hit.get('_score', 0.0),
+                'text': hit['_source'].get('text', ''),
+                'box_normalized': hit['_source'].get('box_normalized'),
+                'det_score': hit['_source'].get('det_score'),
+                'rec_score': hit['_source'].get('rec_score'),
+                'metadata': hit['_source'].get('metadata'),
+            }
+            for hit in response.get('hits', {}).get('hits', [])
+        ]
+        total = int(response.get('aggregations', {}).get('images', {}).get('value', 0))
+        return results, total
 
 
 # Convenience function for standalone usage

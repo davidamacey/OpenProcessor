@@ -322,7 +322,9 @@ def analyze_image(
             detections: list[DetectionResult] = []
             if yolo_clip_result.get('num_dets', 0) > 0:
                 formatted = format_detections_from_triton(
-                    yolo_clip_result, input_size=640, model_name=TritonModelConfig.YOLO_MODEL
+                    yolo_clip_result,
+                    input_size=yolo_clip_result['input_size'],
+                    model_name=TritonModelConfig.YOLO_MODEL,
                 )
                 detections.extend(
                     DetectionResult(
@@ -554,7 +556,9 @@ def analyze_batch(
                 detections: list[DetectionResult] = []
                 if num_dets > 0:
                     formatted = format_detections_from_triton(
-                        yolo_clip_result, input_size=640, model_name=TritonModelConfig.YOLO_MODEL
+                        yolo_clip_result,
+                        input_size=yolo_clip_result['input_size'],
+                        model_name=TritonModelConfig.YOLO_MODEL,
                     )
                     detections.extend(
                         DetectionResult(

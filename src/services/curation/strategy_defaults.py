@@ -114,13 +114,15 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # OP_REGION_PROFILE at startup, so a PUT here actually changes what runs.
 # 'vlm' (W9) is the third config-store axis: an endpoint activation per
 # project (``src.services.config_store.vlm_activation``).
-# 'prompt_pack' and 'detection_profile' are special-cased in
-# ``src.routers.curation.settings`` -- their PUT delegates to
-# ``store.activate_axis`` (the config store's activation, §3.6/§3.7)
-# rather than writing into this module's settings-doc ``defaults`` map;
-# ``_hardcoded_default_for_axis`` for both axes already reads through the
-# store (``active_prompt_pack`` / ``get_active_region_profile``), so the
-# settings-doc override branch below never actually fires for them.
+# 'prompt_pack', 'detection_profile' and 'vlm' are special-cased in
+# ``src.routers.curation.settings`` -- their PUT delegates to the config
+# store's activation (§3.6/§3.7) rather than writing into this module's
+# settings-doc ``defaults`` map. The activation record is the only source of
+# truth for them (:data:`CONFIG_STORE_AXES`): a settings-doc key of the same
+# name is never read, so it cannot override the active pack for a run that
+# omitted ``prompt_pack``.
+CONFIG_STORE_AXES: frozenset[str] = frozenset({'prompt_pack', 'detection_profile', 'vlm'})
+
 SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset(
     {'cluster', 'sort', 'prompt_pack', 'detection_profile', 'vlm'}
 )
@@ -161,9 +163,9 @@ async def resolve_effective_default(
     for the exact call sites.
     """
     hardcoded = _hardcoded_default_for_axis(axis)
-    if axis not in SETTABLE_DEFAULT_AXES:
-        # Read-only axis: a stored override (e.g. from before the axis
-        # became read-only) must not change what is reported as active.
+    if axis not in SETTABLE_DEFAULT_AXES or axis in CONFIG_STORE_AXES:
+        # Read-only axis, or one the config store owns: a stored override
+        # (e.g. from before the axis moved) must not change what is active.
         return hardcoded
     if opensearch is None and settings_doc is None:
         return hardcoded
@@ -212,6 +214,7 @@ async def resolve_strategy_selection(
 
 
 __all__ = [
+    'CONFIG_STORE_AXES',
     'SETTABLE_DEFAULT_AXES',
     'UnknownStrategyError',
     'resolve_effective_default',

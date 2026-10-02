@@ -1503,9 +1503,9 @@ planning and writing wins.
 `DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`,
 `openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
 split}`). Auto-detection tries an OpenProcessor export, then YOLO (a data
-YAML, an `images/` directory, or a child with one), then COCO
-(`annotations/*.json`). Pass `format: coco` for a COCO dataset that also has
-an `images/` directory. The path must lie under a source root, the project's
+YAML), then COCO (`annotations/*.json` with no `labels/` directory, so
+`images/` next to `annotations/` is COCO), then YOLO (an `images/` directory,
+or a child with one). The path must lie under a source root, the project's
 upload root or the project's export root, after symlinks are resolved
 (`422 dataset_path_not_allowed`). References inside a dataset must stay
 inside it. Archive uploads accept regular files and directories only and
@@ -1865,7 +1865,7 @@ it. Request: `triton_name`, `force`, `fp16`, `input_size`, `max_batch_size`,
 |---|---|---|---|---|
 | GET | `/models/status` | `include_other_projects` | `{models[]}`: Triton models and the segmenter and VLM services. Each Triton entry carries `project`, `shared`, `owned`, `sharing_revision`, `class_mapping`, `optional`. VLM rows are one per registered endpoint with `kind: vlm`, `active` and `active_in` (the bound project only) | |
 | GET | `/models/{model_name}/class_mapping` | | `{model, model_project, project, entries[], unmapped[], not_covered[], labels}` | `404 model_not_found` |
-| PUT | `/models/{model_name}/sharing` | `{shared, expected_revision}`, query `force` | `{name, project, shared, revision, used_by[]}` | `404 model_not_found`, `409 revision_conflict`, `409 in_use` |
+| PUT | `/models/{model_name}/sharing` | `{shared, expected_revision}`, query `force` | `{name, project, shared, revision, used_by[]}` | `404 model_not_found`, `409 revision_conflict`, `409 in_use` (another project's active detection profile uses the model; `used_by[]` names them; `force` bypasses), `503 config_store_unavailable` |
 | DELETE | `/models/{model_name}` | query `force` | `{triton_name, triton_unloaded, directory_removed, forced, warning}` | `404`, `400`, `403`, `409` |
 
 - A model's classes reach another project by name only. `class_mapping`

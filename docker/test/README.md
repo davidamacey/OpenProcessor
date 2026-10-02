@@ -113,3 +113,15 @@ A third, non-bug prerequisite is documented by
 `test_embedding_scorers_report_their_missing_prerequisite`: the `uniqueness`
 and `near_dup` scorers require a trained IVF centroid store, which only the
 item-clustering pipeline produces.
+
+## Running a second harness beside the first
+
+Container names and image tags take the `VERIFY_CONTAINER_PREFIX` prefix
+(default `op-verify`) and the test process takes `VERIFY_COMPOSE_PROJECT`
+(default `op-live-verify`), so a second copy can run next to an existing one:
+
+```bash
+export VERIFY_COMPOSE_PROJECT=mine VERIFY_CONTAINER_PREFIX=mine-verify
+docker compose -p mine -f docker/test/compose.yml up -d --build --wait
+python -m pytest tests/live -q --no-cov -m live
+```

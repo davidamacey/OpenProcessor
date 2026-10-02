@@ -12,7 +12,9 @@ Failure model:
 - Round-robin picks healthy hosts only. After 60s a host enters
   HALF_OPEN — the next caller probes it; success closes the circuit,
   failure re-opens for another 60s.
-- ``SegmenterAllHostsDown`` is raised when every host is UNHEALTHY so the
+- ``SegmenterRequestFailed`` (``segment_multi``) is raised for a request that
+  failed before the breaker opened, and ``SegmenterAllHostsDown`` when every
+  host is UNHEALTHY; both are :class:`SegmenterUnavailable`, so the
   caller can park the crop in ``pending_detection`` rather than
   promoting it to a terminal status on infrastructure noise.
 - ``httpx.ReadTimeout`` and ``httpx.ConnectTimeout`` retry up to 2
@@ -58,7 +60,17 @@ from src.services.detection.segmenter_http import DEFAULT_MAX_CANDIDATES
 logger = get_logger('curation_worker')
 
 
-class SegmenterAllHostsDown(RuntimeError):  # noqa: N818
+class SegmenterUnavailable(RuntimeError):  # noqa: N818
+    """The segmenter could not answer. Never a "found nothing" result: a crop
+    that hit this stays in ``pending_detection`` for a later pass."""
+
+
+class SegmenterRequestFailed(SegmenterUnavailable):
+    """One request failed (transport error, 5xx, undecodable body) before the
+    circuit breaker had opened."""
+
+
+class SegmenterAllHostsDown(SegmenterUnavailable):
     """Raised when every SAM3 host is marked UNHEALTHY by the circuit breaker.
 
     Distinct from "SAM3 returned no candidate" — this is an
@@ -346,69 +358,16 @@ class SegmenterClient:
         OP_SEGMENTER_REQUEST_RESPONSE_SECONDS.labels(host=url, outcome=outcome).observe(response)
 
     async def segment(self, crop_jpeg: bytes) -> RegionCandidate | None:
-        """Segment one crop. Returns the top candidate in crop frame.
+        """Segment one crop. Returns the top candidate in crop frame, or
+        ``None`` when the segmenter answered with no usable candidate (or
+        this client is disabled and never attempts an HTTP call).
 
-        Raises :class:`SegmenterAllHostsDown` if every host is UNHEALTHY.
-        Returns ``None`` on a single-host failure (recorded against
-        the circuit breaker), when SAM3 returned no candidate, or
-        when this client is disabled — no segmenter configured.
-        The disabled case never attempts an HTTP call.
+        Raises :class:`SegmenterUnavailable` exactly like :meth:`segment_multi`
+        (the one request path): a failed request or every host UNHEALTHY is
+        never reported as "no candidate".
         """
-        if not self.enabled:
-            return None
-        # t0 = entry to segment (before any client-side work).
-        # See module docstring + metrics.py for the wait/inflight/response
-        # decomposition rationale.
-        t0 = self._now()
-        b64 = base64.b64encode(crop_jpeg).decode('ascii')
-        payload = {
-            'crop_jpeg_b64': b64,
-            'text_prompt': self.text_prompt,
-            'max_candidates': self.max_candidates,
-        }
-        url = await self._pick_healthy_url()
-        timing: dict[str, float] = {}
-        resp = await self._post_with_retry(url, payload, timing=timing)
-        if resp is None:
-            self._record_timings(url, t0, timing, outcome='error', t_end=None)
-            await self._on_failure(url)
-            return None
-
-        try:
-            body = resp.json()
-        except ValueError:
-            t_end = self._now()
-            self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
-            logger.warning('segmenter_bad_json')
-            await self._on_failure(url)
-            return None
-
-        await self._on_success(url)
-
-        cands = body.get('candidates') or []
-        if not cands:
-            t_end = self._now()
-            self._record_timings(url, t0, timing, outcome='miss', t_end=t_end)
-            return None
-        top = max(cands, key=lambda c: float(c.get('score') or 0.0))
-        bbox = top.get('bbox_norm')
-        if not bbox or len(bbox) != 4:
-            t_end = self._now()
-            self._record_timings(url, t0, timing, outcome='miss', t_end=t_end)
-            return None
-        t_end = self._now()
-        self._record_timings(url, t0, timing, outcome='hit', t_end=t_end)
-        return RegionCandidate(
-            bbox_norm=(
-                float(bbox[0]),
-                float(bbox[1]),
-                float(bbox[2]),
-                float(bbox[3]),
-            ),
-            score=float(top.get('score') or 0.0),
-            source=self.source_name,
-            rectangularity=(float(top['mask_iou']) if top.get('mask_iou') is not None else None),
-        )
+        cands = await self.segment_multi(crop_jpeg)
+        return max(cands, key=lambda c: c.score) if cands else None
 
     async def segment_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
         """Segment one crop, keeping every candidate (W8 multi-candidate leg).
@@ -417,9 +376,10 @@ class SegmenterClient:
         service already returns its full ``candidates`` list; this just
         stops discarding everything but the top one. Malformed entries
         (missing/short ``bbox_norm``) are dropped rather than failing the
-        whole response. Raises :class:`SegmenterAllHostsDown` if every
-        host is UNHEALTHY. Returns ``[]`` on a single-host failure, no
-        candidates, or when this client is disabled.
+        whole response. Raises :class:`SegmenterUnavailable` when the request
+        failed or every host is UNHEALTHY (the crop must stay pending, not
+        be finalized as a miss). Returns ``[]`` for no candidates or when
+        this client is disabled.
         """
         if not self.enabled:
             return []
@@ -436,7 +396,7 @@ class SegmenterClient:
         if resp is None:
             self._record_timings(url, t0, timing, outcome='error', t_end=None)
             await self._on_failure(url)
-            return []
+            raise SegmenterRequestFailed(f'segmenter request to {url} failed')
 
         try:
             body = resp.json()
@@ -445,7 +405,9 @@ class SegmenterClient:
             self._record_timings(url, t0, timing, outcome='error', t_end=t_end)
             logger.warning('segmenter_bad_json')
             await self._on_failure(url)
-            return []
+            raise SegmenterRequestFailed(
+                f'segmenter at {url} returned an undecodable body'
+            ) from None
 
         await self._on_success(url)
 
@@ -470,4 +432,9 @@ class SegmenterClient:
         return out
 
 
-__all__ = ['SegmenterAllHostsDown', 'SegmenterClient']
+__all__ = [
+    'SegmenterAllHostsDown',
+    'SegmenterClient',
+    'SegmenterRequestFailed',
+    'SegmenterUnavailable',
+]

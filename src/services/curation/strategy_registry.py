@@ -440,8 +440,8 @@ def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
     generic pack, each ``OP_PROMPT_PACK_PATHS`` pack, and the
     ``OP_PROMPT_PACK_PATH`` pack (the process default). ``default_id`` is
     :func:`resolve_effective_default`'s answer for the ``'prompt_pack'``
-    axis -- the settings-doc override when it names a listed pack, else
-    the ``OP_PROMPT_PACK_PATH`` pack (or the generic pack when unset). A
+    axis -- the config store's active pack, else the
+    ``OP_PROMPT_PACK_PATH`` pack (or the generic pack when unset). A
     run selects among these by name (e.g. ``POST
     /pipeline/auto_label/start?prompt_pack=``).
     """

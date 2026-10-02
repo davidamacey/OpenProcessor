@@ -7,6 +7,7 @@ images.lock
 openprocessor	exec
 scripts/lib/colors.sh
 scripts/lib/ports.sh
+scripts/lib/bind_dirs.sh
 scripts/lib/gpu.sh
 scripts/lib/config.sh
 scripts/lib/download.sh

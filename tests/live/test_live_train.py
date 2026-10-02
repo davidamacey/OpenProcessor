@@ -31,13 +31,17 @@ pytestmark = pytest.mark.live
 CONTAINER_EXPORT_CURRENT = '/verify-data/projects/default/exports/current'
 
 
+# The API and the trainer exchange a project's runs in its own directory.
+PROJECT_JOBS_DIR = JOBS_DIR / 'projects' / 'default'
+
+
 def _job_files(job_id: str) -> dict[str, Any]:
     return {
-        'job': JOBS_DIR / f'{job_id}.job.json',
-        'status': JOBS_DIR / f'{job_id}.status.json',
-        'cancel': JOBS_DIR / f'{job_id}.cancel',
-        'log': JOBS_DIR / f'{job_id}.run.log',
-        'manifest': JOBS_DIR / f'{job_id}.manifest.json',
+        'job': PROJECT_JOBS_DIR / f'{job_id}.job.json',
+        'status': PROJECT_JOBS_DIR / f'{job_id}.status.json',
+        'cancel': PROJECT_JOBS_DIR / f'{job_id}.cancel',
+        'log': PROJECT_JOBS_DIR / f'{job_id}.run.log',
+        'manifest': PROJECT_JOBS_DIR / f'{job_id}.manifest.json',
     }
 
 
@@ -59,7 +63,7 @@ def _spec(**overrides: Any) -> dict[str, Any]:
 
 
 def test_preflight_reports_checks_and_writes_no_job_file(api_client: Any) -> None:
-    before = sorted(p.name for p in JOBS_DIR.glob('*.job.json'))
+    before = sorted(p.name for p in PROJECT_JOBS_DIR.glob('*.job.json'))
 
     resp = api_client.post('/train/preflight', json=_spec())
     assert resp.status_code == 200, resp.text
@@ -68,7 +72,7 @@ def test_preflight_reports_checks_and_writes_no_job_file(api_client: Any) -> Non
     assert report['checks'], report
     assert {c['severity'] for c in report['checks']} <= {'ok', 'warn', 'block', 'unknown'}
 
-    after = sorted(p.name for p in JOBS_DIR.glob('*.job.json'))
+    after = sorted(p.name for p in PROJECT_JOBS_DIR.glob('*.job.json'))
     assert after == before, 'preflight must be side-effect free'
 
 
@@ -90,7 +94,7 @@ def test_start_writes_a_job_file_and_stops_no_container(
 
     paths = _job_files(job_id)
     job_file = wait_until(lambda: paths['job'].is_file() and paths['job'], timeout=30)
-    assert job_file, f'no {job_id}.job.json appeared in {JOBS_DIR}'
+    assert job_file, f'no {job_id}.job.json appeared in {PROJECT_JOBS_DIR}'
     payload = json.loads(paths['job'].read_text())
     assert payload['job_id'] == job_id
     assert payload['dataset_export_dir'] == CONTAINER_EXPORT_CURRENT
@@ -119,8 +123,9 @@ def test_fake_trainer_drives_the_run_to_finished(
     assert state['job_id'] == job_id
     assert state['total_epochs'] >= 1
     assert state['eval']['map50'] == pytest.approx(0.5)
-    # best_checkpoint_metric is back-filled from eval when the trainer omits it.
-    assert state['best_checkpoint_metric']['map50'] == pytest.approx(0.5)
+    # The trainer's own best.pt row is served as-is: the (test-split) eval
+    # block is never presented as best_checkpoint_metric.
+    assert state['best_checkpoint_metric'] is None
 
     assert paths['status'].is_file()
     assert paths['manifest'].is_file()

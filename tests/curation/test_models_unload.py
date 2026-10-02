@@ -21,6 +21,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.services.model_unload_guard import (
+    core_pipeline_models,
+    external_service_model_names,
+    is_region_protected_model,
+)
 from src.services.training.triton_promote import ModelNotPromotedError, UnloadResult
 
 
@@ -237,28 +242,22 @@ def test_discover_promoted_models_corrupt_promote_json_is_skipped_not_fatal(tmp_
 
 
 def test_is_region_protected_model_matches_names_and_prefixes():
-    import src.routers.curation.models as models_mod
-
     # No hardcoded 'lpr_' prefix: an lpr-shaped name is not protected
     # merely by its name, only via the active profile's detector_model or
     # the fixed paddleocr_ OCR prefix.
-    assert models_mod._is_region_protected_model('lpr_nanov11_640') is False
-    assert models_mod._is_region_protected_model('paddleocr_det_trt') is True
-    assert models_mod._is_region_protected_model('op_vehicle_smoke_v1') is False
+    assert is_region_protected_model('lpr_nanov11_640') is False
+    assert is_region_protected_model('paddleocr_det_trt') is True
+    assert is_region_protected_model('op_vehicle_smoke_v1') is False
 
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_is_region_protected_model_matches_the_active_profiles_detector_model():
-    import src.routers.curation.models as models_mod
-
-    assert models_mod._is_region_protected_model('license_plate_detector') is True
-    assert models_mod._is_region_protected_model('lpr_some_future_model') is False
+    assert is_region_protected_model('license_plate_detector') is True
+    assert is_region_protected_model('lpr_some_future_model') is False
 
 
 def test_core_pipeline_models_includes_clip_and_face_models():
-    import src.routers.curation.models as models_mod
-
-    core = models_mod._core_pipeline_models()
+    core = core_pipeline_models()
     assert 'mobileclip2_s2_image_encoder' in core
     assert 'scrfd_10g_bnkps' in core
     assert 'lpr_nanov11_640' not in core
@@ -276,19 +275,15 @@ def test_core_pipeline_models_includes_clip_and_face_models():
 def test_is_region_protected_model_matches_configured_primary_proposer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import src.routers.curation.models as models_mod
-
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer_v9')
-    assert models_mod._is_region_protected_model('item_proposer_v9') is True
+    assert is_region_protected_model('item_proposer_v9') is True
 
 
 def test_is_region_protected_model_matches_configured_secondary_classifier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import src.routers.curation.models as models_mod
-
     monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'secondary_classifier_x1')
-    assert models_mod._is_region_protected_model('secondary_classifier_x1') is True
+    assert is_region_protected_model('secondary_classifier_x1') is True
 
 
 def test_unload_refuses_configured_primary_proposer_even_with_force(
@@ -345,8 +340,6 @@ def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch, vlm
 def test_external_service_model_names_includes_segmenter_and_vlm(
     monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
 ) -> None:
-    import src.routers.curation.models as models_mod
-
-    names = models_mod._external_service_model_names()
+    names = external_service_model_names()
     assert 'sam3' in names
     assert {'env', 'test-vlm'} <= names

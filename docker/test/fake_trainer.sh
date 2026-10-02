@@ -5,6 +5,9 @@
 # The API <-> trainer protocol is a pure shared-volume file protocol
 # (src/services/training/jobs.py):
 #
+# <jobs_dir> is the project's own directory, <root>/projects/<slug>
+# (OP_TRAIN_JOBS_DIR is the root, as for the real trainer).
+#
 #   API     writes  <jobs_dir>/<job_id>.job.json      to start a run
 #   trainer writes  <jobs_dir>/<job_id>.status.json   while it runs
 #   API     writes  <jobs_dir>/<job_id>.cancel        to cancel
@@ -21,14 +24,15 @@
 # =============================================================================
 set -euo pipefail
 
-JOBS_DIR="${OP_TRAIN_JOBS_DIR:-/jobs}"
+JOBS_ROOT="${OP_TRAIN_JOBS_DIR:-/jobs}"
+JOBS_DIR="$JOBS_ROOT"
 POLL_SECONDS="${FAKE_TRAINER_POLL_SECONDS:-1}"
 TOTAL_EPOCHS="${FAKE_TRAINER_EPOCHS:-3}"
 # Per-job progress counters live outside the shared volume so the tests
 # only ever see protocol files there.
 PROGRESS_DIR="/tmp/fake-trainer-progress"
 
-mkdir -p "$JOBS_DIR" "$PROGRESS_DIR"
+mkdir -p "$JOBS_ROOT" "$PROGRESS_DIR"
 
 now_iso() {
     date -u +"%Y-%m-%dT%H:%M:%S+00:00"
@@ -117,12 +121,13 @@ process_job() {
 }
 
 printf 'fake-trainer watching %s (poll=%ss, epochs=%s)\n' \
-    "$JOBS_DIR" "$POLL_SECONDS" "$TOTAL_EPOCHS"
+    "$JOBS_ROOT" "$POLL_SECONDS" "$TOTAL_EPOCHS"
 
 while true; do
     shopt -s nullglob
-    for job_file in "${JOBS_DIR}"/*.job.json; do
+    for job_file in "${JOBS_ROOT}"/projects/*/*.job.json; do
         base="$(basename "$job_file")"
+        JOBS_DIR="$(dirname "$job_file")"
         process_job "${base%.job.json}"
     done
     shopt -u nullglob

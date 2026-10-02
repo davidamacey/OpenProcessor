@@ -62,7 +62,7 @@ from src.services.curation.region_test_run import Leg, VerifyContext, run_region
 from src.services.curation.wire import item_source_excludes
 from src.services.detection.segmenter_http import first_segmenter_url
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
-from src.services.labeling.vlm_factory import labeler_for
+from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
 from src.services.labeling.vlm_labeler import VlmTransportError
 from src.services.labeling.vlm_prompts import PromptPack, active_prompt_pack, prompt_pack_stamp
 
@@ -132,8 +132,9 @@ def _vlm_ref(endpoint: VlmEndpoint, *, draft: bool, labeler: VlmLabeler) -> Pack
     )
 
 
-def _labeler(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
+async def _labeler(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
     try:
+        await assert_may_connect(endpoint)
         return labeler_for(endpoint, pack)
     except VlmEndpointUnavailableError as exc:
         raise labeler_unavailable(exc) from exc
@@ -212,7 +213,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
             f'{len(body.crop_ids)} crop ids; at most {MAX_TEST_CROP_IDS}',
             limit=MAX_TEST_CROP_IDS,
         )
-    await get_config_store().ensure_fresh(opensearch)
+    await get_config_store().refresh(opensearch)
     profile = _profile_for(body.profile_name)
     if body.profile_name is not None and profile is None:
         raise api_error(422, 'unknown_profile', f'{body.profile_name!r} is not a known profile')
@@ -232,7 +233,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
         pack=pack,
         profile=profile,
     )
-    labeler = _labeler(endpoint, pack)
+    labeler = await _labeler(endpoint, pack)
     capacity = (
         labeler.open_images_per_call
         if body.call == 'open_classify'
@@ -401,7 +402,7 @@ async def test_region_profile(
     is it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;
     409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429
     ``test_busy``. Writes nothing."""
-    await get_config_store().ensure_fresh(opensearch)
+    await get_config_store().refresh(opensearch)
     profile, revision, stamp_name, report = await _resolve_profile(opensearch, body)
     verify: VerifyContext | None = None
     verify_ref: tuple[PackTestPackRef, PackTestVlmRef] | None = None
@@ -422,7 +423,7 @@ async def test_region_profile(
             pack=pack,
             profile=profile,
         )
-        labeler = _labeler(endpoint, pack)
+        labeler = await _labeler(endpoint, pack)
         class_names, name_to_id = _registry()
         verify = VerifyContext(
             labeler=labeler,

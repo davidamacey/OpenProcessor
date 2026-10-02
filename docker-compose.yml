@@ -8,7 +8,7 @@ name: ${COMPOSE_PROJECT_NAME:-openprocessor}
 
 services:
   triton-server:
-    image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
     restart: always
     ports:
@@ -22,6 +22,12 @@ services:
       - --model-store=/models
       - --backend-config=default-max-batch-size=128
       - --strict-model-config=false
+      # The API and workers ping every 30 s while idle
+      # (src/clients/triton_pool.py); Triton's defaults refuse idle pings
+      # and pings under 5 minutes apart, so every client got a GOAWAY
+      # ("too_many_pings") and reconnected.
+      - --grpc-keepalive-permit-without-calls=true
+      - --grpc-http2-min-recv-ping-interval-without-data=20000
       - --model-control-mode=explicit
       # Serve whatever exported: a missing/failed engine (e.g. the minimal
       # setup profile skips OCR) leaves that model unloaded instead of
@@ -68,7 +74,7 @@ services:
       - triton_net
 
   yolo-api:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     restart: always
     # CFG-5: previously the ONLY var reaching this container from .env was
@@ -208,7 +214,14 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      - triton-server
+      triton-server:
+        condition: service_started
+      # Not just started: the API creates the core visual_search_* indexes
+      # once at boot, and when OpenSearch is not up yet it skips that for
+      # good, so the first /ingest would auto-create them with dynamic
+      # (non-kNN) mappings.
+      opensearch:
+        condition: service_healthy
     networks:
       # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
       # public compose's service is named yolo-api; this alias lets
@@ -234,7 +247,7 @@ services:
   # ===================================================================
 
   curation-detection-worker:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
     profiles:
       - curation
@@ -298,7 +311,7 @@ services:
       - triton_net
 
   curation-vlm-worker:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
     profiles:
       - curation
@@ -335,7 +348,7 @@ services:
       - triton_net
 
   curation-auto-label-worker:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
     profiles:
       - curation
@@ -397,7 +410,7 @@ services:
       - triton_net
 
   curation-cluster-refresh:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
     profiles:
       - curation
@@ -431,7 +444,7 @@ services:
   # On-demand only (no `restart:` — see docker/evaluator/Dockerfile):
   # `docker compose --profile curation run --rm curation-evaluator`.
   curation-evaluator:
-    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
     profiles:
       - curation
@@ -471,7 +484,7 @@ services:
   #   OP_SEGMENTER_URL=http://segmenter:8000 \
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
-    image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
     profiles:
       - segmenter
@@ -538,7 +551,7 @@ services:
   # ===================================================================
 
   curation-trainer:
-    image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.3.0}}
+    image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.1.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
     profiles:
       - training
@@ -669,7 +682,7 @@ services:
       - VLM_MODEL=${VLM_MODEL:-google/gemma-4-E4B-it}
       - VLM_SERVED_MODEL_NAME=${VLM_SERVED_MODEL_NAME:-gemma-4-e4b}
       - VLM_DTYPE=${VLM_DTYPE:-bfloat16}
-      - VLM_MAX_MODEL_LEN=${VLM_MAX_MODEL_LEN:-8192}
+      - VLM_MAX_MODEL_LEN=${VLM_MAX_MODEL_LEN:-16384}
       # Fraction of this GPU's VRAM vLLM may claim. Lower it to share the
       # GPU with Triton/the segmenter/training; see docs/CURATION.md
       # "VLM VRAM budget" for worked numbers per card size.

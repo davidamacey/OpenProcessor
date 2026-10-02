@@ -38,6 +38,7 @@ import scripts.curation.region_worker_main as worker
 import scripts.curation.worker.state as worker_state
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from scripts.curation.worker import runner as runner_mod
+from scripts.curation.worker.client import SegmenterRequestFailed
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
@@ -134,7 +135,7 @@ async def _drive_text_hint_rescue(
     *,
     fake_os: _FakeOpenSearch,
     ocr_pick: Any,
-    sub_sam_cand: RegionCandidate,
+    sub_sam_cand: RegionCandidate | Exception,
     reply: VlmCombinedReply,
 ) -> dict[str, Any]:
     """Drive the real pipeline through the text-hint sub-crop rescue: the
@@ -171,7 +172,11 @@ async def _drive_text_hint_rescue(
 
     seg = MagicMock(aclose=AsyncMock())
     seg.segment_multi = AsyncMock(return_value=[])  # global attempt always misses
-    seg.segment = AsyncMock(return_value=sub_sam_cand)  # sub-crop re-prompt hits
+    # sub-crop re-prompt hits, or raises when given an exception
+    seg.segment = AsyncMock(
+        side_effect=sub_sam_cand if isinstance(sub_sam_cand, Exception) else None,
+        return_value=None if isinstance(sub_sam_cand, Exception) else sub_sam_cand,
+    )
     monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
@@ -473,6 +478,33 @@ class TestRouting:
         chain = doc.get(F.detector_chain) or []
         assert any('paddleocr_rec_trt:text_hint:hit' in s for s in chain)
         assert any('sam3:combined_verify_ok' in s for s in chain)
+
+    @pytest.mark.asyncio
+    async def test_text_hint_segmenter_failure_leaves_the_crop_pending(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Found in review: a failed sub-crop segmenter request was recorded
+        as ``text_hint:miss`` and the crop finalized as ``no_region_box``.
+        An unavailable segmenter must leave the crop untouched instead."""
+        F = get_region_fields()
+        ocr_pick = MagicMock()
+        ocr_pick.bbox_norm = (0.40, 0.40, 0.55, 0.45)
+        ocr_pick.text = 'ABC1234'
+        ocr_pick.rec_score = 0.85
+        fake_os = _FakeOpenSearch(
+            {'c1': _item_with(status='pending_detection')}, search_delay=0.0, lag_searches=0
+        )
+        mocks = await _drive_text_hint_rescue(
+            tmp_path,
+            monkeypatch,
+            fake_os=fake_os,
+            ocr_pick=ocr_pick,
+            sub_sam_cand=SegmenterRequestFailed('sub-crop request failed'),
+            reply=_accept(),
+        )
+        assert mocks['seg'].segment.await_count >= 1
+        assert fake_os.live['c1'][F.status] == 'pending_detection'
+        assert not fake_os.writes
 
 
 # =============================================================================

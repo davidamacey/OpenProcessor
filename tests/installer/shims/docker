@@ -15,6 +15,8 @@
 #   training_lock       present -> `compose exec ... lock-check` finds the GPU lock
 #   pause_sentinel      the shared pause sentinel: `compose exec ... pause-create`
 #                       prints created/present, `pause-remove` deletes it
+#   up_hangs            present -> `compose up` creates up_started and blocks (a
+#                       long recreate a test can interrupt)
 # Writes mutations.log: every state-changing call, whether allowed or not.
 set -u
 state="${SHIM_STATE:?}"
@@ -120,7 +122,7 @@ cmd_compose() {
             if [[ " ${args[*]:-} " == *" --images "* && "$project" != *-cw ]]; then
                 local k v repo tag
                 repo="$(env_val "$envfile" OP_IMAGE_REPO)"; repo="${repo:-davidamacey}"
-                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.3.0}"
+                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.1.0}"
                 local profiles wanted
                 profiles=",$(env_val "$envfile" COMPOSE_PROFILES),"
                 wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton"
@@ -221,6 +223,10 @@ JSON
                     ;;
                 *) refuse compose exec ;;
             esac
+            ;;
+        up)
+            refuse compose up
+            if [[ -e "${state}/up_hangs" ]]; then : > "${state}/up_started"; sleep 30; fi
             ;;
         images|ls|logs|port|top)
             ;;

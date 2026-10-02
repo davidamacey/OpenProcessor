@@ -105,7 +105,7 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 | GET | `/models/export/{task_id}`, `/models/exports` | Export task status |
 | GET | `/models/{model_name}/status` | Load status |
 | POST | `/models/{model_name}/load`, `/models/{model_name}/unload` | Runtime load / unload |
-| DELETE | `/models/{model_name}` | Remove from the repository |
+| DELETE | `/models/{model_name}` | Remove from the repository. Refused (403, even with `force`) for the configured detector and OCR models, and 409 for other core pipeline models unless `?force=true`; nothing is deleted when refused |
 | POST | `/models/{model_name}/test` | Run a test image through a model |
 
 ## Example response

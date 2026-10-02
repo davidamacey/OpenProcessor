@@ -179,6 +179,8 @@ docker-compose.*.yml
 
 # Environment files (secrets)
 .env
+# `openprocessor vlm key set` writes API keys under secrets/vlm/
+/secrets/
 .env.local
 .env.*.local
 .env.vlm-backup.*

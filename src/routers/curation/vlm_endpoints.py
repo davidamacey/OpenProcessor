@@ -94,7 +94,7 @@ _PREFIX = '/vlm/endpoints'
 
 async def _registry(client: Any) -> Any:
     store = get_global_config_store()
-    await store.ensure_fresh(client)
+    await store.refresh(client)
     return store.current
 
 

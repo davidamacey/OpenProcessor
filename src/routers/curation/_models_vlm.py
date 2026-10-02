@@ -39,10 +39,11 @@ async def _refresh() -> None:
 
 
 async def _live_health(endpoint: VlmEndpoint) -> tuple[str, str | None]:
-    from src.services.labeling.vlm_factory import labeler_for
+    from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
     from src.services.labeling.vlm_prompts import active_prompt_pack
 
     try:
+        await assert_may_connect(endpoint)
         health = await labeler_for(endpoint, active_prompt_pack()).health()
     except Exception as exc:
         return 'unavailable', str(exc)
@@ -115,15 +116,4 @@ async def vlm_status_rows() -> list[dict[str, Any]]:
     return rows
 
 
-def external_service_names() -> set[str]:
-    """Every registered endpoint's name AND model id: none of them is a
-    Triton model, so ``DELETE /models/{name}`` must never reach Triton."""
-    names: set[str] = set()
-    for endpoint in available_vlm_endpoints():
-        names.add(endpoint.name)
-        names.add(endpoint.body.model)
-        names.add(endpoint.model_id)
-    return names
-
-
-__all__ = ['external_service_names', 'vlm_status_rows']
+__all__ = ['vlm_status_rows']

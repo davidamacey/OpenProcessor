@@ -6,19 +6,22 @@ id	hf_repo	licence	vram_gb	served_context	max_context	max_images	status	rank	gat
 # is the header; '#' lines are comments. New columns are only ever
 # appended, so the bash readers' column numbers stay valid.
 #
-# vram_gb: gemma-4-e4b is measured (~23 GB total at
-# --gpu-memory-utilization 0.4 on a 48 GB card); every other value is an
+# vram_gb: gemma-4-e4b (~23 GB at --gpu-memory-utilization 0.4) and
+# qwen3-vl-4b (14 GB resident; 17 budgeted so --gpu-memory-utilization
+# 0.29 leaves KV room) are measured at 16384 context on a 48 GB
+# card; every other value is an
 # estimate (weights + ~6 GB KV/activations at 8192 + ~3 GB CUDA
-# overhead) until it is measured and its status becomes `tested`.
+# overhead) until it is measured and its status becomes `tested`. A `tested`
+# row has a measured resident size (the two above); its vram_gb stays the budget.
 # multi_box_verified / text_reading_verified: `unknown` = not checked yet,
 # `true` = a live check passed for that entry. (Always a value, never an
 # empty last column: the repo's whitespace hook strips a trailing tab.)
 # Checked and EXCLUDED: Qwen/Qwen2.5-VL-3B-Instruct (qwen-research
 # licence, non-commercial); Gemma 3 (google/gemma-3-4b-it, -12b-it: Gemma
 # terms, gated with manual approval; Gemma 4 replaces it under Apache-2.0).
-gemma-4-e4b	google/gemma-4-E4B-it	Apache-2.0	23	8192	131072	8	tested	100	false	vlm_gemma4	gemma4	8.0		15	gemma4	/vllm-workspace/examples/tool_chat_template_gemma4.jinja		unknown	true
-qwen3-vl-8b-fp8	Qwen/Qwen3-VL-8B-Instruct-FP8	Apache-2.0	19	8192	262144	8	to_verify	90	false	vlm_generic	qwen3_vl	8.0	fp8	10.6				unknown	unknown
-gemma-4-e2b	google/gemma-4-E2B-it	Apache-2.0	17	8192	131072	8	to_verify	80	false	vlm_gemma4	gemma4			10	gemma4	/vllm-workspace/examples/tool_chat_template_gemma4.jinja		unknown	unknown
-qwen3-vl-4b	Qwen/Qwen3-VL-4B-Instruct	Apache-2.0	17	8192	262144	8	to_verify	70	false	vlm_generic	qwen3_vl	4.4		8.9				unknown	unknown
-qwen2.5-vl-7b-awq	Qwen/Qwen2.5-VL-7B-Instruct-AWQ	Apache-2.0	15	8192	128000	8	to_verify	60	false	vlm_generic	qwen2_5_vl	7.0	awq	6.9				unknown	unknown
-qwen3-vl-8b	Qwen/Qwen3-VL-8B-Instruct	Apache-2.0	26	8192	262144	8	to_verify	50	false	vlm_generic	qwen3_vl	8.0		17.5				unknown	unknown
+gemma-4-e4b	google/gemma-4-E4B-it	Apache-2.0	23	16384	131072	8	tested	100	false	vlm_gemma4	gemma4	8.0		15	gemma4	/vllm-workspace/examples/tool_chat_template_gemma4.jinja		unknown	true
+qwen3-vl-8b-fp8	Qwen/Qwen3-VL-8B-Instruct-FP8	Apache-2.0	19	16384	262144	8	to_verify	90	false	vlm_generic	qwen3_vl	8.0	fp8	10.6				unknown	unknown
+gemma-4-e2b	google/gemma-4-E2B-it	Apache-2.0	17	16384	131072	8	to_verify	80	false	vlm_gemma4	gemma4			10	gemma4	/vllm-workspace/examples/tool_chat_template_gemma4.jinja		unknown	unknown
+qwen3-vl-4b	Qwen/Qwen3-VL-4B-Instruct	Apache-2.0	17	16384	262144	8	tested	70	false	vlm_generic	qwen3_vl	4.4		8.9				true	unknown
+qwen2.5-vl-7b-awq	Qwen/Qwen2.5-VL-7B-Instruct-AWQ	Apache-2.0	15	16384	128000	8	to_verify	60	false	vlm_generic	qwen2_5_vl	7.0	awq	6.9				unknown	unknown
+qwen3-vl-8b	Qwen/Qwen3-VL-8B-Instruct	Apache-2.0	26	16384	262144	8	to_verify	50	false	vlm_generic	qwen3_vl	8.0		17.5				unknown	unknown

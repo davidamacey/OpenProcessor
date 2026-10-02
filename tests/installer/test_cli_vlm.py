@@ -96,7 +96,7 @@ def test_use_rewrites_env_recreates_the_vlm_probes_and_unpauses(
     assert '@sha256:' in (env_value(stack, 'VLM_IMAGE') or '')
     assert env_value(stack, 'VLM_REASONING_PARSER') == ''  # set but empty: no parser
     assert env_value(stack, 'VLM_CHAT_TEMPLATE') == ''
-    assert env_value(stack, 'VLM_MAX_MODEL_LEN') == '8192'
+    assert env_value(stack, 'VLM_MAX_MODEL_LEN') == '16384'
     assert env_value(stack, 'VLM_LIMIT_MM_IMAGES') == '8'
     assert env_value(stack, 'OP_VLM_MAX_IMAGES_PER_CALL') == '8'
     # clamp((vram_gb - 3) / card_gb, 0.2, 0.9): 17 GB on a 48 GB card
@@ -360,3 +360,68 @@ def test_the_help_lists_every_subcommand(shimmed: Shimmed, stack: Path) -> None:
     result = cli(shimmed, stack, 'help')
     text = result.stdout + result.stderr
     assert 'vlm list|status|use <id> [--force] [--yes]|apply|probe|key set <slug>' in text
+
+
+# ---- clients pick up a changed image cap; Ctrl-C undoes the switch -------------
+
+
+def test_a_changed_image_cap_recreates_the_running_clients(shimmed: Shimmed, stack: Path) -> None:
+    set_env(
+        stack,
+        VLM_SERVED_MODEL_NAME='local-vlm',
+        OP_VLM_MODEL='local-vlm',
+        OP_VLM_MAX_IMAGES_PER_CALL='4',
+    )
+    (shimmed.state / 'running_services').write_text('yolo-api\ncuration-vlm-worker\nsegmenter\n')
+    assert use(shimmed, stack).returncode == 0
+    assert env_value(stack, 'OP_VLM_MAX_IMAGES_PER_CALL') == '8'
+    assert [c for c in compose_calls(shimmed) if 'up -d' in c] == [
+        'up -d vlm yolo-api curation-vlm-worker'
+    ]
+
+
+def test_an_interrupt_removes_the_pause_and_restores_env(shimmed: Shimmed, stack: Path) -> None:
+    import os
+    import signal
+    import subprocess
+    import time
+
+    (shimmed.state / 'up_hangs').write_text('')
+    before = (stack / '.env').read_text()
+    proc = subprocess.Popen(
+        [str(stack / 'openprocessor'), 'vlm', 'use', QWEN, '--yes'],
+        cwd=str(shimmed.root),
+        env=shimmed.env(SHIM_VLM_ROOT=QWEN_REPO, **WAIT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while not (shimmed.state / 'up_started').exists():
+            assert proc.poll() is None, proc.communicate()[0]
+            assert time.monotonic() < deadline
+            time.sleep(0.1)
+        assert (shimmed.state / 'pause_sentinel').exists()
+        os.killpg(proc.pid, signal.SIGINT)
+        output, _ = proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+    assert proc.returncode == 130, output
+    assert not (shimmed.state / 'pause_sentinel').exists()
+    assert (stack / '.env').read_text() == before
+    assert sorted(p.name for p in stack.glob('.env*')) == ['.env']
+
+
+def test_status_desired_line_is_the_requested_model_not_the_served_one(
+    shimmed: Shimmed, stack: Path
+) -> None:
+    (shimmed.state / 'vlm_local.json').write_text(
+        '{"desired":{"catalog_id":"qwen3-vl-4b"},'
+        '"served":{"catalog_id":"gemma-4-e4b","root":"google/gemma-4-E4B-it"}}'
+    )
+    out = cli(shimmed, stack, 'vlm', 'status').stdout
+    desired = next(ln for ln in out.splitlines() if ln.startswith('desired:'))
+    assert desired.split()[-1] == 'qwen3-vl-4b'

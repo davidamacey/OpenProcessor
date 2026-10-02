@@ -349,76 +349,6 @@ async def get_cluster_stats(
         raise HTTPException(status_code=500, detail=f'Stats retrieval failed: {e!s}') from e
 
 
-@router.get('/{index}/{cluster_id}', response_model=ClusterMembersResponse)
-async def get_cluster_members(
-    search_service: VisualSearchDep,
-    index: Annotated[str, Path(description='Index to query: global, vehicles, people, or faces')],
-    cluster_id: Annotated[int, Path(ge=0, description='Cluster ID to retrieve')],
-    page: Annotated[int, Query(ge=0, description='Page number (0-indexed)')] = 0,
-    size: Annotated[int, Query(ge=1, le=100, description='Page size')] = 50,
-):
-    """
-    Get members of a specific cluster (album view).
-
-    Retrieves all images/detections assigned to a cluster, sorted by distance
-    to the cluster centroid (closest first).
-
-    Args:
-        index: Index to query (global, vehicles, people, faces)
-        cluster_id: Cluster ID to retrieve
-        page: Page number (0-indexed)
-        size: Page size (max 100)
-
-    Returns:
-        Paginated list of cluster members.
-    """
-    index_name = validate_index_name(index)
-
-    try:
-        result = await search_service.get_cluster_members(
-            index_name=index_name,
-            cluster_id=cluster_id,
-            page=page,
-            size=size,
-        )
-
-        if result.get('status') == 'error':
-            return ClusterMembersResponse(
-                status='error',
-                index_name=index_name,
-                cluster_id=cluster_id,
-                page=page,
-                size=size,
-                count=0,
-                error=result.get('error'),
-            )
-
-        members = [
-            ClusterMember(
-                image_id=m.get('image_id', ''),
-                image_path=m.get('image_path'),
-                cluster_distance=m.get('cluster_distance'),
-                score=m.get('score'),
-                class_id=m.get('class_id'),
-            )
-            for m in result.get('members', [])
-        ]
-
-        return ClusterMembersResponse(
-            status='success',
-            index_name=result.get('index_name', index_name),
-            cluster_id=result.get('cluster_id', cluster_id),
-            page=result.get('page', page),
-            size=result.get('size', size),
-            count=result.get('count', len(members)),
-            members=members,
-        )
-
-    except Exception as e:
-        logger.error(f'Get cluster members failed for {index_name}/{cluster_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Members retrieval failed: {e!s}') from e
-
-
 @router.post('/rebalance/{index}', response_model=TrainResponse)
 async def rebalance_clusters(
     search_service: VisualSearchDep,
@@ -565,3 +495,76 @@ async def list_albums(
     except Exception as e:
         logger.error(f'List albums failed: {e}')
         raise HTTPException(status_code=500, detail=f'List albums failed: {e!s}') from e
+
+
+# Declared last: `/{index}/{cluster_id}` is two free path segments, so any
+# literal two-segment route registered after it (`/balance/{index}`) would be
+# captured by it.
+@router.get('/{index}/{cluster_id}', response_model=ClusterMembersResponse)
+async def get_cluster_members(
+    search_service: VisualSearchDep,
+    index: Annotated[str, Path(description='Index to query: global, vehicles, people, or faces')],
+    cluster_id: Annotated[int, Path(ge=0, description='Cluster ID to retrieve')],
+    page: Annotated[int, Query(ge=0, description='Page number (0-indexed)')] = 0,
+    size: Annotated[int, Query(ge=1, le=100, description='Page size')] = 50,
+):
+    """
+    Get members of a specific cluster (album view).
+
+    Retrieves all images/detections assigned to a cluster, sorted by distance
+    to the cluster centroid (closest first).
+
+    Args:
+        index: Index to query (global, vehicles, people, faces)
+        cluster_id: Cluster ID to retrieve
+        page: Page number (0-indexed)
+        size: Page size (max 100)
+
+    Returns:
+        Paginated list of cluster members.
+    """
+    index_name = validate_index_name(index)
+
+    try:
+        result = await search_service.get_cluster_members(
+            index_name=index_name,
+            cluster_id=cluster_id,
+            page=page,
+            size=size,
+        )
+
+        if result.get('status') == 'error':
+            return ClusterMembersResponse(
+                status='error',
+                index_name=index_name,
+                cluster_id=cluster_id,
+                page=page,
+                size=size,
+                count=0,
+                error=result.get('error'),
+            )
+
+        members = [
+            ClusterMember(
+                image_id=m.get('image_id', ''),
+                image_path=m.get('image_path'),
+                cluster_distance=m.get('cluster_distance'),
+                score=m.get('score'),
+                class_id=m.get('class_id'),
+            )
+            for m in result.get('members', [])
+        ]
+
+        return ClusterMembersResponse(
+            status='success',
+            index_name=result.get('index_name', index_name),
+            cluster_id=result.get('cluster_id', cluster_id),
+            page=result.get('page', page),
+            size=result.get('size', size),
+            count=result.get('count', len(members)),
+            members=members,
+        )
+
+    except Exception as e:
+        logger.error(f'Get cluster members failed for {index_name}/{cluster_id}: {e}')
+        raise HTTPException(status_code=500, detail=f'Members retrieval failed: {e!s}') from e

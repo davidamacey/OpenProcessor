@@ -24,6 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from src.config.detection_profile import DetectionProfile, reject_legacy_detection_env
+from src.utils.class_names import get_class_names
 
 
 INGEST_PRIMARY_ENV_PREFIX = 'OP_INGEST_PRIMARY_'
@@ -52,12 +53,16 @@ def load_label_names(path: str) -> tuple[str, ...]:
 
 def proposer_label(profile: DetectionProfile, class_id: int) -> str:
     """The primary model's own name for ``class_id``: its ``labels_path``
-    entry when configured and in range, else the bare id as a string."""
+    entry when configured, else the ``labels.txt`` shipped in the model's own
+    Triton directory, else the bare id as a string. (A region profile's
+    ``parent_classes`` select items by this name, so an unconfigured install
+    must still get ``car``, not ``2``.)"""
     if profile.labels_path:
         labels = load_label_names(profile.labels_path)
         if 0 <= class_id < len(labels) and labels[class_id]:
             return labels[class_id]
-    return str(class_id)
+        return str(class_id)
+    return get_class_names(profile.detector_model).get(class_id) or str(class_id)
 
 
 __all__ = [

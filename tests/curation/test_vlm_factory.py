@@ -5,6 +5,8 @@ that it re-checks the SSRF policy at construction."""
 from __future__ import annotations
 
 import asyncio
+import gc
+import threading
 from dataclasses import replace
 from typing import Any
 
@@ -133,7 +135,7 @@ def test_a_reprobe_is_a_new_labeler_even_when_the_facts_are_the_same() -> None:
     assert labeler_for(_endpoint(probe=later), GENERIC_ITEM_PACK) is not first
 
 
-def test_the_cache_is_bounded_and_defers_closing_what_it_drops(
+def test_the_cache_is_bounded_and_retires_what_it_drops(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     closed: list[Any] = []
@@ -141,7 +143,7 @@ def test_the_cache_is_bounded_and_defers_closing_what_it_drops(
     def defer(labeler: Any) -> None:
         closed.append(labeler)
 
-    monkeypatch.setattr(vlm_factory, '_schedule_close', defer)
+    monkeypatch.setattr(vlm_factory, '_retire', defer)
     built = [labeler_for(_endpoint(revision=n), GENERIC_ITEM_PACK) for n in range(1, 40)]
     assert len(vlm_factory._LABELERS) == vlm_factory._CACHE_MAX
     assert (
@@ -149,27 +151,85 @@ def test_the_cache_is_bounded_and_defers_closing_what_it_drops(
     )  # oldest first, never closed inline
 
 
-@pytest.mark.asyncio
-async def test_a_replaced_labeler_is_closed_only_after_in_flight_calls_can_finish(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    waited: list[float] = []
-    closed: list[str] = []
+class _Closable:
+    """Stands in for a labeler: ``_retire`` needs only its client closer."""
 
-    async def fake_sleep(seconds: float) -> None:
-        waited.append(seconds)
+    def __init__(self, closed: list[str]) -> None:
+        self._closed = closed
 
-    class Fake:
-        timeout_s = 20.0
+    def client_closer(self) -> Any:
+        closed = self._closed
 
-        async def aclose(self) -> None:
+        async def close() -> None:
             closed.append('closed')
 
-    monkeypatch.setattr(vlm_factory.asyncio, 'sleep', fake_sleep)
-    vlm_factory._schedule_close(Fake())  # type: ignore[arg-type]
+        return close
+
+
+async def _drain() -> None:
+    await asyncio.sleep(0)
     await asyncio.gather(*list(vlm_factory._CLOSING))
-    assert waited == [20.0 + vlm_factory._CLOSE_GRACE_S]
+
+
+@pytest.mark.asyncio
+async def test_a_retired_labeler_stays_open_while_a_job_still_holds_it() -> None:
+    closed: list[str] = []
+    held = _Closable(closed)
+    vlm_factory._retire(held)  # type: ignore[arg-type]
+    gc.collect()
+    await asyncio.sleep(0)
+    assert closed == []  # still referenced: a long job is using it
+    del held
+    gc.collect()
+    await _drain()
     assert closed == ['closed']
+
+
+@pytest.mark.asyncio
+async def test_a_retired_labeler_nobody_holds_is_closed() -> None:
+    closed: list[str] = []
+    vlm_factory._retire(_Closable(closed))  # type: ignore[arg-type]
+    gc.collect()
+    await _drain()
+    assert closed == ['closed']
+
+
+@pytest.mark.asyncio
+async def test_host_checks_resolve_dns_off_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loop_thread = threading.get_ident()
+    seen: list[int] = []
+
+    def resolve(host: str) -> list[str]:
+        seen.append(threading.get_ident())
+        return ['10.0.0.9'] if host == 'dns.corp.example' else ['172.18.0.9']
+
+    monkeypatch.setattr(policy, '_resolve', resolve)
+    policy.reset_policy_caches()
+    await vlm_factory.assert_may_connect(_endpoint(base_url='http://dns.corp.example/v1'))
+    assert seen
+    assert loop_thread not in seen
+
+
+@pytest.mark.asyncio
+async def test_a_build_after_an_async_precheck_does_not_resolve_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def resolve(host: str) -> list[str]:
+        calls.append(host)
+        return ['10.0.0.9'] if host == 'dns.corp.example' else ['172.18.0.9']
+
+    monkeypatch.setattr(policy, '_resolve', resolve)
+    policy.reset_policy_caches()
+    endpoint = _endpoint(base_url='http://dns.corp.example/v1')
+    await vlm_factory.assert_may_connect(endpoint)
+    seen = len(calls)
+    assert seen
+    labeler_for(endpoint, GENERIC_ITEM_PACK)
+    assert len(calls) == seen
 
 
 def test_the_uncached_builder_owns_what_it_returns() -> None:

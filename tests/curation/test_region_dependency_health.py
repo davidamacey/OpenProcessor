@@ -310,3 +310,24 @@ class TestStatePersistenceIsBestEffort:
         [det] = results
         assert det.ready is False
         assert det.unavailable_since is not None
+
+
+class TestSegmenterOnlyProfile:
+    @pytest.mark.asyncio
+    async def test_a_down_segmenter_gives_a_stall_reason_without_a_detector(self) -> None:
+        """Found live: a segmenter-only profile reported no dependencies, so
+        ``stall_reason`` stayed null while the segmenter was down."""
+
+        async def _never() -> list[dict[str, str]]:
+            msg = 'there is no detector to look up'
+            raise AssertionError(msg)
+
+        async def _down() -> tuple[bool, str]:
+            return False, 'connection refused'
+
+        profile = _profile(detector_model='', segmenter_text_prompt='a thing')
+        deps = await rdh.check_region_dependencies(_never, profile, check_segmenter_health=_down)
+        assert [(d.role, d.ready) for d in deps] == [('segmenter', False)]
+        reason = rdh.stall_reason(deps, pending_detection=4)
+        assert reason is not None
+        assert 'segmenter' in reason

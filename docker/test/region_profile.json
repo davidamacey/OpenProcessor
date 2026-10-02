@@ -1,0 +1,12 @@
+{
+  "_comment": "Region profile for the live harness: a text-bearing region, so the text routes are enabled. Nothing here is ever called (no detector, no OCR model is loaded in the harness).",
+  "name": "label_text",
+  "detector_model": "",
+  "segmenter_name": "sam3",
+  "segmenter_text_prompt": "label",
+  "text_reader": "both",
+  "ocr_pipeline_model": "ocr_pipeline",
+  "region_class_name": "label",
+  "display_name": "Labels",
+  "display_name_singular": "Label"
+}

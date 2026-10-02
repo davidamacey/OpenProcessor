@@ -149,6 +149,12 @@ def _knn_settings() -> dict[str, Any]:
             'number_of_shards': 1,
             'number_of_replicas': 0,
             'knn': True,
+            # OpenSearch 3.x strips vectors from `_source` and re-derives them
+            # (normalised, for cosine) on read; for a nested knn_vector under
+            # a `_source` include the derived value comes back as the number
+            # 1, which silently corrupted every per-box embedding read.
+            # Static: an index created without this needs a reindex.
+            'knn.derived_source.enabled': False,
         },
     }
 

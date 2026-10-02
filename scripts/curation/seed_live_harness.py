@@ -54,6 +54,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.config.region_state import RegionStatus  # noqa: E402 - needs the sys.path fix above
+from src.services.curation.region_class import ensure_region_class  # noqa: E402
 from src.services.projects.guard import make_script_opensearch  # noqa: E402
 from src.services.projects.script_binding import (  # noqa: E402 - needs the sys.path fix above
     add_project_argument,
@@ -131,6 +132,20 @@ COHORTS: tuple[Cohort, ...] = (
     # Merge-target cohort: never human-validated, so it never acquires a
     # frozen holdout row and stays mergeable.
     Cohort('cls7', 7, 20, 1, class_id=7, class_source='secondary_model', class_validated=False),
+    # Auto-promote targets: candidate clusters (promotion never touches a
+    # class cluster) whose members carry classifier labels. One is pure ->
+    # promoted; the other is a 60/40 mix, below the purity gate -> left alone.
+    Cohort('prm', 10004, 30, 2, class_id=0, class_source='secondary_model'),
+    Cohort(
+        'mxd',
+        10005,
+        30,
+        2,
+        class_id=1,
+        class_source='secondary_model',
+        minority_class_id=2,
+        minority_count=12,
+    ),
     # Residual / candidate band.
     Cohort('cnd10000', 10000, 30, 3),
     Cohort('cnd10001', 10001, 20, 2),
@@ -362,6 +377,14 @@ def _build_items(
                     'created_at': (now - timedelta(minutes=global_index)).isoformat(),
                     'updated_at': (now - timedelta(minutes=global_index)).isoformat(),
                 }
+                if cohort.cluster_id is not None and cohort.cluster_id >= 0:
+                    # What the cluster-geometry pass would have measured: a
+                    # member whose class differs from its cluster's sits
+                    # nearest the other class's centroid.
+                    doc['cluster_distance_cluster_id'] = cohort.cluster_id
+                    doc['cluster_nearest_id'] = (
+                        class_id if is_minority and class_id is not None else cohort.cluster_id
+                    )
                 if cohort.excluded:
                     doc['excluded_at'] = now.isoformat()
                     doc['excluded_by'] = 'seed'
@@ -474,6 +497,9 @@ async def _seed(args: argparse.Namespace) -> int:
         for name in CLASS_NAMES:
             if name not in existing:
                 registry.add_class(name, group='shipping')
+        # The API adds the active region profile's class at startup; seeding
+        # it here keeps a restart from changing the registry the tests read.
+        ensure_region_class()
         synced = await registry.sync_to_opensearch(client)
         print(f'class registry: {len(CLASS_NAMES)} classes, synced={synced}')
 

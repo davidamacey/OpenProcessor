@@ -412,6 +412,28 @@ def test_curation_workers_depend_on_healthy_api() -> None:
     assert not bad, f'expected depends_on.yolo-api.condition == service_healthy: {bad}'
 
 
+def test_yolo_api_waits_for_a_healthy_opensearch() -> None:
+    """Found live: the API boots, fails to create the core kNN indexes
+    because OpenSearch is not up yet, and never retries them -- so the first
+    /ingest creates them with dynamic mappings."""
+    depends_on = _services()['yolo-api'].get('depends_on')
+    assert isinstance(depends_on, dict), depends_on
+    assert (depends_on.get('opensearch') or {}).get('condition') == 'service_healthy'
+
+
+def test_triton_accepts_the_clients_idle_keepalive_pings() -> None:
+    """Found live: clients ping every 30 s while idle; Triton refused (idle pings
+    off, 5-minute minimum interval) and sent GOAWAY too_many_pings."""
+    command = _services()['triton-server']['command']
+    assert '--grpc-keepalive-permit-without-calls=true' in command
+    interval = next(
+        int(arg.split('=', 1)[1])
+        for arg in command
+        if arg.startswith('--grpc-http2-min-recv-ping-interval-without-data=')
+    )
+    assert interval <= 30_000
+
+
 def test_yolo_api_has_a_healthcheck() -> None:
     """A `service_healthy` dependency on yolo-api is meaningless without one."""
     services = _services()
@@ -880,12 +902,14 @@ def test_no_service_reads_a_host_port_var_as_its_own_container_config() -> None:
 COMPOSE = REPO_ROOT / 'docker-compose.yml'
 SERVER = 'python3 -m vllm.entrypoints.openai.api_server'
 
-#: The argv the vlm service ran before W9 (docker-compose.yml at b3163f8c).
+#: The argv the vlm service ran before W9 (docker-compose.yml at b3163f8c), with
+#: --max-model-len raised from 8192 to 16384 (an 8-image combined batch plus its
+#: 6144 output tokens does not fit in 8192 -- found live).
 PRE_W9_ARGV = [
     '--model=google/gemma-4-E4B-it',
     '--served-model-name=gemma-4-e4b',
     '--dtype=bfloat16',
-    '--max-model-len=8192',
+    '--max-model-len=16384',
     '--gpu-memory-utilization=0.4',
     '--limit-mm-per-prompt={"image":8,"audio":0}',
     '--chat-template=/vllm-workspace/examples/tool_chat_template_gemma4.jinja',

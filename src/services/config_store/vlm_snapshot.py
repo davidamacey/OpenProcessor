@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 LOCAL_DESIRED_DOC_ID = 'local_vlm:desired'
+_PROBE_PAGE_SIZE = 1000
 
 
 def probe_doc_id(key: str) -> str:
@@ -96,17 +97,26 @@ async def load_global_fields(client: Any, index: str) -> dict[str, Any]:
     from src.services.projects.guard import global_configs_read
 
     with global_configs_read():
-        resp = await client.search(
-            index=index,
-            body={
-                'size': 1000,
+        probes: dict[str, dict[str, Any]] = {}
+        after: list[Any] | None = None
+        while True:
+            body: dict[str, Any] = {
+                'size': _PROBE_PAGE_SIZE,
+                'sort': [{'_doc': 'asc'}],
                 'query': {'bool': {'filter': [{'term': {'doc_type': 'vlm_probe'}}]}},
-            },
-        )
-        probes = {
-            hit['_source']['probe_key']: dict(hit['_source'].get('body') or {})
-            for hit in resp['hits']['hits']
-        }
+            }
+            if after is not None:
+                body['search_after'] = after
+            hits = (await client.search(index=index, body=body))['hits']['hits']
+            for hit in hits:
+                key = hit['_source'].get('probe_key')
+                if key is None:
+                    logger.warning('vlm_probe_doc_without_key', doc_id=hit.get('_id'))
+                    continue
+                probes[key] = dict(hit['_source'].get('body') or {})
+            if len(hits) < _PROBE_PAGE_SIZE:
+                break
+            after = hits[-1]['sort']
         try:
             desired_doc = await client.get(index=index, id=LOCAL_DESIRED_DOC_ID)
             desired = dict(desired_doc['_source'])

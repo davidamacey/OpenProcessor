@@ -138,8 +138,11 @@ def _import_boxes(
         row = wanted.get(b.box_id)
         if row is None:
             continue
+        # A ledger row without a box (written before standalone items
+        # ledgered theirs) cannot prove the box is unedited: keep it.
         untouched = (
-            b.source == CANDIDATE_IMPORT
+            row.get('bbox_norm') is not None
+            and b.source == CANDIDATE_IMPORT
             and b.detector_version == import_id
             and [round(v, 6) for v in b.bbox_norm] == [round(v, 6) for v in row['bbox_norm']]
             and not is_human_owned(b)

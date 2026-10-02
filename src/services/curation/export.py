@@ -92,6 +92,7 @@ from src.services.curation.export_support import (
     _ExportRow,
     _remap_rows_to_export_ids,
     _resolve_source_path,
+    allocate_export_dir,
     atomic_symlink_flip,
     atomic_write_text,
     even_stratified_sample,
@@ -415,7 +416,7 @@ class GenericYoloExportService:
         resolved_export_dir = (
             Path(export_dir)
             if export_dir
-            else (self.config.export_root / datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ'))
+            else allocate_export_dir(self.config.export_root, datetime.now(UTC))
         )
         images_root = resolved_export_dir / 'images'
         labels_root = resolved_export_dir / 'labels'

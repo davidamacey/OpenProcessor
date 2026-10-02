@@ -285,3 +285,23 @@ def get_clip_tokenizer():
                 _clip_tokenizer = CLIPTokenizer.from_pretrained('openai/clip-vit-base-patch32')
 
     return _clip_tokenizer
+
+
+CLIP_CONTEXT_LENGTH = 77
+
+
+def clip_text_tokens(text: str) -> np.ndarray:
+    """``[1, 77]`` int64 token ids for the MobileCLIP text encoder.
+
+    The model was trained on open_clip's tokenizer, which pads with id ``0``
+    after the end-of-text token. The HuggingFace tokenizer pads with the
+    end-of-text id (49407) instead, and the text tower attends to padding
+    (no causal mask), so that padding yields embeddings unrelated to the
+    image tower's (a cosine of ~0.06 for every pair, found live). Pad
+    explicitly with zeros; longer text is truncated with the end-of-text
+    token kept as the last id.
+    """
+    ids = get_clip_tokenizer()(text, truncation=True, max_length=CLIP_CONTEXT_LENGTH)['input_ids']
+    tokens = np.zeros((1, CLIP_CONTEXT_LENGTH), dtype=np.int64)
+    tokens[0, : len(ids)] = ids
+    return tokens

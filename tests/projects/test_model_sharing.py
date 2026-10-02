@@ -24,12 +24,16 @@ def _writable(not_stale_registry: object) -> None:
 
 @pytest.fixture
 def app_client():
+    from curation._fake_config_opensearch import FakeConfigOpenSearch
+
     import src.routers.curation.models as models_mod
+    from src.routers.curation import _raw_opensearch_dep
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, models_mod.router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: FakeConfigOpenSearch()
     with TestClient(app) as client:
         yield client
 
@@ -149,8 +153,13 @@ def test_concurrent_puts_on_the_same_revision_one_wins_one_409s(
     real = sharing_mod._promote_json_path
     monkeypatch.setattr(sharing_mod, '_promote_json_path', lambda n: _SlowReadPath(real(n)))
 
+    from curation._fake_config_opensearch import FakeConfigOpenSearch
+
+    from src.routers.curation import _raw_opensearch_dep
+
     app = FastAPI()
     mount_curation_routers(app, models_mod.router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: FakeConfigOpenSearch()
     client = TestClient(app)
     barrier = threading.Barrier(2)
     codes: list[int] = []

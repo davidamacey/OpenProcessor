@@ -371,71 +371,21 @@ async def search_by_ocr(
         text: Text to search for
         page: Page number (0-indexed)
         size: Results per page (max 100)
-        fuzzy: Enable fuzzy matching for typos
+        fuzzy: Match on any word of the query (prefix/substring); false
+            matches the whole recognised line verbatim
 
     Returns:
-        Images containing matching text.
+        One result per matching image (its best-matching text line) and the
+        number of matching images.
     """
     # Import here to avoid circular imports
     from src.core.dependencies import get_visual_search_service
 
     try:
         search_service = await get_visual_search_service()
-        client = search_service.opensearch.client
-
-        from src.clients.opensearch import IndexName
-
-        # Build search query
-        if fuzzy:
-            query = {
-                'multi_match': {
-                    'query': text,
-                    'fields': ['full_text', 'texts'],
-                    'fuzziness': 'AUTO',
-                }
-            }
-        else:
-            query = {
-                'multi_match': {
-                    'query': text,
-                    'fields': ['full_text', 'texts'],
-                }
-            }
-
-        response = await client.search(
-            index=IndexName.OCR.value,
-            body={
-                'query': query,
-                'from': page * size,
-                'size': size,
-                '_source': ['image_id', 'image_path', 'full_text', 'texts', 'num_texts'],
-                'highlight': {
-                    'fields': {
-                        'full_text': {},
-                        'texts': {},
-                    }
-                },
-            },
+        hits, total = await search_service.opensearch.search_ocr_page(
+            text, offset=page * size, size=size, exact=not fuzzy
         )
-
-        hits = response.get('hits', {})
-        total = hits.get('total', {}).get('value', 0)
-
-        results = []
-        for hit in hits.get('hits', []):
-            source = hit['_source']
-            highlight = hit.get('highlight', {})
-
-            results.append(
-                {
-                    'image_id': source.get('image_id', ''),
-                    'image_path': source.get('image_path', ''),
-                    'score': hit.get('_score', 0),
-                    'full_text': source.get('full_text', ''),
-                    'num_texts': source.get('num_texts', 0),
-                    'highlight': highlight.get('full_text', highlight.get('texts', [])),
-                }
-            )
 
         return {
             'status': 'success',
@@ -443,7 +393,7 @@ async def search_by_ocr(
             'total_results': total,
             'page': page,
             'size': size,
-            'results': results,
+            'results': hits,
         }
 
     except RetryExhaustedError:

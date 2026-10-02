@@ -10,7 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import ActiveRef, api_error
+from src.routers.curation._config_common_models import (
+    ActivateResponse,
+    ActiveConfigResponse,
+    ActiveRef,
+    api_error,
+)
 from src.routers.curation._prompt_pack_models import (
     PromptPackActivateRequest,
     PromptPackBody,
@@ -194,7 +199,7 @@ async def validate_prompt_pack_route(
     body: PromptPackValidateRequest, opensearch: OpenSearchDep, profile: str | None = None
 ) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = all_known_names()
     report = validate_pack(
         body.name,
@@ -211,15 +216,15 @@ async def validate_prompt_pack_route(
 # =============================================================================
 
 
-@router.get('/prompt_packs/active')
-async def get_active_prompt_pack_route(opensearch: OpenSearchDep) -> Any:
+@router.get('/prompt_packs/active', response_model=ActiveConfigResponse)
+async def get_active_prompt_pack_route(opensearch: OpenSearchDep) -> ActiveConfigResponse:
     return await build_active_config_response(opensearch, axis='prompt_pack')
 
 
-@router.post('/prompt_packs/active/rollback')
+@router.post('/prompt_packs/active/rollback', response_model=ActiveConfigResponse)
 async def rollback_active_prompt_pack(
     body: PromptPackRollbackRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
         await rollback_pack(opensearch, expected_active=expected)
@@ -252,7 +257,7 @@ async def rollback_active_prompt_pack(
 @router.get('/prompt_packs', response_model=PromptPackList)
 async def list_prompt_packs(opensearch: OpenSearchDep) -> PromptPackList:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     names = all_known_names() - set(_template_names_only())
     packs = [build_record(name) for name in sorted(names)]
     templates = [
@@ -283,7 +288,7 @@ async def create_prompt_pack(
     body: PromptPackCreateRequest, opensearch: OpenSearchDep
 ) -> PromptPackDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = all_known_names()
     report = validate_pack(
         body.name,
@@ -323,7 +328,7 @@ async def create_prompt_pack(
 @router.get('/prompt_packs/{name}', response_model=PromptPackDoc)
 async def get_prompt_pack_route(name: str, opensearch: OpenSearchDep) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -467,7 +472,7 @@ async def save_prompt_pack(
     name: str, body: PromptPackSaveRequest, opensearch: OpenSearchDep
 ) -> PromptPackDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
@@ -511,7 +516,7 @@ async def delete_prompt_pack_route(
     from fastapi import Response
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -542,14 +547,14 @@ async def delete_prompt_pack_route(
 # =============================================================================
 
 
-@router.post('/prompt_packs/{name}/activate')
+@router.post('/prompt_packs/{name}/activate', response_model=ActivateResponse)
 async def activate_prompt_pack_route(
     name: str, body: PromptPackActivateRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -576,4 +581,4 @@ async def activate_prompt_pack_route(
         ) from exc
 
     response = await build_active_config_response(opensearch, axis='prompt_pack')
-    return {**response.model_dump(), 'validation': report.model_dump()}
+    return ActivateResponse(**response.model_dump(), validation=report)

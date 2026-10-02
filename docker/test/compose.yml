@@ -26,7 +26,7 @@ name: op-live-verify
 services:
   opensearch:
     image: opensearchproject/opensearch:3.6.0
-    container_name: op-verify-opensearch
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-opensearch
     environment:
       - discovery.type=single-node
       - bootstrap.memory_lock=true
@@ -56,8 +56,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.fake-vlm
-    image: op-verify-fake-vlm:latest
-    container_name: op-verify-fake-vlm
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-fake-vlm:latest
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-fake-vlm
     environment:
       # Default class the fake answers with on the classification path.
       # Must match a class the seed script creates, so the label actually
@@ -83,13 +83,14 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: op-verify-api:latest
-    container_name: op-verify-api
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api
     # NOTE: no `env_file: ./.env` — the harness is hermetic on purpose.
     volumes:
       - ../../src:/app/src:ro
       - ../../scripts:/app/scripts:ro
       - ../../VERSION:/app/VERSION:ro
+      - ./region_profile.json:/region_profile.json:ro
       # Everything the API is allowed to write lives under one bind mount
       # so the test process can assert on the bytes it produced. The
       # previous ad-hoc harness mounted none of these and every registry
@@ -134,6 +135,13 @@ services:
       - OP_VLM_URL=http://fake-vlm:8000/v1
       - OP_VLM_MODEL=fake-vlm
       - OP_VLM_API_KEY=EMPTY
+      # A configured secondary classifier is what makes `secondary_model` a
+      # classifier class_source (the seeded cls* rows carry it); no model is
+      # ever called.
+      - OP_INGEST_SECONDARY_DETECTOR_MODEL=seeded_classifier
+      # Region routes 409 without an active region profile, and the text
+      # routes need a text-bearing one.
+      - OP_REGION_PROFILE_PATH=/region_profile.json
       # W9: this harness has no in-compose vLLM to switch (keeps the live
       # guard's local-model routes on their no_local_vlm path).
       - OP_LOCAL_VLM_ENDPOINT=
@@ -174,8 +182,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: op-verify-api:latest
-    container_name: op-verify-trainer
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-trainer
     volumes:
       - ./fake_trainer.sh:/opt/fake_trainer.sh:ro
       - ./verify-data/jobs:/jobs

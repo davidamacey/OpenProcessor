@@ -204,9 +204,18 @@ async def get_curation_opensearch() -> Any:
     """Dependency for the raw, project-guarded ``AsyncOpenSearch`` every
     curation route uses (one dependency for every curation router, so one
     override covers them all)."""
+    from src.config.project_context import try_current_project
+    from src.services.config_store import get_config_store
     from src.services.projects.guard import make_curation_opensearch
 
-    return await make_curation_opensearch()
+    client = await make_curation_opensearch()
+    # Every project route reads the active region profile / prompt pack /
+    # VLM from this API worker's snapshot (ingest seeds region work from it).
+    # An activation made through another of the API's workers must reach this
+    # one within a second, not only when a config route happens to land here.
+    if try_current_project() is not None:
+        await get_config_store().ensure_fresh(client)
+    return client
 
 
 async def get_visual_search_service():
