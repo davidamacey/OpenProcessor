@@ -1607,23 +1607,30 @@ class OpenSearchClient:
             return []
 
     async def get_all_index_stats(self) -> dict[str, Any]:
-        """Get statistics for all visual search indexes."""
-        stats = {}
-        for index_name in [IndexName.GLOBAL, IndexName.VEHICLES, IndexName.PEOPLE, IndexName.FACES]:
+        """``{index: {doc_count, size_bytes, exists}}`` for every core index
+        (the shape ``GET /query/stats`` serves).
+
+        The count comes from ``_count`` -- a search, so an idle shard is
+        refreshed first and a just-ingested document is counted -- where
+        ``_stats`` reports only what the last refresh made searchable.
+        """
+        stats: dict[str, Any] = {}
+        for index_name in IndexName:
+            name = index_name.value
             try:
-                exists = await self.client.indices.exists(index=index_name.value)
-                if exists:
-                    response = await self.client.indices.stats(index=index_name.value)
-                    stats[index_name.value] = {
-                        'total_documents': response['_all']['primaries']['docs']['count'],
-                        'index_size_mb': round(
-                            response['_all']['primaries']['store']['size_in_bytes'] / 1024 / 1024, 2
-                        ),
-                    }
-                else:
-                    stats[index_name.value] = {'exists': False}
+                if not await self.client.indices.exists(index=name):
+                    stats[name] = {'exists': False, 'doc_count': 0, 'size_bytes': 0}
+                    continue
+                count = await self.client.count(index=name)
+                response = await self.client.indices.stats(index=name, metric='store')
+                stats[name] = {
+                    'exists': True,
+                    'doc_count': int(count['count']),
+                    'size_bytes': int(response['_all']['primaries']['store']['size_in_bytes']),
+                }
             except Exception as e:
-                stats[index_name.value] = {'error': str(e)}
+                logger.error(f'Index stats failed for {name}: {e}')
+                stats[name] = {'exists': False, 'doc_count': 0, 'size_bytes': 0, 'error': str(e)}
         return stats
 
     # =========================================================================
