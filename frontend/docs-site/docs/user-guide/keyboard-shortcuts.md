@@ -57,8 +57,12 @@ makes the shortcuts below customizable per project rather than fixed.
 | Key | Action |
 | --- | --- |
 | `F` | Mark false positive (box kept) |
-| `E` | Enter bbox edit mode |
-| `Enter` / `Esc` (edit mode) | Save bbox / cancel edit |
+| `E` | Enter box edit mode |
+| `Y` / `R` | Accept / reject the selected box (saves immediately) |
+| `Enter` | Confirm every box still proposed (see [Multi-box regions](./multi-box-regions.md)) |
+| `Tab` (edit mode) | Select the next box |
+| `Enter` / `Esc` (edit mode) | Save boxes / cancel edit |
+| Arrow keys, `[` `]`, `Backspace` (edit mode) | Nudge the selected box, move its right edge, clear it |
 
 `Esc` cannot cancel an in-progress pointer drag (only keyboard/aria drags) —
 it clears the captured multi-drag set and restores the grid layout instead.
@@ -90,6 +94,15 @@ card doesn't appear at all and every shortcut runs on its built-in default.
   used as a class hotkey, the save is refused with an offer to unbind the
   class key first and save again — it never silently overrides one binding
   with the other.
+- **A project's own keys.** Because the keymap is per project, the project
+  switcher shows a "custom keys" badge on a project that has been rebound.
+  Copying settings between projects can carry a keymap; any clash with the
+  destination's class hotkeys is reported afterwards.
+- **Server messages are shown as served.** While you edit, the backend checks
+  the draft and its own errors and warnings appear verbatim. A save can be
+  refused because someone else changed the keymap (reload and reapply), or
+  because a key is a class hotkey (offered: unbind those class keys and save
+  again).
 - **Reset.** Every action (or the whole keymap) can be reset back to its
   default binding.
 

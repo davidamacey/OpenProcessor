@@ -20,7 +20,8 @@ representative crops.
   visualization only, it never feeds a clustering decision.
 - Filtering on the region class swaps the grid for the region gallery
   (browsing the region queue directly, with detector/verified/status/score/
-  text filters).
+  text filters, plus a **Box state** filter; see
+  [Multi-box regions](./multi-box-regions.md)).
 - One synthetic inventory card per registered annotation slot with a browse
   endpoint is pinned to the unfiltered grid.
 
@@ -30,7 +31,10 @@ representative crops.
 
 The core triage surface: a crop grid for one cluster with pointer-based
 drag and drop onto class rows, bulk select/confirm/move/discard/ignore,
-per-class hotkeys, **Run VLM** and **Accept VLM** for the page, **Refine**
+per-class hotkeys, **Run VLM** (with an optional per-run endpoint picker, see
+[VLM models](./vlm-models.md#choosing-a-vlm-per-run)) and **Accept VLM** for
+the page, **Reprocess** for the selection (see
+[Reprocess](./dataset-import.md#reprocess)), **Refine**
 (sub-cluster with agglomerative clustering), a strategy bar (sort, score
 chips, diverse-selection overlay) and a core-member cut line.
 
@@ -41,4 +45,6 @@ See [Keyboard shortcuts](./keyboard-shortcuts.md) for the full key table.
 The info button on any crop opens its full provenance: the source image
 with every item and region box drawn client-side (toggleable), the crop
 itself, class/label-source/confidence/cluster metadata, OCR text lines,
-label-write history, and sibling crops from the same source image.
+label-write history, and sibling crops from the same source image. It also
+shows provenance when recorded (import, combine origin, VLM endpoint, model
+and prompt pack), and a **lock** icon on a label a human has set.
