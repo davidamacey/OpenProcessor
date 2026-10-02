@@ -12,6 +12,7 @@
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { createImportJob, PAGE_SIZE } from '$lib/datasets/importJobController.svelte';
   import { projectHref } from '$lib/projectPaths';
+  import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
   import type { DatasetImportReport, NextStep } from '$lib/types_import';
 
   const importId = $derived(page.params.id ?? '');
@@ -116,6 +117,17 @@
                 j.source.format}
               · <code class="font-mono">{j.source.root}</code>
             </span>
+            {#if reviewTabsVocabularyStore.hasEntry('imported')}
+              <a
+                class="ml-auto text-xs text-blue-300 underline hover:text-blue-200"
+                data-testid="review-imported-link"
+                href={resolve(
+                  projectHref(
+                    `/review?tab=imported&import_id=${encodeURIComponent(j.import_id)}`,
+                  ),
+                )}>Review imported labels</a
+              >
+            {/if}
           </div>
 
           <div data-testid="job-progress">

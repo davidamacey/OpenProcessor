@@ -52,7 +52,16 @@ export interface EmptyQueueInput {
    *  message can point straight at the control that would populate this
    *  queue, rather than leaving the operator to guess. `null` until the
    *  tabs vocabulary has loaded. */
-  emptyState?: { has_probe_predictions: boolean; has_item_scores: boolean } | null;
+  emptyState?: {
+    has_probe_predictions: boolean;
+    has_item_scores: boolean;
+    has_imported_labels?: boolean;
+  } | null;
+  /** True on the `imported` tab, the only queue the served
+   *  `has_imported_labels` flag speaks to. */
+  importedTab?: boolean;
+  /** `datasetsAvailability.available === true`: the import page exists. */
+  datasetsAvailable?: boolean;
 }
 
 export interface EmptyQueueMessage {
@@ -63,7 +72,7 @@ export interface EmptyQueueMessage {
    *  a link target the page renders as an anchor. */
   /** A project section path; the page builds the full link with
    *  `projectHref()`. */
-  link?: { href: '/train' | '/settings'; text: string };
+  link?: { href: '/train' | '/settings' | '/datasets/import'; text: string };
 }
 
 /**
@@ -98,6 +107,13 @@ export function emptyQueueMessage(input: EmptyQueueInput): EmptyQueueMessage {
     link = { href: '/train', text: 'Run a probe on /train' };
   } else if (input.emptyState?.has_item_scores === false && /score/.test(reasonText)) {
     link = { href: '/settings', text: 'Compute scores on /settings' };
+  }
+  if (
+    input.importedTab &&
+    input.datasetsAvailable &&
+    input.emptyState?.has_imported_labels === false
+  ) {
+    link = { href: '/datasets/import', text: 'Import a labeled dataset' };
   }
   return { title: `The ${input.label} queue is empty.`, lines, link };
 }

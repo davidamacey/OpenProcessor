@@ -26,6 +26,10 @@
     box: BBoxNormLike;
     state: string;
     label: string;
+    /** The served per-box `locked` flag: a human-locked box the pipeline
+     *  must not overwrite. Drawn as a lock glyph; no reason text (the
+     *  backend serves none). */
+    locked?: boolean;
   }
 
   interface Props {
@@ -261,6 +265,25 @@
       >
         {i + 1}
       </span>
+      {#if b.locked}
+        <span
+          class="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-zinc-100"
+          style="border:1px solid {ringColorFor(b.state)}"
+          title="Locked"
+          data-testid="box-locked"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            class="h-2.5 w-2.5"
+            aria-hidden="true"
+          >
+            <path
+              d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
+            />
+          </svg>
+        </span>
+      {/if}
     </div>
   {/each}
 

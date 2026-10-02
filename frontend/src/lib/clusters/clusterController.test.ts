@@ -1275,3 +1275,41 @@ describe('moveCropIds', () => {
     expect(cropPager.items.map((c) => c.id).sort()).toEqual(['a', 'b']);
   });
 });
+
+// ---------------------------------------------------------------------
+// adoptItems: the served post-write items of an image Reprocess
+// ---------------------------------------------------------------------
+
+describe('adoptItems', () => {
+  it('replaces each loaded crop with the served item of the same id and repaints the grid', () => {
+    const { controller, cropPager, resetGrid } = setup([
+      crop('a', { class_name: 'old' }),
+      crop('b'),
+      crop('c'),
+    ]);
+    controller.adoptItems([
+      crop('a', { class_name: 'served' }),
+      crop('c', { proposed_class_name: 'widget' }),
+    ]);
+    expect(cropPager.items.map((c) => c.id)).toEqual(['a', 'b', 'c']);
+    expect(cropPager.items[0]!.class_name).toBe('served');
+    expect(cropPager.items[1]!.class_name).toBeNull();
+    expect(cropPager.items[2]!.proposed_class_name).toBe('widget');
+    expect(resetGrid).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an item the grid does not hold (another cluster, or not loaded) and never adds it', () => {
+    const { controller, cropPager } = setup([crop('a')]);
+    controller.adoptItems([crop('zzz', { class_name: 'elsewhere' })]);
+    expect(cropPager.items.map((c) => c.id)).toEqual(['a']);
+    expect(cropPager.total).toBe(1);
+  });
+
+  it('an empty served list changes nothing, not even the grid', () => {
+    const { controller, cropPager, resetGrid } = setup([crop('a')]);
+    const before = cropPager.items;
+    controller.adoptItems([]);
+    expect(cropPager.items).toBe(before);
+    expect(resetGrid).not.toHaveBeenCalled();
+  });
+});

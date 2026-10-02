@@ -42,7 +42,11 @@ function tab(id: string, label: string, over: Record<string, unknown> = {}) {
   };
 }
 
-const EMPTY_STATE = { has_probe_predictions: false, has_item_scores: true };
+const EMPTY_STATE = {
+  has_probe_predictions: false,
+  has_item_scores: true,
+  has_imported_labels: false,
+};
 
 const PAYLOAD = {
   tabs: [
@@ -126,6 +130,35 @@ describe('reviewTabsVocabularyStore.emptyState', () => {
     await reviewTabsVocabularyStore.init();
 
     expect(reviewTabsVocabularyStore.emptyState).toEqual(EMPTY_STATE);
+  });
+});
+
+describe('reviewTabsVocabularyStore.hasEntry (W10: the imported tab is served-only)', () => {
+  it('is true only for an endpoint id the served vocabulary lists', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, {
+          tabs: [tab('all', 'All'), tab('imported', 'Imported labels')],
+          empty_state: EMPTY_STATE,
+        }),
+      ),
+    );
+    expect(reviewTabsVocabularyStore.hasEntry('imported')).toBe(false);
+    await reviewTabsVocabularyStore.init();
+    expect(reviewTabsVocabularyStore.hasEntry('imported')).toBe(true);
+    expect(reviewTabsVocabularyStore.hasEntry('all')).toBe(true);
+    expect(reviewTabsVocabularyStore.hasEntry('nope')).toBe(false);
+  });
+
+  it('is false for imported when the vocabulary does not list it, and after a failed load', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, PAYLOAD)));
+    await reviewTabsVocabularyStore.init();
+    expect(reviewTabsVocabularyStore.hasEntry('imported')).toBe(false);
+    resetStore();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { detail: 'x' })));
+    await reviewTabsVocabularyStore.init();
+    expect(reviewTabsVocabularyStore.hasEntry('imported')).toBe(false);
   });
 });
 

@@ -77,7 +77,29 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'new_class_proposals',
     endpointId: 'new_class_proposals',
   },
+  // W10: items whose labels came from a labeled-dataset import. Not in the
+  // tab bar unless the backend serves an `imported` entry in
+  // `GET /review/tabs` (see `visibleReviewTabs`): absent, never disabled.
+  {
+    id: 'imported',
+    label: 'Imported',
+    urlId: 'imported',
+    endpointId: 'imported',
+  },
 ];
+
+/** Tab ids shown only when the served `GET /review/tabs` vocabulary has an
+ *  entry for their endpoint id. */
+const SERVED_ONLY_TABS: ReadonlySet<ReviewTab> = new Set(['imported']);
+
+/** `tabs` minus every served-only tab (`imported`) the backend does not
+ *  serve. `isServed(endpointId)` answers from the served vocabulary. */
+export function visibleReviewTabs(
+  tabs: ReviewTabDef[],
+  isServed: (endpointId: string) => boolean,
+): ReviewTabDef[] {
+  return tabs.filter((t) => !SERVED_ONLY_TABS.has(t.id) || isServed(t.endpointId));
+}
 
 /**
  * Slot tabs — derived from each queue-capable slot's `QueueCapability`
@@ -187,6 +209,11 @@ export function reviewDeepLink(params: URLSearchParams): {
   tab: ReviewTab;
   cropId: string | null;
   preset: ReviewPresetId | null;
+  /** `?import_id=` (a W10 import's own id), or null. Whether it is sent
+   *  is the served `filters` list's call, not this function's. */
+  importId: string | null;
+  /** `?combine_conflict=true`. */
+  combineConflict: boolean;
   /** The requested `?tab=` value when it resolved to no tab (so the page
    *  fell back to All) — the page says why instead of switching silently. */
   unavailableTab: string | null;
@@ -201,6 +228,8 @@ export function reviewDeepLink(params: URLSearchParams): {
     tab,
     cropId: params.get('crop_id') || null,
     preset,
+    importId: params.get('import_id') || null,
+    combineConflict: params.get('combine_conflict') === 'true',
     unavailableTab: requested !== '' && resolved == null ? requested : null,
   };
 }

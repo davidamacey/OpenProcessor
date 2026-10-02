@@ -10,6 +10,7 @@
   import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
+  import ReprocessControl from './datasets/ReprocessControl.svelte';
 
   interface Props {
     crop: Crop;
@@ -33,6 +34,11 @@
      * same provenance metadata the review page does.
      */
     ondetail?: (crop: Crop) => void;
+    /**
+     * The served post-write items after an image Reprocess from the
+     * expanded view (every item of that image). The host adopts them.
+     */
+    onreprocessed?: (items: Crop[]) => void;
   }
 
   let {
@@ -44,6 +50,7 @@
     onrejectVlm,
     onslotsaved,
     ondetail,
+    onreprocessed,
   }: Props = $props();
 
   const activeSlot = $derived(slot ?? subBoxSlotFor(crop, slotRegistry.all));
@@ -339,6 +346,20 @@
        "labeled by" chip at all: the backend can leave label_source set
        (e.g. an unmatched VLM answer) on a crop that has no class. -->
   <div class="flex min-w-0 items-center gap-1 px-2 py-1.5">
+    {#if crop.label_locked}
+      <span
+        class="shrink-0 text-zinc-400"
+        title="Label locked"
+        aria-label="Label locked"
+        data-testid="label-locked-badge"
+      >
+        <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true">
+          <path
+            d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
+          />
+        </svg>
+      </span>
+    {/if}
     {#if hasClass}
       <span
         class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-[10px] font-medium {badge.cls}"
@@ -465,6 +486,15 @@
         cropId={crop.id}
         class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
       />
+      {#if crop.image_id}
+        <div class="mt-2 flex justify-end" data-testid="card-reprocess-image">
+          <ReprocessControl
+            target={{ kind: 'image', imageId: crop.image_id }}
+            buttonLabel="Reprocess image…"
+            onadopt={(items) => onreprocessed?.(items)}
+          />
+        </div>
+      {/if}
       <button
         type="button"
         class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
+  import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import {
     cancelSelect,
     reviewUndismissCrop,
@@ -60,6 +61,7 @@
     REVIEW_TABS,
     resolveEffectiveTab,
     tabHonorsPinnedSortDefault,
+    visibleReviewTabs,
     type ReviewPresetId,
     reviewDeepLink,
     unavailableTabMessage,
@@ -138,6 +140,28 @@
   // hangs every slot-tab call site off, instead of a hand-maintained
   // literal per site.
   const activeSlot = $derived(REVIEW_TABS.find((t) => t.id === tab)?.slot ?? null);
+  // The `imported` tab is offered only while `GET /review/tabs` serves it.
+  const visibleTabs = $derived(
+    visibleReviewTabs(REVIEW_TABS, (id) => reviewTabsVocabularyStore.hasEntry(id)),
+  );
+  // The imported tab's empty state links to the import page only when
+  // W10 is served; probe lazily, never on tabs that don't need it.
+  $effect(() => {
+    if (tab === 'imported') void datasetsAvailability.init();
+  });
+  // A `?tab=imported` link against a backend whose vocabulary lacks the tab
+  // falls back to All once the vocabulary has loaded.
+  $effect(() => {
+    if (!reviewTabsVocabularyStore.loaded || tab !== 'imported') return;
+    if (reviewTabsVocabularyStore.hasEntry('imported')) return;
+    tab = 'all';
+    unavailableTabNotice = unavailableTabMessage(
+      'imported',
+      REGION_TAB_ID,
+      regionProfileStore.configured,
+      regionProfileStore.unknown,
+    );
+  });
   // Multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
   // the controller owns the working box set; every item the server returns
   // (a write, or the current item inside a revision conflict) patches the
@@ -477,7 +501,13 @@
   // changes (see the immediate `$effect` below); seeded from the URL on
   // first load so `?region_status=verify_rejected` is bookmarkable, the
   // same pattern `preset` uses.
-  const NON_ENUM_FILTER_PARAMS = new Set(['tab', 'preset', 'crop_id']);
+  const NON_ENUM_FILTER_PARAMS = new Set([
+    'tab',
+    'preset',
+    'crop_id',
+    'import_id',
+    'combine_conflict',
+  ]);
   let enumFilterValues = $state<Record<string, string>>(
     Object.fromEntries(
       [...page.url.searchParams.entries()].filter(
@@ -500,6 +530,41 @@
     }
     return out;
   });
+  // URL-seeded non-enum filters (W10 `import_id`, P4 `combine_conflict`):
+  // no toggle of their own (they would be noise in every project), only a
+  // removable chip when a link carries them. Sent to `/review/{tab}` and
+  // `/locate` only on a tab whose served `filters` list them: unlike the
+  // filter bar's own controls (which stay visible while the vocabulary is
+  // unknown), an unlisted URL param is never guessed, so nothing is sent
+  // before `GET /review/tabs` has answered.
+  let importIdFilter = $state<string>(deepLink.importId ?? '');
+  let combineConflictFilter = $state<boolean>(deepLink.combineConflict);
+  function urlFilterServed(param: string): boolean {
+    return (
+      reviewTabsVocabularyStore.filtersFor(activeTabEndpointId)?.includes(param) === true
+    );
+  }
+  // A link that seeds one of these holds the first queue load until the
+  // vocabulary has answered (it settles even on failure), so the queue never
+  // flashes unfiltered first.
+  const waitingForVocabulary = $derived(
+    (importIdFilter !== '' || combineConflictFilter) && !reviewTabsVocabularyStore.loaded,
+  );
+  const activeUrlFilters = $derived.by<Record<string, string | boolean>>(() => {
+    const out: Record<string, string | boolean> = {};
+    if (importIdFilter && urlFilterServed('import_id')) out.import_id = importIdFilter;
+    if (combineConflictFilter && urlFilterServed('combine_conflict')) {
+      out.combine_conflict = true;
+    }
+    return out;
+  });
+  function clearUrlFilter(param: 'import_id' | 'combine_conflict'): void {
+    if (param === 'import_id') importIdFilter = '';
+    else combineConflictFilter = false;
+    const url = new URL(page.url);
+    url.searchParams.delete(param);
+    replaceState(resolve(projectHref(`/review${url.search}`)), {});
+  }
   function setEnumFilter(param: string, value: string): void {
     enumFilterValues = { ...enumFilterValues, [param]: value };
     const url = new URL(page.url);
@@ -555,6 +620,7 @@
     // ?region_status= on a tab without that spec) must not reach the
     // backend, which 400s on filters a tab doesn't honor.
     Object.assign(f, activeEnumParams);
+    Object.assign(f, activeUrlFilters);
     Object.assign(f, strategyBar.toQueryParams());
     return f;
   }
@@ -714,6 +780,7 @@
     void classFilter;
     void subjectScope;
     void minBlurRatio;
+    if (waitingForVocabulary) return;
     const key = JSON.stringify([tab, preset, classFilter, subjectScope, minBlurRatio]);
     if (key === lastImmediateKey) return;
     lastImmediateKey = key;
@@ -761,6 +828,8 @@
     void strategyBar.hideNearDuplicates;
     void strategyBar.k;
     void activeEnumParams;
+    void activeUrlFilters;
+    if (waitingForVocabulary) return;
     const key = JSON.stringify([
       sourceFilter,
       slotTextQuery,
@@ -771,6 +840,7 @@
       strategyBar.hideNearDuplicates,
       strategyBar.k,
       activeEnumParams,
+      activeUrlFilters,
     ]);
     // The first run only records the starting filters: the immediate
     // effect above already loads page 1, and fetching it a second time
@@ -822,6 +892,15 @@
   // first rejected box's reason; a tier-2 single-box slot still reads
   // the item-level field. Only falls back to `current.reason` when
   // neither is present (core tabs, e.g. the mismatches preset).
+  // W10: the served per-box `locked` flag, by box id, for the canvas's
+  // lock glyph (the editable working set carries no `locked`).
+  const lockedBoxIds = $derived<Set<string>>(
+    new Set(
+      (activeSlot && current ? (slotOf(current, activeSlot)?.subBoxes ?? []) : [])
+        .filter((b) => b.locked === true && b.boxId != null)
+        .map((b) => b.boxId as string),
+    ),
+  );
   const currentSlotRejectionReason = $derived<string | null>(
     activeSlot && current
       ? isMultiBoxSlot
@@ -851,7 +930,8 @@
       slotTextQuery !== '' ||
       subjectScope !== 0 ||
       minBlurRatio != null ||
-      Object.keys(activeEnumParams).length > 0,
+      Object.keys(activeEnumParams).length > 0 ||
+      Object.keys(activeUrlFilters).length > 0,
   );
   const activeQueueLabel = $derived(
     preset
@@ -871,6 +951,8 @@
       sortFallbackReason,
       emptyReason,
       emptyState: reviewTabsVocabularyStore.emptyState,
+      importedTab: effectiveTab === 'imported',
+      datasetsAvailable: datasetsAvailability.available === true,
       filtersActive: clientFiltersActive,
     }),
   );
@@ -1648,7 +1730,7 @@
          active tab past the edge was invisible — ScrollStrip shows a
          chevron where tabs are hidden and scrolls the active one in. -->
     <ScrollStrip class="gap-1" activeKey={tab} testId="review-tabs">
-      {#each REVIEW_TABS as t (t.id)}
+      {#each visibleTabs as t (t.id)}
         {@const knownEmpty = emptyTabEndpoints[t.endpointId] === true}
         <button
           type="button"
@@ -1679,6 +1761,11 @@
               url.searchParams.delete(param);
             }
             enumFilterValues = {};
+            // The URL-seeded filters are per-tab too.
+            url.searchParams.delete('import_id');
+            url.searchParams.delete('combine_conflict');
+            importIdFilter = '';
+            combineConflictFilter = false;
             replaceState(resolve(projectHref(`/review${url.search}`)), {});
             // Presets only make sense on the All tab — switching to any
             // other tab (or re-landing on All from one) always starts
@@ -1953,6 +2040,29 @@
       {/if}
     </div>
 
+    {#if importIdFilter && urlFilterServed('import_id')}
+      <button
+        type="button"
+        class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
+        data-testid="filter-chip-import-id"
+        title="Remove this filter"
+        onclick={() => clearUrlFilter('import_id')}
+      >
+        Import <code class="font-mono">{importIdFilter}</code> ×
+      </button>
+    {/if}
+    {#if combineConflictFilter && urlFilterServed('combine_conflict')}
+      <button
+        type="button"
+        class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
+        data-testid="filter-chip-combine-conflict"
+        title="Remove this filter"
+        onclick={() => clearUrlFilter('combine_conflict')}
+      >
+        Combine conflicts only ×
+      </button>
+    {/if}
+
     {#if tab === 'all'}
       <!-- Quick-filter preset chips (2026-09 tab consolidation) — Mismatches
            / VLM Low-Conf / Primary·Low-Conf collapsed from top-level tabs
@@ -2144,6 +2254,7 @@
                   box: b.box!,
                   state: b.state,
                   label: `${activeSlot!.label.title} (${multiBoxStateLabel(b.state)})`,
+                  locked: b.boxId != null && lockedBoxIds.has(b.boxId),
                 }))}
               selectedIndex={multiBox.selectedIndex}
               busy={multiBox.busy}
