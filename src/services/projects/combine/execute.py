@@ -26,6 +26,7 @@ from src.services.curation.dataset_import.mapping import MapTarget, norm_class_n
 from src.services.curation.dataset_import.project_source import class_names_by_id, iter_source_pages
 from src.services.curation.dataset_import.store import now_iso
 from src.services.curation.file_job import heartbeat_ticker
+from src.services.curation.next_steps import recluster_items
 from src.services.projects.combine import holdout
 from src.services.projects.combine.image_copy import CopyContext, copy_page
 from src.services.projects.combine.mapping import CombineMapping
@@ -289,14 +290,7 @@ async def _finish(ctx: CopyContext, store: ImportStore, claim: str) -> None:
     elif mode == 'recompute':
         extra = await holdout.recompute(ctx.client, ctx.target, ctx.items_index, store.import_id)
     report = {**_sum_reports(store.chunks_done()), **extra}
-    next_steps = [
-        {
-            'action': 'recluster',
-            'method': 'POST',
-            'path': '/clusters/train',
-            'reason': 'Source clusters were not copied; recluster the combined items.',
-        }
-    ]
+    next_steps = [recluster_items()]
     ensure_owner(job, claim)  # the holdout step is long; a takeover may have landed in it
     job.update(
         status='completed',

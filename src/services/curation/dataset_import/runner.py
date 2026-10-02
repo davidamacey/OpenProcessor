@@ -48,6 +48,7 @@ from src.services.curation.dataset_import.store import (
 from src.services.curation.dataset_import.undo import UndoContext, undo_import
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
+from src.services.curation.next_steps import cluster_regions
 
 
 if TYPE_CHECKING:
@@ -321,14 +322,7 @@ async def finalize(ctx: ImportContext, store: ImportStore, report: ImportReport)
         persist_import_freeze(ctx, store)
     next_steps = []
     if report.boxes_written or report.standalone_regions:
-        next_steps.append(
-            {
-                'action': 'cluster_regions',
-                'method': 'POST',
-                'path': '/regions/cluster',
-                'reason': 'Group the imported region boxes with their visual neighbours.',
-            }
-        )
+        next_steps.append(cluster_regions())
     status = (
         'completed_with_errors' if report.images_failed or report.images_skipped else 'completed'
     )

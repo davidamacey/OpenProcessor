@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import ActiveRef, api_error
+from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
     RegionProfileBody,
@@ -251,8 +251,8 @@ def _project_slug() -> str | None:
 # =============================================================================
 
 
-@router.get('/region_profiles/active')
-async def get_active_region_profile_route(opensearch: OpenSearchDep) -> Any:
+@router.get('/region_profiles/active', response_model=ActiveConfigResponse)
+async def get_active_region_profile_route(opensearch: OpenSearchDep) -> ActiveConfigResponse:
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
@@ -265,10 +265,10 @@ async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> Any:
     ).model_dump()
 
 
-@router.post('/region_profiles/active/rollback')
+@router.post('/region_profiles/active/rollback', response_model=ActiveConfigResponse)
 async def rollback_active_region_profile(
     body: RegionProfileRollbackRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
         await rollback_profile(opensearch, expected_active=expected)
@@ -295,10 +295,10 @@ async def rollback_active_region_profile(
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
-@router.post('/region_profiles/deactivate')
+@router.post('/region_profiles/deactivate', response_model=ActiveConfigResponse)
 async def deactivate_region_profile(
     body: RegionProfileDeactivateRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
         await activate_profile(opensearch, name=None, revision=None, expected_active=expected)

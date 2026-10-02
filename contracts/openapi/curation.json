@@ -102,6 +102,78 @@
         "title": "AcceptedModel",
         "type": "object"
       },
+      "ActiveConfigResponse": {
+        "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);\nalso the activation-mutation response shape used by W2's settings\nbridge and by ``store.activate``'s callers.\n\n``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies), or ``'off'`` (explicitly deactivated -- ``active.name`` is\n``None``, distinct from ``'env'``'s ``None`` activation doc). Never\nguessed from ``active`` alone: ``'env'`` and ``'off'`` both may\ncarry ``active.name=None`` in the profile axis's off state, but only\nan explicit deactivation is ``'off'``.\n``activated_at`` is the activation doc's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive ``runtime:*`` doc for this axis (§4.5) -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision"
+        ],
+        "title": "ActiveConfigResponse",
+        "type": "object"
+      },
       "ActiveRef": {
         "description": "``{name, revision}`` for the currently-active config on one axis.\n``name=None`` means the axis is off/unconfigured.",
         "properties": {
@@ -28464,7 +28536,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Active Prompt Pack Route Curation Projects  Project  Prompt Packs Active Get"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -28516,7 +28588,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Rollback Active Prompt Pack Curation Projects  Project  Prompt Packs Active Rollback Post"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -29217,7 +29289,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Active Region Profile Route Curation Projects  Project  Region Profiles Active Get"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -29311,7 +29383,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Rollback Active Region Profile Curation Projects  Project  Region Profiles Active Rollback Post"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },
@@ -29363,7 +29435,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Deactivate Region Profile Curation Projects  Project  Region Profiles Deactivate Post"
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
                 }
               }
             },

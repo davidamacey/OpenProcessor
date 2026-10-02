@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import ActiveRef, api_error
+from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
 from src.routers.curation._prompt_pack_models import (
     PromptPackActivateRequest,
     PromptPackBody,
@@ -211,15 +211,15 @@ async def validate_prompt_pack_route(
 # =============================================================================
 
 
-@router.get('/prompt_packs/active')
-async def get_active_prompt_pack_route(opensearch: OpenSearchDep) -> Any:
+@router.get('/prompt_packs/active', response_model=ActiveConfigResponse)
+async def get_active_prompt_pack_route(opensearch: OpenSearchDep) -> ActiveConfigResponse:
     return await build_active_config_response(opensearch, axis='prompt_pack')
 
 
-@router.post('/prompt_packs/active/rollback')
+@router.post('/prompt_packs/active/rollback', response_model=ActiveConfigResponse)
 async def rollback_active_prompt_pack(
     body: PromptPackRollbackRequest, opensearch: OpenSearchDep
-) -> Any:
+) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
         await rollback_pack(opensearch, expected_active=expected)

@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- **Combine's served next step** is now `POST /cluster/umap/rebuild` under the project
+  mount (it was the unscoped core route `POST /clusters/train`, which 404s from a
+  project client). Every `next_steps` entry a job report serves is built in
+  `src/services/curation/next_steps.py`, and one test resolves each against the
+  published OpenAPI.
+- `GET /prompt_packs/active`, `GET /region_profiles/active` and their rollback and
+  deactivate responses publish the typed `ActiveConfigResponse` schema.
 - **W5/W6/W10 review fixes** (`w5_w6_review_2026-10-01`).
   - **`POST /region_profiles/test` prompt override.** `segmenter_text_prompt`
     on the default (active-profile) path is now validated by the same
