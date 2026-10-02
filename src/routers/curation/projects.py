@@ -39,7 +39,7 @@ from src.routers.curation._project_models import (
     summarize,
 )
 from src.services.projects import lifecycle
-from src.services.projects.guard import bind_registry_admin, make_curation_opensearch
+from src.services.projects.guard import make_curation_opensearch
 from src.services.projects.registry import get_project_registry
 
 
@@ -84,54 +84,23 @@ def _publish_lifecycle_event(event_type: str, record: Any) -> None:
 
 
 async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, ProjectCounts]:
-    """One ``_cat/indices`` call covering every project's images/items
-    index (§4), the one cross-project read the guard allows, inside
-    :func:`bind_registry_admin`; plus one ``validated`` count per project
-    under that project's own read-only binding (``null`` when it could
-    not be counted, the same rule ``/stats`` uses)."""
-    from src.services.projects.stats import validated_count
+    """Per project, under that project's own read-only binding: how many
+    images and items it holds (``_count``, which counts top-level documents --
+    ``_cat/indices`` ``docs.count`` also counts every nested region box and
+    box embedding, and skips what an idle shard has not refreshed yet) and
+    how many are validated (``null`` when it could not be counted, the same
+    rule ``/stats`` uses)."""
+    from src.services.projects.stats import index_count, validated_count
 
-    index_names: set[str] = set()
-    for record in snapshot.values():
-        index_names.add(record.resources.indexes[IndexRole.IMAGES])
-        index_names.add(record.resources.indexes[IndexRole.ITEMS])
-    if not index_names:
-        return {}
-    pattern = ','.join(sorted(index_names))
-    try:
-        with bind_registry_admin():
-            rows = await client.transport.perform_request(
-                'GET',
-                f'/_cat/indices/{pattern}',
-                params={'h': 'index,docs.count', 'format': 'json'},
-            )
-    except Exception as exc:
-        logger.warning('project_counts_unavailable', error=str(exc))
-        rows = []
-    doc_counts = {
-        row['index']: int(row.get('docs.count') or 0) for row in rows if isinstance(row, dict)
-    }
     result: dict[str, ProjectCounts] = {}
-    # TODO(P3F m12): one validated_count `count` query per project here
-    # is N+1 on top of the single `_cat` call above. A real fix batches
-    # it into one aggregation query (bucket by `_index`, term-filtered
-    # on class_validated) across every project's items index, the same
-    # `_cat` pattern already builds -- deferred this pass: it needs a
-    # cross-index terms aggregation the existing fakes (FakeLifecycleOpenSearch
-    # and the leak sweep's _FakeTransport) don't model, so verifying it
-    # wouldn't be a real red->green fix in the time this pass allows.
-    # Acceptable per finish-pass input 6; low severity (project counts
-    # are small-cardinality, cached-adjacent reads, not a hot path).
     for slug, record in snapshot.items():
         images_idx = record.resources.indexes[IndexRole.IMAGES]
         items_idx = record.resources.indexes[IndexRole.ITEMS]
         with bind_project(record, read_only=True):
+            images = await index_count(client, images_idx)
+            items = await index_count(client, items_idx)
             validated = await validated_count(client, items_idx)
-        result[slug] = ProjectCounts(
-            images=doc_counts.get(images_idx, 0),
-            items=doc_counts.get(items_idx, 0),
-            validated=validated,
-        )
+        result[slug] = ProjectCounts(images=images, items=items, validated=validated)
     return result
 
 
