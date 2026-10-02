@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from curation import test_cross_project_leak as _sweep
 from curation.test_cross_project_leak import LeakEnv, _promoted_model
 from fastapi.testclient import TestClient
@@ -104,3 +105,34 @@ def test_reading_other_projects_touches_only_their_config_index_and_never_writes
     assert {a[3] for a in seen} == {beta[IndexRole.CONFIGS]}
     assert {a[1] for a in seen} <= {'GET', 'POST'}
     assert leak_env.transport.writes.count(beta[IndexRole.CONFIGS]) == 0
+
+
+def test_an_unreadable_project_refuses_unsharing_instead_of_being_skipped(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``read_each_project`` backs refusals, so one project whose config
+    cannot be read must block the change, not silently count as "unused"."""
+    from src.services.config_store import index
+
+    _promoted_model(leak_env, 'alpha')
+    client = _client(leak_env)
+    assert _put(client, shared=True, revision=1).status_code == 200
+
+    async def _broken(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError('opensearch unavailable')
+
+    monkeypatch.setattr(index, 'get_activation', _broken)
+    refused = _put(client, shared=False, revision=2)
+    assert refused.status_code == 503, refused.text
+    assert refused.json()['detail']['error'] == 'config_store_unavailable'
+
+
+@pytest.mark.asyncio
+async def test_read_each_project_propagates_a_failed_read(leak_env: LeakEnv) -> None:
+    from src.services.config_store.project_usage import read_each_project
+
+    async def _read(_index: str) -> str:
+        raise RuntimeError('unreadable')
+
+    with pytest.raises(RuntimeError, match='unreadable'):
+        await read_each_project(_read)
