@@ -2,6 +2,8 @@
   "_comment": "Example region-detection profile: license-plate sub-region detection on a vehicle crop. Loadable via OP_REGION_PROFILE_PATH=examples/region_profiles/license_plate.json. This is a worked example, not a built-in profile -- the app ships with region detection off (no active profile) until an operator points config at a file like this one.",
   "_detector_model_comment": "detector_model is left empty: this example runs segmenter-only (SAM 3, prompted by segmenter_text_prompt) plus the OCR text-hint re-pass, with no detector leg and no Triton call for it. No public plate-detector model ships with this project (no CC/permissively-licensed one was found at genericization time). Set detector_model to the Triton name of your own exported detector to add the detector leg back.",
   "name": "license_plate",
+  "_parent_classes_comment": "Only vehicle items get the region stage; matched by class NAME, case-insensitively. An empty list would send every item (people, food, furniture) to the segmenter.",
+  "parent_classes": ["car", "truck", "bus", "motorcycle"],
   "detector_model": "",
   "detector_version": "1",
   "input_size": 640,

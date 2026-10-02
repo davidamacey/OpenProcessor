@@ -42,6 +42,15 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- **The combine job reports completed only after its target is active** (#47). The job
+  used to write `completed`/`done` and only then move the target out of `building`, so
+  the served next step (`POST /cluster/umap/rebuild`) could 409 `project_building`.
+  `run_combine` now awaits one `settle` callback (`lifecycle.finish_building`) before the
+  terminal status; a failed settle fails the job.
+- `examples/region_profiles/license_plate.json` sets `parent_classes` (`car`, `truck`,
+  `bus`, `motorcycle`); empty meant every item (people, food) went to the segmenter
+  (#48). `tests/test_example_region_profiles.py` checks every example profile selects
+  by class name. The shipped default stays region-off.
 - `GET /region_profiles/active` and `/prompt_packs/active` with `source: env` now name
   the env/file default the worker applies (`active.name`, no revision) instead of a
   nameless "off"; only an explicit deactivation, or no env default at all, is nameless.

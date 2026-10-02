@@ -327,7 +327,9 @@ not deleted. Delete is a dry run first (`?dry_run=true`), then needs
 
 **Items and regions.** The primary detector proposes **items** (crops) at
 ingest. When the active region profile names `parent_classes`, only items of
-those classes (matched by name) get the region stage. The detection worker
+those classes (matched by name) get the region stage; an empty list means every
+item does, so the shipped sub-region example names `car`, `truck`, `bus` and
+`motorcycle`. Region detection is off until you set a profile. The detection worker
 runs the profile's detector and segmenter legs, merges candidates, keeps up to
 `max_regions_per_item`, and writes them as the item's `region_boxes` list. The
 VLM verifies each box, a text reader fills `text` when the profile asks for
