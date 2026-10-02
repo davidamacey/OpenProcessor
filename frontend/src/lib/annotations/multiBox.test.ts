@@ -9,27 +9,9 @@ import {
   hasAcceptedBox,
   type EditableBox,
 } from './multiBox';
-import type { SlotBox } from './types';
+import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
-function box(overrides: Partial<SlotBox> = {}): SlotBox {
-  return {
-    boxId: 'b1',
-    state: 'proposed',
-    rawXyxy: [0.1, 0.1, 0.2, 0.2],
-    parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 },
-    score: 0.9,
-    detector: 'sam3',
-    detectorVersion: '1',
-    source: 'segmenter',
-    bboxCorrect: null,
-    confidence: null,
-    rejectionReason: null,
-    text: null,
-    clusterId: null,
-    thumbnailUrl: null,
-    ...overrides,
-  };
-}
+const box = makeSlotBox;
 
 describe('toEditableBoxes', () => {
   it('drops boxes with no parent-frame projection', () => {

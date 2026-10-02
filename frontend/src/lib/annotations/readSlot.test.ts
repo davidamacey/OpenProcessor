@@ -1,16 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import {
-  readSlot,
-  projectFromParent,
-  mapRegionBoxWire,
-  mapRegionBoxList,
-} from './readSlot';
+import { readSlot, mapRegionBoxWire, mapRegionBoxList } from './readSlot';
 import { slotIsPresent } from './types';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import type { XYXY, BBoxNormLike, SlotFrame } from './types';
+import type { XYXY, SlotFrame } from './types';
 
-describe('W8 multi-box mapping (region_boxes)', () => {
-  it('maps a full RegionBoxWire element', () => {
+describe('multi-box mapping (region_boxes)', () => {
+  it('maps a full served box element, including its per-box text and cluster keys', () => {
     const box = mapRegionBoxWire({
       box_id: 'b1',
       state: 'accepted',
@@ -23,8 +18,21 @@ describe('W8 multi-box mapping (region_boxes)', () => {
       bbox_correct: true,
       confidence: 'high',
       rejection_reason: null,
+      locked: true,
       text: 'TAG-001',
+      text_raw: 'tag-001',
+      text_source: 'gemma',
+      text_confidence: 0.8,
+      text_engine_version: '2',
+      text_vlm: 'TAG-001',
+      text_ocr: 'TAG-008',
+      text_disagreement: true,
+      text_choice: 'vlm_preferred',
+      text_vlm_invalid: 'sequence',
       cluster_id: 12,
+      cluster_subid: '12a',
+      cluster_distance: 0.2,
+      detected_at: '2026-10-01T00:00:00Z',
       thumbnail_url: '/curation/crops/c_123/region_thumbnail?box_id=b1',
     });
     expect(box).not.toBeNull();
@@ -33,7 +41,30 @@ describe('W8 multi-box mapping (region_boxes)', () => {
     expect(box?.rawXyxy).toEqual([0.41, 0.62, 0.47, 0.71]);
     expect(box?.parent).toEqual({ cx: 0.21, cy: 0.84, w: 0.18, h: 0.28 });
     expect(box?.text).toBe('TAG-001');
+    expect(box?.textRaw).toBe('tag-001');
+    expect(box?.textSource).toBe('gemma');
+    expect(box?.textConfidence).toBeCloseTo(0.8);
+    expect(box?.textEngineVersion).toBe('2');
+    expect(box?.textVlm).toBe('TAG-001');
+    expect(box?.textOcr).toBe('TAG-008');
+    expect(box?.textDisagreement).toBe(true);
+    expect(box?.textChoice).toBe('vlm_preferred');
+    expect(box?.textVlmInvalid).toBe('sequence');
+    expect(box?.locked).toBe(true);
+    expect(box?.bboxCorrect).toBe(true);
     expect(box?.clusterId).toBe(12);
+    expect(box?.clusterSubid).toBe('12a');
+    expect(box?.clusterDistance).toBeCloseTo(0.2);
+    expect(box?.detectedAt).toBe('2026-10-01T00:00:00Z');
+    expect(box?.thumbnailUrl).toBe('/curation/crops/c_123/region_thumbnail?box_id=b1');
+  });
+
+  it('leaves the text keys null when the profile serves none (a text-free box)', () => {
+    const box = mapRegionBoxWire({ box_id: 'b1', state: 'accepted' });
+    expect(box?.text).toBeNull();
+    expect(box?.textVlm).toBeNull();
+    expect(box?.textDisagreement).toBeNull();
+    expect(box?.locked).toBeNull();
   });
 
   it('drops a malformed element instead of throwing', () => {
@@ -83,14 +114,14 @@ describe('readSlot / widgetTagSlot', () => {
     };
   }
 
-  it('reads a full region row (W8 region_boxes list) into every capability', () => {
+  it('reads a full region row (region_boxes list + item summary) into every capability', () => {
     const raw = {
-      region_boxes: [oneBox()],
-      region_text: 'TAG-001',
-      region_text_raw: 'tag-001',
-      region_text_source: 'gemma',
-      region_text_confidence: 0.8,
-      region_detector: 'tag_detector_v1',
+      region_boxes: [oneBox({ text: 'TAG-001' })],
+      region_count: 1,
+      region_rejected_count: 0,
+      region_max_score: 0.91,
+      region_set_complete: false,
+      region_revision: 7,
       region_detector_chain: ['tag_detector_v1:hit'],
       region_verifier: 'gemma-4-e4b',
       region_status: 'detected',
@@ -102,8 +133,18 @@ describe('readSlot / widgetTagSlot', () => {
     expect(d.subBoxes).toHaveLength(1);
     expect(d.subBoxes?.[0].rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
     expect(d.subBoxes?.[0].parent).not.toBeNull();
-    expect(d.text?.value).toBe('TAG-001');
-    expect(d.provenance?.detector).toBe('tag_detector_v1');
+    expect(d.subBoxes?.[0].text).toBe('TAG-001');
+    expect(d.boxSet).toEqual({
+      count: 1,
+      rejectedCount: 0,
+      maxScore: 0.91,
+      setComplete: false,
+      revision: 7,
+    });
+    // The region's text and detector are per box: no item-level readings.
+    expect(d.text).toBeUndefined();
+    expect(d.provenance?.detector).toBeNull();
+    expect(d.provenance?.chain).toEqual(['tag_detector_v1:hit']);
     expect(d.lifecycle?.status).toBe('detected');
     expect(d.lifecycle?.state?.role).toBe('proposed');
     expect(d.lifecycle?.verified).toBe(true);
@@ -120,7 +161,13 @@ describe('readSlot / widgetTagSlot', () => {
     const d = readSlot({}, widgetTagSlot, parent);
     expect(slotIsPresent(d)).toBe(false);
     expect(d.subBoxes).toEqual([]);
-    expect(d.text?.value).toBeNull();
+    expect(d.boxSet).toEqual({
+      count: null,
+      rejectedCount: null,
+      maxScore: null,
+      setComplete: null,
+      revision: null,
+    });
   });
 
   it('a box with no bbox_in_parent has no drawable crop-local geometry', () => {
@@ -159,31 +206,9 @@ describe('readSlot / widgetTagSlot', () => {
     expect(d.lifecycle?.state?.value).toBe('no_region_visible');
     expect(d.lifecycle?.state?.role).toBe('absent');
   });
-
-  it('reads the VLM/OCR text candidates and the disagreement flag (2026-09-24 logic-moves W8)', () => {
-    const raw = {
-      region_text: 'TAG-001',
-      region_text_vlm: 'TAG-001',
-      region_text_ocr: 'TAG-008',
-      region_text_disagreement: true,
-      region_text_engine_version: '1',
-    };
-    const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.text?.vlmValue).toBe('TAG-001');
-    expect(d.text?.ocrValue).toBe('TAG-008');
-    expect(d.text?.disagreement).toBe(true);
-    expect(d.text?.engineVersion).toBe('1');
-  });
-
-  it('leaves the OCR candidate fields null when the wire omits them', () => {
-    const d = readSlot({ region_text: 'TAG-001' }, widgetTagSlot, parent);
-    expect(d.text?.vlmValue).toBeNull();
-    expect(d.text?.ocrValue).toBeNull();
-    expect(d.text?.disagreement).toBeNull();
-  });
 });
 
-describe('readSlot — W8 rejected box / auto-confirm / text choice', () => {
+describe('readSlot — rejected box / auto-confirm', () => {
   const parent: XYXY = [0, 0, 0.4, 0.2];
 
   it('reads a rejected box as a SlotBox with state "rejected" and its own rejection reason (no separate candidate concept, W8)', () => {
@@ -235,69 +260,51 @@ describe('readSlot — W8 rejected box / auto-confirm / text choice', () => {
     expect(d.lifecycle?.validated).toBe(false);
     expect(d.lifecycle?.autoConfirmed).toBe(true);
   });
-
-  it('reads the text-choice and vlm-invalid-reason fields', () => {
-    const raw = {
-      region_text: 'TAG-001',
-      region_text_choice: 'vlm_preferred',
-      region_text_vlm_invalid: null,
-    };
-    const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.text?.choice).toBe('vlm_preferred');
-    expect(d.text?.invalidReason).toBeNull();
-  });
-
-  it('reads a vlm_invalid text choice with its reason', () => {
-    const raw = {
-      region_text: '123456',
-      region_text_choice: 'vlm_invalid',
-      region_text_vlm_invalid: 'sequence',
-    };
-    const d = readSlot(raw, widgetTagSlot, parent);
-    expect(d.text?.choice).toBe('vlm_invalid');
-    expect(d.text?.invalidReason).toBe('sequence');
-  });
 });
 
-describe('projectFromParent — inverse of the private projectToParent', () => {
-  const cases: Array<{ frame: SlotFrame; parentXyxy: XYXY; childSourceXyxy: XYXY }> = [
+describe('readSlot — read-only scalar single-box slot (tier 2, bboxField)', () => {
+  const cases: Array<{
+    frame: SlotFrame;
+    parentXyxy: XYXY;
+    childXyxy: XYXY;
+    expected: { cx: number; cy: number; w: number; h: number };
+  }> = [
     {
       frame: 'source',
       parentXyxy: [0, 0, 0.4, 0.2],
-      childSourceXyxy: [0.1, 0.08, 0.3, 0.12],
+      childXyxy: [0.1, 0.08, 0.3, 0.12],
+      expected: { cx: 0.5, cy: 0.5, w: 0.5, h: 0.2 },
     },
     {
       frame: 'parent',
       parentXyxy: [0.2, 0.2, 0.6, 0.8],
-      childSourceXyxy: [0.3, 0.3, 0.5, 0.5],
+      childXyxy: [0.3, 0.3, 0.5, 0.5],
+      expected: { cx: 0.4, cy: 0.4, w: 0.2, h: 0.2 },
     },
   ];
 
-  // projectFromParent/the legacy scalar-box readSlot path stay real for a
-  // tier-2 single-box slot (bboxField, no listField) — the served region
-  // slot no longer has one (W8, no backward compatibility), so this uses
-  // a minimal synthetic single-box spec rather than widgetTagSlot.
-  for (const { frame, parentXyxy, childSourceXyxy } of cases) {
-    it(`round-trips through readSlot's forward projection (${frame} frame)`, () => {
+  for (const { frame, parentXyxy, childXyxy, expected } of cases) {
+    it(`projects the stored ${frame}-frame box into the crop frame`, () => {
       const spec = {
         ...widgetTagSlot,
         capabilities: {
           ...widgetTagSlot.capabilities,
           subBox: {
-            bboxField: 'region_bbox_norm',
+            bboxField: 'tail_bbox',
             storedFrame: frame,
             ring: { confirmed: '', proposed: '', rejected: '' },
             editor: { thumbSize: 512, viewPadding: 2.5, nudgeStep: 1 / 512 },
           },
         },
       };
-      const raw = { region_bbox_norm: childSourceXyxy };
-      const d = readSlot(raw, spec, parentXyxy);
-      const parentFrameBox = d.subBox!.parent as BBoxNormLike;
-      const back = projectFromParent(parentFrameBox, parentXyxy, frame);
-      for (let i = 0; i < 4; i++) {
-        expect(back[i]).toBeCloseTo(childSourceXyxy[i], 9);
-      }
+      const d = readSlot({ tail_bbox: childXyxy }, spec, parentXyxy);
+      expect(d.subBoxes).toBeUndefined();
+      expect(d.boxSet).toBeUndefined();
+      expect(d.subBox?.rawXyxy).toEqual(childXyxy);
+      expect(d.subBox?.parent?.cx).toBeCloseTo(expected.cx, 9);
+      expect(d.subBox?.parent?.cy).toBeCloseTo(expected.cy, 9);
+      expect(d.subBox?.parent?.w).toBeCloseTo(expected.w, 9);
+      expect(d.subBox?.parent?.h).toBeCloseTo(expected.h, 9);
     });
   }
 });

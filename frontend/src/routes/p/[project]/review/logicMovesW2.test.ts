@@ -26,16 +26,11 @@ describe('W2: shape-warning badge and client shape-gate are gone', () => {
   });
 });
 
-describe('W2: box edits send frame: "parent", no client-side projectFromParent on write', () => {
-  it('never imports projectFromParent (deleted from the write path)', () => {
+describe('W2: box edits never project client-side, and the removed single-box write is gone', () => {
+  it('never imports projectFromParent or setSlotBox (both deleted)', () => {
     expect(src).not.toMatch(/projectFromParent/);
-  });
-
-  it("saveBboxAndExit and confirmSlot call setSlotBox with frame 'parent'", () => {
-    const saveFn = src.match(/async function saveBboxAndExit\([\s\S]*?\n {2}\}/)?.[0];
-    const confirmFn = src.match(/async function confirmSlot\([\s\S]*?\n {2}\}/)?.[0];
-    expect(saveFn).toMatch(/setSlotBox\(activeSlot, id, tuple, 'parent'\)/);
-    expect(confirmFn).toMatch(/setSlotBox\(activeSlot, item\.id, tuple, 'parent'\)/);
+    expect(src).not.toMatch(/setSlotBox/);
+    expect(src).not.toMatch(/saveBboxAndExit/);
   });
 });
 
@@ -49,24 +44,16 @@ describe('W2: slot writes render the server-returned item, not a computed patch'
     expect(fn).not.toMatch(/applyOptimistic/);
   });
 
-  it('saveBboxAndExit and the clears-box branch of commitSlotStatus spread the returned item', () => {
-    const saveFn = src.match(/async function saveBboxAndExit\([\s\S]*?\n {2}\}/)?.[0];
-    expect(saveFn).toMatch(
-      /queue\.items\[idx\] = \{ \.\.\.queue\.items\[idx\], \.\.\.item \} as ReviewItem/,
-    );
+  it('commitSlotStatus goes through saveSlotMeta, which renders the returned item (the server clears the box list itself)', () => {
     const statusFn = src.match(/async function commitSlotStatus\([\s\S]*?\n {2}\}/)?.[0];
-    expect(statusFn).toMatch(
-      /queue\.items\[idx\] = \{ \.\.\.queue\.items\[idx\], \.\.\.item \} as ReviewItem/,
-    );
+    expect(statusFn).toMatch(/await saveSlotMeta\(\{ status: editedSlotStatus \}\)/);
+    expect(statusFn).not.toMatch(/setSlotBox|editedSlotBox/);
   });
 });
 
 describe('W2: status vocabulary/actions are server-driven with a profile fallback', () => {
-  it('humanWritableStates/statusClearsBox/statusWantsRejectionReason are called with regionStatusesStore.list', () => {
+  it('humanWritableStates/statusWantsRejectionReason are called with regionStatusesStore.list', () => {
     expect(src).toMatch(/humanWritableStates\(activeSlot, regionStatusesStore\.list\)/);
-    expect(src).toMatch(
-      /statusClearsBox\(activeSlot, editedSlotStatus, regionStatusesStore\.list\)/,
-    );
     expect(src).toMatch(
       /statusWantsRejectionReason\(activeSlot, editedSlotStatus, regionStatusesStore\.list\)/,
     );

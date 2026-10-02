@@ -14,6 +14,9 @@
 import { describe, expect, it } from 'vitest';
 import itemWire from '../../../contracts/openprocessor/json/item_wire.json';
 import { RAW_CROP_KEYS } from '../api';
+import openapi from '../../../contracts/openprocessor/openapi/curation.json';
+import { mapRegionBoxWire } from '$lib/annotations/readSlot';
+import { widgetTagServedSlot } from '$lib/test/fixtures/regionSlot';
 import { regionContractSlots } from '$lib/test/fixtures/exampleProfiles';
 
 const regionSlots = regionContractSlots();
@@ -79,8 +82,8 @@ describe('RawCrop (src/lib/api.ts) vs the backend item wire', () => {
  * Checked against `ALL_WIRE_KEYS`, not just `REGION_KEYS` — the vendored
  * contract's `region_keys` array covers the region *write* vocabulary,
  * but a capability field can also name a server-computed, read-only
- * item field (e.g. `bboxInParentField: 'region_bbox_in_parent'`, which
- * is classified under `item_keys` upstream despite the `region_` name).
+ * item field (e.g. `listField: 'region_boxes'`, which is classified
+ * under `item_keys` upstream rather than `region_keys`).
  * Replaces regionWireContract.test.ts's hand-copied `REGION_WIRE_KEYS`
  * literal.
  */
@@ -95,24 +98,6 @@ function declaredWireFields(v: unknown, out: string[] = []): string[] {
   return out;
 }
 
-/**
- * W8 multi-box regions (feat/w8-multibox-lockstep,
- * docs/design/w8-multibox-frontend-plan-2026-09-26.md): the vendored
- * OpenAPI/item-wire snapshot in `contracts/openprocessor/` predates the
- * backend's W8 wave, so it does not yet know `region_boxes` (the
- * `SubBoxCapability.listField` this branch declares) or any
- * `RegionBoxWire` element key. This list — deliberately separate from
- * `KNOWN_STALE` above, which is for fields the backend will never emit —
- * is deleted when backend W8 rebases onto projects (the vendored
- * snapshot is cutover/projects-lifecycle 29807534, which has no W8) and `npm run contract:sync` picks up `region_box_keys`/
- * `region_summary_keys`/`box_states`. Do not add anything here that
- * isn't a genuine "the backend hasn't shipped this yet" case.
- */
-const PENDING_BACKEND_W8: readonly string[] = [
-  // ItemDoc.region_boxes — SubBoxCapability.listField (servedRegionSlot.ts)
-  'region_boxes',
-];
-
 describe('region slots (served synthesis + region example profiles) vs the backend region wire', () => {
   for (const slot of regionSlots) {
     describe(slot.key, () => {
@@ -122,16 +107,65 @@ describe('region slots (served synthesis + region example profiles) vs the backe
         expect(fields.length).toBeGreaterThan(0);
       });
 
-      it('uses only documented wire keys (or a named PENDING_BACKEND_W8 key)', () => {
-        expect(
-          fields.filter((f) => !ALL_WIRE_KEYS.has(f) && !PENDING_BACKEND_W8.includes(f)),
-        ).toEqual([]);
+      it('uses only documented item-wire keys', () => {
+        expect(fields.filter((f) => !ALL_WIRE_KEYS.has(f))).toEqual([]);
       });
     });
   }
+});
 
-  it('PENDING_BACKEND_W8 does not silently accumulate keys the backend already serves', () => {
-    const nowLive = PENDING_BACKEND_W8.filter((k) => ALL_WIRE_KEYS.has(k));
-    expect(nowLive).toEqual([]);
+/**
+ * A region box is one element of `region_boxes`; its keys are not in
+ * `item_keys` (the item wire only says `Record<string, unknown>[]`) but the
+ * vendored OpenAPI documents the full element as `RegionTestCandidate`
+ * (the test-on-crop route serves the very same per-box shape). Every key
+ * `mapRegionBoxWire` reads must be one of them.
+ */
+describe('region box element keys (mapRegionBoxWire) vs the vendored box schema', () => {
+  const boxKeys = new Set(
+    Object.keys(
+      (
+        openapi as unknown as {
+          components: {
+            schemas: Record<string, { properties: Record<string, unknown> }>;
+          };
+        }
+      ).components.schemas.RegionTestCandidate.properties,
+    ),
+  );
+
+  it('the vendored box schema loaded (guards a vacuous pass)', () => {
+    expect(boxKeys.has('box_id')).toBe(true);
+    expect(boxKeys.has('bbox_norm')).toBe(true);
+  });
+
+  it('every wire key mapRegionBoxWire reads is a documented box key', () => {
+    const read = new Set<string>();
+    const probe = new Proxy(
+      {},
+      {
+        get: (_t, k) => {
+          if (typeof k === 'string') read.add(k);
+          return undefined;
+        },
+      },
+    );
+    mapRegionBoxWire(probe);
+    expect(read.size).toBeGreaterThan(20);
+    expect([...read].filter((k) => !boxKeys.has(k))).toEqual([]);
+  });
+
+  it('the item summary fields the region slot declares are item-wire keys', () => {
+    const sb = widgetTagServedSlot.capabilities.subBox!;
+    for (const f of [
+      sb.listField,
+      sb.countField,
+      sb.rejectedCountField,
+      sb.maxScoreField,
+      sb.setCompleteField,
+      sb.revisionField,
+    ]) {
+      expect(ITEM_KEYS.has(f as string), `${f} is not an item-wire key`).toBe(true);
+    }
   });
 });

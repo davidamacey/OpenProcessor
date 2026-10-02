@@ -13,27 +13,14 @@
       },
       "capabilities": {
         "subBox": {
-          "bboxField": "region_bbox_norm",
-          "storedFrame": "source",
-          "frameField": "region_bbox_frame",
-          "scoreField": "region_score",
-          "visibleField": "region_visible",
-          "bboxInParentField": "region_bbox_in_parent",
-          "candidateBboxField": "region_candidate_bbox_norm",
-          "candidateBboxInParentField": "region_candidate_bbox_in_parent",
-          "candidateScoreField": "region_candidate_score",
-          "candidateDetectorField": "region_candidate_detector",
-          "candidateDetectorVersionField": "region_candidate_detector_version",
-          "candidateSourceField": "region_candidate_source",
-          "envelope": {
-            "aspectMin": 0.5,
-            "aspectMax": 2.5,
-            "maxWidthFrac": 0.7,
-            "maxHeightFrac": 0.7,
-            "maxAreaFrac": 0.35
-          },
+          "listField": "region_boxes",
+          "countField": "region_count",
+          "rejectedCountField": "region_rejected_count",
+          "maxScoreField": "region_max_score",
+          "setCompleteField": "region_set_complete",
+          "revisionField": "region_revision",
           "thumbnail": {
-            "path": "/crops/{cropId}/region_thumbnail?size={size}",
+            "path": "/crops/{cropId}/region_thumbnail?box_id={boxId}&size={size}",
             "aspect": "1 / 1",
             "defaultSize": 160
           },
@@ -45,10 +32,6 @@
           }
         },
         "text": {
-          "valueField": "region_text",
-          "rawField": "region_text_raw",
-          "sourceField": "region_text_source",
-          "confidenceField": "region_text_confidence",
           "label": "SSCC code",
           "placeholder": "000123456700000000",
           "transform": "uppercase",
@@ -60,8 +43,6 @@
           "maxLength": 18
         },
         "provenance": {
-          "detectorField": "region_detector",
-          "detectorVersionField": "region_detector_version",
           "chainField": "region_detector_chain",
           "verifierField": "region_verifier",
           "verifiedAtField": "region_verified_at",
@@ -180,8 +161,6 @@
         }
       },
       "endpoints": {
-        "setBox": "/crops/{cropId}/region",
-        "clearBox": "/crops/{cropId}/region",
         "patchMeta": "/crops/{cropId}/region_meta",
         "batchStatus": "/regions/batch_status"
       },

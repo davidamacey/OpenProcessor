@@ -98,8 +98,6 @@
         }
       },
       "endpoints": {
-        "setBox": "/crops/{cropId}/tail",
-        "clearBox": "/crops/{cropId}/tail",
         "patchMeta": "/crops/{cropId}/tail_meta"
       },
       "stats": {

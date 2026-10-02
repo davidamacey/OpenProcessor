@@ -40,7 +40,7 @@ import {
   confirmProposedBoxes,
   type EditableBox,
 } from '$lib/annotations/multiBox';
-import { putRegionBoxes, patchRegionBox, ApiError } from '$lib/api';
+import { putRegionBoxes, patchRegionBox, regionConflictDetail, ApiError } from '$lib/api';
 import { slotOf } from '$lib/annotations/cropSlots';
 import type { SlotSpec, BBoxNormLike } from '$lib/annotations/types';
 import type { Crop } from '$lib/types';
@@ -82,15 +82,30 @@ export interface MultiBoxRegionController {
    *  count) still round-trips through the server so `onsave` always
    *  fires with a real item. */
   saveEdits(cropId: string): Promise<{ ok: boolean; item: Crop | null }>;
+  /** Sets the selected stored box's text (`PATCH .../regions/{box_id}`).
+   *  A not-yet-saved local box has no id to address, so it is refused. */
+  setSelectedText(cropId: string, text: string | null): Promise<void>;
   /** The served `region_profile.limits.max_boxes_per_write` for the
-   *  active slot, or `null` when the slot has no limit declared (a
-   *  pre-W8.8 backend, or a non-region slot). Never a client guess. */
+   *  active slot, or `null` when the slot declares none (a non-region
+   *  slot). Never a client guess. */
   readonly maxBoxes: number | null;
+  /** The item's served `region_revision`, echoed back as
+   *  `expected_region_revision` on every write. */
+  readonly revision: number | null;
+}
+
+export interface MultiBoxRegionOptions {
+  /** Called with every item the server returns (a successful write, or
+   *  the current item inside a `region_conflict`), so the owner can keep
+   *  its own copy of the crop in step. */
+  onitem?: (crop: Crop) => void;
 }
 
 export function createMultiBoxRegionController(
   slot: () => SlotSpec | null,
+  opts: MultiBoxRegionOptions = {},
 ): MultiBoxRegionController {
+  let revision = $state<number | null>(null);
   let boxes = $state<EditableBox[]>([]);
   let original = $state<EditableBox[]>([]);
   let selectedIndex = $state<number | null>(null);
@@ -103,6 +118,7 @@ export function createMultiBoxRegionController(
     const editable = toEditableBoxes(data?.subBoxes ?? []);
     boxes = editable;
     original = editable;
+    revision = data?.boxSet?.revision ?? null;
     selectedIndex = editable.length > 0 ? 0 : null;
   }
 
@@ -139,9 +155,23 @@ export function createMultiBoxRegionController(
     const editable = toEditableBoxes(data?.subBoxes ?? []);
     boxes = editable;
     original = editable;
+    revision = data?.boxSet?.revision ?? null;
     if (selectedIndex != null && selectedIndex >= editable.length) {
       selectedIndex = editable.length > 0 ? editable.length - 1 : null;
     }
+    opts.onitem?.(crop);
+  }
+
+  /** A stale revision: adopt the server's current item and tell the
+   *  operator, rather than guessing which of their edits still apply. */
+  function adoptConflict(e: unknown): Crop | null {
+    const conflict = regionConflictDetail(e);
+    if (!conflict) return null;
+    reseedFromWrittenCrop(conflict.item);
+    toastStore.warn(
+      'This item changed since it was loaded; showing the latest boxes. Repeat your change if it still applies.',
+    );
+    return conflict.item;
   }
 
   async function flipSelected(
@@ -158,10 +188,14 @@ export function createMultiBoxRegionController(
     }
     busy = true;
     try {
-      const crop = await patchRegionBox(cropId, box.boxId, { state });
+      const crop = await patchRegionBox(cropId, box.boxId, {
+        state,
+        expectedRegionRevision: revision ?? undefined,
+      });
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
     } catch (e) {
+      if (adoptConflict(e)) return;
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       toastStore.error(
         `Box ${state === 'accepted' ? 'accept' : 'reject'} failed: ${msg}`,
@@ -187,11 +221,16 @@ export function createMultiBoxRegionController(
     try {
       const confirmed = confirmProposedBoxes(boxes);
       const body = buildRegionsPutBoxes(original, confirmed);
-      const crop = await putRegionBoxes(cropId, body, { regionStatus: 'detected' });
+      const crop = await putRegionBoxes(cropId, body, {
+        regionStatus: 'detected',
+        expectedRegionRevision: revision ?? undefined,
+      });
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
       return { ok: true, item: crop };
     } catch (e) {
+      const adopted = adoptConflict(e);
+      if (adopted) return { ok: false, item: adopted };
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       toastStore.error(`Confirm failed: ${msg}`);
       return { ok: false, item: null };
@@ -205,14 +244,42 @@ export function createMultiBoxRegionController(
     busy = true;
     try {
       const body = buildRegionsPutBoxes(original, boxes);
-      const crop = await putRegionBoxes(cropId, body);
+      const crop = await putRegionBoxes(cropId, body, {
+        expectedRegionRevision: revision ?? undefined,
+      });
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
       return { ok: true, item: crop };
     } catch (e) {
+      const adopted = adoptConflict(e);
+      if (adopted) return { ok: false, item: adopted };
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       toastStore.error(`Save failed: ${msg}`);
       return { ok: false, item: null };
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function setSelectedText(cropId: string, text: string | null): Promise<void> {
+    if (selectedIndex == null || busy) return;
+    const box = boxes[selectedIndex];
+    if (box.boxId == null) {
+      toastStore.warn('Save the new box first; a reading is written per saved box.');
+      return;
+    }
+    busy = true;
+    try {
+      const crop = await patchRegionBox(cropId, box.boxId, {
+        text,
+        expectedRegionRevision: revision ?? undefined,
+      });
+      reseedFromWrittenCrop(crop);
+      undoStore.recordRegionWrites([cropId]);
+    } catch (e) {
+      if (adoptConflict(e)) return;
+      const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      toastStore.error(`Text save failed: ${msg}`);
     } finally {
       busy = false;
     }
@@ -234,6 +301,9 @@ export function createMultiBoxRegionController(
     get maxBoxes() {
       return slot()?.capabilities.subBox?.maxBoxesPerWrite ?? null;
     },
+    get revision() {
+      return revision;
+    },
     seedFrom,
     select,
     next,
@@ -244,5 +314,6 @@ export function createMultiBoxRegionController(
     rejectSelected,
     confirmAndSave,
     saveEdits,
+    setSelectedText,
   };
 }

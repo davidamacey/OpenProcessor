@@ -7,6 +7,7 @@
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
+  import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
 
@@ -82,56 +83,85 @@
       slotData?.lifecycle?.status === activeSlot.capabilities.lifecycle.rejectState,
   );
 
-  // The sub-box, already projected into the parent-crop frame by
-  // readSlot's own projection at mapping time — no second hand-rolled
-  // projection here.
-  const boxInCrop = $derived<BBoxNorm | null>(
-    noSlot ? null : (slotData?.subBox?.parent ?? null),
-  );
-
-  // Letterbox-compensated ring rectangle (percent of the aspect-square
-  // container). When natural dims aren't known yet (still loading), fall
-  // back to naive container-relative placement so first paint isn't blank.
-  const ringRectPct = $derived.by<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(() => {
-    if (!boxInCrop) return null;
-    const x1 = boxInCrop.cx - boxInCrop.w / 2;
-    const y1 = boxInCrop.cy - boxInCrop.h / 2;
-    const w = boxInCrop.w;
-    const h = boxInCrop.h;
-    if (imgNaturalW <= 0 || imgNaturalH <= 0) {
-      return { left: x1 * 100, top: y1 * 100, width: w * 100, height: h * 100 };
+  // Every box to draw, already in the parent-crop frame (the server's own
+  // projection, `SlotBox.parent`; a scalar-box slot's is projected once by
+  // readSlot) — no second hand-rolled projection here. A multi-box slot
+  // draws all of its boxes, each ringed by its served box-state tone.
+  interface RingSource {
+    box: BBoxNorm;
+    colorClass: string;
+    dashed: boolean;
+  }
+  const ringSources = $derived.by<RingSource[]>(() => {
+    if (noSlot || !slotData) return [];
+    if (slotData.subBoxes) {
+      return slotData.subBoxes.flatMap((b) =>
+        b.parent
+          ? [
+              {
+                box: b.parent,
+                colorClass: toneBorderClass(regionStatusesStore.boxStateTone(b.state)),
+                dashed:
+                  regionStatusesStore.boxStateInfo(b.state)?.dashed ??
+                  (b.state === 'rejected' || b.state === 'false_positive'),
+              },
+            ]
+          : [],
+      );
     }
-    const aspect = imgNaturalW / imgNaturalH;
-    let dispW = 1;
-    let dispH = 1;
-    let offX = 0;
-    let offY = 0;
-    if (aspect >= 1) {
-      dispH = 1 / aspect;
-      offY = (1 - dispH) / 2;
-    } else {
-      dispW = aspect;
-      offX = (1 - dispW) / 2;
-    }
-    return {
-      left: (offX + x1 * dispW) * 100,
-      top: (offY + y1 * dispH) * 100,
-      width: w * dispW * 100,
-      height: h * dispH * 100,
-    };
+    return slotData.subBox?.parent
+      ? [{ box: slotData.subBox.parent, colorClass: scalarRingColorClass, dashed: false }]
+      : [];
   });
 
-  // Ring color: green when a human has confirmed the sub-box (verified
-  // === true), yellow for unverified machine-suggested boxes. Mirrors
-  // §11.3 of the design doc, and Finding C.3
-  // (docs/genericization-plan-2026-09-13.md §2.7): `verified` — not any
-  // status value — is the correct predicate for the confirmed ring.
-  const ringColorClass = $derived(
+  // Letterbox-compensated ring rectangles (percent of the aspect-square
+  // container). When natural dims aren't known yet (still loading), fall
+  // back to naive container-relative placement so first paint isn't blank.
+  const ringRects = $derived.by(() =>
+    ringSources.map((src) => {
+      const box = src.box;
+      const x1 = box.cx - box.w / 2;
+      const y1 = box.cy - box.h / 2;
+      const w = box.w;
+      const h = box.h;
+      if (imgNaturalW <= 0 || imgNaturalH <= 0) {
+        return {
+          left: x1 * 100,
+          top: y1 * 100,
+          width: w * 100,
+          height: h * 100,
+          colorClass: src.colorClass,
+          dashed: src.dashed,
+        };
+      }
+      const aspect = imgNaturalW / imgNaturalH;
+      let dispW = 1;
+      let dispH = 1;
+      let offX = 0;
+      let offY = 0;
+      if (aspect >= 1) {
+        dispH = 1 / aspect;
+        offY = (1 - dispH) / 2;
+      } else {
+        dispW = aspect;
+        offX = (1 - dispW) / 2;
+      }
+      return {
+        left: (offX + x1 * dispW) * 100,
+        top: (offY + y1 * dispH) * 100,
+        width: w * dispW * 100,
+        height: h * dispH * 100,
+        colorClass: src.colorClass,
+        dashed: src.dashed,
+      };
+    }),
+  );
+
+  // Scalar-box slot ring color: green when a human has confirmed the box
+  // (verified === true), yellow for unverified machine-suggested boxes
+  // (Finding C.3, docs/genericization-plan-2026-09-13.md §2.7: `verified`
+  // — not any status value — is the confirmed-ring predicate).
+  const scalarRingColorClass = $derived(
     slotVerified
       ? (activeSlot?.capabilities.subBox?.ring.confirmed ??
           'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]')
@@ -213,9 +243,9 @@
       >
         no {activeSlot?.label.singular ?? 'box'}
       </span>
-    {:else if ringRectPct}
+    {:else if ringRects.length > 0}
       <!--
-        Region ring overlaid on the thumbnail. The thumbnail is served as
+        Region rings overlaid on the thumbnail. The thumbnail is served as
         a non-square JPEG (aspect-preserved) and rendered with
         object-contain inside an aspect-square container. We have to
         letterbox-compensate the ring placement so it lands on the
@@ -223,14 +253,18 @@
         in CropCard once `<img onload>` has populated naturalWidth/Height.
         Pointer-events disabled so the ring never swallows card clicks.
       -->
-      <div
-        class="pointer-events-none absolute rounded-[2px] border {ringColorClass}"
-        style:left="{ringRectPct.left}%"
-        style:top="{ringRectPct.top}%"
-        style:width="{ringRectPct.width}%"
-        style:height="{ringRectPct.height}%"
-        aria-hidden="true"
-      ></div>
+      {#each ringRects as ring, i (i)}
+        <div
+          class="pointer-events-none absolute rounded-[2px] border {ring.colorClass} {ring.dashed
+            ? 'border-dashed'
+            : ''}"
+          style:left="{ring.left}%"
+          style:top="{ring.top}%"
+          style:width="{ring.width}%"
+          style:height="{ring.height}%"
+          aria-hidden="true"
+        ></div>
+      {/each}
       <span
         class="absolute top-1 left-1 rounded-sm border border-blue-400/60 bg-blue-500/30 px-1 py-0.5 font-mono text-[10px] text-white"
       >
@@ -238,7 +272,7 @@
       </span>
     {/if}
 
-    {#if activeSlot}
+    {#if activeSlot?.capabilities.subBox?.listField != null}
       <button
         type="button"
         class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"

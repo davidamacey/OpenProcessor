@@ -44,8 +44,7 @@
   import type { Crop } from '$lib/types';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
-  import { projectFromParent } from '$lib/annotations/readSlot';
-  import type { BBoxNormLike, XYXY } from '$lib/annotations/types';
+  import type { XYXY } from '$lib/annotations/types';
   import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
 
   interface Props {
@@ -124,6 +123,18 @@
     return w && h ? `${w} / ${h}` : null;
   });
 
+  /** A box stored relative to its parent crop, as source-image xyxy. */
+  function parentToSource(box: XYXY, parent: XYXY): XYXY {
+    const pw = parent[2] - parent[0];
+    const ph = parent[3] - parent[1];
+    return [
+      parent[0] + box[0] * pw,
+      parent[1] + box[1] * ph,
+      parent[0] + box[2] * pw,
+      parent[1] + box[3] * ph,
+    ];
+  }
+
   function bboxToXyxy(b: { cx: number; cy: number; w: number; h: number }): XYXY {
     return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
   }
@@ -145,7 +156,7 @@
   }
 
   interface DrawBox {
-    kind: 'item' | 'region' | 'region-candidate' | 'region-box';
+    kind: 'item' | 'region' | 'region-box';
     cropId: string;
     xyxy: XYXY;
     dashed: boolean;
@@ -193,25 +204,16 @@
       const data = slotOf(item, slot);
       const sub = data?.subBox;
       const boxList = data?.subBoxes ?? [];
-      // A W8 (listField) capability never populates `sub` — only
-      // `subBoxes` (readSlot.ts). This bug hid every region box on a
-      // real W8 backend: the old `if (!sub) continue` skipped the whole
-      // per-item block, including the multi-box loop below, whenever
-      // there was no legacy single-box `subBox` to draw. Continue only
-      // when there is truly nothing to draw for this item.
-      if (!sub && boxList.length === 0) continue;
       const ring = slot.capabilities.subBox.ring;
 
-      if (sub?.parent) {
-        const regionXyxy = projectFromParent(
-          sub.parent as BBoxNormLike,
-          itemXyxy,
-          'source',
-        );
+      // A read-only scalar-box slot (tier 2): one box, stored in either
+      // frame.
+      if (sub?.rawXyxy) {
         out.push({
           kind: 'region',
           cropId: item.id,
-          xyxy: regionXyxy,
+          xyxy:
+            sub.frame === 'source' ? sub.rawXyxy : parentToSource(sub.rawXyxy, itemXyxy),
           dashed: false,
           colorClass: ring.confirmed,
           label: slot.label.title,
@@ -220,40 +222,15 @@
           clickable: false,
         });
       }
-      if (sub?.candidate?.parent) {
-        const candidateXyxy = projectFromParent(
-          sub.candidate.parent as BBoxNormLike,
-          itemXyxy,
-          'source',
-        );
-        out.push({
-          kind: 'region-candidate',
-          cropId: item.id,
-          xyxy: candidateXyxy,
-          dashed: true,
-          colorClass: ring.proposed,
-          label: `${slot.label.title} candidate`,
-          tooltip: `${slot.label.title} candidate${
-            sub.candidate.score != null
-              ? ` · ${(sub.candidate.score * 100).toFixed(0)}%`
-              : ''
-          }`,
-          selected: false,
-          clickable: false,
-        });
-      }
 
-      // W8 multi-box: draw every box in the list, numbered by position.
-      // Additive to the single-box block above — a real W8 payload
-      // serves subBoxes and leaves the legacy sub/candidate fields null,
-      // so the two loops never double-draw in practice.
+      // Multi-box slot: every served box, in the source image's frame
+      // already (`bbox_norm`), numbered by position.
       boxList.forEach((b, i) => {
-        if (!b.parent) return;
-        const boxXyxy = projectFromParent(b.parent, itemXyxy, 'source');
+        if (!b.rawXyxy) return;
         out.push({
           kind: 'region-box',
           cropId: item.id,
-          xyxy: boxXyxy,
+          xyxy: b.rawXyxy,
           dashed: multiBoxDashed(b.state),
           colorClass: multiBoxRingColorClass(b.state),
           label: `${slot.label.title} ${i + 1}`,

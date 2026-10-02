@@ -20,10 +20,11 @@ describe('/review region bbox edit session', () => {
     );
   });
 
-  it('Enter in edit mode saves to the crop the session started on', () => {
-    const fn = extractFunction(src, 'saveBboxAndExit');
-    expect(fn).toContain('const id = editingCropId ?? current.id;');
-    expect(fn).toContain('if (id !== current.id)');
+  it('Enter in edit mode saves the boxes of the crop it captured, not a re-read of `current` after the await', () => {
+    const fn = extractFunction(src, 'confirmMultiBoxSlot');
+    expect(fn).toContain('const item = current;');
+    expect(fn).toContain('multiBox.confirmAndSave(item.id)');
+    expect(fn).not.toContain('confirmAndSave(current');
   });
 
   it('N / Z are not registered while editing, so the queue cannot move under an edit', () => {

@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe('mapRawCrop slots mapping', () => {
-  it('maps every region_* wire field (W8 region_boxes list + item-level fields) into slots.widget_tag', async () => {
+  it('maps the region_boxes list, the item summary and the item-level fields into slots.widget_tag', async () => {
     const raw = {
       crop_id: 'c1',
       image_path: '/img/1.jpg',
@@ -52,26 +52,25 @@ describe('mapRawCrop slots mapping', () => {
           bbox_correct: null,
           confidence: null,
           rejection_reason: null,
-          text: null,
+          text: 'TAG-001',
+          text_raw: 'tag-001',
+          text_source: 'gemma',
+          text_confidence: 0.8,
+          text_engine_version: '1',
           cluster_id: null,
           thumbnail_url: null,
         },
       ],
+      region_count: 1,
+      region_revision: 3,
       region_status: 'detected',
       region_verified: true,
-      region_detector: 'tag_detector_v1',
-      region_detector_version: '1.0',
       region_detector_chain: ['tag_detector_v1:hit'],
       region_detected_at: '2026-09-01T00:00:00Z',
       region_verifier: 'gemma-4-e4b',
       region_verifier_version: '4',
       region_verified_at: '2026-09-02T00:00:00Z',
       region_rejection_reason: null,
-      region_text: 'TAG-001',
-      region_text_raw: 'tag-001',
-      region_text_source: 'gemma',
-      region_text_confidence: 0.8,
-      region_text_engine_version: '1',
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
 
@@ -84,14 +83,15 @@ describe('mapRawCrop slots mapping', () => {
     expect(slot!.subBoxes![0].score).toBe(0.91);
     expect(slot!.lifecycle?.status).toBe('detected');
     expect(slot!.lifecycle?.verified).toBe(true);
-    // Item-level text/provenance fields are unaffected by the W8 box list
-    // (region_text* / region_detector* stay item-level per the spec).
-    expect(slot!.text?.value).toBe('TAG-001');
-    expect(slot!.text?.raw).toBe('tag-001');
-    expect(slot!.text?.source).toBe('gemma');
-    expect(slot!.text?.confidence).toBe(0.8);
-    expect(slot!.provenance?.detector).toBe('tag_detector_v1');
-    expect(slot!.provenance?.detectorVersion).toBe('1.0');
+    // A region's reading is per box; the item serves no text of its own.
+    expect(slot!.text).toBeUndefined();
+    expect(slot!.subBoxes![0].text).toBe('TAG-001');
+    expect(slot!.subBoxes![0].textRaw).toBe('tag-001');
+    expect(slot!.subBoxes![0].textSource).toBe('gemma');
+    expect(slot!.subBoxes![0].textConfidence).toBe(0.8);
+    expect(slot!.boxSet?.count).toBe(1);
+    expect(slot!.boxSet?.revision).toBe(3);
+    expect(slot!.provenance?.detector).toBeNull();
     expect(slot!.provenance?.chain).toEqual(['tag_detector_v1:hit']);
     expect(slot!.provenance?.verifier).toBe('gemma-4-e4b');
     expect(slot!.provenance?.verifierVersion).toBe('4');

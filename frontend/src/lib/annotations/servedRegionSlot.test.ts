@@ -29,16 +29,10 @@ function wireFields(v: unknown, out: string[] = []): string[] {
 describe('regionSlotFromServedProfile', () => {
   const slot = regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
 
-  it('uses only wire keys the backend documents (or the named pending-W8 key)', () => {
-    // 'region_boxes' is W8's SubBoxCapability.listField — see
-    // src/lib/contract/wireKeys.test.ts's PENDING_BACKEND_W8, which is
-    // the tracked, emptied-at-lockstep-sync allow-list for this.
-    const PENDING_BACKEND_W8 = ['region_boxes'];
+  it('uses only wire keys the backend documents', () => {
     const fields = wireFields(slot.capabilities);
-    expect(fields.length).toBeGreaterThan(20);
-    expect(
-      fields.filter((f) => !WIRE_KEYS.has(f) && !PENDING_BACKEND_W8.includes(f)),
-    ).toEqual([]);
+    expect(fields.length).toBeGreaterThan(10);
+    expect(fields.filter((f) => !WIRE_KEYS.has(f))).toEqual([]);
   });
 
   it('keys the slot by the profile name and binds it to the region class', () => {
@@ -77,18 +71,16 @@ describe('regionSlotFromServedProfile', () => {
     expect(REGION_TAB_ID).toBe('regions');
   });
 
-  it('writes through the region routes (W8: no setBox/clearBox — PUT /crops/{id}/region is a removed route)', () => {
+  it('declares only the whole-set status routes (box writes go through the per-box api helpers)', () => {
     expect(slot.endpoints).toBe(REGION_ENDPOINTS);
-    expect(slot.endpoints.setBox).toBeUndefined();
-    expect(slot.endpoints.clearBox).toBeUndefined();
+    expect(Object.keys(slot.endpoints).sort()).toEqual(['batchStatus', 'patchMeta']);
     expect(slot.endpoints.patchMeta!('a')).toBe('/crops/a/region_meta');
     expect(slot.endpoints.batchStatus!()).toBe('/regions/batch_status');
-    // W8.8: subBox is rebuilt per profile (spread over REGION_SUB_BOX) to
-    // carry the served region_profile.limits.max_boxes_per_write, so it's
-    // no longer the same object identity — compare structurally instead.
+    // subBox is rebuilt per profile (spread over REGION_SUB_BOX) to carry
+    // the served region_profile.limits.max_boxes_per_write.
     expect(slot.capabilities.subBox).toEqual({
       ...REGION_WIRE_CAPABILITIES.subBox,
-      maxBoxesPerWrite: undefined,
+      maxBoxesPerWrite: WIDGET_TAG_PROFILE.limits.max_boxes_per_write,
     });
   });
 
@@ -110,7 +102,9 @@ describe('regionSlotFromServedProfile', () => {
   });
 
   it('has a text capability and text filter when the profile reads text', () => {
-    expect(slot.capabilities.text?.valueField).toBe('region_text');
+    expect(slot.capabilities.text).toBeDefined();
+    // The reading is per box: no item-level text wire field exists.
+    expect(slot.capabilities.text?.valueField).toBeUndefined();
     expect(slot.capabilities.queue?.textFilter?.param).toBe('text');
   });
 

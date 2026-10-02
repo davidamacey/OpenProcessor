@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe('undoCropRegion — W8 multi-box round trip', () => {
-  it('maps the restored region_boxes list, item status, and text choice onto Crop.slots', async () => {
+  it('maps the restored region_boxes list, item status, revision and per-box text choice onto Crop.slots', async () => {
     const raw = {
       crop_id: 'c1',
       image_path: '/nas/img.jpg',
@@ -57,6 +57,7 @@ describe('undoCropRegion — W8 multi-box round trip', () => {
           confidence: null,
           rejection_reason: 'sanity_reject:aspect_ratio',
           text: null,
+          text_choice: 'no_valid_reading',
           cluster_id: null,
           thumbnail_url: null,
         },
@@ -64,7 +65,7 @@ describe('undoCropRegion — W8 multi-box round trip', () => {
       region_status: 'verify_rejected',
       region_validated: false,
       region_auto_confirmed: false,
-      region_text_choice: 'no_valid_reading',
+      region_revision: 12,
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
 
@@ -83,6 +84,7 @@ describe('undoCropRegion — W8 multi-box round trip', () => {
     expect(slot?.lifecycle?.status).toBe('verify_rejected');
     expect(slot?.lifecycle?.validated).toBe(false);
     expect(slot?.lifecycle?.autoConfirmed).toBe(false);
-    expect(slot?.text?.choice).toBe('no_valid_reading');
+    expect(slot?.subBoxes?.[0].textChoice).toBe('no_valid_reading');
+    expect(slot?.boxSet?.revision).toBe(12);
   });
 });

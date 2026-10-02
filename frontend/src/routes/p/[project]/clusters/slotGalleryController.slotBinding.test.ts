@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SlotData, SlotSpec } from '$lib/annotations/types';
 import type { Crop } from '$lib/types';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
 vi.mock('$lib/api', async () => {
   const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
@@ -60,14 +61,7 @@ describe('createSlotGalleryController(slot)', () => {
     const gallery = createSlotGalleryController(gadgetMarkSlot);
     const data: SlotData = {
       key: gadgetMarkSlot.key,
-      subBox: {
-        rawXyxy: [0.1, 0.2, 0.3, 0.4],
-        frame: 'source',
-        parent: null,
-        score: null,
-        visible: true,
-        candidate: null,
-      },
+      subBoxes: [makeSlotBox({ boxId: 'b1', rawXyxy: [0.1, 0.2, 0.3, 0.4] })],
       lifecycle: {
         status: 'detected',
         state: null,
@@ -75,17 +69,16 @@ describe('createSlotGalleryController(slot)', () => {
         validated: true,
         autoConfirmed: null,
         rejectionReason: null,
-        boxCorrect: null,
       },
     };
     const item = { id: 'w1', slots: { [gadgetMarkSlot.key]: data } } as unknown as Crop;
-    gallery.pager.items = [
-      { crop_id: 'w1', region_status: null, region_bbox_norm: null } as never,
-    ];
+    gallery.pager.items = [{ crop_id: 'w1', region_status: null } as never];
     gallery.editCrop = item;
     gallery.saveBox(item);
 
     expect(gallery.pager.items[0].region_status).toBe('detected');
-    expect(gallery.pager.items[0].region_bbox_norm).toEqual([0.1, 0.2, 0.3, 0.4]);
+    expect(
+      gallery.pager.items[0].slots?.[gadgetMarkSlot.key]?.subBoxes?.[0].rawXyxy,
+    ).toEqual([0.1, 0.2, 0.3, 0.4]);
   });
 });

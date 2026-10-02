@@ -22,13 +22,9 @@
    * navigate to the review queue.
    */
   import ProvenanceChip from './ProvenanceChip.svelte';
-  import {
-    getRegionThumbUrl,
-    resolveApiUrl,
-    scoped,
-    type RegionBrowseItem,
-  } from '$lib/api';
+  import { getThumbUrl, resolveApiUrl, scoped, type RegionBrowseItem } from '$lib/api';
   import { readSlot } from '$lib/annotations/readSlot';
+  import { displayBoxOf, rowBoxOf } from '$lib/annotations/rowBox';
   import type { SlotSpec, XYXY } from '$lib/annotations/types';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
@@ -70,43 +66,40 @@
       ),
   );
 
-  // false_positive regions stay visible (kept as hard negatives) but are
-  // dimmed + badged so the operator sees the triage state at a glance.
-  // W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
-  // the row's own box, when the browse route selected one (region_box_id
-  // set); the card's thumbnail is already server-cropped to it via
-  // getRegionThumbUrl's ?box_id= — this is just for the count/state chip.
+  // The box this card describes: the row's own (region_box_id) or, for
+  // an item-level row, the item's first box. Every per-box value below
+  // reads it — the item carries no per-box scalars.
   const boxCount = $derived(data.subBoxes?.length ?? null);
-  const rowBox = $derived(
-    crop.region_box_id != null
-      ? (data.subBoxes?.find((b) => b.boxId === crop.region_box_id) ?? null)
-      : null,
-  );
-  const isFalsePositive = $derived(
-    slot.capabilities.lifecycle?.falsePositiveState != null &&
-      data.lifecycle?.status === slot.capabilities.lifecycle.falsePositiveState,
-  );
+  const rowBox = $derived(rowBoxOf(data, crop.region_box_id));
+  const box = $derived(displayBoxOf(data, crop.region_box_id));
 
-  // dq-region (2026-09-24): a verifier-rejected candidate box, kept for
-  // human review/reversal — distinct from a false positive (which keeps
-  // the promoted region box; this has no region box at all yet).
-  const isRejectedCandidate = $derived(
-    data.subBox?.rawXyxy == null && data.subBox?.candidate != null,
-  );
+  // false_positive boxes stay visible (kept as hard negatives) but are
+  // dimmed + badged so the operator sees the triage state at a glance.
+  const isFalsePositive = $derived(box?.state === 'false_positive');
+  // A box the verifier (or a geometry gate) rejected, kept for human
+  // review/reversal.
+  const isRejectedBox = $derived(box?.state === 'rejected');
 
   const thumbCap = $derived(slot.capabilities.subBox?.thumbnail);
-  // crop.region_thumbnail_url, when present, is a server-provided,
-  // cache-busted URL (see api.ts's region_thumbnail_url doc comment) —
-  // it wins over a freshly-built one. Otherwise build from the active
-  // slot's own thumbnail.path/defaultSize; a slot with no subBox
-  // capability at all falls back to the generic region-thumbnail helper.
-  const thumbUrl = $derived(
-    crop.region_thumbnail_url
-      ? resolveApiUrl(crop.region_thumbnail_url)
-      : thumbCap
-        ? resolveApiUrl(`${scoped()}${thumbCap.path(crop.crop_id, thumbCap.defaultSize)}`)
-        : getRegionThumbUrl(crop.crop_id),
-  );
+  // The served per-box thumbnail wins; otherwise build the slot's own
+  // thumbnail path for the box id. An item with no box has nothing to
+  // crop, so it shows the item thumbnail. The item's served
+  // `region_revision` rides along as `v=` so an edited box is re-cropped
+  // rather than served from the browser's image cache.
+  const revision = $derived(data.boxSet?.revision ?? null);
+  const thumbUrl = $derived.by(() => {
+    let url: string;
+    if (box?.thumbnailUrl) {
+      url = resolveApiUrl(box.thumbnailUrl);
+    } else if (box?.boxId && thumbCap) {
+      url = resolveApiUrl(
+        `${scoped()}${thumbCap.path(crop.crop_id, box.boxId, thumbCap.defaultSize)}`,
+      );
+    } else {
+      return getThumbUrl(crop.crop_id);
+    }
+    return revision == null ? url : `${url}${url.includes('?') ? '&' : '?'}v=${revision}`;
+  });
   const thumbAspect = $derived(thumbCap?.aspect ?? '2 / 1');
 
   function handleClick(e: MouseEvent): void {
@@ -197,9 +190,9 @@
       >
         false pos
       </span>
-    {:else if isRejectedCandidate}
+    {:else if isRejectedBox}
       {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
-        data.lifecycle?.rejectionReason,
+        box?.rejectionReason,
       )}
       <!-- 3f1a11e adoption: badge color follows the served kind —
            model_verdict (verifier rejected) reads red, needs_human (no
@@ -214,8 +207,8 @@
               ? 'border-zinc-500/60 bg-zinc-600/85'
               : 'border-amber-500/60 bg-amber-600/85'
         }`}
-        title={data.lifecycle?.rejectionReason
-          ? regionVocabularyStore.rejectionReasonLabel(data.lifecycle.rejectionReason)
+        title={box?.rejectionReason
+          ? regionVocabularyStore.rejectionReasonLabel(box.rejectionReason)
           : undefined}
       >
         candidate
@@ -243,23 +236,27 @@
            when it structurally doesn't. -->
       {#if slot.capabilities.text}
         <span class="min-w-0 truncate text-zinc-300" data-testid="slot-text-value"
-          >{data.text?.value ?? '—'}</span
+          >{box?.text ?? '—'}</span
         >
       {/if}
       <span class="shrink-0 text-zinc-500">
-        {data.subBox?.score != null ? `${(data.subBox.score * 100).toFixed(0)}%` : '—'}
+        {box?.score != null ? `${(box.score * 100).toFixed(0)}%` : '—'}
       </span>
-      {#if data.text?.disagreement}
+      {#if box?.textDisagreement}
         <span
           class="shrink-0 rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[9px] font-sans text-orange-200"
-          title="vlm: {data.text.vlmValue ?? '∅'} · ocr: {data.text.ocrValue ?? '∅'}"
+          title="vlm: {box.textVlm ?? '∅'} · ocr: {box.textOcr ?? '∅'}"
         >
           readers disagree
         </span>
       {/if}
     </div>
     <div class="flex min-w-0 flex-wrap items-center gap-1">
-      <ProvenanceChip detector={data.provenance?.detector ?? null} size="sm" />
+      <ProvenanceChip
+        detector={box?.detector ?? data.provenance?.detector ?? null}
+        version={box?.detectorVersion ?? null}
+        size="sm"
+      />
       {#if data.provenance?.verifier}
         <ProvenanceChip detector={data.provenance.verifier} tag="verify" size="sm" />
       {/if}

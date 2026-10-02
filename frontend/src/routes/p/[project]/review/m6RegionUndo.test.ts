@@ -25,7 +25,7 @@ function fn(name: string): string {
   return m![0];
 }
 
-describe('M6: confirmSlot/rejectSlot/markFalsePositive/saveBboxAndExit record a region undo entry', () => {
+describe('M6: confirmSlot/rejectSlot/markFalsePositive record a region undo entry', () => {
   it('confirmSlot calls undoStore.recordRegionWrites on a successful write, before the success toast', () => {
     const body = fn('confirmSlot');
     const recordIdx = body.indexOf('undoStore.recordRegionWrites([item.id])');
@@ -44,17 +44,12 @@ describe('M6: confirmSlot/rejectSlot/markFalsePositive/saveBboxAndExit record a 
     );
   });
 
-  it('saveBboxAndExit calls undoStore.recordRegionWrites on a successful write', () => {
-    expect(fn('saveBboxAndExit')).toMatch(/undoStore\.recordRegionWrites\(\[id\]\)/);
-  });
+  // The multi-box writes (confirm / per-box accept-reject / box edits) record
+  // inside multiBoxRegionController.svelte.ts — multiBoxRegionController.test.ts
+  // asserts every successful write records and a failed one does not.
 
-  it('none of the four record on the failure path (only inside the try, before catch)', () => {
-    for (const name of [
-      'confirmSlot',
-      'rejectSlot',
-      'markFalsePositive',
-      'saveBboxAndExit',
-    ]) {
+  it('none of the three record on the failure path (only inside the try, before catch)', () => {
+    for (const name of ['confirmSlot', 'rejectSlot', 'markFalsePositive']) {
       const body = fn(name);
       const catchIdx = body.indexOf('} catch');
       const recordIdx = body.indexOf('undoStore.recordRegionWrites');

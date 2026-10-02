@@ -54,11 +54,31 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     text_reader: 'ocr',
     reads_text: true,
     text_hint_enabled: false,
+    limits: { max_boxes_per_write: 500 },
   };
   const servedSlot = regionSlotFromServedProfile(servedProfile);
 
   it('2a. the region-profile rule keeps it for a backend serving that profile, drops it otherwise', () => {
-    expect(applyRegionProfileRule(slots, servedProfile).kept).toEqual(slots);
+    // The kept slot is the deployment's own, plus the served write limit
+    // (a deployment file never declares it).
+    const kept = applyRegionProfileRule(slots, servedProfile).kept;
+    expect(kept).toHaveLength(1);
+    expect(kept[0].capabilities.subBox?.maxBoxesPerWrite).toBe(
+      servedProfile.limits.max_boxes_per_write,
+    );
+    expect({
+      ...kept[0],
+      capabilities: {
+        ...kept[0].capabilities,
+        subBox: { ...kept[0].capabilities.subBox, maxBoxesPerWrite: undefined },
+      },
+    }).toEqual({
+      ...slots[0],
+      capabilities: {
+        ...slots[0].capabilities,
+        subBox: { ...slots[0].capabilities.subBox, maxBoxesPerWrite: undefined },
+      },
+    });
     expect(applyRegionProfileRule(slots, null).kept).toEqual([]);
     expect(
       applyRegionProfileRule(slots, { ...servedProfile, name: 'other' }).kept,
@@ -146,20 +166,27 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
 
   it('9. readSlot() renders the SlotCard-consumed data shape correctly', () => {
     const raw = {
-      region_bbox_norm: [0.4, 0.4, 0.52, 0.52],
-      region_bbox_frame: 'source',
-      region_score: 0.81,
-      region_visible: true,
-      region_text: '000123456700000000',
-      region_text_source: 'vlm',
-      region_detector: 'tag_segmenter',
+      region_boxes: [
+        {
+          box_id: 'b1',
+          state: 'false_positive',
+          bbox_norm: [0.4, 0.4, 0.52, 0.52],
+          bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
+          score: 0.81,
+          detector: 'tag_segmenter',
+          text: '000123456700000000',
+          text_source: 'vlm',
+        },
+      ],
       region_detector_chain: ['tag_detector_v1:miss', 'tag_segmenter:hit'],
       region_status: 'false_positive',
       region_verified: false,
+      region_revision: 2,
     };
     const d = readSlot(raw, palletSlot, [0.2, 0.2, 0.8, 0.8]);
-    expect(d.subBox!.parent!.w).toBeCloseTo(0.2, 5);
-    expect(d.text!.value).toBe('000123456700000000');
+    expect(d.subBoxes![0].parent!.w).toBeCloseTo(0.2, 5);
+    expect(d.subBoxes![0].text).toBe('000123456700000000');
+    expect(d.boxSet!.revision).toBe(2);
     expect(d.provenance!.chain).toHaveLength(2);
     expect(d.lifecycle!.state!.badge).toBe('false pos');
     expect(d.lifecycle!.state!.dim).toBe(true);

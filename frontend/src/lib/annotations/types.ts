@@ -92,7 +92,7 @@ export interface SubBoxRing {
  * docs/design/w8-multibox-frontend-plan-2026-09-26.md.
  */
 export interface SlotBox {
-  /** Stable id, e.g. `"b1"`. Null only for a not-yet-saved local box. */
+  /** Stable id within the item, e.g. `"b1"`. Null only for a not-yet-saved local box. */
   boxId: string | null;
   state: string;
   /** Source-frame geometry, `[x1,y1,x2,y2]` normalized to the source image. */
@@ -103,11 +103,34 @@ export interface SlotBox {
   detector: string | null;
   detectorVersion: string | null;
   source: string | null;
+  /** The verifier's own box-correctness verdict (`false` = "model said
+   *  wrong box"); null when no verdict was given. */
   bboxCorrect: boolean | null;
   confidence: string | null;
   rejectionReason: string | null;
+  /** A human created, verdicted or edited this box (or it was imported
+   *  from a labeled dataset): automated stages never touch it. */
+  locked: boolean | null;
+  /** The chosen text reading (only served when the profile reads text). */
   text: string | null;
+  textRaw: string | null;
+  textSource: string | null;
+  textConfidence: number | null;
+  textEngineVersion: string | null;
+  /** The VLM's / OCR engine's own candidate readings. */
+  textVlm: string | null;
+  textOcr: string | null;
+  /** True when the two readers differ. */
+  textDisagreement: boolean | null;
+  /** Why the chosen reading won — `region_text_choice` vocabulary. */
+  textChoice: string | null;
+  /** Why the VLM's own reading was rejected as not text, when it was. */
+  textVlmInvalid: string | null;
   clusterId: number | null;
+  clusterSubid: string | null;
+  clusterDistance: number | null;
+  detectedAt: string | null;
+  /** Served per-box thumbnail path (already carries `box_id`). */
   thumbnailUrl: string | null;
 }
 
@@ -125,59 +148,42 @@ export interface BoxStateInfo {
 
 export interface SubBoxCapability {
   /**
-   * Mutually exclusive with `listField` — a capability is EITHER a
-   * single scalar box (a tier-2, non-region slot) OR a W8 multi-box list
-   * (the served region slot). Never both: `readSlot` skips the legacy
-   * scalar block entirely when `listField` is set (owner decision,
-   * 2026-09-26 — "no backward compatibility", the region wire's scalar
-   * fields are gone, not merely deprecated).
+   * EITHER `listField` (a multi-box list: the served region slot) OR
+   * `bboxField` (a read-only single scalar box: a tier-2 non-region slot).
+   * Never both — `readSlot` skips the scalar block when `listField` is
+   * set. The backend has no write route for a scalar-box slot, so a
+   * `bboxField` slot is display-only.
    *
    * Wire field holding the box as `[x1,y1,x2,y2]`. */
   bboxField?: WireField;
-  /** W8: wire field holding the multi-box list on the item
+  /** Wire field holding the multi-box list on the item
    *  (`ItemDoc.region_boxes`) — `readSlot` populates `SlotData.subBoxes`
-   *  from this list (element keys are the fixed `RegionBoxWire` shape —
-   *  see `SlotBox`), always an array (`[]` when none). The served region
-   *  slot declares only this, not `bboxField`. */
+   *  from it (element keys are the fixed `RegionBoxWire` shape, see
+   *  `SlotBox`), always an array (`[]` when none). */
   listField?: WireField;
-  /** Frame the stored box uses when `frameField` is absent or unreadable.
-   *  Only meaningful with `bboxField` (single-box path). */
+  /** Frame the stored scalar box uses when `frameField` is absent or
+   *  unreadable. Only meaningful with `bboxField`. */
   storedFrame?: SlotFrame;
-  /** Optional wire field carrying the frame per-row (regions: `region_bbox_frame`).
-   *  When present and parseable it overrides `storedFrame` for that row. */
+  /** Optional wire field carrying the frame per-row. */
   frameField?: WireField;
-  /** Detector confidence 0..1. Regions: `region_score`. */
+  /** Detector confidence 0..1 (scalar-box slots). */
   scoreField?: WireField;
-  /** Boolean "the thing is visible in this crop". Regions: `region_visible`. */
+  /** Boolean "the thing is visible in this crop" (scalar-box slots). */
   visibleField?: WireField;
-  /** Optional wire field carrying the box already projected into the
-   *  PARENT (crop-local) frame, server-computed (regions:
-   *  `region_bbox_in_parent`). When present, `readSlot` renders from it
-   *  directly instead of projecting `bboxField` through `parentXyxy`
-   *  itself — preferring the server's own projection over a client one. */
-  bboxInParentField?: WireField;
-  /** Wire field holding a verifier-rejected candidate box (dq-region,
-   *  2026-09-24) — set when the detector proposed a box but the
-   *  verifier rejected it, so `bboxField` is empty. Regions:
-   *  `region_candidate_bbox_norm`. A human confirming (or marking false
-   *  positive on) this promotes the candidate into `bboxField`
-   *  server-side; the frontend never computes that promotion itself. */
-  candidateBboxField?: WireField;
-  /** Candidate box already projected into the parent frame, server-
-   *  computed (regions: `region_candidate_bbox_in_parent`). Same
-   *  preference-over-client-projection rule as `bboxInParentField`. */
-  candidateBboxInParentField?: WireField;
-  /** Candidate box's detector score (regions: `region_candidate_score`). */
-  candidateScoreField?: WireField;
-  /** Candidate box's detector id (regions: `region_candidate_detector`). */
-  candidateDetectorField?: WireField;
-  /** Candidate box's detector version (regions: `region_candidate_detector_version`). */
-  candidateDetectorVersionField?: WireField;
-  /** Candidate box's source tag (regions: `region_candidate_source`). */
-  candidateSourceField?: WireField;
-  /** Server-side crop of the sub-bbox region, used as the gallery card image. */
+  /** Item-level summary of a `listField` set: number of boxes, number of
+   *  rejected ones, best score, whether the set is complete (false = the
+   *  VLM reported visible regions missing from the list) and the
+   *  optimistic-concurrency revision every box write echoes back as
+   *  `expected_region_revision`. */
+  countField?: WireField;
+  rejectedCountField?: WireField;
+  maxScoreField?: WireField;
+  setCompleteField?: WireField;
+  revisionField?: WireField;
+  /** Server-side crop of one box, used as the gallery card image. The
+   *  box id is required: the backend 422s a region thumbnail without one. */
   thumbnail?: {
-    path: (cropId: string, size: number) => string;
+    path: (cropId: string, boxId: string, size: number) => string;
     aspect: string;
     defaultSize: number;
   };
@@ -187,10 +193,9 @@ export interface SubBoxCapability {
     viewPadding: number;
     nudgeStep: number;
   };
-  /** W8.8: the served `region_profile.limits.max_boxes_per_write` for a
+  /** The served `region_profile.limits.max_boxes_per_write` for a
    *  `listField` capability — the only real limit on adding a box (no
-   *  client-guessed cap). `undefined` on a pre-W8.8 backend or a
-   *  non-region (single-box) slot. */
+   *  client-guessed cap). */
   maxBoxesPerWrite?: number;
 }
 
@@ -199,29 +204,14 @@ export interface SubBoxCapability {
 /* ------------------------------------------------------------------ */
 
 export interface TextCapability {
-  valueField: WireField;
+  /** Item-level wire field for a scalar-box slot's reading. The served
+   *  region slot declares none: its text is per box (`SlotBox.text`,
+   *  written through `PATCH /crops/{id}/regions/{box_id}`). */
+  valueField?: WireField;
   rawField?: WireField;
   sourceField?: WireField;
   confidenceField?: WireField;
   engineVersionField?: WireField;
-  /** Wire field carrying the VLM's own reading, independent of `valueField`
-   *  (the backend's chosen reading). Regions: `region_text_vlm`. */
-  vlmValueField?: WireField;
-  /** Wire field carrying the OCR engine's own reading. Regions: `region_text_ocr`. */
-  ocrValueField?: WireField;
-  /** Wire field: boolean, true when `vlmValueField` and `ocrValueField`
-   *  disagree. Regions: `region_text_disagreement`. */
-  disagreementField?: WireField;
-  /** Wire field: why the chosen reading won — `readers_agree |
-   *  vlm_preferred | vlm_only | ocr_only | ocr_mode | vlm_invalid |
-   *  no_valid_reading | human` (dq-region, 2026-09-24). Regions:
-   *  `region_text_choice`. */
-  choiceField?: WireField;
-  /** Wire field: why the VLM's own reading was rejected as not text —
-   *  `placeholder | no_reading | sequence | charset | too_short |
-   *  too_long | format`, null when the VLM reading was valid or absent.
-   *  Regions: `region_text_vlm_invalid`. */
-  invalidReasonField?: WireField;
   label: string;
   placeholder?: string;
   transform?: 'none' | 'uppercase' | 'lowercase' | 'trim';
@@ -238,7 +228,9 @@ export interface TextCapability {
 /* ------------------------------------------------------------------ */
 
 export interface ProvenanceCapability {
-  detectorField: WireField;
+  /** Item-level detector id (scalar-box slots). The served region slot's
+   *  detector is per box (`SlotBox.detector`), so it declares none. */
+  detectorField?: WireField;
   detectorVersionField?: WireField;
   chainField?: WireField;
   verifierField?: WireField;
@@ -288,11 +280,6 @@ export interface LifecycleCapability {
    *  Regions: `region_auto_confirmed`. */
   autoConfirmedField?: WireField;
   rejectionReasonField?: WireField;
-  /** Boolean "the verifier judged this box correct" (3f1a11e adoption)
-   *  — `false` is the actual "model said wrong box" signal distinct from
-   *  a rejection reason's `kind`. `null`/absent means no verdict was
-   *  given. Regions: `region_bbox_correct`. */
-  boxCorrectField?: WireField;
   /** Who made a human write (e.g. `region_label_source`). Sent as
    *  `'human'` on batch status writes when declared. */
   labelSourceField?: WireField;
@@ -328,8 +315,6 @@ export interface QueueCapability {
 /* ------------------------------------------------------------------ */
 
 export interface SlotEndpoints {
-  setBox?: (cropId: string) => string;
-  clearBox?: (cropId: string) => string;
   patchMeta?: (cropId: string) => string;
   batchStatus?: () => string;
 }
@@ -383,26 +368,21 @@ export interface SlotData {
    *  set and the backend serves it — always an array, `[]` when the item
    *  has no boxes, in stored (display) order. See `SlotBox`. */
   subBoxes?: SlotBox[];
+  /** The item-level summary of `subBoxes` — see
+   *  `SubBoxCapability.countField`. Present with `subBoxes`. */
+  boxSet?: {
+    count: number | null;
+    rejectedCount: number | null;
+    maxScore: number | null;
+    setComplete: boolean | null;
+    revision: number | null;
+  };
   subBox?: {
     parent: BBoxNormLike | null;
     rawXyxy: XYXY | null;
     frame: SlotFrame;
     score: number | null;
     visible: boolean | null;
-    /** A verifier-rejected candidate box (dq-region, 2026-09-24) — only
-     *  ever non-null when `rawXyxy` above is null (a box and a rejected
-     *  candidate are mutually exclusive on the wire). Confirming or
-     *  marking false-positive on this promotes it server-side into the
-     *  region box; the UI seeds its edit box from here so an unchanged
-     *  confirm goes through the normal write path. */
-    candidate: {
-      parent: BBoxNormLike | null;
-      rawXyxy: XYXY | null;
-      score: number | null;
-      detector: string | null;
-      detectorVersion: string | null;
-      source: string | null;
-    } | null;
   };
   text?: {
     value: string | null;
@@ -410,17 +390,6 @@ export interface SlotData {
     source: string | null;
     confidence: number | null;
     engineVersion: string | null;
-    /** The VLM's own reading, when the slot declares `vlmValueField`. */
-    vlmValue: string | null;
-    /** The OCR engine's own reading, when the slot declares `ocrValueField`. */
-    ocrValue: string | null;
-    /** True when `vlmValue` and `ocrValue` disagree ("readers disagree"). */
-    disagreement: boolean | null;
-    /** Why the chosen reading won — see `TextCapability.choiceField`. */
-    choice: string | null;
-    /** Why the VLM's own reading was rejected as not text, when it was —
-     *  see `TextCapability.invalidReasonField`. */
-    invalidReason: string | null;
   };
   provenance?: {
     detector: string | null;
@@ -442,9 +411,6 @@ export interface SlotData {
      *  human — see `LifecycleCapability.autoConfirmedField`. */
     autoConfirmed: boolean | null;
     rejectionReason: string | null;
-    /** The verifier's own box-correctness verdict — see
-     *  `LifecycleCapability.boxCorrectField`. */
-    boxCorrect: boolean | null;
   };
 }
 
@@ -460,7 +426,6 @@ export function slotIsPresent(d: SlotData | undefined | null): boolean {
   // single-box null case below.
   if (d.subBoxes && d.subBoxes.length > 0) return true;
   if (d.subBox && d.subBox.rawXyxy != null) return true;
-  if (d.subBox && d.subBox.candidate != null) return true;
   if (d.text && d.text.value != null) return true;
   if (d.provenance && d.provenance.detector != null) return true;
   if (d.lifecycle && d.lifecycle.status != null) return true;

@@ -51,7 +51,7 @@ function normalize(p: ServedRegionProfile | null): ServedRegionProfile | null {
     text_reader: p.text_reader,
     reads_text: p.reads_text,
     text_hint_enabled: p.text_hint_enabled,
-    limits: p.limits,
+    limits: { max_boxes_per_write: p.limits.max_boxes_per_write },
   };
 }
 
@@ -65,7 +65,7 @@ function same(a: ServedRegionProfile | null, b: ServedRegionProfile | null): boo
     a.text_reader === b.text_reader &&
     a.reads_text === b.reads_text &&
     a.text_hint_enabled === b.text_hint_enabled &&
-    a.limits?.max_boxes_per_write === b.limits?.max_boxes_per_write
+    a.limits.max_boxes_per_write === b.limits.max_boxes_per_write
   );
 }
 

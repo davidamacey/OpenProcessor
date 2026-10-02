@@ -52,9 +52,8 @@ function fullSlot(): Record<string, unknown> {
         frameField: 'tag_bbox_frame',
         scoreField: 'tag_score',
         visibleField: 'tag_visible',
-        bboxInParentField: 'tag_bbox_in_parent',
         thumbnail: {
-          path: '/crops/{cropId}/region_thumbnail?size={size}',
+          path: '/crops/{cropId}/region_thumbnail?box_id={boxId}&size={size}',
           aspect: '1 / 1',
           defaultSize: 160,
         },
@@ -235,10 +234,48 @@ describe('parseSlotConfig — identity / structure', () => {
 });
 
 describe('parseSlotConfig — subBox', () => {
-  it('13. missing bboxField rejected', () => {
+  it('13. neither bboxField nor listField rejected; both rejected', () => {
     const s = fullSlot();
     delete (s.capabilities as any).subBox.bboxField;
-    expectRejected(parseSlotConfig(s), /bboxField/);
+    expectRejected(parseSlotConfig(s), /exactly one of listField/);
+
+    const both = fullSlot();
+    (both.capabilities as any).subBox.listField = 'region_boxes';
+    expectRejected(parseSlotConfig(both), /exactly one of listField/);
+  });
+
+  it('13b. a multi-box slot declares listField (+ summary fields) and needs no storedFrame', () => {
+    const s = fullSlot();
+    const sb = (s.capabilities as any).subBox;
+    delete sb.bboxField;
+    delete sb.storedFrame;
+    sb.listField = 'region_boxes';
+    sb.countField = 'region_count';
+    sb.rejectedCountField = 'region_rejected_count';
+    sb.maxScoreField = 'region_max_score';
+    sb.setCompleteField = 'region_set_complete';
+    sb.revisionField = 'region_revision';
+    const r = parseSlotConfig(s);
+    expect(r.errors).toEqual([]);
+    const out = r.slot!.capabilities.subBox!;
+    expect(out.listField).toBe('region_boxes');
+    expect(out.bboxField).toBeUndefined();
+    expect(out.revisionField).toBe('region_revision');
+    expect(out.setCompleteField).toBe('region_set_complete');
+  });
+
+  it('13c. a summary field that is not a wire field is rejected', () => {
+    const s = fullSlot();
+    (s.capabilities as any).subBox.revisionField = 7;
+    expectRejected(parseSlotConfig(s), /revisionField/);
+  });
+
+  it('13d. the thumbnail path template may use {boxId}', () => {
+    const r = parseSlotConfig(fullSlot());
+    expect(r.errors).toEqual([]);
+    expect(r.slot!.capabilities.subBox!.thumbnail!.path('c/1', 'b 2', 160)).toBe(
+      '/crops/c%2F1/region_thumbnail?box_id=b%202&size=160',
+    );
   });
 
   it('14. storedFrame: "image" rejected', () => {
@@ -312,10 +349,10 @@ describe('parseSlotConfig — subBox', () => {
     expectRejected(parseSlotConfig(s2), /thumbSize/);
   });
 
-  it('24. bboxInParentField: a non-wire-field value rejected', () => {
+  it('24. scoreField: a non-wire-field value rejected', () => {
     const s = fullSlot();
-    (s.capabilities as any).subBox.bboxInParentField = 123;
-    expectRejected(parseSlotConfig(s), /bboxInParentField/);
+    (s.capabilities as any).subBox.scoreField = 123;
+    expectRejected(parseSlotConfig(s), /scoreField/);
   });
 });
 
@@ -571,10 +608,15 @@ describe('parseSlotConfig — cohorts / endpoints / extras', () => {
     expectRejected(parseSlotConfig(s), /batchStatus/);
   });
 
-  it('59. endpoints.setBox with the wrong placeholder rejected', () => {
+  it('59. endpoints.patchMeta with the wrong placeholder rejected; setBox/clearBox are not endpoints', () => {
     const s = fullSlot();
-    (s.endpoints as any).setBox = '/crops/{size}/x';
-    expectRejected(parseSlotConfig(s), /setBox/);
+    (s.endpoints as any).patchMeta = '/crops/{size}/x';
+    expectRejected(parseSlotConfig(s), /patchMeta/);
+
+    const stale = fullSlot();
+    (stale.endpoints as any).setBox = '/crops/{cropId}/x';
+    const r = parseSlotConfig(stale);
+    expect(r.slot!.endpoints).not.toHaveProperty('setBox');
   });
 
   it('60. extras: [] rejected; extras with a nested __proto__ rejected', () => {
@@ -652,5 +694,24 @@ describe('parseProfileDocument', () => {
       expect(r.slots).toEqual([]);
       expect(r.warnings).toHaveLength(1);
     }
+  });
+});
+
+describe('parseSlotConfig — a multi-box slot has per-box text and detector (no item-level fields)', () => {
+  it('text without valueField and provenance without detectorField parse', () => {
+    const s = fullSlot();
+    delete (s.capabilities as any).text.valueField;
+    delete (s.capabilities as any).provenance.detectorField;
+    const r = parseSlotConfig(s);
+    expect(r.errors).toEqual([]);
+    expect(r.slot!.capabilities.text!.valueField).toBeUndefined();
+    expect(r.slot!.capabilities.provenance!.detectorField).toBeUndefined();
+    expect(r.slot!.capabilities.provenance!.chainField).toBe('tag_detector_chain');
+  });
+
+  it('a present but malformed valueField is still rejected', () => {
+    const s = fullSlot();
+    (s.capabilities as any).text.valueField = 5;
+    expectRejected(parseSlotConfig(s), /valueField/);
   });
 });

@@ -73,9 +73,9 @@ describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)',
   });
 });
 
-describe('3f1a11e: region_bbox_correct folded into the existing Validation row', () => {
-  it('the inline slot panel renders a "model: box wrong" chip gated on boxCorrect === false', () => {
-    expect(src).toMatch(/slotData\?\.lifecycle\?\.boxCorrect === false/);
+describe("3f1a11e: a box's bbox_correct verdict folded into the Status row", () => {
+  it('the inline slot panel renders a "model: box wrong" chip gated on the selected box\'s bboxCorrect === false', () => {
+    expect(src).toMatch(/selectedSlotBox\?\.bboxCorrect === false/);
     expect(src).toMatch(/model: box wrong/);
   });
 });

@@ -718,13 +718,11 @@ export interface ServedRegionProfile {
    *  enabled for this profile. Informational only today — no UI reads it
    *  yet (see CLAUDE.md). */
   text_hint_enabled: boolean;
-  /** W8.8/W8.9: request-size guards on region box writes — never a
-   *  labeling rule. `max_boxes_per_write` gates the Add-box action.
-   *  Optional because backend W8 has not landed in the vendored contract
-   *  (pending-backend, see regionProfile.test.ts's PENDING_BACKEND_W8_KEYS);
-   *  absent means no client-guessed cap (Add stays unbounded). */
-  limits?: {
-    max_boxes_per_write?: number;
+  /** Request-size guards on region box writes — never a labeling rule.
+   *  `max_boxes_per_write` gates the Add-box action (human box lists are
+   *  otherwise unbounded). */
+  limits: {
+    max_boxes_per_write: number;
   };
 }
 

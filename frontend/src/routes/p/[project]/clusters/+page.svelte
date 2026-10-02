@@ -12,7 +12,6 @@
     getClusters,
     getCrops,
     getRegions,
-    getRegionThumbUrl,
     getThumbUrl,
     resolveApiUrl,
     unexcludeCrops,
@@ -20,6 +19,7 @@
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { slotForClassName, registeredSlots } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
+  import { displayBoxOf } from '$lib/annotations/rowBox';
   import { createPager } from '$lib/pager.svelte';
   import { idsNeedingRepresentatives } from '$lib/clusters/displayOrderRepresentatives';
   import {
@@ -159,7 +159,7 @@
   });
 
   // The backend stores a slot's regions as a *sub-bbox* on each item
-  // (`region_bbox_norm`), NOT as standalone docs in the cluster index. So
+  // (`region_boxes`), NOT as standalone docs in the cluster index. So
   // filtering this page by a slot-bound class always returns 0 /
   // unlabeled clusters. Detect that case and show the slot's browse
   // gallery instead, which is the actual home for that slot's labeling.
@@ -534,10 +534,12 @@
         page: 1,
         page_size: 12,
       });
-      const withBox = res.items.filter(
-        (p) => Array.isArray(p.region_bbox_norm) && p.region_bbox_norm.length === 4,
-      );
-      const reps = withBox.slice(0, 4);
+      // A tile is one box's close-up, so only rows with a served box
+      // thumbnail qualify.
+      const reps = res.items
+        .map((p) => ({ p, box: displayBoxOf(p.slots?.[slot.key], p.region_box_id) }))
+        .filter((r) => r.box?.thumbnailUrl != null)
+        .slice(0, 4);
       return {
         id: cls.id,
         // Not a real cluster: cluster_kind/purity_tier/promotable/etc.
@@ -558,10 +560,10 @@
         dominant_pct: null,
         n_subclusters: 0,
         has_subclusters: false,
-        representative_crop_ids: reps.map((p) => p.crop_id),
+        representative_crop_ids: reps.map((r) => r.p.crop_id),
         // Region close-ups, not parent-item thumbnails: the card is the
         // entry point to the slot's own inventory.
-        representative_thumb_urls: reps.map((p) => getRegionThumbUrl(p.crop_id, 160)),
+        representative_thumb_urls: reps.map((r) => resolveApiUrl(r.box!.thumbnailUrl!)),
         updated_at: null,
         isSlotCard: true,
         slotDisplayName: slot.capabilities.queue?.tabLabel ?? slot.label.plural,
@@ -809,6 +811,7 @@
     void gallery.minScore;
     void gallery.textQuery;
     void gallery.statusFilter;
+    void gallery.boxStateFilter;
     void gallery.maxRank;
     void gallery.selectedCluster;
     void gallery.loadFirst();

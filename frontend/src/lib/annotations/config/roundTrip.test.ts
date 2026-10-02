@@ -52,16 +52,13 @@ describe('round-trip: JSON aircraftTailNumber profile === hand-written TypeScrip
 
   it('compiled path closures are byte-identical, including encodeURIComponent on a hostile id', () => {
     const id = 'a/b?c';
-    expect(parsed.endpoints.setBox!(id)).toBe(
-      aircraftTailNumberSlot.endpoints.setBox!(id),
-    );
     expect(parsed.endpoints.patchMeta!(id)).toBe(
       aircraftTailNumberSlot.endpoints.patchMeta!(id),
     );
-    expect(parsed.capabilities.subBox!.thumbnail!.path(id, 192)).toBe(
-      aircraftTailNumberSlot.capabilities.subBox!.thumbnail!.path(id, 192),
+    expect(parsed.capabilities.subBox!.thumbnail!.path(id, 'b1', 192)).toBe(
+      aircraftTailNumberSlot.capabilities.subBox!.thumbnail!.path(id, 'b1', 192),
     );
-    expect(parsed.endpoints.setBox!(id)).toBe('/crops/a%2Fb%3Fc/tail');
+    expect(parsed.endpoints.patchMeta!(id)).toBe('/crops/a%2Fb%3Fc/tail_meta');
   });
 
   it('compiled RegExp matches the hand-written one', () => {

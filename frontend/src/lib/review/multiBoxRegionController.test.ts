@@ -9,15 +9,28 @@ vi.mock('$lib/api', async () => {
   };
 });
 
-import { putRegionBoxes, patchRegionBox } from '$lib/api';
+import { putRegionBoxes, patchRegionBox, ApiError } from '$lib/api';
 import { createMultiBoxRegionController } from './multiBoxRegionController.svelte';
-import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import {
+  WIDGET_TAG_PROFILE,
+  widgetTagServedSlot,
+  widgetTagSlot,
+} from '$lib/test/fixtures/regionSlot';
+import {
+  installServedRegionProfile,
+  resetDeploymentSlots,
+} from '$lib/annotations/registeredSlots';
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { Crop } from '$lib/types';
 import type { SlotData } from '$lib/annotations/types';
+import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
-function cropWithBoxes(id: string, subBoxes: SlotData['subBoxes']): Crop {
+function cropWithBoxes(
+  id: string,
+  subBoxes: SlotData['subBoxes'],
+  revision: number | null = null,
+): Crop {
   return {
     id,
     source_image_path: '/img.jpg',
@@ -34,32 +47,32 @@ function cropWithBoxes(id: string, subBoxes: SlotData['subBoxes']): Crop {
     cluster_subid: null,
     test_holdout: false,
     updated_at: '',
-    slots: { [widgetTagSlot.key]: { key: widgetTagSlot.key, subBoxes } },
+    slots: {
+      [widgetTagSlot.key]: {
+        key: widgetTagSlot.key,
+        subBoxes,
+        boxSet: {
+          count: null,
+          rejectedCount: null,
+          maxScore: null,
+          setComplete: null,
+          revision,
+        },
+      },
+    },
   } as unknown as Crop;
 }
 
-const boxA: NonNullable<SlotData['subBoxes']>[number] = {
+const boxA = makeSlotBox({
   boxId: 'b1',
-  state: 'proposed',
   rawXyxy: [0.1, 0.1, 0.2, 0.2],
   parent: { cx: 0.15, cy: 0.15, w: 0.1, h: 0.1 },
-  score: 0.9,
-  detector: 'tag_detector_v1',
-  detectorVersion: '1',
-  source: 'detector',
-  bboxCorrect: null,
-  confidence: null,
-  rejectionReason: null,
-  text: null,
-  clusterId: null,
-  thumbnailUrl: null,
-};
-const boxB: NonNullable<SlotData['subBoxes']>[number] = {
-  ...boxA,
+});
+const boxB = makeSlotBox({
   boxId: 'b2',
   state: 'rejected',
   parent: { cx: 0.6, cy: 0.6, w: 0.1, h: 0.1 },
-};
+});
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -106,7 +119,10 @@ describe('createMultiBoxRegionController', () => {
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
     await c.acceptSelected('c1');
-    expect(patchRegionBox).toHaveBeenCalledWith('c1', 'b1', { state: 'accepted' });
+    expect(patchRegionBox).toHaveBeenCalledWith('c1', 'b1', {
+      state: 'accepted',
+      expectedRegionRevision: undefined,
+    });
     expect(c.boxes[0].state).toBe('accepted');
   });
 
@@ -132,7 +148,7 @@ describe('createMultiBoxRegionController', () => {
     expect(putRegionBoxes).toHaveBeenCalledWith(
       'c1',
       [{ box_id: 'b1', state: 'accepted' }, { box_id: 'b2' }],
-      { regionStatus: 'detected' },
+      { regionStatus: 'detected', expectedRegionRevision: undefined },
     );
   });
 
@@ -184,7 +200,7 @@ describe('createMultiBoxRegionController', () => {
       expect(cropId).toBe('c1');
       expect(body[0]).toMatchObject({ box_id: 'b1' });
       // The key differentiator from confirmAndSave: no region_status.
-      expect(opts).toBeUndefined();
+      expect(opts?.regionStatus).toBeUndefined();
     });
 
     it('never promotes a proposed box to accepted (no confirm semantics)', async () => {
@@ -222,10 +238,150 @@ describe('createMultiBoxRegionController', () => {
     });
   });
 
-  describe('maxBoxes', () => {
-    it('reads the served subBox.maxBoxesPerWrite, or null when absent (pre-W8.8 backend)', () => {
+  describe('region revision (optimistic concurrency)', () => {
+    it('echoes the served region_revision as expected_region_revision on every write kind', async () => {
+      vi.mocked(patchRegionBox).mockResolvedValue(
+        cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 5),
+      );
+      vi.mocked(putRegionBoxes).mockResolvedValue(
+        cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 6),
+      );
       const c = createMultiBoxRegionController(() => widgetTagSlot);
-      expect(c.maxBoxes).toBeNull();
+      c.seedFrom(cropWithBoxes('c1', [boxA], 4));
+      expect(c.revision).toBe(4);
+      await c.acceptSelected('c1');
+      expect(vi.mocked(patchRegionBox).mock.calls[0][2]).toMatchObject({
+        expectedRegionRevision: 4,
+      });
+      // The write's returned revision is what the next write echoes.
+      expect(c.revision).toBe(5);
+      await c.confirmAndSave('c1');
+      expect(vi.mocked(putRegionBoxes).mock.calls[0][2]).toMatchObject({
+        expectedRegionRevision: 5,
+      });
+      expect(c.revision).toBe(6);
+      await c.saveEdits('c1');
+      expect(vi.mocked(putRegionBoxes).mock.calls[1][2]).toMatchObject({
+        expectedRegionRevision: 6,
+      });
+    });
+
+    it('adopts the server item on a stale revision instead of a generic error', async () => {
+      // The conflict body carries a raw wire item; mapRawCrop maps its
+      // slots through the registry, so the served region slot is installed.
+      installServedRegionProfile(WIDGET_TAG_PROFILE);
+      const wireBox = (id: string, state: string, at: number) => ({
+        box_id: id,
+        state,
+        bbox_norm: [at, at, at + 0.1, at + 0.1],
+        bbox_in_parent: [at, at, at + 0.1, at + 0.1],
+      });
+      vi.mocked(putRegionBoxes).mockRejectedValue(
+        new ApiError(409, '/regions', {
+          detail: {
+            error: 'region_conflict',
+            current_region_revision: 9,
+            current_box_ids: ['b1', 'b2'],
+            item: {
+              crop_id: 'c1',
+              image_path: '/img.jpg',
+              bbox_norm: [0, 0, 1, 1],
+              region_revision: 9,
+              region_boxes: [
+                wireBox('b1', 'accepted', 0.1),
+                wireBox('b2', 'rejected', 0.5),
+              ],
+            },
+          },
+        }),
+      );
+      const warn = vi.spyOn(toastStore, 'warn');
+      const err = vi.spyOn(toastStore, 'error');
+      const seen: Crop[] = [];
+      const c = createMultiBoxRegionController(() => widgetTagServedSlot, {
+        onitem: (crop) => seen.push(crop),
+      });
+      c.seedFrom(cropWithBoxes('c1', [boxA], 4));
+      const result = await c.confirmAndSave('c1');
+      resetDeploymentSlots();
+      expect(result.ok).toBe(false);
+      expect(result.item?.id).toBe('c1');
+      expect(warn).toHaveBeenCalled();
+      expect(err).not.toHaveBeenCalled();
+      expect(c.boxes.map((b) => b.boxId)).toEqual(['b1', 'b2']);
+      expect(c.revision).toBe(9);
+      expect(seen).toHaveLength(1);
+    });
+
+    it('a non-conflict 409 is still a plain error', async () => {
+      vi.mocked(patchRegionBox).mockRejectedValue(
+        new ApiError(409, '/regions', { detail: 'nope' }),
+      );
+      const err = vi.spyOn(toastStore, 'error');
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA], 4));
+      await c.acceptSelected('c1');
+      expect(err).toHaveBeenCalled();
+    });
+
+    it('reports every returned item through onitem', async () => {
+      const returned = cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 5);
+      vi.mocked(patchRegionBox).mockResolvedValue(returned);
+      const onitem = vi.fn();
+      const c = createMultiBoxRegionController(() => widgetTagSlot, { onitem });
+      c.seedFrom(cropWithBoxes('c1', [boxA], 4));
+      await c.acceptSelected('c1');
+      expect(onitem).toHaveBeenCalledWith(returned);
+    });
+  });
+
+  describe('setSelectedText (a reading is per box)', () => {
+    it('PATCHes the selected stored box with the text and the revision', async () => {
+      vi.mocked(patchRegionBox).mockResolvedValue(
+        cropWithBoxes('c1', [{ ...boxA, text: 'TAG-002' }], 5),
+      );
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA, boxB], 4));
+      c.select(1);
+      await c.setSelectedText('c1', 'TAG-002');
+      expect(patchRegionBox).toHaveBeenCalledWith('c1', 'b2', {
+        text: 'TAG-002',
+        expectedRegionRevision: 4,
+      });
+    });
+
+    it('clears a reading with null (not undefined)', async () => {
+      vi.mocked(patchRegionBox).mockResolvedValue(cropWithBoxes('c1', [boxA], 5));
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA], 4));
+      await c.setSelectedText('c1', null);
+      expect(vi.mocked(patchRegionBox).mock.calls[0][2]).toHaveProperty('text', null);
+    });
+
+    it('refuses a not-yet-saved local box with a warning and no request', async () => {
+      const warn = vi.spyOn(toastStore, 'warn');
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      c.seedFrom(cropWithBoxes('c1', [boxA]));
+      c.addBox({ cx: 0.5, cy: 0.5, w: 0.1, h: 0.1 });
+      await c.setSelectedText('c1', 'X');
+      expect(patchRegionBox).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalled();
+    });
+  });
+
+  describe('maxBoxes', () => {
+    it('reads the served subBox.maxBoxesPerWrite, or null when the slot declares none', () => {
+      const c = createMultiBoxRegionController(() => widgetTagSlot);
+      expect(c.maxBoxes).toBe(500);
+
+      const none = {
+        ...widgetTagSlot,
+        capabilities: {
+          ...widgetTagSlot.capabilities,
+          subBox: { ...widgetTagSlot.capabilities.subBox!, maxBoxesPerWrite: undefined },
+        },
+      };
+      expect(createMultiBoxRegionController(() => none).maxBoxes).toBeNull();
 
       const limited = {
         ...widgetTagSlot,

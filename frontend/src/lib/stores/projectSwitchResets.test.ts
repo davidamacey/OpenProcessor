@@ -30,6 +30,7 @@ const profile = (name: string) => ({
   text_reader: '',
   reads_text: false,
   text_hint_enabled: false,
+  limits: { max_boxes_per_write: 500 },
 });
 
 afterEach(() => {

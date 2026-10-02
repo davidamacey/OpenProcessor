@@ -12,22 +12,23 @@ vi.mock('$lib/api', async (importOriginal) => {
   return {
     ...actual,
     getThumbUrl: () => '',
-    setSlotBox: vi.fn(async () => ({ id: 'c1' })),
+    putRegionBoxes: vi.fn(async () => ({ id: 'c1' })),
   };
 });
 
 import ShortcutOverlay from './ShortcutOverlay.svelte';
 import SlotBboxEditor from './SlotBboxEditor.svelte';
-import { setSlotBox } from '$lib/api';
+import { putRegionBoxes } from '$lib/api';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
 import { FALLBACK_KEYMAP, type KeymapDocument } from '$lib/keymapFallback';
 import {
-  installDeploymentSlots,
+  installServedRegionProfile,
   resetDeploymentSlots,
+  slotForClassName,
 } from '$lib/annotations/registeredSlots';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
-import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
+import { WIDGET_TAG_CLASS, WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 import type { Crop } from '$lib/types';
 
 function withKeys(overrides: Record<string, string[]>): KeymapDocument {
@@ -119,14 +120,12 @@ describe('ShortcutOverlay prints the keymap', () => {
 
 describe('SlotBboxEditor resolves its keys through the keymap', () => {
   beforeEach(() => {
-    // aircraftTailNumberSlot is a genuine single-box (bboxField) slot —
-    // the served region slot moved to the W8 multi-box list only (no
-    // backward compatibility), so SlotBboxEditor (the legacy single-box
-    // modal) is tested against this fixture instead.
-    installDeploymentSlots([aircraftTailNumberSlot]);
-    vi.mocked(setSlotBox).mockClear();
+    installServedRegionProfile(WIDGET_TAG_PROFILE);
+    vi.mocked(putRegionBoxes).mockClear();
   });
   afterEach(() => resetDeploymentSlots());
+
+  const slot = () => slotForClassName(WIDGET_TAG_CLASS)!;
 
   function crop(): Crop {
     return {
@@ -136,7 +135,20 @@ describe('SlotBboxEditor resolves its keys through the keymap', () => {
       class_id: 3,
       class_name: 'widget_a',
       label_validated: false,
-      slots: mapCropSlots({ tail_bbox_norm: [0.4, 0.4, 0.6, 0.6] }, [0, 0, 1, 1]),
+      slots: mapCropSlots(
+        {
+          region_boxes: [
+            {
+              box_id: 'b1',
+              state: 'accepted',
+              bbox_norm: [0.4, 0.4, 0.6, 0.6],
+              bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
+            },
+          ],
+          region_revision: 2,
+        },
+        [0, 0, 1, 1],
+      ),
     } as unknown as Crop;
   }
 
@@ -151,35 +163,34 @@ describe('SlotBboxEditor resolves its keys through the keymap', () => {
   }
 
   it('prints the default box-edit keys', () => {
-    const el = render(SlotBboxEditor, {
-      crop: crop(),
-      slot: aircraftTailNumberSlot,
-      onclose: vi.fn(),
-    });
-    expect(footerKeys(el)).toEqual(['[', ']', '←↑↓→', '⌫', '↵', 'Esc']);
+    const el = render(SlotBboxEditor, { crop: crop(), slot: slot(), onclose: vi.fn() });
+    expect(footerKeys(el)).toEqual(['Tab', '⌫', '←↑↓→', '↵', 'Esc']);
   });
 
-  it('a rebound clear key renders and clears the box; the old key no longer does', async () => {
+  it('a rebound delete key renders and removes the selected box; the old key no longer does', async () => {
     keymapStore.setDocument(withKeys({ 'box_edit.delete_box': ['q'] }), 'served');
-    const el = render(SlotBboxEditor, {
-      crop: crop(),
-      slot: aircraftTailNumberSlot,
-      onclose: vi.fn(),
-    });
-    expect(footerKeys(el)).toEqual(['[', ']', '←↑↓→', 'Q', '↵', 'Esc']);
+    const el = render(SlotBboxEditor, { crop: crop(), slot: slot(), onclose: vi.fn() });
+    expect(footerKeys(el)).toEqual(['Tab', 'Q', '←↑↓→', '↵', 'Esc']);
 
-    // Old key: the box survives, so Enter saves a box.
+    // Old key: the box survives, so Enter saves the box list unchanged.
     press({ key: 'Backspace' });
     press({ key: 'Enter' });
     await settle();
-    expect(setSlotBox).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(setSlotBox).mock.calls[0][2]).not.toBeNull();
+    expect(putRegionBoxes).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(putRegionBoxes).mock.calls[0][1]).toEqual([{ box_id: 'b1' }]);
+  });
 
-    // Rebound key: the box is cleared, so Enter saves "no box".
+  it('the rebound key deletes the box, so Save sends an empty list', async () => {
+    keymapStore.setDocument(withKeys({ 'box_edit.delete_box': ['q'] }), 'served');
+    render(SlotBboxEditor, { crop: crop(), slot: slot(), onclose: vi.fn() });
     press({ key: 'q' });
     press({ key: 'Enter' });
     await settle();
-    expect(setSlotBox).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(setSlotBox).mock.calls[1][2]).toBeNull();
+    expect(putRegionBoxes).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(putRegionBoxes).mock.calls[0][1]).toEqual([]);
+    // The served revision rides along as the optimistic-concurrency guard.
+    expect(vi.mocked(putRegionBoxes).mock.calls[0][2]).toMatchObject({
+      expectedRegionRevision: 2,
+    });
   });
 });

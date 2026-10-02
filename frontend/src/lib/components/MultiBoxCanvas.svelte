@@ -1,11 +1,8 @@
 <script lang="ts">
   /**
-   * Multi-box editing canvas for W8 regions (docs/design/
-   * w8-multibox-frontend-plan-2026-09-26.md). Sibling to `BboxCanvas.svelte`
-   * (which stays single-box for every other slot) rather than a rewrite of
-   * it, to avoid touching every existing single-box caller in this pass.
-   *
-   * Operates in crop-local frame, same convention as `BboxCanvas`. Renders
+   * Multi-box editing canvas for region slots (docs/design/
+   * w8-multibox-frontend-plan-2026-09-26.md). Operates in the crop-local
+   * (parent) frame. Renders
    * every box in `boxes`, numbered by its current list position (spec:
    * "not a stable id — use box_id", W8.7). Click selects a box; dragging
    * empty canvas draws a new one; Backspace/Delete removes the selected
@@ -22,6 +19,8 @@
    */
   import { getThumbUrl } from '$lib/api';
   import type { BBoxNormLike } from '$lib/annotations/types';
+  import { normalize as normalizeKey } from '$stores/keyboard.svelte';
+  import { keymapStore } from '$stores/keymap.svelte';
 
   export interface CanvasBox {
     box: BBoxNormLike;
@@ -37,8 +36,7 @@
     class?: string;
     busy?: boolean;
     /** Disables drag-create/drag-move (scan mode) — click-select and
-     *  keyboard actions (Tab/y/r) still work. Matches BboxCanvas's
-     *  readonly convention. */
+     *  keyboard actions (Tab/y/r) still work. */
     readonly?: boolean;
     /** Served `region_profile.limits.max_boxes_per_write`, or `null`/
      *  `undefined` when unknown (no client-guessed default). */
@@ -175,30 +173,51 @@
 
   /** Nudges the selected box by one step in the given direction — the
    *  `box_edit.nudge_*` actions forward here (readonly/scan mode ignores
-   *  this, matching BboxCanvas's own nudge/readonly behavior). */
+   *  this). */
   function nudgeSelected(dx: number, dy: number): void {
     if (readonly || busy || selectedIndex == null) return;
     const b = boxes[selectedIndex].box;
     onmove?.(selectedIndex, { cx: b.cx + dx, cy: b.cy + dy, w: b.w, h: b.h });
   }
 
+  /** The `box_edit` action a keypress resolves to through the keymap, so a
+   *  rebind applies here exactly as the printed hint says. The bare key is
+   *  matched too: Shift or Ctrl held down never stopped a nudge. */
+  function actionFor(e: KeyboardEvent): string | null {
+    return (
+      keymapStore.actionFor('box_edit', normalizeKey(e)) ??
+      keymapStore.actionFor('box_edit', e.key.toLowerCase())
+    );
+  }
+
+  /** Runs the `box_edit` action `e` resolves to; true when it was consumed. */
   export function handleKey(e: KeyboardEvent): boolean {
     if (busy) return false;
-    if (e.key === 'Tab') {
-      onnext?.();
-      return true;
+    switch (actionFor(e)) {
+      case 'box_edit.next_box':
+        onnext?.();
+        return true;
+      case 'box_edit.delete_box':
+        if (selectedIndex == null) return false;
+        ondelete?.(selectedIndex);
+        return true;
+      case 'box_edit.nudge_up':
+        return nudgeKey(0, -pxStep);
+      case 'box_edit.nudge_down':
+        return nudgeKey(0, pxStep);
+      case 'box_edit.nudge_left':
+        return nudgeKey(-pxStep, 0);
+      case 'box_edit.nudge_right':
+        return nudgeKey(pxStep, 0);
+      default:
+        return false;
     }
-    if ((e.key === 'Backspace' || e.key === 'Delete') && selectedIndex != null) {
-      ondelete?.(selectedIndex);
-      return true;
-    }
-    if (!readonly && selectedIndex != null) {
-      if (e.key === 'ArrowUp') return (nudgeSelected(0, -pxStep), true);
-      if (e.key === 'ArrowDown') return (nudgeSelected(0, pxStep), true);
-      if (e.key === 'ArrowLeft') return (nudgeSelected(-pxStep, 0), true);
-      if (e.key === 'ArrowRight') return (nudgeSelected(pxStep, 0), true);
-    }
-    return false;
+  }
+
+  function nudgeKey(dx: number, dy: number): boolean {
+    if (readonly || selectedIndex == null) return false;
+    nudgeSelected(dx, dy);
+    return true;
   }
 </script>
 

@@ -23,9 +23,10 @@
   const label = $derived(gallery.slot.label);
 </script>
 
-<!-- Region gallery. Regions live as a region_bbox_norm sub-bbox on
-     each item crop (not as their own cluster docs), so this view
-     surfaces them directly with detector provenance + OCR text chips. -->
+<!-- Region gallery. Regions live as a `region_boxes` list on each item
+     crop (not as their own cluster docs); each row is one box, so this
+     view surfaces them directly with detector provenance + OCR text
+     chips. -->
 <div class="flex min-h-0 flex-col gap-3">
   <!-- Sticky header: the filter strip + bulk-action toolbar stay pinned
        to the top of the scroll area, so the verify / false-positive /
@@ -75,6 +76,23 @@
           {/each}
         </select>
       </label>
+      {#if regionStatusesStore.boxStates.length > 0}
+        <label class="flex items-center gap-1.5">
+          <span class="text-zinc-400">Box state</span>
+          <!-- Served `box_states` vocabulary; applies to the same box as
+               every other filter here. -->
+          <select
+            bind:value={gallery.boxStateFilter}
+            class="select-sm"
+            data-testid="box-state-filter"
+          >
+            <option value="">any</option>
+            {#each regionStatusesStore.boxStates as b (b.value)}
+              <option value={b.value}>{b.label}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-400">Min score</span>
         <input
@@ -260,10 +278,17 @@
         {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
         listed
         {#if gallery.totalRows != null && gallery.totalRows !== gallery.pager.total}
-          <!-- W8: total_rows counts boxes, not items, on a box-selecting
+          <!-- total_rows counts boxes, not items, on a box-selecting
                request — shown alongside, never replacing, the item total
-               (spec: total stays items so page math holds). -->
+               (total stays items so page math holds). -->
           ({gallery.totalRows.toLocaleString()} boxes)
+        {/if}
+        {#if gallery.rowsTruncated}
+          <span
+            class="text-amber-300"
+            title="An item on this page matched more boxes than the index lists per item; the total still counts them."
+            data-testid="rows-truncated">· some boxes not listed</span
+          >
         {/if}
       </span>
     </div>

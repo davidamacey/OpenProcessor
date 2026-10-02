@@ -12,6 +12,8 @@ import { mount, unmount, flushSync } from 'svelte';
 import type { Crop } from '$lib/types';
 import type { SlotData, SlotSpec } from '$lib/annotations/types';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
+import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
 const registry = vi.hoisted(() => ({ all: [] as SlotSpec[] }));
 
@@ -31,14 +33,20 @@ import CropCard from './CropCard.svelte';
 function tagData(): SlotData {
   return {
     key: widgetTagSlot.key,
-    subBox: {
-      rawXyxy: [0.4, 0.45, 0.6, 0.55],
-      frame: 'source',
-      parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 },
-      score: 0.9,
-      visible: true,
-      candidate: null,
-    },
+    subBoxes: [
+      makeSlotBox({
+        boxId: 'b1',
+        state: 'accepted',
+        rawXyxy: [0.4, 0.45, 0.6, 0.55],
+        parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 },
+      }),
+      makeSlotBox({
+        boxId: 'b2',
+        state: 'rejected',
+        rawXyxy: [0.1, 0.1, 0.2, 0.2],
+        parent: { cx: 0.15, cy: 0.15, w: 0.1, h: 0.1 },
+      }),
+    ],
     lifecycle: {
       status: 'detected',
       state: null,
@@ -46,7 +54,6 @@ function tagData(): SlotData {
       validated: true,
       autoConfirmed: null,
       rejectionReason: null,
-      boxCorrect: null,
     },
   };
 }
@@ -102,7 +109,8 @@ describe('CropCard — sub-box slot chosen by region evidence', () => {
     registry.all = [widgetTagSlot];
     const el = renderCard(widget({ [widgetTagSlot.key]: tagData() }));
 
-    expect(el.querySelector('div.pointer-events-none.absolute')).not.toBeNull();
+    // One ring per served box (two here), not just the first.
+    expect(el.querySelectorAll('div.pointer-events-none.absolute')).toHaveLength(2);
     expect(editButton(el)?.getAttribute('aria-label')).toBe('Edit tag');
   });
 
@@ -120,5 +128,26 @@ describe('CropCard — sub-box slot chosen by region evidence', () => {
 
     expect(editButton(el)).toBeUndefined();
     expect(el.querySelector('div.pointer-events-none.absolute')).toBeNull();
+  });
+
+  it('offers no ✎ for a read-only scalar-box slot (the backend has no write route for it)', () => {
+    registry.all = [aircraftTailNumberSlot];
+    const el = renderCard(
+      widget({
+        [aircraftTailNumberSlot.key]: {
+          key: aircraftTailNumberSlot.key,
+          subBox: {
+            rawXyxy: [0.4, 0.4, 0.6, 0.6],
+            frame: 'parent',
+            parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 },
+            score: 0.8,
+            visible: true,
+          },
+        },
+      }),
+    );
+    // Its box still draws.
+    expect(el.querySelectorAll('div.pointer-events-none.absolute')).toHaveLength(1);
+    expect(editButton(el)).toBeUndefined();
   });
 });

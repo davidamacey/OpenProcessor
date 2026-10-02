@@ -59,15 +59,15 @@ function read(rel: string): string {
 /**
  * A handful of call sites compose the path from a runtime object
  * property (a slot's own declared `endpoints`/`extras.datasetExport`
- * paths — `spec.buildPath`, `spec.statusPath`, `spec.endpoints.setBox`/
- * `patchMeta`/`batchStatus`) rather than a literal or a module-level
+ * paths — `spec.buildPath`, `spec.statusPath`, `spec.endpoints.patchMeta`/
+ * `batchStatus`) rather than a literal or a module-level
  * constant, which `apiCallScanner` can't resolve statically.
  *
  * Each override is anchored to a `marker` — a unique, nearby string
  * (the enclosing function's declaration) that must appear verbatim in
  * the scanned file — and resolves to the nearest scanned call site
- * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchRegionStatus`
- * all happen to share the identical raw template text
+ * *after* that marker. `patchSlotMeta`/`batchRegionStatus`
+ * both happen to share the identical raw template text
  * (`` `${scoped()}${path}` ``), so matching by raw text alone would
  * be ambiguous; matching by (marker, nearest-following-site) is not.
  *
@@ -98,15 +98,6 @@ const MANUAL_OVERRIDES: Array<{
     path: '/export/single_class/status',
     method: 'GET',
     queryParams: ['profile_name'],
-  },
-  {
-    file: 'lib/api.ts',
-    marker: 'export async function setSlotBox(',
-    // spec.endpoints.setBox/clearBox — a region slot declares both as
-    // '/crops/{id}/region'.
-    path: '/crops/*/region',
-    method: 'PUT',
-    queryParams: [],
   },
   {
     file: 'lib/api.ts',
@@ -145,127 +136,15 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/components/SlotCard.svelte',
-    marker: 'const thumbUrl = $derived(',
-    // thumbCap.path(id, size) — a region slot declares
-    // '/crops/{id}/region_thumbnail?size={size}'
+    marker: 'const thumbUrl = $derived.by(',
+    // thumbCap.path(id, boxId, size) — a region slot declares
+    // '/crops/{id}/region_thumbnail?box_id={boxId}&size={size}'
     // (capabilities.subBox.thumbnail.path).
     path: '/crops/*/region_thumbnail',
     method: 'GET',
-    queryParams: ['size'],
+    queryParams: ['box_id', 'size'],
   },
 ];
-
-/**
- * Routes proposed to OpenProcessor as a binding wire contract but not yet
- * implemented server-side, so they can't appear in the vendored OpenAPI
- * snapshot yet. Each entry names the plan section that binds it — remove
- * the entry (not widen it) the moment `npm run contract:sync` picks up
- * the real operation; `keymapActions.test.ts` §5.7 is the sibling check
- * that will then start failing loudly if this allow-list is stale.
- *
- * K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §4.1):
- * OpenProcessor W2b hasn't landed the four `/keymap*` routes yet.
- */
-const PENDING_BACKEND: Array<{ path: string; method: string }> = [
-  { path: '/keymap', method: 'GET' },
-  { path: '/keymap', method: 'PUT' },
-  { path: '/keymap/validate', method: 'POST' },
-  { path: '/keymap/reset', method: 'POST' },
-  // W8 multi-box regions (feat/w8-multibox-lockstep, docs/design/
-  // w8-multibox-frontend-plan-2026-09-26.md): new in the backend's W8
-  // wave, not yet in the vendored OpenAPI snapshot (cutover/projects-
-  // lifecycle 29807534 has no W8). Delete these four entries when backend
-  // W8 rebases onto projects and `npm run contract:sync` picks them up.
-  { path: '/crops/*/regions', method: 'PUT' },
-  { path: '/crops/batch_regions', method: 'PUT' },
-  { path: '/crops/*/regions/*', method: 'PATCH' },
-  { path: '/regions/batch_box_state', method: 'POST' },
-];
-
-/**
- * OpenProcessor W10 (labeled-dataset import + Reprocess,
- * any_domain_plan.md §7.12 / W10.14) — built against the frozen spec
- * before the backend implements it (docs/design/
- * w10-import-reprocess-ui-plan-2026-09-27.md). DELETE THIS LIST when
- * `npm run contract:sync` vendors W10's OpenAPI; every route then has to
- * resolve for real.
- */
-const PENDING_BACKEND_W10: Array<{ path: string; method: string }> = [
-  { path: '/datasets/formats', method: 'GET' },
-  { path: '/datasets/uploads', method: 'POST' },
-  { path: '/datasets/preview', method: 'POST' },
-  { path: '/datasets/imports', method: 'POST' },
-  { path: '/datasets/imports', method: 'GET' },
-  { path: '/datasets/imports/*', method: 'GET' },
-  { path: '/datasets/imports/*/issues', method: 'GET' },
-  { path: '/datasets/imports/*/entries', method: 'GET' },
-  { path: '/datasets/imports/*/cancel', method: 'POST' },
-  { path: '/datasets/imports/*/resume', method: 'POST' },
-  { path: '/datasets/imports/*/undo', method: 'POST' },
-  { path: '/reprocess', method: 'POST' },
-  { path: '/crops/*/reprocess', method: 'POST' },
-  { path: '/reprocess/jobs/*', method: 'GET' },
-  { path: '/reprocess/jobs/*/cancel', method: 'POST' },
-];
-
-/**
- * OpenProcessor W3 (prompt-pack CRUD, any_domain_plan.md §3.2 / §7.2) and
- * the pack half of W5 (`POST /prompt_packs/test`, §5.1 / §7.5) — built
- * against the frozen spec before the backend implements them (docs/design/
- * w3-pack-editor-ui-plan-2026-09-27.md). DELETE THIS LIST when
- * `npm run contract:sync` vendors W3 (and W5 for `/prompt_packs/test`);
- * every route then has to resolve for real.
- */
-const PENDING_BACKEND_W3: Array<{ path: string; method: string }> = [
-  { path: '/prompt_packs', method: 'GET' },
-  { path: '/prompt_packs/schema', method: 'GET' },
-  { path: '/prompt_packs/validate', method: 'POST' },
-  { path: '/prompt_packs/*', method: 'GET' },
-  { path: '/prompt_packs/*', method: 'PUT' },
-  { path: '/prompt_packs/*', method: 'DELETE' },
-  { path: '/prompt_packs/*/revisions', method: 'GET' },
-  { path: '/prompt_packs/*/revisions/*', method: 'GET' },
-  { path: '/prompt_packs/*/clone', method: 'POST' },
-  { path: '/prompt_packs/active', method: 'GET' },
-  { path: '/prompt_packs/*/activate', method: 'POST' },
-  { path: '/prompt_packs/active/rollback', method: 'POST' },
-  { path: '/prompt_packs/test', method: 'POST' },
-];
-
-/**
- * OpenProcessor W4 (region-profile CRUD and the config vocabulary,
- * any_domain_plan.md §4.2 / §7.3 / §7.4) — built against the frozen spec
- * before the backend implements it (docs/design/
- * w4-profile-editor-ui-plan-2026-09-27.md). DELETE THIS LIST when
- * `npm run contract:sync` vendors W4; every route then has to resolve for
- * real.
- */
-const PENDING_BACKEND_W4: Array<{ path: string; method: string }> = [
-  { path: '/region_profiles', method: 'GET' },
-  { path: '/region_profiles/schema', method: 'GET' },
-  { path: '/region_profiles/validate', method: 'POST' },
-  { path: '/region_profiles/*', method: 'GET' },
-  { path: '/region_profiles/*', method: 'PUT' },
-  { path: '/region_profiles/*', method: 'DELETE' },
-  { path: '/region_profiles/*/revisions', method: 'GET' },
-  { path: '/region_profiles/*/revisions/*', method: 'GET' },
-  { path: '/region_profiles/*/clone', method: 'POST' },
-  { path: '/region_profiles/active', method: 'GET' },
-  { path: '/region_profiles/*/activate', method: 'POST' },
-  { path: '/region_profiles/active/rollback', method: 'POST' },
-  { path: '/region_profiles/deactivate', method: 'POST' },
-  { path: '/region_profiles/active/impact', method: 'GET' },
-  { path: '/config/vocabulary', method: 'GET' },
-];
-
-function isPendingBackend(path: string, method: string): boolean {
-  return [
-    ...PENDING_BACKEND,
-    ...PENDING_BACKEND_W10,
-    ...PENDING_BACKEND_W3,
-    ...PENDING_BACKEND_W4,
-  ].some((p) => p.path === path && p.method === method);
-}
 
 interface ResolvedCall {
   file: string;
@@ -411,8 +290,11 @@ describe('endpoint catalog: completeness', () => {
 
 // -- OpenAPI lookup -----------------------------------------------------
 
+interface OpenApiOpDoc {
+  parameters?: Array<{ name?: string }>;
+}
 interface OpenApiDoc {
-  paths: Record<string, Record<string, { parameters?: Array<{ name?: string }> }>>;
+  paths: Record<string, Record<string, OpenApiOpDoc>>;
 }
 const doc = openapi as unknown as OpenApiDoc;
 
@@ -448,25 +330,31 @@ function findOperation(
 ): OpenApiOperation | null {
   const prefix = scope === 'scoped' ? SCOPED_OPENAPI_PREFIX : OPENAPI_PREFIX;
   const wanted = normalizeSegments(`${prefix}${frontendPath}`);
+  // A frontend `*` (a runtime id) matches only an OpenAPI path PARAMETER,
+  // never an OpenAPI literal segment; otherwise a literal sibling route
+  // (`/projects/combine/{job_id}`) shadows `/projects/{project}/...` and
+  // the first match carries the wrong parameter list. Among the remaining
+  // candidates the one with the most exactly-equal literal segments wins.
+  let best: { openApiPath: string; op: OpenApiOpDoc; literals: number } | null = null;
   for (const [openApiPath, methods] of Object.entries(doc.paths)) {
     if (!openApiPath.startsWith(OPENAPI_PREFIX)) continue;
     const opSegs = normalizeSegments(openApiPath);
     if (opSegs.length !== wanted.length) continue;
-    const matches = opSegs.every(
-      (seg, i) => seg === '*' || wanted[i] === '*' || seg === wanted[i],
-    );
+    const matches = opSegs.every((seg, i) => seg === '*' || seg === wanted[i]);
     if (!matches) continue;
     const op = methods[method.toLowerCase()];
     if (!op) continue;
-    return {
-      openApiPath,
-      method,
-      params: new Set(
-        (op.parameters ?? []).map((p) => p.name).filter((x): x is string => !!x),
-      ),
-    };
+    const literals = opSegs.filter((seg, i) => seg !== '*' && seg === wanted[i]).length;
+    if (!best || literals > best.literals) best = { openApiPath, op, literals };
   }
-  return null;
+  if (!best) return null;
+  return {
+    openApiPath: best.openApiPath,
+    method,
+    params: new Set(
+      (best.op.parameters ?? []).map((p) => p.name).filter((x): x is string => !!x),
+    ),
+  };
 }
 
 function describeCalls(
@@ -481,12 +369,7 @@ function describeCalls(
 
     for (const call of calls) {
       const label = `${call.method} ${call.path}`;
-      const pending = isPendingBackend(call.path, call.method);
-      it(`${label} exists in the OpenAPI contract${pending ? ' (skipped: pending backend)' : ''}`, (ctx) => {
-        if (pending) {
-          ctx.skip();
-          return;
-        }
+      it(`${label} exists in the OpenAPI contract`, () => {
         const op = findOperation(call.path, call.method, scope);
         expect(
           op,
@@ -532,4 +415,27 @@ describe('endpoint catalog: every GLOBAL call resolves to a real OpenAPI operati
   for (const file of GLOBAL_SCANNED_FILES) {
     describeCalls(file, resolveCalls(file, '${globalApi()}'), 'global');
   }
+});
+
+describe('findOperation matching', () => {
+  it('does not let a literal sibling route (/projects/combine/{job_id}) shadow a project-scoped one', () => {
+    expect(findOperation('/clusters', 'GET')?.openApiPath).toBe(
+      '/curation/projects/{project}/clusters',
+    );
+  });
+
+  it('a frontend wildcard matches only an OpenAPI path parameter, never a literal segment', () => {
+    // `/crops/{id}/regions` must not resolve to `/crops/batch_regions`.
+    expect(findOperation('/crops/*/regions', 'PUT')?.openApiPath).toBe(
+      '/curation/projects/{project}/crops/{crop_id}/regions',
+    );
+    expect(findOperation('/crops/batch_regions', 'PUT')?.openApiPath).toBe(
+      '/curation/projects/{project}/crops/batch_regions',
+    );
+  });
+
+  it('still reports a missing operation as null (the removed singular region write)', () => {
+    expect(findOperation('/crops/*/region', 'PUT')).toBeNull();
+    expect(findOperation('/crops/batch_region', 'PUT')).toBeNull();
+  });
 });
