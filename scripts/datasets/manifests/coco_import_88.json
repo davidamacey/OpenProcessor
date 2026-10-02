@@ -1,0 +1,706 @@
+[
+  {
+    "file_name": "000000006012.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4030/4281955635_f02ce45926_z.jpg",
+    "image_id": 6012,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000015517.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8184/8407007011_9456edeb6d_z.jpg",
+    "image_id": 15517,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000017029.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7304/8746020648_f1e2075b86_z.jpg",
+    "image_id": 17029,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000023781.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3631/3669674438_5e744504c0_z.jpg",
+    "image_id": 23781,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000076416.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8478/8225218510_04ff392494_z.jpg",
+    "image_id": 76416,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000078823.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/9/13918737_12ed28cb16_z.jpg",
+    "image_id": 78823,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000084170.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8190/8134254727_0b28cabe93_z.jpg",
+    "image_id": 84170,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000091406.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7170/6843637155_9379f537f6_z.jpg",
+    "image_id": 91406,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000094751.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/8/9572416_70a00a9ce9_z.jpg",
+    "image_id": 94751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000097679.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2215/2727641554_ea1cca26c2_z.jpg",
+    "image_id": 97679,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000097924.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8527/8546652580_94dbb43241_z.jpg",
+    "image_id": 97924,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000098392.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2502/4159425709_43b95a16d7_z.jpg",
+    "image_id": 98392,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000100624.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2035/1874994806_da5fee8f5a_z.jpg",
+    "image_id": 100624,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000114907.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8303/7825237468_9345ce9a8e_z.jpg",
+    "image_id": 114907,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000121506.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7116/7721233008_99b07f96b1_z.jpg",
+    "image_id": 121506,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000134886.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4128/5048434632_d18999fce8_z.jpg",
+    "image_id": 134886,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000138979.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8471/8149448889_244498909c_z.jpg",
+    "image_id": 138979,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000140203.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/47/151349771_c85a058c7d_z.jpg",
+    "image_id": 140203,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000140658.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8290/7818203192_f5b2c5c235_z.jpg",
+    "image_id": 140658,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000142472.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7274/7871818696_6bf4905675_z.jpg",
+    "image_id": 142472,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000147745.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7237/7160109697_fdb3a01c97_z.jpg",
+    "image_id": 147745,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000148719.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4138/4781344883_9b115de575_z.jpg",
+    "image_id": 148719,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000154000.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7098/7345318588_d85c0761a3_z.jpg",
+    "image_id": 154000,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000176037.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8046/8140155314_abf7a6c841_z.jpg",
+    "image_id": 176037,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000183246.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2259/2469205788_1473198ae0_z.jpg",
+    "image_id": 183246,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000189078.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4026/4430551771_58c190b055_z.jpg",
+    "image_id": 189078,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000189698.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5287/5334889612_b1cbc99066_z.jpg",
+    "image_id": 189698,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000190923.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2669/3706332805_237c47a25d_z.jpg",
+    "image_id": 190923,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000192670.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6137/5931706250_072cc90a24_z.jpg",
+    "image_id": 192670,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000196759.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7324/9356649003_5cf8fb57b3_z.jpg",
+    "image_id": 196759,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000205289.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8048/8094964301_1518affa3b_z.jpg",
+    "image_id": 205289,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000206487.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8010/7686978996_27b7fdfdbf_z.jpg",
+    "image_id": 206487,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000210273.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5163/5336041838_1a09008014_z.jpg",
+    "image_id": 210273,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000212226.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3633/3554392751_0a85ee44f8_z.jpg",
+    "image_id": 212226,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000213255.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2021/2521020235_f252d7108f_z.jpg",
+    "image_id": 213255,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000213605.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8047/8120656306_9e6dcf4184_z.jpg",
+    "image_id": 213605,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000227511.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3035/2569060763_a6f46a570d_z.jpg",
+    "image_id": 227511,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000242946.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3093/2650118269_48decfbb16_z.jpg",
+    "image_id": 242946,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000274272.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8484/8234130537_419b91e4d8_z.jpg",
+    "image_id": 274272,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000276707.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3538/3383985970_ba0377b709_z.jpg",
+    "image_id": 276707,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000278705.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3282/2875114693_2caf3d7481_z.jpg",
+    "image_id": 278705,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000280710.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7320/9655397508_cf2472680c_z.jpg",
+    "image_id": 280710,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000284725.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7375/9766932005_d859b2b6da_z.jpg",
+    "image_id": 284725,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000301135.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4135/4856973633_60deb1c609_z.jpg",
+    "image_id": 301135,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000301376.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3059/2718408461_4af7105d49_z.jpg",
+    "image_id": 301376,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000303818.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7296/9604033757_c21f78484e_z.jpg",
+    "image_id": 303818,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000309391.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5246/5329327710_92169d73d4_z.jpg",
+    "image_id": 309391,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000313588.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8209/8253725562_84e76ed5e9_z.jpg",
+    "image_id": 313588,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000319935.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3352/3542980344_a845a4cb2c_z.jpg",
+    "image_id": 319935,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000343218.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3169/2653643649_665418b9df_z.jpg",
+    "image_id": 343218,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000350148.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3434/3275441569_eee9434daf_z.jpg",
+    "image_id": 350148,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000355169.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7160/6602610383_1aac075f98_z.jpg",
+    "image_id": 355169,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000361142.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2046/2274699389_b912eafb26_z.jpg",
+    "image_id": 361142,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000362682.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8528/8575643656_6194a29a31_z.jpg",
+    "image_id": 362682,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000365655.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3788/9708425604_ea76a33375_z.jpg",
+    "image_id": 365655,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000369751.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4132/5092877690_7f62303b95_z.jpg",
+    "image_id": 369751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000376856.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6162/6251239449_c1080b30b4_z.jpg",
+    "image_id": 376856,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000377723.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8354/8303563388_c0b3b1939a_z.jpg",
+    "image_id": 377723,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000392722.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2829/9953419346_8bcbd5480f_z.jpg",
+    "image_id": 392722,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000393226.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8003/7321339838_42fe225709_z.jpg",
+    "image_id": 393226,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000398742.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4117/4913716666_4d871bc5d2_z.jpg",
+    "image_id": 398742,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000401862.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8540/8698627837_6d1fb59ce4_z.jpg",
+    "image_id": 401862,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000411953.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4039/4393500671_ecc45c44ea_z.jpg",
+    "image_id": 411953,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000414510.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6011/5883783041_745340195b_z.jpg",
+    "image_id": 414510,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000415536.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8193/8395338258_0f5e408112_z.jpg",
+    "image_id": 415536,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000423519.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3754/10191731076_ac8f52461a_z.jpg",
+    "image_id": 423519,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000423617.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8479/8195678412_8d8d906379_z.jpg",
+    "image_id": 423617,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000442456.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8264/8602459939_be3c670999_z.jpg",
+    "image_id": 442456,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000449406.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3257/2803472112_673f080913_z.jpg",
+    "image_id": 449406,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000461751.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5035/7145171189_ac4034c5f3_z.jpg",
+    "image_id": 461751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000465675.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6041/6296158420_868a46d225_z.jpg",
+    "image_id": 465675,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000469192.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8016/7671708924_54b6fd2c48_z.jpg",
+    "image_id": 469192,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000479912.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7164/6754205289_c601f79a44_z.jpg",
+    "image_id": 479912,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000484404.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8519/8621095125_f3b1b07192_z.jpg",
+    "image_id": 484404,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000495054.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2662/3697328838_11da7136fc_z.jpg",
+    "image_id": 495054,
+    "license_name": "Attribution License",
+    "primary_class": "truck",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000495146.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7375/9211776644_83a3bd9c9b_z.jpg",
+    "image_id": 495146,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000498286.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6195/6048065934_bfaf1be964_z.jpg",
+    "image_id": 498286,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000499768.jpg",
+    "flickr_url": "http://farm2.staticflickr.com/1212/1463670693_c822bbd9e0_z.jpg",
+    "image_id": 499768,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000514376.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2842/8750726399_6f14b42d73_z.jpg",
+    "image_id": 514376,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000516143.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7103/7209556862_8431c062d7_z.jpg",
+    "image_id": 516143,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000520009.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/223/502213596_22f391ea0e_z.jpg",
+    "image_id": 520009,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000528980.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6020/5948647455_15a633da61_z.jpg",
+    "image_id": 528980,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000534673.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7054/8689267710_94db8887b8_z.jpg",
+    "image_id": 534673,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000542625.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7415/9089660689_e77a462f81_z.jpg",
+    "image_id": 542625,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000542856.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8285/7826926496_3aa9e9d112_z.jpg",
+    "image_id": 542856,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000551304.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4023/4680625662_e7b56e1576_z.jpg",
+    "image_id": 551304,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000566758.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8476/8369612010_fc2424973c_z.jpg",
+    "image_id": 566758,
+    "license_name": "Attribution License",
+    "primary_class": "bus",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000577932.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4019/5159956078_f820c56d6f_z.jpg",
+    "image_id": 577932,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  }
+]

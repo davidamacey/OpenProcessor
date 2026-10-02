@@ -58,7 +58,7 @@ Usage::
     # positives and negatives; crowd boxes stay in coco_gt.json, flagged.
     python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_import \\
         --classes car,truck,bus --per-class 28 --negatives 12 --val-only --licenses by \\
-        --manifest scripts/datasets/manifests/coco_import_96.json
+        --manifest scripts/datasets/manifests/coco_import_88.json
 """
 
 from __future__ import annotations

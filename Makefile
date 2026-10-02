@@ -1176,11 +1176,11 @@ sample-coco-cars: ## Fetch the public COCO car subset for the wheel example (60 
 		--manifest scripts/datasets/manifests/coco_car_60.json
 
 .PHONY: sample-coco-import
-sample-coco-import: ## Fetch the public COCO import fixture (96 val2017 images, CC BY) and build the 4 dataset layouts
+sample-coco-import: ## Fetch the public COCO import fixture (88 val2017 images, CC BY) and build the 4 dataset layouts
 	$(PYTHON) scripts/datasets/fetch_coco_subset.py --out data/samples/coco_import \
 		--classes car,truck,bus --per-class 28 --negatives 12 --val-only \
 		--licenses by --seed 20260925 \
-		--manifest scripts/datasets/manifests/coco_import_96.json
+		--manifest scripts/datasets/manifests/coco_import_88.json
 	$(PYTHON) scripts/datasets/build_import_fixture.py \
 		--src data/samples/coco_import --out data/samples/import_fixture
 

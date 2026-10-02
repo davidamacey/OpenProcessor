@@ -652,7 +652,7 @@ Properties:
   touched.
 - Backpressure on the region worker: `OP_DATASET_IMPORT_MAX_PENDING`.
 - Import fixture for testing: `make sample-coco-import` builds four layouts
-  (`yolo/`, `coco/`, `yolo_region/`, `yolo_region_only/`) from 96 CC BY COCO
+  (`yolo/`, `coco/`, `yolo_region/`, `yolo_region_only/`) from 88 CC BY COCO
   images with a `FIXTURE.json` of expected counts. The YOLO layout numbers
   classes unlike any registry, spells `Car` differently and adds a synonym,
   and injects label problems; the wheel boxes in the `yolo_region*` layouts

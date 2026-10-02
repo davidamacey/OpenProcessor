@@ -7,7 +7,7 @@ Input: the directory ``fetch_coco_subset.py`` writes (``coco_gt.json``,
     python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_import \\
         --classes car,truck,bus --per-class 28 --negatives 12 --val-only \\
         --licenses by --seed 20260925 \\
-        --manifest scripts/datasets/manifests/coco_import_96.json
+        --manifest scripts/datasets/manifests/coco_import_88.json
     python scripts/datasets/build_import_fixture.py \\
         --src data/samples/coco_import --out data/samples/import_fixture
 
@@ -368,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             'negative_image_ids': selection.get('negative_image_ids', []),
             'seed': selection.get('seed'),
-            'manifest': 'scripts/datasets/manifests/coco_import_96.json',
+            'manifest': 'scripts/datasets/manifests/coco_import_88.json',
         },
         args.out,
         _copy_writer(args.src / 'images'),

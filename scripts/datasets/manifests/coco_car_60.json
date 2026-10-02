@@ -1,0 +1,482 @@
+[
+  {
+    "file_name": "000000017029.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7304/8746020648_f1e2075b86_z.jpg",
+    "image_id": 17029,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000043737.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3593/3595526099_c28a93aaa0_z.jpg",
+    "image_id": 43737,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000045446.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3218/3015373739_ec8a89cf51_z.jpg",
+    "image_id": 45446,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000065350.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4139/4869131880_ae3de10447_z.jpg",
+    "image_id": 65350,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000066460.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8062/8182965723_1013fd4163_z.jpg",
+    "image_id": 66460,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "train2017"
+  },
+  {
+    "file_name": "000000078823.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/9/13918737_12ed28cb16_z.jpg",
+    "image_id": 78823,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000084170.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8190/8134254727_0b28cabe93_z.jpg",
+    "image_id": 84170,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000089556.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6093/6210323230_57fab50c4b_z.jpg",
+    "image_id": 89556,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000094751.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/8/9572416_70a00a9ce9_z.jpg",
+    "image_id": 94751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000097679.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2215/2727641554_ea1cca26c2_z.jpg",
+    "image_id": 97679,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000098392.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2502/4159425709_43b95a16d7_z.jpg",
+    "image_id": 98392,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000100624.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2035/1874994806_da5fee8f5a_z.jpg",
+    "image_id": 100624,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000121506.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7116/7721233008_99b07f96b1_z.jpg",
+    "image_id": 121506,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000134886.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4128/5048434632_d18999fce8_z.jpg",
+    "image_id": 134886,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000138979.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8471/8149448889_244498909c_z.jpg",
+    "image_id": 138979,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000142472.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7274/7871818696_6bf4905675_z.jpg",
+    "image_id": 142472,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000147740.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8042/8026451116_b1bd0c0c0a_z.jpg",
+    "image_id": 147740,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000160012.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4009/4409615060_2f5554e232_z.jpg",
+    "image_id": 160012,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000181816.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8031/7978704233_c38f174e37_z.jpg",
+    "image_id": 181816,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000183246.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2259/2469205788_1473198ae0_z.jpg",
+    "image_id": 183246,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000192670.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6137/5931706250_072cc90a24_z.jpg",
+    "image_id": 192670,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000206487.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8010/7686978996_27b7fdfdbf_z.jpg",
+    "image_id": 206487,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000210273.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5163/5336041838_1a09008014_z.jpg",
+    "image_id": 210273,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000213255.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2021/2521020235_f252d7108f_z.jpg",
+    "image_id": 213255,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000213605.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8047/8120656306_9e6dcf4184_z.jpg",
+    "image_id": 213605,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000227511.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3035/2569060763_a6f46a570d_z.jpg",
+    "image_id": 227511,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000231508.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2518/3693441995_2118879151_z.jpg",
+    "image_id": 231508,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000274272.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8484/8234130537_419b91e4d8_z.jpg",
+    "image_id": 274272,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000276707.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3538/3383985970_ba0377b709_z.jpg",
+    "image_id": 276707,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000278705.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3282/2875114693_2caf3d7481_z.jpg",
+    "image_id": 278705,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000284725.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7375/9766932005_d859b2b6da_z.jpg",
+    "image_id": 284725,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000293071.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/199/466347034_10b9e3efe4_z.jpg",
+    "image_id": 293071,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000301135.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4135/4856973633_60deb1c609_z.jpg",
+    "image_id": 301135,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000301376.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3059/2718408461_4af7105d49_z.jpg",
+    "image_id": 301376,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000301421.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3222/2511994966_2a82bf9b43_z.jpg",
+    "image_id": 301421,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000303818.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7296/9604033757_c21f78484e_z.jpg",
+    "image_id": 303818,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000309391.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5246/5329327710_92169d73d4_z.jpg",
+    "image_id": 309391,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000338986.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7284/8715827786_9ffcac1fa5_z.jpg",
+    "image_id": 338986,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000343218.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3169/2653643649_665418b9df_z.jpg",
+    "image_id": 343218,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000350148.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3434/3275441569_eee9434daf_z.jpg",
+    "image_id": 350148,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000361142.jpg",
+    "flickr_url": "http://farm3.staticflickr.com/2046/2274699389_b912eafb26_z.jpg",
+    "image_id": 361142,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000369751.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4132/5092877690_7f62303b95_z.jpg",
+    "image_id": 369751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000398742.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4117/4913716666_4d871bc5d2_z.jpg",
+    "image_id": 398742,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000414510.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6011/5883783041_745340195b_z.jpg",
+    "image_id": 414510,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000416885.jpg",
+    "flickr_url": "http://farm4.staticflickr.com/3040/2791132570_faa5072ab9_z.jpg",
+    "image_id": 416885,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000423617.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8479/8195678412_8d8d906379_z.jpg",
+    "image_id": 423617,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000442456.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8264/8602459939_be3c670999_z.jpg",
+    "image_id": 442456,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000461751.jpg",
+    "flickr_url": "http://farm6.staticflickr.com/5035/7145171189_ac4034c5f3_z.jpg",
+    "image_id": 461751,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000476119.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7046/7062224927_570b4f61f7_z.jpg",
+    "image_id": 476119,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000495146.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7375/9211776644_83a3bd9c9b_z.jpg",
+    "image_id": 495146,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000498286.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6195/6048065934_bfaf1be964_z.jpg",
+    "image_id": 498286,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000499768.jpg",
+    "flickr_url": "http://farm2.staticflickr.com/1212/1463670693_c822bbd9e0_z.jpg",
+    "image_id": 499768,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000520009.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/223/502213596_22f391ea0e_z.jpg",
+    "image_id": 520009,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000521141.jpg",
+    "flickr_url": "http://farm1.staticflickr.com/49/121598568_f73fc969ce_z.jpg",
+    "image_id": 521141,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000521259.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8050/8115935734_0ff6dcfd4e_z.jpg",
+    "image_id": 521259,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000528980.jpg",
+    "flickr_url": "http://farm7.staticflickr.com/6020/5948647455_15a633da61_z.jpg",
+    "image_id": 528980,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000538364.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8042/7933423348_c30bd9bd4e_z.jpg",
+    "image_id": 538364,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000542625.jpg",
+    "flickr_url": "http://farm8.staticflickr.com/7415/9089660689_e77a462f81_z.jpg",
+    "image_id": 542625,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000566758.jpg",
+    "flickr_url": "http://farm9.staticflickr.com/8476/8369612010_fc2424973c_z.jpg",
+    "image_id": 566758,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  },
+  {
+    "file_name": "000000577932.jpg",
+    "flickr_url": "http://farm5.staticflickr.com/4019/5159956078_f820c56d6f_z.jpg",
+    "image_id": 577932,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+  }
+]

@@ -261,8 +261,8 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 
 ### COCO 2017 import fixture
 
-- **What:** the pinned 96-image val2017 fixture for dataset-import testing
-  (`make sample-coco-import`, manifest `scripts/datasets/manifests/coco_import_96.json`):
+- **What:** the pinned 88-image val2017 fixture (28 car, 20 truck, 28 bus, 12 negatives: that is all the CC BY trucks val2017 has) for dataset-import testing
+  (`make sample-coco-import`, manifest `scripts/datasets/manifests/coco_import_88.json`):
   28 images each of car / truck / bus plus 12 images with no box of those classes.
 - **Images:** CC BY 2.0 via Flickr (`--licenses by`, `--val-only`); per-image credit in
   `ATTRIBUTION.csv`, copied into every generated variant.

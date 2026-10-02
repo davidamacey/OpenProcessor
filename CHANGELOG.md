@@ -55,11 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     human edit through `PUT /crops/{id}/regions`, and runs `POST
     /train/preflight` on the export. A fixture test checks COCO class names
     against the YAML names independently of the builder.
-  - **Deferred.** `scripts/datasets/manifests/coco_car_60.json` and
-    `coco_import_96.json` are not generated (they need network access; run
-    `make sample-coco-cars` on a networked host and commit them);
-    `test_pinned_manifest_is_sixty_cc_by_cars` skips with that reason until
-    then. The plan's `region_set_complete: false` car and the export's
+  - **Pinned manifests.** `scripts/datasets/manifests/coco_car_60.json` and
+    `coco_import_88.json` were generated live (88, not 96: val2017 has only 20
+    CC BY trucks); `test_pinned_manifest_is_sixty_cc_by_cars` runs against the
+    car pin. The plan's `region_set_complete: false` car and the export's
     `skipped_incomplete_sets` manifest key are not in the E2E: neither the
     worker nor the export has a code path for them yet, so there is nothing to
     assert offline.
