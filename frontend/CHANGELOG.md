@@ -10,7 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 <!-- track-A W9 -->
 
-<!-- track-B P4 -->
+- **Combine projects (P4).** `/projects/combine` merges several projects into
+  a new one: sources in priority order, a name-based class mapping per source
+  (untouched rows follow the server's suggestions, touched rows never get
+  overwritten), options left to the server's defaults until touched, a
+  debounced served preview, and a confirm-gated Start that sends
+  `expected_preview_sha`. `/projects/combine/[job_id]` follows the job
+  (2 s poll while running, `combine.progress` wake-ups), offers Cancel,
+  Resume, Open project, "Review flagged conflicts" and the served next
+  steps. A combined project on `/projects` links to its job and its delete
+  reads "Undo combine". Combined items show their origin project, item,
+  image and split, with a conflict chip, in the item Details. Absent
+  entirely when the backend does not mount the combine router.
 
 <!-- track-C W5+W10 -->
 

@@ -2311,6 +2311,76 @@ owner decision) — reconstructable from the URL, so nothing is persisted.
   `src/lib/test/setup.ts` selects a test project whose prefix is
   `API_PREFIX` (slug `default`) before every unit test.
 
+### Combine projects (P4, 2026-10-01)
+
+`docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md` §4. Merge several
+projects into a NEW one: `/projects/combine` (wizard) and
+`/projects/combine/[job_id]` (job view), both GLOBAL like `/projects`
+(the target does not exist yet). Wrappers `src/lib/api_combine.ts`
+(imported directly, never re-exported from `api.ts`), types
+`src/lib/types_combine.ts`; the preview/job shapes the contract leaves as
+bare objects (`sources`, `target`, `dedup`, `report`, `next_steps`) are
+typed as the backend builds them, every field optional.
+
+- **Gate.** `combineAvailability` (`src/lib/combine/`) probes
+  `GET {globalApi()}/projects/combine/__probe__` once (no served flag, no
+  job list): a 404 whose `detail.error` is `combine_not_found` means the
+  router answered (available); a plain 404 or 501 means it is not mounted
+  (absent: no "Combine projects…" button, the routes say so, nothing else
+  fires). Global, not reset on a project switch. Replace the probe the
+  day the backend serves a real signal.
+- **Wizard** (`combineWizardController.svelte.ts`). Sources come from the
+  served list (`selectable` and `active`), ordered by priority with
+  up/down buttons (first wins a conflict and donates a duplicate's image);
+  each has a `label_states` select. The preview re-runs 400 ms after any
+  change with the previous request aborted. Every option (`dedup`,
+  `dedup_iou`, `holdout`, `settings_from`, a source's `label_states`)
+  stays out of the body until touched. The mapping step is
+  `CombineMappingTable.svelte`, deliberately not the W10 `MappingTable`:
+  combine maps into classes the request itself creates, by name (a
+  `create` row defines one, a `map` row picks one of the form's own
+  `create` names; no registry, no `class_id`). Untouched rows are filled
+  from the served `suggested_mapping` after each preview (one re-preview
+  follows if that changed the body); a touched row is never overwritten;
+  "Reset to suggestions" re-copies. Action labels come from the first
+  source's `GET {its prefix}/datasets/formats` `mapping_actions` (raw ids
+  when that 404s). Start (confirm listing the served target counts) sends
+  the request plus `expected_preview_sha` and is disabled while a preview
+  is in flight, the request changed since it was served, or `ok` is
+  false. 409 `preview_stale` shows the message and re-previews; 422
+  `combine_invalid` shows the message and the served report; 409
+  `project_busy` lists the served `jobs`.
+- **Job view** (`combineJobController.svelte.ts`). The backend serves no
+  `poll_after_s` or actions, so the view re-reads every 2 s while
+  `queued`/`running`, stops at any other status, and a global
+  `combine.progress` event with this `job_id` wakes an immediate re-read.
+  Cancel while queued/running, Resume while interrupted/cancelled
+  (confirm-gated, refusal text verbatim). Completed: Open project,
+  "Review flagged conflicts" (`/p/<target>/review?tab=all&combine_conflict=true`),
+  and one confirm-gated button per served `next_steps` entry, run as served
+  against the TARGET project's own prefix (`runCombineNextStep`, body-less).
+  Failed: the served error and report plus "Undo combine".
+- **`/projects`.** A project the server says came from a combine
+  (`origin.kind === 'combine'` with a `job_id`) links to its job (how a job
+  is found again after a reload) and its delete is labelled "Undo combine"
+  (`DeleteProjectDialog`'s `title` prop; the guarded dry run and typed slug
+  are unchanged, since undoing a combine is deleting the target).
+- **Item provenance.** `provenance/CombineOriginRows.svelte` (mounted in
+  `CropMetaPanel`): origin project/item/image/split, an amber "Conflict
+  between sources" chip with `combine_conflict_origins`, and
+  `combine_merged_origins`, only when `origin_project` is non-null.
+- **Known backend gap.** The one `next_steps` entry the backend serves is
+  `POST /clusters/train`, which is not a route in the vendored curation
+  OpenAPI. `endpointCatalog.test.ts`'s `runCombineNextStep` override is
+  therefore anchored to the real clustering entry point
+  (`/pipeline/auto_label/start`), and the button surfaces the served
+  refusal if the step 404s.
+- **Tests.** `api_combine.test.ts`, `contract/combineContract.test.ts`
+  (interface keys and strict bodies), `combine/*.test.ts` (availability,
+  wizard, job), mount tests under `components/combine/` and
+  `provenance/CombineOriginRows.test.ts`, `routes/projects/projectsPage.test.ts`
+  (extended); e2e `test_combine_projects.py`.
+
 ## API contract
 
 The frontend's picture of the backend's wire format is not hand-copied —
