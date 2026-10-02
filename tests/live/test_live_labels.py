@@ -113,13 +113,14 @@ def test_unlabel_resets_class_provenance(
     resp = api_client.delete(f'/crops/{crop_id}/label')
     assert resp.status_code == 200, resp.text
 
+    # Undo restores the state before the most recent human write -- here the
+    # seeded classifier-sourced, unvalidated class -- not a blank item.
     src = _source(opensearch, crop_id)
     assert src['class_validated'] is False
-    assert src['label_source'] == ''
-    assert src['class_source'] is None
-    assert src['class_labeler'] is None
-    # The reset is itself an audit event.
-    assert src['class_id_history'][-1]['writer'] == 'human:unlabel_crop'
+    assert src['class_source'] == 'secondary_model'
+    assert src['label_source'] == 'secondary_model'
+    # The first 16 seeded cls1 rows are the class-2 minority.
+    assert src['class_id'] == 2
 
 
 def test_review_dismiss_is_recorded(

@@ -50,13 +50,17 @@ def test_export_writes_labels_artifacts_and_flips_the_current_symlink(
     export_dir = _host_path(body['export_dir'])
     assert export_dir.is_dir(), export_dir
 
-    # One YOLO label file per exported item, each a single well-formed row.
+    # One YOLO label file per exported image; each holds one well-formed row
+    # per labelled box on it.
     label_files = sorted(export_dir.glob('labels/*/*.txt'))
     assert len(label_files) == total, (len(label_files), counts)
-    parts = label_files[0].read_text().split()
-    assert len(parts) == 5, parts
-    assert parts[0].isdigit()
-    assert all(0.0 <= float(p) <= 1.0 for p in parts[1:])
+    for label_file in label_files:
+        rows = [line.split() for line in label_file.read_text().splitlines() if line.strip()]
+        assert rows, label_file
+        for parts in rows:
+            assert len(parts) == 5, (label_file, parts)
+            assert parts[0].isdigit()
+            assert all(0.0 <= float(p) <= 1.0 for p in parts[1:])
 
     # Every frozen holdout row must land in the test split, never train/val.
     assert counts['test'] > 0, counts
@@ -78,9 +82,9 @@ def test_export_writes_labels_artifacts_and_flips_the_current_symlink(
 
     current = EXPORTS_DIR / 'current'
     assert current.is_symlink(), 'the current symlink was not flipped'
-    # The symlink stores the API container's own absolute path, so compare
-    # the link text rather than resolving it on this side of the mount.
-    assert current.readlink().as_posix() == body['export_dir']
+    # The link is a sibling name, so it stays valid however the export root
+    # is mounted; compare it to the export directory's own name.
+    assert current.readlink().as_posix() == export_dir.name
 
 
 def test_export_is_deterministic_across_two_tags(
@@ -106,7 +110,7 @@ def test_export_is_deterministic_across_two_tags(
     }
     assert first_labels == second_labels
 
-    assert (EXPORTS_DIR / 'current').readlink().as_posix() == second['export_dir']
+    assert (EXPORTS_DIR / 'current').readlink().as_posix() == _host_path(second['export_dir']).name
 
 
 def test_export_status_and_dataset_listing_see_both_runs(api_client: Any) -> None:

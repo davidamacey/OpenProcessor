@@ -28,7 +28,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = REPO_ROOT / 'docker' / 'test' / 'compose.yml'
-COMPOSE_PROJECT = 'op-live-verify'
+# Overridable so a second harness (own project + container prefix) can run beside
+# another one without sharing fixed container names.
+COMPOSE_PROJECT = os.environ.get('VERIFY_COMPOSE_PROJECT', 'op-live-verify')
 VERIFY_DATA_DIR = REPO_ROOT / 'docker' / 'test' / 'verify-data'
 JOBS_DIR = VERIFY_DATA_DIR / 'jobs'
 EXPORTS_DIR = VERIFY_DATA_DIR / 'projects' / 'default' / 'exports'
@@ -65,6 +67,9 @@ PURE_CLUSTER_ID = 0
 MIXED_CLUSTER_ID = 1
 CANDIDATE_CLUSTER_ID = 10000
 SMALL_CANDIDATE_CLUSTER_ID = 10002
+# Candidate clusters of classifier-labelled rows: auto-promote's only targets.
+PROMOTE_CLUSTER_ID = 10004
+MIXED_PROMOTE_CLUSTER_ID = 10005
 REGION_CLUSTER_ID = 1
 FP_REGION_CLUSTER_ID = -100
 MERGE_SOURCE_CLASS_ID = 7
@@ -151,6 +156,9 @@ _INTERNAL_INDEX_PREFIXES = (
     'security-auditlog',
     'ism-',
     'opensearch_dashboards',
+    # The API bootstraps the core visual_search_* indexes at startup (F-25);
+    # their names are fixed, not configurable, so they cannot carry verify_.
+    'visual_search_',
 )
 
 
