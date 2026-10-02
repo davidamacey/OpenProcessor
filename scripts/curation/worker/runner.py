@@ -433,7 +433,10 @@ async def run(args: argparse.Namespace) -> int:
                 last = _runtime_doc_last_written.get(record.slug, 0.0)
                 if time.monotonic() - last < _RUNTIME_DOC_INTERVAL_S:
                     return
-                from scripts.curation.worker.runtime import upsert_project_runtime_doc
+                from scripts.curation.worker.runtime import (
+                    applied_config_revision,
+                    upsert_project_runtime_doc,
+                )
 
                 await upsert_project_runtime_doc(
                     opensearch,
@@ -441,7 +444,9 @@ async def run(args: argparse.Namespace) -> int:
                     hostname=_hostname,
                     project=record.slug,
                     runtime=rt,
-                    config_revision=store.current.config_revision,
+                    config_revision=applied_config_revision(
+                        store, registry_store, runtime_holder, record.slug
+                    ),
                 )
                 _runtime_doc_last_written[record.slug] = time.monotonic()
         except Exception as exc:

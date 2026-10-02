@@ -125,6 +125,20 @@ def current_want(store: ConfigStore, registry: ConfigStore) -> Want:
     return (project.active_profile, project.active_pack, ref, marker)
 
 
+def applied_config_revision(
+    store: ConfigStore, registry: ConfigStore, holder: RuntimeHolder, slug: str
+) -> int:
+    """The config revision this project's runtime can honestly report as
+    applied. A pinned store only moves ``current`` at a swap, so an edit that
+    leaves the runtime's refs alone (a keymap, a settings default, an unrelated
+    pack) staged a newer snapshot that never gets pinned and the runtime
+    looked behind forever. When the runtime was built from exactly what the
+    freshest snapshot serves, that snapshot's revision is the applied one."""
+    if holder.get_synced_refs(slug) == current_want(store, registry):
+        return _latest(store).config_revision
+    return store.current.config_revision
+
+
 async def build_runtime(
     pool: Any,
     profile: DetectionProfile,
