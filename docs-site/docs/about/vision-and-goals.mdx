@@ -127,7 +127,7 @@ sequenced deliberately rather than included now:
   its own design pass — data model, storage shape, and a full-image vs.
   crop-region trigger — before implementation, so it's deliberately queued
   after the v0.1.0 release.
-- **Deep GPU / Triton inference optimization** (issue #22). Batching
+- **Deep GPU / Triton inference optimization** (issue #40). Batching
   strategy, GPU utilization, and a zero-copy pipeline (decode once, keep
   data resident on the GPU across models) are real, planned work — but
   they should be tuned against the *final* workload shape. Since
