@@ -9,10 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import Page from './+page.svelte';
 import { API_PREFIX } from '$lib/api';
+import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
 import { projectPauseStore } from '$stores/projectPause.svelte';
 import { projectsStore } from '$stores/projects.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import {
+  TEST_LIMITS,
   testCapacity,
   testProject,
   testProjectsResponse,
@@ -49,6 +51,11 @@ let handler: Handler = () => undefined;
 let writes: { method: string; url: string; body: unknown }[] = [];
 /** The served per-project pause flag, carried on the `GET /projects` rows. */
 let paused: Record<string, boolean> = {};
+/** What `GET /projects/combine/<sentinel>` answers (the P4 gate probe). */
+let combineMounted = false;
+let combineProbes = 0;
+/** Served `limits.cloneable_axes` override (null = the fixture's own). */
+let cloneAxes: string[] | null = null;
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
@@ -88,6 +95,10 @@ beforeEach(() => {
   handler = () => undefined;
   writes = [];
   paused = {};
+  combineMounted = false;
+  combineProbes = 0;
+  cloneAxes = null;
+  combineAvailability.reset();
   projectPauseStore.reset();
   toastStore.toasts = [];
   vi.stubGlobal(
@@ -99,9 +110,23 @@ beforeEach(() => {
         return json(
           testProjectsResponse(
             listed.map((p) => ({ ...p, paused: paused[p.slug] ?? false })),
-            { capacity },
+            {
+              capacity,
+              ...(cloneAxes
+                ? { limits: { ...TEST_LIMITS, cloneable_axes: cloneAxes } }
+                : {}),
+            },
           ),
         );
+      }
+      if (method === 'GET' && /\/projects\/combine\/[^/?]+$/.test(u)) {
+        combineProbes += 1;
+        return combineMounted
+          ? json(
+              { detail: { error: 'combine_not_found', message: 'no combine job' } },
+              404,
+            )
+          : json({ detail: 'Not Found' }, 404);
       }
       writes.push({
         method,
@@ -423,5 +448,112 @@ describe('pipeline pause', () => {
       ),
     );
     expect(q('project-paused-alpha')).toBeNull();
+  });
+});
+
+describe('combine entry points (P4)', () => {
+  it('offers Combine projects only when the combine router answers the probe', async () => {
+    await render();
+    await vi.waitFor(() => expect(combineProbes).toBe(1));
+    await vi.waitFor(() => expect(combineAvailability.available).toBe(false));
+    flushSync();
+    expect(q('projects-combine')).toBeNull();
+    unmount(instance!);
+    instance = null;
+    target.remove();
+
+    combineMounted = true;
+    combineAvailability.reset();
+    await render();
+    await vi.waitFor(() => expect(q('projects-combine')).not.toBeNull());
+    expect(q('projects-combine')!.getAttribute('href')).toBe('/projects/combine');
+  });
+
+  it('links a project made by a combine to its job and labels its delete "Undo combine"', async () => {
+    listed = [
+      DEFAULT,
+      testProject({
+        slug: 'merged',
+        display_name: 'Merged',
+        origin: {
+          kind: 'combine',
+          job_id: 'cmb_20261001T120000_1a2b3c4d',
+          sources: ['alpha'],
+        },
+      }),
+      testProject({ slug: 'beta', origin: { kind: 'import', job_id: 'imp_1' } }),
+      ALPHA,
+    ];
+    handler = (url) =>
+      url.includes('dry_run=true')
+        ? json({
+            indexes: [],
+            dirs: [],
+            promoted_models: [],
+            mlflow_experiment: null,
+            running_jobs: [],
+            referenced_by: [],
+            blocking: [],
+            blocking_detail: [],
+          })
+        : undefined;
+    await render();
+    expect(q('project-combine-job-merged')!.getAttribute('href')).toBe(
+      '/projects/combine/cmb_20261001T120000_1a2b3c4d',
+    );
+    expect(q('project-combine-job-beta')).toBeNull();
+    expect(q('project-combine-job-alpha')).toBeNull();
+    expect(q('project-delete-merged')!.textContent?.trim()).toBe('Undo combine');
+    expect(q('project-delete-beta')!.textContent?.trim()).toBe('Delete');
+    expect(q('project-delete-alpha')!.textContent?.trim()).toBe('Delete');
+
+    click('project-delete-merged');
+    await vi.waitFor(() => expect(q('delete-project-title')).not.toBeNull());
+    expect(q('delete-project-title')!.textContent).toContain('Undo combine');
+    expect(q('delete-project-dialog')!.getAttribute('aria-label')).toBe('Undo combine');
+    // The guarded flow is unchanged: a served dry run, then the typed slug.
+    await vi.waitFor(() => expect(q('delete-project-confirm')).not.toBeNull());
+  });
+
+  it('a project with a combine origin but no job id gets no link', async () => {
+    listed = [DEFAULT, testProject({ slug: 'orphan', origin: { kind: 'combine' } })];
+    await render();
+    expect(q('project-combine-job-orphan')).toBeNull();
+    expect(q('project-delete-orphan')!.textContent?.trim()).toBe('Delete');
+  });
+});
+
+describe('copy settings with the served vlm_activation axis (W9)', () => {
+  it('offers the served axis and renders a 422 vlm_external_not_acknowledged verbatim', async () => {
+    cloneAxes = ['settings_defaults', 'vlm_activation'];
+    handler = (url, init) =>
+      init.method === 'POST' && url.endsWith('/projects/alpha/clone_settings')
+        ? json(
+            {
+              detail: {
+                error: 'vlm_external_not_acknowledged',
+                message:
+                  "served: 'cloud_vlm' sends crops outside this deployment; acknowledge it first",
+                endpoint: 'cloud_vlm',
+                activate_via: '/vlm/endpoints/cloud_vlm/activate',
+              },
+            },
+            422,
+          )
+        : undefined;
+    await render();
+    click('project-clone-alpha');
+    expect(q('clone-settings-axis-vlm_activation')).not.toBeNull();
+    submit('clone-settings-submit');
+    await vi.waitFor(() =>
+      expect(q('clone-settings-error')?.textContent).toBe(
+        "served: 'cloud_vlm' sends crops outside this deployment; acknowledge it first",
+      ),
+    );
+    expect(writes[0]!.body).toEqual({
+      from: 'default',
+      axes: ['settings_defaults', 'vlm_activation'],
+      expected_revision: 4,
+    });
   });
 });

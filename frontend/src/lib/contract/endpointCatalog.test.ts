@@ -156,6 +156,22 @@ const MANUAL_OVERRIDES: Array<{
     method: 'GET',
     queryParams: ['box_id', 'size'],
   },
+  {
+    file: 'lib/api_combine.ts',
+    scan: 'projectPrefix',
+    marker: 'export function runCombineNextStep(',
+    // step.method/step.path: a finished combine job's served `next_steps`
+    // entry, run against the target project's own prefix. The ONE step the
+    // backend serves today is `POST /clusters/train` (recluster), which is
+    // NOT a route in the vendored curation OpenAPI at f582aa05 (only the
+    // unscoped `/clusters/train/{index}` exists elsewhere), so the plan's
+    // literal override cannot pass this check. The anchor below is the real
+    // clustering entry point the app already uses; the frontend itself
+    // sends whatever path is served. Reported to the backend as a bug.
+    path: '/pipeline/auto_label/start',
+    method: 'POST',
+    queryParams: [],
+  },
 ];
 
 interface ResolvedCall {
