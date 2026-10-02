@@ -42,6 +42,14 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- `GET /region_profiles/active` and `/prompt_packs/active` with `source: env` now name
+  the env/file default the worker applies (`active.name`, no revision) instead of a
+  nameless "off"; only an explicit deactivation, or no env default at all, is nameless.
+  The name comes from the resolver the worker uses, so `active` and `applied[]` agree.
+- Cross-project "who uses X" listings (`active_in` on `/vlm/endpoints`, model-sharing
+  `used_by`/`in_use`, the VLM delete guard) count only projects that exist and are not
+  being deleted. A tombstoned project used to count as running `env` and could block
+  `DELETE /vlm/endpoints/{name}` with 409 `in_use`.
 - k-NN indexes are created with OpenSearch's derived source again (the setting that
   turned it off is removed), cutting every vector from about 25 KB to 8.4 KB on disk
   (3x). The per-box vector scan (box clustering, false-positive centroids) now reads

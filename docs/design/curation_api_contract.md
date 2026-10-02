@@ -409,7 +409,7 @@ The built-in generic pack is read-only. Packs are per project.
 | GET | `/prompt_packs/schema` | | `PromptPackSchema`: `calls[]`, `fields[]` (placeholders, expected reply keys), `placeholders[]`, `reply_key_contract` | |
 | POST | `/prompt_packs/validate` | `{body, name}`, query `profile` | `ValidationReport` | |
 | POST | `/prompt_packs/test` | `PackTestRequest` | `PackTestResponse` | see [Test on crops](#test-on-crops) |
-| GET | `/prompt_packs/active` | | `ActiveConfigResponse`: `axis`, `active`, `source` (`stored`, `env`, `off`), `activated_at`, `previous`, `applied[]`, `config_revision`, `stale` | |
+| GET | `/prompt_packs/active` | | `ActiveConfigResponse`: `axis`, `active`, `source` (`stored`, `env`, `off`; with `env`, `active.name` is the env/file default in effect), `activated_at`, `previous`, `applied[]`, `config_revision`, `stale` | |
 | POST | `/prompt_packs/active/rollback` | `{expected_active}` | `ActiveConfigResponse` | `409 no_previous`, `409 previous_deleted`, `409 active_conflict` |
 | GET | `/prompt_packs/{name}` | | `PromptPackDoc` (`name`, `body`, `description`, `revision`, `source`, `read_only`, `active`, `cloned_from`, `etag`) | `404 not_found` |
 | PUT | `/prompt_packs/{name}` | `{body, description, expected_revision}` | `PromptPackDoc` (a new revision) | `403 read_only`, `409 revision_conflict`, `422 validation_failed` |

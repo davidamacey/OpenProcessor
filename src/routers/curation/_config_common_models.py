@@ -435,11 +435,10 @@ class ActiveConfigResponse(BaseModel):
     ``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --
     ``'stored'`` (an activation doc names a saved pack/profile),
     ``'env'`` (never activated through the store; the env/file default
-    applies), or ``'off'`` (explicitly deactivated -- ``active.name`` is
-    ``None``, distinct from ``'env'``'s ``None`` activation doc). Never
-    guessed from ``active`` alone: ``'env'`` and ``'off'`` both may
-    carry ``active.name=None`` in the profile axis's off state, but only
-    an explicit deactivation is ``'off'``.
+    applies, and ``active.name`` names it), or ``'off'`` (explicitly
+    deactivated -- ``active.name`` is ``None``). Never guessed from
+    ``active`` alone: ``'env'`` is also nameless when no env default is
+    configured, but only an explicit deactivation is ``'off'``.
     ``activated_at`` is the activation doc's own timestamp -- ``None``
     for ``'env'`` (there was no activation write). ``applied`` is every
     live ``runtime:*`` doc for this axis (§4.5) -- empty when no worker

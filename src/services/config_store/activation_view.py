@@ -20,6 +20,21 @@ from src.services.config_store.index import get_activation, get_runtime_docs
 Axis = Literal['prompt_pack', 'detection_profile']
 
 
+def _env_default_ref(axis: Axis) -> ActiveRef:
+    """The env/file default a never-activated axis really runs, named by the
+    same resolver the worker applies (so ``active`` and the worker's
+    ``applied[]`` row cannot disagree). Nameless only when there is no env
+    default (no region profile configured)."""
+    if axis == 'prompt_pack':
+        from src.services.labeling.vlm_prompt_resolution import active_prompt_pack
+
+        return ActiveRef(name=active_prompt_pack().name)
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    return ActiveRef(name=profile.name) if profile is not None else ActiveRef()
+
+
 async def build_active_config_response(client: Any, *, axis: Axis) -> ActiveConfigResponse:
     store = get_config_store()
     await store.ensure_fresh(client)
@@ -28,7 +43,7 @@ async def build_active_config_response(client: Any, *, axis: Axis) -> ActiveConf
     stored_names = snapshot.packs if axis == 'prompt_pack' else snapshot.profiles
 
     if ref is None:
-        active = ActiveRef()
+        active = _env_default_ref(axis)
         source: Literal['stored', 'env', 'off'] = 'env'
     elif ref == 'off':
         active = ActiveRef()
