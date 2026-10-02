@@ -89,7 +89,7 @@
       "col": 0,
       "type": "frontend",
       "label": "Ingest",
-      "sublabel": "upload or batch",
+      "sublabel": "upload, batch or import",
       "width": 140
     },
     {

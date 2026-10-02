@@ -12,9 +12,9 @@
     ]
   },
   "components": [
-    { "id": "routes", "type": "frontend", "label": "src/routes/", "sublabel": "dashboard, ingest, clusters, review, classes...", "pos": [400, 100], "size": [230, 70] },
+    { "id": "routes", "type": "frontend", "label": "src/routes/", "sublabel": "/p/<slug>/ dashboard, review, settings...", "pos": [400, 100], "size": [230, 70] },
     { "id": "controllers", "type": "frontend", "label": "Controllers", "sublabel": "review / cluster / ingestRun controllers", "pos": [60, 260], "size": [220, 76] },
-    { "id": "stores", "type": "backend", "label": "Runes stores", "sublabel": "classesStore, regionProfileStore, undoStore", "pos": [400, 260], "size": [210, 76] },
+    { "id": "stores", "type": "backend", "label": "Runes stores", "sublabel": "projectsStore, classesStore, keymapStore", "pos": [400, 260], "size": [210, 76] },
     { "id": "slots", "type": "backend", "label": "Slot registry", "sublabel": "registeredSlots.ts, readSlot", "pos": [760, 260], "size": [180, 70] },
     { "id": "regionprofile", "type": "external", "label": "Served region profile", "sublabel": "GET {prefix}/health", "pos": [760, 400], "size": [180, 64] },
     { "id": "tier2", "type": "cloud", "label": "Tier-2 profile", "sublabel": "annotation-profiles.json", "pos": [990, 400], "size": [180, 64] },
