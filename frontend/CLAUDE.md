@@ -2189,6 +2189,13 @@ that every top-level route still mounts. Never runs against a live
 OpenProcessor backend — `e2e/conftest.py`'s `Stub` fixture routes every
 `{API_PREFIX}` request itself.
 
+The runner and the `app_url` fixture start `vite preview` in its own
+process group (`scripts/lib/previewServer.mjs`, `start_new_session` in
+conftest) and stop the whole group (SIGTERM, then SIGKILL), on normal exit,
+test failure, SIGINT/SIGTERM/SIGHUP and uncaught errors, so no server is
+left running; killing only an `npx` wrapper used to orphan one per run.
+`src/lib/testing/previewServer.test.ts` pins the group stop.
+
 **Fail-closed, on purpose** (see docs/design/test-audit-2026-09-24.md
 recommendation 5 — this replaced the old `scripts/playwright_*.py`
 runbooks, which drifted to a stale `/curation/**` prefix for weeks because
