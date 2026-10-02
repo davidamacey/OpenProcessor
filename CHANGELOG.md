@@ -47,8 +47,6 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
 - The installer script reports the current release version (it printed 0.2.0).
 - `POST /prompt_packs/{name}/activate`, `POST /region_profiles/{name}/activate` and
   `GET /region_profiles/active/impact` declare typed responses in the OpenAPI contract.
-
-### Fixed (earlier in this release)
 - `GET /ingest/region_drain` exposes `stall_reason` for a segmenter-only region profile
   too (it reported no dependencies, so the reason stayed null while the segmenter was
   down).
