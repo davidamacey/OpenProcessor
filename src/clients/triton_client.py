@@ -26,6 +26,7 @@ Active models:
 
 import io
 import logging
+import time
 from typing import Any
 
 import cv2
@@ -42,6 +43,8 @@ from src.utils.retry import retry_sync
 
 
 logger = logging.getLogger(__name__)
+
+_MODEL_INFO_TTL_S = 30.0
 
 
 class TritonClient:
@@ -70,11 +73,12 @@ class TritonClient:
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
         self.retry_max_delay = retry_max_delay
-        # Detection-output adapters keyed by model name, resolved lazily
-        # from Triton model metadata (supports YOLO11 end2end 4-tensor and
-        # YOLO26 fused single-tensor engines side by side).
-        self._detection_adapters: dict[str, DetectionAdapter] = {}
-        self._input_sizes: dict[str, int] = {}
+        # Per-model serving facts (output adapter + input size) from Triton
+        # metadata, re-read after ``_MODEL_INFO_TTL_S``: a model re-promoted or
+        # replaced under the same name must not keep its old size, and the API
+        # runs many worker processes, so an in-process invalidation could not
+        # reach them all.
+        self._model_info: dict[str, tuple[float, DetectionAdapter, int]] = {}
         logger.info(f'Unified Triton client initialized (sync, retries={max_retries})')
 
     def _infer_with_retry(self, model_name: str, inputs: list, outputs: list):
@@ -89,27 +93,31 @@ class TritonClient:
             max_delay=self.retry_max_delay,
         )
 
+    def _read_model_info(self, model_name: str) -> tuple[DetectionAdapter, int]:
+        """Output adapter (YOLO11 end2end 4-tensor or YOLO26 fused) and the
+        square input size ``model_name`` was exported at (``images`` is
+        ``[N, 3, H, W]``; 640 when dynamic or absent), cached for
+        ``_MODEL_INFO_TTL_S``. A model promoted at another size would otherwise
+        fail with a shape error."""
+        now = time.monotonic()
+        cached = self._model_info.get(model_name)
+        if cached is not None and cached[0] > now:
+            return cached[1], cached[2]
+        metadata = self.client.get_model_metadata(model_name)
+        adapter = resolve_adapter(metadata)
+        size = self.input_size
+        for tensor in metadata.inputs:
+            dims = [int(d) for d in tensor.shape]
+            if tensor.name == 'images' and len(dims) == 4 and dims[2] > 0:
+                size = dims[2]
+        self._model_info[model_name] = (now + _MODEL_INFO_TTL_S, adapter, size)
+        return adapter, size
+
     def _get_detection_adapter(self, model_name: str) -> DetectionAdapter:
-        """Resolve (and cache) the output adapter for a detection model."""
-        adapter = self._detection_adapters.get(model_name)
-        if adapter is None:
-            adapter = resolve_adapter(self.client.get_model_metadata(model_name))
-            self._detection_adapters[model_name] = adapter
-        return adapter
+        return self._read_model_info(model_name)[0]
 
     def _model_input_size(self, model_name: str) -> int:
-        """The square input size ``model_name`` was exported at, read from its
-        Triton metadata (``images`` is ``[N, 3, H, W]``) and cached; a model
-        promoted at another size would otherwise fail with a shape error."""
-        size = self._input_sizes.get(model_name)
-        if size is None:
-            size = self.input_size
-            for tensor in self.client.get_model_metadata(model_name).inputs:
-                dims = [int(d) for d in tensor.shape]
-                if tensor.name == 'images' and len(dims) == 4 and dims[2] > 0:
-                    size = dims[2]
-            self._input_sizes[model_name] = size
-        return size
+        return self._read_model_info(model_name)[1]
 
     # =========================================================================
     # YOLO End2End: CPU Preprocessing + TensorRT + GPU NMS
@@ -215,15 +223,16 @@ class TritonClient:
         orig_w, orig_h = img.size
         img_array = np.array(img)  # HWC, RGB, uint8
 
-        # YOLO preprocessing (CPU letterbox)
-        yolo_input, scale, padding = self._preprocess_yolo_cpu(img_array)
+        # YOLO preprocessing (CPU letterbox) at the configured detector's own size
+        yolo_model = TritonModelConfig.YOLO_MODEL
+        yolo_size = self._model_input_size(yolo_model)
+        yolo_input, scale, padding = self._preprocess_yolo_cpu(img_array, yolo_size)
 
         # CLIP preprocessing (CPU resize/crop)
         clip_input = self._preprocess_clip_cpu(img_array)
 
         # Run YOLO TRT inference (default detector; adapter handles either
         # the end2end 4-tensor or the fused single-tensor contract)
-        yolo_model = TritonModelConfig.YOLO_MODEL
         adapter = self._get_detection_adapter(yolo_model)
         yolo_inputs = [InferInput('images', yolo_input.shape, 'FP32')]
         yolo_inputs[0].set_data_from_numpy(yolo_input)
@@ -255,7 +264,7 @@ class TritonClient:
                 (orig_h, orig_w),
                 scale,
                 padding,
-                self.input_size,
+                yolo_size,
             ).astype(np.float32)
             from src.services.cpu_preprocess import embed_boxes_from_full_res
 
@@ -269,14 +278,16 @@ class TritonClient:
             'orig_shape': (orig_h, orig_w),
             'scale': scale,
             'padding': padding,
+            'input_size': yolo_size,
             'normalized_boxes': normalized_boxes,
             'box_embeddings': box_embeddings,
         }
 
-    def _preprocess_yolo_cpu(self, img_array: np.ndarray) -> tuple[np.ndarray, float, tuple]:
-        """CPU letterbox preprocessing for YOLO."""
+    def _preprocess_yolo_cpu(
+        self, img_array: np.ndarray, target_size: int
+    ) -> tuple[np.ndarray, float, tuple]:
+        """CPU letterbox preprocessing for YOLO at ``target_size``."""
         orig_h, orig_w = img_array.shape[:2]
-        target_size = self.input_size  # 640
 
         scale = min(target_size / orig_h, target_size / orig_w)
         scale = min(scale, 1.0)
