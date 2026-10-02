@@ -239,12 +239,15 @@ async def _count_pending_ingest(opensearch: Any) -> int:
 def _resolve_target_classes(spec: TrainJobSpec) -> list[int]:
     """Resolve the effective class list for a spec.
 
-    ``include_classes=None`` → every non-deprecated class in the registry.
+    ``include_classes=None`` → every non-deprecated item class in the registry
+    (the active profile's region class labels sub-boxes, never a whole item, so
+    it has no per-item samples to require).
     """
     if spec.include_classes:
         return list(spec.include_classes)
-    registry = get_class_registry()
-    return [c.class_id for c in registry.load().classes if not c.deprecated]
+    from src.services.curation.region_class import item_classes
+
+    return [c.class_id for c in item_classes(get_class_registry().load().classes)]
 
 
 def _augmentation_preset_error(augmentation: AugmentationSpec | None) -> str | None:

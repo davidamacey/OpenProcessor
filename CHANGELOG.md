@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- Default training preflight no longer blocks on the active region profile's class: that
+  class (seeded into every project) labels sub-boxes and has no per-item samples, so
+  `include_classes: null` now resolves to the item classes only. Nothing seeds a
+  domain-specific class by itself; the seeded class always comes from the active profile.
 - **Public `DELETE /models/{name}` has the same guard and `force` as the project-scoped
   unload route.** It deleted the primary detector's files without a question. Both routes
   now call one `check_unload` (`src/services/model_unload_guard.py`): the configured
