@@ -208,7 +208,14 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      - triton-server
+      triton-server:
+        condition: service_started
+      # Not just started: the API creates the core visual_search_* indexes
+      # once at boot, and when OpenSearch is not up yet it skips that for
+      # good, so the first /ingest would auto-create them with dynamic
+      # (non-kNN) mappings.
+      opensearch:
+        condition: service_healthy
     networks:
       # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
       # public compose's service is named yolo-api; this alias lets

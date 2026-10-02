@@ -412,6 +412,15 @@ def test_curation_workers_depend_on_healthy_api() -> None:
     assert not bad, f'expected depends_on.yolo-api.condition == service_healthy: {bad}'
 
 
+def test_yolo_api_waits_for_a_healthy_opensearch() -> None:
+    """Found live: the API boots, fails to create the core kNN indexes
+    because OpenSearch is not up yet, and never retries them -- so the first
+    /ingest creates them with dynamic mappings."""
+    depends_on = _services()['yolo-api'].get('depends_on')
+    assert isinstance(depends_on, dict), depends_on
+    assert (depends_on.get('opensearch') or {}).get('condition') == 'service_healthy'
+
+
 def test_yolo_api_has_a_healthcheck() -> None:
     """A `service_healthy` dependency on yolo-api is meaningless without one."""
     services = _services()
