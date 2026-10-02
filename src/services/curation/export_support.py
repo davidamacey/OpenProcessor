@@ -20,6 +20,7 @@ import shutil
 import subprocess  # nosec B404 - only used with a fixed argv + resolved executable, see _code_sha
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -419,6 +420,26 @@ def _copy_or_resize_one(
         return dest_path, True, None
     except Exception as exc:
         return dest_path, False, str(exc)
+
+
+def allocate_export_dir(root: Path, now: datetime) -> Path:
+    """Claim a new auto-named export directory under ``root``.
+
+    The name is the UTC timestamp (``%Y%m%dT%H%M%SZ``, the shape
+    ``export_retention`` recognises). Two exports started in the same second
+    would otherwise share one directory and the second would overwrite the
+    first's labels and manifest, so the clock is advanced a second at a time
+    until ``mkdir`` claims a directory that did not exist.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    while True:
+        candidate = root / now.strftime('%Y%m%dT%H%M%SZ')
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            now += timedelta(seconds=1)
+            continue
+        return candidate
 
 
 def atomic_write_text(path: Path, payload: str) -> None:
