@@ -342,7 +342,13 @@ async def upsert_runtime_doc(
     """Upsert ``runtime:<process>:<hostname>`` -- the worker's "what did I
     actually apply" record (§4.5), refreshed at swap and every 60s."""
     doc_id = runtime_doc_id(process, hostname)
-    body = {'doc_type': 'runtime', 'process': process, **fields}
+    body = {
+        'doc_type': 'runtime',
+        'process': process,
+        'host': hostname,
+        'applied_at': datetime.datetime.now(datetime.UTC).isoformat(),
+        **fields,
+    }
     await client.index(index=index, id=doc_id, body=body)
 
 

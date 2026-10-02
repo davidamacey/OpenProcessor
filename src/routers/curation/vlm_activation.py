@@ -60,25 +60,10 @@ async def active_response(client: Any, *, validation: Any = None) -> VlmActiveRe
         source = 'env' if ref[0] == 'env' else 'stored'
     doc = await get_activation(client, store.index, 'vlm') if source != 'env' else None
     prev = (doc or {}).get('previous')
-    applied: list[AppliedRuntime] = []
     try:
         runtime_docs = await get_runtime_docs(client, store.index, process='detection_worker')
     except Exception:  # pragma: no cover - applied[] degrades to empty
         runtime_docs = []
-    for rt in runtime_docs:
-        rev = int(rt.get('applied_config_revision') or 0)
-        applied.append(
-            AppliedRuntime(
-                process=rt.get('process', 'detection_worker'),
-                host=rt.get('host', ''),
-                applied_config_revision=rev,
-                profile=ActiveRef(name=rt.get('profile'), revision=rt.get('profile_revision')),
-                pack=ActiveRef(name=rt.get('pack'), revision=rt.get('pack_revision')),
-                vlm=ActiveRef(name=rt.get('vlm'), revision=rt.get('vlm_revision')),
-                applied_at=rt.get('applied_at'),
-                lagging=rev < snapshot.config_revision,
-            )
-        )
     return VlmActiveResponse(
         axis='vlm',
         active=active,
@@ -87,7 +72,10 @@ async def active_response(client: Any, *, validation: Any = None) -> VlmActiveRe
         previous=ActiveRef(name=prev.get('name'), revision=prev.get('revision')) if prev else None,
         config_revision=snapshot.config_revision,
         stale=snapshot.stale,
-        applied=applied,
+        applied=[
+            AppliedRuntime.from_runtime_doc(d, config_revision=snapshot.config_revision)
+            for d in runtime_docs
+        ],
         validation=validation,
     )
 
