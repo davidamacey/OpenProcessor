@@ -367,7 +367,7 @@ class FaceIdentityService:
             response = await self.opensearch.client.search(
                 index=IndexName.FACES.value,
                 body={
-                    'query': {'term': {'person_id.keyword': person_id}},
+                    'query': {'term': {'person_id': person_id}},
                     'size': 1000,  # Get all faces for person
                     'sort': [
                         {'confidence': {'order': 'desc', 'unmapped_type': 'float'}},
@@ -575,7 +575,7 @@ class FaceIdentityService:
                     'aggs': {
                         'persons': {
                             'terms': {
-                                'field': 'person_id.keyword',  # Use keyword for aggregation
+                                'field': 'person_id',  # mapped as keyword already
                                 'size': limit,
                             },
                             'aggs': {
