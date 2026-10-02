@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `/detect` and `/detect/batch` letterbox to the input size the model was exported at,
+  read from its Triton metadata and cached per model (they always used 640, so a model
+  promoted at another size failed with a Triton shape error).
 - Default training preflight no longer blocks on the active region profile's class: that
   class (seeded into every project) labels sub-boxes and has no per-item samples, so
   `include_classes: null` now resolves to the item classes only. Nothing seeds a
