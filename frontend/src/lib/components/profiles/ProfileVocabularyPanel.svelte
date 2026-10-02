@@ -143,7 +143,12 @@
                     ? ' · sends images externally'
                     : ''}</td
                 >
-                <td class="py-0.5 font-mono">{v.status ?? '—'}</td>
+                <td class="py-0.5 font-mono"
+                  >{v.status ?? '—'}{#if v.warning}<span
+                      class="ml-1 rounded border border-red-500/40 bg-red-500/10 px-1 font-sans text-red-200"
+                      data-testid="vocab-vlm-warning">{v.warning}</span
+                    >{/if}</td
+                >
               </tr>
             {/each}
           </tbody>

@@ -19,6 +19,8 @@
     createExclusionGuard,
   } from '$lib/clusters/clusterController.svelte';
   import BlurSlider from '$components/BlurSlider.svelte';
+  import VlmRunPicker from '$components/vlm/VlmRunPicker.svelte';
+  import { vlmRunErrorText } from '$lib/vlm/runErrors';
   import CropCard from '$components/CropCard.svelte';
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
@@ -459,6 +461,10 @@
   // pollAutoLabelJob — rendered as a compact inline stage/progress string
   // next to the Run VLM button (2026-09-24 logic-moves W3).
   let vlmJob = $state<AutoLabelJobState | null>(null);
+  // W9: the endpoint this one run uses (`null` = the project default) and
+  // the acknowledgement for an external one.
+  let vlmChoice = $state<string | null>(null);
+  let vlmAck = $state<boolean>(false);
 
   async function runVlm(): Promise<void> {
     if (vlmRunning) return;
@@ -474,7 +480,10 @@
     vlmRunning = true;
     vlmJob = null;
     try {
-      vlmJob = await runVlmOnCluster(clusterId);
+      vlmJob = await runVlmOnCluster(clusterId, {
+        vlm: vlmChoice,
+        acknowledgeExternal: vlmAck,
+      });
       // M7: poll only the job we just started — see pollAutoLabelJob's
       // `expectedJobId` doc comment for why this matters.
       const final = await pollAutoLabelJob(
@@ -496,7 +505,7 @@
         );
       }
     } catch (e) {
-      toastStore.error(`VLM run failed: ${(e as Error).message}`);
+      toastStore.error(`VLM run failed: ${vlmRunErrorText(e)}`);
     } finally {
       vlmRunning = false;
     }
@@ -988,6 +997,15 @@
           Run VLM
         {/if}
       </button>
+      <VlmRunPicker
+        vlm={vlmChoice}
+        acknowledgeExternal={vlmAck}
+        disabled={vlmRunning}
+        onchange={(next) => {
+          vlmChoice = next.vlm;
+          vlmAck = next.acknowledgeExternal;
+        }}
+      />
       {#if vlmRunning && vlmJob}
         <span class="text-xs text-zinc-400">
           {vlmJob.stage || 'preparing…'}{vlmJob.total > 0

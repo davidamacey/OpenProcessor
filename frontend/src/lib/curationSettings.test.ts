@@ -14,7 +14,10 @@ import {
   isPinned,
   parseCurationSettings,
   SETTINGS_AXES,
+  axisCopy,
   settableAxes,
+  settingsOptionView,
+  vlmNeedsAcknowledgement,
 } from './curationSettings';
 import type { MethodsResponse } from './strategies';
 
@@ -56,11 +59,11 @@ describe('parseCurationSettings', () => {
 });
 
 describe('SETTINGS_AXES', () => {
-  it('covers exactly the backend four SETTABLE_DEFAULT_AXES, no duplicates', () => {
+  it('covers exactly the axes the backend can accept, no duplicates', () => {
     const ids = SETTINGS_AXES.map((a) => a.axis);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.sort()).toEqual(
-      ['cluster', 'detection_profile', 'prompt_pack', 'sort'].sort(),
+      ['cluster', 'detection_profile', 'prompt_pack', 'sort', 'vlm'].sort(),
     );
   });
 
@@ -87,6 +90,8 @@ describe('settableAxes / advisoryAxes', () => {
     review_sorts: [entry('recent', true)],
     detection_profiles: [entry('widget_tag', false)],
     prompt_packs: [entry('generic_item_v1', true)],
+    vlm: [entry('endpoint_a', true)],
+    axes: [],
   } as unknown as MethodsResponse;
 
   it('follows the server flag', () => {
@@ -94,6 +99,7 @@ describe('settableAxes / advisoryAxes', () => {
       'cluster',
       'sort',
       'prompt_pack',
+      'vlm',
     ]);
     expect(advisoryAxes(methods).map((a) => a.axis)).toEqual(['detection_profile']);
   });
@@ -130,6 +136,8 @@ describe('axisOptions', () => {
       dataset_exports: [],
       detection_profiles: [],
       prompt_packs: [],
+      vlm: [],
+      axes: [],
     };
     const spec = axisSpec('sort')!;
     const opts = axisOptions(methods, spec);
@@ -152,6 +160,8 @@ describe('effectiveDefaultId / isPinned', () => {
     dataset_exports: [],
     detection_profiles: [],
     prompt_packs: [],
+    vlm: [],
+    axes: [],
   };
 
   it('a stored value wins over the /methods default flag', () => {
@@ -183,5 +193,138 @@ describe('sort axis blurb (m10, 2026-09-24 interactive pass)', () => {
   it('states the actual precedence: only tabs with no tuned default of their own use it', () => {
     const sortSpec = axisSpec('sort')!;
     expect(sortSpec.blurb).toMatch(/no tuned default of their own/i);
+  });
+});
+
+describe('vlm axis (W9)', () => {
+  const vlm = [
+    {
+      id: 'local_vlm',
+      label: 'Local VLM',
+      status: 'stable' as const,
+      settable: true,
+      default: true,
+      endpoint_status_label: 'Ready',
+      sends_images_externally: false,
+      default_ack_recorded: null,
+    },
+    {
+      id: 'cloud_vlm',
+      label: 'Cloud VLM',
+      status: 'stable' as const,
+      settable: true,
+      endpoint_status_label: 'Not probed yet',
+      sends_images_externally: true,
+      warning: 'Crops leave the deployment.',
+      default_ack_recorded: false,
+    },
+    {
+      id: 'cloud_ack',
+      label: 'Cloud (acknowledged)',
+      status: 'stable' as const,
+      settable: true,
+      sends_images_externally: true,
+      warning: 'Crops leave the deployment.',
+      default_ack_recorded: true,
+    },
+    { id: 'off', label: 'Off', status: 'stable' as const, settable: true },
+    { id: 'gone', label: 'Gone', status: 'disabled' as const, settable: true },
+  ];
+  const methods = {
+    cluster_methods: [],
+    review_sorts: [],
+    overlays: [],
+    scores: [],
+    dataset_exports: [],
+    detection_profiles: [],
+    prompt_packs: [],
+    vlm,
+    axes: [],
+  } as unknown as MethodsResponse;
+  const spec = axisSpec('vlm')!;
+
+  it('has an axis spec that reads the vlm bucket and is settable by the served flag', () => {
+    expect(spec.bucket).toBe('vlm');
+    expect(settableAxes(methods).map((a) => a.axis)).toEqual(['vlm']);
+  });
+
+  it('offers every served entry that is not disabled, off included', () => {
+    expect(axisOptions(methods, spec).map((o) => o.id)).toEqual([
+      'local_vlm',
+      'cloud_vlm',
+      'cloud_ack',
+      'off',
+    ]);
+  });
+
+  it('the effective default is the pinned id, else the served default flag', () => {
+    expect(effectiveDefaultId(EMPTY_CURATION_SETTINGS, methods, spec)).toBe('local_vlm');
+    expect(
+      effectiveDefaultId(
+        { ...EMPTY_CURATION_SETTINGS, defaults: { vlm: 'off' } },
+        methods,
+        spec,
+      ),
+    ).toBe('off');
+  });
+
+  it('only an external entry with an unrecorded acknowledgement needs one', () => {
+    const by = (id: string) => vlm.find((e) => e.id === id)!;
+    expect(vlmNeedsAcknowledgement(by('cloud_vlm'))).toBe(true);
+    // null (not external) and true (recorded) never block; neither does an absent flag.
+    expect(vlmNeedsAcknowledgement(by('local_vlm'))).toBe(false);
+    expect(vlmNeedsAcknowledgement(by('cloud_ack'))).toBe(false);
+    expect(vlmNeedsAcknowledgement(by('off'))).toBe(false);
+  });
+
+  it('the option view carries the served status and warning; only the unacknowledged one is disabled', () => {
+    const view = (id: string) =>
+      settingsOptionView(
+        spec,
+        vlm.find((e) => e.id === id)!,
+      );
+    expect(view('local_vlm')).toEqual({
+      suffix: ' · Ready',
+      disabled: false,
+      warning: null,
+    });
+    expect(view('cloud_vlm')).toEqual({
+      suffix:
+        ' · Not probed yet · warning: Crops leave the deployment. · activate it on Settings → Models first',
+      disabled: true,
+      warning: 'Crops leave the deployment.',
+    });
+    expect(view('cloud_ack').disabled).toBe(false);
+    expect(view('off')).toEqual({ suffix: '', disabled: false, warning: null });
+  });
+
+  it('every other axis renders as before', () => {
+    expect(
+      settingsOptionView(axisSpec('sort')!, {
+        id: 'recent',
+        label: 'R',
+        status: 'stable',
+      }),
+    ).toEqual({
+      suffix: '',
+      disabled: false,
+      warning: null,
+    });
+  });
+
+  it('the served axes[] copy replaces the spec words; absent, the spec words stay', () => {
+    expect(axisCopy({ axes: [] }, spec)).toEqual({
+      label: spec.label,
+      blurb: spec.blurb,
+    });
+    expect(
+      axisCopy(
+        { axes: [{ axis: 'vlm', label: 'Served label', description: 'Served words.' }] },
+        spec,
+      ),
+    ).toEqual({ label: 'Served label', blurb: 'Served words.' });
+    expect(
+      axisCopy({ axes: [{ axis: 'sort', label: 'x', description: 'y' }] }, spec).label,
+    ).toBe(spec.label);
   });
 });

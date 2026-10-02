@@ -684,11 +684,20 @@ export interface StatsSummary {
  *  project bound. Feeds only the top-bar API status chip; every
  *  project-scoped fact (region profile, queue counts, …) comes from the
  *  scoped `ApiHealth` below. */
+/** The backend's `vlm_status()` on `GET /health` (the contract types it as
+ *  an open object; it serves no endpoint name, question A-6). */
+export interface VlmHealth {
+  reachable: boolean;
+  model?: string | null;
+  last_error?: string | null;
+  detail?: string | null;
+}
+
 export interface GlobalHealth {
   status: 'ok' | 'degraded' | 'down';
   triton?: { reachable: boolean; detail?: string };
   opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
-  vlm?: { reachable: boolean; model?: string | null };
+  vlm?: VlmHealth;
   mlflow_public_url?: string | null;
   version?: string;
   api_version?: string;
@@ -702,7 +711,7 @@ export interface ApiHealth {
   status: 'ok' | 'degraded' | 'down';
   triton?: { reachable: boolean; detail?: string };
   opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
-  vlm?: { reachable: boolean; model?: string | null };
+  vlm?: VlmHealth;
   registry?: { path?: string; exists?: boolean; mtime?: string | null };
   /** The backend's active region profile, or `null` when none is
    *  configured (then every region route answers 409). The only signal
@@ -1177,6 +1186,9 @@ export interface ModelInfo {
    *  this scoped route). */
   active?: boolean;
   active_in?: string[];
+  /** Served on a VLM row: the endpoint's model id as the server resolves
+   *  it (the row's `name` is the endpoint name). */
+  model?: string | null;
 }
 
 export interface ModelsStatus {

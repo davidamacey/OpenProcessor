@@ -82,14 +82,17 @@ export interface ConfigDocBase<B> {
   updated_at: string | null;
   updated_by: string | null;
   cloned_from: string | null;
-  active: boolean;
+  /** Absent on a doc whose resource serves no per-doc `active` (a VLM
+   *  endpoint serves `active_in` instead): shared components show the
+   *  active chip only when this is `true`. */
+  active?: boolean;
   active_revision?: number | null;
-  validation: ValidationReport;
+  validation: ValidationReport | null;
 }
 
 export interface ConfigRevision {
   revision: number;
-  saved_at: string;
+  saved_at: string | null;
   cloned_from: string | null;
   description: string | null;
 }

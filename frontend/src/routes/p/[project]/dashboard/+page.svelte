@@ -30,6 +30,8 @@
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import VlmRunPicker from '$components/vlm/VlmRunPicker.svelte';
+  import { vlmRunErrorText } from '$lib/vlm/runErrors';
   import DatasetStats from '$components/DatasetStats.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
   import {
@@ -61,6 +63,10 @@
   let vlmOpen = $state<boolean>(false);
   let vlmClusterId = $state<string>('');
   let vlmBusy = $state<boolean>(false);
+  // W9: the endpoint this one run uses (`null` = the project default) and
+  // the acknowledgement for an external one.
+  let vlmChoice = $state<string | null>(null);
+  let vlmAck = $state<boolean>(false);
   // Live status while the cluster-scoped VLM job runs — polled via
   // pollAutoLabelJob (POST /vlm/label_cluster/{id}, then GET
   // /pipeline/auto_label/status), same job shape AutoLabelPanel shows
@@ -130,7 +136,10 @@
     vlmBusy = true;
     vlmJob = null;
     try {
-      vlmJob = await runVlmOnCluster(id);
+      vlmJob = await runVlmOnCluster(id, {
+        vlm: vlmChoice,
+        acknowledgeExternal: vlmAck,
+      });
       // M7: poll only the job we just started, by id — see
       // pollAutoLabelJob's `expectedJobId` doc comment.
       const final = await pollAutoLabelJob(
@@ -153,7 +162,7 @@
         vlmOpen = false;
       }
     } catch (e) {
-      toastStore.error(`VLM run failed: ${(e as Error).message}`);
+      toastStore.error(`VLM run failed: ${vlmRunErrorText(e)}`);
     } finally {
       vlmBusy = false;
     }
@@ -303,6 +312,17 @@
         Only un-validated crops in the cluster will be sent. Test-holdout crops are
         excluded by the API.
       </p>
+      <div class="mb-4 text-sm">
+        <VlmRunPicker
+          vlm={vlmChoice}
+          acknowledgeExternal={vlmAck}
+          disabled={vlmBusy}
+          onchange={(next) => {
+            vlmChoice = next.vlm;
+            vlmAck = next.acknowledgeExternal;
+          }}
+        />
+      </div>
       {#if vlmJob}
         <p class="mb-4 text-xs text-zinc-400">
           {vlmJob.status === 'running'

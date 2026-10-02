@@ -23,7 +23,7 @@ describe('W3: dashboard runVlm uses POST /vlm/label_cluster/{id} + status pollin
   it('runVlm calls runVlmOnCluster then polls via pollAutoLabelJob', () => {
     const fn = src.match(/async function runVlm\(\)[\s\S]*?\n {2}\}/)?.[0];
     expect(fn).toBeDefined();
-    expect(fn).toMatch(/await runVlmOnCluster\(id\)/);
+    expect(fn).toMatch(/await runVlmOnCluster\(id,/);
     expect(fn).toMatch(/await pollAutoLabelJob\(/);
     expect(fn).not.toMatch(/label_batch/);
   });

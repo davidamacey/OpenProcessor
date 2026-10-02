@@ -15,16 +15,18 @@
    * (`settableAxes`), never a hardcoded axis id.
    */
 
-  import { ApiError } from '$lib/api';
+  import { ApiError, configErrorDetail, unknownStrategyDetail } from '$lib/api';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { formatTimestamp } from '$lib/formatDate';
   import {
     advisoryAxes,
+    axisCopy,
     axisOptions,
     effectiveDefaultId,
     isPinned,
     settableAxes,
+    settingsOptionView,
     type SettingsAxisSpec,
   } from '$lib/curationSettings';
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
@@ -36,6 +38,7 @@
   import { resolve } from '$app/paths';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
   import { profilesAvailability } from '$lib/profiles/profilesAvailability.svelte';
+  import { vlmAvailability } from '$lib/vlm/vlmAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
 
   // `axisOptions()` returns the shared `MethodInfoBase[]` (it serves every
@@ -61,6 +64,7 @@
     void strategiesStore.init();
     void packsAvailability.init();
     void profilesAvailability.init();
+    void vlmAvailability.init();
   });
 
   /** Local, unsaved selection per settable axis id. Cleared back to
@@ -68,6 +72,9 @@
    *  it never drifts from the server's own record. */
   let selections = $state<Record<string, string>>({});
   let saveErrors = $state<Record<string, string>>({});
+  /** Axes whose last save the server refused for a missing external
+   *  acknowledgement: the error is followed by the Models link. */
+  let ackRefused = $state<Record<string, boolean>>({});
 
   let confirmSpec = $state<SettingsAxisSpec | null>(null);
   let pendingId = $state<string | null>(null);
@@ -84,6 +91,7 @@
 
   function onSelectChange(spec: SettingsAxisSpec, value: string): void {
     selections = { ...selections, [spec.axis]: value };
+    if (ackRefused[spec.axis]) ackRefused = { ...ackRefused, [spec.axis]: false };
     if (saveErrors[spec.axis]) {
       const next = { ...saveErrors };
       delete next[spec.axis];
@@ -147,10 +155,23 @@
           : `Shared ${spec.label} default set to ${id}`,
       );
     } catch (e) {
-      const message =
-        (e as Error)?.message ??
-        (mode === 'clear' ? 'failed to clear setting' : 'failed to save settings');
+      // The served words: a refused VLM pick names its endpoint and the
+      // valid ids; other structured refusals carry their own `message`.
+      const unknown = unknownStrategyDetail(e);
+      const refusal = configErrorDetail(e);
+      const message = unknown
+        ? `Unknown ${unknown.axis.replace('_', ' ')} "${unknown.requested}" — valid: ${unknown.valid_ids.join(', ') || 'none'}.`
+        : refusal
+          ? refusal.message
+          : ((e as Error)?.message ??
+            (mode === 'clear' ? 'failed to clear setting' : 'failed to save settings'));
       saveErrors = { ...saveErrors, [spec.axis]: message };
+      // A refused save is shown under its control; the store's load-error
+      // state would otherwise replace the whole page with a Retry.
+      curationSettingsStore.error = null;
+      if (configErrorDetail(e)?.error === 'vlm_external_not_acknowledged') {
+        ackRefused = { ...ackRefused, [spec.axis]: true };
+      }
       toastStore.error(message);
       // Drop the rejected local pick — the control must revert to
       // whatever is actually in effect, never keep showing the rejected
@@ -223,11 +244,12 @@
         )}
         {@const selected = currentSelection(spec)}
         {@const pinned = isPinned(curationSettingsStore.settings, spec)}
+        {@const copy = axisCopy(strategiesStore.methods, spec)}
         <div
           class="flex flex-col gap-1.5 border-t border-zinc-800 pt-4 first:border-0 first:pt-0"
         >
           <div class="flex flex-wrap items-center gap-2">
-            <span class="w-44 shrink-0 text-sm font-medium">{spec.label}</span>
+            <span class="w-44 shrink-0 text-sm font-medium">{copy.label}</span>
             {#if options.length === 0}
               <span class="text-sm text-zinc-500">no options advertised</span>
             {:else}
@@ -246,14 +268,24 @@
                   >
                 {/if}
                 {#each options as opt (opt.id)}
-                  <option value={opt.id}>
+                  {@const view = settingsOptionView(spec, opt)}
+                  <option value={opt.id} disabled={view.disabled}>
                     {opt.label}{opt.status === 'experimental'
                       ? ' · beta'
-                      : ''}{coverageOf(opt) ? '' : ' · no coverage yet'}
+                      : ''}{coverageOf(opt) ? '' : ' · no coverage yet'}{view.suffix}
                   </option>
                 {/each}
               </select>
               {@const selectedOpt = options.find((o) => o.id === (selected ?? effective))}
+              {@const selectedWarning = selectedOpt
+                ? settingsOptionView(spec, selectedOpt).warning
+                : null}
+              {#if selectedWarning}
+                <span
+                  class="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[11px] text-red-200"
+                  data-testid="settings-option-warning">{selectedWarning}</span
+                >
+              {/if}
               {#if selectedOpt && !coverageOf(selectedOpt)}
                 <span
                   class="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-200"
@@ -285,15 +317,32 @@
               </button>
             {/if}
           </div>
-          <p class="text-xs text-zinc-400">{spec.blurb}</p>
+          <p class="text-xs text-zinc-400">{copy.blurb}</p>
           <p class="text-xs text-zinc-500">
             {pinned ? 'pinned' : "inherited from the backend's built-in default"}
           </p>
+          {#if options.some((o) => settingsOptionView(spec, o).disabled)}
+            <p class="text-xs text-zinc-400" data-testid="settings-ack-hint">
+              An endpoint that sends crops outside this deployment is acknowledged when it
+              is activated.
+              <a
+                class="text-blue-300 hover:underline"
+                href={resolve(projectHref('/settings/models'))}>Settings → Models</a
+              >
+            </p>
+          {/if}
           {#if saveErrors[spec.axis]}
             <p
               class="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-200"
+              data-testid="settings-save-error"
             >
               {saveErrors[spec.axis]}
+              {#if ackRefused[spec.axis]}
+                <a
+                  class="ml-1 text-blue-300 hover:underline"
+                  href={resolve(projectHref('/settings/models'))}>Settings → Models</a
+                >
+              {/if}
             </p>
           {/if}
         </div>
@@ -313,7 +362,9 @@
           {@const options = axisOptions(strategiesStore.methods, spec)}
           {#if options.length > 0}
             <div class="flex flex-wrap items-center gap-2 text-sm">
-              <span class="w-44 shrink-0 font-medium text-zinc-400">{spec.label}</span>
+              <span class="w-44 shrink-0 font-medium text-zinc-400"
+                >{axisCopy(strategiesStore.methods, spec).label}</span
+              >
               {#each options as opt (opt.id)}
                 <span class="text-zinc-300"
                   >{opt.label}{(opt as { default?: boolean }).default
@@ -366,6 +417,23 @@
     </section>
   {/if}
 
+  {#if vlmAvailability.available === true}
+    <section
+      class="surface flex flex-wrap items-center gap-3 p-5"
+      data-testid="vlm-models-card"
+    >
+      <div class="flex min-w-0 flex-col gap-1">
+        <h2 class="text-base font-semibold">Models</h2>
+        <p class="text-xs text-zinc-400">
+          Register VLM endpoints, test them, choose which one this project uses, and see
+          every model choice in one place.
+        </p>
+      </div>
+      <span class="grow"></span>
+      <a class="btn" href={resolve(projectHref('/settings/models'))}>Open models</a>
+    </section>
+  {/if}
+
   <ScoresCard />
 
   {#if keymapAvailability.available === true}
@@ -391,7 +459,10 @@
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
     >
       <h3 class="mb-3 text-base font-semibold">
-        {confirmMode === 'clear' ? 'Clear shared default' : 'Set shared default'}: {confirmSpec.label}
+        {confirmMode === 'clear' ? 'Clear shared default' : 'Set shared default'}: {axisCopy(
+          strategiesStore.methods,
+          confirmSpec,
+        ).label}
       </h3>
       <p class="mb-3 text-sm text-zinc-300">
         {effectiveDefaultId(
@@ -403,7 +474,9 @@
           >{confirmMode === 'clear' ? "each caller's own default" : pendingId}</strong
         >
       </p>
-      <p class="mb-3 text-xs text-zinc-400">{confirmSpec.blurb}</p>
+      <p class="mb-3 text-xs text-zinc-400">
+        {axisCopy(strategiesStore.methods, confirmSpec).blurb}
+      </p>
       {#if confirmMode === 'clear'}
         <p class="mb-3 text-xs text-zinc-400">
           Removes this axis's pinned override entirely — every caller that reads it falls

@@ -154,6 +154,10 @@ beforeEach(() => {
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const u = String(url);
       const method = init.method ?? 'GET';
+      // The page's one-shot VLM registry probe: absent on this backend.
+      if (method === 'GET' && u.endsWith('/vlm/endpoints')) {
+        return json({ detail: 'Not Found' }, 404);
+      }
       if (method === 'GET' && u.includes('/models/status')) {
         statusReads.push(u);
         return json({ models: rows.map((r) => ({ ...r })) });

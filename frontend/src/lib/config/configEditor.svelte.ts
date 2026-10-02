@@ -35,6 +35,7 @@ export interface ConfigEditorBackend<
   B extends ConfigBody,
   D extends ConfigDocBase<B>,
   S,
+  E = CurationEvent,
 > {
   getSchema: () => Promise<S>;
   getDoc: (name: string) => Promise<D>;
@@ -45,9 +46,11 @@ export interface ConfigEditorBackend<
     body: ConfigValidateRequest<B>,
     signal: AbortSignal,
   ) => Promise<ValidationReport>;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
-  /** True for the `config.changed` events this resource follows. */
-  isEvent: (e: CurationEvent) => boolean;
+  /** `E` is the event type of the stream the resource follows (the scoped
+   *  `CurationEvent`, or the VLM registry's global events). */
+  subscribe: (onEvent: (e: E) => void) => { close(): void };
+  /** True for the events this resource follows. */
+  isEvent: (e: E) => boolean;
 }
 
 /** What the shared editor components (save panel, revisions, activate and
@@ -87,6 +90,7 @@ export class ConfigEditor<
   D extends ConfigDocBase<B>,
   S,
   A extends { load(): Promise<void> } = ConfigActive,
+  E = CurationEvent,
 > {
   readonly name: string;
   readonly active: A;
@@ -117,12 +121,12 @@ export class ConfigEditor<
   /** This doc changed on the server while the draft had edits. */
   remoteChanged = $state(false);
 
-  protected backend: ConfigEditorBackend<B, D, S>;
+  protected backend: ConfigEditorBackend<B, D, S, E>;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #validateAbort: AbortController | null = null;
   #sub: { close(): void } | null = null;
 
-  constructor(name: string, backend: ConfigEditorBackend<B, D, S>, active: A) {
+  constructor(name: string, backend: ConfigEditorBackend<B, D, S, E>, active: A) {
     this.name = name;
     this.backend = backend;
     this.active = active;
@@ -205,7 +209,7 @@ export class ConfigEditor<
     this.#validateAbort?.abort();
   }
 
-  async #onEvent(e: CurationEvent): Promise<void> {
+  async #onEvent(e: E): Promise<void> {
     if (!this.backend.isEvent(e)) return;
     await this.active.load();
     const name = (e as { name?: string | null }).name;

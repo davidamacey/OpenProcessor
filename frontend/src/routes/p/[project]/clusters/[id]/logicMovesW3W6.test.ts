@@ -22,7 +22,7 @@ describe('W3: runVlm uses POST /vlm/label_cluster/{id} + status polling, not the
   it('runVlm calls runVlmOnCluster then polls via pollAutoLabelJob, never fetching a crop page itself', () => {
     const fn = src.match(/async function runVlm\(\)[\s\S]*?\n {2}\}/)?.[0];
     expect(fn).toBeDefined();
-    expect(fn).toMatch(/await runVlmOnCluster\(clusterId\)/);
+    expect(fn).toMatch(/await runVlmOnCluster\(clusterId,/);
     expect(fn).toMatch(/await pollAutoLabelJob\(/);
     // The old implementation fetched {API_PREFIX}/crops itself before
     // chunking into {API_PREFIX}/vlm/label_batch — neither should survive.

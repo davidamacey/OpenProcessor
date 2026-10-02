@@ -111,4 +111,43 @@ describe('ConfigActive', () => {
     expect(backend.getActive).toHaveBeenCalledTimes(2);
     expect(ctl.active?.active.name).toBe('env_tags');
   });
+
+  it('activate spreads `extra` into the body (a VLM acknowledge_external); with none the body is unchanged', async () => {
+    const { ctl, backend } = setup();
+    await ctl.load();
+    await ctl.activate('widget_tag', 2, false);
+    expect(backend.activate.mock.calls[0]).toEqual([
+      'widget_tag',
+      {
+        revision: 2,
+        expected_active: { name: 'widget_tag', revision: 2 },
+        force: false,
+      },
+    ]);
+    await ctl.activate('widget_tag', 2, true, { acknowledge_external: true });
+    // The first write's served response is the next expected_active.
+    expect(backend.activate.mock.calls[1]![1]).toEqual({
+      revision: 2,
+      expected_active: ctl.active!.active,
+      force: true,
+      acknowledge_external: true,
+    });
+  });
+
+  it('keeps the served refusal detail and clears it on the next write', async () => {
+    const { ctl, backend } = setup();
+    backend.activate.mockRejectedValueOnce(
+      refusal(422, {
+        error: 'vlm_external_not_acknowledged',
+        message: 'Needs an acknowledgement.',
+        endpoint: 'cloud_vlm',
+      }),
+    );
+    await ctl.load();
+    await ctl.activate('cloud_vlm', 1, false);
+    expect(ctl.errorDetail?.error).toBe('vlm_external_not_acknowledged');
+    expect(ctl.errorDetail?.endpoint).toBe('cloud_vlm');
+    await ctl.activate('cloud_vlm', 1, false);
+    expect(ctl.errorDetail).toBeNull();
+  });
 });

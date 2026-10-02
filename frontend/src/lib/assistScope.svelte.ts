@@ -32,6 +32,12 @@ export interface AssistScope {
   classId: number | null;
   /** Selected `axis: 'prompt_pack'` entry id, or `null` = server default. */
   promptPack: string | null;
+  /** Selected `axis: 'vlm'` entry id (a registered endpoint, or `off`), or
+   *  `null` = the project's active endpoint (nothing is sent). */
+  vlm: string | null;
+  /** The operator's acknowledgement that this run sends crops outside the
+   *  deployment. Sent only when `true`. */
+  acknowledgeExternal: boolean;
   /** True when nothing is scoped — the run is exactly today's run. */
   readonly isDefault: boolean;
   /**
@@ -50,6 +56,8 @@ export interface AssistScope {
 export function createAssistScope(): AssistScope {
   let classId = $state<number | null>(null);
   let promptPack = $state<string | null>(null);
+  let vlm = $state<string | null>(null);
+  let acknowledgeExternal = $state(false);
 
   return {
     get classId() {
@@ -64,20 +72,36 @@ export function createAssistScope(): AssistScope {
     set promptPack(next: string | null) {
       promptPack = next;
     },
+    get vlm() {
+      return vlm;
+    },
+    set vlm(next: string | null) {
+      vlm = next;
+    },
+    get acknowledgeExternal() {
+      return acknowledgeExternal;
+    },
+    set acknowledgeExternal(next: boolean) {
+      acknowledgeExternal = next;
+    },
     get isDefault() {
-      return classId == null && promptPack == null;
+      return classId == null && promptPack == null && vlm == null && !acknowledgeExternal;
     },
 
     toStartParams(): Partial<AutoLabelStartParams> {
       const params: Partial<AutoLabelStartParams> = {};
       if (classId != null) params.class_id = classId;
       if (promptPack != null) params.prompt_pack = promptPack;
+      if (vlm != null) params.vlm = vlm;
+      if (acknowledgeExternal) params.acknowledge_external = true;
       return params;
     },
 
     reset(): void {
       classId = null;
       promptPack = null;
+      vlm = null;
+      acknowledgeExternal = false;
     },
   };
 }
