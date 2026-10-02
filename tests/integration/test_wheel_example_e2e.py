@@ -367,7 +367,16 @@ def test_wheel_example_end_to_end(
         },
     )
     assert go.status_code == 200, go.text
-    assert all(d['region_status'] == 'pending_detection' for d in items.values())
+    # Only the profile's parent class (car) is queued; truck/bus items are not seeded.
+    in_scope = {
+        c
+        for c, d in items.items()
+        if 'car' in {(d.get('class_name') or '').lower(), (d.get('proposal_name') or '').lower()}
+    }
+    assert in_scope
+    assert {
+        c for c, d in items.items() if d.get('region_status') == 'pending_detection'
+    } == in_scope
     assert world.default_traffic(since=world.mark, writes_only=False) == []
 
     # -- hop 5: the worker finds wheels, on car items only (by name) ---------
@@ -413,10 +422,11 @@ def test_wheel_example_end_to_end(
             assert (box['detector'], box['source']) == ('sam3', 'segmenter')
             # a text-free profile: every text field of every box is empty
             assert {k: v for k, v in box.items() if k.startswith('text') and v} == {}
-    untouched = [d for k, d in items.items() if k not in cars]
+    untouched = {k: d for k, d in items.items() if k not in cars}
     assert untouched
-    for d in untouched:
-        assert d['region_status'] == 'pending_detection'
+    for k, d in untouched.items():
+        # in-scope proposals stay queued; items outside the parent class never were
+        assert d.get('region_status') == ('pending_detection' if k in in_scope else None)
         assert not d.get('region_boxes')
     assert [
         e
@@ -541,18 +551,14 @@ def test_audit_catches_a_write_to_the_sibling_project(world: World) -> None:
     assert {'index', 'update', 'bulk'} <= ops
 
 
-def test_coco_variant_imports_by_name_with_an_explicit_format(world: World) -> None:
-    """The ``coco/`` layout of the same fixture: ``images/`` next to
-    ``annotations/`` is not auto-detected (it is read as YOLO and finds no
-    split), so the format must be named."""
+def test_coco_variant_is_detected_and_imports(world: World) -> None:
+    """The ``coco/`` layout of the same fixture (``images/`` next to
+    ``annotations/``) is detected as COCO without naming the format."""
     ids = create_project_with_classes(world)
     fixture = build_fixture(world.tmp)
     spec = fixture['variants']['coco']
     root = world.tmp / 'fixture' / 'coco'
-    guessed = world.client.post(f'{API}/datasets/preview', json={'source': {'path': str(root)}})
-    assert guessed.status_code == 422, guessed.text  # the documented gotcha
-    assert guessed.json()['detail']['error'] == 'format_undetected'
-    body = {'source': {'path': str(root), 'format': spec['source_format']}}
+    body = {'source': {'path': str(root)}}
     pre = world.client.post(f'{API}/datasets/preview', json=body)
     assert pre.status_code == 200, pre.text
     assert pre.json()['format'] == 'coco'
