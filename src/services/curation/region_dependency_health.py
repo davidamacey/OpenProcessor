@@ -141,10 +141,11 @@ async def check_region_dependencies(
 
     Returns one :class:`RegionDependencyStatus` per configured (non-empty)
     dependency, in ``(role, model)`` stable order -- detector first, then
-    segmenter. Empty when the profile has no ``detector_model`` at all (no
-    active profile -- nothing to check; the neutral/off case, not a stall).
+    segmenter. Empty when the profile has neither a ``detector_model`` nor a
+    segmenter prompt (no active profile -- nothing to check; the neutral/off
+    case, not a stall). A segmenter-only profile is checked on the segmenter.
     """
-    if not profile.detector_model:
+    if not profile.detector_model and not profile.segmenter_text_prompt:
         return []
 
     ts = now or datetime.now(UTC)
@@ -153,53 +154,54 @@ async def check_region_dependencies(
     results: list[RegionDependencyStatus] = []
 
     # ---- detector: Triton repository index ----
-    model = profile.detector_model
-    try:
-        repo_index = await get_repository_index()
-    except Exception as exc:
-        # Triton itself unreachable from the API -- unknown-unavailable,
-        # not silently "ready".
-        since = tracked.setdefault(model, epoch)
-        results.append(
-            RegionDependencyStatus(
-                role='detector',
-                model=model,
-                ready=False,
-                unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
-                detail=f'Triton repository index unavailable: {exc}',
-            )
-        )
-    else:
-        states = _model_state_map(repo_index)
-        triton_state = states.get(model)
-        ready = triton_state == 'READY'
-        if ready:
-            tracked.pop(model, None)
-            results.append(
-                RegionDependencyStatus(
-                    role='detector',
-                    model=model,
-                    ready=True,
-                    unavailable_since=None,
-                    detail='READY',
-                )
-            )
-        else:
+    if profile.detector_model:
+        model = profile.detector_model
+        try:
+            repo_index = await get_repository_index()
+        except Exception as exc:
+            # Triton itself unreachable from the API -- unknown-unavailable,
+            # not silently "ready".
             since = tracked.setdefault(model, epoch)
-            detail = (
-                f'Triton reports state={triton_state!r}'
-                if triton_state is not None
-                else 'not in Triton repository index (never loaded)'
-            )
             results.append(
                 RegionDependencyStatus(
                     role='detector',
                     model=model,
                     ready=False,
                     unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
-                    detail=detail,
+                    detail=f'Triton repository index unavailable: {exc}',
                 )
             )
+        else:
+            states = _model_state_map(repo_index)
+            triton_state = states.get(model)
+            ready = triton_state == 'READY'
+            if ready:
+                tracked.pop(model, None)
+                results.append(
+                    RegionDependencyStatus(
+                        role='detector',
+                        model=model,
+                        ready=True,
+                        unavailable_since=None,
+                        detail='READY',
+                    )
+                )
+            else:
+                since = tracked.setdefault(model, epoch)
+                detail = (
+                    f'Triton reports state={triton_state!r}'
+                    if triton_state is not None
+                    else 'not in Triton repository index (never loaded)'
+                )
+                results.append(
+                    RegionDependencyStatus(
+                        role='detector',
+                        model=model,
+                        ready=False,
+                        unavailable_since=datetime.fromtimestamp(since, tz=UTC).isoformat(),
+                        detail=detail,
+                    )
+                )
 
     # ---- segmenter: its own HTTP service, never Triton ----
     if profile.segmenter_name:

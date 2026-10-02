@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- `GET /ingest/region_drain` exposes `stall_reason` for a segmenter-only region profile
+  too (it reported no dependencies, so the reason stayed null while the segmenter was
+  down).
+- While OpenSearch is down the client's per-request tracebacks (one per poll per worker)
+  become one `opensearch unreachable` warning with doubling backoff up to 60 s.
 - Installer and CLI wording: an `images.lock` that still holds a development placeholder
   digest says so (this checkout is not a release; install one or pass `--image-tag`), and
   `openprocessor vlm status` prints the requested model on its `desired:` line (it printed

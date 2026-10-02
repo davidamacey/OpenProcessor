@@ -10,6 +10,7 @@ Provides:
 
 import logging
 import sys
+import time
 from contextvars import ContextVar
 from typing import Any
 
@@ -48,6 +49,67 @@ def clear_request_id() -> None:
     """Reset both ContextVar + structlog contextvars to defaults."""
     request_id_ctx.set('-')
     structlog.contextvars.unbind_contextvars('request_id')
+
+
+_OUTAGE_LOGGERS = ('opensearch', 'elastic_transport')
+
+
+class OutageLogFilter(logging.Filter):
+    """Turn the OpenSearch client's per-request connection failures (a full
+    traceback each) into one backed-off warning line: while OpenSearch is down
+    every poll of every worker would otherwise print one.
+
+    The first failure is logged at once, then at most one more after 1 s, 2 s,
+    4 s ... up to ``max_backoff_s``; after a quiet stretch it starts over.
+    """
+
+    def __init__(self, *, max_backoff_s: float = 60.0, clock: Any = time.monotonic) -> None:
+        super().__init__()
+        self._max = max_backoff_s
+        self._clock = clock
+        self._delay = 0.0
+        self._next_at = 0.0
+
+    @staticmethod
+    def _is_outage(exc: BaseException | None) -> bool:
+        from opensearchpy.exceptions import ConnectionError as OsConnectionError
+
+        while exc is not None:
+            if isinstance(exc, OsConnectionError | ConnectionError):
+                return True
+            exc = exc.__cause__ or exc.__context__
+        return False
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not record.name.startswith(_OUTAGE_LOGGERS) or not record.exc_info:
+            return True
+        if not self._is_outage(record.exc_info[1]):
+            return True
+        now = self._clock()
+        if now < self._next_at:
+            return False
+        quiet = now - self._next_at > self._max * 2
+        self._delay = 1.0 if quiet or not self._delay else min(self._delay * 2, self._max)
+        self._next_at = now + self._delay
+        record.msg = (
+            f'opensearch unreachable ({type(record.exc_info[1]).__name__}); '
+            f'retrying, repeats suppressed for {self._delay:.0f}s'
+        )
+        record.args = ()
+        record.exc_info = None
+        record.exc_text = None
+        return True
+
+
+def _install_outage_filter() -> None:
+    """On the client's own loggers, so it holds for every process that imports
+    this module (the API and each worker), configured or not."""
+    outage = OutageLogFilter()
+    for name in _OUTAGE_LOGGERS:
+        logging.getLogger(name).addFilter(outage)
+
+
+_install_outage_filter()
 
 
 def configure_logging(json_logs: bool = True, log_level: str = 'INFO') -> None:
