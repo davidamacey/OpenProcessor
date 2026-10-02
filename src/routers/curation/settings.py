@@ -125,7 +125,7 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
     from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     snapshot = store.current
     result: dict[str, str | None] = {}
     # W9: the third config-store axis is the project's VLM endpoint.
@@ -274,7 +274,7 @@ async def _resolve_config_store_axis(
     from src.services.curation.strategy_defaults import _advertised_ids_for_axis
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     current_ref = (
         store.current.active_pack if axis == 'prompt_pack' else store.current.active_profile
     )

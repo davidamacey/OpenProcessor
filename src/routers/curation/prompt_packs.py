@@ -194,7 +194,7 @@ async def validate_prompt_pack_route(
     body: PromptPackValidateRequest, opensearch: OpenSearchDep, profile: str | None = None
 ) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = all_known_names()
     report = validate_pack(
         body.name,
@@ -252,7 +252,7 @@ async def rollback_active_prompt_pack(
 @router.get('/prompt_packs', response_model=PromptPackList)
 async def list_prompt_packs(opensearch: OpenSearchDep) -> PromptPackList:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     names = all_known_names() - set(_template_names_only())
     packs = [build_record(name) for name in sorted(names)]
     templates = [
@@ -283,7 +283,7 @@ async def create_prompt_pack(
     body: PromptPackCreateRequest, opensearch: OpenSearchDep
 ) -> PromptPackDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = all_known_names()
     report = validate_pack(
         body.name,
@@ -323,7 +323,7 @@ async def create_prompt_pack(
 @router.get('/prompt_packs/{name}', response_model=PromptPackDoc)
 async def get_prompt_pack_route(name: str, opensearch: OpenSearchDep) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -467,7 +467,7 @@ async def save_prompt_pack(
     name: str, body: PromptPackSaveRequest, opensearch: OpenSearchDep
 ) -> PromptPackDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
@@ -511,7 +511,7 @@ async def delete_prompt_pack_route(
     from fastapi import Response
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -549,7 +549,7 @@ async def activate_prompt_pack_route(
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')

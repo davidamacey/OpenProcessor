@@ -211,7 +211,7 @@ async def validate_region_profile_route(
     body: RegionProfileValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
 ) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     report = await validate_profile(
         body.name,
         body.body.model_dump(),
@@ -322,7 +322,7 @@ async def list_region_profiles(
     opensearch: OpenSearchDep, include_templates: bool = False
 ) -> RegionProfileList:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     names = all_known_names() - set(_template_names_only())
     records = [build_record(name) for name in sorted(names)]
     templates: list[RegionProfileTemplateSummary] = []
@@ -356,7 +356,7 @@ async def create_region_profile(
     body: RegionProfileCreateRequest, opensearch: OpenSearchDep
 ) -> RegionProfileDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = all_known_names()
     report = await validate_profile(
         body.name,
@@ -396,7 +396,7 @@ async def create_region_profile(
 @router.get('/region_profiles/{name}', response_model=RegionProfileDoc)
 async def get_region_profile_route(name: str, opensearch: OpenSearchDep) -> Any:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -453,7 +453,7 @@ async def save_region_profile(
     name: str, body: RegionProfileSaveRequest, opensearch: OpenSearchDep
 ) -> RegionProfileDoc:
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
@@ -503,7 +503,7 @@ async def delete_region_profile_route(
     from fastapi import Response
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -536,7 +536,7 @@ async def activate_region_profile_route(
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
-    await store.ensure_fresh(opensearch)
+    await store.refresh(opensearch)
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')

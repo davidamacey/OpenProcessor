@@ -304,9 +304,11 @@ class ConfigStore:
         )
 
     async def ensure_fresh(self, client: Any, max_age_s: float = 1.0) -> ConfigSnapshot:
-        """Refresh only if the snapshot is older than ``max_age_s``. Every
-        async route that resolves a pack/profile by name calls this
-        first (§3.6)."""
+        """Refresh only if the snapshot is older than ``max_age_s``: for
+        read paths where a snapshot under a second old is fine (§3.6). A
+        route that looks a config up by *name* so a caller can act on what it
+        just wrote -- through another API worker -- calls :meth:`refresh`
+        instead, which always checks the revision counter."""
         if self.current.loaded_at and (time.monotonic() - self.current.loaded_at) < max_age_s:
             return self.current
         return await self.refresh(client)

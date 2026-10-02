@@ -296,3 +296,28 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
     r_get = app_client.get(f'{PREFIX}/cloned_from_other')
     assert r_get.status_code == 200
     assert r_get.json()['body']['detector_model'] == 'my_detector'
+
+
+def test_a_profile_created_through_another_worker_can_be_activated_at_once(
+    app_client: TestClient,
+) -> None:
+    """Found live (32 API workers): create on one worker, activate on another
+    within a second answered 404 -- the second worker's snapshot was under a
+    second old, so it never looked at the revision counter."""
+    import time
+    from dataclasses import replace
+
+    from src.services.config_store.store import get_config_store
+
+    r = app_client.post(PREFIX, json={'name': 'my_profile', 'description': '', 'body': _body()})
+    assert r.status_code == 201, r.text
+    store = get_config_store()
+    store.current = replace(
+        store.current, profiles={}, config_revision=0, loaded_at=time.monotonic()
+    )
+
+    r = app_client.post(
+        f'{PREFIX}/my_profile/activate', json={'expected_active': None, 'force': False}
+    )
+
+    assert r.status_code == 200, r.text

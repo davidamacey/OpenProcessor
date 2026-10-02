@@ -212,7 +212,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
             f'{len(body.crop_ids)} crop ids; at most {MAX_TEST_CROP_IDS}',
             limit=MAX_TEST_CROP_IDS,
         )
-    await get_config_store().ensure_fresh(opensearch)
+    await get_config_store().refresh(opensearch)
     profile = _profile_for(body.profile_name)
     if body.profile_name is not None and profile is None:
         raise api_error(422, 'unknown_profile', f'{body.profile_name!r} is not a known profile')
@@ -401,7 +401,7 @@ async def test_region_profile(
     is it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;
     409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429
     ``test_busy``. Writes nothing."""
-    await get_config_store().ensure_fresh(opensearch)
+    await get_config_store().refresh(opensearch)
     profile, revision, stamp_name, report = await _resolve_profile(opensearch, body)
     verify: VerifyContext | None = None
     verify_ref: tuple[PackTestPackRef, PackTestVlmRef] | None = None

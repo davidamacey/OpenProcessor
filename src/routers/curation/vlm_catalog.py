@@ -45,7 +45,7 @@ def _local_endpoint_name() -> str:
 
 async def _local_status(client: Any) -> VlmLocalStatus:
     store = get_global_config_store()
-    await store.ensure_fresh(client)
+    await store.refresh(client)
     name = _local_endpoint_name()
     endpoint = get_vlm_endpoint(name) if name else None
     probe = endpoint.last_probe if endpoint else None
