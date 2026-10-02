@@ -330,6 +330,8 @@ describe('/models sharing', () => {
       ),
     );
     expect(q('share-model-reloaded')).not.toBeNull();
+    // A stale revision is not an `in_use` refusal: no force is offered.
+    expect(q('share-model-force')).toBeNull();
     // The reload landed: the dialog now reads the fresh served entry.
     await vi.waitFor(() => expect(statusReads.length).toBeGreaterThanOrEqual(2));
     click('share-model-confirm');
@@ -374,6 +376,7 @@ describe('/models sharing', () => {
                 error: 'in_use',
                 message: "'own_det' is still used by 1 other project(s)",
                 projects: ['beta'],
+                used_by: [{ project: 'beta', profile: 'beta_tags' }],
               },
             },
             409,
@@ -382,7 +385,7 @@ describe('/models sharing', () => {
     click('model-share-toggle-own_det');
     click('share-model-confirm');
     await vi.waitFor(() =>
-      expect(q('share-model-in-use')?.textContent).toContain('beta'),
+      expect(q('share-model-in-use')?.textContent).toContain('beta (beta_tags)'),
     );
     click('share-model-force');
     // Arming only reveals the warning; nothing is sent until the confirm.

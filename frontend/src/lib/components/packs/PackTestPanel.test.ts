@@ -235,6 +235,24 @@ describe('PackTestPanel', () => {
     );
   });
 
+  it('a classify test with an empty registry shows the served 422 no_class_names detail', async () => {
+    const message = 'This project has no classes; pass class_names or add classes first.';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ detail: { error: 'no_class_names', message } }, 422)),
+    );
+    render(schemaFixture().calls);
+    const ids = q('test-crop-ids') as HTMLInputElement;
+    ids.value = 'c_1';
+    ids.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    (q('test-run') as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(q('test-error')?.querySelector('p')?.textContent).toBe(message),
+    );
+    expect(q('test-missing-ids')).toBeNull();
+  });
+
   describe('VLM picker', () => {
     async function runWith(setup: () => void) {
       strategiesStore.methods = parseMethodsResponse(VLM_WIRE);

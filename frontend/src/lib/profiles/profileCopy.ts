@@ -9,6 +9,7 @@ export const PROFILE_ACTIVE_COPY: ActivePanelCopy = {
   noneText: 'off: region detection is off',
   appliedColumn: 'Profile',
   appliedRef: 'profile',
+  appliedNoneText: 'none',
   rollbackTitle: 'Roll back the active region profile',
   rollbackBlurb:
     'Items still waiting are detected with the profile you roll back to. Items already processed keep their results. Workers switch at their next quiet point.',

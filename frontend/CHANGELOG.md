@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Backend finalization (OpenProcessor d00e8957).** Contracts re-vendored.
+  The unshare dialog's in_use refusal names each project with its served
+  profile (`used_by`), and the sharing 409/503 details are typed and pinned
+  (`ModelInUseDetail`, `ModelRevisionConflictDetail`,
+  `ModelSharingUnavailableDetail`); a stale-revision 409 offers no force.
+  `AppliedRuntime.vlm` is required-nullable: the active panels read a null
+  ref as "not reported" and a null VLM name as "no VLM". A region-profile
+  `enum` field whose choices come from `choices_from` (no static `enum`) now
+  renders a select instead of a read-only box.
 - **Combine next step result.** After a confirmed next step (e.g. Recluster)
   the job view now shows the served response in a "Last next step" block
   (action, status chip, scalar values, nested values collapsed) until the job

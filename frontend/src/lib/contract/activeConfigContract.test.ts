@@ -117,6 +117,26 @@ describe('ActiveConfigResponse', () => {
     ).toEqual(declared('AppliedRuntime'));
   });
 
+  it('AppliedRuntime.vlm is required and nullable: null means the worker never reported a VLM axis', () => {
+    const s = schemas['AppliedRuntime'] as Schema & { required: string[] };
+    expect(s.required).toEqual(expect.arrayContaining(['profile', 'pack', 'vlm']));
+    const vlm = s.properties!.vlm as { anyOf?: { type?: string; $ref?: string }[] };
+    expect(vlm.anyOf?.some((a) => a.type === 'null')).toBe(true);
+    expect(vlm.anyOf?.some((a) => a.$ref?.endsWith('/ActiveRef'))).toBe(true);
+    // Ours: profile and pack are always objects, vlm alone may be null.
+    const row: AppliedRuntime = {
+      process: 'p',
+      host: 'h',
+      applied_config_revision: 1,
+      profile: { name: null, revision: null },
+      pack: { name: null, revision: null },
+      vlm: null,
+      applied_at: null,
+      lagging: false,
+    };
+    expect(row.vlm).toBeNull();
+  });
+
   it('source and axis are exactly the served enums', () => {
     expect([...SOURCES].sort()).toEqual(enumOf('ActiveConfigResponse', 'source'));
     expect([...AXES].sort()).toEqual(enumOf('ActiveConfigResponse', 'axis'));

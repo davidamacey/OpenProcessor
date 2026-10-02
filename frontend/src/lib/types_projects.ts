@@ -10,6 +10,7 @@
  * Pinned key-for-key to the vendored OpenAPI by
  * `src/lib/contract/projectsContract.test.ts`.
  */
+import type { ModelSharingUser } from '$lib/types_models';
 
 export interface ProjectCounts {
   images: number;
@@ -197,6 +198,9 @@ export interface ProjectErrorDetail {
   hard_limit?: number | null;
   heap_max_bytes?: number | null;
   current_revision?: number | null;
+  /** 409 `in_use` on a model sharing write: each other project with the
+   *  profile that uses the model. */
+  used_by?: ModelSharingUser[] | null;
 }
 
 /** `GET|POST {prefix}/pause`, `POST {prefix}/resume` (projects P2,

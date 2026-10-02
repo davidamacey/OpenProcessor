@@ -9,6 +9,7 @@ export const VLM_ACTIVE_COPY: ActivePanelCopy = {
   noneText: 'off: no VLM runs for this project',
   appliedColumn: 'VLM',
   appliedRef: 'vlm',
+  appliedNoneText: 'no VLM',
   rollbackTitle: 'Roll back the VLM endpoint',
   rollbackBlurb:
     'Runs that start after this use the endpoint you roll back to. Labels the VLM already wrote keep their provenance. Workers switch at their next quiet point.',

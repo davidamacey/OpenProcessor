@@ -11,6 +11,7 @@ import {
   sharingRole,
   unmappedText,
   forceUnshareText,
+  usedByText,
   forceUnshareUnreadableText,
   unshareConfirmText,
 } from './modelSharing';
@@ -79,6 +80,12 @@ describe('copy', () => {
     expect(t).not.toMatch(/may be using it/i);
     expect(t).not.toMatch(/\bsafe/i);
     expect(shareConfirmText('alpha__det')).toMatch(/by name/);
+  });
+
+  it('usedByText names each project with its served profile', () => {
+    expect(
+      usedByText([{ project: 'beta', profile: 'beta_tags' }, { project: 'gamma' }]),
+    ).toBe('beta (beta_tags), gamma');
   });
 
   it('the forced-unshare warning names the served projects', () => {

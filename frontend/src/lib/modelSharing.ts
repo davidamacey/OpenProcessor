@@ -4,7 +4,7 @@
  * derives a mapping, a count or an owner.
  */
 import type { ModelInfo } from '$lib/types';
-import type { ModelClassMappingSummary } from '$lib/types_models';
+import type { ModelClassMappingSummary, ModelSharingUser } from '$lib/types_models';
 
 /**
  * `owner`: the server says this project owns the model (`owned`), so the
@@ -45,6 +45,13 @@ export function shareConfirmText(name: string): string {
  *  forced, so the copy promises nothing about safety. */
 export function unshareConfirmText(name: string): string {
   return `Stop sharing ${name}? The server refuses if another project's active detection profile uses it, and tells you which; you can then choose to unshare anyway.`;
+}
+
+/** The served `used_by` rows as `project (profile)`, comma-joined. */
+export function usedByText(users: ModelSharingUser[]): string {
+  return users
+    .map((u) => (u.profile ? `${u.project} (${u.profile})` : u.project))
+    .join(', ');
 }
 
 /** Shown once the operator has armed the forced retry. */

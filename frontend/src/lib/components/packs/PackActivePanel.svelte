@@ -6,6 +6,7 @@
     noneText: 'none: the deployment default applies',
     appliedColumn: 'Pack',
     appliedRef: 'pack',
+    appliedNoneText: 'none',
     rollbackTitle: 'Roll back the active pack',
     rollbackBlurb:
       "Every VLM step that doesn't pick its own pack uses the active pack. Workers switch at their next quiet point.",

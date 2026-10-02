@@ -8,6 +8,8 @@
  * here is pinned to the vendored OpenAPI yet.
  */
 
+import type { ModelSharingUser } from '$lib/types_models';
+
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
 /** §7.1 `ValidationIssue`. `field` is a dotted path; null = whole body. */
@@ -43,7 +45,9 @@ export type ConfigSource =
   'builtin' | 'file' | 'stored' | 'template' | 'env' | 'registered' | (string & {});
 
 /** `ActiveConfigResponse.source`: where the active value came from. `off`
- *  is an explicit deactivation, distinct from `env` (never activated). */
+ *  is an explicit deactivation, distinct from `env` (never activated; the
+ *  env/file default applies and `active.name` names it, nameless only when
+ *  no env default is configured). */
 export type ActiveSource = 'stored' | 'env' | 'off';
 
 /** `ActiveConfigResponse.axis`. */
@@ -54,9 +58,11 @@ export interface AppliedRuntime {
   process: string;
   host: string;
   applied_config_revision: number;
-  profile?: ActiveRef | null;
-  pack?: ActiveRef | null;
-  vlm?: ActiveRef | null;
+  profile: ActiveRef;
+  pack: ActiveRef;
+  /** `null`: the worker never reported a VLM axis. `{name: null,
+   *  revision: null}`: it reported "no VLM". */
+  vlm: ActiveRef | null;
   applied_at: string | null;
   lagging: boolean;
 }
@@ -156,6 +162,8 @@ export interface ConfigErrorDetail {
   activate_via?: string | null;
   requested?: string | null;
   projects?: string[] | null;
+  /** 409 `in_use` on a model sharing write: each project with its profile. */
+  used_by?: ModelSharingUser[] | null;
   crop_ids?: string[] | null;
   limit?: number | null;
   jobs?: ConfigErrorJobRef[] | null;

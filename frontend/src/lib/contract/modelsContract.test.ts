@@ -42,6 +42,27 @@ const CASES: [string, string[]][] = [
     >),
   ],
   [
+    'ModelInUseDetail',
+    keys({ error: true, message: true, projects: true, used_by: true } satisfies Record<
+      keyof M.ModelInUseDetail,
+      true
+    >),
+  ],
+  [
+    'ModelRevisionConflictDetail',
+    keys({ error: true, message: true, current_revision: true } satisfies Record<
+      keyof M.ModelRevisionConflictDetail,
+      true
+    >),
+  ],
+  [
+    'ModelSharingUnavailableDetail',
+    keys({ error: true, message: true } satisfies Record<
+      keyof M.ModelSharingUnavailableDetail,
+      true
+    >),
+  ],
+  [
     'ModelClassMappingResponse',
     keys({
       model: true,
@@ -83,6 +104,40 @@ describe('types_models.ts matches the vendored OpenAPI', () => {
       'expected_revision',
       'shared',
     ]);
+  });
+
+  it('the sharing write publishes a typed 409 and 503 whose detail codes are ours', () => {
+    const op = (
+      spec as unknown as {
+        paths: Record<string, Record<string, { responses: Record<string, unknown> }>>;
+      }
+    ).paths['/curation/projects/{project}/models/{model_name}/sharing']!.put!;
+    const ref = (code: string) =>
+      JSON.stringify(op.responses[code]).match(/schemas\/(\w+)/)?.[1];
+    expect(ref('409')).toBe('ModelSharingConflictResponse');
+    expect(ref('503')).toBe('ModelSharingUnavailableResponse');
+
+    type Const = { const?: string };
+    const code = (name: string) => (schemas[name]!.properties!.error as Const).const;
+    const ours: Record<
+      string,
+      M.ModelSharingConflictDetail['error'] | 'config_store_unavailable'
+    > = {
+      ModelInUseDetail: 'in_use',
+      ModelRevisionConflictDetail: 'revision_conflict',
+      ModelSharingUnavailableDetail: 'config_store_unavailable',
+    };
+    for (const [name, c] of Object.entries(ours)) expect(code(name)).toBe(c);
+
+    const conflict = schemas.ModelSharingConflictResponse!.properties!.detail as {
+      anyOf: { $ref: string }[];
+    };
+    expect(conflict.anyOf.map((a) => a.$ref.split('/').pop()).sort()).toEqual([
+      'ModelInUseDetail',
+      'ModelRevisionConflictDetail',
+    ]);
+    // `in_use` names each project with its profile, not just the slug.
+    expect(schemas.ModelInUseDetail!.required).toContain('used_by');
   });
 
   it('the served match kinds are exactly ModelClassMatch', () => {

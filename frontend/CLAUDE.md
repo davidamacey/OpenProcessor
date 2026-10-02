@@ -394,7 +394,7 @@ before the backend ships it.
   models live in `src/lib/types_config.ts`); routes
   resolve for real in `endpointCatalog.test.ts`; `ActiveConfigResponse`'s
   `source`/`activated_at`/`applied[]` are required (served since W2) and
-  `AppliedRuntime` also carries the optional `vlm` ref. Refusals render `configErrorText` (the served `message`).
+  `AppliedRuntime.vlm` is required-nullable (OpenProcessor d00e8957): `null` renders "not reported" (the worker never reported a VLM axis), a null name renders the axis's `appliedNoneText` ("no VLM"). Refusals render `configErrorText` (the served `message`).
 - **Shared with the region-profile editor** (W4, below): the pack
   modules are thin bindings of `src/lib/config/` (`ConfigActive`,
   `ConfigEditor`, `ConfigList`, `ConfigAvailability`, `validationIssues`)
@@ -1571,8 +1571,8 @@ rendered). `ShareModelDialog.svelte` confirms, then
 `PUT {API_PREFIX}/models/{name}/sharing` with the served sharing revision as
 `expected_revision` (`$lib/models/modelSharingController.svelte.ts`);
 refusals show the served message, a 409 `revision_conflict` reloads the
-list so the retry carries the fresh revision, and a 409 `in_use` lists the
-served projects (those whose ACTIVE detection profile uses the model) and
+list so the retry carries the fresh revision, and a 409 `in_use` lists each
+served `used_by` project with its profile (typed `ModelInUseDetail`; those whose ACTIVE detection profile uses the model) and
 offers a confirm-gated "Unshare anyway" that retries with `?force=true`
 (arming it shows a warning and sends nothing); a 503
 `config_store_unavailable` (the server could not read every project, only

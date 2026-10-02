@@ -9,6 +9,8 @@
     appliedColumn: string;
     /** Which applied-runtime ref this axis names. */
     appliedRef: 'pack' | 'profile' | 'vlm';
+    /** An applied ref the worker reported with `name: null`. */
+    appliedNoneText: string;
     rollbackTitle: string;
     rollbackBlurb: string;
     /** Present for a resource with a deactivate route. */
@@ -58,6 +60,14 @@
 
   function refText(ref: ActiveRef | null | undefined): string {
     if (!ref || ref.name == null) return 'none';
+    return ref.revision == null ? ref.name : `${ref.name} r${ref.revision}`;
+  }
+
+  /** An applied ref: `null` is a worker that never reported the axis
+   *  (served only for `vlm`); a null name is a reported "nothing here". */
+  function appliedRefText(ref: ActiveRef | null | undefined): string {
+    if (ref == null) return 'not reported';
+    if (ref.name == null) return copy.appliedNoneText;
     return ref.revision == null ? ref.name : `${ref.name} r${ref.revision}`;
   }
 
@@ -148,7 +158,8 @@
               <tr class="border-t border-zinc-800">
                 <td class="py-0.5 pr-3">{r.process}</td>
                 <td class="py-0.5 pr-3 font-mono">{r.host}</td>
-                <td class="py-0.5 pr-3 font-mono">{refText(r[copy.appliedRef])}</td>
+                <td class="py-0.5 pr-3 font-mono">{appliedRefText(r[copy.appliedRef])}</td
+                >
                 <td class="py-0.5 pr-3 font-mono">{r.applied_config_revision}</td>
                 <td class="py-0.5 pr-3 font-mono" data-testid="applied-at"
                   >{formatTimestamp(r.applied_at)}</td

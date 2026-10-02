@@ -16,9 +16,11 @@
     forceUnshareUnreadableText,
     shareConfirmText,
     unshareConfirmText,
+    usedByText,
   } from '$lib/modelSharing';
   import type { ModelSharing } from '$lib/models/modelSharingController.svelte';
   import type { ModelInfo } from '$lib/types';
+  import type { ModelSharingUser } from '$lib/types_models';
   import { toastStore } from '$stores/toast.svelte';
 
   interface Props {
@@ -30,7 +32,7 @@
 
   let errorText = $state<string | null>(null);
   let conflict = $state(false);
-  let inUse = $state<string[] | null>(null);
+  let inUse = $state<ModelSharingUser[] | null>(null);
   let unreadable = $state(false);
   let forceArmed = $state(false);
   let openFor = $state<string | null>(null);
@@ -58,9 +60,7 @@
         (res.response.shared
           ? `${res.response.name} is shared with other projects.`
           : `${res.response.name} is no longer shared.`) +
-          (users.length
-            ? ` Used by: ${users.map((u) => (u.profile ? `${u.project} (${u.profile})` : u.project)).join(', ')}.`
-            : ''),
+          (users.length ? ` Used by: ${usedByText(users)}.` : ''),
       );
       onclose();
       return;
@@ -68,7 +68,7 @@
     forceArmed = false;
     errorText = res.message;
     conflict = res.code === 'revision_conflict';
-    inUse = res.code === 'in_use' ? res.projects : null;
+    inUse = res.code === 'in_use' ? res.usedBy : null;
     unreadable = res.code === 'config_store_unavailable' && model.shared;
   }
 </script>
@@ -110,12 +110,14 @@
           {#if inUse || unreadable}
             {#if inUse?.length}
               <p class="mt-1 text-zinc-400" data-testid="share-model-in-use">
-                Used by: {inUse.join(', ')}
+                Used by: {usedByText(inUse)}
               </p>
             {/if}
             {#if forceArmed}
               <p class="mt-2 text-amber-300" data-testid="share-model-force-warning">
-                {inUse ? forceUnshareText(inUse) : forceUnshareUnreadableText()}
+                {inUse
+                  ? forceUnshareText(inUse.map((u) => u.project))
+                  : forceUnshareUnreadableText()}
               </p>
               <button
                 type="button"
