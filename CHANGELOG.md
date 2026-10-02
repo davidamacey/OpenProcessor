@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- **Dataset format auto-detection** (#39): `images/` next to `annotations/*.json` (no
+  `labels/` directory) is detected as COCO instead of YOLO; a `labels/` directory still
+  marks YOLO. The docs no longer say a COCO layout must name its format.
+- `POST /reprocess` with `scope: region` and `missing_status` queues, and counts, only
+  the items whose class is one of the active profile's parent classes (it used to count
+  every item with no region status) (#39).
 - `PUT /models/{name}/sharing` fills `used_by` from every other project's live active
   detection profile (read-only, one project at a time, configs index only) instead of
   always `[]`. Unsharing a model another project runs on is `409 in_use` (naming the

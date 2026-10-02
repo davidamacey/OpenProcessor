@@ -632,8 +632,8 @@ curl -s -X POST $API/datasets/imports -H 'content-type: application/json' -d '{
 }' | jq '{import_id, status}'
 ```
 
-A COCO layout must name its format (`"format": "coco"`): `images/` next to
-`annotations/` is not auto-detected. Options: `label_trust` (`validated` or
+A COCO layout (`images/` next to `annotations/*.json`, no `labels/`) is
+detected without naming its format; `"format": "coco"` forces it. Options: `label_trust` (`validated` or
 `suggestion`), `missing_label` (`unlabeled` or `negative`), `processing`
 (`none` or `propose` to run the detector), `parents`, `region_containment`,
 `freeze_test_split`, `source_tag`, `force`.

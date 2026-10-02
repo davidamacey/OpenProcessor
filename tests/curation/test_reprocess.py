@@ -404,3 +404,31 @@ def _factory(service: Any) -> Any:
         return service
 
     return build
+
+
+@pytest.mark.asyncio
+async def test_region_missing_status_counts_only_items_the_active_profile_seeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An item with no region status is queued only when its class is one of
+    the active profile's parent classes (ingest would never have seeded the
+    others, so the worker would never pick them up)."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        'src.services.curation.reprocess_region.get_active_region_profile',
+        lambda: SimpleNamespace(parent_classes=('car',)),
+    )
+    corpus = [
+        item('c1', None, class_id=1, class_name='car'),
+        item('c2', None, class_id=1, class_name='CAR'),
+        item('p1', None, class_id=2, class_name='person'),
+    ]
+    fake = make_fake(corpus)
+    filt = ReprocessFilter(missing_status=True)
+    resp = await apply_reprocess(fake, _req(scopes=['region'], filt=filt, dry_run=False))
+    region = _result(resp, 'region')
+    assert (region.selected, region.queued) == (2, 2)
+    after = docs(fake)
+    assert after['p1'].get(F.status) is None
+    assert after['c1'][F.status] == RegionStatus.PENDING_DETECTION.value

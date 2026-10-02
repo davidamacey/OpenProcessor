@@ -106,13 +106,18 @@ def detect_format(root: Path) -> DatasetFormat:
     for name in ('data.yaml', 'data.yml', 'dataset.yaml'):
         if (root / name).is_file():
             return 'yolo'
+    annotations_dir = root / 'annotations'
+    has_coco_json = annotations_dir.is_dir() and any(annotations_dir.glob('*.json'))
+    # `images/` + `annotations/*.json` is the usual COCO layout; a `labels/`
+    # directory is what marks `images/` as YOLO's.
+    if has_coco_json and not (root / 'labels').is_dir():
+        return 'coco'
     if (root / 'images').is_dir():
         return 'yolo'
     for child in sorted(root.iterdir()) if root.is_dir() else ():
         if child.is_dir() and (child / 'images').is_dir():
             return 'yolo'
-    annotations_dir = root / 'annotations'
-    if annotations_dir.is_dir() and any(annotations_dir.glob('*.json')):
+    if has_coco_json:
         return 'coco'
     raise FormatUndetectedError(str(root))
 
