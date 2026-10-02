@@ -360,3 +360,56 @@ def test_the_help_lists_every_subcommand(shimmed: Shimmed, stack: Path) -> None:
     result = cli(shimmed, stack, 'help')
     text = result.stdout + result.stderr
     assert 'vlm list|status|use <id> [--force] [--yes]|apply|probe|key set <slug>' in text
+
+
+# ---- clients pick up a changed image cap; Ctrl-C undoes the switch -------------
+
+
+def test_a_changed_image_cap_recreates_the_running_clients(shimmed: Shimmed, stack: Path) -> None:
+    set_env(
+        stack,
+        VLM_SERVED_MODEL_NAME='local-vlm',
+        OP_VLM_MODEL='local-vlm',
+        OP_VLM_MAX_IMAGES_PER_CALL='4',
+    )
+    (shimmed.state / 'running_services').write_text('yolo-api\ncuration-vlm-worker\nsegmenter\n')
+    assert use(shimmed, stack).returncode == 0
+    assert env_value(stack, 'OP_VLM_MAX_IMAGES_PER_CALL') == '8'
+    assert [c for c in compose_calls(shimmed) if 'up -d' in c] == [
+        'up -d vlm yolo-api curation-vlm-worker'
+    ]
+
+
+def test_an_interrupt_removes_the_pause_and_restores_env(shimmed: Shimmed, stack: Path) -> None:
+    import os
+    import signal
+    import subprocess
+    import time
+
+    (shimmed.state / 'up_hangs').write_text('')
+    before = (stack / '.env').read_text()
+    proc = subprocess.Popen(
+        [str(stack / 'openprocessor'), 'vlm', 'use', QWEN, '--yes'],
+        cwd=str(shimmed.root),
+        env=shimmed.env(SHIM_VLM_ROOT=QWEN_REPO, **WAIT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while not (shimmed.state / 'up_started').exists():
+            assert proc.poll() is None, proc.communicate()[0]
+            assert time.monotonic() < deadline
+            time.sleep(0.1)
+        assert (shimmed.state / 'pause_sentinel').exists()
+        os.killpg(proc.pid, signal.SIGINT)
+        output, _ = proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+    assert proc.returncode == 130, output
+    assert not (shimmed.state / 'pause_sentinel').exists()
+    assert (stack / '.env').read_text() == before
+    assert sorted(p.name for p in stack.glob('.env*')) == ['.env']

@@ -153,12 +153,13 @@ _vlm_wait_served() {
     return 1
 }
 
-# _vlm_recreate_targets -> services to recreate: vlm plus (when the served
-# alias changes) every already-running service that reads OP_VLM_MODEL
+# _vlm_recreate_targets CLIENTS -> services to recreate: vlm plus (when CLIENTS
+# is 1: the served alias or the per-call image cap changes) every
+# already-running service that reads OP_VLM_MODEL / OP_VLM_MAX_IMAGES_PER_CALL
 _vlm_recreate_targets() {
-    local migrate="$1" svc running
+    local clients="$1" svc running
     echo vlm
-    [[ "$migrate" == 1 ]] || return 0
+    [[ "$clients" == 1 ]] || return 0
     running="$(dc ps --services --status running 2>/dev/null || true)"
     for svc in yolo-api curation-detection-worker curation-vlm-worker curation-auto-label-worker; do
         [[ $'\n'"$running"$'\n' == *$'\n'"$svc"$'\n'* ]] && echo "$svc"
@@ -196,8 +197,37 @@ _vlm_probe() {
     printf '%s' "$body" | grep -o '"message":"[^"]*"' | sed 's/^"message":"/  warning: /;s/"$//' || true
 }
 
+# State the interrupt handler needs: what this run changed so far.
+_VLM_PAUSE_OWNED=0
+_VLM_ENV_BACKUP=""
+
+# Ctrl-C / SIGTERM mid-switch: remove the pause this run created and put the
+# previous .env back, so the workers are not left paused.
+_vlm_on_signal() {
+    trap - INT TERM
+    log_warn "interrupted: undoing what this switch changed"
+    if [[ -n "$_VLM_ENV_BACKUP" && -f "$_VLM_ENV_BACKUP" ]]; then
+        cp -p "$_VLM_ENV_BACKUP" "${PROJECT_DIR}/.env" && chmod 600 "${PROJECT_DIR}/.env"
+        rm -f "$_VLM_ENV_BACKUP"
+    fi
+    (( _VLM_PAUSE_OWNED == 1 )) && _vlm_in_api pause-remove
+    log_info "re-run 'openprocessor vlm use <id>' (or 'vlm apply') to finish the switch"
+    exit 130
+}
+
 # _vlm_use ID [--force] [--yes]
 _vlm_use() {
+    local rc
+    _VLM_PAUSE_OWNED=0
+    _VLM_ENV_BACKUP=""
+    trap _vlm_on_signal INT TERM
+    _vlm_switch "$@"
+    rc=$?
+    trap - INT TERM
+    return "$rc"
+}
+
+_vlm_switch() {
     local id="" force=0 yes=0 arg
     for arg in "$@"; do
         case "$arg" in
@@ -257,9 +287,14 @@ _vlm_use() {
         return 1
     fi
 
-    local migrate=0 current_alias
+    local migrate=0 current_alias clients=0 old_max new_max
     current_alias="$(_env_value VLM_SERVED_MODEL_NAME)"
     [[ "$current_alias" == "$VLM_ALIAS" ]] || migrate=1
+    # The API and workers read the image cap when they start, so a changed cap
+    # needs them recreated too (the compose default is 8).
+    old_max="$(_env_value OP_VLM_MAX_IMAGES_PER_CALL)"; old_max="${old_max:-8}"
+    new_max="$(vlm_catalog_field "$id" max_images)"
+    { (( migrate == 1 )) || [[ "$old_max" != "$new_max" ]]; } && clients=1
     if (( migrate == 1 )); then
         log_warn "this install still serves the model as '${current_alias:-the compose default}': this one time the API and workers are recreated too, so they send '${VLM_ALIAS}'"
     fi
@@ -277,6 +312,7 @@ _vlm_use() {
         return 1
     fi
     [[ "$paused" == created ]] && created_pause=1
+    _VLM_PAUSE_OWNED=$created_pause
 
     # 4. .env, with a backup to restore on failure
     local backup targets
@@ -285,22 +321,23 @@ _vlm_use() {
         (( created_pause == 1 )) && _vlm_in_api pause-remove
         return 1
     }
+    _VLM_ENV_BACKUP="$backup"
     _vlm_write_env "$id" "$hf_repo" "$image" "$gpu_id" "$total_mib" "$migrate" || {
-        _vlm_fail "$backup" "$created_pause" "$migrate"
+        _vlm_fail "$backup" "$created_pause" "$clients"
         return 1
     }
-    readarray -t targets < <(_vlm_recreate_targets "$migrate")
+    readarray -t targets < <(_vlm_recreate_targets "$clients")
 
     # 5. recreate and wait until the new model is really served
     log_info "recreating: ${targets[*]}"
     if ! dc up -d "${targets[@]}"; then
         log_error "docker compose could not recreate ${targets[*]}"
-        _vlm_fail "$backup" "$created_pause" "$migrate"
+        _vlm_fail "$backup" "$created_pause" "$clients"
         return 1
     fi
     if ! _vlm_wait_served "$hf_repo"; then
         log_error "the vlm container did not serve ${hf_repo} as '${VLM_ALIAS}' in time"
-        _vlm_fail "$backup" "$created_pause" "$migrate"
+        _vlm_fail "$backup" "$created_pause" "$clients"
         return 1
     fi
 
@@ -308,7 +345,7 @@ _vlm_use() {
     local probe_out
     if ! probe_out="$(_vlm_api POST "/curation/vlm/endpoints/${endpoint}/probe")"; then
         log_error "the new model is up but probing '${endpoint}' failed: ${probe_out}"
-        _vlm_fail "$backup" "$created_pause" "$migrate"
+        _vlm_fail "$backup" "$created_pause" "$clients"
         return 1
     fi
     _vlm_api DELETE /curation/vlm/local/select >/dev/null || log_warn "could not clear the desired-model request"
@@ -342,13 +379,13 @@ _vlm_write_env() {
     fi
 }
 
-# _vlm_fail BACKUP CREATED_PAUSE MIGRATE -- put .env and the container back
+# _vlm_fail BACKUP CREATED_PAUSE CLIENTS -- put .env and the container back
 _vlm_fail() {
-    local backup="$1" created_pause="$2" migrate="$3" targets
+    local backup="$1" created_pause="$2" clients="$3" targets
     log_warn "restoring the previous .env and recreating the vlm container on it"
     cp -p "$backup" "${PROJECT_DIR}/.env" && chmod 600 "${PROJECT_DIR}/.env"
     rm -f "$backup"
-    readarray -t targets < <(_vlm_recreate_targets "$migrate")
+    readarray -t targets < <(_vlm_recreate_targets "$clients")
     dc up -d "${targets[@]}" || log_error "could not recreate ${targets[*]} on the old values; run 'docker compose up -d vlm' yourself"
     (( created_pause == 1 )) && _vlm_in_api pause-remove || true
 }

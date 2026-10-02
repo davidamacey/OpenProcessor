@@ -34,6 +34,7 @@ from src.services.curation.autolabel.selection import unvalidated_count_query, v
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.event_hub import publish_crop_classified
+from src.services.labeling.vlm_factory import assert_may_connect
 
 
 # Fields the VLM sweep reads per unvalidated item.
@@ -435,6 +436,8 @@ async def _run_auto_label(
         pinned_revision=vlm_endpoint_revision,
         resolved=vlm_resolved,
     )
+    if endpoint is not None:
+        await assert_may_connect(endpoint)
     labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision, endpoint=endpoint)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 

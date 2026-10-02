@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from src.core.logging import get_logger
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
 from src.services.labeling.vlm_url_policy import (
     Locality,
@@ -39,6 +40,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from src.services.config_store.store import ConfigSnapshot, StoredConfig
+
+logger = get_logger(__name__)
 
 ENV_ENDPOINT_NAME = 'env'
 ENV_KEY_REF = 'env:OP_VLM_API_KEY'
@@ -266,7 +269,11 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
         return None
     # Credentials in the URL are dropped here, at the source, so no route,
     # log line or labeler ever sees them (the key goes in OP_VLM_API_KEY).
-    url = strip_userinfo(raw_url).rstrip('/')
+    try:
+        url = strip_userinfo(raw_url).rstrip('/')
+    except ValueError as exc:  # e.g. a non-numeric port: not a usable URL
+        logger.warning('vlm_env_url_invalid', error=str(exc))
+        return None
     base = VlmEndpointBody(
         base_url=url,
         model=os.environ.get('OP_VLM_MODEL', '').strip(),

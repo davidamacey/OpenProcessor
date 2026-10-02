@@ -15,16 +15,22 @@ Every labeler also re-checks its endpoint before sending, at most once per
 :data:`_RECHECK_S` (:func:`_assert_may_connect`): a host's DNS can change
 after the endpoint was validated, and a worker's or a cached labeler is long
 lived. A refusal is sticky until the host is acceptable again (fail closed).
-A labeler that a newer key replaced is closed only after ``timeout_s + 10``
-seconds, so an in-flight call is never cut off mid-request.
+A labeler the cache dropped keeps its HTTP client open for as long as anything
+still references it (a long job, a call in flight) and is closed once the last
+reference is gone, so a call is never cut off mid-request.
+
+DNS lookups never run on the event loop: :func:`assert_may_connect` runs the
+host check in a worker thread, and the labeler's own pre-send re-check awaits it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import time
+import weakref
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
@@ -36,7 +42,7 @@ from src.services.labeling.vlm_url_policy import compute_locality, url_denial
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack
@@ -44,8 +50,11 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _CACHE_MAX = 32
-_CLOSE_GRACE_S = 10.0
 _RECHECK_S = 30.0
+#: How long an async pre-check vouches for the endpoint, so the synchronous
+#: build that follows it does not resolve DNS again on the event loop.
+_PRECHECK_FRESH_S = 5.0
+_PRECHECKED: dict[str, float] = {}
 _LABELERS: OrderedDict[tuple[Any, ...], VlmLabeler] = OrderedDict()
 _CLOSING: set[asyncio.Task[None]] = set()
 
@@ -72,22 +81,36 @@ def _cache_key(endpoint: VlmEndpoint, pack: PromptPack) -> tuple[Any, ...]:
     )
 
 
-def _schedule_close(labeler: VlmLabeler) -> None:
+def _start_close(close: Callable[[], Awaitable[None]]) -> None:
+    async def _run() -> None:
+        try:
+            await close()
+        except Exception as exc:
+            logger.warning('vlm_labeler_close_failed', error=str(exc))
+
+    task = asyncio.get_running_loop().create_task(_run())
+    _CLOSING.add(task)
+    task.add_done_callback(_CLOSING.discard)
+
+
+def _close_when_collected(
+    loop: asyncio.AbstractEventLoop, close: Callable[[], Awaitable[None]]
+) -> None:
+    """Runs when the dropped labeler is garbage collected (any thread)."""
+    with contextlib.suppress(RuntimeError):  # loop already closed: the client goes with it
+        loop.call_soon_threadsafe(_start_close, close)
+
+
+def _retire(labeler: VlmLabeler) -> None:
+    """Close ``labeler``'s HTTP client once nothing references the labeler any
+    more. A job that fetched it keeps it (and the client) alive however long
+    it runs, and a call in flight holds it through its own frame."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return  # no loop (sync caller): the client is released with the labeler
-
-    async def _close_later() -> None:
-        await asyncio.sleep(labeler.timeout_s + _CLOSE_GRACE_S)
-        try:
-            await labeler.aclose()
-        except Exception as exc:
-            logger.warning('vlm_labeler_close_failed', error=str(exc))
-
-    task = loop.create_task(_close_later())
-    _CLOSING.add(task)
-    task.add_done_callback(_CLOSING.discard)
+    finalizer = weakref.finalize(labeler, _close_when_collected, loop, labeler.client_closer())
+    finalizer.atexit = False
 
 
 def _assert_may_connect(endpoint: VlmEndpoint) -> None:
@@ -110,16 +133,34 @@ def _assert_may_connect(endpoint: VlmEndpoint) -> None:
         raise VlmEndpointDeniedError(refusals[0].message)
 
 
-def _egress_check(endpoint: VlmEndpoint) -> Callable[[], None]:
-    """The labeler's pre-send check: :func:`_assert_may_connect`, throttled
-    to once per :data:`_RECHECK_S` while it keeps passing."""
+async def assert_may_connect(endpoint: VlmEndpoint) -> None:
+    """:func:`_assert_may_connect` with its DNS lookups in a worker thread.
+    A pass is remembered for :data:`_PRECHECK_FRESH_S`, so the synchronous
+    :func:`labeler_for` an async caller makes next does not resolve again on
+    the event loop."""
+    if endpoint.source == 'env':
+        return
+    await asyncio.to_thread(_assert_may_connect, endpoint)
+    if len(_PRECHECKED) > 256:
+        _PRECHECKED.clear()
+    _PRECHECKED[endpoint.ref] = time.monotonic()
+
+
+def _prechecked(endpoint: VlmEndpoint) -> bool:
+    at = _PRECHECKED.get(endpoint.ref)
+    return at is not None and time.monotonic() - at < _PRECHECK_FRESH_S
+
+
+def _egress_check(endpoint: VlmEndpoint) -> Callable[[], Awaitable[None]]:
+    """The labeler's pre-send check: :func:`assert_may_connect`, throttled to
+    once per :data:`_RECHECK_S` while it keeps passing."""
     checked_at = time.monotonic()
 
-    def check() -> None:
+    async def check() -> None:
         nonlocal checked_at
         if time.monotonic() - checked_at < _RECHECK_S:
             return
-        _assert_may_connect(endpoint)
+        await assert_may_connect(endpoint)
         checked_at = time.monotonic()
 
     return check
@@ -128,7 +169,8 @@ def _egress_check(endpoint: VlmEndpoint) -> Callable[[], None]:
 def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
     body = endpoint.body
     is_env = endpoint.source == 'env'
-    _assert_may_connect(endpoint)
+    if not _prechecked(endpoint):
+        _assert_may_connect(endpoint)
     key = resolve_api_key(body.api_key_ref, is_env_builtin=is_env)
     if key is None and body.api_key_ref is not None and not is_env:
         msg = f'endpoint {endpoint.name!r}: the secret {body.api_key_ref!r} is missing or empty'
@@ -161,7 +203,7 @@ def labeler_for(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
     labeler = _build(endpoint, pack)
     _LABELERS[key] = labeler
     while len(_LABELERS) > _CACHE_MAX:
-        _schedule_close(_LABELERS.popitem(last=False)[1])
+        _retire(_LABELERS.popitem(last=False)[1])
     return labeler
 
 
@@ -174,11 +216,13 @@ def build_uncached_labeler(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabele
 def reset_labeler_cache() -> None:
     """Test-only."""
     _LABELERS.clear()
+    _PRECHECKED.clear()
 
 
 __all__ = [
     'VlmEndpointDeniedError',
     'VlmIdentity',
+    'assert_may_connect',
     'build_uncached_labeler',
     'labeler_for',
     'reset_labeler_cache',

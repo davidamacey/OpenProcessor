@@ -94,6 +94,7 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
     VLM is off."""
     from src.routers.curation.pipeline_vlm import labeler_unavailable, resolve_run_vlm
     from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
+    from src.services.labeling.vlm_factory import assert_may_connect
 
     pack_name = await _default_pack_name(opensearch)
     run = await resolve_run_vlm(
@@ -103,6 +104,8 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
         acknowledge_external=acknowledge_external,
     )
     try:
+        if run.endpoint is not None:
+            await assert_may_connect(run.endpoint)
         return _get_vlm_labeler(pack_name, endpoint=run.endpoint)
     except VlmEndpointUnavailableError as exc:
         raise labeler_unavailable(exc) from exc

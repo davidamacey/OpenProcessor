@@ -77,6 +77,9 @@ async def vlm_status(client: Any = None, *, scoped: bool = True) -> dict[str, An
         if endpoint is None:
             status['detail'] = 'no VLM endpoint is configured'
             return status
+        from src.services.labeling.vlm_factory import assert_may_connect
+
+        await assert_may_connect(endpoint)
         if scoped:
             labeler = _get_vlm_labeler(endpoint=endpoint)
         else:

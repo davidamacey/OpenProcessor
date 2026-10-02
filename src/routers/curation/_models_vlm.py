@@ -39,10 +39,11 @@ async def _refresh() -> None:
 
 
 async def _live_health(endpoint: VlmEndpoint) -> tuple[str, str | None]:
-    from src.services.labeling.vlm_factory import labeler_for
+    from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
     from src.services.labeling.vlm_prompts import active_prompt_pack
 
     try:
+        await assert_may_connect(endpoint)
         health = await labeler_for(endpoint, active_prompt_pack()).health()
     except Exception as exc:
         return 'unavailable', str(exc)

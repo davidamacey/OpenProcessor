@@ -15,6 +15,8 @@
 #   training_lock       present -> `compose exec ... lock-check` finds the GPU lock
 #   pause_sentinel      the shared pause sentinel: `compose exec ... pause-create`
 #                       prints created/present, `pause-remove` deletes it
+#   up_hangs            present -> `compose up` creates up_started and blocks (a
+#                       long recreate a test can interrupt)
 # Writes mutations.log: every state-changing call, whether allowed or not.
 set -u
 state="${SHIM_STATE:?}"
@@ -221,6 +223,10 @@ JSON
                     ;;
                 *) refuse compose exec ;;
             esac
+            ;;
+        up)
+            refuse compose up
+            if [[ -e "${state}/up_hangs" ]]; then : > "${state}/up_started"; sleep 30; fi
             ;;
         images|ls|logs|port|top)
             ;;

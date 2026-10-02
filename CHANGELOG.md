@@ -27,6 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- **W9 follow-ups** (#38).
+  - A malformed `OP_VLM_URL` port (`http://h:abc`) means "no env endpoint" instead of a
+    500 from `/vlm/endpoints` and `vlm_configured()`.
+  - Probe docs are read page by page (`search_after`) so more than 1000 no longer drop
+    off the registry, and a probe doc with no `probe_key` is skipped with a warning.
+  - A labeler the cache evicts keeps its HTTP client open while anything still holds it
+    (a long auto-label job) and is closed once the last reference is gone, replacing the
+    fixed close delay.
+  - The endpoint host check (DNS) runs in a worker thread: `assert_may_connect` for the
+    VLM routes, the auto-label job and the model-status probe, and the labeler's own
+    pre-send re-check no longer resolve on the event loop.
+  - `openprocessor vlm use` undoes its pause and `.env` edit on Ctrl-C or SIGTERM, and
+    recreates the running API and workers when the model's image cap
+    (`OP_VLM_MAX_IMAGES_PER_CALL`) changes, not only on the first alias migration.
 - **A settings-document `prompt_pack` key no longer overrides the active pack**
   (#32). `prompt_pack`, `detection_profile` and `vlm` defaults are owned by the config
   store's activation record: `resolve_effective_default` never reads a settings-doc
