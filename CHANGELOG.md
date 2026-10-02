@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor that does not resolve.
 
 ### Fixed
+- VLM catalog: `qwen3-vl-4b` (measured about 14 GiB resident, multi-box verified live) is
+  `tested` like `gemma-4-e4b`, so a 36 GB card auto-picks it; the catalog test now requires
+  every tested row to carry a measured size note instead of exactly one tested row.
 - `/detect` and `/detect/batch` letterbox to the input size the model was exported at,
   read from its Triton metadata and cached per model (they always used 640, so a model
   promoted at another size failed with a Triton shape error).

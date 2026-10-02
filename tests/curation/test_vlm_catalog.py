@@ -86,11 +86,16 @@ def test_licence_and_gating_agree() -> None:
         assert (_bash(f'vlm_catalog_field {entry.id} gated').strip() == 'true') is entry.gated
 
 
-def test_only_permissive_ungated_models_are_listed_and_exactly_one_is_tested() -> None:
+def test_only_permissive_ungated_models_are_listed_and_tested_rows_are_measured() -> None:
     entries = load_catalog()
     assert all(e.license == 'apache-2.0' for e in entries)
     assert not any(e.gated for e in entries)
-    assert [e.id for e in entries if e.status == 'tested'] == ['gemma-4-e4b']
+    tested = {e.id for e in entries if e.status == 'tested'}
+    assert 'gemma-4-e4b' in tested
+    measured = (DEFAULT_CATALOG_PATH.read_text().split('vram_gb:')[1]).split('multi_box_verified')[
+        0
+    ]
+    assert all(entry_id in measured for entry_id in tested)  # each has a measured vram note
     assert {e.status for e in entries} <= {'tested', 'to_verify'}
     # the default served model carries the parser and template the compose
     # file used to hardcode

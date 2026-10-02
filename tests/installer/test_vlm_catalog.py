@@ -31,23 +31,30 @@ def test_pick_vlm_below_floor_refuses(bash) -> None:
 
 
 def test_pick_vlm_never_auto_picks_a_to_verify_row(bash) -> None:
-    # Owner answer 11.1 #6: 20 GB fits four to_verify rows but no tested
-    # one, so nothing is picked.
-    result = _run(bash, 'pick_vlm 20')
-    assert result.returncode == 1
-    assert result.stdout.strip() == ''
+    # Owner answer 11.1 #6: 18 GB fits three to_verify rows and one tested
+    # row; only the tested one is picked. 16 GB fits no tested row.
+    result = _run(bash, 'pick_vlm 18')
+    assert result.stdout.strip() == 'qwen3-vl-4b\ttested'
+    none = _run(bash, 'pick_vlm 16')
+    assert none.returncode == 1
+    assert none.stdout.strip() == ''
 
 
 def test_pick_vlm_candidates_lists_fitting_rows_with_status(bash) -> None:
     result = _run(bash, 'pick_vlm_candidates 20')
     rows = [ln.split('\t') for ln in result.stdout.strip().splitlines()]
-    assert [r[0] for r in rows] == [
+    assert [r[0] for r in rows] == [  # tested rows first
+        'qwen3-vl-4b',
         'qwen3-vl-8b-fp8',
         'gemma-4-e2b',
-        'qwen3-vl-4b',
         'qwen2.5-vl-7b-awq',
     ]
-    assert all(r[3] == 'to_verify' for r in rows)
+    assert {r[0]: r[3] for r in rows} == {
+        'qwen3-vl-8b-fp8': 'to_verify',
+        'gemma-4-e2b': 'to_verify',
+        'qwen3-vl-4b': 'tested',
+        'qwen2.5-vl-7b-awq': 'to_verify',
+    }
     first = _run(bash, 'pick_vlm_candidates 48').stdout.splitlines()[0]
     assert first.startswith('gemma-4-e4b\t')
     assert first.endswith('\ttested')
@@ -55,7 +62,7 @@ def test_pick_vlm_candidates_lists_fitting_rows_with_status(bash) -> None:
 
 def test_vlm_catalog_floor_gb_counts_tested_rows_only(bash) -> None:
     result = _run(bash, 'vlm_catalog_floor_gb')
-    assert result.stdout.strip() == '23'
+    assert result.stdout.strip() == '17'
 
 
 def test_vlm_gpu_memory_utilization_clamped_low(bash) -> None:
