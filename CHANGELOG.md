@@ -28,6 +28,15 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
   OpenAPI contract or the app, an `OP_*` variable no code reads, or a link or
   anchor that does not resolve.
 
+### Changed
+- `PUT /models/{name}/sharing` publishes typed OpenAPI bodies for its 409 (`in_use`
+  with `projects[]` and `used_by[]` rows of `{project, profile}`, or `revision_conflict`)
+  and 503 `config_store_unavailable` errors; force semantics are unchanged.
+- `AppliedRuntime.vlm` is explicit: `null` when a worker never reported a VLM axis, an
+  empty `{name, revision}` when it reported none. `profile` and `pack` are unchanged.
+- `RegionProfileSchema` docs: a field `type` can be `enum`; its choices are in the
+  sibling `enum` (static) or `choices_from` (dynamic source).
+
 ### Fixed
 - k-NN indexes are created with OpenSearch's derived source again (the setting that
   turned it off is removed), cutting every vector from about 25 KB to 8.4 KB on disk

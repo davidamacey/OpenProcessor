@@ -299,7 +299,9 @@ index. Three axes are activated through the config store: the prompt pack
 (`prompt_pack`), the region profile (`detection_profile`) and the VLM
 endpoint (`vlm`). Activations are served to workers and applied at their next
 quiesce point. A worker reports what it applies as `applied[]` on the
-activation response.
+activation response. Each `applied[]` row always carries `profile` and `pack`
+(`{name, revision}`); `vlm` is `null` when the worker never reported a VLM axis
+and `{name: null, revision: null}` when it reported no VLM configured.
 
 ### Project settings
 
@@ -440,7 +442,7 @@ OCR and text reader, the parent classes it applies to, and
 |---|---|---|---|---|
 | GET | `/region_profiles` | `include_templates` | `RegionProfileList`: `profiles[]`, `templates[]`, `active`, `config_revision`, `stale` | |
 | POST | `/region_profiles` | `{name, body, description}` | `201 RegionProfileDoc` | `409 name_conflict`, `422 validation_failed` |
-| GET | `/region_profiles/schema` | | field specs: `fields[]`, `groups[]` | |
+| GET | `/region_profiles/schema` | | `RegionProfileSchema`: `fields[]`, `groups[]`. A field `type` is one of `string`, `int`, `float`, `bool`, `enum`, `string_list`, `int_list`, `float_pair`, `rgb`. For `type: enum` the choices are in the sibling `enum[]` (static list); a dynamic list names its source in `choices_from` instead (`detectors`, `segmenters`, `ocr_pipeline_models`, `ocr_det_models`, `ocr_rec_models`, `registry_classes`, `text_reader_modes`) | |
 | POST | `/region_profiles/validate` | `{body, name}`, query `for_activation` | `ValidationReport` | |
 | POST | `/region_profiles/validate_segmenter_prompt` | `{text_prompt, sole_leg}` | `ValidationReport` | |
 | POST | `/region_profiles/test` | `RegionTestRequest` | `RegionTestResponse` | see [Test on crops](#test-on-crops) |
@@ -1865,7 +1867,7 @@ it. Request: `triton_name`, `force`, `fp16`, `input_size`, `max_batch_size`,
 |---|---|---|---|---|
 | GET | `/models/status` | `include_other_projects` | `{models[]}`: Triton models and the segmenter and VLM services. Each Triton entry carries `project`, `shared`, `owned`, `sharing_revision`, `class_mapping`, `optional`. VLM rows are one per registered endpoint with `kind: vlm`, `active` and `active_in` (the bound project only) | |
 | GET | `/models/{model_name}/class_mapping` | | `{model, model_project, project, entries[], unmapped[], not_covered[], labels}` | `404 model_not_found` |
-| PUT | `/models/{model_name}/sharing` | `{shared, expected_revision}`, query `force` | `{name, project, shared, revision, used_by[]}` | `404 model_not_found`, `409 revision_conflict`, `409 in_use` (another project's active detection profile uses the model; `used_by[]` names them; `force` bypasses), `503 config_store_unavailable` |
+| PUT | `/models/{model_name}/sharing` | `{shared, expected_revision}`, query `force` | `{name, project, shared, revision, used_by[]}` | `404 model_not_found`, `409 revision_conflict`, `409 in_use` (another project's active detection profile uses the model; typed `ModelSharingConflictResponse`: `detail.projects[]` slugs and `detail.used_by[]` rows `{project, profile}`; `force` bypasses), `503 config_store_unavailable` (typed `ModelSharingUnavailableResponse`; `force` bypasses) |
 | DELETE | `/models/{model_name}` | query `force` | `{triton_name, triton_unloaded, directory_removed, forced, warning}` | `404`, `400`, `403`, `409` |
 
 - A model's classes reach another project by name only. `class_mapping`

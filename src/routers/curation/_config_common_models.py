@@ -276,6 +276,13 @@ class JobRefWire(BaseModel):
     started_at: str | None = None
 
 
+class ModelSharingUser(BaseModel):
+    """One other project whose active detection profile uses a shared model."""
+
+    project: str
+    profile: str | None = None
+
+
 class ConfigErrorDetail(BaseModel):
     """The ``detail`` body of every project/config-store route's 4xx/5xx.
 
@@ -329,6 +336,8 @@ class ConfigErrorDetail(BaseModel):
     activate_via: str | None = None
     # W5: 404 crop_not_found names every crop id the project does not have.
     crop_ids: list[str] | None = None
+    # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
+    used_by: list[ModelSharingUser] | None = None
 
 
 class ApiErrorResponse(BaseModel):
@@ -388,8 +397,10 @@ class AppliedRuntime(BaseModel):
     applied_config_revision: int
     profile: ActiveRef
     pack: ActiveRef
-    # W9: the VLM endpoint this worker's runtime was built from.
-    vlm: ActiveRef = ActiveRef()
+    # W9: the VLM endpoint this worker's runtime was built from. ``null``
+    # = the worker never reported a VLM axis (older worker); an ActiveRef
+    # with ``name=None`` = it reported "no VLM configured".
+    vlm: ActiveRef | None
     applied_at: str | None = None
     lagging: bool = False
 
@@ -406,7 +417,11 @@ class AppliedRuntime(BaseModel):
             applied_config_revision=applied_rev,
             profile=ActiveRef(name=doc.get('profile'), revision=doc.get('profile_revision')),
             pack=ActiveRef(name=doc.get('pack'), revision=doc.get('pack_revision')),
-            vlm=ActiveRef(name=doc.get('vlm'), revision=doc.get('vlm_revision')),
+            vlm=(
+                ActiveRef(name=doc['vlm'], revision=doc.get('vlm_revision'))
+                if 'vlm' in doc
+                else None
+            ),
             applied_at=doc.get('applied_at'),
             lagging=applied_rev < config_revision,
         )

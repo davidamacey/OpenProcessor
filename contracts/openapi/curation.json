@@ -424,8 +424,14 @@
             "$ref": "#/components/schemas/ActiveRef"
           },
           "vlm": {
-            "$ref": "#/components/schemas/ActiveRef",
-            "default": {}
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -433,7 +439,8 @@
           "host",
           "applied_config_revision",
           "profile",
-          "pack"
+          "pack",
+          "vlm"
         ],
         "title": "AppliedRuntime",
         "type": "object"
@@ -3362,6 +3369,20 @@
               }
             ],
             "title": "Unmapped"
+          },
+          "used_by": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModelSharingUser"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used By"
           },
           "valid_ids": {
             "anyOf": [
@@ -9709,6 +9730,86 @@
         "title": "ModelClassMappingResponse",
         "type": "object"
       },
+      "ModelInUseDetail": {
+        "properties": {
+          "error": {
+            "const": "in_use",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSharingUser"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "projects",
+          "used_by"
+        ],
+        "title": "ModelInUseDetail",
+        "type": "object"
+      },
+      "ModelRevisionConflictDetail": {
+        "properties": {
+          "current_revision": {
+            "title": "Current Revision",
+            "type": "integer"
+          },
+          "error": {
+            "const": "revision_conflict",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "current_revision"
+        ],
+        "title": "ModelRevisionConflictDetail",
+        "type": "object"
+      },
+      "ModelSharingConflictResponse": {
+        "description": "409: another project still uses the model, or a stale ``expected_revision``.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelInUseDetail"
+              },
+              {
+                "$ref": "#/components/schemas/ModelRevisionConflictDetail"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ModelSharingConflictResponse",
+        "type": "object"
+      },
       "ModelSharingRequest": {
         "properties": {
           "expected_revision": {
@@ -9763,7 +9864,40 @@
         "title": "ModelSharingResponse",
         "type": "object"
       },
+      "ModelSharingUnavailableDetail": {
+        "properties": {
+          "error": {
+            "const": "config_store_unavailable",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ModelSharingUnavailableDetail",
+        "type": "object"
+      },
+      "ModelSharingUnavailableResponse": {
+        "description": "503: another project's config could not be read; retry or pass ``force``.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ModelSharingUnavailableDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ModelSharingUnavailableResponse",
+        "type": "object"
+      },
       "ModelSharingUser": {
+        "description": "One other project whose active detection profile uses a shared model.",
         "properties": {
           "profile": {
             "anyOf": [
@@ -27825,6 +27959,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingConflictResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -27834,6 +27978,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingUnavailableResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Set Model Sharing",

@@ -8,14 +8,14 @@ ratchet.
 from __future__ import annotations
 
 import asyncio
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import Query
 from pydantic import BaseModel
 
 from src.config.curation import get_curation_config
 from src.routers.curation._common import OpenSearchDep, logger, router
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._config_common_models import ModelSharingUser, api_error
 from src.services.config_store.project_usage import active_detector_users
 from src.services.training.promote_json import SharingRevisionConflictError, update_sharing
 
@@ -31,9 +31,34 @@ class ModelSharingRequest(BaseModel):
     expected_revision: int
 
 
-class ModelSharingUser(BaseModel):
-    project: str
-    profile: str | None = None
+class ModelInUseDetail(BaseModel):
+    error: Literal['in_use']
+    message: str
+    projects: list[str]
+    used_by: list[ModelSharingUser]
+
+
+class ModelRevisionConflictDetail(BaseModel):
+    error: Literal['revision_conflict']
+    message: str
+    current_revision: int
+
+
+class ModelSharingConflictResponse(BaseModel):
+    """409: another project still uses the model, or a stale ``expected_revision``."""
+
+    detail: ModelInUseDetail | ModelRevisionConflictDetail
+
+
+class ModelSharingUnavailableDetail(BaseModel):
+    error: Literal['config_store_unavailable']
+    message: str
+
+
+class ModelSharingUnavailableResponse(BaseModel):
+    """503: another project's config could not be read; retry or pass ``force``."""
+
+    detail: ModelSharingUnavailableDetail
 
 
 class ModelSharingResponse(BaseModel):
@@ -44,7 +69,14 @@ class ModelSharingResponse(BaseModel):
     used_by: list[ModelSharingUser] = []
 
 
-@router.put('/models/{model_name}/sharing', response_model=ModelSharingResponse)
+@router.put(
+    '/models/{model_name}/sharing',
+    response_model=ModelSharingResponse,
+    responses={
+        409: {'model': ModelSharingConflictResponse},
+        503: {'model': ModelSharingUnavailableResponse},
+    },
+)
 async def set_model_sharing(
     model_name: str,
     payload: ModelSharingRequest,
@@ -94,6 +126,7 @@ async def set_model_sharing(
             'in_use',
             f'{model_name!r} is still used by {len(used_by)} other project(s)',
             projects=[u.project for u in used_by],
+            used_by=used_by,
         )
     if not payload.shared and used_by and force:
         logger.warning(
@@ -134,4 +167,11 @@ async def set_model_sharing(
     )
 
 
-__all__ = ['ModelSharingRequest', 'ModelSharingResponse', 'ModelSharingUser', 'set_model_sharing']
+__all__ = [
+    'ModelSharingConflictResponse',
+    'ModelSharingRequest',
+    'ModelSharingResponse',
+    'ModelSharingUnavailableResponse',
+    'ModelSharingUser',
+    'set_model_sharing',
+]
