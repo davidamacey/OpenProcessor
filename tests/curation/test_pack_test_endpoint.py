@@ -257,6 +257,16 @@ def test_no_vlm_is_a_409_before_anything_is_sent(stack, wheels) -> None:
     assert stack.upstream.vlm_requests == []
 
 
+def test_classify_without_any_class_names_is_a_422_not_a_500(stack, wheels) -> None:
+    """A fresh project has an empty registry; classify then has nothing to choose
+    from, which is the caller's input problem (422), not a server error."""
+    response = stack.post(URL, call='classify', crop_ids=['car1'], class_names=[])
+
+    assert response.status_code == 422
+    assert response.json()['detail']['error'] == 'no_class_names'
+    assert stack.upstream.vlm_requests == []
+
+
 def test_a_missing_crop_is_a_404_naming_it(stack, wheels) -> None:
     response = stack.post(URL, call='classify', crop_ids=['car1', 'ghost'])
 

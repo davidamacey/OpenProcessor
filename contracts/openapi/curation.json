@@ -273,7 +273,7 @@
         "type": "object"
       },
       "ActiveConfigResponse": {
-        "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);\nalso the activation-mutation response shape used by W2's settings\nbridge and by ``store.activate``'s callers.\n\n``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies), or ``'off'`` (explicitly deactivated -- ``active.name`` is\n``None``, distinct from ``'env'``'s ``None`` activation doc). Never\nguessed from ``active`` alone: ``'env'`` and ``'off'`` both may\ncarry ``active.name=None`` in the profile axis's off state, but only\nan explicit deactivation is ``'off'``.\n``activated_at`` is the activation doc's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive ``runtime:*`` doc for this axis (§4.5) -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
+        "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);\nalso the activation-mutation response shape used by W2's settings\nbridge and by ``store.activate``'s callers.\n\n``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies, and ``active.name`` names it), or ``'off'`` (explicitly\ndeactivated -- ``active.name`` is ``None``). Never guessed from\n``active`` alone: ``'env'`` is also nameless when no env default is\nconfigured, but only an explicit deactivation is ``'off'``.\n``activated_at`` is the activation doc's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive ``runtime:*`` doc for this axis (§4.5) -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
         "properties": {
           "activated_at": {
             "anyOf": [
@@ -424,8 +424,14 @@
             "$ref": "#/components/schemas/ActiveRef"
           },
           "vlm": {
-            "$ref": "#/components/schemas/ActiveRef",
-            "default": {}
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -433,7 +439,8 @@
           "host",
           "applied_config_revision",
           "profile",
-          "pack"
+          "pack",
+          "vlm"
         ],
         "title": "AppliedRuntime",
         "type": "object"
@@ -3168,6 +3175,7 @@
               "test_timeout",
               "vlm_transport_error",
               "no_box_to_verify",
+              "no_class_names",
               "too_many_crops",
               "too_many_crop_ids",
               "pack_invalid",
@@ -3361,6 +3369,20 @@
               }
             ],
             "title": "Unmapped"
+          },
+          "used_by": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModelSharingUser"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used By"
           },
           "valid_ids": {
             "anyOf": [
@@ -9708,6 +9730,86 @@
         "title": "ModelClassMappingResponse",
         "type": "object"
       },
+      "ModelInUseDetail": {
+        "properties": {
+          "error": {
+            "const": "in_use",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "projects": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSharingUser"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "projects",
+          "used_by"
+        ],
+        "title": "ModelInUseDetail",
+        "type": "object"
+      },
+      "ModelRevisionConflictDetail": {
+        "properties": {
+          "current_revision": {
+            "title": "Current Revision",
+            "type": "integer"
+          },
+          "error": {
+            "const": "revision_conflict",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "current_revision"
+        ],
+        "title": "ModelRevisionConflictDetail",
+        "type": "object"
+      },
+      "ModelSharingConflictResponse": {
+        "description": "409: another project still uses the model, or a stale ``expected_revision``.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelInUseDetail"
+              },
+              {
+                "$ref": "#/components/schemas/ModelRevisionConflictDetail"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ModelSharingConflictResponse",
+        "type": "object"
+      },
       "ModelSharingRequest": {
         "properties": {
           "expected_revision": {
@@ -9762,7 +9864,40 @@
         "title": "ModelSharingResponse",
         "type": "object"
       },
+      "ModelSharingUnavailableDetail": {
+        "properties": {
+          "error": {
+            "const": "config_store_unavailable",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ModelSharingUnavailableDetail",
+        "type": "object"
+      },
+      "ModelSharingUnavailableResponse": {
+        "description": "503: another project's config could not be read; retry or pass ``force``.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ModelSharingUnavailableDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ModelSharingUnavailableResponse",
+        "type": "object"
+      },
       "ModelSharingUser": {
+        "description": "One other project whose active detection profile uses a shared model.",
         "properties": {
           "profile": {
             "anyOf": [
@@ -27824,6 +27959,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingConflictResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -27833,6 +27978,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSharingUnavailableResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Set Model Sharing",
@@ -29142,7 +29297,7 @@
     },
     "/curation/projects/{project}/prompt_packs/test": {
       "post": {
-        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify``; 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
+        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify`` /\n``no_class_names`` (classify with an empty registry and no ``class_names``); 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
         "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
         "parameters": [
           {

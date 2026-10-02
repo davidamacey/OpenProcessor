@@ -21,15 +21,16 @@ if TYPE_CHECKING:
 
 
 async def read_each_project[T](read: Callable[[str], Awaitable[T]]) -> dict[str, T]:
-    """``slug -> read(configs_index)`` for every project, each call inside a
+    """``slug -> read(configs_index)`` for every project that exists and is
+    not being deleted (``ProjectRegistry.existing_projects``), each call inside a
     read-only bind of that project. A read that raises propagates: callers
     use this to REFUSE a change, so an unreadable project must block it."""
     registry = get_project_registry()
     await registry.ensure_fresh()
     found: dict[str, T] = {}
-    for slug, record in sorted(registry.snapshot().items()):
+    for record in sorted(registry.existing_projects(), key=lambda r: r.slug):
         with bind_project(record, read_only=True):
-            found[slug] = await read(get_curation_config().configs_index)
+            found[record.slug] = await read(get_curation_config().configs_index)
     return found
 
 

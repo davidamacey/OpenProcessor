@@ -149,6 +149,7 @@ selection did with it: `selected`, and a `drop_reason` of `below_min_score`,
 | 422 | `pack_invalid`, `profile_invalid` | A draft with errors; `report` lists them |
 | 422 | `vlm_external_not_acknowledged` | External endpoint without `acknowledge_external` |
 | 422 | `no_box_to_verify` | `region_verify` on a crop with no stored box |
+| 422 | `no_class_names` | `classify` on a project whose registry has no classes and no `class_names` in the request |
 | 429 | `test_busy` | All run slots are taken; retry shortly |
 | 502 | `vlm_transport_error` | The VLM endpoint failed |
 | 502 | `detector_error`, `segmenter_error` | No leg of the profile ran |

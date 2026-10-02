@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private history of this codebase; v0.1.0 is the first public release.
+The entries headed `Pre-release` (0.3.0, 0.2.x and the earliest 0.1.0) are the private
+history of this codebase before it was published. Their numbers belong to that history
+only: the first public release is `[0.1.0] - 2026-10-02` and restarts public versioning.
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-10-02
 
 ### Documentation
 - Full v0.1.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
@@ -28,7 +32,24 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
   OpenAPI contract or the app, an `OP_*` variable no code reads, or a link or
   anchor that does not resolve.
 
+### Changed
+- `PUT /models/{name}/sharing` publishes typed OpenAPI bodies for its 409 (`in_use`
+  with `projects[]` and `used_by[]` rows of `{project, profile}`, or `revision_conflict`)
+  and 503 `config_store_unavailable` errors; force semantics are unchanged.
+- `AppliedRuntime.vlm` is explicit: `null` when a worker never reported a VLM axis, an
+  empty `{name, revision}` when it reported none. `profile` and `pack` are unchanged.
+- `RegionProfileSchema` docs: a field `type` can be `enum`; its choices are in the
+  sibling `enum` (static) or `choices_from` (dynamic source).
+
 ### Fixed
+- `GET /region_profiles/active` and `/prompt_packs/active` with `source: env` now name
+  the env/file default the worker applies (`active.name`, no revision) instead of a
+  nameless "off"; only an explicit deactivation, or no env default at all, is nameless.
+  The name comes from the resolver the worker uses, so `active` and `applied[]` agree.
+- Cross-project "who uses X" listings (`active_in` on `/vlm/endpoints`, model-sharing
+  `used_by`/`in_use`, the VLM delete guard) count only projects that exist and are not
+  being deleted. A tombstoned project used to count as running `env` and could block
+  `DELETE /vlm/endpoints/{name}` with 409 `in_use`.
 - k-NN indexes are created with OpenSearch's derived source again (the setting that
   turned it off is removed), cutting every vector from about 25 KB to 8.4 KB on disk
   (3x). The per-box vector scan (box clustering, false-positive centroids) now reads
@@ -3825,7 +3846,7 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
 - `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`
   (`quantize.coreml` returns 400).
 
-## [0.3.0] - 2026-09-21
+## [Pre-release 0.3.0] - 2026-09-21
 
 ### Added
 - **Curation subsystem (EXPERIMENTAL)**: a generic active-learning
@@ -3935,7 +3956,7 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
   detection/clustering leaves, measured `scripts/` for coverage, and
   enforced a coverage floor.
 
-## [0.2.1] - 2026-07-04
+## [Pre-release 0.2.1] - 2026-07-04
 
 ### Fixed
 - Fresh-install path (`scripts/setup.sh`) on Triton 26.06: trtexec moved
@@ -3950,7 +3971,7 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
 - Endpoint suite: dual-family checks skip gracefully when the optional
   YOLO26 engine is not exported.
 
-## [0.2.0] - 2026-07-04
+## [Pre-release 0.2.0] - 2026-07-04
 
 ### Added
 - **YOLO26 support served alongside YOLO11** in the same Triton + API
@@ -4004,8 +4025,8 @@ Earlier numbered entries below (`[0.3.0]` and `[0.2.x]`) are pre-release private
 - Container HEALTHCHECK targets `/live` so a degraded downstream
   dependency cannot cascade restarts through `depends_on`.
 
-## [0.1.0] - 2026-03-19
+## [Pre-release 0.1.0] - 2026-03-19
 
-Initial public release: YOLO11 detection, SCRFD + ArcFace face
+Initial private release: YOLO11 detection, SCRFD + ArcFace face
 recognition, MobileCLIP embeddings, PP-OCRv5 OCR, OpenSearch visual
 search, Triton 25.10 TensorRT serving, monitoring stack.

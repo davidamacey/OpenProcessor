@@ -119,6 +119,7 @@ ErrorCode = Literal[
     'test_timeout',
     'vlm_transport_error',
     'no_box_to_verify',
+    'no_class_names',
     'too_many_crops',
     'too_many_crop_ids',
     'pack_invalid',
@@ -275,6 +276,13 @@ class JobRefWire(BaseModel):
     started_at: str | None = None
 
 
+class ModelSharingUser(BaseModel):
+    """One other project whose active detection profile uses a shared model."""
+
+    project: str
+    profile: str | None = None
+
+
 class ConfigErrorDetail(BaseModel):
     """The ``detail`` body of every project/config-store route's 4xx/5xx.
 
@@ -328,6 +336,8 @@ class ConfigErrorDetail(BaseModel):
     activate_via: str | None = None
     # W5: 404 crop_not_found names every crop id the project does not have.
     crop_ids: list[str] | None = None
+    # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
+    used_by: list[ModelSharingUser] | None = None
 
 
 class ApiErrorResponse(BaseModel):
@@ -387,8 +397,10 @@ class AppliedRuntime(BaseModel):
     applied_config_revision: int
     profile: ActiveRef
     pack: ActiveRef
-    # W9: the VLM endpoint this worker's runtime was built from.
-    vlm: ActiveRef = ActiveRef()
+    # W9: the VLM endpoint this worker's runtime was built from. ``null``
+    # = the worker never reported a VLM axis (older worker); an ActiveRef
+    # with ``name=None`` = it reported "no VLM configured".
+    vlm: ActiveRef | None
     applied_at: str | None = None
     lagging: bool = False
 
@@ -405,7 +417,11 @@ class AppliedRuntime(BaseModel):
             applied_config_revision=applied_rev,
             profile=ActiveRef(name=doc.get('profile'), revision=doc.get('profile_revision')),
             pack=ActiveRef(name=doc.get('pack'), revision=doc.get('pack_revision')),
-            vlm=ActiveRef(name=doc.get('vlm'), revision=doc.get('vlm_revision')),
+            vlm=(
+                ActiveRef(name=doc['vlm'], revision=doc.get('vlm_revision'))
+                if 'vlm' in doc
+                else None
+            ),
             applied_at=doc.get('applied_at'),
             lagging=applied_rev < config_revision,
         )
@@ -419,11 +435,10 @@ class ActiveConfigResponse(BaseModel):
     ``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --
     ``'stored'`` (an activation doc names a saved pack/profile),
     ``'env'`` (never activated through the store; the env/file default
-    applies), or ``'off'`` (explicitly deactivated -- ``active.name`` is
-    ``None``, distinct from ``'env'``'s ``None`` activation doc). Never
-    guessed from ``active`` alone: ``'env'`` and ``'off'`` both may
-    carry ``active.name=None`` in the profile axis's off state, but only
-    an explicit deactivation is ``'off'``.
+    applies, and ``active.name`` names it), or ``'off'`` (explicitly
+    deactivated -- ``active.name`` is ``None``). Never guessed from
+    ``active`` alone: ``'env'`` is also nameless when no env default is
+    configured, but only an explicit deactivation is ``'off'``.
     ``activated_at`` is the activation doc's own timestamp -- ``None``
     for ``'env'`` (there was no activation write). ``applied`` is every
     live ``runtime:*`` doc for this axis (§4.5) -- empty when no worker
