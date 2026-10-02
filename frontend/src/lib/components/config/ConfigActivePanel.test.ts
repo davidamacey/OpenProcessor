@@ -85,6 +85,53 @@ describe('ConfigActivePanel (region-profile words)', () => {
     expect(q('active-deactivate')).toBeNull();
   });
 
+  it('a nameless active reads by the served source', async () => {
+    const nameless = { name: null, revision: null };
+    await render(
+      profileActiveFixture({ active: nameless, previous: null, source: 'off' }),
+    );
+    expect(q('active-ref')?.textContent).toBe('off: region detection is off');
+    unmount(instance!);
+    instance = undefined;
+    target.remove();
+    await render(
+      profileActiveFixture({ active: nameless, previous: null, source: 'env' }),
+    );
+    expect(q('active-ref')?.textContent).toBe(
+      'None: no region profile configured (region detection off)',
+    );
+    unmount(instance!);
+    instance = undefined;
+    target.remove();
+    await render(
+      profileActiveFixture({ active: nameless, previous: null, source: 'stored' }),
+    );
+    expect(q('active-ref')?.textContent).toBe('off: region detection is off');
+    unmount(instance!);
+    instance = undefined;
+    target.remove();
+    await render(
+      profileActiveFixture({
+        active: { name: 'env_tags', revision: null },
+        previous: null,
+        source: 'env',
+      }),
+    );
+    expect(q('active-ref')?.textContent).toBe('env_tags');
+  });
+
+  it('a copy with no noneEnvText reads noneText for every source', async () => {
+    await render(
+      profileActiveFixture({
+        active: { name: null, revision: null },
+        previous: null,
+        source: 'env',
+      }),
+      { copy: VLM_ACTIVE_COPY },
+    );
+    expect(q('active-ref')?.textContent).toBe('off: no VLM runs for this project');
+  });
+
   it('an applied vlm ref: null is "not reported", a null name is "no VLM"', async () => {
     const base = profileActiveFixture();
     const row = base.applied[0]!;

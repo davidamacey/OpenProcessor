@@ -3,7 +3,7 @@
 
   export const PACK_ACTIVE_COPY: ActivePanelCopy = {
     title: 'Active pack',
-    noneText: 'none: the deployment default applies',
+    noneText: 'none',
     appliedColumn: 'Pack',
     appliedRef: 'pack',
     appliedNoneText: 'none',

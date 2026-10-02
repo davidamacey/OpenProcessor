@@ -31,8 +31,11 @@ export interface ValidationReport {
   force_allowed: boolean;
 }
 
-/** §7.1 `ActiveRef`. `name: null` = nothing active on the axis (no pack:
- *  the deployment default applies; no profile: region detection is off).
+/** §7.1 `ActiveRef`. `name: null` = nothing active on the axis (source
+ *  `off`: an explicit deactivation; source `env` with no name: no
+ *  activation and no env default, i.e. for a region profile none is
+ *  configured and the region stage does not run; a pack is never nameless
+ *  with source `env`).
  *  `revision: null` for a source without revisions (builtin, file, env,
  *  registered). */
 export interface ActiveRef {

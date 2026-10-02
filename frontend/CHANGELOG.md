@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Nameless active panel text follows the served source.** A region-profile
+  `active` with no name and source `env` now reads "None: no region profile
+  configured (region detection off)" (no activation and no env default);
+  "off: region detection is off" stays for an explicit `off`. The prompt-pack
+  panel no longer claims "the deployment default applies" for a nameless
+  pack and reads a neutral "none". The VLM panel is unchanged (nameless
+  means off).
 - **Backend finalization (OpenProcessor d00e8957).** Contracts re-vendored.
   The unshare dialog's in_use refusal names each project with its served
   profile (`used_by`), and the sharing 409/503 details are typed and pinned

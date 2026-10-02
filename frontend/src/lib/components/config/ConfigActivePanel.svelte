@@ -3,8 +3,12 @@
   export interface ActivePanelCopy {
     /** "Active pack" / "Active region profile". */
     title: string;
-    /** Shown for `active.name: null`. */
+    /** Shown for `active.name: null` (an explicit `off`, or any source
+     *  without a more specific text below). */
     noneText: string;
+    /** Shown instead for `active.name: null` with `source: 'env'` (never
+     *  activated, and no env default to name). */
+    noneEnvText?: string;
     /** Header of the applied-runtime column naming the ref. */
     appliedColumn: string;
     /** Which applied-runtime ref this axis names. */
@@ -58,6 +62,10 @@
 
   let confirming = $state<'rollback' | 'deactivate' | null>(null);
 
+  function noneText(source: string | null | undefined): string {
+    return source === 'env' && copy.noneEnvText ? copy.noneEnvText : copy.noneText;
+  }
+
   function refText(ref: ActiveRef | null | undefined): string {
     if (!ref || ref.name == null) return 'none';
     return ref.revision == null ? ref.name : `${ref.name} r${ref.revision}`;
@@ -97,7 +105,7 @@
       <span class="text-zinc-400">{copy.title}</span>
       {#if a.active.name == null}
         <span class="font-medium text-zinc-200" data-testid="active-ref"
-          >{copy.noneText}</span
+          >{noneText(a.source)}</span
         >
       {:else}
         <span class="font-mono font-medium text-emerald-300" data-testid="active-ref"

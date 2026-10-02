@@ -425,7 +425,11 @@ on the shared config machinery listed under "Prompt-pack editor".
 - **List** (`profileListController.svelte.ts`): the served profiles and
   templates (`?include_templates=true`), the active profile
   (`ConfigActivePanel` with `PROFILE_ACTIVE_COPY`: Rollback and a
-  confirm-gated **Turn off**, `POST /region_profiles/deactivate`), "Show
+  confirm-gated **Turn off**, `POST /region_profiles/deactivate`; a nameless
+  active reads by its served `source`: `off` is "off: region detection is
+  off", `env` is "None: no region profile configured" via the copy's
+  optional `noneEnvText`; a nameless pack reads a bare "none", since a pack
+  is never nameless with source `env`), "Show
   impact" (`GET /region_profiles/active/impact`), Clone, Delete, and a
   collapsed read-only "Models and sources" panel (`ProfileVocabularyPanel`,
   `GET /config/vocabulary`; the vocabulary has no write route).
