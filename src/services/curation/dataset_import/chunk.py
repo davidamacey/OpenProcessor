@@ -40,18 +40,19 @@ from src.services.curation.dataset_import.proposals import (
 )
 from src.services.curation.dataset_import.regions import ParentCandidate, attach_region_boxes
 from src.services.curation.dataset_import.report import ImportReport
+from src.services.curation.dataset_import.scan import LabelBox
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.ingest_index import ImageContext
 from src.services.curation.item_doc import DetectedItem
 from src.services.curation.proposal_merge import count_disagreements
 from src.services.curation.wire import item_source_excludes
-from src.services.detection.geometry import crop_id as make_crop_id
+from src.services.detection.geometry import crop_id as make_crop_id, stored_bbox_norm
 
 
 if TYPE_CHECKING:
     from src.services.curation.dataset_import.context import ImportContext
     from src.services.curation.dataset_import.mapping import MapTarget
-    from src.services.curation.dataset_import.scan import LabelBox, ScanEntry
+    from src.services.curation.dataset_import.scan import ScanEntry
     from src.services.curation.dataset_import.store import ImportStore
     from src.services.curation.proposal_merge import MergePlan
 
@@ -233,7 +234,11 @@ async def _import_one(
     now = _now()
 
     existing = await _items_for_image(ctx, img.image_id)
-    plans = plan_item_labels(existing, boxes.items, image_id=img.image_id)
+    stored_boxes = [
+        (LabelBox(b.dataset_class, stored_bbox_norm(b.bbox_norm, img.width, img.height)), t)
+        for b, t in boxes.items
+    ]
+    plans = plan_item_labels(existing, stored_boxes, image_id=img.image_id)
     _apply_prior_actions(plans, prior)
     dropped = await reconcile.dropped_entries(
         ctx, existing, entry, plans, image_id=img.image_id, prior=prior
@@ -366,7 +371,10 @@ async def _import_one(
     _count_plans(report, plans, updates, len(new_items))
     report.parents_detected += n_parent
     report.standalone_regions += n_standalone
-    ledger_boxes.extend({'crop_id': cid, 'box_id': 'b1'} for cid in standalone_ids)
+    ledger_boxes.extend(
+        {'crop_id': cid, 'box_id': 'b1', 'bbox_norm': list(box.bbox_norm)}
+        for cid, box in zip(standalone_ids, attach.standalone, strict=True)
+    )
     if state == 'negative':
         report.negatives += 1
     elif state == 'unlabeled':
