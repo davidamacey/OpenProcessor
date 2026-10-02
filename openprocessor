@@ -26,6 +26,7 @@ export PROJECT_DIR
 source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/gpu.sh"
 source "${SCRIPT_DIR}/lib/ports.sh"
+source "${SCRIPT_DIR}/lib/bind_dirs.sh"
 source "${SCRIPT_DIR}/lib/vlm_catalog.sh"
 source "${SCRIPT_DIR}/lib/vlm_switch.sh"
 
@@ -209,6 +210,7 @@ load_config_lib() {
 cmd_start() {
     log_step "Starting OpenProcessor services..."
     cd "$PROJECT_DIR"
+    ensure_bind_mount_dirs "$PROJECT_DIR"
     dc up -d
     log_success "Services started"
     echo ""
