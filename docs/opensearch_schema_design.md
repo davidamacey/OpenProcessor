@@ -198,6 +198,15 @@ apart so that rewriting the box list cannot drop vectors, and every read that
 feeds the wire excludes it. A vector whose `bbox_norm` no longer matches its box
 is stale and is dropped on write.
 
+Every k-NN index keeps OpenSearch's derived source (no `knn.derived_source.enabled`
+override), so a vector is stored twice (HNSW graph and flat copy, about 8.4 KB at
+1024-d) and not a third time as JSON text in `_source` (about 25 KB). Measured with
+this mapping: 8.4 KB per vector for `pe_embedding` and for each nested box vector.
+One trap: a search whose `_source` names the bare `region_box_embeddings` path gets
+the number `1` for each vector; readers use
+`region_box_embeddings.box_vector_source_includes` (the leaf paths), which returns
+the real values. `_source` excludes, `GET`, `mget` and `_update` are unaffected.
+
 `region_revision` is bumped by any write that changes a box's state, geometry or
 text (a cluster-only write does not). Editors send it back as
 `expected_region_revision` to detect a concurrent change.

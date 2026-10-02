@@ -149,12 +149,11 @@ def _knn_settings() -> dict[str, Any]:
             'number_of_shards': 1,
             'number_of_replicas': 0,
             'knn': True,
-            # OpenSearch 3.x strips vectors from `_source` and re-derives them
-            # (normalised, for cosine) on read; for a nested knn_vector under
-            # a `_source` include the derived value comes back as the number
-            # 1, which silently corrupted every per-box embedding read.
-            # Static: an index created without this needs a reindex.
-            'knn.derived_source.enabled': False,
+            # Derived source stays ON (the OpenSearch 3.x default): vectors are
+            # not duplicated as JSON text in `_source` (about 3x smaller). Its
+            # one trap: a search whose `_source` includes the bare path of the
+            # nested per-box vector field returns the number 1 for each vector;
+            # use region_box_embeddings.box_vector_source_includes instead.
         },
     }
 

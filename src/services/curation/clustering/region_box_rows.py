@@ -28,7 +28,7 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.core.logging import get_logger
-from src.services.curation.region_box_embeddings import join_box_vectors
+from src.services.curation.region_box_embeddings import box_vector_source_includes, join_box_vectors
 from src.services.curation.region_boxes import (
     RegionBox,
     box_query,
@@ -153,7 +153,7 @@ async def scroll_box_rows(
     body = {
         'size': _SCROLL_PAGE,
         'query': query,
-        '_source': [F.boxes, F.box_embeddings, 'class_name'],
+        '_source': [F.boxes, *box_vector_source_includes(F), 'class_name'],
     }
     rows: list[RegionBoxRow] = []
     resp = await client.search(index=index, body=body, scroll='5m')
