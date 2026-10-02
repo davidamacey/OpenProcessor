@@ -57,6 +57,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from opensearchpy import AsyncOpenSearch
+from opensearchpy.exceptions import RequestError
 from opensearchpy.helpers import async_bulk
 
 
@@ -587,6 +588,8 @@ class OpenSearchClient:
                 'index': {
                     'number_of_shards': 1,
                     'number_of_replicas': 0,
+                    # OpenSearch rejects max_gram - min_gram > 1 unless raised.
+                    'max_ngram_diff': 2,
                 },
                 'analysis': {
                     'analyzer': {
@@ -650,6 +653,14 @@ class OpenSearchClient:
             logger.info(f'Index created successfully: {index_name}')
             return True
 
+        except RequestError as e:
+            # Every API worker creates the indexes at startup, so losing the
+            # create race to a sibling means the index exists: success.
+            if e.error == 'resource_already_exists_exception':
+                logger.info(f'Index already exists (created concurrently): {index_name}')
+                return True
+            logger.error(f'Failed to create index {index_name}: {e}')
+            return False
         except Exception as e:
             logger.error(f'Failed to create index {index_name}: {e}')
             return False

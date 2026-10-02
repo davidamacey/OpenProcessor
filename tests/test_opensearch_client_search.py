@@ -114,3 +114,50 @@ class TestCreateAllIndexesIsIdempotent:
         results = await client.create_all_indexes(force_recreate=False)
         assert all(results.values()), results
         assert client.client.indices.create.call_count == len(IndexName)
+
+
+class TestIndexCreation:
+    """Found live: OpenSearch 3.6 rejected the OCR index (ngram diff 2 > the
+    default max_ngram_diff of 1), so it never existed; and the N API workers
+    racing to create the same index logged the loser's
+    ``resource_already_exists_exception`` as an error."""
+
+    @pytest.mark.asyncio
+    async def test_ocr_index_allows_its_ngram_filter_width(self, client: OpenSearchClient) -> None:
+        client.client.indices.exists = AsyncMock(return_value=False)
+        client.client.indices.create = AsyncMock()
+
+        assert await client.create_ocr_index() is True
+
+        call = client.client.indices.create.await_args
+        assert call is not None
+        body = call.kwargs['body']
+        ngram = body['settings']['analysis']['filter']['trigram_filter']
+        allowed = body['settings']['index']['max_ngram_diff']
+        assert ngram['max_gram'] - ngram['min_gram'] <= allowed
+
+    @pytest.mark.asyncio
+    async def test_losing_the_create_race_is_success(
+        self, client: OpenSearchClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from opensearchpy.exceptions import RequestError
+
+        client.client.indices.exists = AsyncMock(return_value=False)
+        client.client.indices.create = AsyncMock(
+            side_effect=RequestError(400, 'resource_already_exists_exception', {})
+        )
+
+        with caplog.at_level('ERROR'):
+            assert await client.create_global_index() is True
+        assert not [r for r in caplog.records if r.levelname == 'ERROR']
+
+    @pytest.mark.asyncio
+    async def test_other_create_errors_still_fail(self, client: OpenSearchClient) -> None:
+        from opensearchpy.exceptions import RequestError
+
+        client.client.indices.exists = AsyncMock(return_value=False)
+        client.client.indices.create = AsyncMock(
+            side_effect=RequestError(400, 'illegal_argument_exception', {})
+        )
+
+        assert await client.create_global_index() is False
