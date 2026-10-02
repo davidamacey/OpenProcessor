@@ -79,6 +79,7 @@ class Models:
         self.status_queries: list[str] = []
         self.conflict_next = False
         self.in_use_projects: list[str] = []
+        self.unreadable = False
 
     def install(self, stub: Any) -> None:
         base_re = re.escape(PREFIX)
@@ -107,6 +108,11 @@ class Models:
                 "error": "in_use",
                 "message": f"'widget_det' is still used by {len(self.in_use_projects)} other project(s)",
                 "projects": self.in_use_projects,
+            }})
+        if self.unreadable and not body["shared"] and not forced:
+            return (503, {"detail": {
+                "error": "config_store_unavailable",
+                "message": "could not read every project to see who uses this model; retry, or pass force",
             }})
         if self.conflict_next:
             self.conflict_next = False
@@ -227,3 +233,29 @@ def test_unshare_in_use_shows_served_projects_and_confirm_gates_force(stub, page
         page.get_by_test_id("share-model-force-confirm").click()
     page.get_by_test_id("share-model-dialog").wait_for(state="detached", timeout=ACTION_TIMEOUT_MS)
     assert len(reg.puts) == 2
+
+
+def test_unshare_unreadable_503_offers_retry_and_confirm_gated_force(stub, page, app_url):
+    reg = Models()
+    reg.own["shared"] = True
+    reg.unreadable = True
+    reg.install(stub)
+    open_models(page, app_url)
+
+    page.get_by_test_id("model-share-toggle-widget_det").click()
+    page.get_by_test_id("share-model-confirm").click()
+    err = page.get_by_test_id("share-model-error")
+    err.wait_for(timeout=20000)
+    assert "retry, or pass force" in err.inner_text()
+    page.get_by_test_id("share-model-retry").wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert page.get_by_test_id("share-model-in-use").count() == 0
+
+    page.get_by_test_id("share-model-force").click()
+    page.get_by_test_id("share-model-force-warning").wait_for(timeout=ACTION_TIMEOUT_MS)
+    sent = len(reg.puts)
+    with page.expect_request(
+        lambda r: r.method == "PUT" and r.url.endswith("/sharing?force=true")
+    ):
+        page.get_by_test_id("share-model-force-confirm").click()
+    page.get_by_test_id("share-model-dialog").wait_for(state="detached", timeout=ACTION_TIMEOUT_MS)
+    assert len(reg.puts) == sent + 1

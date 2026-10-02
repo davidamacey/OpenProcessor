@@ -1575,8 +1575,10 @@ list so the retry carries the fresh revision, and a 409 `in_use` lists the
 served projects (those whose ACTIVE detection profile uses the model) and
 offers a confirm-gated "Unshare anyway" that retries with `?force=true`
 (arming it shows a warning and sends nothing); a 503
-`config_store_unavailable` (an unreadable project) shows the served message
-with no force offer. A forced success toast names the served `used_by`
+`config_store_unavailable` (the server could not read every project, only
+when unsharing; the backend confirmed force is intended there) shows the
+served message verbatim and offers the same two-step "Unshare anyway" plus a
+plain "Retry". A forced success toast names the served `used_by`
 `{project, profile}`. The unshare copy says the server refuses while another
 project's active profile uses the model. The listing serves `owned` and `sharing_revision` (non-null only
 when owned): `sharingRole`/`canToggleSharing` (`$lib/modelSharing.ts`)

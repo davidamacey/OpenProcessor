@@ -11,6 +11,7 @@ import {
   sharingRole,
   unmappedText,
   forceUnshareText,
+  forceUnshareUnreadableText,
   unshareConfirmText,
 } from './modelSharing';
 import type { ModelInfo } from './types';
@@ -83,5 +84,6 @@ describe('copy', () => {
   it('the forced-unshare warning names the served projects', () => {
     expect(forceUnshareText(['beta', 'gamma'])).toContain('beta, gamma');
     expect(forceUnshareText([])).toMatch(/Projects using this model/);
+    expect(forceUnshareUnreadableText()).toMatch(/could not check every project/);
   });
 });

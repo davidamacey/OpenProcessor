@@ -16,11 +16,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   activation-backed axes are pinned by `activeConfigContract.test.ts`.
   Unsharing a model shows the served in-use projects and a confirm-gated
   "Unshare anyway" (`?force=true`); the 503 `config_store_unavailable` message
-  renders verbatim, and the old "another project may be using it" copy is
+  renders verbatim with the same confirm-gated "Unshare anyway" (the backend
+  confirmed force is intended there) plus a plain Retry, and the old "another project may be using it" copy is
   gone. `/settings` drops the "startup config" copy (`detection_profile` is
   settable via activation) and shows a served `off`. A refused model unload
   (403/409) shows the served detail verbatim; the active panels show each
   worker's `applied_at`.
+- The prompt-pack activate response is typed `ActivateResponse` and the
+  profile one requires `validation` and `impact`; `ActivationImpact` gains
+  `stale_items`. `activeConfigContract.test.ts` pins both activate
+  operations' response schemas and key sets.
 
 ### Added
 

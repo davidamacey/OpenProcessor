@@ -5,12 +5,15 @@
    * `model` is the page's CURRENT served entry, so after a
    * `revision_conflict` reload the next confirm carries the fresh served
    * revision. A refusal shows the served message verbatim; a 409 `in_use`
-   * lists the served projects and offers the served `force`.
+   * lists the served projects and a 503 `config_store_unavailable` (the
+   * server could not read every project) says so; both offer the served
+   * `force` behind a two-step confirm, the 503 also a plain retry.
    */
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import {
     forceUnshareText,
+    forceUnshareUnreadableText,
     shareConfirmText,
     unshareConfirmText,
   } from '$lib/modelSharing';
@@ -28,6 +31,7 @@
   let errorText = $state<string | null>(null);
   let conflict = $state(false);
   let inUse = $state<string[] | null>(null);
+  let unreadable = $state(false);
   let forceArmed = $state(false);
   let openFor = $state<string | null>(null);
 
@@ -38,6 +42,7 @@
       errorText = null;
       conflict = false;
       inUse = null;
+      unreadable = false;
       forceArmed = false;
     }
   });
@@ -64,6 +69,7 @@
     errorText = res.message;
     conflict = res.code === 'revision_conflict';
     inUse = res.code === 'in_use' ? res.projects : null;
+    unreadable = res.code === 'config_store_unavailable' && model.shared;
   }
 </script>
 
@@ -101,15 +107,15 @@
               Reloaded the latest sharing state. Confirm again to apply it.
             </p>
           {/if}
-          {#if inUse}
-            {#if inUse.length}
+          {#if inUse || unreadable}
+            {#if inUse?.length}
               <p class="mt-1 text-zinc-400" data-testid="share-model-in-use">
                 Used by: {inUse.join(', ')}
               </p>
             {/if}
             {#if forceArmed}
               <p class="mt-2 text-amber-300" data-testid="share-model-force-warning">
-                {forceUnshareText(inUse)}
+                {inUse ? forceUnshareText(inUse) : forceUnshareUnreadableText()}
               </p>
               <button
                 type="button"
@@ -125,6 +131,15 @@
                 data-testid="share-model-force"
                 disabled={busy}
                 onclick={() => (forceArmed = true)}>Unshare anyway</button
+              >
+            {/if}
+            {#if unreadable}
+              <button
+                type="button"
+                class="btn btn-sm ml-2 mt-2"
+                data-testid="share-model-retry"
+                disabled={busy}
+                onclick={() => void confirm()}>Retry</button
               >
             {/if}
           {/if}

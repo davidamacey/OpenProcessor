@@ -53,3 +53,8 @@ export function forceUnshareText(projects: string[]): string {
     ? `${projects.join(', ')} will lose access to this model. The override is logged server-side.`
     : 'Projects using this model will lose access to it. The override is logged server-side.';
 }
+
+/** Warning before a forced unshare when the server could not read every project. */
+export function forceUnshareUnreadableText(): string {
+  return 'The server could not check every project, so a project that uses this model may lose access to it. The override is logged server-side.';
+}
