@@ -177,7 +177,7 @@ async def models_status(
             'endpoint': triton_http,
             # Unload guard flags — same source of truth the
             # DELETE /models/{name} endpoint enforces (see
-            # _is_region_protected_model / _core_pipeline_models above).
+            # src/services/model_unload_guard.py).
             'is_region_protected': is_region_protected_model(name),
             'requires_force_to_unload': name in core_pipeline_models(),
             'job_id': job_id,
@@ -278,10 +278,9 @@ async def models_status(
 # Triton /v2/repository/models/<name>/{load,unload} control endpoint, same
 # on-disk model repo) but in reverse, with guardrails a promote doesn't
 # need: unloading the wrong model breaks live serving instantly, where a
-# bad promote at worst fails to load. (`_is_region_protected_model` /
-# `_core_pipeline_models` are defined above, alongside `models_status`,
-# which surfaces the same flags per-model so the UI doesn't have to
-# re-derive them.)
+# bad promote at worst fails to load. (The guard lives in
+# src/services/model_unload_guard.py; `models_status` surfaces the same
+# flags per-model so the UI doesn't have to re-derive them.)
 
 
 # PUT /models/{model_name}/sharing lives in _models_sharing.py (kept

@@ -5,6 +5,7 @@ Triton)."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -84,3 +85,31 @@ def test_delete_of_a_core_model_needs_force(
     forced = client.delete(f'{models_router.router.prefix}/face_x', params={'force': 'true'})
     assert forced.status_code == 200, forced.text
     assert _names(tmp_path) == []
+
+
+def test_unload_refuses_a_region_protected_model_even_with_force(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found in review: ``POST /models/{name}/unload`` skipped the guard that
+    ``DELETE`` applies, so the OCR models could be unloaded with one POST."""
+    unload = AsyncMock(return_value=(True, ''))
+    monkeypatch.setattr(_Triton, 'unload_model', unload)
+    for name in ('paddleocr_det_trt', 'paddleocr_rec_trt'):
+        for params in ({}, {'force': 'true'}):
+            resp = client.post(f'{models_router.router.prefix}/{name}/unload', params=params)
+            assert resp.status_code == 403, resp.text
+    unload.assert_not_awaited()
+
+
+def test_unload_of_a_core_model_needs_force(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config.settings import TritonModelConfig
+
+    unload = AsyncMock(return_value=(True, ''))
+    monkeypatch.setattr(_Triton, 'unload_model', unload)
+    url = f'{models_router.router.prefix}/{TritonModelConfig.FACE_DETECT_MODEL}/unload'
+    assert client.post(url).status_code == 409
+    unload.assert_not_awaited()
+    assert client.post(url, params={'force': 'true'}).status_code == 200
+    unload.assert_awaited_once()

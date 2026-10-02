@@ -428,17 +428,20 @@ async def load_model(model_name: str):
 
 
 @router.post('/{model_name}/unload', response_model=ModelLoadResponse)
-async def unload_model(model_name: str):
+async def unload_model(
+    model_name: str, force: bool = Query(False, description='Also unload a core pipeline model')
+):
     """
-    Unload a model from Triton server.
+    Unload a model from Triton (files stay in the repository, reloadable).
 
-    Frees GPU memory by removing the model from Triton.
-    The model files remain in the repository and can be reloaded.
-
-    **Note:** Model names should include the format suffix:
-    - `{name}_trt` for standard TRT
-    - `{name}_trt_end2end` for End2End TRT
+    Model names include the format suffix (`{name}_trt`, `{name}_trt_end2end`).
+    Same guard as the delete routes: 403 for the configured detector / OCR
+    (even with ``force``), 409 for core models without ``force``.
     """
+    try:
+        check_unload(model_name, force=force)
+    except UnloadRefusedError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     triton = TritonControlService()
     success, message = await triton.unload_model(model_name)
 
@@ -466,9 +469,8 @@ async def delete_model(
     - TRT End2End model directory (models/{name}_trt_end2end/)
     - the ONNX End2End intermediate the export leaves (models/{name}_end2end/)
 
-    Also unloads the model from Triton if currently loaded. Every Triton model
-    removed goes through the curation unload route's guard first (403 for the
-    configured detector / OCR, 409 for core models without ``force``), and
+    Also unloads it from Triton. Every model removed goes through the shared
+    unload guard first (403 detector / OCR, 409 core without ``force``);
     nothing is deleted when any is refused.
     """
     triton = TritonControlService()
