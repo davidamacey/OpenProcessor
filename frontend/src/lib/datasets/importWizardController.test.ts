@@ -106,7 +106,12 @@ describe('Start', () => {
     return previewFixture({
       classes: previewFixture().classes.map((c) => ({
         ...c,
-        resolved: { kind: 'item', class_id: 2, class_name: 'widget' },
+        resolved: {
+          dataset_class: c.dataset_class,
+          kind: 'item',
+          class_id: 2,
+          class_name: 'widget',
+        },
       })),
     });
   }

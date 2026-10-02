@@ -118,7 +118,7 @@ export class ImportJob {
   /** The served label for the current status. */
   statusLabel(fallback: Record<string, string> = {}): string {
     const s = this.status ?? '';
-    return this.job?.labels?.status?.[s] ?? fallback[s] ?? s;
+    return this.job?.labels?.['status']?.[s] ?? fallback[s] ?? s;
   }
 
   start(): void {

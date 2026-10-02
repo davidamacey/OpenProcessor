@@ -121,8 +121,6 @@ import type {
   ValidationReport,
 } from './types_config';
 import type {
-  PackTestRequest,
-  PackTestResponse,
   PackUpdateRequest,
   PackValidateRequest,
   PromptPackDoc,
@@ -1254,6 +1252,8 @@ export interface RegionBrowseItem {
   crop_id: string;
   id: string;
   image_path: string;
+  /** The source image's id; targets an image Reprocess. */
+  image_id?: string;
   bbox_norm: number[];
   region_status: string | null;
   region_verified: boolean | null;
@@ -2243,6 +2243,7 @@ export function mapRawCrop(c: RawCrop): Crop {
   const out: Crop = {
     id: c.crop_id,
     source_image_path: c.image_path,
+    image_id: c.image_id || undefined,
     bbox_norm: xyxyToBBoxNorm(bb),
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
@@ -3123,6 +3124,8 @@ export interface ReviewTabVocabularyEntry {
 export interface ReviewEmptyState {
   has_probe_predictions: boolean;
   has_item_scores: boolean;
+  /** Whether any labeled-dataset import has written labels (W10). */
+  has_imported_labels: boolean;
 }
 
 /** `GET {API_PREFIX}/review/tabs`. */
@@ -5132,6 +5135,21 @@ export async function reprocessCrop(
   return { ...res, items: (res.items ?? []).map(mapRawCrop) };
 }
 
+/** Single-image Reprocess (`POST /images/{image_id}/reprocess`); returns
+ *  the post-write `items` of that image, mapped like every other crop. */
+export async function reprocessImage(
+  imageId: string,
+  body: ReprocessOneRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse<Crop>> {
+  const res = await apiFetch<ReprocessResponse<RawCrop>>(
+    `${scoped()}/images/${encodeURIComponent(imageId)}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return { ...res, items: (res.items ?? []).map(mapRawCrop) };
+}
+
 export function getReprocessJob(
   jobId: string,
   signal?: AbortSignal,
@@ -5301,27 +5319,6 @@ export function rollbackPromptPack(body: {
     method: 'POST',
     body: JSON.stringify(body),
   });
-}
-
-/** `POST /prompt_packs/test` (W5): runs one call on real crops and never
- *  writes. Each result's `preview_item` (the item as the write would
- *  leave it) is also mapped into `preview`. */
-export async function testPromptPack(
-  body: PackTestRequest,
-  signal?: AbortSignal,
-): Promise<PackTestResponse<Crop>> {
-  const res = await apiFetch<PackTestResponse>(
-    `${scoped()}/prompt_packs/test`,
-    { method: 'POST', body: JSON.stringify(body) },
-    signal,
-  );
-  return {
-    ...res,
-    results: (res.results ?? []).map((r) => ({
-      ...r,
-      preview: r.preview_item ? mapRawCrop(r.preview_item as unknown as RawCrop) : null,
-    })),
-  };
 }
 
 // -- Region profiles and the config vocabulary (OpenProcessor W4) ---------

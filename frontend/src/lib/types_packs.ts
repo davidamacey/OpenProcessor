@@ -15,7 +15,6 @@ import type {
   ConfigSource,
   ConfigUpdateRequest,
   ConfigValidateRequest,
-  ValidationReport,
 } from './types_config';
 
 /**
@@ -101,52 +100,3 @@ export interface PromptPackSchema {
 export type PackUpdateRequest = ConfigUpdateRequest<PromptPackBody>;
 
 export type PackValidateRequest = ConfigValidateRequest<PromptPackBody>;
-
-/** `POST /prompt_packs/test` (§7.5). Exactly one pack source: `draft`, or
- *  `pack_name` (+ `pack_revision`). Unset keys take the server's default
- *  (registry classes, active profile, active VLM endpoint). */
-export interface PackTestRequest {
-  pack_name?: string | null;
-  pack_revision?: number | null;
-  draft?: PromptPackBody | null;
-  call: string;
-  crop_ids: string[];
-  use_region_box?: 'current' | 'none';
-}
-
-export interface PackTestVlm {
-  name: string | null;
-  revision: number | null;
-  draft: boolean;
-  model: string | null;
-  resolved_model: string | null;
-  sends_images_externally: boolean;
-}
-
-/** One `results[]` entry. `preview` is `preview_item` mapped through
- *  `mapRawCrop` by `testPromptPack`. */
-export interface PackTestResult<P = unknown> {
-  crop_id: string;
-  /** Region-verify results carry the box they judged (W3-Q15). */
-  box_id?: string | null;
-  parse_ok: boolean;
-  parse_error: string | null;
-  parsed_combined: unknown;
-  parsed_region: unknown;
-  parsed_class: unknown;
-  parsed_visible: unknown;
-  preview_item: Record<string, unknown> | null;
-  preview?: P | null;
-}
-
-export interface PackTestResponse<P = unknown> {
-  call: string;
-  pack: { name: string | null; revision: number | null; draft: boolean };
-  vlm: PackTestVlm | null;
-  prompt: { system: string; user_text: string };
-  raw_reply: string;
-  reasoning: string | null;
-  latency_ms: number;
-  validation: ValidationReport | null;
-  results: PackTestResult<P>[];
-}

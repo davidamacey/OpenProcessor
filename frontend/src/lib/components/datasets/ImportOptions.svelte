@@ -45,14 +45,14 @@
       />
       <span class="text-zinc-400">Server default</span>
     </label>
-    {#each formats.processing as p (p.id)}
+    {#each formats.processing_modes as p (p.value)}
       <label class="flex items-start gap-2 py-0.5">
         <input
           type="radio"
           name="processing"
-          value={p.id}
-          checked={wizard.options.processing === p.id}
-          onchange={() => wizard.setOption('processing', p.id)}
+          value={p.value}
+          checked={wizard.options.processing === p.value}
+          onchange={() => wizard.setOption('processing', p.value)}
         />
         <span>
           <span class="text-zinc-200">{p.label}</span>
@@ -75,8 +75,8 @@
           )}
       >
         <option value="">Server default</option>
-        {#each formats.label_trust as t (t.id)}
-          <option value={t.id}>{t.label}</option>
+        {#each formats.trust_levels as t (t.value)}
+          <option value={t.value}>{t.label}</option>
         {/each}
       </select>
     </label>
@@ -112,8 +112,8 @@
             )}
         >
           <option value="">Server default</option>
-          {#each formats.parents as p (p.id)}
-            <option value={p.id}>{p.label}</option>
+          {#each formats.parents_modes as p (p.value)}
+            <option value={p.value}>{p.label}</option>
           {/each}
         </select>
       </label>

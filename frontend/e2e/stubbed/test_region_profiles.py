@@ -263,19 +263,14 @@ IMPACT: dict[str, Any] = {
 
 DATASET_FORMATS: dict[str, Any] = {
     "formats": [],
-    "processing": [],
-    "parents": [],
-    "label_trust": [],
+    "issues": [],
     "mapping_actions": [],
     "match_kinds": [],
-    "issues": [],
-    "upload": {"max_bytes": 1, "max_files": 1, "accepted": []},
+    "processing_modes": [],
+    "parents_modes": [],
+    "trust_levels": [],
+    "upload_limits": {"max_bytes": 1, "max_files": 1, "ttl_hours": 24, "preview_max_files": 1},
     "status_labels": {"queued": "Queued"},
-    "reprocess": {
-        "scopes": [{"id": "region", "label": "Regions", "description": "Regenerate regions.", "unit": "item"}],
-        "region_modes": [{"id": "redetect", "label": "Detect again", "description": "Remove machine boxes."}],
-        "lock_rule": "Validated items are never changed.",
-    },
 }
 
 
@@ -455,8 +450,7 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
         reprocesses.append(body)
         scopes = [{"scope": "region", "selected": 940, "locked_skipped": 12, "queued": 0 if body["dry_run"] else 928}]
         job = None if body["dry_run"] else {"job_id": "rp-1", "status": "queued", "poll_after_s": None}
-        message = "940 items would be re-run." if body["dry_run"] else "928 items queued."
-        return (200, {"dry_run": body["dry_run"], "scopes": scopes, "job": job, "items": [], "message": message})
+        return (200, {"dry_run": body["dry_run"], "scopes": scopes, "job": job, "items": []})
 
     stub.on("POST", r"/reprocess$", reprocess)
 
@@ -489,7 +483,9 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
     confirm = page.get_by_role("dialog", name="Re-run items")
     with page.expect_request(lambda r: r.url.endswith("/reprocess")):
         confirm.get_by_role("button", name="Re-run", exact=True).click()
-    expect(impact.get_by_test_id("rerun-result")).to_contain_text("928 items queued.", timeout=ACTION_TIMEOUT_MS)
+    expect(impact.get_by_test_id("rerun-result").locator("tbody tr td")).to_have_text(
+        ["Region", "940", "12", "928", "\u2014", "\u2014"], timeout=ACTION_TIMEOUT_MS
+    )
     expect(impact.get_by_test_id("rerun-job")).to_contain_text("rp-1")
     assert reprocesses[1] == {**SUGGESTED, "dry_run": False}, reprocesses
 

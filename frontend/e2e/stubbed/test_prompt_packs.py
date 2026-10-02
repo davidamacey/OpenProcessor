@@ -381,24 +381,22 @@ def test_test_on_crop_sends_the_draft_and_shows_the_reply(stub, page, app_url):
                     "name": "env",
                     "revision": None,
                     "draft": False,
-                    "model": "local-vlm",
-                    "resolved_model": "example/vision-model",
-                    "sends_images_externally": False,
+                    "endpoint": "env@abc123",
+                    "model": "example/vision-model",
                 },
                 "prompt": {"system": "You classify widgets.", "user_text": "Pick one of: widget, gadget"},
                 "raw_reply": '[{"img": 1, "class": "widget", "confidence": 0.91}]',
                 "reasoning": None,
                 "latency_ms": 812.4,
+                "parse_ok": True,
+                "parse_error": None,
                 "validation": CLEAN,
                 "results": [
                     {
                         "crop_id": "c_123",
-                        "parse_ok": True,
-                        "parse_error": None,
-                        "parsed_combined": None,
-                        "parsed_region": None,
-                        "parsed_class": {"class_name": "widget", "confidence": 0.91},
-                        "parsed_visible": None,
+                        "box_id": None,
+                        "parsed": {"class_name": "widget", "confidence": 0.91},
+                        "skipped": None,
                         "preview_item": {"crop_id": "c_123", "bbox_norm": [0.1, 0.1, 0.5, 0.5]},
                     }
                 ],
@@ -417,9 +415,12 @@ def test_test_on_crop_sends_the_draft_and_shows_the_reply(stub, page, app_url):
         {"draft": {**BODY, "class_system": "You sort widgets."}, "call": "classify", "crop_ids": ["c_123"]}
     ], tests
     expect(panel.get_by_test_id("test-raw-reply")).to_contain_text('"class": "widget"', timeout=ACTION_TIMEOUT_MS)
-    expect(panel.get_by_test_id("test-parse-ok")).to_be_visible()
+    expect(panel.get_by_test_id("test-parse-status")).to_contain_text("parsed")
+    expect(panel.get_by_test_id("test-pack-ref")).to_have_text("draft")
+    expect(panel.get_by_test_id("test-vlm-ref")).to_contain_text("env@abc123")
+    expect(panel.get_by_test_id("test-latency")).to_have_text("812.4 ms")
     expect(panel.get_by_test_id("test-parsed")).to_contain_text('"class_name": "widget"')
-    expect(panel.get_by_test_id("pack-test-preview")).to_be_visible()
+    expect(panel.get_by_test_id("test-preview-item")).to_be_visible()
 
 
 def test_clone_a_template_opens_the_new_pack(stub, page, app_url):

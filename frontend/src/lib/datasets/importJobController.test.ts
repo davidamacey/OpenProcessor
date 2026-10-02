@@ -76,17 +76,12 @@ describe('following a job', () => {
       jobFixture({
         status: 'failed',
         poll_after_s: null,
-        error: {
-          code: 'chunks_failed',
-          message: '6 consecutive chunks failed: index unavailable.',
-        },
+        error: '6 consecutive chunks failed: index unavailable.',
       }),
     ]);
     job.start();
     await vi.advanceTimersByTimeAsync(0);
-    expect(job.job?.error?.message).toBe(
-      '6 consecutive chunks failed: index unavailable.',
-    );
+    expect(job.job?.error).toBe('6 consecutive chunks failed: index unavailable.');
     expect(job.canResume).toBe(true);
     expect(job.canCancel).toBe(false);
     await vi.advanceTimersByTimeAsync(10_000);

@@ -45,8 +45,9 @@ describe('datasetsAvailability', () => {
     await datasetsAvailability.init();
     expect(datasetsAvailability.available).toBe(true);
     expect(datasetsAvailability.formats?.mapping_actions[0]).toEqual({
-      id: 'map',
+      value: 'map',
       label: 'Map to class',
+      description: '',
     });
     expect(datasetsAvailability.statusLabel('paused_backpressure')).toBe(
       'Waiting for the region worker',

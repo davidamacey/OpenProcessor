@@ -4,15 +4,24 @@
  * w3-pack-editor-ui-plan-2026-09-27.md §3).
  *
  * Sends exactly what the operator chose: the unsaved draft, or the saved
- * pack at the revision on screen; the call; the crop ids; and
- * `use_region_box` only when picked. Everything else takes the server's
- * default (registry classes, active profile, active VLM endpoint). The
- * response is rendered as served; nothing here parses a reply.
+ * pack at the revision on screen; the call; the crop ids; `use_region_box`
+ * only when picked; and the VLM selection only when one is set
+ * (`vlmSelection`, written by the VLM picker). Everything else takes the
+ * server's default (registry classes, active profile, active VLM
+ * endpoint). The response is rendered as served; nothing here parses a
+ * reply.
  */
 import { untrack } from 'svelte';
-import { configErrorDetail, configErrorText, testPromptPack } from '$lib/api';
+import { configErrorDetail, configErrorText } from '$lib/api';
+import { testPromptPack } from '$lib/api_configTest';
 import type { Crop } from '$lib/types';
-import type { PackTestRequest, PackTestResponse, PromptPackBody } from '$lib/types_packs';
+import type {
+  PackTestCall,
+  PackTestRequest,
+  PackTestResponse,
+  TestVlmSelection,
+} from '$lib/types_configTest';
+import type { PromptPackBody } from '$lib/types_packs';
 import type { ValidationReport } from '$lib/types_config';
 
 export type PackTestSource = 'draft' | 'saved';
@@ -29,16 +38,21 @@ export function parseCropIds(text: string): string[] {
 }
 
 export class PackTest {
-  call = $state('');
+  call = $state<PackTestCall | ''>('');
   cropIdsText = $state('');
   source = $state<PackTestSource>('draft');
   /** `''` = not sent (the server's default applies). */
   useRegionBox = $state<'' | 'current' | 'none'>('');
+  /** The VLM to answer, when the operator picked one; null = the server's
+   *  default (the active endpoint). */
+  vlmSelection = $state<TestVlmSelection | null>(null);
 
   running = $state(false);
   result = $state<PackTestResponse<Crop> | null>(null);
   error = $state<string | null>(null);
   errorReport = $state<ValidationReport | null>(null);
+  /** Ids the server named in a `crop_not_found` refusal. */
+  missingCropIds = $state<string[]>([]);
 
   #test: typeof testPromptPack;
   #abort: AbortController | null = null;
@@ -66,39 +80,50 @@ export class PackTest {
     return parseCropIds(this.cropIdsText);
   }
 
+  /** Enough input to run (a rerun while one is in flight aborts it). */
+  get ready(): boolean {
+    return this.call !== '' && this.cropIds.length > 0;
+  }
+
+  /** What the Run button enables on. */
   get canRun(): boolean {
-    return !this.running && this.call !== '' && this.cropIds.length > 0;
+    return !this.running && this.ready;
   }
 
   request(ctx: PackTestContext): PackTestRequest {
+    const call = this.call as PackTestCall;
     const req: PackTestRequest =
       this.source === 'draft'
-        ? { draft: ctx.draft, call: this.call, crop_ids: this.cropIds }
+        ? { draft: ctx.draft, call, crop_ids: this.cropIds }
         : {
             pack_name: ctx.name,
             pack_revision: ctx.revision,
-            call: this.call,
+            call,
             crop_ids: this.cropIds,
           };
     if (this.useRegionBox) req.use_region_box = this.useRegionBox;
+    if (this.vlmSelection) Object.assign(req, this.vlmSelection);
     return req;
   }
 
   async run(ctx: PackTestContext): Promise<void> {
-    if (!this.canRun) return;
+    if (!this.ready) return;
     this.#abort?.abort();
     const ctl = new AbortController();
     this.#abort = ctl;
     this.running = true;
     this.error = null;
     this.errorReport = null;
+    this.missingCropIds = [];
     try {
       this.result = await this.#test(this.request(ctx), ctl.signal);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.result = null;
       this.error = configErrorText(e);
-      this.errorReport = configErrorDetail(e)?.report ?? null;
+      const d = configErrorDetail(e);
+      this.errorReport = d?.report ?? null;
+      this.missingCropIds = d?.error === 'crop_not_found' ? (d.crop_ids ?? []) : [];
     } finally {
       if (this.#abort === ctl) {
         this.running = false;

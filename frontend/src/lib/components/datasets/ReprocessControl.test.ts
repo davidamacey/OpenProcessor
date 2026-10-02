@@ -1,8 +1,11 @@
 /**
- * Reprocess (§7.12 item 6, W10.13), mounted: absent without the served
- * vocabulary; one crop applies from the dialog and hands back the served
- * post-write crop; several crops run a served dry run before the apply;
- * the served message and counts are what the operator reads.
+ * Reprocess (§7.12 item 6, W10.13), mounted against the contract shapes:
+ * present whenever W10 is served (the backend serves no `reprocess`
+ * vocabulary block, so nothing is gated on one); the scope and region-mode
+ * ids are the contract's enums; one crop or one image applies from the
+ * dialog and hands back the served post-write items; several crops run a
+ * served dry run before the apply; the served counts are what the operator
+ * reads.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
@@ -84,13 +87,32 @@ describe('ReprocessControl', () => {
     expect(target.querySelector('[data-testid="reprocess-open"]')).toBeNull();
   });
 
-  it('is absent when the served formats carry no reprocess vocabulary', async () => {
-    serve({ formats: () => json(formatsFixture({ reprocess: null })) });
+  it('is present once W10 is served, with no reprocess block in the formats', async () => {
+    const formats = formatsFixture();
+    expect(formats).not.toHaveProperty('reprocess');
+    serve({ formats: () => json(formats) });
     await render({ kind: 'crop', cropId: 'c1' });
-    expect(target.querySelector('[data-testid="reprocess-open"]')).toBeNull();
+    expect(target.querySelector('[data-testid="reprocess-open"]')).not.toBeNull();
   });
 
-  it('one crop: the served scopes and lock rule, then apply and adopt the served crop', async () => {
+  it('offers exactly the contract scopes and region modes, and no lock-rule copy', async () => {
+    serve({ formats: () => json(formatsFixture()) });
+    await render({ kind: 'crop', cropId: 'c1' });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    const labels = [...document.querySelectorAll('fieldset label')].map((l) =>
+      l.textContent?.trim(),
+    );
+    expect(labels).toEqual(['Detect', 'Region', 'VLM', 'Embed']);
+    expect(document.querySelector('[data-testid="reprocess-lock-rule"]')).toBeNull();
+    expect(document.querySelector('select')).toBeNull();
+    check('Region');
+    const modes = [...document.querySelectorAll('select option')].map(
+      (o) => (o as HTMLOptionElement).value,
+    );
+    expect(modes).toEqual(['', 'redetect', 'reverify']);
+  });
+
+  it('one crop: apply with dry_run false and adopt the served crop', async () => {
     serve({
       formats: () => json(formatsFixture()),
       '/crops/c1/reprocess': () =>
@@ -99,18 +121,14 @@ describe('ReprocessControl', () => {
             dry_run: false,
             scopes: [{ scope: 'vlm', selected: 1, locked_skipped: 1, queued: 0 }],
             items: [{ crop_id: 'c1', class_name: 'widget' }],
-            message: 'This item is locked; nothing was re-run.',
           }),
         ),
     });
     const onadopt = vi.fn();
     await render({ kind: 'crop', cropId: 'c1' }, { onadopt });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    expect(
-      document.querySelector('[data-testid="reprocess-lock-rule"]')?.textContent,
-    ).toBe(formatsFixture().reprocess!.lock_rule);
     expect(buttonNamed('Reprocess')?.disabled).toBe(true);
-    check('VLM class');
+    check('VLM');
     click(buttonNamed('Reprocess'));
     await flush();
     flushSync();
@@ -120,10 +138,40 @@ describe('ReprocessControl', () => {
         body: { scopes: ['vlm'], dry_run: false },
       },
     ]);
-    expect(document.querySelector('[data-testid="reprocess-message"]')?.textContent).toBe(
-      'This item is locked; nothing was re-run.',
-    );
+    const counts = document.querySelector('[data-testid="reprocess-result"]')!;
+    expect(counts.textContent).toContain('Locked, skipped');
     expect(onadopt).toHaveBeenCalledWith([expect.objectContaining({ id: 'c1' })]);
+  });
+
+  it('one image: posts to the image route and adopts every served item', async () => {
+    serve({
+      formats: () => json(formatsFixture()),
+      '/images/img_1/reprocess': () =>
+        json(
+          reprocessFixture({
+            dry_run: false,
+            items: [{ crop_id: 'c1' }, { crop_id: 'c2' }],
+          }),
+        ),
+    });
+    const onadopt = vi.fn();
+    await render({ kind: 'image', imageId: 'img_1' }, { onadopt });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    expect(document.querySelector('h3')?.textContent?.trim()).toBe('Reprocess image');
+    check('Detect');
+    click(buttonNamed('Reprocess'));
+    await flush();
+    flushSync();
+    expect(posts).toEqual([
+      {
+        url: `${API_PREFIX}/images/img_1/reprocess`,
+        body: { scopes: ['detect'], dry_run: false },
+      },
+    ]);
+    expect(onadopt).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'c1' }),
+      expect.objectContaining({ id: 'c2' }),
+    ]);
   });
 
   it('several crops: a served dry run first, then the apply', async () => {
@@ -136,14 +184,13 @@ describe('ReprocessControl', () => {
             : reprocessFixture({
                 dry_run: false,
                 scopes: [{ scope: 'region', selected: 12, locked_skipped: 3, queued: 9 }],
-                message: '9 items queued.',
               }),
         ),
     });
     const onapplied = vi.fn();
     await render({ kind: 'crops', cropIds: ['a', 'b'] }, { onapplied });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    check('Regions');
+    check('Region');
     const mode = document.querySelector('select') as HTMLSelectElement;
     mode.value = 'reverify';
     mode.dispatchEvent(new Event('change', { bubbles: true }));
@@ -155,9 +202,6 @@ describe('ReprocessControl', () => {
     const dry = document.querySelector('[data-testid="reprocess-dry-run"]')!;
     expect(dry.textContent).toContain('12');
     expect(dry.textContent).toContain('3');
-    expect(dry.textContent).toContain(
-      '12 items selected; 3 are locked and will be skipped.',
-    );
     click(buttonNamed('Reprocess'));
     await flush();
     flushSync();
@@ -175,9 +219,11 @@ describe('ReprocessControl', () => {
         dry_run: false,
       },
     ]);
-    expect(
-      document.querySelector('[data-testid="reprocess-result"]')?.textContent,
-    ).toContain('9 items queued.');
+    const cells = [
+      ...document.querySelectorAll('[data-testid="reprocess-result"] tbody tr td'),
+    ].map((c) => c.textContent?.trim());
+    // scope, selected, locked, queued, failed, not found: omitted counts read "—".
+    expect(cells).toEqual(['Region', '12', '3', '9', '—', '—']);
     expect(onapplied).toHaveBeenCalled();
   });
 
@@ -197,12 +243,48 @@ describe('ReprocessControl', () => {
     });
     await render({ kind: 'crops', cropIds: ['a'] });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    check('Embeddings');
+    check('Embed');
     click(buttonNamed('Check what would run'));
     await flush();
     flushSync();
     expect(document.querySelector('[data-testid="reprocess-error"]')?.textContent).toBe(
       'A reprocess job is already running.',
     );
+  });
+
+  it('shows a served job with its progress', async () => {
+    serve({
+      formats: () => json(formatsFixture()),
+      '/reprocess': (body) =>
+        json(
+          (body as { dry_run: boolean }).dry_run
+            ? reprocessFixture()
+            : reprocessFixture({
+                dry_run: false,
+                job: {
+                  job_id: 'rj1',
+                  status: 'running',
+                  images_total: 10,
+                  images_done: 4,
+                  images_failed: 1,
+                  poll_after_s: 600,
+                },
+              }),
+        ),
+    });
+    await render({ kind: 'crops', cropIds: ['a'] });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    check('Detect');
+    click(buttonNamed('Check what would run'));
+    await flush();
+    flushSync();
+    click(buttonNamed('Reprocess'));
+    await flush();
+    flushSync();
+    const job = document.querySelector('[data-testid="reprocess-job"]')!;
+    expect(job.textContent).toContain('rj1');
+    expect(job.textContent).toContain('4 / 10');
+    expect(job.textContent).toContain('1 failed');
+    click(buttonNamed('Close'));
   });
 });

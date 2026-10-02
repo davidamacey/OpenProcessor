@@ -378,6 +378,9 @@ export interface ItemTextLine {
 export interface Crop {
   id: string;
   source_image_path: string;
+  /** The source image's id (wire `image_id`); undefined on a legacy item
+   *  that serves none. Targets an image Reprocess. */
+  image_id?: string;
   source_image_sha256?: string;
   bbox_norm: BBoxNorm;
   class_id: number | null;
@@ -776,7 +779,10 @@ export type CoreReviewTab =
   // 'vlm_new_class_pending'`). Backed by the same `{API_PREFIX}/review/{tab}`
   // shape as every other core tab; `/classes`'s Proposals section reads
   // the separate `.../summary` aggregate instead (see api.ts).
-  | 'new_class_proposals';
+  | 'new_class_proposals'
+  // Labels written by a W10 dataset import (`GET {prefix}/review/imported`);
+  // only offered when `GET /review/tabs` serves an `imported` entry.
+  | 'imported';
 
 export type ReviewTab = CoreReviewTab | SlotReviewTab;
 

@@ -5,8 +5,10 @@
  * - One crop: `POST /crops/{id}/reprocess` with `dry_run: false` (the
  *   route's own default; the dialog is the confirm step). The served
  *   post-write items are handed back for the host to adopt.
+ * - One image: `POST /images/{id}/reprocess`, same single-target flow;
+ *   every served item of that image is handed back.
  * - Several crops: `POST /reprocess` with `dry_run: true` first (served
- *   per-scope `selected` / `locked_skipped` / `breakdown` / `message`),
+ *   per-scope `selected` / `locked_skipped` / `breakdown`),
  *   then the same request with `dry_run: false`. A served `job` is
  *   followed at `GET /reprocess/jobs/{job_id}`.
  * - A served request (W4's activation `impact.suggested_reprocess`,
@@ -15,7 +17,7 @@
  *   and region mode can't be changed.
  *
  * Human and imported labels are locked server-side; the client never
- * words an outcome itself — the served `message` and counts are shown.
+ * words an outcome itself, only the served counts are shown.
  */
 import {
   cancelReprocessJob,
@@ -23,22 +25,27 @@ import {
   getReprocessJob,
   reprocessBatch,
   reprocessCrop,
+  reprocessImage,
 } from '$lib/api';
 import type { Crop } from '$lib/types';
 import type {
   ReprocessJob,
+  ReprocessRegionMode,
   ReprocessRequest,
   ReprocessResponse,
+  ReprocessScope,
 } from '$lib/types_import';
 
 export type ReprocessTarget =
   | { kind: 'crop'; cropId: string }
+  | { kind: 'image'; imageId: string }
   | { kind: 'crops'; cropIds: string[] }
   | { kind: 'request'; request: ReprocessRequest };
 
 export interface ReprocessDeps {
   reprocessBatch: typeof reprocessBatch;
   reprocessCrop: typeof reprocessCrop;
+  reprocessImage: typeof reprocessImage;
   getReprocessJob: typeof getReprocessJob;
   cancelReprocessJob: typeof cancelReprocessJob;
 }
@@ -47,15 +54,16 @@ export interface ReprocessDeps {
 const defaultDeps = (): ReprocessDeps => ({
   reprocessBatch,
   reprocessCrop,
+  reprocessImage,
   getReprocessJob,
   cancelReprocessJob,
 });
 
 export class ReprocessFlow {
   readonly target: ReprocessTarget;
-  scopes = $state<string[]>([]);
+  scopes = $state<ReprocessScope[]>([]);
   /** '' = the server's default region mode. */
-  regionMode = $state('');
+  regionMode = $state<ReprocessRegionMode | ''>('');
   /** The batch dry run for the current choices; null when stale. */
   dryRun = $state<ReprocessResponse | null>(null);
   result = $state<ReprocessResponse | null>(null);
@@ -73,18 +81,18 @@ export class ReprocessFlow {
   }
 
   get isBatch(): boolean {
-    return this.target.kind !== 'crop';
+    return this.target.kind === 'crops' || this.target.kind === 'request';
   }
 
   /** The number of crops targeted; 0 for a served request, whose size is
    *  only known from its dry run. */
   get count(): number {
-    if (this.target.kind === 'crop') return 1;
+    if (this.target.kind === 'crop' || this.target.kind === 'image') return 1;
     if (this.target.kind === 'crops') return this.target.cropIds.length;
     return 0;
   }
 
-  toggleScope(id: string, on: boolean): void {
+  toggleScope(id: ReprocessScope, on: boolean): void {
     if (this.target.kind === 'request') return;
     this.scopes = on
       ? [...this.scopes.filter((s) => s !== id), id]
@@ -92,7 +100,7 @@ export class ReprocessFlow {
     this.#invalidate();
   }
 
-  setRegionMode(mode: string): void {
+  setRegionMode(mode: ReprocessRegionMode | ''): void {
     if (this.target.kind === 'request') return;
     this.regionMode = mode;
     this.#invalidate();
@@ -104,7 +112,7 @@ export class ReprocessFlow {
     this.error = null;
   }
 
-  #regionMode(): { region_mode?: string } {
+  #regionMode(): { region_mode?: ReprocessRegionMode } {
     return this.scopes.includes('region') && this.regionMode
       ? { region_mode: this.regionMode }
       : {};
@@ -149,14 +157,18 @@ export class ReprocessFlow {
     this.busy = true;
     this.error = null;
     try {
-      if (this.target.kind === 'crop') {
-        const res = await this.#deps.reprocessCrop(this.target.cropId, {
+      if (this.target.kind === 'crop' || this.target.kind === 'image') {
+        const body = {
           scopes: this.scopes,
           ...this.#regionMode(),
           dry_run: false,
-        });
+        };
+        const res =
+          this.target.kind === 'crop'
+            ? await this.#deps.reprocessCrop(this.target.cropId, body)
+            : await this.#deps.reprocessImage(this.target.imageId, body);
         this.result = res;
-        return res.items;
+        return res.items ?? [];
       }
       const res = await this.#deps.reprocessBatch(this.#batchRequest(false)!);
       this.result = res;

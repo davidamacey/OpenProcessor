@@ -1,19 +1,23 @@
 <script lang="ts">
   /**
    * A test result's `preview_item` (the item as the write would leave it,
-   * §5.1) drawn through the same box path as a stored item: the crop's
-   * source-image context with the tested item replaced by the preview,
-   * rendered by `SourceImageOverlay` (§7.6 item 3). Nothing is written.
+   * §5.1, §7.7) drawn through the same box path as a stored item: the
+   * crop's source-image context with the tested item replaced by the
+   * preview, rendered by `SourceImageOverlay`. Shared by the pack and
+   * region-profile test panels. Nothing is written. `extraShapes` adds
+   * overlay shapes (profile-test candidates) in the source-image frame.
    */
   import { getCropContext, configErrorText } from '$lib/api';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
+  import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import type { Crop, CropContextResponse } from '$lib/types';
 
   interface Props {
     preview: Crop;
+    extraShapes?: OverlayShape[];
   }
 
-  let { preview }: Props = $props();
+  let { preview, extraShapes = [] }: Props = $props();
 
   let context = $state<CropContextResponse | null>(null);
   let error = $state<string | null>(null);
@@ -39,7 +43,7 @@
   });
 </script>
 
-<div data-testid="pack-test-preview">
+<div data-testid="test-preview-item">
   {#if error}
     <p class="text-xs text-red-300">Could not load the source image: {error}</p>
   {:else if context}
@@ -47,6 +51,7 @@
       cropId={preview.id}
       {context}
       maxDim={800}
+      {extraShapes}
       class="max-h-80 w-full"
     />
   {:else}

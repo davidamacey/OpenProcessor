@@ -8,12 +8,7 @@ import type {
   ValidationIssue,
   ValidationReport,
 } from '$lib/types_config';
-import type {
-  PackTestResponse,
-  PromptPackDoc,
-  PromptPackList,
-  PromptPackSchema,
-} from '$lib/types_packs';
+import type { PromptPackDoc, PromptPackList, PromptPackSchema } from '$lib/types_packs';
 
 export const cleanReport = (): ValidationReport => ({
   ok: true,
@@ -245,43 +240,6 @@ export function revisionsFixture(): ConfigRevisionList {
         saved_at: '2026-09-26T10:00:00Z',
         cloned_from: 'template:widget_tag@-',
         description: 'First cut',
-      },
-    ],
-  };
-}
-
-export function testResponseFixture(): PackTestResponse {
-  return {
-    call: 'classify',
-    pack: { name: null, revision: null, draft: true },
-    vlm: {
-      name: 'env',
-      revision: null,
-      draft: false,
-      model: 'local-vlm',
-      resolved_model: 'example/vision-model',
-      sends_images_externally: false,
-    },
-    prompt: { system: 'You classify widgets.', user_text: 'Pick one of: widget, gadget' },
-    raw_reply: '[{"img": 1, "class": "widget", "confidence": 0.91}]',
-    reasoning: null,
-    latency_ms: 812.4,
-    validation: cleanReport(),
-    results: [
-      {
-        crop_id: 'c_123',
-        parse_ok: true,
-        parse_error: null,
-        parsed_combined: null,
-        parsed_region: null,
-        parsed_class: { class_name: 'widget', confidence: 0.91 },
-        parsed_visible: null,
-        preview_item: {
-          crop_id: 'c_123',
-          image_id: 'img_1',
-          bbox_norm: [0.1, 0.1, 0.5, 0.5],
-          proposed_class_name: 'widget',
-        },
       },
     ],
   };

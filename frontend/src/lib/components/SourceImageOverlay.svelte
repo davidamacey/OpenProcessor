@@ -42,6 +42,7 @@
    */
   import { getCropContext, getSourceImageScaled } from '$lib/api';
   import type { Crop } from '$lib/types';
+  import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
   import type { XYXY } from '$lib/annotations/types';
@@ -66,6 +67,9 @@
     /** Pre-fetched context (e.g. a caller that already loaded it for its
      *  own purposes) — skips this component's own fetch entirely. */
     context?: CropContextResponse | null;
+    /** Extra shapes in the source-image frame (test-on-crop candidates):
+     *  boxes and mask outlines, `dimmed` ones drawn faint. */
+    extraShapes?: OverlayShape[];
   }
 
   let {
@@ -76,6 +80,7 @@
     class: className = '',
     align = 'center',
     context: providedContext = null,
+    extraShapes = [],
   }: Props = $props();
 
   let fetchedContext = $state<CropContextResponse | null>(null);
@@ -322,6 +327,47 @@
               >
                 {@render boxLabel(b)}
               </div>
+            {/if}
+          {/each}
+          {#each extraShapes as s (s.key)}
+            {#if s.kind === 'box'}
+              {@const [x1, y1, x2, y2] = s.box}
+              <div
+                class="absolute border-2 border-sky-400 {s.dimmed
+                  ? 'border-dashed opacity-40'
+                  : 'z-10'}"
+                style="left:{pct(x1)}; top:{pct(y1)}; width:{pct(x2 - x1)}; height:{pct(
+                  y2 - y1,
+                )};"
+                data-testid="overlay-extra-box"
+                data-dimmed={s.dimmed}
+                title={s.title}
+              >
+                <span
+                  class="absolute -top-4 left-0 rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none whitespace-nowrap text-zinc-100"
+                  >{s.label}</span
+                >
+              </div>
+            {:else}
+              <svg
+                class="absolute inset-0 h-full w-full {s.dimmed ? 'opacity-40' : ''}"
+                viewBox="0 0 1 1"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <polygon
+                  points={s.points.map((q) => `${q[0]},${q[1]}`).join(' ')}
+                  fill="rgba(56, 189, 248, 0.15)"
+                  stroke="rgb(56, 189, 248)"
+                  stroke-width="2"
+                  stroke-dasharray={s.dimmed ? '4 3' : undefined}
+                  vector-effect="non-scaling-stroke"
+                  data-testid="overlay-extra-polygon"
+                  data-dimmed={s.dimmed}
+                >
+                  <title>{s.title}</title>
+                </polygon>
+              </svg>
             {/if}
           {/each}
         </div>

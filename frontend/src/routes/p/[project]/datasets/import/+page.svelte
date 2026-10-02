@@ -91,7 +91,7 @@
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    const max = datasetUploadMaxBytes(formats.upload.max_bytes);
+    const max = datasetUploadMaxBytes(formats.upload_limits.max_bytes);
     void wizard.upload(
       file,
       max,
@@ -143,8 +143,8 @@
               onchange={(e) =>
                 wizard.setFormat((e.currentTarget as HTMLSelectElement).value)}
             >
-              {#each formats.formats as f (f.id)}
-                <option value={f.id}>{f.label}</option>
+              {#each formats.formats as f (f.format)}
+                <option value={f.format}>{f.label}</option>
               {/each}
             </select>
           </label>
@@ -161,15 +161,16 @@
             <span class="text-zinc-400">Or upload an archive</span>
             <input
               type="file"
-              accept={formats.upload.accepted.join(',')}
               disabled={wizard.uploading}
               onchange={(e) => onFile(e, formats)}
             />
           </label>
           <span class="ml-2 text-zinc-500">
-            {formats.upload.accepted.join(', ')}, up to
-            {(datasetUploadMaxBytes(formats.upload.max_bytes) / 1024 ** 3).toFixed(1)} GiB.
-            Large datasets belong on a server path.
+            Up to
+            {(datasetUploadMaxBytes(formats.upload_limits.max_bytes) / 1024 ** 3).toFixed(
+              1,
+            )} GiB and {formats.upload_limits.max_files.toLocaleString()} files. Large datasets
+            belong on a server path.
           </span>
           {#if wizard.uploading}<p class="mt-1 text-zinc-400">Uploading…</p>{/if}
           {#if wizard.uploadError}<p class="mt-1 text-red-300">

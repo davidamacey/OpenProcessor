@@ -443,3 +443,115 @@ describe('SourceImageOverlay', () => {
     regionStatusesStore.boxStates = [];
   });
 });
+
+describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
+  const ctx = (): CropContextResponse => ({
+    image: {
+      image_id: 'i',
+      image_path: '/i.jpg',
+      width: 100,
+      height: 100,
+      source: null,
+      indexed_at: null,
+    },
+    items: [item({ id: 'crop-1' })],
+  });
+
+  const shapes = [
+    {
+      key: 'detector:0:box',
+      kind: 'box' as const,
+      box: [0.1, 0.2, 0.5, 0.6] as [number, number, number, number],
+      dimmed: false,
+      label: 'detector #0',
+      title: 'detector #0',
+    },
+    {
+      key: 'detector:1:box',
+      kind: 'box' as const,
+      box: [0.6, 0.6, 0.9, 0.9] as [number, number, number, number],
+      dimmed: true,
+      label: 'detector #1',
+      title: 'detector #1 · dropped: Below min score',
+    },
+    {
+      key: 'segmenter:0:poly',
+      kind: 'polygon' as const,
+      points: [
+        [0.2, 0.2],
+        [0.6, 0.2],
+        [0.4, 0.5],
+      ] as [number, number][],
+      dimmed: true,
+      label: 'segmenter #0',
+      title: 'segmenter #0',
+    },
+    {
+      key: 'segmenter:1:poly',
+      kind: 'polygon' as const,
+      points: [
+        [0.3, 0.3],
+        [0.7, 0.3],
+        [0.5, 0.8],
+      ] as [number, number][],
+      dimmed: false,
+      label: 'segmenter #1',
+      title: 'segmenter #1',
+    },
+  ];
+
+  it('draws extra boxes at the served percentages, dimmed ones faint and dashed', async () => {
+    vi.mocked(getCropContext).mockResolvedValue(ctx());
+    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    const boxes = [
+      ...el.querySelectorAll('[data-testid="overlay-extra-box"]'),
+    ] as HTMLElement[];
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]!.style.left).toBe('10%');
+    expect(boxes[0]!.style.top).toBe('20%');
+    expect(boxes[0]!.style.width).toBe('40%');
+    expect(boxes[0]!.style.height).toBe('40%');
+    expect(boxes[0]!.dataset.dimmed).toBe('false');
+    expect(boxes[0]!.className).not.toContain('opacity-40');
+    expect(boxes[1]!.dataset.dimmed).toBe('true');
+    expect(boxes[1]!.className).toContain('opacity-40');
+    expect(boxes[1]!.className).toContain('border-dashed');
+    expect(boxes[1]!.getAttribute('title')).toContain('Below min score');
+    expect(boxes[0]!.textContent).toContain('detector #0');
+  });
+
+  it('draws mask outlines as polygons over a unit viewBox, dimmed ones faint', async () => {
+    vi.mocked(getCropContext).mockResolvedValue(ctx());
+    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    const polys = [
+      ...el.querySelectorAll('[data-testid="overlay-extra-polygon"]'),
+    ] as SVGPolygonElement[];
+    expect(polys).toHaveLength(2);
+    expect(polys[0]!.getAttribute('points')).toBe('0.2,0.2 0.6,0.2 0.4,0.5');
+    expect(polys[0]!.dataset.dimmed).toBe('true');
+    expect(polys[0]!.closest('svg')!.getAttribute('class')).toContain('opacity-40');
+    expect(polys[1]!.dataset.dimmed).toBe('false');
+    expect(polys[1]!.closest('svg')!.getAttribute('class')).not.toContain('opacity-40');
+    expect(polys[0]!.closest('svg')!.getAttribute('viewBox')).toBe('0 0 1 1');
+  });
+
+  it('draws no extra shapes by default, and hides them with the boxes toggle', async () => {
+    vi.mocked(getCropContext).mockResolvedValue(ctx());
+    const plain = await render({ cropId: 'crop-1' });
+    expect(plain.querySelector('[data-testid="overlay-extra-box"]')).toBeNull();
+    expect(plain.querySelector('[data-testid="overlay-extra-polygon"]')).toBeNull();
+    unmount(instance as never);
+    instance = undefined;
+    plain.remove();
+
+    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    expect(el.querySelector('[data-testid="overlay-extra-box"]')).not.toBeNull();
+    const toggle = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('hide boxes'),
+    ) as HTMLButtonElement;
+    toggle.click();
+    flushSync();
+    expect(el.querySelector('[data-testid="overlay-extra-box"]')).toBeNull();
+    expect(el.querySelector('[data-testid="overlay-extra-polygon"]')).toBeNull();
+  });
+});

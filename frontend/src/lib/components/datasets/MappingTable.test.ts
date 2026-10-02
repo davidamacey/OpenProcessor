@@ -56,7 +56,12 @@ describe('MappingTable', () => {
 
   it('highlights rows the served preview does not resolve, and shows resolved targets', () => {
     const p = previewFixture();
-    p.classes[0]!.resolved = { kind: 'item', class_id: 2, class_name: 'widget' };
+    p.classes[0]!.resolved = {
+      dataset_class: 'Widget',
+      kind: 'item',
+      class_id: 2,
+      class_name: 'widget',
+    };
     render(p);
     expect(row('Widget').dataset.unmapped).toBeUndefined();
     expect(

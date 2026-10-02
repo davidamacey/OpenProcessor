@@ -1,11 +1,12 @@
 <script lang="ts">
   /**
    * "Reprocess…" button + dialog (any_domain_plan.md §7.12 item 6,
-   * W10.13). Absent unless the backend serves W10 and its Reprocess
-   * vocabulary (`/datasets/formats` `reprocess`: scopes, region modes and
-   * the lock-rule copy, delta 20). One crop applies directly from the
-   * dialog; several crops run a served dry run first and apply on
-   * confirm. Every count and sentence about the outcome is served.
+   * W10.13). Absent unless the backend serves W10 (the one-shot
+   * `datasetsAvailability` probe). The scope and region-mode ids are the
+   * contract's enums (`reprocessVocabulary.ts`); the backend serves no
+   * labels or lock-rule copy for them. One crop or image applies directly
+   * from the dialog; several crops run a served dry run first and apply
+   * on confirm. Every count about the outcome is served.
    */
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
@@ -15,6 +16,12 @@
     type ReprocessTarget,
   } from '$lib/datasets/reprocessController.svelte';
   import type { Crop } from '$lib/types';
+  import type { ReprocessRegionMode } from '$lib/types_import';
+  import {
+    REGION_MODES,
+    REPROCESS_SCOPES,
+    reprocessLabel,
+  } from '$lib/datasets/reprocessVocabulary';
   import ReprocessCounts from './ReprocessCounts.svelte';
 
   interface Props {
@@ -25,6 +32,8 @@
     onapplied?: () => void;
     disabled?: boolean;
     buttonClass?: string;
+    /** The open button's text (default "Reprocess…"). */
+    buttonLabel?: string;
   }
 
   let {
@@ -33,17 +42,14 @@
     onapplied,
     disabled = false,
     buttonClass = 'btn btn-sm',
+    buttonLabel = 'Reprocess…',
   }: Props = $props();
 
   $effect(() => {
     void datasetsAvailability.init();
   });
 
-  const vocab = $derived(
-    datasetsAvailability.available === true
-      ? (datasetsAvailability.formats?.reprocess ?? null)
-      : null,
-  );
+  const available = $derived(datasetsAvailability.available === true);
 
   let flow = $state<ReprocessFlow | null>(null);
 
@@ -66,12 +72,9 @@
     if (crops.length > 0) onadopt?.(crops);
     if (f.isBatch) onapplied?.();
   }
-
-  const scopeLabel = (id: string): string =>
-    vocab?.scopes.find((s) => s.id === id)?.label ?? id;
 </script>
 
-{#if vocab}
+{#if available}
   <button
     type="button"
     class={buttonClass}
@@ -79,11 +82,11 @@
     {disabled}
     onclick={open}
   >
-    Reprocess…
+    {buttonLabel}
   </button>
 {/if}
 
-{#if flow && vocab}
+{#if flow && available}
   {@const f = flow}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
@@ -102,34 +105,30 @@
       class="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-5 text-sm shadow-2xl"
     >
       <h3 class="text-base font-semibold text-zinc-100">
-        Reprocess {f.count.toLocaleString()}
-        {f.count === 1 ? 'item' : 'items'}
+        {#if f.target.kind === 'image'}
+          Reprocess image
+        {:else}
+          Reprocess {f.count.toLocaleString()}
+          {f.count === 1 ? 'item' : 'items'}
+        {/if}
       </h3>
-      <p class="text-xs text-zinc-400" data-testid="reprocess-lock-rule">
-        {vocab.lock_rule}
-      </p>
 
       <fieldset class="space-y-1">
-        {#each vocab.scopes as s (s.id)}
+        {#each REPROCESS_SCOPES as id (id)}
           <label class="flex items-start gap-2">
             <input
               type="checkbox"
-              checked={f.scopes.includes(s.id)}
+              checked={f.scopes.includes(id)}
               disabled={f.busy || f.result != null}
               onchange={(e) =>
-                f.toggleScope(s.id, (e.currentTarget as HTMLInputElement).checked)}
+                f.toggleScope(id, (e.currentTarget as HTMLInputElement).checked)}
             />
-            <span>
-              <span class="text-zinc-200">{s.label}</span>
-              {#if s.description}
-                <span class="block text-xs text-zinc-500">{s.description}</span>
-              {/if}
-            </span>
+            <span class="text-zinc-200">{reprocessLabel(id)}</span>
           </label>
         {/each}
       </fieldset>
 
-      {#if f.scopes.includes('region') && vocab.region_modes.length > 0}
+      {#if f.scopes.includes('region')}
         <label class="block text-xs">
           <span class="mb-0.5 block text-zinc-400">Region mode</span>
           <select
@@ -137,11 +136,13 @@
             value={f.regionMode}
             disabled={f.busy || f.result != null}
             onchange={(e) =>
-              f.setRegionMode((e.currentTarget as HTMLSelectElement).value)}
+              f.setRegionMode(
+                (e.currentTarget as HTMLSelectElement).value as ReprocessRegionMode | '',
+              )}
           >
             <option value="">Server default</option>
-            {#each vocab.region_modes as m (m.id)}
-              <option value={m.id}>{m.label}</option>
+            {#each REGION_MODES as m (m)}
+              <option value={m}>{reprocessLabel(m)}</option>
             {/each}
           </select>
         </label>
@@ -149,16 +150,20 @@
 
       {#if f.dryRun && !f.result}
         <div class="space-y-1" data-testid="reprocess-dry-run">
-          <ReprocessCounts res={f.dryRun} {scopeLabel} />
+          <ReprocessCounts res={f.dryRun} scopeLabel={reprocessLabel} />
         </div>
       {/if}
       {#if f.result}
         <div class="space-y-1" data-testid="reprocess-result">
-          <ReprocessCounts res={f.result} {scopeLabel} />
+          <ReprocessCounts res={f.result} scopeLabel={reprocessLabel} />
           {#if f.job}
             <p class="text-xs text-zinc-300" data-testid="reprocess-job">
               Job <code class="font-mono">{f.job.job_id}</code>:
-              {f.job.labels?.status?.[f.job.status] ?? f.job.status}
+              {datasetsAvailability.statusLabel(f.job.status)}
+              {#if f.job.images_total}
+                · {(f.job.images_done ?? 0).toLocaleString()} / {f.job.images_total.toLocaleString()}
+                images{#if f.job.images_failed}, {f.job.images_failed.toLocaleString()} failed{/if}
+              {/if}
               {#if f.job.error}<span class="text-red-300"> — {f.job.error}</span>{/if}
             </p>
           {/if}

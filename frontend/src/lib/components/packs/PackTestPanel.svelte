@@ -1,15 +1,18 @@
 <script lang="ts">
   /**
    * Test-on-crop for one pack (`POST /prompt_packs/test`, W5; §5.1, §7.5,
-   * §7.6 item 3). Absent unless the served schema marks a call
-   * `testable`. Shows exactly what the server returns: the prompt it
-   * built, the raw reply, the parsed models and the preview item.
+   * §7.6 item 3, §7.7). Absent unless the served schema marks a call
+   * `testable`. Shows exactly what the server returns: the pack and VLM
+   * that ran, the prompt it built, the raw reply, each crop's parsed
+   * answer (or served skip reason) and the preview item.
    */
   import { getThumbUrl } from '$lib/api';
   import { createPackTest } from '$lib/packs/packTestController.svelte';
+  import type { PackTestCall } from '$lib/types_configTest';
   import type { PackSchemaCall, PromptPackBody } from '$lib/types_packs';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
-  import PackTestPreview from './PackTestPreview.svelte';
+  import TestPreviewItem from '$components/config/TestPreviewItem.svelte';
+  import TestRefs from '$components/configTest/TestRefs.svelte';
 
   interface Props {
     calls: PackSchemaCall[];
@@ -28,7 +31,7 @@
   const testable = $derived(calls.filter((c) => c.testable));
 
   $effect(() => {
-    if (t.call === '' && testable.length > 0) t.call = testable[0]!.id;
+    if (t.call === '' && testable.length > 0) t.call = testable[0]!.id as PackTestCall;
   });
   $effect(() => {
     t.setSavedOnly(savedOnly);
@@ -38,21 +41,6 @@
   function run(): void {
     void t.run({ name, revision, draft });
   }
-
-  const parsedBlocks = (r: {
-    parsed_combined: unknown;
-    parsed_class: unknown;
-    parsed_region: unknown;
-    parsed_visible: unknown;
-  }): Array<[string, unknown]> =>
-    (
-      [
-        ['parsed_combined', r.parsed_combined],
-        ['parsed_class', r.parsed_class],
-        ['parsed_region', r.parsed_region],
-        ['parsed_visible', r.parsed_visible],
-      ] as Array<[string, unknown]>
-    ).filter(([, v]) => v != null);
 </script>
 
 {#if testable.length > 0}
@@ -86,11 +74,23 @@
       <label class="flex flex-col gap-1 text-xs text-zinc-400 sm:col-span-2">
         Crop ids (from review or browse, separated by commas or spaces)
         <input
-          class="input input-sm font-mono"
+          class="input input-sm font-mono {t.missingCropIds.length > 0
+            ? 'border-red-500'
+            : ''}"
           bind:value={t.cropIdsText}
           placeholder="c_123, c_456"
+          aria-invalid={t.missingCropIds.length > 0}
           data-testid="test-crop-ids"
         />
+        {#if t.missingCropIds.length > 0}
+          <span class="text-red-300" data-testid="test-missing-ids">
+            Not found:
+            {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
+              t.missingCropIds.length - 1
+                ? ', '
+                : ''}{/each}
+          </span>
+        {/if}
       </label>
       <label class="flex flex-col gap-1 text-xs text-zinc-400">
         Boxes on the crop
@@ -129,27 +129,19 @@
         class="flex flex-col gap-3 border-t border-zinc-800 pt-3"
         data-testid="test-result"
       >
-        <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-          <dt class="text-zinc-500">Pack</dt>
-          <dd class="font-mono">
-            {r.pack.draft
-              ? 'unsaved draft'
-              : `${r.pack.name ?? ''}${r.pack.revision == null ? '' : ` r${r.pack.revision}`}`}
-          </dd>
-          {#if r.vlm}
-            <dt class="text-zinc-500">VLM</dt>
-            <dd class="font-mono">
-              {r.vlm.name ?? '—'} · {r.vlm.resolved_model ?? r.vlm.model ?? '—'}
-              {#if r.vlm.sends_images_externally}
-                <span class="ml-1 text-amber-300"
-                  >sends images outside this deployment</span
-                >
-              {/if}
-            </dd>
+        <TestRefs pack={r.pack} vlm={r.vlm} latencyMs={r.latency_ms} />
+        <p class="text-xs" data-testid="test-parse-status">
+          {#if r.parse_ok}
+            <span class="rounded border border-emerald-500/40 px-1.5 text-emerald-300"
+              >parsed</span
+            >
+          {:else}
+            <span class="rounded border border-red-500/40 px-1.5 text-red-300"
+              >not parsed</span
+            >
+            {#if r.parse_error}<span class="ml-1 text-red-300">{r.parse_error}</span>{/if}
           {/if}
-          <dt class="text-zinc-500">Latency</dt>
-          <dd class="font-mono">{r.latency_ms} ms</dd>
-        </dl>
+        </p>
         {#if r.validation}
           <ConfigIssueList
             issues={[...r.validation.errors, ...r.validation.warnings]}
@@ -161,17 +153,17 @@
           <p class="mt-1 text-[11px] text-zinc-500">System</p>
           <pre
             class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap"
-            data-testid="test-prompt-system">{r.prompt.system}</pre>
+            data-testid="test-prompt-system">{r.prompt.system ?? ''}</pre>
           <p class="mt-1 text-[11px] text-zinc-500">User</p>
           <pre
             class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap"
-            data-testid="test-prompt-user">{r.prompt.user_text}</pre>
+            data-testid="test-prompt-user">{r.prompt.user_text ?? ''}</pre>
         </details>
         <div>
           <p class="text-xs text-zinc-500">Raw reply</p>
           <pre
             class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap"
-            data-testid="test-raw-reply">{r.raw_reply}</pre>
+            data-testid="test-raw-reply">{r.raw_reply ?? ''}</pre>
         </div>
         {#if r.reasoning}
           <div>
@@ -195,33 +187,21 @@
               <code class="font-mono">{res.crop_id}</code>
               {#if res.box_id}<code class="font-mono text-zinc-400">{res.box_id}</code
                 >{/if}
-              {#if res.parse_ok}
-                <span
-                  class="rounded border border-emerald-500/40 px-1.5 text-emerald-300"
-                  data-testid="test-parse-ok">parsed</span
-                >
-              {:else}
-                <span
-                  class="rounded border border-red-500/40 px-1.5 text-red-300"
-                  data-testid="test-parse-failed">not parsed</span
-                >
-                {#if res.parse_error}<span class="text-red-300">{res.parse_error}</span
-                  >{/if}
-              {/if}
             </div>
-            {#each parsedBlocks(res) as [key, value] (key)}
-              <div>
-                <p class="font-mono text-[11px] text-zinc-500">{key}</p>
-                <pre
-                  class="max-h-48 overflow-auto rounded bg-zinc-900 p-2 text-[11px]"
-                  data-testid="test-parsed">{JSON.stringify(value, null, 2)}</pre>
-              </div>
-            {/each}
+            {#if res.skipped}
+              <p class="text-xs text-amber-300" data-testid="test-skipped">
+                {res.skipped}
+              </p>
+            {:else if res.parsed != null}
+              <pre
+                class="max-h-48 overflow-auto rounded bg-zinc-900 p-2 text-[11px]"
+                data-testid="test-parsed">{JSON.stringify(res.parsed, null, 2)}</pre>
+            {/if}
             {#if res.preview}
               <p class="text-[11px] text-zinc-500">
                 The item as this reply would leave it
               </p>
-              <PackTestPreview preview={res.preview} />
+              <TestPreviewItem preview={res.preview} />
               <details>
                 <summary class="cursor-pointer text-[11px] text-zinc-400"
                   >preview_item</summary

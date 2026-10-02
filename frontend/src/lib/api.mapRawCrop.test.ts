@@ -91,11 +91,14 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.excluded_at).toBe(raw.excluded_at);
     expect(crop.item_text_lines).toEqual(raw.item_text_lines);
 
-    // image_id and thumbnail_url are declared on RawCrop but intentionally
-    // not carried onto Crop by mapRawCrop today — documented here so a
-    // future intentional wiring doesn't get flagged as a regression, and an
-    // accidental one shows up as a diff in this test instead of nowhere.
-    expect((crop as unknown as Record<string, unknown>).image_id).toBeUndefined();
+    // image_id is carried (it targets an image Reprocess, W10); an empty
+    // served one (a legacy item) reads undefined. thumbnail_url is declared
+    // on RawCrop but intentionally not carried onto Crop by mapRawCrop
+    // today — documented here so a future intentional wiring doesn't get
+    // flagged as a regression, and an accidental one shows up as a diff
+    // in this test instead of nowhere.
+    expect(crop.image_id).toBe(raw.image_id);
+    expect(mapRawCrop({ ...raw, image_id: '' }).image_id).toBeUndefined();
     expect((crop as unknown as Record<string, unknown>).thumbnail_url).toBeUndefined();
   });
 

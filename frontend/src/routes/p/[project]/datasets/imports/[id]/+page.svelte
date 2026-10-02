@@ -112,7 +112,7 @@
               data-status={j.status}>{job.statusLabel(formats.status_labels)}</span
             >
             <span class="text-xs text-zinc-500">
-              {formats.formats.find((f) => f.id === j.source.format)?.label ??
+              {formats.formats.find((f) => f.format === j.source.format)?.label ??
                 j.source.format}
               · <code class="font-mono">{j.source.root}</code>
             </span>
@@ -154,7 +154,7 @@
               class="rounded border border-red-900 bg-red-950/30 p-2 text-sm text-red-200"
               data-testid="job-error"
             >
-              {j.error.message}
+              {j.error}
             </p>
           {/if}
 
@@ -244,7 +244,7 @@
                   <td class="py-1 pr-4 text-zinc-300">{m.dataset_class}</td>
                   <td class="py-1 pr-4 text-zinc-500">
                     {formats.mapping_actions.find(
-                      (a) => a.id === (m.kind === 'item' ? 'map' : m.kind),
+                      (a) => a.value === (m.kind === 'item' ? 'map' : m.kind),
                     )?.label ?? m.kind}
                   </td>
                   <td class="py-1 text-zinc-100">{m.class_name ?? '—'}</td>

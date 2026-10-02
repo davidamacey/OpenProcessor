@@ -16,43 +16,43 @@ export function formatsFixture(
 ): DatasetFormatsResponse {
   return {
     formats: [
-      { id: 'auto', label: 'Detect automatically' },
-      { id: 'yolo', label: 'YOLO (data.yaml)' },
-      { id: 'coco', label: 'COCO JSON' },
-      { id: 'openprocessor_export', label: 'OpenProcessor export' },
+      { format: 'auto', label: 'Detect automatically' },
+      { format: 'yolo', label: 'YOLO (data.yaml)' },
+      { format: 'coco', label: 'COCO JSON' },
+      { format: 'openprocessor_export', label: 'OpenProcessor export' },
     ],
-    processing: [
+    processing_modes: [
       {
-        id: 'none',
+        value: 'none',
         label: 'Import as-is',
         description: 'Index the images and import the labels. No detector or VLM runs.',
       },
       {
-        id: 'propose',
+        value: 'propose',
         label: 'Import and find missed objects',
         description: 'Also run the detector, region and VLM pipeline.',
       },
     ],
-    parents: [
-      { id: 'auto', label: 'Automatic' },
-      { id: 'labels', label: "From the dataset's labels" },
-      { id: 'detect', label: 'Detect them' },
+    parents_modes: [
+      { value: 'auto', label: 'Automatic', description: '' },
+      { value: 'labels', label: "From the dataset's labels", description: '' },
+      { value: 'detect', label: 'Detect them', description: '' },
     ],
-    label_trust: [
-      { id: 'validated', label: 'Trusted (validated)' },
-      { id: 'suggestion', label: 'Suggestions to review' },
+    trust_levels: [
+      { value: 'validated', label: 'Trusted (validated)', description: '' },
+      { value: 'suggestion', label: 'Suggestions to review', description: '' },
     ],
     mapping_actions: [
-      { id: 'map', label: 'Map to class' },
-      { id: 'create', label: 'Create class' },
-      { id: 'skip', label: 'Skip' },
-      { id: 'region', label: 'Region boxes' },
+      { value: 'map', label: 'Map to class', description: '' },
+      { value: 'create', label: 'Create class', description: '' },
+      { value: 'skip', label: 'Skip', description: '' },
+      { value: 'region', label: 'Region boxes', description: '' },
     ],
     match_kinds: [
-      { id: 'exact', label: 'Same name' },
-      { id: 'case_insensitive', label: 'Same name, different case' },
-      { id: 'synonym', label: 'Synonym' },
-      { id: 'none', label: 'No match' },
+      { value: 'exact', label: 'Same name', description: '' },
+      { value: 'case_insensitive', label: 'Same name, different case', description: '' },
+      { value: 'synonym', label: 'Synonym', description: '' },
+      { value: 'none', label: 'No match', description: '' },
     ],
     issues: [
       {
@@ -70,10 +70,11 @@ export function formatsFixture(
         label: 'The frozen test split changed',
       },
     ],
-    upload: {
+    upload_limits: {
       max_bytes: 2147483648,
       max_files: 200000,
-      accepted: ['.zip', '.tar', '.tar.gz'],
+      ttl_hours: 24,
+      preview_max_files: 5000,
     },
     status_labels: {
       queued: 'Queued',
@@ -86,44 +87,6 @@ export function formatsFixture(
       interrupted: 'Interrupted',
       undoing: 'Undoing',
       undone: 'Undone',
-    },
-    reprocess: {
-      scopes: [
-        {
-          id: 'detect',
-          label: 'Detect again',
-          description: 'Re-run the detectors.',
-          unit: 'image',
-        },
-        {
-          id: 'region',
-          label: 'Regions',
-          description: 'Regenerate machine regions.',
-          unit: 'item',
-        },
-        {
-          id: 'vlm',
-          label: 'VLM class',
-          description: 'Clear the VLM class.',
-          unit: 'item',
-        },
-        {
-          id: 'embed',
-          label: 'Embeddings',
-          description: 'Recompute vectors.',
-          unit: 'item',
-        },
-      ],
-      region_modes: [
-        { id: 'redetect', label: 'Detect again', description: 'Remove machine boxes.' },
-        {
-          id: 'reverify',
-          label: 'Verify again',
-          description: 'Re-verify machine boxes.',
-        },
-      ],
-      lock_rule:
-        'Human and imported labels are never changed. Reprocess only regenerates machine proposals.',
     },
     ...over,
   };
@@ -214,6 +177,9 @@ export function jobFixture(over: Partial<DatasetImportJob> = {}): DatasetImportJ
     report: {
       images_created: 40,
       images_reused: 0,
+      images_failed: 0,
+      images_skipped: 0,
+      items_reconciled_removed: 0,
       items_created: 120,
       items_updated: 0,
       items_noop: 0,
@@ -230,14 +196,19 @@ export function jobFixture(over: Partial<DatasetImportJob> = {}): DatasetImportJ
       disagreements: { counts: {}, samples: [] },
     },
     mapping: [
-      { dataset_class: 'Widget', kind: 'item', class_id: 2, class_name: 'widget' },
+      {
+        dataset_class: 'Widget',
+        kind: 'item',
+        class_id: 2,
+        class_name: 'widget',
+        created: false,
+      },
     ],
     options: {},
     source: {
       format: 'yolo',
       root: '/data/source/widgets/yolo',
       source_sha: 'a',
-      op_export: null,
     },
     issues_summary: [],
     undo: null,
@@ -271,6 +242,8 @@ export function undoReportFixture(
     items_deleted: 240,
     items_restored: 3,
     items_kept_human_edited: 2,
+    items_kept_shared: 0,
+    items_reinstated: 0,
     class_labels_removed: 243,
     boxes_removed: 0,
     boxes_kept_human_edited: 0,
@@ -289,11 +262,18 @@ export function reprocessFixture(
   return {
     dry_run: true,
     scopes: [
-      { scope: 'region', selected: 12, locked_skipped: 3, queued: 0, breakdown: [] },
+      {
+        scope: 'region',
+        selected: 12,
+        locked_skipped: 3,
+        queued: 0,
+        failed: 0,
+        not_found: 0,
+        breakdown: [],
+      },
     ],
     job: null,
     items: [],
-    message: '12 items selected; 3 are locked and will be skipped.',
     ...over,
   };
 }

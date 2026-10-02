@@ -23,6 +23,7 @@
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import ReprocessCounts from '$components/datasets/ReprocessCounts.svelte';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
+  import { reprocessLabel } from '$lib/datasets/reprocessVocabulary';
   import { ReprocessFlow } from '$lib/datasets/reprocessController.svelte';
   import type { ActivationImpact } from '$lib/types_profiles';
 
@@ -36,13 +37,8 @@
     if (impact.suggested_reprocess) void datasetsAvailability.init();
   });
 
-  const vocab = $derived(
-    datasetsAvailability.available === true
-      ? (datasetsAvailability.formats?.reprocess ?? null)
-      : null,
-  );
-  const scopeLabel = (id: string): string =>
-    vocab?.scopes.find((s) => s.id === id)?.label ?? id;
+  const available = $derived(datasetsAvailability.available === true);
+  const scopeLabel = reprocessLabel;
 
   let flow = $state<ReprocessFlow | null>(null);
   let confirming = $state(false);
@@ -107,9 +103,8 @@
     </table>
   {/if}
 
-  {#if impact.suggested_reprocess && vocab}
+  {#if impact.suggested_reprocess && available}
     <div class="flex flex-col gap-2 border-t border-zinc-800 pt-2">
-      <p class="text-xs text-zinc-400" data-testid="rerun-lock-rule">{vocab.lock_rule}</p>
       {#if !flow}
         <button
           type="button"
@@ -150,7 +145,7 @@
             {#if f.job}
               <p class="text-xs text-zinc-300" data-testid="rerun-job">
                 Job <code class="font-mono">{f.job.job_id}</code>:
-                {f.job.labels?.status?.[f.job.status] ?? f.job.status}
+                {datasetsAvailability.statusLabel(f.job.status)}
                 {#if f.job.error}<span class="text-red-300"> — {f.job.error}</span>{/if}
               </p>
             {/if}
@@ -174,7 +169,6 @@
   >
     <p>Sends the server's suggested re-run with the counts below.</p>
     <ReprocessCounts res={flow.dryRun} {scopeLabel} />
-    {#if vocab}<p class="text-xs text-zinc-400">{vocab.lock_rule}</p>{/if}
     {#if flow.error}<p class="text-red-300">{flow.error}</p>{/if}
   </ConfirmDialog>
 {/if}
