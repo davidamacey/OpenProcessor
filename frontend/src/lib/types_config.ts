@@ -134,4 +134,22 @@ export interface ConfigErrorDetail {
   current?: ActiveRef | null;
   axis?: string | null;
   valid_ids?: string[] | null;
+  // W9 / P4 / W5 refusals (contract f582aa05): each present only on the
+  // codes that carry it.
+  endpoint?: string | null;
+  activate_via?: string | null;
+  requested?: string | null;
+  projects?: string[] | null;
+  crop_ids?: string[] | null;
+  limit?: number | null;
+  jobs?: ConfigErrorJobRef[] | null;
+}
+
+/** One running job blocking a lifecycle action (contract `JobRefWire`). */
+export interface ConfigErrorJobRef {
+  kind: string;
+  kind_label: string;
+  id: string;
+  label: string;
+  started_at?: string | null;
 }

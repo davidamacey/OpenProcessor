@@ -2103,6 +2103,26 @@ export type RawCrop = {
   excluded_reason?: string | null;
   excluded_at?: string | null;
   item_text_lines?: unknown;
+  // W9 / W10 / P4 item provenance (contract f582aa05 `ItemDoc`); each is
+  // served on every item, a missing key maps to null / false / [].
+  vlm_endpoint?: string | null;
+  vlm_model?: string | null;
+  vlm_prompt_pack?: string | null;
+  label_locked?: boolean;
+  import_ids?: string[];
+  dataset_split?: string | null;
+  imported_at?: string | null;
+  proposed_by_import?: string | null;
+  on_negative_frame?: boolean;
+  import_standalone_region?: boolean;
+  proposal_chain?: string[];
+  origin_project?: string | null;
+  origin_item_id?: string | null;
+  origin_image_id?: string | null;
+  origin_split?: string | null;
+  combine_conflict?: boolean;
+  combine_conflict_origins?: string[];
+  combine_merged_origins?: string[];
 };
 
 /**
@@ -2165,6 +2185,24 @@ export const RAW_CROP_KEYS = [
   'excluded_reason',
   'excluded_at',
   'item_text_lines',
+  'vlm_endpoint',
+  'vlm_model',
+  'vlm_prompt_pack',
+  'label_locked',
+  'import_ids',
+  'dataset_split',
+  'imported_at',
+  'proposed_by_import',
+  'on_negative_frame',
+  'import_standalone_region',
+  'proposal_chain',
+  'origin_project',
+  'origin_item_id',
+  'origin_image_id',
+  'origin_split',
+  'combine_conflict',
+  'combine_conflict_origins',
+  'combine_merged_origins',
 ] as const satisfies readonly (keyof RawCrop)[];
 // Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
 type _RawCropKeysExhaustive =
@@ -2195,7 +2233,12 @@ function asItemTextLines(v: unknown): ItemTextLine[] {
   return out;
 }
 
-function mapRawCrop(c: RawCrop): Crop {
+/** A served string list, tolerantly: anything else (absent, null) is `[]`. */
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+export function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
   const out: Crop = {
     id: c.crop_id,
@@ -2248,6 +2291,24 @@ function mapRawCrop(c: RawCrop): Crop {
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
     item_text_lines: asItemTextLines(c.item_text_lines),
+    vlm_endpoint: c.vlm_endpoint ?? null,
+    vlm_model: c.vlm_model ?? null,
+    vlm_prompt_pack: c.vlm_prompt_pack ?? null,
+    label_locked: !!c.label_locked,
+    import_ids: asStringArray(c.import_ids),
+    dataset_split: c.dataset_split ?? null,
+    imported_at: c.imported_at ?? null,
+    proposed_by_import: c.proposed_by_import ?? null,
+    on_negative_frame: !!c.on_negative_frame,
+    import_standalone_region: !!c.import_standalone_region,
+    proposal_chain: asStringArray(c.proposal_chain),
+    origin_project: c.origin_project ?? null,
+    origin_item_id: c.origin_item_id ?? null,
+    origin_image_id: c.origin_image_id ?? null,
+    origin_split: c.origin_split ?? null,
+    combine_conflict: !!c.combine_conflict,
+    combine_conflict_origins: asStringArray(c.combine_conflict_origins),
+    combine_merged_origins: asStringArray(c.combine_merged_origins),
     slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks

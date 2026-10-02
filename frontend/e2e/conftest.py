@@ -374,6 +374,15 @@ class Stub:
         # absent — so existing tests stay green; test_region_profiles.py
         # overrides it.
         self.on("GET", r"/region_profiles(\?|$)", (404, {"detail": "Not Found"}))
+        # W9 (VLM endpoint registry): the Settings card and /models probe the
+        # GLOBAL `GET {prefix}/vlm/endpoints` once. Defaults to a 404 — a
+        # backend without W9 — so existing tests stay green; the Track A
+        # specs override it.
+        self.on("GET", r"/vlm/endpoints(\?|$)", (404, {"detail": "Not Found"}))
+        # P4 (combine projects): `/projects` probes
+        # `GET {prefix}/projects/combine/<sentinel>` once. A plain 404 is the
+        # "router not mounted" shape; Track B specs override it.
+        self.on("GET", r"/projects/combine/[^/?]+(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 

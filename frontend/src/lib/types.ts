@@ -529,6 +529,29 @@ export interface Crop {
    * scored at all.
    */
   probe_actionable?: boolean | null;
+  /** W9: the VLM endpoint (`name@revision`), model and prompt pack that
+   *  produced this item's VLM answer. Null when none ran. */
+  vlm_endpoint?: string | null;
+  vlm_model?: string | null;
+  vlm_prompt_pack?: string | null;
+  /** W10: a human-locked label the pipeline must not overwrite. */
+  label_locked?: boolean;
+  /** W10: ids of the dataset imports that carried this item. */
+  import_ids?: string[];
+  dataset_split?: string | null;
+  imported_at?: string | null;
+  proposed_by_import?: string | null;
+  on_negative_frame?: boolean;
+  import_standalone_region?: boolean;
+  proposal_chain?: string[];
+  /** P4: where a combined item came from (null on a non-combined one). */
+  origin_project?: string | null;
+  origin_item_id?: string | null;
+  origin_image_id?: string | null;
+  origin_split?: string | null;
+  combine_conflict?: boolean;
+  combine_conflict_origins?: string[];
+  combine_merged_origins?: string[];
   updated_at: string;
 }
 

@@ -72,6 +72,24 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   item_text_lines: [
     { text: 'STOP', confidence: 0.88, box_norm: [0.1, 0.1, 0.3, 0.2], rel_height: 0.1 },
   ],
+  vlm_endpoint: 'vlm_widget@3',
+  vlm_model: 'widget-vl-7b',
+  vlm_prompt_pack: 'widget_pack',
+  label_locked: true,
+  import_ids: ['imp-1', 'imp-2'],
+  dataset_split: 'val',
+  imported_at: '2026-05-06T07:08:09Z',
+  proposed_by_import: 'imp-2',
+  on_negative_frame: true,
+  import_standalone_region: true,
+  proposal_chain: ['import:imp-2', 'vlm:widget_pack'],
+  origin_project: 'widgets_a',
+  origin_item_id: 'item-origin-9',
+  origin_image_id: 'image-origin-9',
+  origin_split: 'train',
+  combine_conflict: true,
+  combine_conflict_origins: ['widgets_a', 'widgets_b'],
+  combine_merged_origins: ['widgets_c'],
 };
 
 // Runtime cross-check that DEFAULT_ITEM's own keys match RAW_CROP_KEYS

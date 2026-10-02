@@ -36,13 +36,20 @@ const SCANNED_FILES = [
   'lib/sse.ts',
   'routes/p/[project]/export/+page.svelte',
   'lib/components/SlotCard.svelte',
+  'lib/api_vlm.ts',
+  'lib/api_configTest.ts',
 ] as const;
 
 /** Every file that composes a backend URL through `${globalApi()}` — the
  *  small set of routes P1 keeps global (never project-scoped): the
  *  project list itself, and the global health/events used before a
  *  project is even selected. */
-const GLOBAL_SCANNED_FILES = ['lib/api.ts', 'lib/sse.ts'] as const;
+const GLOBAL_SCANNED_FILES = [
+  'lib/api.ts',
+  'lib/sse.ts',
+  'lib/api_vlm.ts',
+  'lib/api_combine.ts',
+] as const;
 
 /** Every file that composes a backend URL through
  *  `${projectPrefix(project)}` — a SCOPED route addressed through a
@@ -50,7 +57,7 @@ const GLOBAL_SCANNED_FILES = ['lib/api.ts', 'lib/sse.ts'] as const;
  *  (`/projects` row actions such as pause/resume). Resolved against the
  *  scoped OpenAPI paths exactly like `${scoped()}`. */
 const PROJECT_PREFIX_MARKER = '${projectPrefix(project)}';
-const PROJECT_PREFIX_SCANNED_FILES = ['lib/api.ts'] as const;
+const PROJECT_PREFIX_SCANNED_FILES = ['lib/api.ts', 'lib/api_combine.ts'] as const;
 
 function read(rel: string): string {
   return readFileSync(path.join(srcRoot, rel), 'utf-8');
@@ -77,8 +84,13 @@ function read(rel: string): string {
  * `browsePath` parameter, a runtime string, needs a path override).
  */
 const MANUAL_OVERRIDES: Array<{
-  file: (typeof SCANNED_FILES)[number];
+  file:
+    | (typeof SCANNED_FILES)[number]
+    | (typeof GLOBAL_SCANNED_FILES)[number]
+    | (typeof PROJECT_PREFIX_SCANNED_FILES)[number];
   marker: string;
+  /** Which call-site marker the override anchors to; default `'scoped'`. */
+  scan?: 'scoped' | 'projectPrefix';
   path?: string;
   method?: string;
   queryParams?: string[] | null;
@@ -154,16 +166,16 @@ interface ResolvedCall {
   raw: string;
 }
 
-function resolveCalls(
-  file: (typeof SCANNED_FILES)[number],
-  marker: string = '${scoped()}',
-): ResolvedCall[] {
+function resolveCalls(file: string, marker: string = '${scoped()}'): ResolvedCall[] {
   const src = read(file);
   const sites: ApiCallSite[] = scanApiCallSites(src, marker);
-  // Every MANUAL_OVERRIDES marker anchors a ${scoped()} call site — none
-  // apply to the ${globalApi()} scan.
-  const overridesForFile =
-    marker === '${scoped()}' ? MANUAL_OVERRIDES.filter((o) => o.file === file) : [];
+  // An override applies only to the scan kind it names (default scoped);
+  // none apply to the ${globalApi()} scan.
+  const overridesForFile = MANUAL_OVERRIDES.filter(
+    (o) =>
+      o.file === file &&
+      (o.scan === 'projectPrefix' ? PROJECT_PREFIX_MARKER : '${scoped()}') === marker,
+  );
 
   // marker -> the index of the nearest scanned site after it.
   const overrideSiteIndex = new Map<number, (typeof overridesForFile)[number]>();
@@ -217,6 +229,31 @@ function grepFilesWith(marker: string): string[] {
 }
 
 describe('endpoint catalog: completeness', () => {
+  it('every per-track wrapper module exists and is in the scanner lists its track needs', () => {
+    const expected: Record<
+      string,
+      { scoped: boolean; global: boolean; prefix: boolean }
+    > = {
+      'lib/api_vlm.ts': { scoped: true, global: true, prefix: false },
+      'lib/api_combine.ts': { scoped: false, global: true, prefix: true },
+      'lib/api_configTest.ts': { scoped: true, global: false, prefix: false },
+    };
+    const sets = {
+      scoped: new Set<string>(SCANNED_FILES),
+      global: new Set<string>(GLOBAL_SCANNED_FILES),
+      prefix: new Set<string>(PROJECT_PREFIX_SCANNED_FILES),
+    };
+    for (const f of TRACK_WRAPPER_FILES) {
+      expect(() => read(f), `${f} does not exist`).not.toThrow();
+      const want = expected[f];
+      expect(sets.scoped.has(f), `${f} in SCANNED_FILES`).toBe(want.scoped);
+      expect(sets.global.has(f), `${f} in GLOBAL_SCANNED_FILES`).toBe(want.global);
+      expect(sets.prefix.has(f), `${f} in PROJECT_PREFIX_SCANNED_FILES`).toBe(
+        want.prefix,
+      );
+    }
+  });
+
   it('scans a non-trivial number of call sites (guards a vacuous pass)', () => {
     const total = SCANNED_FILES.reduce((n, f) => n + resolveCalls(f).length, 0);
     expect(total).toBeGreaterThan(50);
@@ -252,14 +289,18 @@ describe('endpoint catalog: completeness', () => {
     ).toEqual([]);
   });
 
-  it('every projectPrefix() URL in api.ts uses the scanned marker', () => {
-    // A wrapper that names its parameter anything but `project` would
-    // slip past the marker scan; fail instead of silently skipping it.
-    const src = read('lib/api.ts');
-    const uses = src.match(/\$\{projectPrefix\([^)]*\)\}/g) ?? [];
-    expect(uses.length).toBeGreaterThan(0);
-    expect(uses.filter((u) => u !== PROJECT_PREFIX_MARKER)).toEqual([]);
-  });
+  for (const file of PROJECT_PREFIX_SCANNED_FILES) {
+    it(`every projectPrefix() URL in ${file} uses the scanned marker`, () => {
+      // A wrapper that names its parameter anything but `project` would
+      // slip past the marker scan; fail instead of silently skipping it.
+      const src = read(file);
+      const uses = src.match(/\$\{projectPrefix\([^)]*\)\}/g) ?? [];
+      // Wrapper files not yet populated (Step 0 stubs) have nothing to check.
+      if (file !== 'lib/api.ts' && uses.length === 0) return;
+      expect(uses.length).toBeGreaterThan(0);
+      expect(uses.filter((u) => u !== PROJECT_PREFIX_MARKER)).toEqual([]);
+    });
+  }
 
   it('no other src/ file references ${globalApi()} outside GLOBAL_SCANNED_FILES', () => {
     let out = '';
@@ -357,6 +398,15 @@ function findOperation(
   };
 }
 
+/** Per-track wrapper modules created empty by the Step 0 prelude
+ *  (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md); a track fills them in.
+ *  An empty one is allowed to have zero call sites. */
+const TRACK_WRAPPER_FILES = new Set<string>([
+  'lib/api_vlm.ts',
+  'lib/api_combine.ts',
+  'lib/api_configTest.ts',
+]);
+
 function describeCalls(
   file: string,
   calls: ResolvedCall[],
@@ -364,6 +414,7 @@ function describeCalls(
 ): void {
   describe(file, () => {
     it('found at least one call site', () => {
+      if (calls.length === 0 && TRACK_WRAPPER_FILES.has(file.split(' ')[0])) return;
       expect(calls.length).toBeGreaterThan(0);
     });
 

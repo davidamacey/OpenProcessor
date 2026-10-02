@@ -10,7 +10,7 @@
  * instead of surfacing as `label_confidence`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getCrop } from './api';
+import { getCrop, mapRawCrop } from './api';
 import { makeItem } from './test/makeItem';
 
 function jsonResponse(body: unknown) {
@@ -175,5 +175,58 @@ describe('mapRawCrop full field mapping', () => {
     const crop = await getCrop(raw.crop_id);
 
     expect(crop.updated_at).toBe('');
+  });
+
+  describe('W9 / W10 / P4 item fields', () => {
+    it('maps the VLM provenance fields verbatim', () => {
+      const raw = makeItem();
+      const crop = mapRawCrop(raw);
+      expect(crop.vlm_endpoint).toBe('vlm_widget@3');
+      expect(crop.vlm_model).toBe('widget-vl-7b');
+      expect(crop.vlm_prompt_pack).toBe('widget_pack');
+    });
+
+    it('maps the W10 lock and import fields verbatim', () => {
+      const crop = mapRawCrop(makeItem());
+      expect(crop.label_locked).toBe(true);
+      expect(crop.import_ids).toEqual(['imp-1', 'imp-2']);
+      expect(crop.dataset_split).toBe('val');
+      expect(crop.imported_at).toBe('2026-05-06T07:08:09Z');
+      expect(crop.proposed_by_import).toBe('imp-2');
+      expect(crop.on_negative_frame).toBe(true);
+      expect(crop.import_standalone_region).toBe(true);
+      expect(crop.proposal_chain).toEqual(['import:imp-2', 'vlm:widget_pack']);
+    });
+
+    it('maps the P4 combine origin fields verbatim', () => {
+      const crop = mapRawCrop(makeItem());
+      expect(crop.origin_project).toBe('widgets_a');
+      expect(crop.origin_item_id).toBe('item-origin-9');
+      expect(crop.origin_image_id).toBe('image-origin-9');
+      expect(crop.origin_split).toBe('train');
+      expect(crop.combine_conflict).toBe(true);
+      expect(crop.combine_conflict_origins).toEqual(['widgets_a', 'widgets_b']);
+      expect(crop.combine_merged_origins).toEqual(['widgets_c']);
+    });
+
+    it('defaults a missing key to null / false / [] like the served serializer', () => {
+      const {
+        vlm_endpoint: _a,
+        label_locked: _b,
+        import_ids: _c,
+        origin_project: _d,
+        combine_conflict: _e,
+        combine_merged_origins: _f,
+        ...raw
+      } = makeItem();
+      void [_a, _b, _c, _d, _e, _f];
+      const crop = mapRawCrop(raw);
+      expect(crop.vlm_endpoint).toBeNull();
+      expect(crop.label_locked).toBe(false);
+      expect(crop.import_ids).toEqual([]);
+      expect(crop.origin_project).toBeNull();
+      expect(crop.combine_conflict).toBe(false);
+      expect(crop.combine_merged_origins).toEqual([]);
+    });
   });
 });

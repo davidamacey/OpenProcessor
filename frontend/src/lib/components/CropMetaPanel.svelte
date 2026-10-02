@@ -7,6 +7,9 @@
   } from '$lib/types';
   import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
+  import VlmProvenanceRows from './provenance/VlmProvenanceRows.svelte';
+  import ImportProvenanceRows from './provenance/ImportProvenanceRows.svelte';
+  import CombineOriginRows from './provenance/CombineOriginRows.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
@@ -198,6 +201,12 @@
       <dd class="font-mono text-zinc-200">{vlmConf}</dd>
     {/if}
   {/if}
+
+  <!-- Per-feature provenance rows (W9 VLM, W10 import/lock, P4 combine
+       origin): each component renders its own <dt>/<dd> pairs or nothing. -->
+  <VlmProvenanceRows {crop} />
+  <ImportProvenanceRows {crop} />
+  <CombineOriginRows {crop} />
 
   <!-- dq-queues cutover (2026-09-24): `class_confidence` is the served
        confidence of whoever set the LABEL (VLM categorical mapped to a
