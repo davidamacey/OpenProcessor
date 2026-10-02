@@ -24,6 +24,23 @@
 name: op-live-verify
 
 services:
+  # Docker creates a missing bind-mount source as root:root, which the
+  # non-root app user (uid 1000) then cannot write to (PermissionError on
+  # /verify-data/projects). Create + chown it before anything uses it so
+  # the harness works from a clean checkout with no manual `mkdir`.
+  verify-data-init:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    user: root
+    entrypoint: ["sh", "-c", "mkdir -p /verify-data/jobs && chown -R 1000:1000 /verify-data"]
+    volumes:
+      - ./verify-data:/verify-data
+    restart: "no"
+    networks:
+      - verify_net
+
   opensearch:
     image: opensearchproject/opensearch:3.6.0
     container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-opensearch
@@ -173,6 +190,8 @@ services:
         condition: service_healthy
       fake-vlm:
         condition: service_healthy
+      verify-data-init:
+        condition: service_completed_successfully
     networks:
       - verify_net
 
@@ -191,6 +210,9 @@ services:
       - FAKE_TRAINER_POLL_SECONDS=1
       - FAKE_TRAINER_EPOCHS=3
     command: ["bash", "/opt/fake_trainer.sh"]
+    depends_on:
+      verify-data-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f fake_trainer.sh > /dev/null || exit 1"]
       interval: 10s
