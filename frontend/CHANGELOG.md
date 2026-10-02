@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Backend finalization (OpenProcessor f14f4ddc).** Contracts re-vendored.
+  The combine recluster next step is `POST /cluster/umap/rebuild`; the
+  reprocess request schema is `ReprocessRequest-Input`; `ActiveConfigResponse`
+  (axis/source enums), `RegionProfileSchema` (the editor's field types, no
+  open-ended escape hatch) and the `PUT /settings` body for the
+  activation-backed axes are pinned by `activeConfigContract.test.ts`.
+  Unsharing a model shows the served in-use projects and a confirm-gated
+  "Unshare anyway" (`?force=true`); the 503 `config_store_unavailable` message
+  renders verbatim, and the old "another project may be using it" copy is
+  gone. `/settings` drops the "startup config" copy (`detection_profile` is
+  settable via activation) and shows a served `off`. A refused model unload
+  (403/409) shows the served detail verbatim; the active panels show each
+  worker's `applied_at`.
+
 ### Added
 
 - **VLM picker on the test-on-crop panels (W9 x W5).** The pack test panel
