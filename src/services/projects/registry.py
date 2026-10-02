@@ -259,6 +259,17 @@ class ProjectRegistry:
         indexes would 404/409 at the route layer."""
         return [record for record in self.snapshot().values() if record.status == 'active']
 
+    def existing_projects(self) -> list[ProjectRecord]:
+        """Every project that exists and is not being deleted (any status but
+        ``deleting``/``deleted``): the one set a cross-project "who uses X"
+        listing may count. A tombstone keeps its record but its indexes are
+        gone, so counting it over-reports (and blocks deletes as ``in_use``)."""
+        return [
+            record
+            for record in self.snapshot().values()
+            if record.status not in ('deleting', 'deleted')
+        ]
+
     def archived_projects(self) -> list[ProjectRecord]:
         """Every ``archived`` project, for maintenance scripts
         (``prune_exports.py``, ``prune_training_runs.py``) that must still
