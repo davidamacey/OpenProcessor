@@ -71,7 +71,9 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
 
     page.goto(f"{app_url}/p/default/review?tab=all")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(800)
+    # Real wait for the filter bar's own on-mount requests to settle
+    # before the negative assertions below.
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     # `all`'s served filters list has no max_rank/min_blur_ratio/conf —
     # those controls must not render.
@@ -93,7 +95,6 @@ def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page
 
     page.goto(f"{app_url}/p/default/review?tab=all&preset=primary_low_conf")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(800)
 
     subject = page.locator('div:has(> span:text-is("subject"))')
     subject.wait_for(timeout=ACTION_TIMEOUT_MS)

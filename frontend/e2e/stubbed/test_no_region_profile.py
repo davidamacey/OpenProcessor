@@ -109,7 +109,10 @@ def test_every_route_mounts_without_region_calls(stub, page, app_url):
         stub.console_errors.clear()
         page.goto(f"{app_url}{route}")
         page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-        page.wait_for_timeout(500)
+        # Real wait for "the page is done firing its on-mount requests"
+        # (the whole point of the following negative assertion) instead of
+        # an arbitrary settle sleep.
+        page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
         crashed = [c for c in stub.console_errors if c.startswith("pageerror") or "Uncaught" in c]
         assert not crashed, f"{route} should mount without errors: {crashed[:2]}"
         assert not region_requests(stub), f"{route} called a region route: {region_requests(stub)}"
@@ -129,27 +132,28 @@ def test_region_surfaces_absent(stub, page, app_url):
     # /dashboard: no region detections panel.
     page.goto(f"{app_url}/p/default/dashboard")
     page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(800)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("verifier-confirmed").count() == 0
 
     # /clusters?class=<region class>: the normal class-filtered grid, not
     # a region gallery.
     page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
     page.get_by_test_id("class-filter-chip").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(500)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_role("button", name=re.compile("⟳")).count() == 0
 
     # /clusters/[id]: crop cards offer no sub-box editor.
     page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(500)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.locator('button[aria-label^="Edit "]').count() == 0
     assert page.get_by_text("✎").count() == 0
 
     # /ingest: no region drain panel.
     page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
-    page.wait_for_timeout(500)
+    # The next line's own real wait (a concrete selector) supersedes the
+    # settle sleep that used to sit here.
     page.get_by_text("Ingest status").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("Region detection worklog").count() == 0
 

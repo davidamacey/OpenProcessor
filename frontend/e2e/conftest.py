@@ -32,6 +32,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from fixtures.wire import (
     REGION_PROFILE,
@@ -84,6 +85,24 @@ TRANSPARENT_GIF = bytes.fromhex(
 
 HandlerResult = Any  # dict/list (-> 200 json) | tuple[int, Any] | tuple[int, Any, str]
 Handler = Callable[[Any, "re.Match[str]"], HandlerResult]
+
+
+def wait_for_paint(page: Any) -> None:
+    """Wait for two real animation frames instead of an arbitrary sleep.
+
+    A handful of interactions (mid-drag Escape, rapid Escape presses) have
+    no app-exposed DOM/network signal to wait on — the assertion that
+    follows is about the ABSENCE of a console error, not a state change a
+    selector can observe. Sleeping a fixed duration there is exactly the
+    flake-under-load pattern this whole rewrite removes: this instead
+    waits on the browser's own paint pipeline (two rAF callbacks
+    guarantees at least one full frame was rendered), which naturally
+    slows down under host contention the same way real waiting would,
+    without picking an arbitrary millisecond budget.
+    """
+    page.evaluate(
+        "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+    )
 
 
 def _free_port() -> int:
@@ -332,11 +351,40 @@ class Stub:
         # every existing test stays green without editing each one;
         # `test_keymap.py` overrides this per-test with a served document.
         self.on("GET", r"/keymap(\?|$)", (404, {"detail": "not found"}))
+        # Projects P2 (§5.1): the `/p/[project]` layout reads the active
+        # project's served pipeline-pause flag (`GET {prefix}/pause`) on
+        # EVERY route for the switcher's chip, and `/projects` reads it
+        # for every selectable row. Default: not paused.
+        # `test_projects_pause.py` overrides it with a stateful stub.
+        self.on("GET", r"/pause$", self._pause_state)
+        # W10 (dataset import + Reprocess): /ingest, the item-detail panel
+        # and the cluster toolbar probe `GET {prefix}/datasets/formats`
+        # once per project. Defaults to a 404 — a backend without W10,
+        # where every W10 surface is absent — so existing tests stay
+        # green; test_dataset_import.py overrides it with served formats.
+        self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
+        # W3 (prompt-pack CRUD): /settings and the pack pages probe
+        # `GET {prefix}/prompt_packs` once per project. Defaults to a 404 —
+        # a backend without W3, where every pack surface is absent — so
+        # existing tests stay green; test_prompt_packs.py overrides it.
+        self.on("GET", r"/prompt_packs(\?|$)", (404, {"detail": "Not Found"}))
+        # W4 (region-profile CRUD): /settings and the profile pages probe
+        # `GET {prefix}/region_profiles` once per project. Defaults to a
+        # 404 — a backend without W4, where every profile surface is
+        # absent — so existing tests stay green; test_region_profiles.py
+        # overrides it.
+        self.on("GET", r"/region_profiles(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 
     def on(self, method: str, path_regex: str, handler_or_body: Handler | HandlerResult) -> None:
         self._handlers.append((method.upper(), re.compile(path_regex), handler_or_body))
+
+    @staticmethod
+    def _pause_state(request: Any, _match: "re.Match[str]") -> HandlerResult:
+        path = urlparse(request.url).path.rstrip("/")
+        slug = path.split("/")[-2]
+        return {"project": slug, "paused": False}
 
     @staticmethod
     def _image(_request: Any, _match: "re.Match[str]") -> HandlerResult:

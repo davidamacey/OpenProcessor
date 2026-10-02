@@ -7,6 +7,7 @@
   } from '$lib/types';
   import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
+  import ReprocessControl from './datasets/ReprocessControl.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
@@ -24,9 +25,12 @@
      *  above — hide those rows here instead of repeating them (visual
      *  audit 2026-09-24, R11). */
     embedded?: boolean;
+    /** The served post-write crop after a Reprocess, for the host to
+     *  adopt in place of `crop`. */
+    onreprocessed?: (crop: Crop) => void;
   }
 
-  let { crop, embedded = false }: Props = $props();
+  let { crop, embedded = false, onreprocessed }: Props = $props();
 
   const vlmConf = $derived<string | null>(crop.vlm_confidence ?? null);
   const classSource = $derived<string | null>(crop.class_source ?? null);
@@ -263,6 +267,17 @@
     <dd class="text-zinc-300">{crop.class_labeler}</dd>
   {/if}
 </dl>
+
+<!-- W10 Reprocess (§7.12 item 6): absent unless the backend serves it. -->
+<div class="mt-2">
+  <ReprocessControl
+    target={{ kind: 'crop', cropId: crop.id }}
+    onadopt={(crops) => {
+      const updated = crops.find((c) => c.id === crop.id);
+      if (updated) onreprocessed?.(updated);
+    }}
+  />
+</div>
 
 {#each presentSlots as spec (spec.key)}
   {@const data = slotOf(crop, spec)}

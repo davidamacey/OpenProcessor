@@ -3061,7 +3061,15 @@
             </button>
             {#if detailsOpen}
               <div class="mt-2">
-                <CropMetaPanel crop={current} embedded />
+                <CropMetaPanel
+                  crop={current}
+                  embedded
+                  onreprocessed={(c) => {
+                    const idx = queue.items.findIndex((x) => x.id === c.id);
+                    if (idx >= 0)
+                      queue.items[idx] = { ...queue.items[idx], ...c } as ReviewItem;
+                  }}
+                />
               </div>
             {/if}
           </div>

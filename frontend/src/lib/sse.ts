@@ -119,6 +119,9 @@ function knownEventTypes(): string[] {
     'crop.created',
     'crop.classified',
     'config.changed',
+    // W10.11: advisory import progress; the job view re-reads the job.
+    'dataset_import.progress',
+    'dataset_import.finished',
     ...slotVerifiedEventTypes(),
   ];
 }

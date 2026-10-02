@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import Page from './+page.svelte';
 import { API_PREFIX } from '$lib/api';
+import { projectPauseStore } from '$stores/projectPause.svelte';
 import { projectsStore } from '$stores/projects.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import {
@@ -46,6 +47,9 @@ let listed: ProjectSummary[];
 let capacity = testCapacity('ok');
 let handler: Handler = () => undefined;
 let writes: { method: string; url: string; body: unknown }[] = [];
+/** The served pipeline-pause flag per slug (`GET {prefix}/pause`). */
+let paused: Record<string, boolean> = {};
+let pauseReads: string[] = [];
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
@@ -84,6 +88,9 @@ beforeEach(() => {
   capacity = testCapacity('ok');
   handler = () => undefined;
   writes = [];
+  paused = {};
+  pauseReads = [];
+  projectPauseStore.reset();
   toastStore.toasts = [];
   vi.stubGlobal(
     'fetch',
@@ -92,6 +99,11 @@ beforeEach(() => {
       const u = String(url);
       if (method === 'GET' && /\/projects(\?|$)/.test(u)) {
         return json(testProjectsResponse(listed, { capacity }));
+      }
+      const pauseOf = listed.find((p) => u === `${p.prefix}/pause`);
+      if (method === 'GET' && pauseOf) {
+        pauseReads.push(u);
+        return json({ project: pauseOf.slug, paused: paused[pauseOf.slug] ?? false });
       }
       writes.push({
         method,
@@ -131,6 +143,33 @@ describe('row actions follow served flags only', () => {
     expect(q('project-unarchive-wip')).toBeNull();
     expect(q('project-status-wip')!.textContent).toBe('Building');
     expect(q('project-open-alpha')!.getAttribute('href')).toBe('/p/alpha/dashboard');
+  });
+
+  it('Archive / Unarchive read the served archivable / unarchivable, not status', async () => {
+    // Flags that contradict what status/writable would suggest: the served
+    // flags win, so no client-side inference can survive this test.
+    listed = [
+      DEFAULT,
+      testProject({ slug: 'pinned', status: 'active', archivable: false }),
+      testProject({
+        slug: 'frozen',
+        status: 'archived',
+        writable: false,
+        unarchivable: false,
+      }),
+      testProject({
+        slug: 'odd',
+        status: 'building',
+        writable: false,
+        selectable: false,
+        unarchivable: true,
+      }),
+    ];
+    await render();
+    expect(q('project-archive-pinned')).toBeNull();
+    expect(q('project-clone-pinned')).not.toBeNull();
+    expect(q('project-unarchive-frozen')).toBeNull();
+    expect(q('project-unarchive-odd')).not.toBeNull();
   });
 
   it('a served blocked capacity disables Create and shows the served message', async () => {
@@ -312,5 +351,98 @@ describe('delete', () => {
       ['DELETE', `${API_PREFIX}/projects/alpha?dry_run=true`],
       ['DELETE', `${API_PREFIX}/projects/alpha?confirm=alpha`],
     ]);
+  });
+});
+
+describe('pipeline pause', () => {
+  it('reads every selectable row from its own served prefix and shows the served flag', async () => {
+    paused = { alpha: true };
+    await render();
+    await vi.waitFor(() => expect(q('project-paused-alpha')).not.toBeNull());
+    expect(q('project-paused-default')).toBeNull();
+    // Served prefixes, never a slug path assembled here; `wip` is not
+    // selectable, so it is never read.
+    expect([...pauseReads].sort()).toEqual(
+      [`${DEFAULT.prefix}/pause`, `${ALPHA.prefix}/pause`, `${OLD.prefix}/pause`].sort(),
+    );
+    // Writable rows offer the opposite of the served flag; the archived
+    // row shows no control.
+    expect(q('project-resume-alpha')).not.toBeNull();
+    expect(q('project-pause-alpha')).toBeNull();
+    expect(q('project-pause-default')).not.toBeNull();
+    expect(q('project-pause-old')).toBeNull();
+    expect(q('project-resume-old')).toBeNull();
+  });
+
+  it("no control until the row's served state has loaded", async () => {
+    listed = [DEFAULT];
+    // Never answer the pause read.
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) =>
+        String(url).endsWith('/pause')
+          ? new Promise<Response>(() => {})
+          : original(url, init),
+      ),
+    );
+    await render();
+    expect(q('project-pause-default')).toBeNull();
+    expect(q('project-resume-default')).toBeNull();
+  });
+
+  it("pause is confirm-gated, POSTs the row's served prefix, and shows the chip", async () => {
+    handler = (u) =>
+      u === `${ALPHA.prefix}/pause`
+        ? json({ project: 'alpha', paused: true })
+        : undefined;
+    await render();
+    await vi.waitFor(() => expect(q('project-pause-alpha')).not.toBeNull());
+    click('project-pause-alpha');
+    expect(q('pause-project-dialog')).not.toBeNull();
+    expect(writes).toEqual([]);
+    click('pause-project-confirm');
+    await vi.waitFor(() => expect(q('project-paused-alpha')).not.toBeNull());
+    expect(writes).toEqual([
+      { method: 'POST', url: `${ALPHA.prefix}/pause`, body: undefined },
+    ]);
+    expect(q('pause-project-dialog')).toBeNull();
+    expect(q('project-resume-alpha')).not.toBeNull();
+  });
+
+  it('resume POSTs /resume and clears the chip from the served answer', async () => {
+    paused = { alpha: true };
+    handler = (u) =>
+      u === `${ALPHA.prefix}/resume`
+        ? json({ project: 'alpha', paused: false })
+        : undefined;
+    await render();
+    await vi.waitFor(() => expect(q('project-resume-alpha')).not.toBeNull());
+    click('project-resume-alpha');
+    click('pause-project-confirm');
+    await vi.waitFor(() => expect(q('project-paused-alpha')).toBeNull());
+    expect(writes).toEqual([
+      { method: 'POST', url: `${ALPHA.prefix}/resume`, body: undefined },
+    ]);
+  });
+
+  it('a served refusal renders verbatim and the flag is unchanged', async () => {
+    handler = () =>
+      json(
+        {
+          detail: { error: 'project_read_only', message: 'served: project is read-only' },
+        },
+        409,
+      );
+    await render();
+    await vi.waitFor(() => expect(q('project-pause-alpha')).not.toBeNull());
+    click('project-pause-alpha');
+    click('pause-project-confirm');
+    await vi.waitFor(() =>
+      expect(q('pause-project-error')?.textContent?.trim()).toBe(
+        'served: project is read-only',
+      ),
+    );
+    expect(q('project-paused-alpha')).toBeNull();
   });
 });

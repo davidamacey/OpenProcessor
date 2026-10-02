@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
 
+from playwright.sync_api import expect
+
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -88,10 +90,9 @@ def test_move_then_undo_sends_single_crop_label_undo(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/clusters/1")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
 
     page.locator("img").first.click()
-    page.wait_for_timeout(150)
+    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     # M opens the move picker; type a target cluster id and Enter to confirm.
     page.keyboard.press("m")
@@ -100,8 +101,11 @@ def test_move_then_undo_sends_single_crop_label_undo(stub, page, app_url):
     assert "Assign class to selected" in page.get_by_test_id("move-relabel-hint").inner_text()
     assert page.get_by_test_id("assign-selected").inner_text().strip() == "Assign class to selected"
     page.locator('input[placeholder="e.g. 42"]').fill("42")
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(400)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/crops/move"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("Enter")
 
     assert len(move_calls) == 1, f"expected exactly one move request: {move_calls}"
     _, _, move_body = move_calls[0]
@@ -109,8 +113,11 @@ def test_move_then_undo_sends_single_crop_label_undo(stub, page, app_url):
     moved_ids = move_body.get("crop_ids", [])
     assert len(moved_ids) == 1, f"expected exactly one crop moved: {move_body}"
 
-    page.keyboard.press("z")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/label/undo"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("z")
 
     assert len(undo_batch_calls) == 0, (
         f"a single-crop move's undo must not go through undo_batch: {undo_batch_calls}"

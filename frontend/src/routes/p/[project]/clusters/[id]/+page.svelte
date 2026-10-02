@@ -23,6 +23,7 @@
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
   import ScoreChip from '$components/ScoreChip.svelte';
+  import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import SemanticSearchBox from '$components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$components/ShortcutsButton.svelte';
@@ -956,6 +957,14 @@
           >{kc('cluster.flag_new_class')}</kbd
         >
       </button>
+      <!-- W10 Reprocess on the selection (§7.12 item 6): absent unless the
+           backend serves it; a served dry run precedes the apply. -->
+      <ReprocessControl
+        target={{ kind: 'crops', cropIds: [...sel.ids] }}
+        disabled={sel.size === 0}
+        buttonClass="btn"
+        onapplied={() => void cropPager.loadFirst()}
+      />
       <button
         class="btn"
         type="button"

@@ -448,7 +448,9 @@ describe('/export — class table puts classes with data first', () => {
     const toggle = target.querySelector<HTMLButtonElement>(
       '[data-testid="export-empty-classes-toggle"]',
     );
-    expect(toggle?.textContent).toContain('2 classes with no validated crops');
+    expect(toggle?.textContent?.replace(/\s+/g, ' ')).toContain(
+      '2 classes with no validated crops',
+    );
     toggle!.click();
     flushSync();
     expect(rowNames()).toEqual(
@@ -461,6 +463,40 @@ describe('/export — class table puts classes with data first', () => {
 });
 
 describe('/export — Gap column describes the served trainable_gap', () => {
+  it('says "1 class", not "1 classes", when a single class has no validated crops', async () => {
+    vi.stubGlobal(
+      'fetch',
+      makeFetchMock([], EXPORT_STATUS_SUCCESS, [], {
+        classes: [
+          {
+            class_id: 1,
+            class_name: 'alpha_empty',
+            count: 38,
+            validated_count: 0,
+            adequacy: 'block',
+            aug_target: 500,
+            aug_gap: 500,
+            trainable: 0,
+            trainable_gap: 30,
+          },
+        ],
+      }),
+    );
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(ExportPage, { target } as never);
+    flushSync();
+    await flushMicrotasks();
+    flushSync();
+
+    const toggle = target.querySelector<HTMLButtonElement>(
+      '[data-testid="export-empty-classes-toggle"]',
+    );
+    expect(toggle?.textContent?.replace(/\s+/g, ' ')).toContain(
+      '1 class with no validated crops',
+    );
+  });
+
   it('titles the Gap header and cells as the shortfall against the served per-class minimum', async () => {
     vi.stubGlobal(
       'fetch',

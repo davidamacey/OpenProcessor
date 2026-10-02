@@ -6,7 +6,7 @@ browser: each asserts on measured geometry, not on class names.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 from fixtures.wire import REGION_CLASS, make_item
 
@@ -92,7 +92,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
     page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
     name = page.locator('[data-testid="class-name"]').first
     name.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
+    wait_for_paint(page)  # layout settle for the following overflow/bbox check
 
     box = name.evaluate(
         "el => ({w: el.clientWidth, sw: el.scrollWidth, text: el.textContent.trim()})"
@@ -138,7 +138,7 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
 
     page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
     page.locator('[data-testid="slot-text-value"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
+    wait_for_paint(page)  # layout settle for the following overflow/bbox check
 
     # C2: the filter chip names the class, not "#80".
     chip = page.locator('[data-testid="class-filter-chip"]')
@@ -260,7 +260,7 @@ def test_dashboard_recluster_card_stacks_at_800(stub, page, app_url):
     page.goto(f"{app_url}/p/default/dashboard")
     desc = page.locator('[data-testid="recluster-description"]')
     desc.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(400)
+    wait_for_paint(page)  # layout settle for the following overflow/bbox check
 
     # Stacked: the description spans its card's full content width.
     ratio = desc.evaluate(

@@ -19,6 +19,8 @@ from conftest import ACTION_TIMEOUT_MS
 
 import re
 
+from playwright.sync_api import expect
+
 METHODS_TODAY = {
     "strategies": [
         {"id": "ivf", "axis": "cluster", "settable": True, "label": "FAISS IVF-512 (production)", "status": "stable", "default": True},
@@ -87,7 +89,7 @@ def test_curation_settings(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/settings")
     page.get_by_role("button", name="Retry").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")], "page should render with no pageerror"
     assert page.locator("select").count() == 0, "zero <select> elements expected"
@@ -101,10 +103,9 @@ def test_curation_settings(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
 
     selects = page.locator("select")
-    assert selects.count() == 2, f"exactly 2 <select> elements expected, got {selects.count()}"
+    expect(selects).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("Clustering method").count() > 0 and page.get_by_text("Review queue sort").count() > 0
 
     options_text = page.locator("select option").all_inner_texts()
@@ -113,19 +114,19 @@ def test_curation_settings(stub, page, app_url):
 
     sort_select = selects.nth(1)
     sort_select.select_option("uncertainty_entropy")
-    page.wait_for_timeout(150)
     save_buttons = page.get_by_role("button", name="Save")
-    assert save_buttons.count() > 0, "a Save button should be enabled after changing the sort"
+    expect(save_buttons.nth(1)).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
     save_buttons.nth(1).click()
-    page.wait_for_timeout(200)
 
     dialog = page.get_by_role("dialog")
-    assert dialog.count() > 0, "confirm dialog should appear"
+    expect(dialog).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert dialog.get_by_text("Review queue sort").count() > 0, "dialog should name the sort axis"
 
     put_calls.clear()
-    dialog.get_by_role("button", name="Confirm").click()
-    page.wait_for_timeout(300)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/settings"), timeout=ACTION_TIMEOUT_MS
+    ):
+        dialog.get_by_role("button", name="Confirm").click()
 
     assert len(put_calls) == 1, f"exactly one PUT expected: {put_calls}"
     _url, body = put_calls[0]
@@ -133,10 +134,7 @@ def test_curation_settings(stub, page, app_url):
     # whitespace, unlike Python's json.dumps default.
     assert body == '{"defaults":{"sort":"uncertainty_entropy"}}', body
 
-    assert page.get_by_text("pinned").count() >= 1, (
-        "the cluster axis should now show pinned, though the client never sent it "
-        "(adopted the response, not a guess)"
-    )
+    expect(page.get_by_text("pinned").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     # ================================================================
     # Pass 3 — non-settable axis visible but inert.
@@ -146,14 +144,10 @@ def test_curation_settings(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Set by the backend's startup config").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
 
     assert page.get_by_text("grounding_v2").count() > 0
     assert page.get_by_text("warehouse_v1").count() > 0
-    assert page.locator("select").count() == 3, (
-        "exactly 3 <select>s expected (cluster, sort, settable prompt_pack) — the "
-        f"non-settable detection_profile should add no control, got {page.locator('select').count()}"
-    )
+    expect(page.locator("select")).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
     advisory_heading = page.get_by_text("Set by the backend's startup config")
     advisory_section = advisory_heading.locator("xpath=ancestor::section[1]")
     assert advisory_section.get_by_role("button", name="Save").count() == 0
@@ -166,17 +160,21 @@ def test_curation_settings(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/settings")
     page.get_by_text("Clustering method").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(200)
 
     sort_select4 = page.locator("select").nth(1)
     sort_select4.select_option("uncertainty_entropy")
-    page.wait_for_timeout(150)
-    page.get_by_role("button", name="Save").nth(1).click()
-    page.wait_for_timeout(200)
-    page.get_by_role("dialog").get_by_role("button", name="Confirm").click()
-    page.wait_for_timeout(400)
+    save_btn4 = page.get_by_role("button", name="Save").nth(1)
+    expect(save_btn4).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
+    save_btn4.click()
+    confirm_dialog4 = page.get_by_role("dialog")
+    expect(confirm_dialog4).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/settings"), timeout=ACTION_TIMEOUT_MS
+    ):
+        confirm_dialog4.get_by_role("button", name="Confirm").click()
 
-    assert page.get_by_text(re.compile(r"is not a currently-advertised id for axis 'sort'")).count() > 0
+    error_text = page.get_by_text(re.compile(r"is not a currently-advertised id for axis 'sort'"))
+    expect(error_text.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text(re.compile(r"valid ids:\s*\['recent'\]")).count() > 0
     assert page.locator("select").nth(1).input_value() != "uncertainty_entropy", (
         "the control's value must not be left showing the rejected selection as though saved"

@@ -99,6 +99,11 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
         page.keyboard.press("Enter")
     assert len(label_calls) == 1 and label_calls[0].startswith(DEFAULT_PREFIX), label_calls
 
+    # Enter advanced the queue, which starts the next crop's image loads on
+    # `default`. Let them land before marking the switch, so only requests
+    # made after the switch are counted below.
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
+
     # Switch to `beta` from the top bar.
     before_switch = len(stub.handled)
     page.get_by_test_id("project-switcher-trigger").click()

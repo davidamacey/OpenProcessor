@@ -44,6 +44,14 @@ const SCANNED_FILES = [
  *  project is even selected. */
 const GLOBAL_SCANNED_FILES = ['lib/api.ts', 'lib/sse.ts'] as const;
 
+/** Every file that composes a backend URL through
+ *  `${projectPrefix(project)}` — a SCOPED route addressed through a
+ *  specific project's own served prefix rather than the active one
+ *  (`/projects` row actions such as pause/resume). Resolved against the
+ *  scoped OpenAPI paths exactly like `${scoped()}`. */
+const PROJECT_PREFIX_MARKER = '${projectPrefix(project)}';
+const PROJECT_PREFIX_SCANNED_FILES = ['lib/api.ts'] as const;
+
 function read(rel: string): string {
   return readFileSync(path.join(srcRoot, rel), 'utf-8');
 }
@@ -125,6 +133,17 @@ const MANUAL_OVERRIDES: Array<{
     path: '/regions',
   },
   {
+    file: 'lib/api.ts',
+    marker: 'export function runServedNextStep(',
+    // step.method/step.path: a finished import's served `next_steps`
+    // entry (W10.11). The spec's one documented example is
+    // `POST /regions/cluster`; anything else it serves is the server's
+    // own route.
+    path: '/regions/cluster',
+    method: 'POST',
+    queryParams: [],
+  },
+  {
     file: 'lib/components/SlotCard.svelte',
     marker: 'const thumbUrl = $derived(',
     // thumbCap.path(id, size) — a region slot declares
@@ -163,8 +182,89 @@ const PENDING_BACKEND: Array<{ path: string; method: string }> = [
   { path: '/regions/batch_box_state', method: 'POST' },
 ];
 
+/**
+ * OpenProcessor W10 (labeled-dataset import + Reprocess,
+ * any_domain_plan.md §7.12 / W10.14) — built against the frozen spec
+ * before the backend implements it (docs/design/
+ * w10-import-reprocess-ui-plan-2026-09-27.md). DELETE THIS LIST when
+ * `npm run contract:sync` vendors W10's OpenAPI; every route then has to
+ * resolve for real.
+ */
+const PENDING_BACKEND_W10: Array<{ path: string; method: string }> = [
+  { path: '/datasets/formats', method: 'GET' },
+  { path: '/datasets/uploads', method: 'POST' },
+  { path: '/datasets/preview', method: 'POST' },
+  { path: '/datasets/imports', method: 'POST' },
+  { path: '/datasets/imports', method: 'GET' },
+  { path: '/datasets/imports/*', method: 'GET' },
+  { path: '/datasets/imports/*/issues', method: 'GET' },
+  { path: '/datasets/imports/*/entries', method: 'GET' },
+  { path: '/datasets/imports/*/cancel', method: 'POST' },
+  { path: '/datasets/imports/*/resume', method: 'POST' },
+  { path: '/datasets/imports/*/undo', method: 'POST' },
+  { path: '/reprocess', method: 'POST' },
+  { path: '/crops/*/reprocess', method: 'POST' },
+  { path: '/reprocess/jobs/*', method: 'GET' },
+  { path: '/reprocess/jobs/*/cancel', method: 'POST' },
+];
+
+/**
+ * OpenProcessor W3 (prompt-pack CRUD, any_domain_plan.md §3.2 / §7.2) and
+ * the pack half of W5 (`POST /prompt_packs/test`, §5.1 / §7.5) — built
+ * against the frozen spec before the backend implements them (docs/design/
+ * w3-pack-editor-ui-plan-2026-09-27.md). DELETE THIS LIST when
+ * `npm run contract:sync` vendors W3 (and W5 for `/prompt_packs/test`);
+ * every route then has to resolve for real.
+ */
+const PENDING_BACKEND_W3: Array<{ path: string; method: string }> = [
+  { path: '/prompt_packs', method: 'GET' },
+  { path: '/prompt_packs/schema', method: 'GET' },
+  { path: '/prompt_packs/validate', method: 'POST' },
+  { path: '/prompt_packs/*', method: 'GET' },
+  { path: '/prompt_packs/*', method: 'PUT' },
+  { path: '/prompt_packs/*', method: 'DELETE' },
+  { path: '/prompt_packs/*/revisions', method: 'GET' },
+  { path: '/prompt_packs/*/revisions/*', method: 'GET' },
+  { path: '/prompt_packs/*/clone', method: 'POST' },
+  { path: '/prompt_packs/active', method: 'GET' },
+  { path: '/prompt_packs/*/activate', method: 'POST' },
+  { path: '/prompt_packs/active/rollback', method: 'POST' },
+  { path: '/prompt_packs/test', method: 'POST' },
+];
+
+/**
+ * OpenProcessor W4 (region-profile CRUD and the config vocabulary,
+ * any_domain_plan.md §4.2 / §7.3 / §7.4) — built against the frozen spec
+ * before the backend implements it (docs/design/
+ * w4-profile-editor-ui-plan-2026-09-27.md). DELETE THIS LIST when
+ * `npm run contract:sync` vendors W4; every route then has to resolve for
+ * real.
+ */
+const PENDING_BACKEND_W4: Array<{ path: string; method: string }> = [
+  { path: '/region_profiles', method: 'GET' },
+  { path: '/region_profiles/schema', method: 'GET' },
+  { path: '/region_profiles/validate', method: 'POST' },
+  { path: '/region_profiles/*', method: 'GET' },
+  { path: '/region_profiles/*', method: 'PUT' },
+  { path: '/region_profiles/*', method: 'DELETE' },
+  { path: '/region_profiles/*/revisions', method: 'GET' },
+  { path: '/region_profiles/*/revisions/*', method: 'GET' },
+  { path: '/region_profiles/*/clone', method: 'POST' },
+  { path: '/region_profiles/active', method: 'GET' },
+  { path: '/region_profiles/*/activate', method: 'POST' },
+  { path: '/region_profiles/active/rollback', method: 'POST' },
+  { path: '/region_profiles/deactivate', method: 'POST' },
+  { path: '/region_profiles/active/impact', method: 'GET' },
+  { path: '/config/vocabulary', method: 'GET' },
+];
+
 function isPendingBackend(path: string, method: string): boolean {
-  return PENDING_BACKEND.some((p) => p.path === path && p.method === method);
+  return [
+    ...PENDING_BACKEND,
+    ...PENDING_BACKEND_W10,
+    ...PENDING_BACKEND_W3,
+    ...PENDING_BACKEND_W4,
+  ].some((p) => p.path === path && p.method === method);
 }
 
 interface ResolvedCall {
@@ -217,6 +317,26 @@ function resolveCalls(
   });
 }
 
+function grepFilesWith(marker: string): string[] {
+  let out = '';
+  try {
+    out = execFileSync(
+      'grep',
+      ['-rlF', '--include=*.ts', '--include=*.svelte', marker, srcRoot],
+      { encoding: 'utf-8' },
+    );
+  } catch (e) {
+    if ((e as { status?: number }).status !== 1) throw e;
+  }
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((p) => path.relative(srcRoot, p))
+    .filter(
+      (p) => !p.endsWith('.test.ts') && !p.startsWith(path.join('lib', 'contract')),
+    );
+}
+
 describe('endpoint catalog: completeness', () => {
   it('scans a non-trivial number of call sites (guards a vacuous pass)', () => {
     const total = SCANNED_FILES.reduce((n, f) => n + resolveCalls(f).length, 0);
@@ -244,6 +364,22 @@ describe('endpoint catalog: completeness', () => {
       (p) => !scannedSet.has(p as (typeof SCANNED_FILES)[number]),
     );
     expect(unscanned).toEqual([]);
+  });
+
+  it('no other src/ file references ${projectPrefix(project)} outside PROJECT_PREFIX_SCANNED_FILES', () => {
+    const scannedSet = new Set<string>(PROJECT_PREFIX_SCANNED_FILES);
+    expect(
+      grepFilesWith(PROJECT_PREFIX_MARKER).filter((p) => !scannedSet.has(p)),
+    ).toEqual([]);
+  });
+
+  it('every projectPrefix() URL in api.ts uses the scanned marker', () => {
+    // A wrapper that names its parameter anything but `project` would
+    // slip past the marker scan; fail instead of silently skipping it.
+    const src = read('lib/api.ts');
+    const uses = src.match(/\$\{projectPrefix\([^)]*\)\}/g) ?? [];
+    expect(uses.length).toBeGreaterThan(0);
+    expect(uses.filter((u) => u !== PROJECT_PREFIX_MARKER)).toEqual([]);
   });
 
   it('no other src/ file references ${globalApi()} outside GLOBAL_SCANNED_FILES', () => {
@@ -379,6 +515,16 @@ function describeCalls(
 describe('endpoint catalog: every call resolves to a real OpenAPI operation', () => {
   for (const file of SCANNED_FILES) {
     describeCalls(file, resolveCalls(file), 'scoped');
+  }
+});
+
+describe('endpoint catalog: every served-project-prefix call resolves to a real OpenAPI operation', () => {
+  for (const file of PROJECT_PREFIX_SCANNED_FILES) {
+    describeCalls(
+      `${file} (projectPrefix)`,
+      resolveCalls(file, PROJECT_PREFIX_MARKER),
+      'scoped',
+    );
   }
 });
 

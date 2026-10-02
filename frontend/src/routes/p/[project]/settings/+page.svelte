@@ -33,6 +33,10 @@
   import ScoresCard from '$lib/components/ScoresCard.svelte';
   import KeymapCard from '$lib/components/settings/KeymapCard.svelte';
   import { keymapAvailability } from '$stores/keymap.svelte';
+  import { resolve } from '$app/paths';
+  import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
+  import { profilesAvailability } from '$lib/profiles/profilesAvailability.svelte';
+  import { projectHref } from '$lib/projectPaths';
 
   // `axisOptions()` returns the shared `MethodInfoBase[]` (it serves every
   // axis, not just review_sorts), which doesn't itself declare
@@ -55,6 +59,8 @@
   $effect(() => {
     void curationSettingsStore.init();
     void strategiesStore.init();
+    void packsAvailability.init();
+    void profilesAvailability.init();
   });
 
   /** Local, unsaved selection per settable axis id. Cleared back to
@@ -320,6 +326,44 @@
         {/each}
       </section>
     {/if}
+  {/if}
+
+  {#if packsAvailability.available === true}
+    <section
+      class="surface flex flex-wrap items-center gap-3 p-5"
+      data-testid="prompt-packs-card"
+    >
+      <div class="flex min-w-0 flex-col gap-1">
+        <h2 class="text-base font-semibold">Prompt packs</h2>
+        <p class="text-xs text-zinc-400">
+          Edit the VLM's instructions, test them on a crop, and choose which revision is
+          active.
+        </p>
+      </div>
+      <span class="grow"></span>
+      <a class="btn" href={resolve(projectHref('/settings/prompt-packs'))}
+        >Open prompt packs</a
+      >
+    </section>
+  {/if}
+
+  {#if profilesAvailability.available === true}
+    <section
+      class="surface flex flex-wrap items-center gap-3 p-5"
+      data-testid="region-profiles-card"
+    >
+      <div class="flex min-w-0 flex-col gap-1">
+        <h2 class="text-base font-semibold">Region profiles</h2>
+        <p class="text-xs text-zinc-400">
+          Choose what part of an item to find, with which models, and which revision is
+          active.
+        </p>
+      </div>
+      <span class="grow"></span>
+      <a class="btn" href={resolve(projectHref('/settings/region-profiles'))}
+        >Open region profiles</a
+      >
+    </section>
   {/if}
 
   <ScoresCard />

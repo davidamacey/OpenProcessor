@@ -17,6 +17,9 @@
          "unset" the same way normalizeApiPrefix treats __API_PREFIX__. -->
     <script>
       window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__ = '__INGEST_MAX_REQUEST_MB__';
+      // W10 dataset-archive upload cap (CROPWRIGHT_DATASET_UPLOAD_MAX_MB);
+      // the unresolved literal means "unset" (src/lib/datasets/uploadCap.ts).
+      window.__CROPWRIGHT_DATASET_UPLOAD_MAX_MB__ = '__DATASET_UPLOAD_MAX_MB__';
     </script>
     %sveltekit.head%
   </head>

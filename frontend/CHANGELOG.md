@@ -6,8 +6,128 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Region-profile editor and config vocabulary (OpenProcessor W4).** New
+  `/settings/region-profiles` lists the project's region profiles and
+  templates with the active profile (confirm-gated Rollback and Turn
+  off), the served activation impact with a confirm-gated Re-run of the
+  served `suggested_reprocess` (dry run first, through `POST /reprocess`),
+  Clone, confirm-gated Delete, and a read-only "Models and sources" panel
+  from `GET /config/vocabulary`. `/settings/region-profiles/[name]` edits
+  a profile from the served schema (groups, types, ranges, advanced
+  fields, `applies_when` dimming from the saved revision's `effective`),
+  with model pickers from the served vocabulary (`choice.id` stored,
+  `empty_choice` offered, other projects' shared detectors on request),
+  the served segmenter cap and floor beside the segmenter fields, live
+  validation, "Check the draft for activation", revisions and restore,
+  and pinned activation ("Activate anyway" only when the served report
+  allows force). A successful activation re-polls `/health`, so the
+  existing "reload to apply" notice fires. Absent until the backend
+  serves `GET /region_profiles` (a one-shot probe per project); routes in
+  `PENDING_BACKEND_W4` until the W4 contract sync. The prompt-pack
+  editor's activate/rollback state, save column, revisions, dialogs,
+  issue list and availability gate are now shared config components
+  (`src/lib/config`, `src/lib/components/config`) used by both editors
+  (`packErrorDetail`/`packErrorText` are now
+  `configErrorDetail`/`configErrorText`), and the shared stale-snapshot
+  banner no longer reads "last known ctl."
+- **Prompt-pack editor (OpenProcessor W3; test-on-crop W5).** New
+  `/settings/prompt-packs` lists the project's VLM prompt packs and
+  templates with the active pack (confirm-gated Rollback), Clone and
+  confirm-gated Delete; `/settings/prompt-packs/[name]` edits a pack from
+  the served schema with live server validation (issues shown under their
+  field), saves new revisions with `expected_revision` (a
+  `revision_conflict` offers reload or keep-my-edits), views and restores
+  old revisions, activates a pinned revision (confirm; "Activate anyway"
+  only when the served report allows force) and, for calls the schema
+  marks `testable`, runs test-on-crop showing the served prompt, raw
+  reply, parsed result and preview item. Absent until the backend serves
+  `GET /prompt_packs` (a one-shot probe per project). Built against the
+  frozen spec; the routes are in `PENDING_BACKEND_W3` until the W3/W5
+  contract sync.
+- **Cross-project model sharing on `/models` (OpenProcessor projects P2,
+  §5.5).** The page lists other projects' shared models
+  (`include_other_projects=true`) with a "from `<project>`" chip, and
+  every model with a served `class_mapping` shows "N classes map", the
+  served unmapped class names and a name-by-name "Class mapping" table
+  (`GET .../models/{name}/class_mapping`); class ids are never shown. The
+  active project's own promoted models show their served sharing state
+  and an owner-only, confirm-gated "Share with other projects" / "Stop
+  sharing" toggle (`PUT .../models/{name}/sharing` with the served
+  revision; a revision conflict reloads, an `in_use` refusal offers the
+  served `force`, every refusal is shown verbatim). The toggle needs the
+  model's sharing revision, which the backend doesn't serve on the
+  listing yet, so it stays absent until it does. Unsharing warns that
+  another project may be using the model.
+- **Per-project pipeline pause.** `/projects` shows a "paused" chip on
+  each project whose served `GET {prefix}/pause` flag is set, and a
+  confirm-gated Pause / Resume pipeline action on writable projects
+  (`POST {prefix}/pause` / `/resume`, through each project's own served
+  prefix). The project switcher shows "paused" for the active project.
+- **Labeled-dataset import and Reprocess (OpenProcessor W10), built ahead
+  of the backend.** A `/p/<slug>/datasets` section: the imports list, the
+  `/datasets/import` wizard (server path or archive upload, a debounced
+  served preview with splits, totals and issues, class mapping by name
+  only with the served suggestions and resolved targets, options sent only
+  when set, confirm-gated Start tied to the preview's `import_key`, every
+  served refusal rendered by its message) and the `/datasets/imports/[id]`
+  job view (follows the served `poll_after_s` and `dataset_import.*`
+  events; cancel, resume and a dry-run-first undo). A Reprocess dialog on
+  the item-detail panel (one crop, the served post-write crop adopted) and
+  the `/clusters/[id]` selection (served dry run, then apply). Every W10
+  surface is absent until the backend serves `GET {prefix}/datasets/formats`
+  (a one-shot per-project probe; W10 has no capability flag). nginx gains a
+  dataset-upload location sized by `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
+  (default 2048). Plan and backend questions:
+  `docs/design/w10-import-reprocess-ui-plan-2026-09-27.md`.
+
+### Changed
+
+- **Archive / Unarchive on `/projects` follow the served `archivable` /
+  `unarchivable` flags** (vendored from OpenProcessor be20dc40) instead of
+  being inferred from `writable` / `selectable`.
+
+- **The `/clusters` region gallery picks the false-positive bucket by
+  served `cluster_kind`, not a client id constant.** `SlotGallery.svelte`
+  and `slotGalleryController.svelte.ts` deleted
+  `FALSE_POSITIVE_REGION_CLUSTER_ID` (`-100`) — the FP-only styling (red
+  border, "✗ False positives"/"✗ False-positive cluster" badges) now keys
+  off the selected cluster's own served `cluster_kind === 'false_positive'`
+  (`GET {API_PREFIX}/regions/clusters`), via the controller's new
+  `selectedClusterIsFalsePositive`. A cluster's id sent back to the
+  backend (`region_cluster_id`, refine, etc.) was always the served id
+  and is unchanged; only the FP-detection comparison moved off the id.
+- **`e2e/live/` is project-aware (following the projects cutover).** The
+  live read-only tier now reads a session-scoped `live_project` fixture
+  (`{slug, prefix}`) off the GLOBAL `GET {API_PREFIX}/projects`
+  response's `default_slug` — every direct API read goes through
+  `api_get(live_url, live_project, path)` against that project's own
+  served `prefix`, and every page navigation goes through
+  `page_path(live_project, path)` (`/p/<slug>/...`). The health preflight
+  stays on the GLOBAL `GET {API_PREFIX}/health`; `live_region_profile`
+  now reads the region profile from the project's own scoped `/health`.
+  `test_route_sweep.py` gained `test_global_route_mounts_cleanly` for the
+  one page that stays unscoped, `/projects`. The write guard's
+  read-only-POST allowance now matches `/train/preflight` by path suffix
+  (the scoped prefix varies per project) and `ALLOWED_4XX_5XX` gained a
+  documented entry for `GET .../keymap` 404ing against a
+  pre-OpenProcessor-W2b deployment.
+
 ### Fixed
 
+- **Confirm dialogs close on Esc again after a busy Confirm.** While a
+  dialog's Confirm button is busy it is disabled, which drops keyboard focus
+  out of the dialog, so Esc and Tab stopped reaching it. Keys that land
+  outside every open dialog now go to the topmost one.
+- **Ingest uploads get the ingest proxy limits again.** Every ingest route
+  is project-scoped (`/projects/<slug>/ingest/...`), but `nginx.conf`'s
+  ingest location still matched the removed unscoped path, so uploads fell
+  through to the general location's 120 s read timeout. The location now
+  matches the scoped path and keeps its 600 s timeout.
+- **`/export` says "1 class with no validated crops"**, not "1 classes",
+  when a single class has none (seen on a fresh install whose registry
+  held only the region class).
 - **Lint debt (#83): `svelte/prefer-svelte-reactivity` and
   `svelte/no-navigation-without-resolve` restored to `error`.** Both
   rules were downgraded to `warn` during the eslint-plugin-svelte 3
@@ -45,6 +165,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   longer caps vitest at 4 workers, which cut it from about 1 min 44 s to
   about 31 s. `test_keymap_absent_when_404` now waits on the real key and
   request instead of fixed sleeps; it flaked under parallel load.
+
+### Fixed
+
+- **Stubbed e2e suite no longer flakes under pytest-xdist parallel
+  load.** Every fixed `page.wait_for_timeout(...)` sleep across
+  `e2e/stubbed/**` (127 occurrences in 30 files) that was gating an
+  assertion is replaced with a real wait: `page.expect_response(...)`
+  around the action that should fire a request, `expect(locator)...`/
+  `page.wait_for_selector`/`page.wait_for_load_state("networkidle")` for
+  UI/network settle, or a Python-side poll of the stub's own call log for
+  an async client-side refetch with no `page.*`-observable signal. A
+  "must NOT fire" assertion now triggers and waits for a later request or
+  UI change proving the keypress was processed (or, when nothing async
+  ever happens, a `wait_for_paint` — two real animation frames — new in
+  `e2e/conftest.py`) before asserting the absence, never straight after a
+  sleep. Two short fixed sleeps remain, both documented as pacing
+  synthetic input rather than gating an assertion: the inter-move delay
+  in a simulated pointer drag (`test_labeling_flow.py`, needed for
+  svelte-dnd-action's own drag-gesture detection) and a 50ms poll
+  interval in a Python-side call-log poll
+  (`test_clusters_display_order_representatives.py`).
 
 ### Added
 

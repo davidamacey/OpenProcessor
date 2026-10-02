@@ -128,7 +128,6 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
     page.goto(f"{app_url}/p/default/dashboard")
     open_btn = page.get_by_role("button", name="Run VLM Labeling")
     open_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
 
     open_btn.first.click()
     page.get_by_placeholder("e.g. 42").fill("26")
@@ -136,10 +135,12 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
 
     # The real job's toast (predicted 7 / updated 7) must appear — the
     # stale slot's numbers (99/99) must never appear.
+    # The toast only renders once pollAutoLabelJob has observed a
+    # terminal status, so real_job_status_calls is already populated by
+    # the time this wait resolves — no extra settle sleep needed.
     page.get_by_text("VLM labeled 7 crops (7 updated).", exact=False).first.wait_for(
         timeout=ACTION_TIMEOUT_MS
     )
-    page.wait_for_timeout(300)
 
     assert len(real_job_status_calls) >= 1, (
         "pollAutoLabelJob(expectedJobId) must call GET "

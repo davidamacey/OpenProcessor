@@ -10,10 +10,7 @@
   import { resolveApiUrl } from '$lib/api';
   import SlotBboxEditor from '$lib/components/SlotBboxEditor.svelte';
   import SlotCard from '$lib/components/SlotCard.svelte';
-  import {
-    FALSE_POSITIVE_REGION_CLUSTER_ID,
-    type SlotGalleryController,
-  } from '../../../routes/p/[project]/clusters/slotGalleryController.svelte';
+  import type { SlotGalleryController } from '../../../routes/p/[project]/clusters/slotGalleryController.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
@@ -205,7 +202,7 @@
         >
           ← Clusters
         </button>
-        {#if gallery.selectedCluster === FALSE_POSITIVE_REGION_CLUSTER_ID}
+        {#if gallery.selectedClusterIsFalsePositive}
           <span
             class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
           >

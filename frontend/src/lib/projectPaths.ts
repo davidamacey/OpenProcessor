@@ -15,6 +15,7 @@ import { projectsStore } from '$stores/projects.svelte';
 export const PROJECT_SECTIONS = [
   'dashboard',
   'ingest',
+  'datasets',
   'clusters',
   'review',
   'classes',

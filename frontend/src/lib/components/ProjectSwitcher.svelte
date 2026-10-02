@@ -7,6 +7,9 @@
    * don't carry across projects). The switch itself is the `/p/[project]`
    * layout's job — this component only navigates. Nothing is persisted.
    *
+   * The "paused" chip is the ACTIVE project's served pipeline-pause flag
+   * (`projectPauseStore`, read by the `/p/[project]` layout).
+   *
    * The "custom keys" badge is the ACTIVE project's served keymap
    * `is_default === false` (already loaded, so it costs nothing); other
    * projects' keymaps aren't loaded, so they carry no badge.
@@ -16,6 +19,7 @@
   import { page } from '$app/state';
   import { switchProjectHref } from '$lib/projectPaths';
   import { keymapStore } from '$stores/keymap.svelte';
+  import { projectPauseStore } from '$stores/projectPause.svelte';
   import { projectsStore } from '$stores/projects.svelte';
 
   let open = $state(false);
@@ -24,6 +28,10 @@
   const current = $derived(projectsStore.current);
   const options = $derived(projectsStore.selectable);
   const customKeys = $derived(keymapStore.source === 'served' && !keymapStore.isDefault);
+  /** The active project's served pipeline-pause flag (`GET {prefix}/pause`). */
+  const paused = $derived(
+    current ? projectPauseStore.pausedFor(current.slug) === true : false,
+  );
 
   function choose(slug: string): void {
     open = false;
@@ -64,6 +72,13 @@
         class="shrink-0 rounded bg-amber-950/60 px-1 text-[10px] uppercase tracking-wide text-amber-300"
         data-testid="project-switcher-status"
         >{projectsStore.statusLabel(current.status)}</span
+      >
+    {/if}
+    {#if paused}
+      <span
+        class="shrink-0 rounded bg-amber-950/60 px-1 text-[10px] uppercase tracking-wide text-amber-300"
+        title="This project's pipeline is paused: workers skip it until it's resumed on the Projects page"
+        data-testid="project-switcher-paused">paused</span
       >
     {/if}
     {#if customKeys}

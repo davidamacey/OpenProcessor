@@ -17,7 +17,7 @@ that omit `region_boxes`).
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
@@ -126,10 +126,13 @@ def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "PATCH" and r.url.endswith("/region_meta"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("Enter")
 
     assert len(puts) == 1, puts
     body = puts[0]

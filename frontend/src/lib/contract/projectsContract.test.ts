@@ -28,6 +28,8 @@ const SUMMARY = {
   selectable: true,
   is_default: true,
   deletable: true,
+  archivable: true,
+  unarchivable: true,
   revision: true,
   created_at: true,
   updated_at: true,
@@ -111,6 +113,13 @@ const CASES: [string, string[]][] = [
     'CloneSettingsRequest',
     keys({ from: true, axes: true, expected_revision: true } satisfies Record<
       keyof T.CloneSettingsRequest,
+      true
+    >),
+  ],
+  [
+    'PipelinePauseState',
+    keys({ project: true, paused: true } satisfies Record<
+      keyof T.PipelinePauseState,
       true
     >),
   ],

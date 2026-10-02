@@ -3,7 +3,7 @@ sidebar_position: 6
 title: Export
 ---
 
-# Export (`/export`)
+# Export (`/p/<project>/export`)
 
 - Per-class balance and trainability gaps.
 - A one-shot **test-holdout freeze** — deterministic selection (a hash of

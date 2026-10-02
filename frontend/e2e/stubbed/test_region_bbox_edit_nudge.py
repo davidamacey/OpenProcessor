@@ -12,7 +12,9 @@ crop being edited, with the nudged geometry.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+
+from playwright.sync_api import expect
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
 
@@ -107,9 +109,10 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta)
 
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(500)
-    counter_before = page.get_by_test_id("queue-counter").first.inner_text()
+    counter = page.get_by_test_id("queue-counter").first
+    counter.wait_for(timeout=ACTION_TIMEOUT_MS)
+    expect(counter).to_contain_text("3 total", timeout=ACTION_TIMEOUT_MS)
+    counter_before = counter.inner_text()
 
     page.keyboard.press("e")
     canvas = page.get_by_test_id("multibox-canvas").first
@@ -117,7 +120,10 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
 
     for _ in range(3):
         page.keyboard.press("ArrowRight")
-        page.wait_for_timeout(100)
+        # Each nudge is a synchronous client-side redraw, not a network
+        # call — a real paint tick settles it instead of an arbitrary
+        # sleep between presses.
+        wait_for_paint(page)
 
     # Still editing, still the same crop.
     assert canvas.count() == 1, "an arrow nudge dropped edit mode"
@@ -125,8 +131,10 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
         "arrow keys in edit mode paged the queue"
     )
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/region"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.keyboard.press("Enter")
 
     assert region_meta_calls == [], f"Enter in edit mode must not PATCH region_meta: {region_meta_calls}"
     assert len(region_puts) == 1, region_puts

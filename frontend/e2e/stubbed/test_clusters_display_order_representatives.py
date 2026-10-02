@@ -22,7 +22,10 @@ follows display order, not server order.
 
 from __future__ import annotations
 
+import time
 from urllib.parse import parse_qs, urlparse
+
+from conftest import ACTION_TIMEOUT_MS
 
 CLASSES: list[dict] = []
 METHODS = {"strategies": [], "flags": {}}
@@ -85,12 +88,19 @@ def test_clusters_fetch_representatives_in_display_order(stub, page, app_url):
     stub.on("GET", r"/clusters(\?|$)", clusters_handler)
 
     page.goto(f"{app_url}/p/default/clusters")
-    page.wait_for_timeout(2000)
+
+    # Real wait for the per-cluster fetches to land instead of a fixed
+    # sleep: poll the stub's own call log (populated synchronously by the
+    # handler above) until every targeted id has been requested or the
+    # shared action-timeout budget runs out.
+    display_only_ids = {25, 26, 27, 28, 29, 30}
+    deadline = time.monotonic() + ACTION_TIMEOUT_MS / 1000
+    while time.monotonic() < deadline and not display_only_ids.issubset(per_id_calls):
+        page.wait_for_timeout(50)
 
     # The 6 clusters (ids 25-30) that are in the purity-asc first window
     # but NOT in the size-desc server-order first window must have been
     # fetched individually.
-    display_only_ids = {25, 26, 27, 28, 29, 30}
     fetched = set(per_id_calls)
     missing = display_only_ids - fetched
     assert not missing, (

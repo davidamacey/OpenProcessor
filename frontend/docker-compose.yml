@@ -45,6 +45,8 @@ services:
       - PUBLIC_TRITON_API_URL=${PUBLIC_TRITON_API_URL:-}
       # Deployment-owned nginx upload cap for /ingest, in MB (default 256).
       - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
+      # nginx upload cap for a dataset archive, in MB (default 2048).
+      - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
     ports:
       - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
     healthcheck:

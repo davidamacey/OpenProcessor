@@ -116,3 +116,80 @@ describe('trapFocus action', () => {
     expect(document.activeElement).toBe(trigger);
   });
 });
+
+describe('trapFocus when focus has fallen out of the dialog', () => {
+  // A focused Confirm button that turns `disabled` (busy) drops focus to
+  // <body>; keys then never reach the dialog's own listener.
+  it('still closes on Escape pressed with focus on <body>', () => {
+    const { outer, ok } = buildDialog();
+    const onEscape = vi.fn();
+    const action = trapFocus(outer, { onEscape });
+    ok.focus();
+    ok.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    action.destroy();
+  });
+
+  it('pulls Tab from <body> back into the dialog', () => {
+    const { outer, input } = buildDialog();
+    const action = trapFocus(outer);
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(input);
+    action.destroy();
+  });
+
+  it('routes a stray Escape to the topmost dialog only, once', () => {
+    const lower = buildDialog();
+    const lowerEscape = vi.fn();
+    const lowerAction = trapFocus(lower.outer, { onEscape: lowerEscape });
+    const upperOuter = document.createElement('div');
+    upperOuter.append(document.createElement('button'));
+    document.body.appendChild(upperOuter);
+    const upperEscape = vi.fn();
+    const upperAction = trapFocus(upperOuter, { onEscape: upperEscape });
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(upperEscape).toHaveBeenCalledTimes(1);
+    expect(lowerEscape).not.toHaveBeenCalled();
+
+    upperAction.destroy();
+    upperOuter.remove();
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(lowerEscape).toHaveBeenCalledTimes(1);
+    lowerAction.destroy();
+  });
+
+  it('handles Escape inside the dialog exactly once', () => {
+    const { outer, cancel } = buildDialog();
+    const onEscape = vi.fn();
+    const action = trapFocus(outer, { onEscape });
+    cancel.focus();
+    cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    action.destroy();
+  });
+
+  it('stops listening on the document once destroyed', () => {
+    const { outer } = buildDialog();
+    const onEscape = vi.fn();
+    trapFocus(outer, { onEscape }).destroy();
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(onEscape).not.toHaveBeenCalled();
+  });
+});

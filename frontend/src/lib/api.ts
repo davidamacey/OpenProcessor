@@ -93,6 +93,53 @@ import type {
   TrainManifest,
 } from './types_train';
 import type {
+  DatasetErrorDetail,
+  DatasetFormatsResponse,
+  DatasetImportEntryPage,
+  DatasetImportJob,
+  DatasetImportList,
+  DatasetImportRequest,
+  DatasetIssuePage,
+  DatasetPreview,
+  DatasetPreviewRequest,
+  DatasetUndoReport,
+  DatasetUndoRequest,
+  DatasetUploadResponse,
+  NextStep,
+  ReprocessJob,
+  ReprocessOneRequest,
+  ReprocessRequest,
+  ReprocessResponse,
+} from './types_import';
+import type {
+  ActiveConfigResponse,
+  ActiveRef,
+  ConfigActivateRequest,
+  ConfigCloneRequest,
+  ConfigErrorDetail,
+  ConfigRevisionList,
+  ValidationReport,
+} from './types_config';
+import type {
+  PackTestRequest,
+  PackTestResponse,
+  PackUpdateRequest,
+  PackValidateRequest,
+  PromptPackDoc,
+  PromptPackList,
+  PromptPackSchema,
+} from './types_packs';
+import type {
+  ActivationImpact,
+  ConfigVocabulary,
+  ProfileActivateResponse,
+  ProfileUpdateRequest,
+  ProfileValidateRequest,
+  RegionProfileDoc,
+  RegionProfileList,
+  RegionProfileSchema,
+} from './types_profiles';
+import type {
   BakeoffComparison,
   BakeoffMatrix,
   BakeoffProfileList,
@@ -110,11 +157,17 @@ import type {
   CreateProjectRequest,
   DeleteDryRunResponse,
   PatchProjectRequest,
+  PipelinePauseState,
   ProjectErrorDetail,
   ProjectLifecycleResponse,
   ProjectRecordResponse,
   ProjectsResponse,
 } from './types_projects';
+import type {
+  ModelClassMappingResponse,
+  ModelSharingRequest,
+  ModelSharingResponse,
+} from './types_models';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -1497,8 +1550,91 @@ export function getTrainingCohorts(
   );
 }
 
+/**
+ * Every model the active project can see: its own, the base models, and
+ * (projects P2, §5.5) other projects' models their owners shared, each
+ * with the served `project`/`shared`/`class_mapping`.
+ */
 export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
-  return apiFetch<ModelsStatus>(`${scoped()}/models/status`, {}, signal);
+  return apiFetch<ModelsStatus>(
+    `${scoped()}/models/status${qs({ include_other_projects: true })}`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * Opt one of the active project's promoted models into (or out of)
+ * cross-project sharing. Owner only: any other project gets 404
+ * `model_not_found`. 409 `revision_conflict` carries the served
+ * `current_revision`; 409 `in_use` (unsharing while another project uses
+ * it) is bypassed by `force`.
+ */
+export function setModelSharing(
+  modelName: string,
+  body: ModelSharingRequest,
+  force = false,
+  signal?: AbortSignal,
+): Promise<ModelSharingResponse> {
+  return apiFetch<ModelSharingResponse>(
+    `${scoped()}/models/${encodeURIComponent(modelName)}/sharing${qs({ force: force || undefined })}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** How a model's classes map by name onto the active project's registry. */
+export function getModelClassMapping(
+  modelName: string,
+  signal?: AbortSignal,
+): Promise<ModelClassMappingResponse> {
+  return apiFetch<ModelClassMappingResponse>(
+    `${scoped()}/models/${encodeURIComponent(modelName)}/class_mapping`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * A project's own served API prefix, verbatim. The only way to address a
+ * project OTHER than the active one (the `/projects` page acts on each
+ * row's own project): the prefix is the served
+ * `ProjectSummary.prefix`, never assembled from a slug.
+ */
+export function projectPrefix(project: { prefix: string }): string {
+  return project.prefix;
+}
+
+/** `GET {prefix}/pause`. A row action on `/projects`, so `global`: it
+ *  belongs to that row's project, not the active one, and is never
+ *  dropped as stale when the active project changes. */
+export function getProjectPause(
+  project: { prefix: string },
+  signal?: AbortSignal,
+): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(`${projectPrefix(project)}/pause`, {}, signal, {
+    global: true,
+  });
+}
+
+/** `POST {prefix}/pause` — workers skip the project until resumed. */
+export function pauseProject(project: { prefix: string }): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(
+    `${projectPrefix(project)}/pause`,
+    { method: 'POST' },
+    undefined,
+    { global: true },
+  );
+}
+
+/** `POST {prefix}/resume`. */
+export function resumeProject(project: { prefix: string }): Promise<PipelinePauseState> {
+  return apiFetch<PipelinePauseState>(
+    `${projectPrefix(project)}/resume`,
+    { method: 'POST' },
+    undefined,
+    { global: true },
+  );
 }
 
 /**
@@ -4800,4 +4936,583 @@ export function bakeoffMatrix(
   signal?: AbortSignal,
 ): Promise<BakeoffMatrix> {
   return apiFetch(`${scoped()}/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
+}
+
+// -- labeled-dataset import and Reprocess (OpenProcessor W10) ------------
+//
+// any_domain_plan.md §7.12 / W10.14; docs/design/
+// w10-import-reprocess-ui-plan-2026-09-27.md. Every route is scoped to the
+// active project (the import's target is the path's project; no body
+// carries `project`). A backend without W10 404s `GET /datasets/formats`,
+// which `datasetsAvailability` treats as "not deployed yet".
+
+export function getDatasetFormats(signal?: AbortSignal): Promise<DatasetFormatsResponse> {
+  return apiFetch<DatasetFormatsResponse>(`${scoped()}/datasets/formats`, {}, signal);
+}
+
+/** `POST /datasets/uploads` — one multipart `file` (a .zip/.tar/.tar.gz),
+ *  streamed server-side; the response's `dataset_path` is what the
+ *  preview then reads. */
+export function uploadDatasetArchive(
+  file: File,
+  signal?: AbortSignal,
+): Promise<DatasetUploadResponse> {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  return apiFetch<DatasetUploadResponse>(
+    `${scoped()}/datasets/uploads`,
+    { method: 'POST', body: fd },
+    signal,
+  );
+}
+
+/** Dry run: writes nothing. Dataset problems come back as `issues`,
+ *  never as a 4xx (only a malformed body or a disallowed root 422s). */
+export function previewDataset(
+  body: DatasetPreviewRequest,
+  signal?: AbortSignal,
+): Promise<DatasetPreview> {
+  return apiFetch<DatasetPreview>(
+    `${scoped()}/datasets/preview`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** 202 with a new job, or 200 with the existing one (`reused: true`). */
+export function startDatasetImport(
+  body: DatasetImportRequest,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function listDatasetImports(
+  params: { page?: number; page_size?: number; status?: string | null } = {},
+  signal?: AbortSignal,
+): Promise<DatasetImportList> {
+  return apiFetch<DatasetImportList>(
+    `${scoped()}/datasets/imports${qs({
+      page: params.page,
+      page_size: params.page_size,
+      status: params.status,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImportIssues(
+  importId: string,
+  params: { code?: string | null; page?: number; page_size?: number } = {},
+  signal?: AbortSignal,
+): Promise<DatasetIssuePage> {
+  return apiFetch<DatasetIssuePage>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/issues${qs({
+      code: params.code,
+      page: params.page,
+      page_size: params.page_size,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function getDatasetImportEntries(
+  importId: string,
+  params: {
+    split?: string | null;
+    label_state?: string | null;
+    status?: string | null;
+    page?: number;
+    page_size?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<DatasetImportEntryPage> {
+  return apiFetch<DatasetImportEntryPage>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/entries${qs({
+      split: params.split,
+      label_state: params.label_state,
+      status: params.status,
+      page: params.page,
+      page_size: params.page_size,
+    })}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+export function resumeDatasetImport(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<DatasetImportJob> {
+  return apiFetch<DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/resume`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Dry run → `DatasetUndoReport`; apply → 202 `DatasetImportJob`
+ *  (`status: undoing`). */
+export function undoDatasetImport(
+  importId: string,
+  body: DatasetUndoRequest,
+  signal?: AbortSignal,
+): Promise<DatasetUndoReport | DatasetImportJob> {
+  return apiFetch<DatasetUndoReport | DatasetImportJob>(
+    `${scoped()}/datasets/imports/${encodeURIComponent(importId)}/undo`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** A finished import's served `next_steps` entry, run as served: its
+ *  `method` against its `path` under the project's prefix, no body
+ *  (plan §8 question 10). */
+export function runServedNextStep(
+  step: NextStep,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `${scoped()}${step.path}`,
+    { method: step.method.toUpperCase() },
+    signal,
+  );
+}
+
+/** Batch Reprocess. `dry_run` defaults to true on the server; the caller
+ *  always sends it explicitly. */
+export function reprocessBatch(
+  body: ReprocessRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse> {
+  return apiFetch<ReprocessResponse>(
+    `${scoped()}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Single-item Reprocess; returns the post-write `items` (mapped like
+ *  every other crop) for the caller to adopt. */
+export async function reprocessCrop(
+  cropId: string,
+  body: ReprocessOneRequest,
+  signal?: AbortSignal,
+): Promise<ReprocessResponse<Crop>> {
+  const res = await apiFetch<ReprocessResponse<RawCrop>>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/reprocess`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return { ...res, items: (res.items ?? []).map(mapRawCrop) };
+}
+
+export function getReprocessJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReprocessJob> {
+  return apiFetch<ReprocessJob>(
+    `${scoped()}/reprocess/jobs/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelReprocessJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReprocessJob> {
+  return apiFetch<ReprocessJob>(
+    `${scoped()}/reprocess/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/**
+ * The structured W10 refusal (`{detail: ConfigErrorDetail}` with the
+ * optional `issues`/`unmapped`/`import_id`), or `null` when the error
+ * isn't one. The UI shows `message` and branches only on `error`.
+ */
+export function datasetErrorDetail(e: unknown): DatasetErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as DatasetErrorDetail;
+}
+
+/** The served `message` of a W10 refusal, else the generic detail. */
+export function datasetErrorText(e: unknown): string {
+  const d = datasetErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
+}
+
+// -- Prompt packs (OpenProcessor W3; test-on-crop W5) --------------------
+// any_domain_plan.md §3, §5.1, §7.2, §7.5;
+// docs/design/w3-pack-editor-ui-plan-2026-09-27.md §1.
+
+/** `GET /prompt_packs`: every pack (builtin, file, stored) plus the
+ *  clone-only templates and the active ref. Also the W3 gate's probe. */
+export function listPromptPacks(signal?: AbortSignal): Promise<PromptPackList> {
+  return apiFetch<PromptPackList>(`${scoped()}/prompt_packs`, {}, signal);
+}
+
+export function getPromptPackSchema(signal?: AbortSignal): Promise<PromptPackSchema> {
+  return apiFetch<PromptPackSchema>(`${scoped()}/prompt_packs/schema`, {}, signal);
+}
+
+/** `POST /prompt_packs/validate`: a draft's report. Never writes and
+ *  never 422s; a reserved or taken `name` is an issue in the report. */
+export function validatePromptPack(
+  body: PackValidateRequest,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
+  return apiFetch<ValidationReport>(
+    `${scoped()}/prompt_packs/validate`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function getPromptPack(
+  name: string,
+  signal?: AbortSignal,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}`,
+    {},
+    signal,
+  );
+}
+
+export function getPromptPackRevisions(
+  name: string,
+  signal?: AbortSignal,
+): Promise<ConfigRevisionList> {
+  return apiFetch<ConfigRevisionList>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions`,
+    {},
+    signal,
+  );
+}
+
+export function getPromptPackRevision(
+  name: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/revisions/${encodeURIComponent(String(revision))}`,
+    {},
+    signal,
+  );
+}
+
+/** `POST /prompt_packs/{name}/clone` → 201 the new stored pack. */
+export function clonePromptPack(
+  name: string,
+  body: ConfigCloneRequest,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/clone`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** `PUT /prompt_packs/{name}`: saves a new revision (OCC on
+ *  `expected_revision`; 409 `revision_conflict` carries the current one). */
+export function updatePromptPack(
+  name: string,
+  body: PackUpdateRequest,
+): Promise<PromptPackDoc> {
+  return apiFetch<PromptPackDoc>(`${scoped()}/prompt_packs/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `DELETE /prompt_packs/{name}?expected_revision=` → 204. */
+export function deletePromptPack(name: string, expectedRevision: number): Promise<void> {
+  return apiFetch<void>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}${qs({ expected_revision: expectedRevision })}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export function getActivePromptPack(signal?: AbortSignal): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/prompt_packs/active`, {}, signal);
+}
+
+/** `POST /prompt_packs/{name}/activate` (OCC on `expected_active`). */
+export function activatePromptPack(
+  name: string,
+  body: ConfigActivateRequest,
+): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(
+    `${scoped()}/prompt_packs/${encodeURIComponent(name)}/activate`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** `POST /prompt_packs/active/rollback`: re-activates the previous pack. */
+export function rollbackPromptPack(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/prompt_packs/active/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `POST /prompt_packs/test` (W5): runs one call on real crops and never
+ *  writes. Each result's `preview_item` (the item as the write would
+ *  leave it) is also mapped into `preview`. */
+export async function testPromptPack(
+  body: PackTestRequest,
+  signal?: AbortSignal,
+): Promise<PackTestResponse<Crop>> {
+  const res = await apiFetch<PackTestResponse>(
+    `${scoped()}/prompt_packs/test`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return {
+    ...res,
+    results: (res.results ?? []).map((r) => ({
+      ...r,
+      preview: r.preview_item ? mapRawCrop(r.preview_item as unknown as RawCrop) : null,
+    })),
+  };
+}
+
+// -- Region profiles and the config vocabulary (OpenProcessor W4) ---------
+// any_domain_plan.md §4, §7.3, §7.4;
+// docs/design/w4-profile-editor-ui-plan-2026-09-27.md §2.
+
+/** `GET /region_profiles?include_templates=true`: every profile (env,
+ *  registered, stored) plus the clone-only templates and the active ref.
+ *  Also the W4 gate's probe. */
+export function listRegionProfiles(signal?: AbortSignal): Promise<RegionProfileList> {
+  return apiFetch<RegionProfileList>(
+    `${scoped()}/region_profiles${qs({ include_templates: true })}`,
+    {},
+    signal,
+  );
+}
+
+export function getRegionProfileSchema(
+  signal?: AbortSignal,
+): Promise<RegionProfileSchema> {
+  return apiFetch<RegionProfileSchema>(`${scoped()}/region_profiles/schema`, {}, signal);
+}
+
+/** `POST /region_profiles/validate`: a draft's report, never a write.
+ *  `forActivation` adds the activation-only checks (§4.3). */
+export function validateRegionProfile(
+  body: ProfileValidateRequest,
+  forActivation: boolean,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
+  return apiFetch<ValidationReport>(
+    `${scoped()}/region_profiles/validate${qs({ for_activation: forActivation })}`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+export function getRegionProfile(
+  name: string,
+  signal?: AbortSignal,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}`,
+    {},
+    signal,
+  );
+}
+
+export function getRegionProfileRevisions(
+  name: string,
+  signal?: AbortSignal,
+): Promise<ConfigRevisionList> {
+  return apiFetch<ConfigRevisionList>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/revisions`,
+    {},
+    signal,
+  );
+}
+
+export function getRegionProfileRevision(
+  name: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/revisions/${encodeURIComponent(String(revision))}`,
+    {},
+    signal,
+  );
+}
+
+/** `POST /region_profiles/{name}/clone` → 201 the new stored profile. */
+export function cloneRegionProfile(
+  name: string,
+  body: ConfigCloneRequest,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/clone`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/** `PUT /region_profiles/{name}`: saves a new revision. Never changes what
+ *  runs (§4.4); 409 `revision_conflict` carries the current revision. */
+export function updateRegionProfile(
+  name: string,
+  body: ProfileUpdateRequest,
+): Promise<RegionProfileDoc> {
+  return apiFetch<RegionProfileDoc>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+  );
+}
+
+/** `DELETE /region_profiles/{name}?expected_revision=` → 204 (409 `in_use`
+ *  when it is the active profile). */
+export function deleteRegionProfile(
+  name: string,
+  expectedRevision: number,
+): Promise<void> {
+  return apiFetch<void>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}${qs({ expected_revision: expectedRevision })}`,
+    { method: 'DELETE' },
+  );
+}
+
+/** `GET /region_profiles/active` (axis `detection_profile`; `active.name`
+ *  null = region detection is off). */
+export function getActiveRegionProfile(
+  signal?: AbortSignal,
+): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/region_profiles/active`, {}, signal);
+}
+
+/** `POST /region_profiles/{name}/activate` (OCC on `expected_active`); the
+ *  response adds the served `impact` and `validation`. */
+export function activateRegionProfile(
+  name: string,
+  body: ConfigActivateRequest,
+): Promise<ProfileActivateResponse> {
+  return apiFetch<ProfileActivateResponse>(
+    `${scoped()}/region_profiles/${encodeURIComponent(name)}/activate`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/** `POST /region_profiles/active/rollback`: re-activates the previous one. */
+export function rollbackRegionProfile(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/region_profiles/active/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `POST /region_profiles/deactivate`: region detection off (OCC). */
+export function deactivateRegionProfile(body: {
+  expected_active: ActiveRef;
+}): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/region_profiles/deactivate`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `GET /region_profiles/active/impact`: items by the profile@revision that
+ *  produced them, plus the served re-run suggestion (§4.6). */
+export function getRegionProfileImpact(signal?: AbortSignal): Promise<ActivationImpact> {
+  return apiFetch<ActivationImpact>(
+    `${scoped()}/region_profiles/active/impact`,
+    {},
+    signal,
+  );
+}
+
+/** `GET /config/vocabulary`: every model / mode / class list the profile
+ *  editor's pickers render (§7.4). `includeOtherProjects` adds other
+ *  projects' shared detectors (projects_plan.md §5.5). */
+export function getConfigVocabulary(
+  includeOtherProjects: boolean,
+  signal?: AbortSignal,
+): Promise<ConfigVocabulary> {
+  return apiFetch<ConfigVocabulary>(
+    `${scoped()}/config/vocabulary${qs({ include_other_projects: includeOtherProjects || undefined })}`,
+    {},
+    signal,
+  );
+}
+
+/** The structured config-store refusal (`{detail: ConfigErrorDetail}`,
+ *  §7.1) of a prompt-pack or region-profile route, or `null` when the
+ *  error isn't one. The UI shows `message`, branches on `error`. */
+export function configErrorDetail(e: unknown): ConfigErrorDetail | null {
+  if (!(e instanceof ApiError)) return null;
+  const body = e.body;
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as ConfigErrorDetail;
+}
+
+/** The served `message` of a config-store refusal, else the generic detail. */
+export function configErrorText(e: unknown): string {
+  const d = configErrorDetail(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
 }

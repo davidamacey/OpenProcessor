@@ -10,6 +10,10 @@
   import { toastStore } from '$stores/toast.svelte';
   import { isInstalled, modelStatusPill } from '$lib/modelStatus';
   import type { ModelInfo } from '$lib/types';
+  import ModelSharingInfo from '$components/models/ModelSharingInfo.svelte';
+  import ShareModelDialog from '$components/models/ShareModelDialog.svelte';
+  import { createModelSharing } from '$lib/models/modelSharingController.svelte';
+  import { projectsStore } from '$stores/projects.svelte';
 
   const REFRESH_MS = 15_000;
 
@@ -22,6 +26,20 @@
   /** Model name currently mid-unload, or null. Gates the button so a
    *  double-click can't fire two DELETEs for the same model. */
   let unloadingName = $state<string | null>(null);
+
+  const sharing = createModelSharing({ reload: refresh });
+  /** The model whose sharing dialog is open, by name, so the dialog
+   *  always reads the CURRENT served entry (fresh revision after a
+   *  reload). */
+  let sharingName = $state<string | null>(null);
+  const sharingModel = $derived(
+    sharingName ? (models.find((m) => m.name === sharingName) ?? null) : null,
+  );
+  const activeSlug = $derived(projectsStore.current?.slug ?? null);
+
+  function projectName(slug: string): string {
+    return projectsStore.list.find((p) => p.slug === slug)?.display_name ?? slug;
+  }
 
   async function refresh(): Promise<void> {
     abortCtrl?.abort();
@@ -117,7 +135,9 @@
       <h1 class="text-xl font-semibold tracking-tight">Models</h1>
       <p class="mt-1 text-sm text-zinc-400">
         Inference services that drive the labeling pipeline. Locally-hosted models run on
-        the GPU box; the VLM is an external service. Auto-refreshes every 15 seconds.
+        the GPU box; the VLM is an external service. Models other projects shared with
+        this one are listed too, with how their classes map onto this project's classes.
+        Auto-refreshes every 15 seconds.
       </p>
     </div>
     <div
@@ -252,6 +272,14 @@
             </p>
           {/if}
 
+          <ModelSharingInfo
+            model={m}
+            {activeSlug}
+            {projectName}
+            {sharing}
+            onshare={(target) => (sharingName = target.name)}
+          />
+
           {#if unloadButtonState(m) !== 'hidden'}
             <div class="mt-3 flex justify-end border-t border-zinc-800 pt-3">
               <button
@@ -294,3 +322,5 @@
     </ul>
   {/if}
 </div>
+
+<ShareModelDialog model={sharingModel} {sharing} onclose={() => (sharingName = null)} />
