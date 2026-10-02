@@ -12,10 +12,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 <!-- track-B P4 -->
 
-<!-- track-C W5+W10 -->
+- **Test on a crop for prompt packs and region profiles (W5).** The pack
+  editor's test panel is re-typed to the served contract and now shows the
+  served pack and VLM refs (`name@revision`, endpoint, model), top-level
+  parse state, each crop's parsed answer or served skip reason, and the
+  preview item; a `crop_not_found` refusal names the missing ids in the
+  input. The region-profile editor gains a "Test on a crop" panel
+  (`POST /region_profiles/test`): one crop, the draft or a saved revision,
+  an optional segmenter prompt, and "Verify with the VLM"; it shows each
+  leg's status and its candidates (a dropped one greyed with its served
+  reason), the candidates drawn over the source image (boxes and mask
+  outlines, dropped ones dimmed) and in the crop's own frame from the
+  served parent-frame geometry, the preview under "Selection (not
+  verified)" or "VLM verdicts", and the verify block. Wrappers live in
+  `src/lib/api_configTest.ts`; types are pinned key-for-key by
+  `contract/configTestContract.test.ts`. Both controllers carry a
+  `vlmSelection` hook the VLM picker will fill.
+- **Imported labels in review and browse (W10 leftovers).** An **Imported**
+  review tab, shown only when the backend serves it, with its own empty
+  state linking to the import page; URL-seeded `import_id` and
+  `combine_conflict` filters shown as removable chips and sent only when
+  the tab's served filters list them; "Review imported labels" on the
+  import job view; a lock glyph on a locked label (browse card) or box
+  (slot card, multi-box canvas); import provenance rows in an item's
+  details; and "Reprocess image..." on a card's expanded view and on slot
+  cards (`POST /images/{image_id}/reprocess`), with `/clusters/[id]`
+  adopting the served items.
 
 ### Changed
 
+- **W10 types pinned to the contract; Reprocess now appears against the
+  real backend.** `types_import.ts` is re-typed field-for-field from the
+  vendored OpenAPI (`/datasets/formats` serves `processing_modes`,
+  `parents_modes`, `trust_levels`, `upload_limits` and `{value, label,
+description}` choices; a failed job's `error` is a string; the report and
+  undo report gained their new counts). Reprocess was gated on a
+  `formats.reprocess` block the backend never serves, so it was absent; it
+  is now present whenever the import API is served, with its scope and
+  region-mode ids pinned to the contract enums, no lock-rule sentence and
+  no summary message (the served counts are what show). The archive input
+  no longer filters by a served extension list (none is served).
 - **Contract sync to OpenProcessor f582aa05; every route resolves for real.**
   All `PENDING_BACKEND*` allow-lists and `it.todo` entries are gone, so every
   scanned call site must resolve in the vendored OpenAPI. `findOperation`

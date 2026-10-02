@@ -60,7 +60,7 @@ stub.
 | `/datasets`      | Labeled-dataset import (OpenProcessor W10): the imports list, the `/datasets/import` wizard (preview, name-based class mapping, options, confirm-gated start) and the `/datasets/imports/[id]` job view (served progress, cancel / resume / dry-run-first undo). Reached from `/ingest`; absent when the backend doesn't serve `GET {API_PREFIX}/datasets/formats`. See "Dataset import and Reprocess" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/p/[project]/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / VLM Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / VLM Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below). An **Imported** tab (W10) appears only when `GET {API_PREFIX}/review/tabs` serves it, and a link can seed `import_id` / `combine_conflict` filters (shown as removable chips; see "Dataset import and Reprocess" below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `/classes`       | Add / rename / merge / **deprecate** / **restore** classes, per-class hotkey binding, and a **Proposals** section (`GET {API_PREFIX}/review/new_class_proposals/summary`) for creating a class from — or mapping onto an existing class — a VLM-proposed term the registry doesn't have yet, bulk-resolving _every_ pending crop proposing that term (`POST {API_PREFIX}/review/new_class_proposals/resolve`), not just the summary's sample thumbnails. Every active row has a **Deprecate** button (`POST {API_PREFIX}/classes/{id}/deprecate`, confirm-gated) — 409 with a structured `class_still_referenced` detail (`{message, item_count, confirmed_label_count}`) offers the existing merge dialog instead, preselecting the class as the merge source. The deprecated-classes table's **Restore** button (OpenProcessor 01324cb, 243f7f2) is real, not the permanently-disabled placeholder it used to be — `POST {API_PREFIX}/classes/{id}/restore`, whose 409 is either a PLAIN STRING detail (a live class already claims the name) shown verbatim, or, for a class merged into another (OpenProcessor 4c125ec, F-56), a structured `class_merged` detail rendered as "Merged into `<served class_name>`; un-merge isn't supported." plus the served message and hint (`classMergedDetail`/`classMergedRestoreText`, `api.ts`). Since OpenProcessor 51b05d7, `GET {API_PREFIX}/classes` serves `merged_into`, so a merged deprecated class shows "merged into `<name>`" instead of a Restore button (the 409 path stays for a stale page). The merge dry-run's `validations_carried_over` reads "N human validations will carry over" (a merge keeps validations; the old `would_unvalidate` key is gone, no shim). The class table renders first; the Proposals list sits below it (and below the deprecated table) in a collapsed `<details>` (F-53), its per-term Hide button is session-only (not persisted, F-58), and the page scrolls as a whole rather than in an inner pane (F-50).                                                                                                                                                                        |
 | `/export`        | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`). Since OpenProcessor df01309, `GET {API_PREFIX}/export/status` also serves `image_count`/`class_count`/`group_key`/`split_counts`/`class_split_counts` — the page shows the served train/val/test totals and a collapsible per-class table (any class at 0 train or 0 val highlighted, served numbers only). The freeze modal has no Seed field: `POST {API_PREFIX}/test_holdout/freeze`'s body is `{percent}` only (selection is deterministic, SHA1 of each crop id per class — an extra `seed` key is a 422); the success toast shows the served `selection`/`min_per_class`. Since OpenProcessor 4c9499a (one image + one label file per source image), `ExportStatus` also carries `object_count`/`split_object_counts` (label lines, distinct from `image_count`/`split_counts`) — the page reads "N objects in M images" and separate images:/objects: split badges, never one ambiguous number. An opt-in "Only images whose every object is labeled" checkbox sends `require_fully_labeled_images` on `POST {API_PREFIX}/export/yolo`; the served partial-frame counts (`unlabeled_items_on_exported_images`/`images_with_unlabeled_items`/`images_dropped_not_fully_labeled`) render when present. Every one of these fields is `null` (not `0`) on an export written before it was recorded — rendered via `formatCount()` (`src/lib/formatCount.ts`) as "—". The `ExportStatus` fields are nullable because the served schema types them so; `TestHoldoutFreezeResult`'s `selection`/`percent`/`min_per_class` are required.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `/models`        | Triton model registry browser. Lists the project's own models, the base models and, via `GET {API_PREFIX}/models/status?include_other_projects=true`, other projects' models their owners shared, each with the served `project`/`shared`/`class_mapping` — see "Model sharing" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -261,23 +261,73 @@ Built against the frozen W10 spec before the backend ships it.
 - **Reprocess** (`ReprocessControl.svelte` + `reprocessController.svelte.ts`):
   on `CropMetaPanel` (one crop, `POST /crops/{id}/reprocess`, `dry_run:
 false`; the served post-write crop is adopted by `CropDetailModal` and
-  `/review`) and the `/clusters/[id]` selection toolbar (`POST /reprocess`,
-  served dry run first, then apply; a served job is followed). Scopes,
-  region modes and the lock-rule copy come from the served
-  `formats.reprocess`; absent when it isn't served. The outcome sentence
-  is the served `message`.
+  `/review`), on `CropCard`'s expanded view and `SlotCard` as "Reprocess
+  image…" (`POST /images/{image_id}/reprocess`, `reprocessImage`,
+  `api.ts`; the served `items` of that image are mapped like any crop and
+  handed to `onreprocessed`; `/clusters/[id]` adopts them by `crop_id` via
+  `clusterController.adoptItems`), and the `/clusters/[id]` selection toolbar
+  (`POST /reprocess`, served dry run first, then apply; a served
+  `ReprocessJobInfo` is followed). The backend serves no Reprocess
+  vocabulary (`/datasets/formats` has no `reprocess` block), so the control
+  is present whenever `datasetsAvailability.available === true`, its scope
+  and region-mode ids are the contract's enums
+  (`src/lib/datasets/reprocessVocabulary.ts`, pinned to the vendored
+  `ReprocessOneRequest` by `contract/datasetsContract.test.ts`) labelled by
+  `humanizeId`, and there is no lock-rule or summary sentence: results show
+  the served counts only (`ReprocessCounts`: selected / locked skipped /
+  queued / failed / not found, and the breakdown rows; an omitted count
+  reads "—"). Question C-1 asks for served labels.
 - **Proxy.** `nginx.conf` has a `…/projects/*/datasets/uploads` location
   with `client_max_body_size` from `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
   (default 2048) and a one-hour timeout.
-- **Contract.** Types in `src/lib/types_import.ts`. The routes are in
-  vendored OpenAPI and resolve for real in `endpointCatalog.test.ts`; the
-  ingest-batch label fields the W10 backend 422s are gone (see Ingest).
-- **Not yet built:** the served `imported` review tab, lock badges, and
-  Reprocess on browse cards / an image view (they wait on the served tab
-  and lock-reason shapes).
+- **Contract.** Types in `src/lib/types_import.ts`, pinned key-for-key to
+  the vendored OpenAPI (OpenProcessor f582aa05) by
+  `contract/datasetsContract.test.ts`: `/datasets/formats` serves
+  `formats: [{format, label}]`, `processing_modes` / `parents_modes` /
+  `trust_levels` / `mapping_actions` / `match_kinds` as `{value, label,
+description}` and `upload_limits` (no accepted-extension list, so the
+  archive input has no `accept` filter). A failed job's `error` is a
+  string. The routes are in the vendored OpenAPI and resolve for real in
+  `endpointCatalog.test.ts`; the ingest-batch label fields the W10 backend
+  422s are gone (see Ingest).
+- **W10 leftovers (2026-10-01, Track C).**
+  - **`imported` review tab.** `CORE_REVIEW_TABS` has `imported`, shown only
+    while `GET /review/tabs` serves an `imported` entry
+    (`visibleReviewTabs`, `reviewTabsVocabularyStore.hasEntry`); absent,
+    never disabled. A `?tab=imported` link against a backend that does not
+    serve it falls back to All with the usual notice once the vocabulary has
+    loaded. Its `dataset_split` / `on_negative_frame` filters render through
+    the generic served-filter bar. When the served `empty_state.
+has_imported_labels` is false (and W10 is served) the empty panel links
+    to `/datasets/import`.
+  - **URL-seeded `import_id` and `combine_conflict`.** `/review` reads both
+    from the URL (`reviewDeepLink`), sends each to `GET /review/{tab}` and
+    `/locate` only when that tab's served `filters` list it (nothing is
+    guessed before the vocabulary answers, and a link that seeds one holds
+    the first queue load until it has), persists them in the URL, clears
+    them on a tab click, and shows a removable chip ("Import `<id>`",
+    "Combine conflicts only"). No toggle exists when not URL-seeded. The
+    import job view's "Review imported labels" links to
+    `/review?tab=imported&import_id=<id>` when the `imported` tab is served.
+  - **Lock badges.** `CropCard`: a lock glyph when the served
+    `label_locked` is true ("Label locked"); `SlotCard` and
+    `MultiBoxCanvas`: a lock glyph on a box whose served `locked` is true
+    (the review page passes it by box id). No reason text (question C-2).
+    `SlotBboxEditor`'s own canvas does not pass `locked`.
+  - **Import provenance** (`provenance/ImportProvenanceRows.svelte`, in
+    `CropMetaPanel`): label locked, `dataset_split`, `import_ids` (links to
+    `/datasets/imports/<id>` while W10 is served, else text),
+    `imported_at`, `proposed_by_import`, `on_negative_frame`,
+    `import_standalone_region`, `proposal_chain` (chips, verbatim); each row
+    only when it carries a value. `Crop.image_id` (wire `image_id`) is now
+    carried by `mapRawCrop`; it targets the image Reprocess.
 - **Tests:** `api.datasetImport.test.ts`, `datasets/*.test.ts`,
-  `components/datasets/*.test.ts`; e2e `test_dataset_import.py` (conftest
-  serves `/datasets/formats` 404 by default).
+  `components/datasets/*.test.ts`, `contract/datasetsContract.test.ts`,
+  `components/provenance/ImportProvenanceRows.test.ts`, the lock and image
+  Reprocess cases in `CropCard.test.ts` / `SlotCard.test.ts` /
+  `MultiBoxCanvas.test.ts`; e2e `test_dataset_import.py`,
+  `test_import_leftovers.py` (conftest serves `/datasets/formats` 404 by
+  default).
 
 ## Prompt-pack editor (`/settings/prompt-packs`, OpenProcessor W3, 2026-09-27)
 
@@ -318,12 +368,24 @@ before the backend ships it.
   anyway" (`force: true`) renders only when the report's `force_allowed`.
   `active_conflict` re-reads. The panel shows the served `stale` and
   `applied[].lagging`.
-- **Test on a crop** (`packTestController.svelte.ts`, `PackTestPanel`):
+- **Test on a crop** (`packTestController.svelte.ts`, `PackTestPanel`;
+  wrappers in `src/lib/api_configTest.ts`, types in `types_configTest.ts`,
+  pinned by `contract/configTestContract.test.ts`):
   `POST /prompt_packs/test` is W5, so the panel renders only for served
   `schema.calls[].testable` calls. Sends the draft or the saved revision,
-  the call, crop ids, and `use_region_box` only when chosen; renders the
-  served prompt, raw reply, parsed models and the preview item (through
-  `SourceImageOverlay`, the tested item replaced in its context).
+  the call, crop ids, `use_region_box` only when chosen, and the VLM
+  selection (`vlmSelection`: `vlm_name` / `vlm_revision` /
+  `acknowledge_external`) only when one is set (nothing sets it until the
+  VLM picker is mounted on the panel; `vlm_draft` is never sent). Renders
+  the served pack and VLM refs (`name@revision`, `endpoint`, `model`,
+  "draft"), latency, top-level parse state, validation, the prompt, raw
+  reply and reasoning, and per crop the thumbnail, `box_id`, the served
+  `skipped` text or `parsed` JSON and the preview item
+  (`components/config/TestPreviewItem.svelte`, shared with the profile
+  test: the crop's context with the tested item replaced, drawn by
+  `SourceImageOverlay`). `crop_not_found` names the listed ids in the
+  input; every other refusal is the served message. A new run aborts the
+  one in flight.
 - **Contract:** types in `src/lib/types_packs.ts` (the shared §7.1
   models live in `src/lib/types_config.ts`); routes
   resolve for real in `endpointCatalog.test.ts`; `ActiveConfigResponse`'s
@@ -385,8 +447,26 @@ on the shared config machinery listed under "Prompt-pack editor".
   serves Reprocess). Every successful activate / rollback / turn-off calls
   `healthStore.poll()`, so `regionProfileStore` raises its existing
   "reload to apply" notice; nothing hot-swaps the region slot.
-- **Not built:** test-on-crop (`POST /region_profiles/test`, W5; the
-  profile schema serves no testable flag, W4-Q3), create-from-nothing,
+- **Test on a crop** (`profileTestController.svelte.ts`,
+  `ProfileTestPanel`, `ProfileTestLegs`, `components/configTest/`; wrapper
+  `testRegionProfile`, `POST /region_profiles/test`, W5): the profile
+  schema serves no `testable` flag (question W5-1), so the panel shows
+  whenever the editor loads. One crop id, the unsaved draft or the saved
+  revision (read-only profiles and a viewed revision offer saved only), a
+  segmenter prompt override sent only when non-empty, "Verify with the
+  VLM" (`verify: true` only when ticked), and the `vlmSelection` hook.
+  Renders the served profile ref, "not eligible" (`item_eligible: false`,
+  no served reason, question W5-2), validation, the legs (served status,
+  reason, time; a candidate table of score / selected / drop reason / mask
+  IoU / detector, dropped rows greyed with the reason in the tooltip), the
+  candidates over the source image (`SourceImageOverlay`'s `extraShapes`:
+  boxes from `bbox_norm`, mask outlines from `mask_polygon`, dropped ones
+  dimmed) and in the crop's own frame (`CropFrameShapes`, from the served
+  `bbox_in_parent` / `mask_polygon_in_parent`), the preview item under
+  "Selection (not verified)" (`selection_accepted`) or "VLM verdicts"
+  (`vlm_verdicts`), and the verify block when served. Nothing is projected
+  or judged client-side.
+- **Not built:** create-from-nothing,
   `validate_segmenter_prompt` (no surface, W4-Q4), `from_project` clone.
 - **Contract:** types in `src/lib/types_profiles.ts`; routes
   resolve for real in `endpointCatalog.test.ts`. **Tests:** `api.regionProfiles.test.ts`, `profiles/*.test.ts`,
