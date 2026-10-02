@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Combine next step result.** After a confirmed next step (e.g. Recluster)
+  the job view now shows the served response in a "Last next step" block
+  (action, status chip, scalar values, nested values collapsed) until the job
+  changes, and the toast reads "Ran <action>" instead of the stale
+  "Combining into ..." message. Refusals still show the served detail.
+
 ### Changed
 
 - **Backend finalization (OpenProcessor f14f4ddc).** Contracts re-vendored.

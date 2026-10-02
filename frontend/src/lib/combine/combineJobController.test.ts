@@ -248,4 +248,29 @@ describe('actions', () => {
     expect(runCombineNextStep).not.toHaveBeenCalled();
     expect(job.actionError).toContain('not in the project list');
   });
+
+  it('stores the served result of a next step and keeps it per job', async () => {
+    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const body = { status: 'no_residuals', n_residuals: 0, refit: false };
+    const { job, runCombineNextStep } = setup([combineJob({ status: 'completed' })]);
+    runCombineNextStep.mockResolvedValueOnce(body);
+    await job.load();
+    expect(job.lastStep).toBeNull();
+    await job.runNextStep(step);
+    expect(job.lastStep).toEqual({ action: 'recluster', result: body });
+    // A different job id is a different controller: nothing carries over.
+    expect(setup([combineJob()]).job.lastStep).toBeNull();
+  });
+
+  it('a refused next step stores no result and shows the served detail', async () => {
+    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const { job, runCombineNextStep } = setup([combineJob({ status: 'completed' })]);
+    runCombineNextStep.mockRejectedValueOnce(
+      new ApiError(409, '/x', { detail: 'rebuild already running' }),
+    );
+    await job.load();
+    expect(await job.runNextStep(step)).toBe(false);
+    expect(job.lastStep).toBeNull();
+    expect(job.actionError).toBe('rebuild already running');
+  });
 });

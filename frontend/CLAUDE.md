@@ -2562,6 +2562,10 @@ typed as the backend builds them, every field optional.
   "Review flagged conflicts" (`/p/<target>/review?tab=all&combine_conflict=true`),
   and one confirm-gated button per served `next_steps` entry, run as served
   against the TARGET project's own prefix (`runCombineNextStep`, body-less).
+  The served response stays on the job view as a "Last next step" block
+  (`CombineStepResult.svelte`: action label, `status` chip, scalar rows,
+  nested/long values collapsed; `CombineJob.lastStep`, per job id) with a
+  neutral "Ran <action>" toast; a refusal shows the served detail instead.
   Failed: the served error and report plus "Undo combine".
 - **`/projects`.** A project the server says came from a combine
   (`origin.kind === 'combine'` with a `job_id`) links to its job (how a job

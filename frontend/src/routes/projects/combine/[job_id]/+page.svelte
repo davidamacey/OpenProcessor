@@ -18,7 +18,9 @@
   import { createProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import type { CombineNextStep } from '$lib/types_combine';
   import type { ProjectSummary } from '$lib/types_projects';
+  import CombineStepResult from '$components/combine/CombineStepResult.svelte';
   import { projectsStore } from '$stores/projects.svelte';
+  import { toastStore } from '$stores/toast.svelte';
 
   const appName =
     (import.meta.env?.PUBLIC_APP_NAME as string | undefined) || 'Cropwright';
@@ -68,7 +70,10 @@
   async function doStep(): Promise<void> {
     const s = pendingStep;
     if (!s) return;
-    if (await job.runNextStep(s)) pendingStep = null;
+    if (await job.runNextStep(s)) {
+      pendingStep = null;
+      toastStore.info(`Ran ${combineLabel(s.action)}`);
+    }
   }
 </script>
 
@@ -231,6 +236,10 @@
             {#if step.reason}<li>{combineLabel(step.action)}: {step.reason}</li>{/if}
           {/each}
         </ul>
+      {/if}
+
+      {#if job.lastStep}
+        <CombineStepResult action={job.lastStep.action} result={job.lastStep.result} />
       {/if}
 
       {#if reportRows.length > 0}

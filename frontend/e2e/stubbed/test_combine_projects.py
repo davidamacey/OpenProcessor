@@ -272,7 +272,7 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
 
     def next_step(request: Any, _m: Any):
         ran.append((request.method, request.post_data or ""))
-        return (200, {})
+        return (200, {"status": "no_residuals", "n_residuals": 0, "refit": False})
 
     stub.on("POST", r"/projects/merged/cluster/umap/rebuild$", next_step)
 
@@ -295,6 +295,11 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
         page.get_by_role("button", name="Run", exact=True).click()
     expect(page.get_by_role("button", name="Run", exact=True)).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     assert ran == [("POST", "")]
+    result = page.get_by_test_id("combine-step-result")
+    expect(result).to_contain_text("Recluster")
+    expect(page.get_by_test_id("combine-step-result-status")).to_have_text("No residuals")
+    expect(result.locator('[data-result-key="n_residuals"]')).to_have_text("0")
+    expect(page.get_by_text("Ran Recluster")).to_be_visible()
 
 
 def test_preview_stale_re_previews(stub, page, app_url):

@@ -56,6 +56,9 @@ export class CombineJob {
   notFound = $state<string | null>(null);
   actionError = $state<string | null>(null);
   busy = $state(false);
+  /** The served response of the last next step that ran; lives as long as
+   *  this controller (one per job id). */
+  lastStep = $state<{ action: string; result: unknown } | null>(null);
 
   #deps: CombineJobDeps;
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -175,7 +178,8 @@ export class CombineJob {
       return Promise.resolve(false);
     }
     return this.#act(async () => {
-      await this.#deps.runCombineNextStep(project, step);
+      const result = await this.#deps.runCombineNextStep(project, step);
+      this.lastStep = { action: step.action, result };
       return null;
     });
   }
