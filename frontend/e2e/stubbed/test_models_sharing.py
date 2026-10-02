@@ -78,6 +78,7 @@ class Models:
         self.puts: list[tuple[str, Any]] = []
         self.status_queries: list[str] = []
         self.conflict_next = False
+        self.in_use_projects: list[str] = []
 
     def install(self, stub: Any) -> None:
         base_re = re.escape(PREFIX)
@@ -100,6 +101,13 @@ class Models:
     def put(self, request: Any, m: Any) -> Any:
         body = request.post_data_json
         self.puts.append((m.group(1), body))
+        forced = "force=true" in request.url
+        if self.in_use_projects and not body["shared"] and not forced:
+            return (409, {"detail": {
+                "error": "in_use",
+                "message": f"'widget_det' is still used by {len(self.in_use_projects)} other project(s)",
+                "projects": self.in_use_projects,
+            }})
         if self.conflict_next:
             self.conflict_next = False
             self.own["sharing_revision"] += 2  # someone else toggled twice
@@ -116,7 +124,9 @@ class Models:
             "project": "default",
             "shared": body["shared"],
             "revision": self.own["sharing_revision"],
-            "used_by": [],
+            "used_by": [{"project": p, "profile": "tag"} for p in self.in_use_projects]
+            if forced
+            else [],
         })
 
 
@@ -147,10 +157,11 @@ def test_share_toggle_round_trip_sends_the_served_revision(stub, page, app_url):
     )
     assert reg.puts == [("widget_det", {"shared": True, "expected_revision": 3})]
 
-    # And back: unsharing warns another project may be using it.
+    # And back: unsharing names the server-side in-use check, never "safe".
     page.get_by_test_id("model-share-toggle-widget_det").click()
     text = page.get_by_test_id("share-model-text").inner_text()
-    assert "Another project may be using it" in text, text
+    assert "active detection profile" in text, text
+    assert "may be using it" not in text, text
     assert "safe" not in text.lower(), text
     with page.expect_request(lambda r: r.method == "PUT" and r.url.endswith("/sharing")):
         page.get_by_test_id("share-model-confirm").click()
@@ -192,3 +203,27 @@ def test_another_projects_shared_model_shows_its_chip_and_mapping(stub, page, ap
     card.get_by_text("2 not in this project").click()
     assert card.get_by_test_id("model-unmapped-names").inner_text() == "van, bus"
     assert page.get_by_test_id("model-share-toggle-beta__crate_det").count() == 0
+
+
+def test_unshare_in_use_shows_served_projects_and_confirm_gates_force(stub, page, app_url):
+    reg = Models()
+    reg.own["shared"] = True
+    reg.in_use_projects = ["beta"]
+    reg.install(stub)
+    open_models(page, app_url)
+
+    page.get_by_test_id("model-share-toggle-widget_det").click()
+    page.get_by_test_id("share-model-confirm").click()
+    page.get_by_test_id("share-model-in-use").wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert "beta" in page.get_by_test_id("share-model-in-use").inner_text()
+    assert "still used by 1 other project(s)" in page.get_by_test_id("share-model-error").inner_text()
+
+    page.get_by_test_id("share-model-force").click()
+    assert "beta" in page.get_by_test_id("share-model-force-warning").inner_text()
+    assert len(reg.puts) == 1  # arming the override sends nothing
+    with page.expect_request(
+        lambda r: r.method == "PUT" and r.url.endswith("/sharing?force=true")
+    ):
+        page.get_by_test_id("share-model-force-confirm").click()
+    page.get_by_test_id("share-model-dialog").wait_for(state="detached", timeout=ACTION_TIMEOUT_MS)
+    assert len(reg.puts) == 2

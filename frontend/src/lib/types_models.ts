@@ -33,9 +33,9 @@ export interface ModelSharingUser {
   profile?: string | null;
 }
 
-/** `PUT {scoped}/models/{name}/sharing` 200. `used_by` lists other
- *  projects using the model — always empty until the backend's profile
- *  wave (W4) can tell, so an empty list is not "nobody uses it". */
+/** `PUT {scoped}/models/{name}/sharing` 200. `used_by` lists the other
+ *  projects whose ACTIVE detection profile uses the model (served since
+ *  OpenProcessor f14f4ddc; non-empty here only on a forced unshare). */
 export interface ModelSharingResponse {
   name: string;
   project: string;

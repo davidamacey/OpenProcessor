@@ -9,7 +9,11 @@
    */
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
-  import { shareConfirmText, unshareConfirmText } from '$lib/modelSharing';
+  import {
+    forceUnshareText,
+    shareConfirmText,
+    unshareConfirmText,
+  } from '$lib/modelSharing';
   import type { ModelSharing } from '$lib/models/modelSharingController.svelte';
   import type { ModelInfo } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
@@ -24,6 +28,7 @@
   let errorText = $state<string | null>(null);
   let conflict = $state(false);
   let inUse = $state<string[] | null>(null);
+  let forceArmed = $state(false);
   let openFor = $state<string | null>(null);
 
   $effect(() => {
@@ -33,6 +38,7 @@
       errorText = null;
       conflict = false;
       inUse = null;
+      forceArmed = false;
     }
   });
 
@@ -47,11 +53,14 @@
         (res.response.shared
           ? `${res.response.name} is shared with other projects.`
           : `${res.response.name} is no longer shared.`) +
-          (users.length ? ` Used by: ${users.map((u) => u.project).join(', ')}.` : ''),
+          (users.length
+            ? ` Used by: ${users.map((u) => (u.profile ? `${u.project} (${u.profile})` : u.project)).join(', ')}.`
+            : ''),
       );
       onclose();
       return;
     }
+    forceArmed = false;
     errorText = res.message;
     conflict = res.code === 'revision_conflict';
     inUse = res.code === 'in_use' ? res.projects : null;
@@ -98,13 +107,26 @@
                 Used by: {inUse.join(', ')}
               </p>
             {/if}
-            <button
-              type="button"
-              class="btn btn-sm mt-2 text-red-300"
-              data-testid="share-model-force"
-              disabled={busy}
-              onclick={() => void confirm(true)}>Stop sharing anyway</button
-            >
+            {#if forceArmed}
+              <p class="mt-2 text-amber-300" data-testid="share-model-force-warning">
+                {forceUnshareText(inUse)}
+              </p>
+              <button
+                type="button"
+                class="btn btn-sm mt-2 text-red-300"
+                data-testid="share-model-force-confirm"
+                disabled={busy}
+                onclick={() => void confirm(true)}>Confirm: unshare anyway</button
+              >
+            {:else}
+              <button
+                type="button"
+                class="btn btn-sm mt-2 text-red-300"
+                data-testid="share-model-force"
+                disabled={busy}
+                onclick={() => (forceArmed = true)}>Unshare anyway</button
+              >
+            {/if}
           {/if}
         </div>
       {/if}

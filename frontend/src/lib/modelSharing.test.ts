@@ -10,6 +10,7 @@ import {
   shareConfirmText,
   sharingRole,
   unmappedText,
+  forceUnshareText,
   unshareConfirmText,
 } from './modelSharing';
 import type { ModelInfo } from './types';
@@ -70,11 +71,17 @@ describe('copy', () => {
     );
   });
 
-  it('unsharing is never described as safe, and says another project may use it', () => {
+  it('unsharing is never described as safe, and says the server names any project using it', () => {
     const t = unshareConfirmText('alpha__det');
     expect(t).toContain('alpha__det');
-    expect(t).toMatch(/another project may be using it/i);
+    expect(t).toMatch(/active detection profile/i);
+    expect(t).not.toMatch(/may be using it/i);
     expect(t).not.toMatch(/\bsafe/i);
     expect(shareConfirmText('alpha__det')).toMatch(/by name/);
+  });
+
+  it('the forced-unshare warning names the served projects', () => {
+    expect(forceUnshareText(['beta', 'gamma'])).toContain('beta, gamma');
+    expect(forceUnshareText([])).toMatch(/Projects using this model/);
   });
 });
