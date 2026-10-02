@@ -461,6 +461,7 @@ async def delete_model(model_name: str):
     - PyTorch model file (pytorch_models/{name}.pt)
     - TRT model directory (models/{name}_trt/)
     - TRT End2End model directory (models/{name}_trt_end2end/)
+    - the ONNX End2End intermediate the export leaves (models/{name}_end2end/)
 
     Also unloads the model from Triton if currently loaded.
     """
@@ -476,7 +477,7 @@ async def delete_model(model_name: str):
         logger.info(f'Deleted PyTorch model: {pt_file}')
 
     # Delete Triton model directories
-    for suffix in ['_trt', '_trt_end2end']:
+    for suffix in ['_trt', '_trt_end2end', '_end2end']:
         model_dir = TRITON_MODELS_DIR / f'{model_name}{suffix}'
         if model_dir.exists():
             # Unload from Triton first
