@@ -319,3 +319,71 @@ describe('delete', () => {
     ]);
   });
 });
+
+describe('polling while a row is transient', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function serveSequence(statuses: string[]) {
+    let n = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const status = statuses[Math.min(n++, statuses.length - 1)]!;
+        const rows =
+          status === 'gone'
+            ? [DEFAULT]
+            : [DEFAULT, testProject({ slug: 'alpha', status: status as 'deleting' })];
+        return json(testProjectsResponse(rows));
+      }),
+    );
+    return () => n;
+  }
+
+  it('re-reads every 2 s while a row is deleting, then stops once it is gone', async () => {
+    vi.useFakeTimers();
+    const reads = serveSequence(['deleting', 'deleting', 'gone']);
+    const admin = createProjectsAdmin();
+    admin.start();
+    await admin.load();
+    expect(reads()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(reads()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(reads()).toBe(2);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reads()).toBe(3);
+    expect(admin.list.map((p) => p.slug)).toEqual(['default']);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(reads()).toBe(3);
+    admin.stop();
+  });
+
+  it('also polls a building row', async () => {
+    vi.useFakeTimers();
+    const reads = serveSequence(['building', 'active']);
+    const admin = createProjectsAdmin();
+    admin.start();
+    await admin.load();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reads()).toBe(2);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(reads()).toBe(2);
+    admin.stop();
+  });
+
+  it('stop() cancels a pending poll, and never polls before start()', async () => {
+    vi.useFakeTimers();
+    const reads = serveSequence(['deleting']);
+    const idle = createProjectsAdmin();
+    await idle.load();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(reads()).toBe(1);
+
+    const admin = createProjectsAdmin();
+    admin.start();
+    await admin.load();
+    admin.stop();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(reads()).toBe(2);
+  });
+});

@@ -79,6 +79,13 @@ function failure(e: unknown): { ok: false; code: string | null; message: string 
   };
 }
 
+/** Served statuses that are transient: the server is still working, so
+ *  the row's next state only shows up on a re-read. */
+const TRANSIENT_STATUSES = ['building', 'deleting'];
+
+/** How often the list is re-read while any row is transient. */
+export const TRANSIENT_POLL_MS = 2000;
+
 export function createProjectsAdmin() {
   let list = $state<ProjectSummary[]>([]);
   let capacity = $state<ProjectCapacity | null>(null);
@@ -89,6 +96,21 @@ export function createProjectsAdmin() {
   let loading = $state(false);
   let loadError = $state<string | null>(null);
   let seq = 0;
+  let watching = false;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearPoll(): void {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+
+  /** While watching, re-read on an interval for as long as any listed
+   *  row has a transient served status; stops itself once none remain. */
+  function schedulePoll(): void {
+    clearPoll();
+    if (!watching || !list.some((p) => TRANSIENT_STATUSES.includes(p.status))) return;
+    pollTimer = setTimeout(() => void load(), TRANSIENT_POLL_MS);
+  }
 
   async function load(): Promise<void> {
     const mine = ++seq;
@@ -106,7 +128,10 @@ export function createProjectsAdmin() {
       if (mine !== seq) return;
       loadError = projectErrorText(e);
     } finally {
-      if (mine === seq) loading = false;
+      if (mine === seq) {
+        loading = false;
+        schedulePoll();
+      }
     }
   }
 
@@ -158,6 +183,16 @@ export function createProjectsAdmin() {
       return labels?.status?.[status] ?? status;
     },
     load,
+    /** Begin keeping the list fresh while rows are transient. */
+    start(): void {
+      watching = true;
+      schedulePoll();
+    },
+    /** Stop polling (page unmount). */
+    stop(): void {
+      watching = false;
+      clearPoll();
+    },
     async setIncludeArchived(v: boolean): Promise<void> {
       includeArchived = v;
       await load();

@@ -37,6 +37,7 @@
     createProjectsAdmin,
     type ActionResult,
   } from '$lib/projects/projectsAdminController.svelte';
+  import { subscribeGlobalEvents } from '$lib/sse';
   import type { ProjectSummary } from '$lib/types_projects';
   import { projectsStore } from '$stores/projects.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -54,8 +55,16 @@
   let pausing = $state<{ project: ProjectSummary; pause: boolean } | null>(null);
 
   onMount(() => {
+    admin.start();
     void admin.load();
     void combineAvailability.init();
+    // A served project.* event (deleted, created, ...) re-reads the list
+    // at once; the controller's poll covers a missed event.
+    const sub = subscribeGlobalEvents({ onEvent: () => void admin.load() });
+    return () => {
+      sub.close();
+      admin.stop();
+    };
   });
 
   /** The combine job a project was made by, when the server says so. */

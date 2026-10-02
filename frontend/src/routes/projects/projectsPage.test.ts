@@ -89,7 +89,30 @@ function submit(testId: string): void {
   flushSync();
 }
 
+class FakeEventSource {
+  static all: FakeEventSource[] = [];
+  listeners = new Map<string, ((ev: MessageEvent) => void)[]>();
+  onopen: (() => void) | null = null;
+  onerror: ((e: Event) => void) | null = null;
+  closed = false;
+  constructor(public url: string) {
+    FakeEventSource.all.push(this);
+  }
+  addEventListener(t: string, fn: (ev: MessageEvent) => void): void {
+    this.listeners.set(t, [...(this.listeners.get(t) ?? []), fn]);
+  }
+  emit(t: string, data: unknown): void {
+    for (const fn of this.listeners.get(t) ?? [])
+      fn({ data: JSON.stringify(data) } as MessageEvent);
+  }
+  close(): void {
+    this.closed = true;
+  }
+}
+
 beforeEach(() => {
+  FakeEventSource.all = [];
+  vi.stubGlobal('EventSource', FakeEventSource);
   listed = [DEFAULT, ALPHA, OLD, WIP];
   capacity = testCapacity('ok');
   handler = () => undefined;
@@ -544,6 +567,10 @@ describe('copy settings with the served vlm_activation axis (W9)', () => {
     await render();
     click('project-clone-alpha');
     expect(q('clone-settings-axis-vlm_activation')).not.toBeNull();
+    const from = q<HTMLSelectElement>('clone-settings-from')!;
+    from.value = 'default';
+    from.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
     submit('clone-settings-submit');
     await vi.waitFor(() =>
       expect(q('clone-settings-error')?.textContent).toBe(
@@ -555,5 +582,33 @@ describe('copy settings with the served vlm_activation axis (W9)', () => {
       axes: ['settings_defaults', 'vlm_activation'],
       expected_revision: 4,
     });
+  });
+});
+
+describe('a transient row re-reads on the global project events', () => {
+  it('a served project.deleted event drops the deleting row', async () => {
+    listed = [
+      DEFAULT,
+      testProject({ slug: 'alpha', status: 'deleting', deletable: false }),
+    ];
+    await render();
+    expect(q('project-status-alpha')).not.toBeNull();
+    expect(q('project-delete-alpha')).toBeNull();
+    listed = [DEFAULT];
+    FakeEventSource.all.at(-1)!.emit('project.deleted', {
+      type: 'project.deleted',
+      topic: 'project',
+      project: null,
+      target: 'alpha',
+    });
+    await vi.waitFor(() => expect(q('project-row-alpha')).toBeNull());
+  });
+
+  it('closes the event stream on unmount', async () => {
+    await render();
+    const es = FakeEventSource.all.at(-1)!;
+    unmount(instance!);
+    instance = null;
+    expect(es.closed).toBe(true);
   });
 });

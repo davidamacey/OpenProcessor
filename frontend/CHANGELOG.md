@@ -246,6 +246,14 @@ description}` choices; a failed job's `error` is a string; the report and
 
 ### Fixed
 
+- `/projects`: a row left in the served `deleting` (or `building`) status
+  no longer stays stale. While any listed row has a transient status the
+  page re-reads the list every 2 s (stopping when none remain or on
+  unmount) and also re-reads on any global `project.*` event, so a
+  finished delete drops its row without a reload.
+- `/projects` Copy settings dialog: no source project is preselected (Copy
+  stays disabled until one is picked), and a list reload, including the
+  one after submitting, no longer resets the chosen source or ticked axes.
 - **Test-on-crop source-image preview no longer spills over the result.**
   The overlay sat in an auto-height parent, so its image grew to the card
   width and covered the rows below; it now lives in a bounded column

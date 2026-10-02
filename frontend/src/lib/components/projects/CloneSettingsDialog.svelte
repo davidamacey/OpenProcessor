@@ -30,9 +30,16 @@
   );
   const axisOptions = $derived(admin.limits?.cloneable_axes ?? []);
 
+  // Reset only when the dialog opens or its target changes. The early
+  // return keeps a list reload (including the one after this very submit)
+  // from re-reading `axisOptions` here and wiping the operator's choices.
+  let initFor: string | null = null;
   $effect(() => {
-    if (!project) return;
-    from = sources[0]?.slug ?? '';
+    const slug = project?.slug ?? null;
+    if (slug === initFor) return;
+    initFor = slug;
+    if (!slug) return;
+    from = '';
     axes = [...axisOptions];
     errorText = null;
   });
@@ -93,6 +100,7 @@
             data-testid="clone-settings-from"
             class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
           >
+            <option value="" disabled>Choose a project…</option>
             {#each sources as s (s.slug)}
               <option value={s.slug}>{s.display_name} ({s.slug})</option>
             {/each}

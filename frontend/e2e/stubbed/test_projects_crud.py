@@ -263,3 +263,22 @@ def test_delete_confirms_with_the_typed_slug(stub, page, app_url):
         ("DELETE", "alpha?confirm=alpha", None),
     ]
     assert json.dumps(reg.rows["alpha"]["status"]) == '"deleting"'
+
+
+def test_deleting_row_disappears_without_a_reload(stub, page, app_url):
+    """The 202 leaves the row `deleting`; the page keeps re-reading the
+    served list until the server drops it, with no manual reload."""
+    reg = Projects()
+    reg.install(stub)
+    open_projects(page, app_url)
+
+    page.get_by_test_id("project-delete-alpha").click()
+    page.get_by_test_id("delete-project-confirm").fill("alpha")
+    page.get_by_test_id("delete-project-submit").click()
+    page.get_by_test_id("project-status-alpha").filter(has_text="Deleting").wait_for(
+        timeout=ACTION_TIMEOUT_MS
+    )
+
+    # The background delete finishes server-side; only a re-read can show it.
+    reg.rows["alpha"]["status"] = "deleted"
+    page.get_by_test_id("project-row-alpha").wait_for(state="detached", timeout=10_000)
