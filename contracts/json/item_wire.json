@@ -62,6 +62,10 @@
     "crop_area_norm",
     "blur_lap_ratio",
     "proposal_name",
+    "source_prompt",
+    "open_vocab_set",
+    "open_vocab_revision",
+    "mask_polygon",
     "probe_pred_class",
     "probe_pred_class_id",
     "probe_pred_entropy",
@@ -596,6 +600,24 @@
         "title": "Label Validated",
         "type": "boolean"
       },
+      "mask_polygon": {
+        "anyOf": [
+          {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mask Polygon"
+      },
       "mistakenness_method": {
         "anyOf": [
           {
@@ -665,6 +687,30 @@
         "default": false,
         "title": "On Negative Frame",
         "type": "boolean"
+      },
+      "open_vocab_revision": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Open Vocab Revision"
+      },
+      "open_vocab_set": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Open Vocab Set"
       },
       "origin_image_id": {
         "anyOf": [
@@ -1117,6 +1163,18 @@
         "default": "",
         "title": "Source Image Path",
         "type": "string"
+      },
+      "source_prompt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Source Prompt"
       },
       "test_holdout": {
         "default": false,

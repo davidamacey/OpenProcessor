@@ -287,3 +287,74 @@ async def test_a_failed_stats_write_never_fails_the_pass() -> None:
             raise RuntimeError('opensearch down')
 
     await save_tracker(Broken(), HitRateTracker())  # logged, not raised
+
+
+def _sample(counter_or_hist: Any, **labels: str) -> float:
+    child = counter_or_hist.labels(**labels)
+    if hasattr(child, '_buckets'):
+        return sum(b.get() for b in child._buckets)
+    return child._value.get()
+
+
+@pytest.mark.asyncio
+async def test_metrics_count_calls_gate_skips_drops_and_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.curation.metrics import (
+        OP_OPEN_VOCAB_CALL_SECONDS,
+        OP_OPEN_VOCAB_HITS_DROPPED_TOTAL,
+        OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL,
+        OP_SEGMENTER_GATE_DECISIONS_TOTAL,
+    )
+
+    fake, service, (image_id,) = await ingested_world(tmp_path, monkeypatch)
+    seg = FakeSegmenter()
+    seg.by_prompt = {'cone': [cand()], 'cup': []}
+    gate_labels = {'scope': 'image', 'decision': 'skip', 'tier': '2', 'reason': 'vlm_no'}
+    before = {
+        'hit': _sample(OP_OPEN_VOCAB_CALL_SECONDS, outcome='hit'),
+        'miss': _sample(OP_OPEN_VOCAB_CALL_SECONDS, outcome='miss'),
+        'skip': _sample(OP_SEGMENTER_GATE_DECISIONS_TOTAL, **gate_labels),
+        'written': OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL._value.get(),
+        'floor': _sample(OP_OPEN_VOCAB_HITS_DROPPED_TOTAL, reason='below_min_score'),
+    }
+    seg.by_prompt['cone'] = [cand(), cand((0.6, 0.6, 0.9, 0.9), 0.1)]
+    three = [*TWO, {'prompt': 'mug', 'class_name': 'mug'}]
+    ov = make_set(targets=three, gating={'tier2_vlm_precheck': True})
+
+    await run_open_vocab_image(
+        fake,
+        service,
+        image_id,
+        image_doc(fake, image_id),
+        ov,
+        revision=1,
+        segment=seg,
+        gate=GateContext(vlm_visible=_Vlm({'mug': False})),
+    )
+
+    assert _sample(OP_OPEN_VOCAB_CALL_SECONDS, outcome='hit') == before['hit'] + 1
+    assert _sample(OP_OPEN_VOCAB_CALL_SECONDS, outcome='miss') == before['miss'] + 1
+    assert _sample(OP_SEGMENTER_GATE_DECISIONS_TOTAL, **gate_labels) == before['skip'] + 1
+    assert OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL._value.get() == before['written'] + 1
+    assert (
+        _sample(OP_OPEN_VOCAB_HITS_DROPPED_TOTAL, reason='below_min_score') == before['floor'] + 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_segmenter_outage_is_counted_as_an_error_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.curation.metrics import OP_OPEN_VOCAB_CALL_SECONDS
+    from src.services.detection.segmenter_http import SegmenterCallError
+
+    fake, service, (image_id,) = await ingested_world(tmp_path, monkeypatch)
+    seg = _seg()
+    seg.down = True
+    before = _sample(OP_OPEN_VOCAB_CALL_SECONDS, outcome='error')
+    with pytest.raises(SegmenterCallError):
+        await run_open_vocab_image(
+            fake, service, image_id, image_doc(fake, image_id), make_set(), revision=1, segment=seg
+        )
+    assert _sample(OP_OPEN_VOCAB_CALL_SECONDS, outcome='error') == before + 1

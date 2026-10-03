@@ -64,6 +64,10 @@ export interface ItemWire {
   crop_area_norm: number | null;
   blur_lap_ratio: number | null;
   proposal_name: string | null;
+  source_prompt: string | null;
+  open_vocab_set: string | null;
+  open_vocab_revision: number | null;
+  mask_polygon: number[][] | null;
   probe_pred_class: unknown;
   probe_pred_class_id: number | null;
   probe_pred_entropy: number | null;
@@ -175,6 +179,10 @@ export const ITEM_WIRE_KEYS = [
   'crop_area_norm',
   'blur_lap_ratio',
   'proposal_name',
+  'source_prompt',
+  'open_vocab_set',
+  'open_vocab_revision',
+  'mask_polygon',
   'probe_pred_class',
   'probe_pred_class_id',
   'probe_pred_entropy',

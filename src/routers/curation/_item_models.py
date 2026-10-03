@@ -107,6 +107,14 @@ class ItemDoc(BaseModel):
     crop_area_norm: float | None = None
     blur_lap_ratio: float | None = None
     proposal_name: str | None = None
+    # Full-image open-vocabulary pass provenance: the target prompt that found
+    # the item, the prompt set and revision that ran it, and the outline
+    # (normalized (x, y) points in the source frame; null in list responses,
+    # present on GET /crops/{id}).
+    source_prompt: str | None = None
+    open_vocab_set: str | None = None
+    open_vocab_revision: int | None = None
+    mask_polygon: list[list[float]] | None = None
     probe_pred_class: Any = None
     probe_pred_class_id: int | None = None
     probe_pred_entropy: float | None = None

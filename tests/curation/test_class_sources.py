@@ -89,6 +89,7 @@ def test_fixed_writer_values_and_roles(clean_env: pytest.MonkeyPatch) -> None:
     assert by_id['class_merge'] == 'merge'
     assert by_id['external_label'] == 'label_import'
     assert by_id['unlabeled_proposal'] == 'proposal'
+    assert by_id['open_vocab_proposal'] == 'open_vocab'
 
 
 def test_catalog_entries_are_well_formed(clean_env: pytest.MonkeyPatch) -> None:
@@ -141,6 +142,8 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     # PUT /crops/{id}/label, PUT /crops/batch_label: always 'human'
     # (label_source is caller-chosen among the human sources only).
     'HUMAN_CLASS_SOURCE': 'human',
+    # The full-image open-vocabulary pass.
+    'OPEN_VOCAB_CLASS_SOURCE': 'open_vocab_proposal',
     # Label import: caller-chosen, default 'external_label'.
     'label_source': 'external_label',
     'item.class_source': None,

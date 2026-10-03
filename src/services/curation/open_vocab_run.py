@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
@@ -32,6 +33,12 @@ from src.services.curation.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
 from src.services.curation.item_doc import DetectedItem
+from src.services.curation.metrics import (
+    OP_OPEN_VOCAB_CALL_SECONDS,
+    OP_OPEN_VOCAB_HITS_DROPPED_TOTAL,
+    OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL,
+    OP_SEGMENTER_GATE_DECISIONS_TOTAL,
+)
 from src.services.curation.open_vocab_gate import VlmVisibleFn  # noqa: TC001 - dataclass field type
 from src.services.curation.reprocess_detect import load_image_context
 from src.services.curation.reprocess_locks import item_locked
@@ -179,23 +186,39 @@ def _detected(
     )
 
 
+async def _segment_target(
+    segment: SegmentImage, jpeg: bytes, target: OpenVocabTarget
+) -> list[RegionCandidate]:
+    started = time.monotonic()
+    outcome = 'error'
+    try:
+        found = await segment(
+            jpeg,
+            target.prompt,
+            min_score=target.min_score,
+            max_candidates=target.max_instances,
+            return_masks=target.mask,
+        )
+        outcome = 'hit' if found else 'miss'
+    finally:
+        OP_OPEN_VOCAB_CALL_SECONDS.labels(outcome=outcome).observe(time.monotonic() - started)
+    return found
+
+
 async def _segment_targets(
     segment: SegmentImage, jpeg: bytes, targets: tuple[OpenVocabTarget, ...]
 ) -> list[list[RegionCandidate]]:
-    return list(
-        await asyncio.gather(
-            *(
-                segment(
-                    jpeg,
-                    t.prompt,
-                    min_score=t.min_score,
-                    max_candidates=t.max_instances,
-                    return_masks=t.mask,
-                )
-                for t in targets
-            )
-        )
-    )
+    return list(await asyncio.gather(*(_segment_target(segment, jpeg, t) for t in targets)))
+
+
+def _count_decision(decision: GateDecision) -> None:
+    kind = 'sample' if decision.sampled else 'run' if decision.run else 'skip'
+    OP_SEGMENTER_GATE_DECISIONS_TOTAL.labels(
+        scope='image',
+        decision=kind,
+        tier=str(decision.tier or ''),
+        reason=decision.reason or '',
+    ).inc()
 
 
 @dataclass
@@ -283,6 +306,8 @@ async def plan_open_vocab_image(
         )
 
     decisions = await asyncio.gather(*(decision_for(t) for t in targets))
+    for decision in decisions:
+        _count_decision(decision)
     ran = tuple(t for t, d in zip(targets, decisions, strict=True) if d.run)
     skipped = [(t, d) for t, d in zip(targets, decisions, strict=True) if not d.run]
 
@@ -370,6 +395,8 @@ async def run_open_vocab_image(
         seen.add(cid)
         kept.append(h)
     result.hits = len(kept)
+    for reason, count in result.dropped.items():
+        OP_OPEN_VOCAB_HITS_DROPPED_TOTAL.labels(reason=reason).inc(count)
 
     by_target = {(t.prompt, t.class_name): t for t in todo}
     registry = get_class_registry()
@@ -398,6 +425,7 @@ async def run_open_vocab_image(
             raise RuntimeError(outcome.result.error or 'index_items failed')
         new_ids = outcome.crop_ids
         result.written = len(new_ids)
+        OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL.inc(result.written)
 
     # A target the gate skipped was not looked at, so its earlier output stays.
     protected = {t.prompt for t, _d in plan.skipped}

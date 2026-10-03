@@ -7649,6 +7649,23 @@
             "title": "Label Validated",
             "type": "boolean"
           },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
           "mistakenness_method": {
             "anyOf": [
               {
@@ -7713,6 +7730,28 @@
             "default": false,
             "title": "On Negative Frame",
             "type": "boolean"
+          },
+          "open_vocab_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Revision"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
           },
           "origin_image_id": {
             "anyOf": [
@@ -8130,6 +8169,17 @@
             "default": "",
             "title": "Source Image Path",
             "type": "string"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
           },
           "test_holdout": {
             "default": false,
@@ -15288,6 +15338,23 @@
             "title": "Label Validated",
             "type": "boolean"
           },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
           "mistakenness_method": {
             "anyOf": [
               {
@@ -15364,6 +15431,28 @@
             "default": false,
             "title": "On Negative Frame",
             "type": "boolean"
+          },
+          "open_vocab_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Revision"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
           },
           "origin_image_id": {
             "anyOf": [
@@ -15805,6 +15894,17 @@
             "default": "",
             "title": "Source Image Path",
             "type": "string"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
           },
           "suspected_fp_distance": {
             "anyOf": [
@@ -24878,6 +24978,42 @@
               ],
               "description": "Ingest source tag (wire `source`).",
               "title": "Source"
+            }
+          },
+          {
+            "description": "Items the full-image pass wrote for this prompt set.",
+            "in": "query",
+            "name": "open_vocab_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass wrote for this prompt set.",
+              "title": "Open Vocab Set"
+            }
+          },
+          {
+            "description": "Items the full-image pass found with this exact prompt.",
+            "in": "query",
+            "name": "source_prompt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass found with this exact prompt.",
+              "title": "Source Prompt"
             }
           },
           {

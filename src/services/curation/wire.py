@@ -95,13 +95,14 @@ def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
     / regions browse / semantic search) — :func:`item_source_excludes`
     plus ``class_id_history``.
 
+    ``mask_polygon`` (up to 256 points) is only drawn on a single item's detail.
     ``class_id_history`` (up to 32 entries) is only ever read by the
     undo path (``label_undo.py``, which stays on
     :func:`item_source_excludes` — it needs the history) — no list
     renderer reads it. Shipping it in every row of a paginated list
     response decompresses + serializes a field nobody displays.
     """
-    return [*item_source_excludes(storage), 'class_id_history']
+    return [*item_source_excludes(storage), 'class_id_history', 'mask_polygon']
 
 
 def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> dict[str, Any]:
@@ -333,6 +334,14 @@ def serialize_item(
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
         'proposal_name': src.get('proposal_name'),
+        # Full-image open-vocabulary pass: the prompt that found the item, the
+        # set@revision that ran it, and the outline (source frame, normalized).
+        # List endpoints send ``mask_polygon`` as null (``item_list_source_excludes``);
+        # ``GET /crops/{id}`` carries it.
+        'source_prompt': src.get('source_prompt'),
+        'open_vocab_set': src.get('open_vocab_set'),
+        'open_vocab_revision': src.get('open_vocab_revision'),
+        'mask_polygon': src.get('mask_polygon'),
         'probe_pred_class': probe_pred_class,
         'probe_pred_class_id': src.get('probe_pred_class_id'),
         'probe_pred_entropy': src.get('probe_pred_entropy'),
