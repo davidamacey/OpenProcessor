@@ -315,6 +315,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         # Open-vocabulary prompt sets: same shape as the region-profile routes.
         ('POST', '/open_vocab'): {'json': {'name': f'{slug}-newset', 'body': _open_vocab_body()}},
         ('POST', '/open_vocab/validate'): {'json': {'name': None, 'body': _open_vocab_body()}},
+        ('POST', '/open_vocab/test'): {
+            'json': {'image_id': f'{slug}-img-0001', 'target': _open_vocab_body()['targets'][0]}
+        },
         ('POST', '/open_vocab/active/rollback'): {'json': {'expected_active': None}},
         ('POST', '/open_vocab/deactivate'): {'json': {'expected_active': None}},
         ('POST', '/open_vocab/{name}/clone'): {
@@ -379,6 +382,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/region_profiles/validate'): 'dry-run report; never writes',
     ('POST', '/region_profiles/validate_segmenter_prompt'): 'dry-run report; never writes',
     ('POST', '/open_vocab/validate'): 'dry-run report; never writes',
+    ('POST', '/open_vocab/test'): 'runs a target over a stored image and previews; never writes',
     (
         'POST',
         '/region_profiles/test',
@@ -401,6 +405,10 @@ EXPECTED_5XX: dict[tuple[str, str], str] = {
         '502 segmenter_error: the sweep has no network, so the only leg of the draft '
         'profile cannot run (a total leg failure is a 502 by design); the item is read '
         'from the bound project before that'
+    ),
+    ('POST', '/open_vocab/test'): (
+        '502 segmenter_error: the sweep has no segmenter (no network), so the call cannot '
+        'run (an outage is never "no hits"); the image is read from the bound project first'
     ),
     ('DELETE', '/models/{model_name}'): (
         '502: the dead in-process Triton never confirms the unload, so the route '

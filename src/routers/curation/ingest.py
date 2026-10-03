@@ -52,6 +52,7 @@ from src.routers.curation._common import (
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
+from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
 
 
 class IngestBatchItem(IngestImageRequest):
@@ -131,6 +132,8 @@ async def curation_ingest_image(
 
     service = await _get_ingest_service(opensearch, registry)
     result = await service.ingest_one(image_bytes, body.path, source=body.source)
+    if result.status == 'success' and result.image_id:
+        await schedule_open_vocab_after_ingest(opensearch, service, [result.image_id])
     return IngestImageResponse(
         status=result.status,
         image_id=result.image_id,
@@ -212,6 +215,12 @@ async def curation_ingest_batch(
         if images
         else None
     )
+    if batch_result is not None:
+        await schedule_open_vocab_after_ingest(
+            opensearch,
+            service,
+            [r.image_id for r in batch_result.results if r.status == 'success' and r.image_id],
+        )
     return _batch_response(batch_result, failed_early)
 
 

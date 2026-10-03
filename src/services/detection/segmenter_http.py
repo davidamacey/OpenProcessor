@@ -115,6 +115,20 @@ async def segment_once(
     return [c for c in parsed if c is not None]
 
 
+async def segmenter_instances(url: str, *, timeout_s: float = 3.0) -> int | None:
+    """``instances`` from the segmenter's ``GET /health`` (its in-flight
+    forward capacity), or ``None`` when it cannot be read. Only used to
+    estimate a pass's duration, never to decide anything."""
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=False) as http:
+            resp = await http.get(f'{url.rstrip("/")}/health')
+            resp.raise_for_status()
+            value = resp.json().get('instances')
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return None
+    return int(value) if isinstance(value, int) and value > 0 else None
+
+
 async def segment_image_http(
     jpeg: bytes,
     prompt: str,
@@ -159,4 +173,5 @@ __all__ = [
     'first_segmenter_url',
     'segment_image_http',
     'segment_once',
+    'segmenter_instances',
 ]

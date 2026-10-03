@@ -191,3 +191,39 @@ class OpenVocabFieldSchema(BaseModel):
 class OpenVocabSchema(BaseModel):
     fields: list[OpenVocabFieldSchema]
     max_enabled_targets_ceiling: int
+
+
+class OpenVocabTestRequest(BaseModel):
+    """Run one UNSAVED target on one image; exactly one of ``image_id`` (a
+    stored image) and ``image_base64`` (an uploaded JPEG/PNG)."""
+
+    image_id: str | None = None
+    image_base64: str | None = None
+    target: OpenVocabTargetBody
+    image_max_side: int = DEFAULT_IMAGE_MAX_SIDE
+    dedup_iou: float = DEFAULT_DEDUP_IOU
+
+
+class OpenVocabTestHit(BaseModel):
+    """One raw segmenter candidate, with what selection did with it. Boxes and
+    outlines are normalized to the image: the client draws them."""
+
+    bbox_norm: list[float]
+    score: float
+    mask_polygon: list[list[float]] | None = None
+    selected: bool
+    drop_reason: str | None = None
+
+
+class OpenVocabTestImage(BaseModel):
+    width: int
+    height: int
+
+
+class OpenVocabTestResponse(BaseModel):
+    image: OpenVocabTestImage
+    prompt: str
+    class_name: str
+    hits: list[OpenVocabTestHit]
+    elapsed_ms: float
+    validation: ValidationReport

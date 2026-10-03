@@ -36,7 +36,12 @@ from src.services.curation.reprocess_detect import load_image_context
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_targets import items_by_terms
 from src.services.detection.geometry import crop_id, stored_bbox_norm
-from src.services.detection.open_vocab_select import ExistingBox, Hit, select_open_vocab_hits
+from src.services.detection.open_vocab_select import (
+    ExistingBox,
+    Hit,
+    OpenVocabSelection,
+    select_open_vocab_hits,
+)
 
 
 if TYPE_CHECKING:
@@ -186,6 +191,81 @@ async def _segment_targets(
     )
 
 
+@dataclass
+class ImagePlan:
+    """The read-only half of a pass on one image: what the segmenter said and
+    what survives selection and dedup. Shared by the writing runner and the
+    per-image test route, so a test shows exactly what a run would keep."""
+
+    selection: OpenVocabSelection
+    calls: int
+    own_ids: set[str]
+    existing_ids: dict[str, str | None]
+    locked_untouched: int
+
+
+async def plan_open_vocab_image(
+    opensearch: AsyncOpenSearch,
+    image_id: str,
+    pil: Image.Image,
+    ov: OpenVocabSet,
+    targets: tuple[OpenVocabTarget, ...],
+    *,
+    segment: SegmentImage,
+) -> ImagePlan:
+    """Segment ``pil`` for ``targets`` and select against the image's items.
+    Writes nothing. Raises ``SegmenterCallError`` on an outage."""
+    jpeg = await asyncio.to_thread(encode_for_segmenter, pil, ov.image_max_side)
+    candidates = await _segment_targets(segment, jpeg, targets)
+    existing_docs = await items_by_terms(
+        opensearch,
+        'image_id',
+        [image_id],
+        index=get_curation_config().items_index,
+        includes=_existing_includes(),
+    )
+    existing: list[ExistingBox] = []
+    own: set[str] = set()
+    existing_ids: dict[str, str | None] = {}
+    locked_count = 0
+    for doc_id, src in existing_docs:
+        box = src.get('bbox_norm')
+        if not box or len(box) != 4:
+            continue
+        locked = item_locked(src)
+        if src.get('open_vocab_set') == ov.name and not locked:
+            own.add(doc_id)
+            continue
+        name = src.get('class_name') or src.get('proposal_name')
+        existing_ids[doc_id] = name
+        existing.append(
+            ExistingBox(bbox_norm=(box[0], box[1], box[2], box[3]), class_name=name, locked=locked)
+        )
+        locked_count += int(locked)
+    selection = select_open_vocab_hits(
+        [(t.rules(), c) for t, c in zip(targets, candidates, strict=True)],
+        existing,
+        dedup_iou=ov.dedup_iou,
+    )
+    return ImagePlan(selection, len(targets), own, existing_ids, locked_count)
+
+
+async def stamp_open_vocab_status(opensearch: AsyncOpenSearch, image_id: str, status: str) -> None:
+    """Record the pass's state on the image doc (``pending`` | ``done`` |
+    ``failed``). The state is bookkeeping: a failed stamp is logged, never
+    allowed to fail the image whose items are already written."""
+    try:
+        await opensearch.update(
+            index=get_curation_config().images_index,
+            id=image_id,
+            body={'doc': {'open_vocab_status': status}},
+        )
+    except Exception as exc:
+        logger.warning(
+            'open_vocab_status_stamp_failed', image_id=image_id, status=status, error=str(exc)
+        )
+
+
 async def run_open_vocab_image(
     opensearch: AsyncOpenSearch,
     service: CurationIngestService,
@@ -208,39 +288,10 @@ async def run_open_vocab_image(
     if not todo:
         return result
 
-    jpeg = await asyncio.to_thread(encode_for_segmenter, ctx.pil, ov.image_max_side)
-    candidates = await _segment_targets(segment, jpeg, todo)
-    result.calls = len(todo)
-
-    existing_docs = await items_by_terms(
-        opensearch, 'image_id', [image_id], index=cfg.items_index, includes=_existing_includes()
-    )
-    existing: list[ExistingBox] = []
-    own: set[str] = set()
-    existing_ids: dict[str, str | None] = {}
-    for doc_id, src in existing_docs:
-        box = src.get('bbox_norm')
-        if not box or len(box) != 4:
-            continue
-        locked = item_locked(src)
-        if src.get('open_vocab_set') == ov.name and not locked:
-            own.add(doc_id)
-            continue
-        existing_ids[doc_id] = src.get('class_name') or src.get('proposal_name')
-        existing.append(
-            ExistingBox(
-                bbox_norm=(box[0], box[1], box[2], box[3]),
-                class_name=src.get('class_name') or src.get('proposal_name'),
-                locked=locked,
-            )
-        )
-        result.locked_untouched += int(locked)
-
-    selection = select_open_vocab_hits(
-        [(t.rules(), c) for t, c in zip(todo, candidates, strict=True)],
-        existing,
-        dedup_iou=ov.dedup_iou,
-    )
+    plan = await plan_open_vocab_image(opensearch, image_id, ctx.pil, ov, todo, segment=segment)
+    selection, own, existing_ids = plan.selection, plan.own_ids, plan.existing_ids
+    result.calls = plan.calls
+    result.locked_untouched = plan.locked_untouched
     result.dropped.update(reason for _hit, reason in selection.dropped)
 
     # An item's id is its (image, box): a hit on exactly the box of another
@@ -256,7 +307,7 @@ async def run_open_vocab_image(
         kept.append(h)
     result.hits = len(kept)
 
-    by_prompt = {t.prompt: t for t in todo}
+    by_target = {(t.prompt, t.class_name): t for t in todo}
     registry = get_class_registry()
     class_ids: dict[str, int] = {}
     for name in {h.class_name for h in kept if h.class_name}:
@@ -266,7 +317,7 @@ async def run_open_vocab_image(
     items = [
         _detected(
             h,
-            by_prompt[h.prompt],
+            by_target[(h.prompt, h.class_name)],
             ov,
             revision,
             class_ids.get(h.class_name),
@@ -308,8 +359,11 @@ __all__ = [
     'OPEN_VOCAB_CLASS_GROUP',
     'OPEN_VOCAB_DETECTOR',
     'OPEN_VOCAB_DETECTOR_VERSION',
+    'ImagePlan',
     'OpenVocabImageResult',
     'SegmentImage',
     'encode_for_segmenter',
+    'plan_open_vocab_image',
     'run_open_vocab_image',
+    'stamp_open_vocab_status',
 ]

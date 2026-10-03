@@ -82,7 +82,7 @@ async def _with_items(
 async def reprocess_batch(
     body: ReprocessRequest, opensearch: OpenSearchDep, registry: RegistryDep
 ) -> ReprocessWireResponse:
-    """Re-run one or more scopes (``detect`` / ``region`` / ``vlm`` /
+    """Re-run one or more scopes (``detect`` / ``open_vocab`` / ``region`` / ``vlm`` /
     ``embed``) over images, items or a filter. Dry run by default: the
     response counts, per scope, what is selected and what the lock rule
     skips (``locked_skipped``). Detect and embed over many images return a

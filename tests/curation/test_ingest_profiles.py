@@ -220,7 +220,11 @@ def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> No
     from src.services.curation import ingest_class_sources as cs
 
     clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
-    assert cs.unlabeled_proposal_class_sources() == {'proposer_proposal', 'proposer_low_conf'}
+    assert cs.unlabeled_proposal_class_sources() == {
+        'proposer_proposal',
+        'proposer_low_conf',
+        'open_vocab_proposal',
+    }
     assert cs.classifier_class_sources() == frozenset()
     assert cs.confident_class_sources() == ('external_label', 'human', 'vlm')
 

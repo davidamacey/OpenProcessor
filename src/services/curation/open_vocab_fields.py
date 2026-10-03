@@ -28,7 +28,7 @@ OPEN_VOCAB_ITEM_MAPPING: dict[str, Any] = {
     'mask_polygon': {'type': 'object', 'enabled': False},
 }
 
-#: ``pending`` | ``done`` | ``failed_unavailable`` (the ingest-time pass).
+#: ``pending`` (queued by ingest, or the segmenter was down) | ``done`` | ``failed``.
 OPEN_VOCAB_IMAGE_MAPPING: dict[str, Any] = {
     'open_vocab_status': {'type': 'keyword'},
 }

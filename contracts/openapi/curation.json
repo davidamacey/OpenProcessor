@@ -10928,6 +10928,163 @@
         "title": "OpenVocabTemplateSummary",
         "type": "object"
       },
+      "OpenVocabTestHit": {
+        "description": "One raw segmenter candidate, with what selection did with it. Boxes and\noutlines are normalized to the image: the client draws them.",
+        "properties": {
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "drop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drop Reason"
+          },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bbox_norm",
+          "score",
+          "selected"
+        ],
+        "title": "OpenVocabTestHit",
+        "type": "object"
+      },
+      "OpenVocabTestImage": {
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "OpenVocabTestImage",
+        "type": "object"
+      },
+      "OpenVocabTestRequest": {
+        "description": "Run one UNSAVED target on one image; exactly one of ``image_id`` (a\nstored image) and ``image_base64`` (an uploaded JPEG/PNG).",
+        "properties": {
+          "dedup_iou": {
+            "default": 0.5,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "image_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Base64"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "image_max_side": {
+            "default": 1024,
+            "title": "Image Max Side",
+            "type": "integer"
+          },
+          "target": {
+            "$ref": "#/components/schemas/OpenVocabTargetBody"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "OpenVocabTestRequest",
+        "type": "object"
+      },
+      "OpenVocabTestResponse": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "number"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabTestHit"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "image": {
+            "$ref": "#/components/schemas/OpenVocabTestImage"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "image",
+          "prompt",
+          "class_name",
+          "hits",
+          "elapsed_ms",
+          "validation"
+        ],
+        "title": "OpenVocabTestResponse",
+        "type": "object"
+      },
       "OpenVocabValidateRequest": {
         "properties": {
           "body": {
@@ -16699,6 +16856,11 @@
         "additionalProperties": false,
         "description": "The W4 requeue selection, moved here, plus provenance selectors.\n\n``profile_not`` / ``profile_revision_below`` select items not produced\nby the profile@revision named (both given: not produced by that exact\nprofile@revision); ``include_detected`` widens a region selection to\n``detected`` items and is only valid together with a profile selector.",
         "properties": {
+          "all_images": {
+            "default": false,
+            "title": "All Images",
+            "type": "boolean"
+          },
           "class_id": {
             "anyOf": [
               {
@@ -16753,6 +16915,13 @@
             "default": false,
             "title": "Missing Status",
             "type": "boolean"
+          },
+          "open_vocab_status": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Vocab Status",
+            "type": "array"
           },
           "profile_not": {
             "anyOf": [
@@ -16871,6 +17040,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -16936,6 +17106,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -16974,6 +17145,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -17016,6 +17188,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -17076,6 +17249,7 @@
           "scope": {
             "enum": [
               "detect",
+              "open_vocab",
               "region",
               "vlm",
               "embed"
@@ -29203,6 +29377,59 @@
         ]
       }
     },
+    "/curation/projects/{project}/open_vocab/test": {
+      "post": {
+        "description": "404 ``image_not_found``; 422 ``validation_failed`` (the target, or not\nexactly one image source); 502 ``segmenter_error`` when the segmenter\ncannot answer (never reported as \"found nothing\"). Writes nothing.",
+        "operationId": "test_open_vocab_target_curation_projects__project__open_vocab_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Open Vocab Target",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/open_vocab/validate": {
       "post": {
         "operationId": "validate_open_vocab_route_curation_projects__project__open_vocab_validate_post",
@@ -33427,7 +33654,7 @@
     },
     "/curation/projects/{project}/reprocess": {
       "post": {
-        "description": "Re-run one or more scopes (``detect`` / ``region`` / ``vlm`` /\n``embed``) over images, items or a filter. Dry run by default: the\nresponse counts, per scope, what is selected and what the lock rule\nskips (``locked_skipped``). Detect and embed over many images return a\n``job`` to poll at ``GET /reprocess/jobs/{job_id}``.",
+        "description": "Re-run one or more scopes (``detect`` / ``open_vocab`` / ``region`` / ``vlm`` /\n``embed``) over images, items or a filter. Dry run by default: the\nresponse counts, per scope, what is selected and what the lock rule\nskips (``locked_skipped``). Detect and embed over many images return a\n``job`` to poll at ``GET /reprocess/jobs/{job_id}``.",
         "operationId": "reprocess_batch_curation_projects__project__reprocess_post",
         "parameters": [
           {

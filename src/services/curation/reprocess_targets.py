@@ -103,6 +103,18 @@ def selector_clauses(f: ReprocessFilter, F: RegionFields | None = None) -> list[
     return out
 
 
+def has_image_selector(f: ReprocessFilter) -> bool:
+    """The filter selects images (not items): see :class:`ReprocessFilter`."""
+    return f.all_images or bool(f.open_vocab_status)
+
+
+def image_filter_query(f: ReprocessFilter) -> dict[str, Any]:
+    """The image-level selectors as one images query."""
+    if f.open_vocab_status:
+        return {'terms': {'open_vocab_status': list(f.open_vocab_status)}}
+    return {'match_all': {}}
+
+
 def has_profile_selector(f: ReprocessFilter) -> bool:
     return f.profile_not is not None or f.profile_revision_below is not None
 
@@ -134,9 +146,11 @@ async def scan_items(
     index: str,
     includes: list[str],
     max_docs: int = 0,
+    id_field: str = 'crop_id',
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Every ``(crop_id, _source)`` the query matches (``search_after``
-    pages sorted by ``crop_id``), ``_source`` limited to ``includes``."""
+    """Every ``(id, _source)`` the query matches (``search_after`` pages
+    sorted by ``id_field``: ``crop_id`` for items, ``image_id`` for images),
+    ``_source`` limited to ``includes``."""
     out: list[tuple[str, dict[str, Any]]] = []
     cursor: list[Any] | None = None
     while True:
@@ -144,7 +158,7 @@ async def scan_items(
             'size': _PAGE,
             '_source': includes,
             'query': query,
-            'sort': [{'crop_id': 'asc'}],
+            'sort': [{id_field: 'asc'}],
         }
         if cursor is not None:
             body['search_after'] = cursor
@@ -208,7 +222,9 @@ __all__ = [
     'NONE_BUCKET',
     'ReprocessTargetsError',
     'existing_images',
+    'has_image_selector',
     'has_profile_selector',
+    'image_filter_query',
     'item_filter_query',
     'items_by_terms',
     'scan_items',
