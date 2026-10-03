@@ -379,9 +379,13 @@ class ApiErrorResponse(BaseModel):
 
 
 def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:
-    """Build ``HTTPException(status, {"detail": ConfigErrorDetail})``."""
+    """Build ``HTTPException(status, {"detail": ConfigErrorDetail})`` with only the
+    top-level fields the code carries."""
     detail = ConfigErrorDetail(error=code, message=message, **fields)
-    return HTTPException(status_code=status, detail=detail.model_dump(exclude_none=True))
+    # Only the fields this code carries: a null top-level field is dropped, but a
+    # nested object keeps its own (nullable) keys.
+    body = {k: v for k, v in detail.model_dump(exclude_none=False).items() if v is not None}
+    return HTTPException(status_code=status, detail=body)
 
 
 def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPException:
