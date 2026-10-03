@@ -53,9 +53,11 @@ class SeedPlan:
 
 
 def detector_labels(profile: DetectionProfile) -> list[DetectorLabel]:
-    """The profile's labels in class-id order, resolved the way ingest does
-    (``labels_path``, else the model directory's own ``labels.txt``). Empty
-    when the model has none. A configured but unreadable ``labels_path``
+    """The profile's real labels in class-id order, resolved the way ingest does
+    (``labels_path``, else the model directory's own ``labels.txt``). An id gap
+    or an empty name is skipped (``class_id`` keeps the model's own id), and a
+    name repeated under another id keeps its first id. Empty when the model
+    has none. A configured but unreadable ``labels_path``
     raises ``OSError`` (a deployment error, not something to guess)."""
     if profile.labels_path:
         raw = dict(enumerate(load_label_names(profile.labels_path)))
@@ -63,10 +65,16 @@ def detector_labels(profile: DetectionProfile) -> list[DetectorLabel]:
         raw = get_class_names(profile.detector_model)
     if not raw:
         return []
-    return [
-        DetectorLabel(i, raw.get(i, ''), normalize_class_name(raw.get(i, '')))
-        for i in range(max(raw) + 1)
-    ]
+    out: list[DetectorLabel] = []
+    seen: set[str] = set()
+    for i in sorted(raw):
+        name = raw[i]
+        slug = normalize_class_name(name)
+        if not slug or slug in seen:
+            continue
+        seen.add(slug)
+        out.append(DetectorLabel(i, name, slug))
+    return out
 
 
 def plan_seed(
