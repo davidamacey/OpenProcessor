@@ -71,6 +71,7 @@ _suspected_fp_cache: dict[
 @router.post('/regions/cluster')
 async def cluster_regions(
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
     max_rank: int | None = Query(None, ge=1, description='Only top-N largest crops.'),
     auto_fp_threshold: float = Query(
         0.20,
@@ -283,7 +284,9 @@ async def list_region_clusters(
 
 
 @router.post('/regions/fp_centroids/build')
-async def build_fp_centroids_endpoint(opensearch: OpenSearchDep) -> dict[str, Any]:
+async def build_fp_centroids_endpoint(
+    opensearch: OpenSearchDep, _profile: RegionProfileDep
+) -> dict[str, Any]:
     """Sub-type the FP bucket + (re)build the FP centroid store (background).
 
     This is the retrain trigger for the FP matcher: re-run it after marking a
@@ -310,6 +313,7 @@ async def fp_centroids_status() -> dict[str, Any]:
 )
 async def suspected_false_positives(
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
     threshold: float | None = Query(
         None, ge=0.0, le=2.0, description=f'Max distance; default {SUSPECTED_FP_MAX_DISTANCE}.'
     ),

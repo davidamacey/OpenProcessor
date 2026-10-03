@@ -263,18 +263,9 @@ GENERIC_ITEM_PACK = PromptPack(
         'array of per-image verdicts in input order:\n'
         '{"results": [{"img": 1, "visible": true|false}, ...]}'
     ),
-    class_descriptions={
-        'box': 'rectangular cardboard shipping box',
-        'envelope': 'flat paper or poly mailer',
-        'tube': 'cylindrical mailing tube',
-    },
-    synonyms={
-        'carton': 'box',
-        'package': 'box',
-        'mailer': 'envelope',
-        'poly bag': 'envelope',
-        'poly_bag': 'envelope',
-    },
+    # Deliberately no class_descriptions/synonyms: they name registry classes,
+    # and the shipped default must validate with zero warnings on any registry
+    # (empty, COCO, ...). Domain vocabulary belongs in a stored pack.
 )
 
 

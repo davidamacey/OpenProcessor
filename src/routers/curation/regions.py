@@ -331,6 +331,7 @@ def _training_candidate_query(
 )
 async def training_candidates(
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
     mode: str = Query(
         ...,
         description=(

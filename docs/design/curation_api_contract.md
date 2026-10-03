@@ -984,7 +984,7 @@ applies to automated writers.
 
 ## Regions: multi-box edits and queues
 
-The region write routes, `GET /regions`, the region undo routes and the region
+The region write routes, `GET /regions`, `GET /regions/training_candidates`, `GET /regions/suspected_false_positives`, `POST /regions/cluster`, `POST /regions/fp_centroids/build`, the region undo routes and the region
 cluster card and refine routes need an active region profile. Without one they
 answer `409` with the plain detail `no region profile is configured`.
 

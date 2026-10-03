@@ -85,6 +85,22 @@ def test_item_classes_exclude_the_region_class(
     assert names == ['car']
 
 
+def test_item_classes_exclude_a_seeded_region_class_after_profile_deactivation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deactivating the project's region profile must not turn the
+    already-seeded region class into a whole-item class (live regression:
+    every COCO item was VLM-labelled with the seeded region class)."""
+    from src.services.curation.region_class import ensure_region_class, item_classes
+
+    reg = _seed(tmp_path, monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
+    ensure_region_class()
+    reg.add_class('car')
+    _seed(tmp_path, monkeypatch, None)  # profile now off; registry keeps 'wheel'
+    names = [c.class_name for c in item_classes(reg.load().classes)]
+    assert names == ['car']
+
+
 def test_label_batch_with_only_the_region_class_is_no_classes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

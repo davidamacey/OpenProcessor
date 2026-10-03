@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from src.clients.curation_opensearch import RegistryClassEntry
 
 
+REGION_CLASS_GROUP = 'region'
+
+
 def ensure_region_class() -> int | None:
     """The region class's id, adding it first if the registry lacks it.
     ``None`` when no region profile names a region class."""
@@ -28,7 +31,9 @@ def ensure_region_class() -> int | None:
     for entry in registry.load().classes:
         if not entry.deprecated and entry.class_name.lower() == name.lower():
             return entry.class_id
-    return registry.add_class(name, group='region', notes='seeded from the active region profile')
+    return registry.add_class(
+        name, group=REGION_CLASS_GROUP, notes='seeded from the active region profile'
+    )
 
 
 def item_classes(classes: Iterable[RegistryClassEntry]) -> list[RegistryClassEntry]:
@@ -36,4 +41,10 @@ def item_classes(classes: Iterable[RegistryClassEntry]) -> list[RegistryClassEnt
     class except the region class, which only ever labels a sub-box."""
     profile = get_active_region_profile()
     region = (profile.region_class_name if profile else '').strip().lower()
-    return [c for c in classes if not c.deprecated and c.class_name.lower() != region]
+    # ``group == 'region'`` marks a class seeded by ensure_region_class: it
+    # stays a sub-box class after the profile is deactivated.
+    return [
+        c
+        for c in classes
+        if not c.deprecated and c.group != REGION_CLASS_GROUP and c.class_name.lower() != region
+    ]
