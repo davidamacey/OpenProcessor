@@ -1143,3 +1143,15 @@ def test_cluster_make_targets_recreate_only_the_worker() -> None:
     assert 'docker-compose.gpu-clustering.yml' not in cpu
     for out in (gpu, cpu):
         assert '--no-deps --force-recreate curation-auto-label-worker' in out
+
+
+def test_api_service_aggregates_metrics_across_workers() -> None:
+    """uvicorn --workers N keeps one registry per process; without a shared
+    multiprocess dir a /metrics scrape reflects a single worker."""
+    spec = _services()['yolo-api']
+    env = spec['environment']
+    entries = dict(e.split('=', 1) for e in env) if isinstance(env, list) else env
+    mp_dir = entries['PROMETHEUS_MULTIPROC_DIR']
+    assert any(t.split(':')[0] == mp_dir for t in spec['tmpfs']), (
+        'multiproc dir must be a tmpfs (wiped on start)'
+    )
