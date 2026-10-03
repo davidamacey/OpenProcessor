@@ -213,3 +213,20 @@ def test_preview_equals_the_ingest_selection_and_names_labeled_extras(
     body = client.post(f'{URL}/preview', json={'embedding': policy.model_dump()}).json()
     assert body['would_embed'] == ingest + 1
     assert body['embedded_because_labeled'] == 1
+
+
+def test_preview_ignores_a_label_on_an_item_stored_without_a_vector(
+    client: TestClient, fake: SettingsFakeOpenSearch
+) -> None:
+    """Labeling a not_selected item later does not embed it (only a re-ingest
+    does), so the preview must not count it either."""
+    from src.services.curation.ingest_policy import EmbeddingPolicy
+
+    policy = EmbeddingPolicy(mode='selected', classes=['car'])
+    items = fake.store[get_curation_config().items_index]
+    before = client.post(f'{URL}/preview', json={'embedding': policy.model_dump()}).json()
+    items['c1']['class_validated'] = True
+    items['c1']['embedding_state'] = 'not_selected'
+    after = client.post(f'{URL}/preview', json={'embedding': policy.model_dump()}).json()
+    assert after['would_embed'] == before['would_embed']
+    assert after['embedded_because_labeled'] == 0

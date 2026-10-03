@@ -26,7 +26,7 @@ from src.routers.curation._ingest_policy_models import (
 )
 from src.routers.curation.ingest import _get_detection_profile
 from src.services.curation.detector_vocabulary import detector_labels
-from src.services.curation.embedding_state import EMBEDDED
+from src.services.curation.embedding_state import DEFERRED, EMBEDDED, FAILED, NOT_SELECTED
 from src.services.curation.ingest_detector import detector_problems, effective_profile
 from src.services.curation.ingest_policy import (
     DetectorOverride,
@@ -46,6 +46,7 @@ from src.utils.class_names import normalize_class_name
 
 
 PREVIEW_MAX_ITEMS = 100_000
+_NO_VECTOR = (NOT_SELECTED, DEFERRED, FAILED)
 _PREVIEW_FIELDS = [
     'image_id',
     'confidence',
@@ -57,6 +58,7 @@ _PREVIEW_FIELDS = [
     'label_source',
     'class_labeled_at',
     'class_excluded',
+    'embedding_state',
 ]
 
 
@@ -154,7 +156,13 @@ async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> I
     display: dict[str, str] = {}
     n_labeled = 0
     for sources in by_image.values():
-        cands = [candidate_from_doc(s) for s in sources]
+        # A label given after ingest does not embed a stored vectorless item (only a
+        # re-ingest applies the labeled-always-embeds rule), so it must not count here.
+        cands = [
+            dataclasses.replace(c, labeled=c.labeled and s.get('embedding_state') not in _NO_VECTOR)
+            for s in sources
+            for c in (candidate_from_doc(s),)
+        ]
         states = embedding_states(cands, body.embedding)
         unlabeled = embedding_states(
             [dataclasses.replace(c, labeled=False) for c in cands], body.embedding
