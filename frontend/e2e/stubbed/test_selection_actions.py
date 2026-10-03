@@ -8,37 +8,10 @@ ignore via `batch_unexclude`).
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 
 from fixtures.wire import make_item
 from test_item_filter import CLASSES, CLUSTERS
-
-
-class _Handled:
-    """Context manager whose `.value` is the matched *request*, resolved only
-    once the stub has answered it."""
-
-    def __init__(self, manager):
-        self._manager = manager
-        self._info = None
-
-    def __enter__(self):
-        self._info = self._manager.__enter__()
-        return self
-
-    def __exit__(self, *exc):
-        return self._manager.__exit__(*exc)
-
-    @property
-    def value(self):
-        return self._info.value.request
-
-
-def expect_handled(page, predicate, timeout):
-    """Wait for the stub to have answered a matching request, not just for the
-    browser to send it: the handlers record bodies, and on a slow runner the
-    recording can trail the send."""
-    return _Handled(page.expect_response(lambda resp: predicate(resp.request), timeout=timeout))
 
 
 FILTER = {"class_names": ["widget"]}

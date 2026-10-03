@@ -61,3 +61,31 @@ updates:
       docker-security:
         applies-to: security-updates
         patterns: ['*']
+
+  # docs-site/ is a standalone Docusaurus project with its own lockfile and
+  # Dockerfile, shipped to GitHub Pages and the cropwright-docs container.
+  - package-ecosystem: 'npm'
+    directory: '/docs-site'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 3
+    groups:
+      docs-npm-minor-patch:
+        applies-to: version-updates
+        update-types: ['minor', 'patch']
+      docs-npm-minor-patch-security:
+        applies-to: security-updates
+        patterns: ['*']
+
+  - package-ecosystem: 'docker'
+    directory: '/docs-site'
+    schedule:
+      interval: 'monthly'
+    open-pull-requests-limit: 2
+    groups:
+      docs-docker:
+        applies-to: version-updates
+        patterns: ['*']
+      docs-docker-security:
+        applies-to: security-updates
+        patterns: ['*']

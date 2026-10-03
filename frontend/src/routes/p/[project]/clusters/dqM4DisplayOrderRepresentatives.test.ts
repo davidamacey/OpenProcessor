@@ -23,7 +23,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 
 function fn(name: string): string {
   const m = src.match(new RegExp(`async function ${name}\\([\\s\\S]*?\\n {2}\\}`));
-  expect(m, `function ${name} not found`).toBeDefined();
+  expect(m, `function ${name} not found`).not.toBeNull();
   return m![0];
 }
 
@@ -47,7 +47,7 @@ describe('DQ-M4: representatives are windowed over gridItems (display order), no
     const clusterQueryFn = src.match(
       /function clusterQuery\(page: number\): ClusterFilter \{[\s\S]*?\n {2}\}/,
     )?.[0];
-    expect(clusterQueryFn).toBeDefined();
+    expect(clusterQueryFn).not.toBeUndefined();
     expect(clusterQueryFn).toMatch(/per_cluster:\s*0,/);
     expect(clusterQueryFn).not.toMatch(/representatives_limit:\s*0,/);
   });

@@ -36,7 +36,7 @@ describe('DQ-m6: the reject-reason prompt is real DOM, not a native window.promp
 
   it('promptForRejectionReason opens the in-app modal and returns a Promise the caller awaits', () => {
     const fn = src.match(/function promptForRejectionReason\(\)[\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/rejectReasonPromptOpen = true;/);
     expect(fn).toMatch(/return new Promise/);
   });
@@ -52,7 +52,7 @@ describe('DQ-m6: the reject-reason prompt is real DOM, not a native window.promp
 
   it('cancelling resolves null (reject still proceeds with no reason, matching the old Cancel behavior) rather than throwing', () => {
     const fn = src.match(/function cancelRejectReasonPrompt\(\)[\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/rejectReasonPromptResolve\?\.\(null\)/);
   });
 });

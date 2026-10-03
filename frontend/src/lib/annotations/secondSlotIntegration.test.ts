@@ -14,10 +14,11 @@
  * does for the capability-model layer.
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { resolveSlotRegistry } from './registry';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { registeredSlots } from './registeredSlots';
+import { resetDeploymentSlots } from './registeredSlots';
+import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import { buildReviewTabs, isSlotTab, slotTabId, tabFromUrlId } from '../reviewTabs';
 import { buildSlotKeymap, singleCharCombos } from '../review/slotKeymap';
@@ -31,6 +32,7 @@ import { cohortsForClass } from './cohorts';
 import { vi } from 'vitest';
 
 describe('P3.6: registering a second capable slot works with zero production code change', () => {
+  afterEach(() => resetDeploymentSlots());
   const secondSlotTabs = buildReviewTabs([widgetTagSlot, aircraftTailNumberSlot]);
 
   it('REVIEW_TABS-shaped output contains a sixth tab: id slot:aircraft_tail_number, urlId tails, endpointId tail_numbers', () => {
@@ -45,7 +47,7 @@ describe('P3.6: registering a second capable slot works with zero production cod
     // tabFromUrlId reads the real REVIEW_TABS (registeredSlots-backed),
     // not secondSlotTabs — the bookmark contract must hold regardless of
     // what a hypothetical second slot registers.
-    for (const s of registeredSlots.filter((x) => x.capabilities.queue)) {
+    for (const s of installedQueueSlots()) {
       expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);
     }
   });

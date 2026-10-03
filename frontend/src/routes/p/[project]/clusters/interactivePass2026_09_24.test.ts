@@ -17,7 +17,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 describe('M4: the synthetic slot inventory card invents nothing and never hides a real cluster', () => {
   it('buildSlotInventoryCard builds a fully-typed Cluster (no `as Cluster` cast hiding missing fields)', () => {
     const fn = src.match(/async function buildSlotInventoryCard\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).not.toMatch(/as Cluster/);
     expect(fn).toMatch(/isSlotCard: true/);
     expect(fn).toMatch(/purity_tier: null/);
@@ -33,7 +33,7 @@ describe('M4: the synthetic slot inventory card invents nothing and never hides 
     const gridItemsFn = src.match(
       /const gridItems = \$derived\.by<Cluster\[\]>\(\(\) => \{[\s\S]*?\n {2}\}\);/,
     )?.[0];
-    expect(gridItemsFn).toBeDefined();
+    expect(gridItemsFn).not.toBeUndefined();
     // The old bug filtered the real cluster out via
     // `sorted.filter((c) => c.id !== slotInventoryCard!.id)`.
     expect(gridItemsFn).not.toMatch(/filter\(\(c\) => c\.id !== slotInventoryCard/);
@@ -48,7 +48,7 @@ describe('M4: the synthetic slot inventory card invents nothing and never hides 
 
   it('purityBadge renders no badge at all for the synthetic card (never an invented "noisy 0%")', () => {
     const fn = src.match(/function purityBadge\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/if \(c\.isSlotCard\) return null;/);
   });
 
@@ -65,7 +65,7 @@ describe('m22: a name-form ?class= deep link resolves against the loaded registr
     const fn = src.match(
       /const classFilter = \$derived\.by\(\(\) => \{[\s\S]*?\n {2}\}\);/,
     )?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/findActiveClassByName\(classesStore\.classes, v\)/);
   });
 });
@@ -75,7 +75,7 @@ describe('m18: item-text search shows only the error, not the error AND the empt
     const block = src.match(
       /\{#if itemTextLoading[\s\S]*?No crops matched that text\.[\s\S]*?\{:else\}/,
     )?.[0];
-    expect(block).toBeDefined();
+    expect(block).not.toBeUndefined();
     expect(block).toMatch(/\{:else if itemTextError\}/);
   });
 });

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 from fixtures.multipart import parse_multipart
@@ -284,7 +284,12 @@ def test_drain_gate(stub, page, app_url):
     recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
     expect(recluster_btn).to_be_enabled()
     recluster_btn.click()
-    page.get_by_role("dialog").get_by_role("button", name="Start", exact=True).click()
+    with expect_handled(
+        page,
+        lambda r: r.method == "POST" and "/pipeline/auto_label/start" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.get_by_role("dialog").get_by_role("button", name="Start", exact=True).click()
     assert start_calls
 
 

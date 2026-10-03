@@ -14,7 +14,7 @@ exists"). This proves the real browser-rendered page:
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 
 CLASSES_LIVE = [
     {
@@ -79,7 +79,12 @@ def test_deprecate_empty_class_succeeds_and_refreshes(stub, page, app_url):
     page.goto(f"{app_url}/p/default/classes")
     row = page.get_by_test_id("class-row-10")
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.get_by_test_id("deprecate-10").click()
+    with expect_handled(
+        page,
+        lambda r: r.method == "POST" and r.url.endswith("/classes/10/deprecate"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.get_by_test_id("deprecate-10").click()
 
     assert any(c[1].endswith("/classes/10/deprecate") for c in stub.calls)
     toast = page.get_by_text("Deprecated coupe.")
@@ -140,7 +145,12 @@ def test_restore_succeeds_and_row_disappears(stub, page, app_url):
     restore_btn = page.get_by_test_id("restore-99")
     restore_btn.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert restore_btn.is_enabled()
-    restore_btn.click()
+    with expect_handled(
+        page,
+        lambda r: r.method == "POST" and r.url.endswith("/classes/99/restore"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        restore_btn.click()
 
     assert any(c[1].endswith("/classes/99/restore") for c in stub.calls)
 

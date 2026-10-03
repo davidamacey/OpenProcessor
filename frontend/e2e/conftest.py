@@ -87,6 +87,33 @@ HandlerResult = Any  # dict/list (-> 200 json) | tuple[int, Any] | tuple[int, An
 Handler = Callable[[Any, "re.Match[str]"], HandlerResult]
 
 
+class _Handled:
+    """Context manager whose `.value` is the matched *request*, resolved only
+    once the stub has answered it."""
+
+    def __init__(self, manager):
+        self._manager = manager
+        self._info = None
+
+    def __enter__(self):
+        self._info = self._manager.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        return self._manager.__exit__(*exc)
+
+    @property
+    def value(self):
+        return self._info.value.request
+
+
+def expect_handled(page, predicate, timeout=None):
+    """Wait for the stub to have answered a matching request, not just for the
+    browser to send it: the handlers record bodies, and on a slow runner the
+    recording can trail the send."""
+    return _Handled(page.expect_response(lambda resp: predicate(resp.request), timeout=timeout))
+
+
 def wait_for_paint(page: Any) -> None:
     """Wait for two real animation frames instead of an arbitrary sleep.
 

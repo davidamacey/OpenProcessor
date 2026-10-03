@@ -21,7 +21,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 
 function fn(name: string): string {
   const m = src.match(new RegExp(`async function ${name}\\([\\s\\S]*?\\n {2}\\}`));
-  expect(m, `function ${name} not found`).toBeDefined();
+  expect(m, `function ${name} not found`).not.toBeNull();
   return m![0];
 }
 
@@ -55,6 +55,13 @@ describe('M6: confirmSlot/rejectSlot/markFalsePositive record a region undo entr
       const recordIdx = body.indexOf('undoStore.recordRegionWrites');
       expect(recordIdx, `${name} never calls recordRegionWrites`).toBeGreaterThan(-1);
       expect(recordIdx, `${name} records after its catch block`).toBeLessThan(catchIdx);
+      // ...and only after the write itself resolved: an entry recorded before
+      // the awaited write would survive a failed write and Z would replay it.
+      const writeIdx = body.indexOf('await patchSlotMeta(');
+      expect(writeIdx, `${name} no longer awaits patchSlotMeta`).toBeGreaterThan(-1);
+      expect(recordIdx, `${name} records before its write resolves`).toBeGreaterThan(
+        writeIdx,
+      );
     }
   });
 });

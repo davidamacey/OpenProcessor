@@ -22,3 +22,9 @@ Pipeline health at a glance.
 `/p/<default-project>/dashboard`. See [Projects](./projects.md) for how the
 active project is chosen and how old bare URLs (without a `/p/<project>`
 prefix) resolve.
+
+## Embedding and detections
+
+The stats include an **Embedding** card, and a **Detections summary** panel
+below them, with an **Embed N detections** action when the backend suggests
+one. See [Embedding state and detections summary](./embedding-state.md).

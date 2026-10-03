@@ -381,3 +381,62 @@ describe('CropCard — W10 image Reprocess from the expanded view', () => {
     expect(onreprocessed.mock.calls[0]![0].map((c: Crop) => c.id)).toEqual(['c1', 'c2']);
   });
 });
+
+describe('CropCard expanded Source-image dialog: keyboard and focus', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: 'Not Found' }), { status: 404 }),
+      ),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.querySelectorAll('[role="dialog"]').forEach((d) => d.remove());
+  });
+
+  function open() {
+    const el = renderCard({ crop: baseCrop() });
+    const view = el.querySelector('button[aria-label="Expand"]') as HTMLButtonElement;
+    view.focus();
+    view.click();
+    flushSync();
+    return {
+      view,
+      dialog: () => document.querySelector('[role="dialog"]') as HTMLElement | null,
+    };
+  }
+
+  it('takes focus when it opens', async () => {
+    const { dialog } = open();
+    await Promise.resolve();
+    expect(dialog()).not.toBeNull();
+    expect(dialog()!.contains(document.activeElement)).toBe(true);
+  });
+
+  it('closes on Escape without the key reaching the page behind it', () => {
+    const { dialog } = open();
+    const behind = vi.fn();
+    window.addEventListener('keydown', behind);
+    try {
+      dialog()!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      flushSync();
+    } finally {
+      window.removeEventListener('keydown', behind);
+    }
+    expect(dialog()).toBeNull();
+    expect(behind).not.toHaveBeenCalled();
+  });
+
+  it('returns focus to the view button when it closes', () => {
+    const { view, dialog } = open();
+    (dialog()!.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click();
+    flushSync();
+    expect(dialog()).toBeNull();
+    expect(document.activeElement).toBe(view);
+  });
+});

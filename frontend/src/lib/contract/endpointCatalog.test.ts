@@ -314,8 +314,6 @@ describe('endpoint catalog: completeness', () => {
       // slip past the marker scan; fail instead of silently skipping it.
       const src = read(file);
       const uses = src.match(/\$\{projectPrefix\([^)]*\)\}/g) ?? [];
-      // Wrapper files not yet populated (Step 0 stubs) have nothing to check.
-      if (file !== 'lib/api.ts' && uses.length === 0) return;
       expect(uses.length).toBeGreaterThan(0);
       expect(uses.filter((u) => u !== PROJECT_PREFIX_MARKER)).toEqual([]);
     });
@@ -417,9 +415,8 @@ function findOperation(
   };
 }
 
-/** Per-track wrapper modules created empty by the Step 0 prelude
- *  (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md); a track fills them in.
- *  An empty one is allowed to have zero call sites. */
+/** Per-track wrapper modules (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md);
+ *  each must exist and sit in the scanner lists its track needs. */
 const TRACK_WRAPPER_FILES = new Set<string>([
   'lib/api_vlm.ts',
   'lib/api_combine.ts',
@@ -429,6 +426,23 @@ const TRACK_WRAPPER_FILES = new Set<string>([
   'lib/api_detector.ts',
 ]);
 
+/** Calls whose query keys the scanner cannot resolve (an untyped
+ *  passthrough such as a bare `Record<string, unknown>` filter object).
+ *  Their path+method is still checked; their query keys are not, so each is
+ *  named here and a test pins the list: a newly unresolved call, or a stale
+ *  entry, fails instead of reporting a check that asserted nothing. */
+const UNRESOLVED_QUERY = new Set<string>([
+  'lib/api.ts GET /clusters',
+  'lib/api.ts GET /crops',
+  'lib/api.ts GET /review/*',
+  'lib/api.ts GET /review/*/locate',
+  'lib/api.ts GET /search/text',
+  'lib/api.ts GET /stats/dataset',
+  'lib/api.ts POST /pipeline/auto_label/start',
+  'lib/api_detector.ts GET /detections/summary',
+]);
+const unresolvedSeen = new Set<string>();
+
 function describeCalls(
   file: string,
   calls: ResolvedCall[],
@@ -436,7 +450,6 @@ function describeCalls(
 ): void {
   describe(file, () => {
     it('found at least one call site', () => {
-      if (calls.length === 0 && TRACK_WRAPPER_FILES.has(file.split(' ')[0])) return;
       expect(calls.length).toBeGreaterThan(0);
     });
 
@@ -450,20 +463,20 @@ function describeCalls(
         ).not.toBeNull();
       });
 
-      it(`${label} — every sent query key is a declared OpenAPI parameter`, () => {
-        if (call.queryParams == null) {
-          // Untyped passthrough (e.g. a bare `Record<string, unknown>`
-          // filter object) the scanner correctly declines to guess at.
-          // Path+method is still checked above.
-          return;
-        }
-        const op = findOperation(call.path, call.method, scope);
-        if (!op) return; // already failed the existence assertion above
-        const undeclared = call.queryParams.filter((k) => !op.params.has(k));
-        expect(undeclared, `${label} sends undeclared params (raw: ${call.raw})`).toEqual(
-          [],
-        );
-      });
+      if (call.queryParams == null) {
+        unresolvedSeen.add(`${file} ${label}`);
+      } else {
+        const queryParams = call.queryParams;
+        it(`${label} — every sent query key is a declared OpenAPI parameter`, () => {
+          const op = findOperation(call.path, call.method, scope);
+          if (!op) return; // already failed the existence assertion above
+          const undeclared = queryParams.filter((k) => !op.params.has(k));
+          expect(
+            undeclared,
+            `${label} sends undeclared params (raw: ${call.raw})`,
+          ).toEqual([]);
+        });
+      }
     }
   });
 }
@@ -522,5 +535,11 @@ describe('findOperation matching', () => {
   it('still reports a missing operation as null (the removed singular region write)', () => {
     expect(findOperation('/crops/*/region', 'PUT')).toBeNull();
     expect(findOperation('/crops/batch_region', 'PUT')).toBeNull();
+  });
+});
+
+describe('endpoint catalog: query keys the scanner cannot resolve', () => {
+  it('are exactly the named UNRESOLVED_QUERY entries', () => {
+    expect([...unresolvedSeen].sort()).toEqual([...UNRESOLVED_QUERY].sort());
   });
 });

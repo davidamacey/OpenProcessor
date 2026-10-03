@@ -300,12 +300,6 @@ ALLOWED_4XX_5XX = {
     # expected UI behavior, not a bug — keep this list short and
     # explicit; a route sweep failure should default to "real bug", not
     # "add it to the allow-list".
-    ("GET", r"/keymap$"): (
-        "CLAUDE.md's 'Keyboard shortcuts' section, K2: GET {prefix}/keymap is a "
-        "documented pending-backend route until OpenProcessor W2b lands and vendors "
-        "it. keymapStore.loadKeymap() treats a 404/501 as 'backend predates it' and "
-        "falls back to FALLBACK_KEYMAP silently — this deployment predates W2b."
-    ),
     ("GET", r"/projects/combine/__probe__$"): (
         "P4-1 (combineAvailability): the combine router has no list route, so the gate "
         "probes a sentinel job id. A 404 with detail.error 'combine_not_found' is the "

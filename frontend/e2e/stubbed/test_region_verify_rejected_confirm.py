@@ -17,7 +17,10 @@ that omit `region_boxes`).
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+import re
+
+from conftest import ACTION_TIMEOUT_MS, expect_handled, wait_for_paint
+from playwright.sync_api import expect
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
@@ -170,17 +173,22 @@ def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_
 
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
-    counter_before = page.get_by_test_id("queue-counter").first.inner_text()
+    wait_for_paint(page)
+    counter = page.get_by_test_id("queue-counter").first
+    expect(counter).to_have_text(re.compile(r"#\d+"), timeout=ACTION_TIMEOUT_MS)
+    counter_before = counter.inner_text()
+
+    def is_box_patch(box_id):
+        return lambda r: r.method == "PATCH" and r.url.endswith(f"/regions/{box_id}")
 
     # b1 (selected by default, position 1) rejected via 'r'.
-    page.keyboard.press("r")
-    page.wait_for_timeout(300)
-    # Tab to b2, accept via 'y'.
+    with expect_handled(page, is_box_patch("b1"), timeout=ACTION_TIMEOUT_MS):
+        page.keyboard.press("r")
+    # Tab to b2, accept via 'y'. Key events are handled in order on the page's
+    # main thread, so Tab has moved the selection before 'y' is dispatched.
     page.keyboard.press("Tab")
-    page.wait_for_timeout(100)
-    page.keyboard.press("y")
-    page.wait_for_timeout(300)
+    with expect_handled(page, is_box_patch("b2"), timeout=ACTION_TIMEOUT_MS):
+        page.keyboard.press("y")
 
     assert [p[0] for p in patches] == ["b1", "b2"], patches
     assert patches[0][1]["state"] == "rejected", patches[0]
@@ -217,11 +225,11 @@ def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     canvas = page.get_by_test_id("multibox-canvas").first
     canvas.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
 
     # Enter edit mode, then drag out a new box in an empty area of the canvas.
     page.keyboard.press("e")
-    page.wait_for_timeout(200)
+    wait_for_paint(page)
     box = canvas.bounding_box()
     assert box is not None
     x0 = box["x"] + box["width"] * 0.6
@@ -232,10 +240,14 @@ def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
     page.mouse.down()
     page.mouse.move(x1, y1, steps=5)
     page.mouse.up()
-    page.wait_for_timeout(200)
+    wait_for_paint(page)
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(500)
+    with expect_handled(
+        page,
+        lambda r: r.method == "PUT" and r.url.endswith("/regions"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("Enter")
 
     assert len(puts) == 1, puts
     body = puts[0]
@@ -294,14 +306,22 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
 
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
 
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(400)
+    with expect_handled(
+        page,
+        lambda r: r.method == "PUT" and r.url.endswith("/regions"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("Enter")
     assert len(puts) == 1, puts
 
-    page.keyboard.press("z")
-    page.wait_for_timeout(400)
+    with expect_handled(
+        page,
+        lambda r: r.method == "POST" and r.url.endswith("/region/undo"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press("z")
 
     assert len(undo_calls) == 1, undo_calls
     assert "tag-mb-1" in undo_calls[0], undo_calls
@@ -335,10 +355,14 @@ def test_on_screen_confirm_button_uses_the_multibox_write_too(stub, page, app_ur
 
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
     page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
 
-    page.get_by_role("button", name="Confirm", exact=False).first.click()
-    page.wait_for_timeout(400)
+    with expect_handled(
+        page,
+        lambda r: r.method == "PUT" and r.url.endswith("/regions"),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.get_by_role("button", name="Confirm", exact=False).first.click()
 
     assert len(puts) == 1, puts
     assert puts[0]["region_status"] == "detected", puts[0]

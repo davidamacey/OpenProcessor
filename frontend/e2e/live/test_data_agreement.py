@@ -197,6 +197,8 @@ def test_regions_filter_spec_select_matches_served_options(
         select.wait_for(timeout=15_000)
         rendered_labels = select.locator("option").all_inner_texts()
         served_labels = [opt["label"] for opt in spec["options"]]
+        # The select renders exactly the served options (the backend serves an
+        # explicit Any option where an unset state exists); nothing is invented.
         assert rendered_labels == served_labels, (
             f"filter_specs[{spec['param']}]: rendered options {rendered_labels} != "
             f"served options {served_labels}"

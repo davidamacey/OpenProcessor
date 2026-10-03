@@ -204,15 +204,32 @@ describe('ServedFilterField kinds', () => {
   function field(
     spec: Partial<ReviewFilterSpec> & Pick<ReviewFilterSpec, 'param' | 'kind'>,
     value: string | string[] = '',
+    servedDefault: string | null = null,
   ) {
     const onchange = vi.fn();
     instance = mount(ServedFilterField, {
       target,
-      props: { spec: { ...base, label: 'L', ...spec }, value, onchange },
+      props: { spec: { ...base, label: 'L', ...spec }, value, onchange, servedDefault },
     });
     flushSync();
     return onchange;
   }
+
+  it('enum: a served Any option is selected when nothing is chosen and the default is null', () => {
+    field({
+      param: 'p',
+      kind: 'enum',
+      default: null,
+      allows_unset: true,
+      options: [
+        { value: '', label: 'Any' },
+        { value: 'a', label: 'Alpha' },
+      ],
+    });
+    const sel = target.querySelector('select')!;
+    expect([...sel.options].map((o) => o.textContent?.trim())).toEqual(['Any', 'Alpha']);
+    expect(sel.value).toBe('');
+  });
 
   it('enum: a select of the served options, changes emit the value', () => {
     const onchange = field({
@@ -224,6 +241,8 @@ describe('ServedFilterField kinds', () => {
       ],
     });
     const sel = target.querySelector('select')!;
+    // Only the served options: no option is invented (the backend serves an
+    // explicit Any option when an unset state exists).
     expect([...sel.options].map((o) => o.textContent?.trim())).toEqual(['Alpha', 'Beta']);
     sel.value = 'b';
     sel.dispatchEvent(new Event('change', { bubbles: true }));

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX, getReviewQueue } from './api';
 import { WIDGET_TAG_PROFILE, widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { registeredSlots } from './annotations/registeredSlots';
+import { registeredSlots, resetDeploymentSlots } from './annotations/registeredSlots';
+import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import {
   buildReviewTabs,
   CORE_REVIEW_TABS,
@@ -23,6 +24,9 @@ import {
 // The registered queue slots (whatever this build registers); each gets
 // exactly one tab after the core tabs.
 const queueSlots = registeredSlots.filter((s) => s.capabilities.queue);
+
+// `installedQueueSlots()` installs a served profile for the loops below.
+afterEach(() => resetDeploymentSlots());
 
 describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
   it('has the core tabs from the 2026-09 consolidation plus new_class_proposals and imported, then one tab per queue slot', () => {
@@ -158,7 +162,7 @@ describe('endpointForTab', () => {
   });
 
   it("resolves each registered slot tab to its slot's endpointId", () => {
-    for (const s of queueSlots) {
+    for (const s of installedQueueSlots()) {
       expect(endpointForTab(slotTabId(s.key))).toBe(s.capabilities.queue!.endpointId);
     }
   });
@@ -170,7 +174,7 @@ describe('endpointForTab', () => {
 
 describe('tabFromUrlId (bookmark contract)', () => {
   it("resolves each registered slot's urlId to its slot: tab", () => {
-    for (const s of queueSlots) {
+    for (const s of installedQueueSlots()) {
       expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(slotTabId(s.key));
     }
   });
@@ -215,7 +219,7 @@ describe('tabHonorsPinnedSortDefault', () => {
   });
 
   it('is false for a slot tab', () => {
-    for (const t of queueSlots) {
+    for (const t of installedQueueSlots()) {
       expect(tabHonorsPinnedSortDefault(slotTabId(t.key))).toBe(false);
     }
   });
@@ -307,7 +311,7 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
 
 describe('reviewDeepLink / urlIdForTab', () => {
   it('opens the slot tab from its bookmark urlId, with the crop to jump to', () => {
-    for (const s of queueSlots) {
+    for (const s of installedQueueSlots()) {
       const d = reviewDeepLink(
         new URLSearchParams(`tab=${s.capabilities.queue!.urlId}&crop_id=abc`),
       );

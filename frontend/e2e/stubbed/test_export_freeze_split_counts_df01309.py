@@ -20,6 +20,7 @@ image, partial-frame policy and counts"):
 from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS
+from playwright.sync_api import expect
 
 CLASSES = [
     {
@@ -165,7 +166,9 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
     freeze_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     freeze_button.click()
 
-    # No Seed field anywhere in the modal.
+    # No Seed field anywhere in the modal. Wait for the modal first, or the
+    # absence check can pass before it has rendered.
+    expect(page.get_by_role("dialog")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text("Seed", exact=True).count() == 0, (
         "the freeze modal must not offer a Seed field — selection is deterministic (sha1 per class)"
     )

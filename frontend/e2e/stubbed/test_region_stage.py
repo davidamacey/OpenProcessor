@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 from test_ingest import _base_ingest_stubs as _serve_ingest_baseline
@@ -98,14 +98,14 @@ def test_pause_needs_a_confirm_and_resume_follows(stub, page, app_url):
     dialog = page.get_by_role("dialog")
     expect(dialog).to_contain_text("Queued items stay pending; nothing is lost.")
     assert posts == []
-    with page.expect_request(lambda r: r.url.endswith("/region_stage/pause")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_stage/pause")):
         dialog.get_by_role("button", name="Pause", exact=True).click()
     expect(panel.get_by_test_id("region-stage-state")).to_have_text("paused", timeout=ACTION_TIMEOUT_MS)
     expect(panel.get_by_test_id("region-stage-since")).to_be_visible()
     shoot(page, "region-stage-paused")
 
     panel.get_by_test_id("region-stage-toggle").click()
-    with page.expect_request(lambda r: r.url.endswith("/region_stage/resume")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_stage/resume")):
         page.get_by_role("dialog").get_by_role("button", name="Resume", exact=True).click()
     expect(panel.get_by_test_id("region-stage-state")).to_have_text("running", timeout=ACTION_TIMEOUT_MS)
     assert posts == ["pause", "resume"], posts
@@ -138,6 +138,6 @@ def test_rerun_gate_skipped_sends_the_served_request(stub, page, app_url):
     button = page.get_by_test_id("region-stage-panel").get_by_test_id("reprocess-open")
     expect(button).to_have_text("Re-run gate-skipped (7)…", timeout=ACTION_TIMEOUT_MS)
     button.click()
-    with page.expect_request(lambda r: r.url.endswith("/reprocess")):
+    with expect_handled(page, lambda r: r.url.endswith("/reprocess")):
         page.get_by_role("dialog", name="Reprocess").get_by_role("button", name="Check what would run").click()
     assert posts == [RERUN], posts

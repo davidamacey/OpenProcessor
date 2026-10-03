@@ -1,12 +1,13 @@
-"""Issue #24 polish: a served enum filter never renders a blank default
-option, and the review panel's Reason row stays a label/value row at 800px.
+"""Issue #24 polish: a served enum filter with no served default reads "any"
+(never a value the queue request does not send, never a blank), and the
+review panel's Reason row stays a label/value row at 800px.
 """
 
 from __future__ import annotations
 
 import os
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 
 from fixtures.wire import make_item, review_tab, review_tabs
 
@@ -60,9 +61,12 @@ def _shot(page, name):
 
 def test_negative_frames_select_shows_the_served_any_option_by_default(stub, page, app_url):
     _setup(stub)
+    queue_urls: list[str] = []
+    page.on("request", lambda r: queue_urls.append(r.url) if "/review/all" in r.url else None)
     page.goto(f"{app_url}/p/default/review?tab=all")
     select = page.locator('label:has-text("Negative frames") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.locator('dt:text-is("Reason")').wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = select.evaluate("el => el.selectedOptions[0]?.textContent?.trim() ?? ''")
     assert shown == "Any", shown
 

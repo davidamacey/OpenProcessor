@@ -27,6 +27,10 @@ representative crops.
 
 <Screenshot name="clusters-1600.png" alt="Cropwright cluster grid" caption="Cluster grid with cohesion badges" />
 
+The filter bar above the grid, and the **Matching items** mode that lists and
+bulk-edits everything the filter matches, are described in
+[Item filter and Matching items](./item-filter.md).
+
 ## Cluster detail (`/p/<project>/clusters/[id]`)
 
 The core triage surface: a crop grid for one cluster with pointer-based

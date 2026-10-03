@@ -17,8 +17,8 @@ describe('W6: cluster cards use the served purity_tier/promotable, not a client 
   it('borderColor/purityBadge branch on c.purity_tier, not a numeric cutoff', () => {
     const borderFn = src.match(/function borderColor\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
     const badgeFn = src.match(/function purityBadge\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
-    expect(borderFn).toBeDefined();
-    expect(badgeFn).toBeDefined();
+    expect(borderFn).not.toBeUndefined();
+    expect(badgeFn).not.toBeUndefined();
     expect(borderFn).toMatch(/c\.purity_tier === 'pure'/);
     expect(borderFn).toMatch(/c\.purity_tier === 'mixed'/);
     expect(badgeFn).toMatch(/c\.purity_tier === 'pure'/);

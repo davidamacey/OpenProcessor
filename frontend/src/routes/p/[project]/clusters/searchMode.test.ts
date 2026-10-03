@@ -71,7 +71,12 @@ describe('/clusters search mode', () => {
     expect(body).toMatch(/reg\(\s*'clusters_search\.undo',/);
     expect(body).toMatch(/reg\(\s*'clusters_search\.ignore',/);
     expect(body).toMatch(/reg\(\s*\n?\s*'clusters_search\.cancel',/);
-    expect(body).not.toMatch(/reg\('(m'|cluster\.move')/);
+    expect([...body.matchAll(/\breg\(\s*'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([
+      'clusters_search.cancel',
+      'clusters_search.ignore',
+      'clusters_search.select_all',
+      'clusters_search.undo',
+    ]);
     expect(body).not.toMatch(/openMovePicker/);
   });
 

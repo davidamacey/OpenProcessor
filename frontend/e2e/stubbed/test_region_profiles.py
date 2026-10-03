@@ -24,7 +24,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}
@@ -354,13 +354,13 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
     edited = {**BODY, "detector_model": "item_detector_base", "max_regions_per_item": 99}
     assert validated[-1] == {"name": None, "body": edited}, validated[-1]
 
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     conflict = page.get_by_test_id("save-conflict")
     expect(conflict).to_contain_text("Revision 4 was saved after you opened this profile.")
     assert puts[0] == {"expected_revision": 3, "description": "Tags on widgets", "body": edited}, puts[0]
     conflict.get_by_test_id("keep-mine").click()
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     assert puts[1]["expected_revision"] == 4
     assert puts[1]["body"] == edited
@@ -462,12 +462,12 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
     dialog = page.get_by_role("dialog", name="Activate widget_tag revision 3")
     expect(dialog.get_by_test_id("activate-from-to")).to_contain_text("widget_tag r2")
     expect(dialog.get_by_test_id("activate-force")).to_have_count(0)
-    with page.expect_request(lambda r: r.url.endswith("/activate")):
+    with expect_handled(page, lambda r: r.url.endswith("/activate")):
         dialog.get_by_role("button", name="Activate", exact=True).click()
     expect(dialog.get_by_test_id("activate-error")).to_have_text("widget_tag r3 has errors.")
     expect(dialog).to_contain_text("tag_detector_v1 is not loaded")
     dialog.get_by_test_id("activate-force").check()
-    with page.expect_request(lambda r: r.url.endswith("/activate")):
+    with expect_handled(page, lambda r: r.url.endswith("/activate")):
         dialog.get_by_role("button", name="Activate anyway").click()
     expect(dialog).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     assert activations == [
@@ -484,7 +484,7 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
     assert reprocesses == [{**SUGGESTED, "dry_run": True}], reprocesses
     impact.get_by_test_id("rerun-apply").click()
     confirm = page.get_by_role("dialog", name="Re-run items")
-    with page.expect_request(lambda r: r.url.endswith("/reprocess")):
+    with expect_handled(page, lambda r: r.url.endswith("/reprocess")):
         confirm.get_by_role("button", name="Re-run", exact=True).click()
     expect(impact.get_by_test_id("rerun-result").locator("tbody tr td")).to_have_text(
         ["Region", "940", "12", "928", "\u2014", "\u2014"], timeout=ACTION_TIMEOUT_MS
@@ -520,14 +520,14 @@ def test_rollback_and_turn_off_from_the_list(stub, page, app_url):
 
     page.get_by_role("button", name="Roll back to env_tags").click()
     dialog = page.get_by_role("dialog", name="Roll back the active region profile")
-    with page.expect_request(lambda r: r.url.endswith("/active/rollback")):
+    with expect_handled(page, lambda r: r.url.endswith("/active/rollback")):
         dialog.get_by_role("button", name="Roll back", exact=True).click()
     assert rollbacks == [{"expected_active": {"name": "widget_tag", "revision": 2}}], rollbacks
     expect(page.get_by_test_id("active-ref")).to_have_text("env_tags", timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_test_id("active-deactivate").click()
     off = page.get_by_role("dialog", name="Turn off region detection")
-    with page.expect_request(lambda r: r.url.endswith("/region_profiles/deactivate")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_profiles/deactivate")):
         off.get_by_role("button", name="Turn off", exact=True).click()
     assert deactivations == [{"expected_active": {"name": "env_tags", "revision": None}}], deactivations
     expect(page.get_by_test_id("active-ref")).to_have_text(
@@ -552,7 +552,7 @@ def test_clone_a_template_opens_the_new_profile(stub, page, app_url):
     page.get_by_test_id("template-row").get_by_role("button", name="Clone").click()
     dialog = page.get_by_role("dialog", name="Clone widget_tag (template)")
     dialog.get_by_test_id("clone-name").fill("widget_tag_v2")
-    with page.expect_request(lambda r: r.url.endswith("/clone")):
+    with expect_handled(page, lambda r: r.url.endswith("/clone")):
         dialog.get_by_role("button", name="Clone", exact=True).click()
     assert clones == [
         {"new_name": "widget_tag_v2", "revision": None, "source": "template", "description": None}

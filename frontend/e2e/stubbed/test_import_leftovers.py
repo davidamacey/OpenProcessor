@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 from fixtures.wire import make_item, review_tab, review_tabs
@@ -251,7 +251,7 @@ def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
     dialog = page.get_by_role("dialog", name="Reprocess")
     expect(dialog.get_by_role("heading", name="Reprocess image")).to_be_visible()
     dialog.get_by_label("Detect", exact=True).check()
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/images/img-0/reprocess")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/images/img-0/reprocess")):
         dialog.get_by_role("button", name="Reprocess", exact=True).click()
     assert [b for _p, b in bodies] == [{"scopes": ["detect"], "dry_run": False}], bodies
     assert bodies[0][0].endswith("/images/img-0/reprocess"), bodies

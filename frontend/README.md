@@ -208,8 +208,9 @@ key a registered region slot's own keymap declares.
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
 **no** local database. State is reconstructed from API calls;
-`localStorage` only caches transient UI state (sidebar collapse, last
-cluster viewed).
+the browser keeps only `sessionStorage` state that is rebuilt on demand (the
+clusters sort and unlabeled toggle, and a one-reload guard for a failed
+chunk load).
 
 ## Development
 

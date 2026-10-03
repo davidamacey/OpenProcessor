@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}
@@ -257,14 +257,14 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
     open_editor(page, app_url)
     field = page.locator('[data-field="class_user_template"]')
     expect(field.get_by_test_id("placeholder-chip")).to_have_text("{class_names_csv} required")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/prompt_packs/validate")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/prompt_packs/validate")):
         field.locator("textarea").fill("Pick one class.")
     expect(field.get_by_test_id("config-issue")).to_contain_text(
         "class_user_template must contain {class_names_csv}", timeout=ACTION_TIMEOUT_MS
     )
     assert validated[-1] == {"name": None, "body": {**BODY, "class_user_template": "Pick one class."}}
 
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     assert puts[0] == {
         "expected_revision": 2,
@@ -274,13 +274,13 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
     expect(page.get_by_test_id("config-meta")).to_contain_text("revision 3", timeout=ACTION_TIMEOUT_MS)
 
     page.locator('[data-field="class_system"] textarea').fill("You classify widgets and gadgets.")
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     conflict = page.get_by_test_id("save-conflict")
     expect(conflict).to_contain_text("Revision 4 was saved after you opened this pack.")
     assert puts[1]["expected_revision"] == 3
     conflict.get_by_test_id("keep-mine").click()
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     assert puts[2]["expected_revision"] == 4
     assert puts[2]["body"]["class_system"] == "You classify widgets and gadgets."
@@ -330,12 +330,12 @@ def test_activate_needs_force_only_when_the_server_allows_it(stub, page, app_url
     dialog = page.get_by_role("dialog", name="Activate widget_tag revision 2")
     expect(dialog.get_by_test_id("activate-from-to")).to_contain_text("widget_tag r1")
     expect(dialog.get_by_test_id("activate-force")).to_have_count(0)
-    with page.expect_request(lambda r: r.url.endswith("/activate")):
+    with expect_handled(page, lambda r: r.url.endswith("/activate")):
         dialog.get_by_role("button", name="Activate", exact=True).click()
     expect(dialog.get_by_test_id("activate-error")).to_have_text("widget_tag r2 has errors.")
     expect(dialog).to_contain_text("sprocket is not a registry class")
     dialog.get_by_test_id("activate-force").check()
-    with page.expect_request(lambda r: r.url.endswith("/activate")):
+    with expect_handled(page, lambda r: r.url.endswith("/activate")):
         dialog.get_by_role("button", name="Activate anyway").click()
     expect(dialog).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     assert bodies == [
@@ -361,7 +361,7 @@ def test_rollback_from_the_list(stub, page, app_url):
     expect(page.locator('[data-name="widget_tag"]').get_by_test_id("pack-active-chip")).to_have_text("active r1")
     page.get_by_role("button", name="Roll back to generic_item_v1").click()
     dialog = page.get_by_role("dialog", name="Roll back the active pack")
-    with page.expect_request(lambda r: r.url.endswith("/active/rollback")):
+    with expect_handled(page, lambda r: r.url.endswith("/active/rollback")):
         dialog.get_by_role("button", name="Roll back", exact=True).click()
     assert bodies == [{"expected_active": {"name": "widget_tag", "revision": 1}}], bodies
     expect(page.get_by_test_id("active-ref")).to_have_text("generic_item_v1", timeout=ACTION_TIMEOUT_MS)
@@ -411,7 +411,7 @@ def test_test_on_crop_sends_the_draft_and_shows_the_reply(stub, page, app_url):
     page.locator('[data-field="class_system"] textarea').fill("You sort widgets.")
     panel = page.get_by_test_id("pack-test-panel")
     panel.get_by_test_id("test-crop-ids").fill("c_123")
-    with page.expect_request(lambda r: r.url.endswith("/prompt_packs/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/prompt_packs/test")):
         panel.get_by_test_id("test-run").click()
     assert tests == [
         {"draft": {**BODY, "class_system": "You sort widgets."}, "call": "classify", "crop_ids": ["c_123"]}
@@ -441,7 +441,7 @@ def test_clone_a_template_opens_the_new_pack(stub, page, app_url):
     page.get_by_test_id("template-row").get_by_role("button", name="Clone").click()
     dialog = page.get_by_role("dialog", name="Clone widget_tag (template)")
     dialog.get_by_test_id("clone-name").fill("widget_tag_v2")
-    with page.expect_request(lambda r: r.url.endswith("/clone")):
+    with expect_handled(page, lambda r: r.url.endswith("/clone")):
         dialog.get_by_role("button", name="Clone", exact=True).click()
     assert clones == [
         {"new_name": "widget_tag_v2", "revision": None, "source": "template", "description": None}

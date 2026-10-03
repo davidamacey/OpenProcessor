@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 
 from fixtures.wire import make_item, project, projects_response
 
@@ -95,7 +95,7 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     assert page.get_by_test_id("project-switcher-current").inner_text() == "Default"
 
     # One labelled write on `default` → one undo entry.
-    with page.expect_request(lambda r: r.method == "PUT" and _path(r.url).endswith("/label")):
+    with expect_handled(page, lambda r: r.method == "PUT" and _path(r.url).endswith("/label")):
         page.keyboard.press("Enter")
     assert len(label_calls) == 1 and label_calls[0].startswith(DEFAULT_PREFIX), label_calls
 

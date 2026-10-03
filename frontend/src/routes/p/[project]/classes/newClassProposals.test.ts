@@ -28,7 +28,7 @@ describe('/classes Proposals section', () => {
 
   it('loadProposals fetches getNewClassProposalsSummary and degrades to an inline error, not a crash', () => {
     const fn = src.match(/async function loadProposals\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/proposalsSummary = await getNewClassProposalsSummary\(\)/);
     expect(fn).toMatch(/catch \(e\) \{[\s\S]*proposalsError = \(e as Error\)\.message;/);
   });
@@ -103,7 +103,7 @@ describe('/classes Proposals section — flagged_terms (DQ-M11)', () => {
 
   it('flagReason renders the served flag as a human reason: generic parent / not an object / existing class → map to X', () => {
     const fn = src.match(/function flagReason\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/generic_parent.*generic parent/s);
     expect(fn).toMatch(/non_object.*not an object/s);
     expect(fn).toMatch(/existing_class/);

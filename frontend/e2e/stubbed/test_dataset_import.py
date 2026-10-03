@@ -25,7 +25,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 from fixtures.wire import make_item
@@ -363,7 +363,7 @@ def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
     start.click()
     dialog = page.get_by_role("dialog", name="Start the import")
     expect(dialog).to_contain_text("96 images and 297 boxes")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/datasets/imports")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/datasets/imports")):
         dialog.get_by_role("button", name="Start import").click()
 
     assert len(started) == 1
@@ -510,13 +510,13 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
     expect(dialog.locator("fieldset label")).to_have_text(["Detect", "Open vocab", "Region", "VLM", "Embed"])
     dialog.get_by_label("Region", exact=True).check()
     dialog.get_by_role("combobox").select_option("redetect")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Check what would run").click()
     # scope, selected, locked skipped, queued, failed, not found (omitted = em dash)
     expect(dialog.get_by_test_id("reprocess-dry-run").locator("tbody tr td")).to_have_text(
         ["Region", "1", "0", "0", "\u2014", "\u2014"]
     )
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Reprocess").click()
     expect(dialog.get_by_test_id("reprocess-result").locator("tbody tr td")).to_have_text(
         ["Region", "1", "0", "1", "\u2014", "\u2014"]

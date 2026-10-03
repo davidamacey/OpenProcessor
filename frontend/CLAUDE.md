@@ -1382,7 +1382,8 @@ trainer_image_id}`, and a class-remap table (new id → original
   `formatCount()`.
 - New types on `types_train.ts`: `TrainEval`/`TrainEvalPerClass`/
   `TrainEvalSplit`/`TrainEpochMetric`, `TrainManifest` and its
-  `Lineage`/`ClassRemap`/`CodeVersions`/`Results` sub-types;
+  `TrainManifestLineage`/`TrainManifestClassRemap`/
+  `TrainManifestCodeVersions`/`TrainManifestResults` sub-types;
   `getTrainManifest` (`api.ts`) is now typed `Promise<TrainManifest>`
   (was `Record<string, unknown>`).
 - Tests: `trainResults.test.ts`, `trainRunsTable.test.ts`,
@@ -1527,9 +1528,10 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   region slot is derived from the store's `review.region.*` keys
   (`servedRegionSlot.ts`), and which a tier-2 slot may still declare
   itself.
-- **One box-edit handler.** `/review`'s edit mode (`BboxCanvas.handleKey`,
-  via the page's single forwarded window listener) and the `SlotBboxEditor`
-  modal both resolve keys through `runBoxEditKey` (`src/lib/boxEditKeys.ts`).
+- **One box-edit handler.** `/review`'s edit mode and the `SlotBboxEditor`
+  modal both mount `MultiBoxCanvas`, whose `handleKey` resolves keys through
+  `keymapStore.actionFor('box_edit', ...)` (the page forwards its single
+  window listener to it; the modal forwards to its own canvas).
 - **Printed keys.** Every hint strip, toast, button badge/title and
   overlay row prints `keymapStore.glyph(id)`, never a literal.
   `src/lib/keymap.literals.scan.test.ts` fails on a literal `<kbd>`,
@@ -1697,8 +1699,8 @@ value through `slotOf(current, activeSlot)` (`src/lib/annotations/
 cropSlots.ts`, off `Crop.slots` — populated by `mapRawCrop` via
 `mapCropSlots`/`readSlot`), and every label/status-vocabulary/copy
 string through `src/lib/review/slotPanel.ts`'s `humanWritableStates` /
-`statusClearsBox` / `statusWantsRejectionReason` / `panelLabels`. Writes
-go through `setSlotBox`/`patchSlotMeta` (`api.ts`), which target the
+`statusWantsRejectionReason` / `panelLabels`. Writes go through
+`putRegionBoxes`/`patchRegionBox`/`patchSlotMeta` (`api.ts`), which target the
 active slot's own declared `endpoints`/wire field names — never a
 hardcoded `/crops/{id}/region` or `region_status` literal, and render
 the server's own returned item rather than a client-computed post-write
@@ -1717,9 +1719,9 @@ clear-box and rejection-reason behavior all read the server's own
 `capabilities.lifecycle.states` is kept only as the fallback for when
 the endpoint is absent or hasn't loaded yet. Box edits (`saveBboxAndExit`/
 `confirmSlot`) send the box exactly as drawn (crop-local, parent frame)
-with `setSlotBox(..., 'parent')` — the server does the projection into
-its own stored frame, so there is no client-side `projectFromParent` on
-the write path (read-side projection is unchanged, and prefers a served
+through `putRegionBoxes`/`patchRegionBox` — the server does the projection
+into its own stored frame, so there is no client-side projection on the
+write path (read-side projection is unchanged, and prefers a served
 `region_bbox_in_parent` when present — see "Plate provenance + OCR"
 below).
 
@@ -1728,8 +1730,8 @@ every non-deprecated class — the top-10 quick-assign row under the crop
 (`quickAssignClasses`, `src/lib/classPicker.ts`) only ever surfaces the most-validated
 classes, leaving the long tail (including brand-new, zero-sample classes)
 reachable only via `/classes` without it. `/` is reserved
-(`RESERVED_HOTKEY_LETTERS` in `src/lib/classHotkey.ts`) so a class can never
-be bound to it.
+(the served reserved set, read through `reservedHotkeyLetters()` in
+`src/lib/classHotkey.ts`) so a class can never be bound to it.
 
 `Esc` cannot cancel an in-progress pointer drag — `svelte-dnd-action` only
 Escape-cancels keyboard (aria) drags. It clears the captured multi-drag set
@@ -1806,7 +1808,7 @@ model, write-path table and the current gap list.
 **No backward compatibility (owner decision, 2026-09-26): the single-box
 scalar region fields are gone, not additive.** `REGION_SUB_BOX` declares
 only `listField: 'region_boxes'` — no `bboxField`/`scoreField`/
-`candidateBboxField`/etc. `readSlot` never runs the legacy scalar-box
+candidate fields. `readSlot` never runs the legacy scalar-box
 block for a capability that declares `listField`; `region_bbox_norm`,
 `region_candidate_*`, and every other pre-W8 per-box scalar key are gone
 from the wire and from this codebase's reads. A `SubBoxCapability` declares exactly one of `listField` or
@@ -1978,10 +1980,9 @@ render via the shared chip components.
   `region_text_disagreement` (2026-09-24, logic-moves W8): `region_text`
   is the backend's _chosen_ reading; `region_text_vlm`/`region_text_ocr`
   are the two readers' own candidates, and `region_text_disagreement` is
-  true when they differ. `TextCapability` carries these as
-  `vlmValueField`/`ocrValueField`/`disagreementField`;
-  `SlotData.text.{vlmValue,ocrValue,disagreement}` is populated by
-  `readSlot`. `SlotCard` and `/review`'s inline slot panel both render a
+  true when they differ. Since W8 these are per box (`SlotBox.textVlm`/
+  `textOcr`/`textDisagreement`, `src/lib/annotations/types.ts`), populated
+  by `readSlot` from each `region_boxes[]` element. `SlotCard` and `/review`'s inline slot panel both render a
   "readers disagree" badge with the two candidate values in its tooltip;
   `CropMetaPanel` additionally shows `region_text_engine_version`.
   `ProvenanceChip`'s muted-tag pattern now includes the
@@ -2025,20 +2026,13 @@ things about the region wire shape, all adopted here:
   `_detector_version`/`_source` (+ `_bbox_in_parent`) instead, kept for
   human review and reversal — `region_rejection_reason` is set
   (`region_visible_elsewhere` / `sanity_reject:<gate>` /
-  `verifier_no_verdict`). `SubBoxCapability` gained
-  `candidateBboxField`/`candidateBboxInParentField`/
-  `candidateScoreField`/`candidateDetectorField`/
-  `candidateDetectorVersionField`/`candidateSourceField`;
-  `readSlot`/`SlotData.subBox.candidate` populate it the same
-  server-projection-preferred way as the main box. **Confirming (or
-  marking false-positive on) a verify_rejected item promotes the
-  candidate into the region box server-side** (`region_writes.py`'s
-  `candidate_promotion`/`human_status_fields`) — the frontend never
-  computes that promotion; `/review`'s `_seedSlotFromCurrent` just seeds
-  `editedSlotBox` from the candidate's parent-frame box when the main
-  box is absent, so an unchanged Confirm still goes through the existing
-  boxUnchanged → status-only-PATCH path (see B2 above). The candidate
-  box renders **dashed** (`BboxCanvas`'s `dashed` prop) with a hint
+  `verifier_no_verdict`). **Superseded by W8 (see "W8 multi-box
+  regions"):** the `candidate*Field` capability fields, the candidate
+  promotion on confirm and `/review`'s `_seedSlotFromCurrent`/`editedSlotBox`
+  are gone. A rejected candidate is now a box with `state: 'rejected'` in
+  `region_boxes`, and Enter never overrides it (it confirms only
+  `proposed` boxes). The candidate box renders **dashed** (the served
+  `box_states` `dashed` flag, drawn by `MultiBoxCanvas`) with a hint
   styled/worded by the served rejection **kind** (OpenProcessor 3f1a11e
   adoption, see below) — "rejected candidate · confirm to accept" (red/
   amber) for a `model_verdict`/`automatic` reason, "candidate · needs
@@ -2062,10 +2056,9 @@ things about the region wire shape, all adopted here:
   `vlm_invalid`/`no_valid_reading`/`human`) says why it won, and
   `region_text_vlm_invalid` (`placeholder`/`no_reading`/`sequence`/
   `charset`/`too_short`/`too_long`/`format`) says why the VLM's own
-  reading was rejected as not text, when it was. `TextCapability` gained
-  `choiceField`/`invalidReasonField`; `SlotData.text.choice`/
-  `.invalidReason` render next to the plate text on `/review` and
-  `CropMetaPanel`.
+  reading was rejected as not text, when it was. Since W8 both are per box
+  (`SlotBox.textChoice`/`textVlmInvalid`) and render next to the plate text
+  on `/review` and `CropMetaPanel`.
 
 `regionVocabularyStore` (`GET {API_PREFIX}/regions/vocabulary`) gained
 `textChoices`/`textRules` (the served `region_text_choice` id list and
@@ -2181,8 +2174,8 @@ itself from `getCropContext`'s `items`, via
   candidate box (dq-region) renders dashed in `ring.proposed` —
   projected out of the parent-local frame `readSlot` always produces
   (`SlotData.subBox.parent`/`.candidate.parent`) back into the source
-  image's absolute frame via `projectFromParent(box, itemSourceXyxy,
-'source')` (`readSlot.ts`) — no new wire field, no new projection math.
+  image's absolute frame via the overlay's own `parentToSource`
+  (`SourceImageOverlay.svelte`) — no new wire field.
 - The requested crop renders with a thicker ring; every sibling is
   dimmed and, when the caller passes `onselect`, clickable.
 - A "hide/show boxes" toggle removes the overlay layer so the raw image
@@ -2200,7 +2193,7 @@ lightbox, and `CropMetaPanel`'s "Source image" section. `api.ts`'s old
 `cacheKey` param the burn-in needed and the client-drawn overlay
 doesn't) is retired; `getSourceImageScaled(cropId, maxDim)` is its
 replacement — same downscaled-image URL, honest naming.
-`SlotBboxEditor`/`BboxCanvas` are unaffected (they only ever draw the
+`SlotBboxEditor` is unaffected (it only ever draws the
 crop's own thumbnail via `getThumbUrl`, never the full source image, so
 never depended on the burn-in).
 
@@ -2669,15 +2662,13 @@ dataset:
   `/settings` — plus the one GLOBAL page, `/projects` (never under
   `/p/<slug>/...`), swept by its own
   `test_global_route_mounts_cleanly`. `/ingest` fails against any backend that predates
-  `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md` (this
-  currently deployed build 404s it) — that's expected until the next
-  deploy, not a bug. Each asserts:
+  `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`. Each asserts:
   no `pageerror`; no `**/curation/**` response >= 400 outside a small,
   explicit, documented allow-list (`ALLOWED_4XX_5XX` in
-  `e2e/live/conftest.py` — one entry today, `GET .../keymap` 404, for a
-  deployment that predates OpenProcessor W2b, see "Keyboard shortcuts"
-  above; every other endpoint this deployment serves on mount came back
-  200/204 in manual verification);
+  `e2e/live/conftest.py` — one entry today, `GET .../projects/combine/
+__probe__`, whose 404 `combine_not_found` is the served "router is
+  mounted" answer of the combine gate, see "Combine projects"; every other
+  endpoint this deployment serves on mount comes back 200/204);
   no literal `"NaN"`/`"undefined"` in the rendered body text; every
   `<img>` whose bounding box intersects the 1280×720 viewport finishes
   loading (`naturalWidth > 0`) — an offscreen lazy image is allowed to
@@ -2723,7 +2714,8 @@ verify_rejected&crop_id=<id>`, and asserts it actually lands: "Locating
 ### Mutation testing
 
 `npm run test:mutation` (Stryker, `stryker.config.json`) runs mutation
-testing against 10 pure, high-value modules — `api.ts` (data mapping +
+testing against 17 pure, high-value modules (`stryker.config.json`'s
+`mutate` list is authoritative; these are the original ten) — `api.ts` (data mapping +
 wire params), `stores/undo.svelte.ts`, `datasetStats.ts`,
 `autoLabelRunVlm.ts`, `sourceBadge.ts`, `reviewTabs.ts`,
 `curationSettings.ts`, `strategies.ts`, `classPicker.ts`,
@@ -2751,14 +2743,10 @@ source is the `docker-compose.build.yml` overlay (`docker compose -f
 docker-compose.yml -f docker-compose.build.yml up -d --build`, tagged
 `cropwright-dev:local`, never `docker-compose.override.yml` — that
 auto-loads and would make a plain clone silently build instead of
-pull). **The currently deployed `cropwright` container on this host was
-started from a checkout with the old `build: .`-in-`docker-compose.yml`
-shape and keeps running unmodified** — its next
-`docker compose up -d --build` must use the override explicitly
+pull). Rebuilding a source-built instance always needs the overlay
 (`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
---build`) now that the base file is pull-only, since `latest` isn't
-published on Docker Hub yet and a bare `docker compose up -d --build`
-against the new base file has no `build:` to run. Port conflicts:
+--build`): the base file is pull-only, so a bare `docker compose up -d
+--build` has no `build:` to run. Port conflicts:
 5174=example-app-backend, 5180/5181=example-app-opensearch,
 5183=example-app-docs.
 

@@ -17,6 +17,7 @@ import {
 } from '$lib/types_itemFilter';
 import type * as T from '$lib/types_itemFilter';
 import type { ReviewFilterSpec } from '$lib/api';
+import type { CropFilter } from '$lib/types';
 
 type Prop = { enum?: string[]; items?: Prop; anyOf?: Prop[] };
 type Schema = { properties?: Record<string, Prop> };
@@ -144,6 +145,50 @@ describe('ItemFilterQuery', () => {
       open_vocab_set: true,
       source_prompt: true,
     } satisfies Record<keyof T.ItemFilterQuery, true>);
+    const path = Object.keys(S.paths).find((p) =>
+      /\/projects\/\{project\}\/crops$/.test(p),
+    );
+    if (!path) throw new Error('GET /crops not found');
+    const declared = new Set(
+      (S.paths[path].get.parameters ?? [])
+        .filter((p) => p.in === 'query')
+        .map((p) => p.name),
+    );
+    expect(local.filter((k) => !declared.has(k))).toEqual([]);
+  });
+});
+
+describe('CropFilter (getCrops spreads every key into the query)', () => {
+  it('every key is a declared query parameter of GET /crops', () => {
+    // FastAPI ignores an unknown query parameter, so a stale key would
+    // silently drop the filter; `satisfies` makes a new key a type error here.
+    const local = keys({
+      class_name: true,
+      exclude_class_name: true,
+      conf_min: true,
+      conf_max: true,
+      min_area: true,
+      max_area: true,
+      max_rank: true,
+      origin: true,
+      embedding_state: true,
+      review_status: true,
+      open_vocab_set: true,
+      source_prompt: true,
+      cluster_id: true,
+      label_source: true,
+      class_source: true,
+      label_validated: true,
+      source: true,
+      sort: true,
+      limit: true,
+      page: true,
+      min_blur_ratio: true,
+      classifier_conf_lt: true,
+      review_dismissed: true,
+      include_excluded: true,
+      item_text: true,
+    } satisfies Record<keyof CropFilter, true>);
     const path = Object.keys(S.paths).find((p) =>
       /\/projects\/\{project\}\/crops$/.test(p),
     );

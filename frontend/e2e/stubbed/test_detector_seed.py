@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, wait_for_paint
 from playwright.sync_api import expect
 
 from test_ingest_policy import DETECTOR, POLICY, _ingest_config
@@ -99,6 +99,9 @@ def test_dry_run_then_create_behind_a_confirm(stub, page, app_url):
     assert seeds == [{"dry_run": True}], "the preview is a dry run with no names"
 
     page.get_by_test_id("seed-create").click()
+    # The confirm dialog is up, so the click was handled; only now is "nothing
+    # was sent yet" a statement about the confirm and not about a slow click.
+    expect(page.get_by_role("dialog")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert len(seeds) == 1, "nothing is created before the confirm"
     page.get_by_role("dialog").get_by_role("button", name="Create 1 classes").click()
     page.wait_for_function("document.querySelector('[data-testid=seed-result]') === null")
@@ -131,7 +134,12 @@ def test_a_served_refusal_is_shown_verbatim(stub, page, app_url):
 
 def test_absent_without_a_detector(stub, page, app_url):
     _stubs(stub, None)
-    page.goto(f"{app_url}/p/default/classes")
+    with page.expect_response(
+        lambda r: r.url.split("?")[0].endswith("/ingest/config"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.goto(f"{app_url}/p/default/classes")
     page.get_by_text("Classes").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
+    # The detector config has been served (and nothing in it reports a
+    # detector); let the page render it before asserting the panel is absent.
+    wait_for_paint(page)
     expect(page.get_by_test_id("seed-panel")).to_have_count(0)

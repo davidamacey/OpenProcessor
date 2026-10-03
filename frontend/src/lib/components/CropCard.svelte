@@ -8,6 +8,8 @@
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
@@ -484,11 +486,20 @@
 {/if}
 
 {#if expanded}
+  <!-- Escape closes it and is stopped here so a page-level Esc (clear selection
+       on /clusters/[id]) does not also fire; focus moves in and returns to
+       "view" on close (trapFocus). -->
   <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
     role="dialog"
     aria-modal="true"
     aria-label="Source image"
+    tabindex="-1"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: () => (expanded = false) }}
+    onkeydown={(e) => {
+      if (e.key === 'Escape') e.stopPropagation();
+    }}
   >
     <div class="relative max-h-full max-w-6xl">
       <SourceImageOverlay

@@ -23,7 +23,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 describe('M1: Dismissed panel sends a sort the backend accepts and reports failure', () => {
   it('toggleDismissedPanel requests updated_at:desc, not the 400-ing "recent"', () => {
     const fn = src.match(/async function toggleDismissedPanel\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/sort:\s*'updated_at:desc'/);
     expect(fn).not.toMatch(/sort:\s*'recent'/);
   });
@@ -36,7 +36,7 @@ describe('M1: Dismissed panel sends a sort the backend accepts and reports failu
 
   it('the panel renders an error state before falling back to the empty state', () => {
     const markup = src.match(/\{#if dismissedLoading\}[\s\S]*?\{\/if\}/)?.[0];
-    expect(markup).toBeDefined();
+    expect(markup).not.toBeUndefined();
     expect(markup).toMatch(/\{:else if dismissedError\}/);
     // The error branch must come before the empty-state branch so a
     // failed request never renders "No dismissed crops."
@@ -74,7 +74,7 @@ describe("B2 (frontend half): confirming an untouched box doesn't rewrite proven
   const confirmFn = src.match(/async function confirmSlot\([\s\S]*?\n {2}\}/)?.[0];
 
   it('confirmSlot (a slot with no box list) is a status-only PATCH region_meta via patchSlotMeta', () => {
-    expect(confirmFn).toBeDefined();
+    expect(confirmFn).not.toBeUndefined();
     expect(confirmFn).toMatch(
       /await patchSlotMeta\(activeSlot, item\.id, \{ status: confirmStatus \}\);/,
     );
@@ -103,7 +103,7 @@ describe('m1 (2026-09-24 interactive pass): a name-only proposal is styled as a 
     const block = src.match(
       /\{#if current\.proposed_class_name && current\.proposed_class_id == null\}[\s\S]*?\{:else\}/,
     )?.[0];
-    expect(block).toBeDefined();
+    expect(block).not.toBeUndefined();
     expect(block).not.toMatch(/text-yellow-200/);
     expect(block).toMatch(/hint only/);
   });
@@ -113,14 +113,14 @@ describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front wh
   const fn = src.match(/async function rejectSlot\(\)[\s\S]*?\n {2}\}/)?.[0];
 
   it('checks statusWantsRejectionReason against the served reject status before writing anything', () => {
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(
       /statusWantsRejectionReason\(activeSlot, rejectStatus, regionStatusesStore\.list\)/,
     );
   });
 
   it('prompts before the optimistic queue removal / the write, not after', () => {
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     // DQ-m6 (2026-09-24 data-quality pass): window.prompt() replaced with
     // an in-app modal (promptForRejectionReason) — a native dialog
     // blocks the JS thread and renders outside the page's DOM/CDP
@@ -151,7 +151,7 @@ describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front wh
 describe('p9 (2026-09-24 interactive pass): the /review crop thumbnail upscales to fill its panel, at any viewport', () => {
   it('the plain-<img> crop branch uses h-full w-full, not max-h-full max-w-full (which never upscales)', () => {
     const block = src.match(/\{:else\}\s*\n\s*<!-- p9[\s\S]*?<img[\s\S]*?\/>/)?.[0];
-    expect(block).toBeDefined();
+    expect(block).not.toBeUndefined();
     expect(block).toMatch(/class="h-full w-full object-contain"/);
     expect(block).not.toMatch(/class="max-h-full max-w-full object-contain"/);
   });

@@ -39,7 +39,7 @@ describe('W2: slot writes render the server-returned item, not a computed patch'
     const fn = src.match(
       /async function saveSlotMeta\([\s\S]*?\n {2}async function commitSlotText/,
     )?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/\.\.\.res\.item/);
     expect(fn).not.toMatch(/applyOptimistic/);
   });
