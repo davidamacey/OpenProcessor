@@ -266,21 +266,9 @@
       classSource: classSourceFilter,
       maxRank,
       minBlurRatio,
-      // DQ-M3 (docs/design/data-quality-pass-2026-09-24.md): backend main
-      // 63d57d8 now serves `order=core_first` on `GET {API_PREFIX}/crops`
-      // (nearest-to-centroid first, with cluster_distance/
-      // cluster_similarity/cluster_is_core recomputed against the live
-      // centroid) — exactly what the cut line needs and previously had
-      // no way to request, which is why computeCutLine() (cutLine.ts)
-      // has to defensively hide the line whenever the loaded order isn't
-      // actually core-first-consistent. Requesting it here (whenever the
-      // operator hasn't picked their own explicit order) means that
-      // defensive check now passes in the common case instead of always
-      // falling back to hidden — computeCutLine() is left in place
-      // as-is: it still hides the line for any cluster the backend
-      // hasn't backfilled cluster_is_core for, or an order override the
-      // operator explicitly picked (outliers/diverse) genuinely isn't
-      // core-first.
+      // Unless the operator picked an explicit order, ask for the server's
+      // core-first order: nearest to the centroid first, each item serving
+      // its `cluster_is_core`, which is what the cut line reads.
       order: orderMode === 'default' ? 'core_first' : orderMode,
       k: diverseK,
     };
@@ -401,23 +389,11 @@
   // leading crops are "core". Only meaningful in the single '__all__'
   // group; suppressed while grouping by sub-cluster (subid order wins).
   //
-  // DQ-M3 (docs/design/data-quality-pass-2026-09-24.md): this used to
-  // assume "crops are already sorted core-first by the API" — false.
-  // `cluster_is_core` is null on most class-cluster members, and
-  // the default order (`sort=updated_at:desc`) isn't core-first at all —
-  // live, a class cluster's member #1 usually isn't core (this old logic
-  // degenerately produced index 0, effectively already hidden by the
-  // `cutLineIndex > 0` template guard below), while a candidate cluster
-  // has `cluster_is_core` set on every member but in recency order, so
-  // the old "stop at first non-core" logic drew a line at a meaningless
-  // boundary with core crops resuming right after it (#10000: break at
-  // 181, core again from 182). There's no server-side core-first order to
-  // request instead (checked against the vendored OpenAPI contract) — so
-  // computeCutLine() verifies the loaded order is actually
-  // core-first-consistent (and not mostly null) before trusting any
-  // boundary, rather than drawing one on a guess. See
-  // src/lib/clusters/cutLine.ts.
-  const cutLine = $derived.by(() => computeCutLine(filteredCrops));
+  // The cut is the first item the server serves as `cluster_is_core === false`,
+  // and only in the core-first order requested above.
+  const cutLine = $derived.by(() =>
+    computeCutLine(filteredCrops, orderMode === 'default'),
+  );
   const cutLineIndex = $derived(cutLine.index);
   const cutLineVisible = $derived(cutLine.visible);
 
