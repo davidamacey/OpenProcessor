@@ -418,7 +418,7 @@ def test_test_on_crop_sends_the_draft_and_shows_the_reply(stub, page, app_url):
     expect(panel.get_by_test_id("test-parse-status")).to_contain_text("parsed")
     expect(panel.get_by_test_id("test-pack-ref")).to_have_text("draft")
     expect(panel.get_by_test_id("test-vlm-ref")).to_contain_text("env@abc123")
-    expect(panel.get_by_test_id("test-latency")).to_have_text("812.4 ms")
+    expect(panel.get_by_test_id("test-latency")).to_have_text("812 ms")
     expect(panel.get_by_test_id("test-parsed")).to_contain_text('"class_name": "widget"')
     expect(panel.get_by_test_id("test-preview-item")).to_be_visible()
 

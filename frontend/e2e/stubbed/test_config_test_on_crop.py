@@ -182,7 +182,7 @@ def test_pack_test_sends_the_draft_and_renders_the_contract_response(stub, page,
     expect(panel.get_by_test_id("test-raw-reply")).to_contain_text('"class": "widget"', timeout=ACTION_TIMEOUT_MS)
     expect(panel.get_by_test_id("test-pack-ref")).to_have_text("draft")
     expect(panel.get_by_test_id("test-vlm-ref")).to_contain_text("env@abc123")
-    expect(panel.get_by_test_id("test-latency")).to_have_text("812.4 ms")
+    expect(panel.get_by_test_id("test-latency")).to_have_text("812 ms")
     expect(panel.get_by_test_id("test-prompt-user")).to_have_text("Pick one of: widget, gadget")
     items = panel.get_by_test_id("test-result-item")
     expect(items).to_have_count(2)
