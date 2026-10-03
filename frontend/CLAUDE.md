@@ -2210,6 +2210,19 @@ silently rendering empty. CI runs this in the `e2e-stubbed` job on every
 push/PR; a `py_compile` pre-commit hook (and CI step) gates
 `scripts/*.py` and `e2e/**/*.py` syntax separately from this suite.
 
+**The app's own files are loaded by the harness, not by Chromium.** The
+`stub` fixture routes every app-origin request through `route.fetch()`
+(`serve_app_through_harness`). Chromium fails requests queued for a socket
+with `net::ERR_NETWORK_CHANGED` whenever the host's network changes (any
+docker container starting or stopping), which used to break the SPA's
+chunk loading at boot and fail a random test on its first element. Keep
+the routing; `test_harness_serves_app.py` fails without it, and
+`scripts/repro_chromium_network_change.py` reproduces the abort (it
+disturbs other browsers on the host, so run it only when idle). A failed
+test writes a screenshot, console, request log with timings, the stub's
+handled/unhandled lists and the DOM to `artifacts_local/e2e-failures/
+<test id>/`; read those first when a test flakes.
+
 #### Live read-only tier (`e2e/live/`)
 
 `npm run test:live` — same `e2e/.venv`/chromium setup as `npm run
