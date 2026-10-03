@@ -189,8 +189,13 @@ reachable}`.
 
 For LAN clients the server must allow inbound TCP on every published service
 port you want linked (Grafana 4605, Prometheus 4604, Dashboards 4608, MLflow
-4609, plus 4602 and 4610 for the raw metrics), and `OP_BIND_ADDRESS` must not
-be `127.0.0.1`, or the browser cannot connect. Behind a single-origin reverse
+4609, plus 4602 and 4610 for the raw metrics), and the UI ports must not be
+bound to `127.0.0.1`, or the browser cannot connect. Set `OP_UI_BIND_ADDRESS=0.0.0.0`
+(or a LAN IP) to open only those four UIs; it defaults to `OP_BIND_ADDRESS`, and
+DCGM, Loki, Triton metrics, OpenSearch and the model APIs stay on `OP_BIND_ADDRESS`.
+The resource-link host is derived from the request host the browser used, with the
+port from the published port. Security: Grafana ships `admin`/`admin` (set
+`GF_SECURITY_ADMIN_PASSWORD` before exposing it); MLflow and Prometheus have no auth. Behind a single-origin reverse
 proxy, set the `OP_*_URL` overrides to the proxied addresses instead.
 
 `make dev-up` starts the dev stack; the monitoring profile is opt-in

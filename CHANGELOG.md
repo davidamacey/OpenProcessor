@@ -14,6 +14,10 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ## [0.4.0] - 2026-10-03
 
 ### Added
+- `OP_UI_BIND_ADDRESS` (default: `OP_BIND_ADDRESS`) publishes only the human-facing
+  UIs (Grafana, Prometheus, OpenSearch Dashboards, MLflow) on a separate address, so
+  LAN browsers can follow resource links without exposing OpenSearch, Triton, the VLM
+  or segmenter APIs. `GF_SECURITY_ADMIN_PASSWORD` is now overridable from `.env`.
 
 - Served facts for the thin client. `POST /region_profiles/test` answers `testable` and a
   `reason` sentence (from `region_scope.out_of_scope_reason`, the worker's own
