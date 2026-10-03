@@ -23,6 +23,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Intermittent e2e "first element never appears" failures.** Chromium fails
+  every request still waiting for a socket with `net::ERR_NETWORK_CHANGED`
+  when the host's network changes, and a docker container starting or
+  stopping on the machine is enough (its veth gains or loses an IPv6
+  address). The SPA's ~60 boot chunks queue behind 6 connections, so a
+  container event during boot failed a chunk import, the page showed
+  SvelteKit's "500 Internal Error", and whichever test was loading timed out
+  on its first element. Host CPU and IO load were not involved, which is why
+  the failures followed docker activity on the host rather than load. The
+  stubbed suite now loads every app-origin request through `route.fetch()`
+  (`serve_app_through_harness`, `e2e/conftest.py`), which never uses the
+  browser's socket pool; `test_harness_serves_app.py` guards it. Under forced
+  container churn, six loops of 30 tests went from 5 failures to 0.
+  `scripts/repro_chromium_network_change.py` reproduces the abort
+  deterministically (34 of 40 queued fetches fail with plain loading, 0 when
+  routed).
+- **Failed e2e tests explain themselves.** On a failure (including a
+  fail-closed teardown error), the `page` fixture writes a screenshot, the
+  console and pageerrors, every request with its status and timing, the
+  stub's handled and unhandled lists and the DOM to
+  `artifacts_local/e2e-failures/<test id>/`.
 - **e2e runs no longer leak `vite preview` servers.** The runner and the
   conftest fixture started the server through an `npx` wrapper and killed only
   the wrapper, orphaning one real server per run. Both now spawn the server in
