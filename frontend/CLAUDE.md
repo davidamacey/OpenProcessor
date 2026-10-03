@@ -2000,10 +2000,9 @@ things about the region wire shape, all adopted here:
   `vlm_invalid`/`no_valid_reading`/`human`) says why it won, and
   `region_text_vlm_invalid` (`placeholder`/`no_reading`/`sequence`/
   `charset`/`too_short`/`too_long`/`format`) says why the VLM's own
-  reading was rejected as not text, when it was. `TextCapability` gained
-  `choiceField`/`invalidReasonField`; `SlotData.text.choice`/
-  `.invalidReason` render next to the plate text on `/review` and
-  `CropMetaPanel`.
+  reading was rejected as not text, when it was. Since W8 both are per box
+  (`SlotBox.textChoice`/`textVlmInvalid`) and render next to the plate text
+  on `/review` and `CropMetaPanel`.
 
 `regionVocabularyStore` (`GET {API_PREFIX}/regions/vocabulary`) gained
 `textChoices`/`textRules` (the served `region_text_choice` id list and

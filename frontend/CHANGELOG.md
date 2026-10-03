@@ -46,6 +46,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`/review`'s served enum filters no longer show a value that is not
+  applied.** A select whose spec has no served default (live: the negative-frame
+  filter, and the Imported tab's dataset split) read its first option while the
+  queue request sent nothing. It now reads "any", and prefers a `default` served
+  on the spec when the backend sends one.
+- **`CropCard`'s expanded Source-image dialog** takes focus, closes on Escape
+  (without the page behind also handling it) and returns focus to the "view"
+  button; the review confidence min and max inputs have accessible names.
+- **CI's `[skip-changelog]`** is read from the pull request head commit, not the
+  synthetic merge commit; Dependabot also covers `docs-site/`, and the
+  pre-commit gitleaks hook uses the same version as CI.
+- **Tests that could not fail now can:** the registered-slot loops run against
+  an installed profile, unresolved query keys and the `CropFilter` keys are
+  pinned to the contract, the health-poll teardown, `n_clusters` and region-undo
+  order checks fail when their code regresses, e2e tests wait for the stub to
+  answer before reading recorded requests, and the live tier no longer
+  allow-lists a keymap 404.
 - `/models` no longer fails to load when the server lists the same model twice (a shared model after a re-share): each card is keyed by position as well as name, so both render instead of a Svelte `each_key_duplicate` error leaving the page on "Loading...".
 
 - A failed module-chunk load (flaky network, browser network-change abort, or
@@ -72,24 +89,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Documentation
 
-- **Docs screenshots captured from public COCO sample data.** 12 of the 21
-  pending slots now have real images; the capture script gained `--project`,
-  scripted dialog/editor states and an explicit allow-list of side-effect-free
-  calls (documented on the screenshots page), plus
+- **Docs screenshots captured from public COCO sample data.** Every screenshot
+  slot on the docs site has a real image; the capture script gained
+  `--project`, scripted dialog/editor states and an explicit allow-list of
+  side-effect-free calls (documented on the screenshots page), plus
   `scripts/docs_screenshot_fixtures.py` for throwaway `cwlife-` projects.
-  The remaining slots stay pending, with the reason for each listed.
-- **Docs site updated for the v0.1.0 feature set.** New user-guide pages for
-  combine projects, dataset import and Reprocess, the prompt-pack and
+- **Docs site updated for the v0.1.0 and v0.4.0 feature sets.** User-guide
+  pages for combine projects, dataset import and Reprocess, the prompt-pack and
   region-profile editors (with test-on-a-crop), the VLM registry and per-run
-  selection, and multi-box regions; updated Projects (pause, copy settings,
+  selection, multi-box regions, open-vocabulary sets, the detector and ingest
+  policy, embedding state and the detections summary, and the shared item
+  filter with Matching items; updated Projects (pause, copy settings,
   archive, guarded delete), Models (sharing and force-unshare), Settings,
   Review (Imported tab, lock badges), Keyboard shortcuts, the configuration
   reference (new runtime-settings page, bind address and dataset-upload env
-  vars), operations (project administration, proxy limits) and the FAQ. Two
-  new architecture diagrams (projects and config store; edit, test and
-  activate) and refreshed features, workflow and roadmap data. Screenshot
-  slots are listed as pending in the screenshots page and
-  `screenshot_routes.json`; no images were captured.
+  vars; build-time variables are now listed as such), operations (project
+  administration, proxy limits) and the FAQ. Two new architecture diagrams
+  (projects and config store; edit, test and activate) and refreshed
+  features, workflow and roadmap data.
+- **CLAUDE.md and the public overlay** no longer name deleted code, drop stale
+  deployment warnings, and the overlay now carries the W8 multi-box section.
+- The README no longer lists the removed `PUBLIC_CROPWRIGHT_INGEST_UPLOAD`
+  override or claims `localStorage` use.
 
 ### Fixed
 
