@@ -170,11 +170,6 @@ export function tabFromUrlId(urlId: string): ReviewTab | undefined {
   return undefined;
 }
 
-/** The `?tab=` value for an internal tab — the inverse of `tabFromUrlId`. */
-export function urlIdForTab(tab: ReviewTab): string {
-  return REVIEW_TABS.find((t) => t.id === tab)?.urlId ?? 'all';
-}
-
 /**
  * Tabs with no tuned default sort of their own — the ONLY tabs where the
  * deployment's pinned `sort` default (`GET {API_PREFIX}/settings`,

@@ -21,7 +21,7 @@ import { resetDeploymentSlots } from './registeredSlots';
 import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import { buildReviewTabs, isSlotTab, slotTabId, tabFromUrlId } from '../reviewTabs';
-import { buildSlotKeymap, singleCharCombos } from '../review/slotKeymap';
+import { buildSlotKeymap } from '../review/slotKeymap';
 import {
   humanWritableStates,
   panelLabels,
@@ -76,7 +76,7 @@ describe('P3.6: registering a second capable slot works with zero production cod
       'arrowleft',
       'arrowright',
     ]);
-    expect(singleCharCombos(entries)).not.toContain('f');
+    expect(entries.some((e) => e.combo === 'f')).toBe(false);
   });
 
   it('reservedHotkeyLetters(registry) contains e and d but not f for a registry with only the tail-number slot', () => {

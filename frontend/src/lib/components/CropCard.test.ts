@@ -200,7 +200,7 @@ describe('CropCard — dq-queues cutover: class_confidence / vlm_raw_class', () 
         vlm_class_empty_reason: 'no_match',
       }),
     });
-    expect(el.textContent).toContain('VLM answer matched no class');
+    expect(el.textContent).toContain('VLM gave no class — No match');
     expect(el.textContent).not.toContain('no_match');
     expect(el.textContent).not.toContain('VLM said');
   });
@@ -211,7 +211,7 @@ describe('CropCard — K4: readable VLM empty reason', () => {
     const el = renderCard({
       crop: baseCrop({ vlm_raw_class: null, vlm_class_empty_reason: 'no_answer' }),
     });
-    expect(el.textContent).toContain('VLM gave no answer');
+    expect(el.textContent).toContain('VLM gave no class — No answer');
     expect(el.textContent).not.toContain('no_answer');
   });
 });

@@ -16,7 +16,6 @@ import {
   unavailableTabMessage,
   tabFromUrlId,
   tabHonorsPinnedSortDefault,
-  urlIdForTab,
   visibleReviewTabs,
   type ReviewPresetId,
 } from './reviewTabs';
@@ -309,7 +308,7 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
   });
 });
 
-describe('reviewDeepLink / urlIdForTab', () => {
+describe('reviewDeepLink', () => {
   it('opens the slot tab from its bookmark urlId, with the crop to jump to', () => {
     for (const s of installedQueueSlots()) {
       const d = reviewDeepLink(
@@ -330,12 +329,6 @@ describe('reviewDeepLink / urlIdForTab', () => {
       unavailableTab: null,
     });
     expect(reviewDeepLink(new URLSearchParams('tab=nope&crop_id=')).tab).toBe('all');
-  });
-
-  it('round-trips every tab through its urlId', () => {
-    for (const t of REVIEW_TABS) {
-      expect(tabFromUrlId(urlIdForTab(t.id))).toBe(t.id);
-    }
   });
 
   describe('preset (m31, 2026-09-24 interactive pass)', () => {

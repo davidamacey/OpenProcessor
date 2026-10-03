@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sourceBadge } from '$lib/sourceBadge';
-  import { sourceShortCode, vlmEmptyReasonText } from '$lib/cropCardText';
+  import { sourceShortCode } from '$lib/cropCardText';
+  import { vlmEmptyReasonText } from '$lib/review/reviewCopy';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl } from '$lib/api';
   import type { BBoxNorm, Crop } from '$lib/types';

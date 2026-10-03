@@ -84,15 +84,6 @@ export function buildSlotKeymap(
   return entries;
 }
 
-/** Single-character combos in a keymap table — what
- *  `reservedHotkeyLetters()` (`../classHotkey.ts`) uses to derive the
- *  reserved set (Finding C.2, closed structurally by P2.8c). Multi-char
- *  combos (`arrowleft`, `enter`, `escape`) are excluded since a class
- *  hotkey is always a single character. */
-export function singleCharCombos(entries: KeymapEntry[]): string[] {
-  return entries.map((e) => e.combo).filter((c) => c.length === 1);
-}
-
 /**
  * The on-screen glyph for a slot's reject/"no {label} visible" action —
  * the review-tab hint strip used to hardcode this to the literal `"D"`

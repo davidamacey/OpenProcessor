@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildSlotKeymap, rejectKeyGlyph, singleCharCombos } from './slotKeymap';
+import { buildSlotKeymap, rejectKeyGlyph } from './slotKeymap';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 import type { SlotSpec } from '../annotations/types';
@@ -45,16 +45,6 @@ describe('buildSlotKeymap — widgetTagSlot (the standard region keymap)', () =>
     expect(entries.find((e) => e.combo === 'enter')?.fn).toBe(slotHandlers.saveAndExit);
     expect(entries.find((e) => e.combo === 'escape')?.fn).toBe(slotHandlers.toggleEdit);
   });
-
-  it('singleCharCombos keeps single letters, drops multi-char combos', () => {
-    const entries = buildSlotKeymap(widgetTagSlot, false, slotHandlers);
-    expect(singleCharCombos(entries).sort()).toEqual(['b', 'd', 'e', 'f']);
-  });
-
-  it('edit mode has no single-char combos (enter/escape are both multi-char)', () => {
-    const entries = buildSlotKeymap(widgetTagSlot, true, slotHandlers);
-    expect(singleCharCombos(entries)).toEqual([]);
-  });
 });
 
 describe('buildSlotKeymap — aircraftTailNumberSlot (second-slot case, no falsePositiveState)', () => {
@@ -79,11 +69,6 @@ describe('buildSlotKeymap — aircraftTailNumberSlot (second-slot case, no false
       'arrowright',
     ]);
     expect(entries.some((e) => e.combo === 'f')).toBe(false);
-  });
-
-  it('single-char combos never include f for a slot with no falsePositiveState', () => {
-    const entries = buildSlotKeymap(aircraftTailNumberSlot, false, tailHandlers);
-    expect(singleCharCombos(entries).sort()).toEqual(['d', 'e']);
   });
 });
 
