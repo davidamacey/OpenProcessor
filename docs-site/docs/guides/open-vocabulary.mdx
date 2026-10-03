@@ -116,8 +116,8 @@ At ingest: set `run_on_ingest: true` in the active set. Newly created images
 are stamped `open_vocab_status: pending` and processed by a background task,
 never inside the ingest request. Whatever the task does not reach (segmenter
 down, restart) stays `pending`; a sweeper in the API (`OP_OPEN_VOCAB_SWEEP_S`,
-default every 120 s, 0 turns it off) takes `pending` images older than ten
-minutes while the active set has `run_on_ingest` on, or run the scope with
+default every 120 s, 0 turns it off) takes `pending` images older than
+`OP_OPEN_VOCAB_STALE_S` (default 240 s, floor 30) while the active set has `run_on_ingest` on, or run the scope with
 `{"filter": {"open_vocab_status": ["pending"]}}` yourself. The other states are
 `done`, `skipped_gate` (the gate spent no call) and `failed`.
 
