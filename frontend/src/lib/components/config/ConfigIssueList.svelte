@@ -23,7 +23,7 @@
 
 {#if issues.length > 0}
   <ul class="space-y-1" data-testid="config-issues">
-    {#each issues as i, idx (idx)}
+    {#each issues as i (i.id)}
       <li
         class="rounded border px-2 py-1 text-xs {TONE[i.severity] ?? TONE.info}"
         data-testid="config-issue"

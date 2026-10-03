@@ -218,6 +218,7 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
                 "errors": [
                     {
                         "code": "pack_placeholder_missing",
+                        "id": "pack_placeholder_missing",
                         "severity": "error",
                         "field": "class_user_template",
                         "message": "class_user_template must contain {class_names_csv}",
@@ -305,6 +306,7 @@ def test_activate_needs_force_only_when_the_server_allows_it(stub, page, app_url
                             "errors": [
                                 {
                                     "code": "pack_description_class_unknown",
+                                    "id": "pack_description_class_unknown",
                                     "severity": "error",
                                     "field": "class_descriptions.sprocket",
                                     "message": "sprocket is not a registry class",

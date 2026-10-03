@@ -148,6 +148,7 @@ describe('ConfigIssueList', () => {
           issue({ bypassable: true }),
           issue({
             code: 'pack_example_values',
+            id: 'pack_example_values',
             severity: 'info',
             field: null,
             message: 'Examples: A1',

@@ -29,13 +29,19 @@ describe('CombineIssueList', () => {
     render([
       {
         code: 'unmapped_class',
+        id: 'unmapped_class',
         severity: 'error',
         project: 'widgets-a',
         message: 'class gadget has no mapping',
         detail: { class: 'gadget', count: 2 },
       },
-      { code: 'label_conflicts', severity: 'warning', message: '1 boxes disagree' },
-      { code: 'slug_taken', detail: {} },
+      {
+        code: 'label_conflicts',
+        id: 'label_conflicts',
+        severity: 'warning',
+        message: '1 boxes disagree',
+      },
+      { code: 'slug_taken', id: 'slug_taken', detail: {} },
     ]);
     const items = [...target.querySelectorAll('[data-testid="combine-issue"]')];
     expect(items).toHaveLength(3);

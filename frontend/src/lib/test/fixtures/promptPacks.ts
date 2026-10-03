@@ -20,6 +20,7 @@ export const cleanReport = (): ValidationReport => ({
 export function issue(over: Partial<ValidationIssue> = {}): ValidationIssue {
   return {
     code: 'pack_placeholder_missing',
+    id: 'pack_placeholder_missing:class_user_template',
     severity: 'error',
     field: 'class_user_template',
     message: 'class_user_template must contain {class_names_csv}',

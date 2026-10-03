@@ -308,6 +308,7 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
                 "errors": [
                     {
                         "code": "profile_field_range",
+                        "id": "profile_field_range",
                         "severity": "error",
                         "field": "max_regions_per_item",
                         "message": "max_regions_per_item must be at most 64",
@@ -381,6 +382,7 @@ def test_check_for_activation_shows_the_for_activation_report(stub, page, app_ur
                 "errors": [
                     {
                         "code": "detector_model_not_ready",
+                        "id": "detector_model_not_ready",
                         "severity": "error",
                         "field": "detector_model",
                         "message": "tag_detector_v1 is not loaded",
@@ -426,6 +428,7 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
                             "errors": [
                                 {
                                     "code": "detector_model_not_ready",
+                                    "id": "detector_model_not_ready",
                                     "severity": "error",
                                     "field": "detector_model",
                                     "message": "tag_detector_v1 is not loaded",

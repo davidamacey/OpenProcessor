@@ -61,7 +61,7 @@ export interface CombineStartResponse {
 export interface CombineIssue {
   code: string;
   /** Unique within the response (`code[:project[:class]]`, `#2` on a repeat). */
-  id?: string;
+  id: string;
   severity?: 'error' | 'warning';
   project?: string | null;
   message?: string;
@@ -96,8 +96,10 @@ export interface CombinePreviewTarget {
   slug?: string;
   slug_available?: boolean;
   classes?: CombinePreviewTargetClass[];
-  images?: number | null;
-  items?: number | null;
+  /** After dedup; equals the finished target. */
+  projected_images?: number | null;
+  projected_items?: number | null;
+  unclassed_items?: number | null;
   holdout_images?: number | null;
 }
 

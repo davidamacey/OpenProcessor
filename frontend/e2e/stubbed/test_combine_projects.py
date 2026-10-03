@@ -61,6 +61,7 @@ def preview(sha: str = "sha-1", **over: Any) -> dict[str, Any]:
         "warnings": [
             {
                 "code": "label_conflicts",
+                "id": "label_conflicts",
                 "severity": "warning",
                 "project": None,
                 "message": "1 boxes disagree between sources; the first source wins",
@@ -68,12 +69,14 @@ def preview(sha: str = "sha-1", **over: Any) -> dict[str, Any]:
             },
             {
                 "code": "embedding_model_mismatch",
+                "id": "embedding_model_mismatch",
                 "severity": "warning",
                 "project": None,
                 "message": "widgets-a embeds with clip-b, widgets-b with pe-core",
             },
             {
                 "code": "region_profiles_differ",
+                "id": "region_profiles_differ",
                 "severity": "warning",
                 "project": None,
                 "message": "widgets-a uses tag_v1, widgets-b has no region profile",
@@ -106,8 +109,9 @@ def preview(sha: str = "sha-1", **over: Any) -> dict[str, Any]:
                 },
                 {"id": 1, "name": "gadget", "count": 2, "from": [{"project": "widgets-a", "class": "gadget"}]},
             ],
-            "images": 18,
-            "items": 15,
+            "projected_images": 18,
+            "projected_items": 15,
+            "unclassed_items": 2,
             "holdout_images": 1,
         },
         "dedup": {
@@ -237,6 +241,8 @@ def test_two_sources_preview_mapping_and_start(stub, page, app_url):
     ) as req_info:
         page.get_by_test_id("combine-start").click()
         expect(page.get_by_test_id("combine-confirm-body")).to_contain_text("18 images")
+        expect(page.get_by_test_id("combine-confirm-body")).to_contain_text("15 items")
+        expect(page.get_by_test_id("combine-confirm-body")).to_contain_text("2 unclassed")
         page.get_by_role("button", name="Start combine", exact=True).click()
     assert req_info.value.post_data_json["expected_preview_sha"] == "sha-1"
 

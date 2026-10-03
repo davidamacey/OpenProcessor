@@ -161,7 +161,7 @@
                     the prompt.
                   </p>
                 {/if}
-                {#each issuesForTargetField(report, i, r.field) as iss, k (k)}
+                {#each issuesForTargetField(report, i, r.field) as iss (iss.id)}
                   <p
                     class="text-xs {iss.severity === 'error'
                       ? 'text-red-300'

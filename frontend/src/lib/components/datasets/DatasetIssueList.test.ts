@@ -83,7 +83,7 @@ describe('DatasetIssueList', () => {
       count: 1,
       samples: [],
     };
-    render([unmapped, { ...unmapped, count: 2 }]);
+    render([unmapped, { ...unmapped, id: 'class_unmapped#2', count: 2 }]);
     expect(target.querySelectorAll('li[data-code="class_unmapped"]').length).toBe(2);
   });
 });

@@ -62,8 +62,9 @@ export function combinePreview(over: Partial<CombinePreview> = {}): CombinePrevi
           from: [{ project: 'widgets-a', class: 'gadget' }],
         },
       ],
-      images: 18,
-      items: 15,
+      projected_images: 18,
+      projected_items: 15,
+      unclassed_items: 2,
       holdout_images: 1,
     },
     dedup: {

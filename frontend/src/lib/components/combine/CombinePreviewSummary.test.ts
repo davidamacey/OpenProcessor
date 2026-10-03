@@ -42,6 +42,7 @@ describe('CombinePreviewSummary', () => {
     expect(t('combine-preview-target')).toContain('merged');
     expect(t('combine-preview-target')).toContain('18 images');
     expect(t('combine-preview-target')).toContain('15 items');
+    expect(t('combine-preview-target')).toContain('2 unclassed');
     expect(t('combine-preview-classes')).toContain('widget');
     expect(t('combine-preview-classes')).toContain(
       'from widgets-a/widget, widgets-b/widget',
@@ -60,9 +61,16 @@ describe('CombinePreviewSummary', () => {
     render(
       combinePreview({
         ok: false,
-        errors: [{ code: 'slug_taken', message: "'merged' cannot be used" }],
+        errors: [
+          { code: 'slug_taken', id: 'slug_taken', message: "'merged' cannot be used" },
+        ],
         warnings: [
-          { code: 'shard_budget_high', severity: 'warning', message: 'near the budget' },
+          {
+            code: 'shard_budget_high',
+            id: 'shard_budget_high',
+            severity: 'warning',
+            message: 'near the budget',
+          },
         ],
         target: { slug: 'merged', slug_available: false },
       }),
@@ -79,11 +87,13 @@ describe('CombinePreviewSummary', () => {
         warnings: [
           {
             code: 'embedding_model_mismatch',
+            id: 'embedding_model_mismatch',
             severity: 'warning',
             message: 'widgets-a embeds with clip-b, widgets-b with pe-core',
           },
           {
             code: 'region_profiles_differ',
+            id: 'region_profiles_differ',
             severity: 'warning',
             message: 'widgets-a uses tag_v1, widgets-b has no region profile',
           },
