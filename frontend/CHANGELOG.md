@@ -8,7 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-<!-- track-A open-vocab -->
+- Open-vocabulary sets (OpenProcessor v0.4.0, SAM 3): a `/settings/open-vocab`
+  list and editor for the sets that find things by describing them in words
+  (create, clone a template, edit targets, served validation under the cell it
+  names, save with conflict handling, revisions, activate, roll back, turn
+  off), a test panel that runs one unsaved target on a stored crop or an
+  upload and draws the hits (a dropped hit dimmed, its reason in the server's
+  words), the segmenter's configured/reachable state, and "Run on existing
+  images" re-runs (every image, or those whose pass is pending, skipped by the
+  gate or failed). Item details show the prompt, the set and revision, why the
+  region stage skipped it, the mask outline and a link to the other items from
+  the same set or prompt. The route and its `/settings` card are absent until
+  the backend serves them.
+- The region stage on `/ingest`: its state and worklog counts, confirm-gated
+  Pause and Resume, and "Re-run gate-skipped" with the request the server
+  built.
 
 <!-- track-B detector+embedding -->
 
@@ -18,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- A region route's 409 is recognised by its `no_active_profile` error code (the structured
+  `{detail: {error, message}}` body) instead of the old plain sentence.
 - Vendored OpenProcessor v0.4.0 (fce17771); item cards carry embedding and open-vocabulary fields; repeatable query parameters are sent as repeats.
 - Docs screenshots: the capture script gained import, multi-box review, box editor, region-profile test and Imported-tab states (read-only allow-list extended for `/region_profiles/test` and `/datasets/preview`); the matching docs slots now render real captures.
 
