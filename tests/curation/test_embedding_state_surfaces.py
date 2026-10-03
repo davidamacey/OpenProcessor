@@ -39,7 +39,11 @@ def test_stats_summary_splits_reasons_and_counts_unknown_legacy() -> None:
             'unknown': 3,
         },
     }
-    assert set(embedding_aggregations()) == {'embedding_states', 'embedded_items'}
+    assert set(embedding_aggregations()) == {
+        'embedding_states',
+        'embedded_items',
+        'legacy_embedded_items',
+    }
 
 
 @pytest.mark.asyncio
@@ -165,3 +169,15 @@ async def test_pipeline_snapshot_counts_items_waiting_for_a_vector() -> None:
     assert aggs['unembedded']['filter'] == {
         'bool': {'must_not': [{'exists': {'field': 'pe_embedding'}}]}
     }
+
+
+def test_legacy_items_with_a_vector_count_as_embedded_in_by_state() -> None:
+    aggs = {
+        'embedded_items': {'doc_count': 2740},
+        'legacy_embedded_items': {'doc_count': 2740},
+        'embedding_states': {'buckets': [{'key': '__none__', 'doc_count': 2740}]},
+    }
+    summary = embedding_summary(aggs, 2740)
+    assert summary['embedded'] == summary['by_state']['embedded'] == 2740
+    assert summary['by_state']['unknown'] == 0
+    assert sum(summary['by_state'].values()) == 2740

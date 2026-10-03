@@ -6922,7 +6922,7 @@
           },
           "unknown": {
             "default": 0,
-            "description": "Items written before embedding_state existed (no recorded state; not a value of the filter).",
+            "description": "Items written before embedding_state existed that have no vector (no recorded state; not a value of the filter). A legacy item with a vector counts as embedded.",
             "title": "Unknown",
             "type": "integer"
           }
