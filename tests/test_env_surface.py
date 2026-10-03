@@ -91,6 +91,7 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_SEGMENTER_IMAGE',
     'OP_TRAINER_IMAGE',
     'OP_BIND_ADDRESS',
+    'OP_UI_BIND_ADDRESS',
     # docker-compose.gpu-clustering.yml's own device pin (make cluster-gpu).
     'OP_CLUSTER_GPU_DEVICE',
     # Projects plan 2.3: the soft shard budget knob. Today its only reader is

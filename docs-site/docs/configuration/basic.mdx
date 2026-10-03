@@ -100,6 +100,7 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 | `SEGMENTER_PORT` | `4611` | Segmenter (segmenter profile) |
 | `VLM_PORT` | `4612` | In-compose VLM (vlm profile) |
 | `OP_BIND_ADDRESS` | `127.0.0.1` | Address every published port binds to. The API has no authentication, so set `0.0.0.0` (or a non-loopback address) only behind a reverse proxy that does; see [Security](../deployment/security.mdx) |
+| `OP_UI_BIND_ADDRESS` | value of `OP_BIND_ADDRESS` | Publish address for only Grafana, Prometheus, OpenSearch Dashboards and MLflow, so LAN browsers can follow the resource links without exposing OpenSearch, Triton, the VLM or segmenter APIs. Grafana's default login is `admin`/`admin` (set `GF_SECURITY_ADMIN_PASSWORD` first); MLflow and Prometheus have no auth |
 
 ## Stack isolation
 

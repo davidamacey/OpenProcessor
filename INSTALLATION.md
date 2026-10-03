@@ -124,6 +124,11 @@ everything on 127.0.0.1.**
 - A specific `--bind` address (for example `--bind 10.0.0.5`) also narrows
   Cropwright to that interface. `--bind 0.0.0.0` leaves Cropwright on all
   interfaces, and `--local-only` always wins.
+- `OP_UI_BIND_ADDRESS` (in `.env`, defaults to `OP_BIND_ADDRESS`) publishes only
+  Grafana, Prometheus, OpenSearch Dashboards and MLflow on another address, e.g.
+  `0.0.0.0`, so LAN browsers can follow resource links while the datastore and
+  model APIs stay local. Change `GF_SECURITY_ADMIN_PASSWORD` first; MLflow and
+  Prometheus have no auth.
 - A re-run keeps the Cropwright bind you chose last time.
 
 Details: [SECURITY.md](SECURITY.md).

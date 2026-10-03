@@ -639,7 +639,7 @@ services:
     volumes:
       - mlflow_data:/mlflow
     ports:
-      - "${OP_BIND_ADDRESS:-127.0.0.1}:${MLFLOW_PORT:-4609}:5000"
+      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${MLFLOW_PORT:-4609}:5000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\" || exit 1"]
       interval: 30s
@@ -791,7 +791,7 @@ services:
     profiles:
       - monitoring
     ports:
-      - "${OP_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
+      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alerts:/etc/prometheus/alerts
@@ -814,7 +814,7 @@ services:
     profiles:
       - monitoring
     ports:
-      - "${OP_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-4605}:3000"  # Grafana
+      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${GRAFANA_PORT:-4605}:3000"  # Grafana
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
@@ -823,7 +823,7 @@ services:
       - ./monitoring/dashboards:/etc/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       # Enable unified alerting (Grafana 8+)
       - GF_UNIFIED_ALERTING_ENABLED=true
@@ -918,7 +918,7 @@ services:
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true  # Must match OpenSearch security setting
     ports:
-      - "${OP_BIND_ADDRESS:-127.0.0.1}:${OPENSEARCH_DASHBOARDS_PORT:-4608}:5601"  # OpenSearch Dashboards
+      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${OPENSEARCH_DASHBOARDS_PORT:-4608}:5601"  # OpenSearch Dashboards
     volumes:
       - opensearch_dashboards_data:/usr/share/opensearch-dashboards/data
     healthcheck:

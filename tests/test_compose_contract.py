@@ -593,7 +593,7 @@ def test_every_published_port_uses_op_bind_address() -> None:
             if isinstance(entry, dict):
                 continue
             text = str(entry)
-            if not text.startswith('${OP_BIND_ADDRESS'):
+            if not text.startswith(('${OP_BIND_ADDRESS', '${OP_UI_BIND_ADDRESS')):
                 bad.append(f'{name}: {text!r}')
     assert not bad, 'published ports missing ${OP_BIND_ADDRESS prefix:\n' + '\n'.join(bad)
 
@@ -836,7 +836,7 @@ _DOCKERFILE_ENV_VAR_RE = re.compile(r'^\s*([A-Z0-9_]+)=', re.MULTILINE)
 # short syntax), which is never the F-75 host-port-var-reused-as-container-ENV
 # case this check guards against -- exclude it explicitly rather than
 # reworking the leading-anchor match for a 3-segment string.
-_NON_HOST_PORT_VARS = frozenset({'OP_BIND_ADDRESS'})
+_NON_HOST_PORT_VARS = frozenset({'OP_BIND_ADDRESS', 'OP_UI_BIND_ADDRESS'})
 
 
 def _host_port_vars(spec: dict[str, Any]) -> set[str]:
