@@ -1,6 +1,6 @@
 # Triton pipeline optimization plan: crop at model size, decode once, stay on the GPU
 
-Status: plan only (nothing implemented). Issue: #40. This is the single
+Status: plan; Wave 0 tooling implemented (`select_baseline_set.py`, `run_baseline.py`, per-stage timers; see section 5.3 status note); baseline numbers not yet recorded, waves 1 onward not started. Issue: #40. This is the single
 consolidated plan; it replaces the earlier private design notes. A fresh agent
 with no memory should be able to implement it from this file alone.
 
@@ -294,6 +294,21 @@ vectors), items per image, and the crop-cache hit/miss counts
 | `scripts/bench/worker_stage_probe.py` | new | Scrape the worker's Prometheus metrics (segmenter, VLM, region stage durations; `OP_SEGMENTER_REQUEST_*` histograms exist) before and after the worker drains; record crops/s |
 | `scripts/bench/parity_capture.py`, `parity_compare.py` | new | Capture current outputs for the parity subsets (item docs without ids/timestamps, boxes, vectors keyed by `(sha256, box index)`, VLM labels, segmenter candidates), then compare against the gates of section 7 and exit non-zero on failure. `parity_compare` is the one piece that must be right: unit-test it on synthetic boxes, vectors and strings |
 | `tests/test_bench_*.py` | new | Tests for the above pure logic |
+
+Wave 0 implementation status: the manifest tool and the run harness are
+`scripts/bench/select_baseline_set.py` (`local` and `coco` modes, checksummed
+manifest, license sidecar) and `scripts/bench/run_baseline.py` (one command per
+set, `--compare` for deltas), with the shared logic in
+`scripts/bench/baseline_report.py`. They replace the proposed `bench_sets.py`,
+`run_ingest_benchmark.py` and `worker_stage_probe.py` (worker and Triton
+metrics are scraped by the harness). The per-stage timer is
+`src/utils/stage_timing.py` (`op_pipeline_stage_seconds`,
+`op_pipeline_stage_bytes_total`; stages decode, crop, jpeg_encode, resize,
+embed, opensearch_write). Host-to-device is derived from Triton's
+`compute_input` counters, not timed in process. Still open: the in-process
+`ingest_stage_timer.py`, `triton_stats_delta.py` (the harness reads Triton's
+Prometheus counters instead), `parity_capture.py` / `parity_compare.py`,
+perf_analyzer points, checks C1-C7, and the recorded baseline tables.
 
 Perf_analyzer points (from the Triton SDK image, `--network host`, gRPC,
 `--measurement-interval 5000 --stability-percentage 10`) for each TensorRT model

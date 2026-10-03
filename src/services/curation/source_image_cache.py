@@ -32,6 +32,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from src.utils.stage_timing import add_stage_bytes, stage_timer
+
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -156,8 +158,10 @@ def write_crop_cache(
         # Atomic write: tmp + rename so a partial write is never visible
         # to a concurrent reader.
         tmp = cache_root / f'{crop_id}.jpg.tmp.{os.getpid()}'
-        crop.save(tmp, format='JPEG', quality=quality)
+        with stage_timer('jpeg_encode'):
+            crop.save(tmp, format='JPEG', quality=quality)
         tmp.replace(out)
+        add_stage_bytes('jpeg_encode', out.stat().st_size)
     except Exception as exc:
         logger.warning('write_crop_cache failed for crop_id=%s: %s', crop_id, exc)
 
