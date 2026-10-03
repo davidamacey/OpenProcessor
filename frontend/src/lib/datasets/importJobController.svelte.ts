@@ -27,21 +27,6 @@ import type {
   NextStep,
 } from '$lib/types_import';
 
-/**
- * Which action each served status offers — a reading of W10.11 (resume:
- * "interrupted / failed / cancelled") and W10.12 (undo: not while
- * running). Plan §8 question 8 asks for served `actions` flags instead.
- */
-const CANCELLABLE = new Set(['queued', 'running', 'paused_backpressure']);
-const RESUMABLE = new Set(['interrupted', 'failed', 'cancelled']);
-const UNDOABLE = new Set([
-  'completed',
-  'completed_with_errors',
-  'failed',
-  'cancelled',
-  'interrupted',
-]);
-
 export const PAGE_SIZE = 20;
 
 export interface JobDeps {
@@ -105,14 +90,30 @@ export class ImportJob {
     return this.job?.status ?? null;
   }
 
+  /** Availability of each action is the served `actions`, never the status. */
   get canCancel(): boolean {
-    return this.status != null && CANCELLABLE.has(this.status);
+    return this.job?.actions?.can_cancel.allowed === true;
   }
   get canResume(): boolean {
-    return this.status != null && RESUMABLE.has(this.status);
+    return this.job?.actions?.can_resume.allowed === true;
   }
   get canUndo(): boolean {
-    return this.status != null && UNDOABLE.has(this.status);
+    return this.job?.actions?.can_undo.allowed === true;
+  }
+
+  /** `[button name, served reason]` for each action not allowed that
+   *  serves a reason. */
+  get refusalReasons(): [string, string][] {
+    const a = this.job?.actions;
+    if (!a) return [];
+    const rows: [string, { allowed: boolean; reason?: string | null }][] = [
+      ['Cancel import', a.can_cancel],
+      ['Resume', a.can_resume],
+      ['Undo import', a.can_undo],
+    ];
+    return rows.flatMap(([name, x]) =>
+      !x.allowed && x.reason ? [[name, x.reason]] : [],
+    );
   }
 
   /** The served label for the current status. */

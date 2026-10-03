@@ -274,7 +274,29 @@ def job(**over: Any) -> dict[str, Any]:
         "error": None,
     }
     base.update(over)
+    base.setdefault("actions", actions_for(base["status"]))
     return base
+
+
+def actions_for(status: str) -> dict[str, Any]:
+    """The served `actions` the stub backend computes for a status."""
+
+    def act(allowed: bool, why: str) -> dict[str, Any]:
+        return {"allowed": allowed, "reason": None if allowed else why}
+
+    return {
+        "can_cancel": act(
+            status in {"queued", "running", "paused_backpressure"}, "The import is not running."
+        ),
+        "can_resume": act(
+            status in {"interrupted", "failed", "cancelled"}, "Only a stopped import can resume."
+        ),
+        "can_undo": act(
+            status
+            in {"completed", "completed_with_errors", "failed", "cancelled", "interrupted"},
+            "The import is still running.",
+        ),
+    }
 
 
 def completed_job() -> dict[str, Any]:
@@ -423,6 +445,9 @@ def test_failed_job_shows_its_served_error(stub, page, app_url):
     )
     expect(page.get_by_role("button", name="Resume")).to_be_visible()
     expect(page.get_by_role("button", name="Cancel import")).to_have_count(0)
+    expect(page.get_by_test_id("job-action-reasons")).to_contain_text(
+        "Cancel import: The import is not running."
+    )
 
 
 def serve_cluster(stub: Any) -> None:
