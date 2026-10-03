@@ -113,6 +113,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shown, until `GET /projects/{target}` reports `active`; a 409 still shows
   the served message and leaves the button usable for a retry.
 
+### Removed
+
+- The three manual live-backend runbooks `scripts/playwright_smoke.py`, `scripts/playwright_round_trip.py` and `scripts/playwright_backend_integration.py` (about 1,400 lines, run by nothing) and their public-export exclude entries. They targeted the pre-projects unscoped API and a private virtualenv; the stubbed e2e suite and the project-aware live tier (`e2e/live/`) replace them, and a newer runbook can be written against the current API when needed.
+
 ### Documentation
 
 - **Docs screenshots captured from public COCO sample data.** Every screenshot
