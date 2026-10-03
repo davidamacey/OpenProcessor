@@ -629,7 +629,7 @@
         onclick={() => void runExport()}
         disabled={exportRunning || nothingExportable}
         title={nothingExportable
-          ? 'Nothing to export yet — every class is at 0 validated crops or the served block adequacy tier.'
+          ? 'Nothing to export yet — no class has a validated crop.'
           : undefined}
       >
         {exportRunning

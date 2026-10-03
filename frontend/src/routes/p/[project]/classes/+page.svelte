@@ -298,13 +298,14 @@
       toastStore.error('Source and target must differ.');
       return;
     }
+    if (mergePreview == null) return;
     if (mergePreview?.blocked) {
       toastStore.error('Merge is blocked — resolve the holdout conflict first.');
       return;
     }
     const ok = window.confirm(
       `Merge "${mergeSource?.name}" into "${mergeTarget?.name}"? This relabels ` +
-        `${mergePreview?.would_relabel ?? mergeSource?.validated_count ?? 0} crops and marks the ` +
+        `${mergePreview.would_relabel} crops and marks the ` +
         'source deprecated. The action is recorded in the registry but cannot be undone from the UI.',
     );
     if (!ok) return;
@@ -1059,6 +1060,7 @@
             mergeSourceId == null ||
             mergeTargetId == null ||
             mergePreviewBusy ||
+            mergePreview == null ||
             mergePreview?.blocked}
         >
           {busy ? 'Merging…' : 'Merge'}
