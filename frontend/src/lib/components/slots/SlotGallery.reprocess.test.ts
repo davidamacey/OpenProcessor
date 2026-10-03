@@ -95,7 +95,7 @@ describe('SlotGallery image Reprocess', () => {
     open.click();
     flushSync();
     const box = [...document.querySelectorAll('fieldset label')]
-      .find((l) => l.textContent?.includes('Detect'))
+      .find((l) => l.textContent?.includes('detect'))
       ?.querySelector('input') as HTMLInputElement;
     box.checked = true;
     box.dispatchEvent(new Event('change', { bubbles: true }));
