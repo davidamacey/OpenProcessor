@@ -23,6 +23,10 @@ export interface IngestFileResult {
   n_crops?: number | null;
   /** d72cc63: the served secondary-detector failure on an ingested file. */
   secondary_detector_error?: string | null;
+  /** v0.4.0: the served embedding counts for an ingested file. */
+  n_embedded?: number | null;
+  n_not_embedded?: number | null;
+  n_embed_failed?: number | null;
 }
 
 export interface IngestResults {
@@ -33,6 +37,8 @@ export interface IngestResults {
   countOf(kind: IngestResultKind): number;
   /** Count of `'failed'` entries matching `errorKind` (`'unknown'` for null/absent). */
   countOfErrorKind(errorKind: string): number;
+  /** Ingested files with at least one detection left without a vector. */
+  countNotEmbedded(): number;
   failures(): [string, IngestFileResult][];
   /** `not_sent` counts as retryable too — both are what "Retry failed" resends. */
   retryable(): [string, IngestFileResult][];
@@ -43,6 +49,7 @@ export interface IngestResults {
     offset: number,
     limit: number,
     errorKind?: string,
+    notEmbeddedOnly?: boolean,
   ): [string, IngestFileResult][];
   /** BA-7: `failed` counts grouped by `error_kind` (`'unknown'` for a
    *  null/absent kind), descending by count — drives the Failed tab's
@@ -99,14 +106,21 @@ export function createIngestResults(): IngestResults {
       }
       return n;
     },
+    countNotEmbedded() {
+      let n = 0;
+      for (const r of map.values()) if ((r.n_not_embedded ?? 0) > 0) n++;
+      return n;
+    },
     failures() {
       return entriesByKind('failed');
     },
     retryable() {
       return [...entriesByKind('failed'), ...entriesByKind('not_sent')];
     },
-    page(kind, offset, limit, errorKind) {
-      const entries = entriesByKind(kind);
+    page(kind, offset, limit, errorKind, notEmbeddedOnly) {
+      const entries = entriesByKind(kind).filter(
+        ([, r]) => !notEmbeddedOnly || (r.n_not_embedded ?? 0) > 0,
+      );
       const filtered =
         errorKind === undefined
           ? entries

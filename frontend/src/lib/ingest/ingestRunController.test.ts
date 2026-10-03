@@ -649,3 +649,39 @@ describe('createIngestRun — retry failed', () => {
     expect(run.results.get('b.jpg')?.kind).toBe('ingested');
   });
 });
+
+describe('createIngestRun - embedding counts (v0.4.0)', () => {
+  it('sums the served embedding counts and keeps them per file', async () => {
+    const upload = vi.fn(async (req: IngestUploadRequest) => {
+      const res = successResponse(req.identifiers);
+      res.summary = {
+        ...res.summary,
+        n_embedded: 3,
+        n_not_embedded: 2,
+        n_embed_failed: 1,
+        n_filtered: 4,
+      };
+      res.results[0] = {
+        ...res.results[0]!,
+        n_embedded: 3,
+        n_not_embedded: 2,
+        n_embed_failed: 1,
+        n_filtered: 4,
+      };
+      return res;
+    });
+    const run = createIngestRun(baseDeps({ upload }));
+    await run.start([mkFile('a.jpg')], {
+      source: 'src',
+      identifierPrefix: '',
+      skipLookup: true,
+    });
+    expect(run.totals.n_embedded).toBe(3);
+    expect(run.totals.n_not_embedded).toBe(2);
+    expect(run.totals.n_embed_failed).toBe(1);
+    expect(run.totals.n_filtered).toBe(4);
+    const r = run.results.get('a.jpg')!;
+    expect([r.n_embedded, r.n_not_embedded, r.n_embed_failed]).toEqual([3, 2, 1]);
+    expect(run.results.countNotEmbedded()).toBe(1);
+  });
+});

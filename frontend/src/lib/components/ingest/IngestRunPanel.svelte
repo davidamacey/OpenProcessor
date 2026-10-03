@@ -38,6 +38,7 @@
   // BA-7: the Failed tab's error_kind filter chip. `null` = no filter
   // (every failed result shows). Only meaningful on the 'failed' tab.
   let errorKindFilter = $state<string | null>(null);
+  let notEmbeddedOnly = $state(false);
   const PAGE_SIZE = 100;
   let pageOffset = $state<Record<IngestResultKind, number>>({
     ingested: 0,
@@ -250,6 +251,12 @@
       <span class="chip">duplicate {run.totals.duplicates}</span>
       <span class="chip">failed {run.totals.failed}</span>
       <span class="chip">crops indexed {run.totals.crops_indexed}</span>
+      <span class="chip" data-testid="ingest-embedding-totals"
+        >embedded {run.totals.n_embedded} · not embedded {run.totals
+          .n_not_embedded}{#if run.totals.n_embed_failed > 0}
+          · encoder failed {run.totals.n_embed_failed}{/if}{#if run.totals.n_filtered > 0}
+          · filtered out {run.totals.n_filtered}{/if}</span
+      >
       {#if run.totals.secondary_detector_failures > 0}
         <span
           class="chip border-amber-700 text-amber-200"
@@ -304,8 +311,22 @@
         </div>
       {/if}
 
+      {#if activeTab === 'ingested' && run.results.countNotEmbedded() > 0}
+        <div class="flex gap-1 border-b border-zinc-800 py-2 text-xs">
+          <button
+            class="chip border-amber-700 text-amber-200 {notEmbeddedOnly
+              ? 'bg-amber-950'
+              : ''}"
+            type="button"
+            data-testid="ingest-not-embedded-chip"
+            onclick={() => (notEmbeddedOnly = !notEmbeddedOnly)}
+          >
+            not embedded ({run.results.countNotEmbedded()})
+          </button>
+        </div>
+      {/if}
       <ul class="max-h-64 overflow-y-auto text-xs">
-        {#each run.results.page(activeTab, pageOffset[activeTab], PAGE_SIZE, activeTab === 'failed' ? (errorKindFilter ?? undefined) : undefined) as [id, r] (id)}
+        {#each run.results.page(activeTab, pageOffset[activeTab], PAGE_SIZE, activeTab === 'failed' ? (errorKindFilter ?? undefined) : undefined, activeTab === 'ingested' && notEmbeddedOnly) as [id, r] (id)}
           <li class="border-b border-zinc-900 py-1 font-mono">
             {r.identifier}
             {#if r.error_kind}
@@ -313,6 +334,13 @@
             {/if}
             {#if r.error}
               <span class="text-red-300"> — {r.error}</span>
+            {/if}
+            {#if r.n_embedded != null || r.n_not_embedded}
+              <span class="text-zinc-500">
+                — embedded {r.n_embedded ?? 0} / not embedded {r.n_not_embedded ??
+                  0}{#if r.n_embed_failed}
+                  ({r.n_embed_failed} encoder failed){/if}</span
+              >
             {/if}
             {#if r.secondary_detector_error}
               <span class="text-amber-300">

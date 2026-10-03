@@ -43,6 +43,9 @@
   const failedResults = $derived(
     result ? result.results.filter((r) => r.status === 'failed') : [],
   );
+  const notEmbedded = $derived(
+    result ? result.results.filter((r) => r.n_not_embedded > 0) : [],
+  );
   const secondaryFailures = $derived(
     result ? result.results.filter((r) => r.secondary_detector_error) : [],
   );
@@ -142,6 +145,13 @@
       <span class="chip">duplicate {result.summary.duplicates}</span>
       <span class="chip">failed {result.summary.failed}</span>
       <span class="chip">crops indexed {result.summary.crops_indexed}</span>
+      <span class="chip" data-testid="batch-embedding-totals"
+        >embedded {result.summary.n_embedded} · not embedded {result.summary
+          .n_not_embedded}{#if result.summary.n_embed_failed > 0}
+          · encoder failed {result.summary
+            .n_embed_failed}{/if}{#if result.summary.n_filtered > 0}
+          · filtered out {result.summary.n_filtered}{/if}</span
+      >
       {#if (result.summary.secondary_detector_failures ?? 0) > 0}
         <span
           class="chip border-amber-700 text-amber-200"
@@ -150,6 +160,20 @@
         >
       {/if}
     </div>
+
+    {#if notEmbedded.length > 0}
+      <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-not-embedded-list">
+        {#each notEmbedded as r (r.image_path)}
+          <li class="border-b border-zinc-900 py-1 font-mono">
+            {r.image_path}
+            <span class="text-amber-300">
+              — embedded {r.n_embedded} / not embedded {r.n_not_embedded}{#if r.n_embed_failed > 0}
+                ({r.n_embed_failed} encoder failed){/if}</span
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
 
     {#if secondaryFailures.length > 0}
       <!-- d72cc63: these images ingested with primary-detector crops only. -->

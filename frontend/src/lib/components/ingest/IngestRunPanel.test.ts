@@ -230,4 +230,66 @@ describe('IngestRunPanel', () => {
       'secondary detector: DEADLINE_EXCEEDED after 30s',
     );
   });
+
+  it('shows the served embedding totals and the not-embedded files', async () => {
+    vi.mocked(ingestPathLookup).mockResolvedValue({ known_paths: {} });
+    vi.mocked(ingestUpload).mockResolvedValue({
+      status: 'success',
+      summary: {
+        successful: 1,
+        duplicates: 0,
+        failed: 0,
+        crops_indexed: 5,
+        n_embedded: 3,
+        n_not_embedded: 2,
+        n_embed_failed: 1,
+        n_filtered: 4,
+      },
+      results: [
+        {
+          status: 'success',
+          image_id: 'img-1',
+          image_path: 'upload/a.jpg',
+          imohash: 'h',
+          n_crops: 5,
+          n_regions: 0,
+          n_embedded: 3,
+          n_not_embedded: 2,
+          n_embed_failed: 1,
+          n_filtered: 4,
+          error: null,
+          error_kind: null,
+          source_identifier: 'upload/a.jpg',
+        },
+      ],
+    });
+    instance = mount(IngestRunPanel, {
+      target,
+      props: {
+        files: [mkFile('a.jpg')],
+        config: resolveIngestConfig(servedIngestConfig()),
+      },
+    });
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Start')
+      ?.click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(
+        target.querySelector('[data-testid="ingest-embedding-totals"]'),
+      ).not.toBeNull();
+    });
+    const totals = target.querySelector(
+      '[data-testid="ingest-embedding-totals"]',
+    )!.textContent!;
+    expect(totals).toContain('embedded 3');
+    expect(totals).toContain('not embedded 2');
+    expect(totals).toContain('encoder failed 1');
+    expect(totals).toContain('filtered out 4');
+    expect(
+      target.querySelector('[data-testid="ingest-not-embedded-chip"]'),
+    ).not.toBeNull();
+    expect(target.textContent).toContain('embedded 3 / not embedded 2');
+  });
 });

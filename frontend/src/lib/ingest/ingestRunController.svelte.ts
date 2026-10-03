@@ -53,6 +53,11 @@ export interface IngestTotals {
   crops_indexed: number;
   /** d72cc63: sum of the served `summary.secondary_detector_failures`. */
   secondary_detector_failures: number;
+  /** v0.4.0: sums of the served per-image embedding counts. */
+  n_embedded: number;
+  n_not_embedded: number;
+  n_embed_failed: number;
+  n_filtered: number;
 }
 
 export interface IngestRunStartOpts {
@@ -101,6 +106,10 @@ function emptyTotals(): IngestTotals {
     failed: 0,
     crops_indexed: 0,
     secondary_detector_failures: 0,
+    n_embedded: 0,
+    n_not_embedded: 0,
+    n_embed_failed: 0,
+    n_filtered: 0,
   };
 }
 
@@ -219,6 +228,10 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
     // signal a result genuinely didn't come back at all.
     const canFallBackToRequestOrder = res.results.length === chunk.length;
     totals.secondary_detector_failures += res.summary?.secondary_detector_failures ?? 0;
+    totals.n_embedded += res.summary?.n_embedded ?? 0;
+    totals.n_not_embedded += res.summary?.n_not_embedded ?? 0;
+    totals.n_embed_failed += res.summary?.n_embed_failed ?? 0;
+    totals.n_filtered += res.summary?.n_filtered ?? 0;
     for (let i = 0; i < chunk.length; i++) {
       const f = chunk[i]!;
       const id = identifierFor(f);
@@ -246,6 +259,9 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
           image_id: r.image_id,
           n_crops: r.n_crops,
           secondary_detector_error: r.secondary_detector_error ?? null,
+          n_embedded: r.n_embedded,
+          n_not_embedded: r.n_not_embedded,
+          n_embed_failed: r.n_embed_failed,
         });
         totals.successful++;
         totals.crops_indexed += r.n_crops;
