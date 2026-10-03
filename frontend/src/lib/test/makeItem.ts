@@ -90,6 +90,16 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   combine_conflict: true,
   combine_conflict_origins: ['widgets_a', 'widgets_b'],
   combine_merged_origins: ['widgets_c'],
+  embedding_state: 'deferred',
+  source_prompt: 'red widget',
+  open_vocab_set: 'widget_set',
+  open_vocab_revision: 4,
+  mask_polygon: [
+    [0.1, 0.2],
+    [0.3, 0.2],
+    [0.2, 0.4],
+  ],
+  region_gate_skip: 'tier3_hit_rate',
 };
 
 // Runtime cross-check that DEFAULT_ITEM's own keys match RAW_CROP_KEYS

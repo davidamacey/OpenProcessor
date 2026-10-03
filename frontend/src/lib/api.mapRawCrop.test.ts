@@ -232,4 +232,47 @@ describe('mapRawCrop full field mapping', () => {
       expect(crop.combine_merged_origins).toEqual([]);
     });
   });
+
+  describe('v0.4.0 embedding and open-vocabulary fields', () => {
+    it('maps all six verbatim when served', () => {
+      const raw = makeItem();
+      const crop = mapRawCrop(raw);
+      expect(crop.embedding_state).toBe('deferred');
+      expect(crop.source_prompt).toBe('red widget');
+      expect(crop.open_vocab_set).toBe('widget_set');
+      expect(crop.open_vocab_revision).toBe(4);
+      expect(crop.mask_polygon).toEqual([
+        [0.1, 0.2],
+        [0.3, 0.2],
+        [0.2, 0.4],
+      ]);
+      expect(crop.region_gate_skip).toBe('tier3_hit_rate');
+    });
+
+    it('keeps a served revision of 0 (not a falsy default)', () => {
+      expect(mapRawCrop(makeItem({ open_vocab_revision: 0 })).open_vocab_revision).toBe(
+        0,
+      );
+    });
+
+    it('maps every missing key to null', () => {
+      const {
+        embedding_state: _a,
+        source_prompt: _b,
+        open_vocab_set: _c,
+        open_vocab_revision: _d,
+        mask_polygon: _e,
+        region_gate_skip: _f,
+        ...raw
+      } = makeItem();
+      void [_a, _b, _c, _d, _e, _f];
+      const crop = mapRawCrop(raw);
+      expect(crop.embedding_state).toBeNull();
+      expect(crop.source_prompt).toBeNull();
+      expect(crop.open_vocab_set).toBeNull();
+      expect(crop.open_vocab_revision).toBeNull();
+      expect(crop.mask_polygon).toBeNull();
+      expect(crop.region_gate_skip).toBeNull();
+    });
+  });
 });

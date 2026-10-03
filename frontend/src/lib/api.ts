@@ -22,6 +22,7 @@ import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
 import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
 import type { RegionBoxInput } from './annotations/multiBox';
+import type { EmbeddingState } from '$lib/types_itemFilter';
 import {
   isNoRegionProfileDetail,
   notifyRegionProfileUnavailable,
@@ -1734,6 +1735,13 @@ export interface DatasetStats {
     noise_count: number;
     method: string | null;
   };
+  /** v0.4.0: items with and without a vector, and the served per-state
+   *  breakdown (legacy items report under `unknown`). Untyped on the wire. */
+  embedding: {
+    embedded: number;
+    not_embedded: number;
+    by_state: Record<string, number>;
+  };
 }
 
 export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
@@ -2131,6 +2139,14 @@ export type RawCrop = {
   combine_conflict?: boolean;
   combine_conflict_origins?: string[];
   combine_merged_origins?: string[];
+  // v0.4.0 embedding state and open-vocabulary provenance (contract
+  // fce17771 `ItemDoc`); a missing key maps to null.
+  embedding_state?: EmbeddingState | null;
+  source_prompt?: string | null;
+  open_vocab_set?: string | null;
+  open_vocab_revision?: number | null;
+  mask_polygon?: number[][] | null;
+  region_gate_skip?: string | null;
 };
 
 /**
@@ -2211,6 +2227,12 @@ export const RAW_CROP_KEYS = [
   'combine_conflict',
   'combine_conflict_origins',
   'combine_merged_origins',
+  'embedding_state',
+  'source_prompt',
+  'open_vocab_set',
+  'open_vocab_revision',
+  'mask_polygon',
+  'region_gate_skip',
 ] as const satisfies readonly (keyof RawCrop)[];
 // Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
 type _RawCropKeysExhaustive =
@@ -2318,6 +2340,12 @@ export function mapRawCrop(c: RawCrop): Crop {
     combine_conflict: !!c.combine_conflict,
     combine_conflict_origins: asStringArray(c.combine_conflict_origins),
     combine_merged_origins: asStringArray(c.combine_merged_origins),
+    embedding_state: c.embedding_state ?? null,
+    source_prompt: c.source_prompt ?? null,
+    open_vocab_set: c.open_vocab_set ?? null,
+    open_vocab_revision: c.open_vocab_revision ?? null,
+    mask_polygon: c.mask_polygon ?? null,
+    region_gate_skip: c.region_gate_skip ?? null,
     slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
@@ -2451,13 +2479,20 @@ export async function getCrops(
   filter: CropFilter = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<Crop>> {
-  type Raw = { total: number; page: number; page_size: number; crops: RawCrop[] };
+  type Raw = {
+    total: number;
+    page: number;
+    page_size: number;
+    crops: RawCrop[];
+    n_unembedded?: number | null;
+  };
   const raw = await apiFetch<Raw>(`${scoped()}/crops${qs({ ...filter })}`, {}, signal);
   return {
     items: raw.crops.map(mapRawCrop),
     total: raw.total,
     page: raw.page,
     page_size: raw.page_size,
+    n_unembedded: raw.n_unembedded ?? null,
   };
 }
 
@@ -3913,6 +3948,7 @@ export async function searchCrops(
     page: number;
     page_size: number;
     items: RawSearchItem[];
+    unembedded_in_scope?: number | null;
   };
   const raw = await apiFetch<RawPage>(
     `${scoped()}/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
@@ -3933,6 +3969,7 @@ export async function searchCrops(
     total: raw.total ?? items.length,
     page: raw.page ?? page,
     page_size: raw.page_size ?? pageSize,
+    unembedded_in_scope: raw.unembedded_in_scope ?? null,
   };
 }
 

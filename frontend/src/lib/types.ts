@@ -9,7 +9,7 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 import type { ModelClassMappingSummary } from './types_models';
-import type { ItemFilterQuery } from '$lib/types_itemFilter';
+import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
  *  (curation_api_contract.md "class_source values"): `human*`, the fixed
@@ -556,6 +556,17 @@ export interface Crop {
   combine_conflict?: boolean;
   combine_conflict_origins?: string[];
   combine_merged_origins?: string[];
+  /** v0.4.0: whether the item has a vector; `null` on an item written
+   *  before the field existed. */
+  embedding_state?: EmbeddingState | null;
+  /** v0.4.0 open vocabulary: the prompt, set and set revision that found
+   *  this item, its image-normalised mask outline, and why the region
+   *  gate skipped it. `null` when not served. */
+  source_prompt?: string | null;
+  open_vocab_set?: string | null;
+  open_vocab_revision?: number | null;
+  mask_polygon?: number[][] | null;
+  region_gate_skip?: string | null;
   updated_at: string;
 }
 
@@ -873,6 +884,12 @@ export interface PaginatedResponse<T> {
    *  real `pure_min`/`mixed_min` (0.85/0.6). Absent on every other
    *  endpoint. */
   purity_thresholds?: { pure_min: number; mixed_min: number } | null;
+  /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
+   *  when the route did not compute it). Absent on every other endpoint. */
+  n_unembedded?: number | null;
+  /** v0.4.0 `GET {API_PREFIX}/search/text`: items in the search scope a
+   *  semantic search cannot reach because they have no vector. */
+  unembedded_in_scope?: number | null;
 }
 
 /**
