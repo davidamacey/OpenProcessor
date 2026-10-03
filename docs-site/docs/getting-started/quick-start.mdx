@@ -146,15 +146,15 @@ docker compose up -d --force-recreate yolo-api
 
 # 3. Create a project, then its classes (the registry starts empty)
 API=http://localhost:4603
-P=coco-vehicles
+P=coco-sample
 curl -s -X POST "$API/curation/projects" \
   -H 'content-type: application/json' \
-  -d "{\"slug\": \"$P\", \"display_name\": \"COCO vehicles\"}"
-for name in car truck bus motorcycle bicycle; do
-  curl -s -X POST "$API/curation/projects/$P/classes" \
-    -H 'content-type: application/json' \
-    -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
-done
+  -d "{\"slug\": \"$P\", \"display_name\": \"COCO sample\"}"
+# Seed the classes from the detector's own labels (dry run is the default;
+# "dry_run": false writes). Or create your own with POST .../classes.
+curl -s -X POST "$API/curation/projects/$P/classes/seed_from_detector" \
+  -H 'content-type: application/json' \
+  -d '{"dry_run": false}'
 
 # 4. Ingest into the project. --root is a container path under the
 #    /data/source mount

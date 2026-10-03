@@ -33,6 +33,8 @@ from src.routers.curation._common import (
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
     IngestBatchConfig,
     IngestConfigResponse,
+    IngestDetectorInfo,
+    IngestDetectorLabel,
     IngestImageRequest,
     IngestImageResponse,
     IngestRegionDrainConfig,
@@ -49,6 +51,7 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
+from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
@@ -310,6 +313,23 @@ async def ingest_status(
     )
 
 
+def _detector_info(profile: DetectionProfile) -> IngestDetectorInfo | None:
+    """Read-only description of the ingest detector; ``None`` when unconfigured."""
+    if not profile.detector_model:
+        return None
+    labels = detector_labels(profile)
+    return IngestDetectorInfo(
+        model=profile.detector_model,
+        version=profile.detector_version,
+        input_size=profile.input_size,
+        assigns_class=profile.assigns_class,
+        class_ids_filter=sorted(profile.class_ids) or None,
+        confidence_floor_applies=profile.assigns_class,
+        n_labels=len(labels),
+        labels=[IngestDetectorLabel(class_id=x.class_id, name=x.name, slug=x.slug) for x in labels],
+    )
+
+
 @router.get('/ingest/config', response_model=IngestConfigResponse)
 async def ingest_config() -> IngestConfigResponse:
     """Typed ingest capability + limits.
@@ -330,6 +350,10 @@ async def ingest_config() -> IngestConfigResponse:
     )
 
     cfg = get_curation_config()
+    try:
+        detector = _detector_info(_get_detection_profile())
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     return IngestConfigResponse(
         upload=IngestUploadConfig(
             max_images_per_request=cfg.upload_max_images_per_request,
@@ -345,6 +369,7 @@ async def ingest_config() -> IngestConfigResponse:
             poll_interval_s=region_drain_poll_interval_s(),
             stable_polls=region_drain_stable_polls(),
         ),
+        detector=detector,
     )
 
 

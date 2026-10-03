@@ -6952,6 +6952,16 @@
           "batch": {
             "$ref": "#/components/schemas/IngestBatchConfig"
           },
+          "detector": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestDetectorInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "region_drain": {
             "$ref": "#/components/schemas/IngestRegionDrainConfig"
           },
@@ -6965,6 +6975,91 @@
           "region_drain"
         ],
         "title": "IngestConfigResponse",
+        "type": "object"
+      },
+      "IngestDetectorInfo": {
+        "description": "The deployment's ingest detector, read-only.",
+        "properties": {
+          "assigns_class": {
+            "title": "Assigns Class",
+            "type": "boolean"
+          },
+          "class_ids_filter": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Ids Filter"
+          },
+          "confidence_floor_applies": {
+            "title": "Confidence Floor Applies",
+            "type": "boolean"
+          },
+          "input_size": {
+            "title": "Input Size",
+            "type": "integer"
+          },
+          "labels": {
+            "items": {
+              "$ref": "#/components/schemas/IngestDetectorLabel"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "n_labels": {
+            "title": "N Labels",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "version",
+          "input_size",
+          "assigns_class",
+          "class_ids_filter",
+          "confidence_floor_applies",
+          "n_labels",
+          "labels"
+        ],
+        "title": "IngestDetectorInfo",
+        "type": "object"
+      },
+      "IngestDetectorLabel": {
+        "properties": {
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "name",
+          "slug"
+        ],
+        "title": "IngestDetectorLabel",
         "type": "object"
       },
       "IngestImageRequest": {
@@ -16784,6 +16879,165 @@
         "title": "SecretRef",
         "type": "object"
       },
+      "SeedConflict": {
+        "properties": {
+          "class_id_in_detector": {
+            "title": "Class Id In Detector",
+            "type": "integer"
+          },
+          "detector_label": {
+            "title": "Detector Label",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "duplicate_slug",
+              "unnamed_label"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detector_label",
+          "class_id_in_detector",
+          "reason"
+        ],
+        "title": "SeedConflict",
+        "type": "object"
+      },
+      "SeedFromDetectorRequest": {
+        "additionalProperties": false,
+        "description": "Seed the class registry from the ingest detector's labels, by name.\n\n``names`` limits the seed to those detector labels (matched by their\nregistry slug, ``traffic light`` = ``traffic_light``); omitted means every\nlabel. ``dry_run`` defaults to true: nothing is written until it is\nexplicitly false.",
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "detector",
+            "title": "Group",
+            "type": "string"
+          },
+          "names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Names"
+          }
+        },
+        "title": "SeedFromDetectorRequest",
+        "type": "object"
+      },
+      "SeedFromDetectorResponse": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/SeedConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "created": {
+            "items": {
+              "$ref": "#/components/schemas/SeededClass"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "detector_model": {
+            "title": "Detector Model",
+            "type": "string"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SeedSkipped"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "detector_model",
+          "created",
+          "skipped",
+          "conflicts"
+        ],
+        "title": "SeedFromDetectorResponse",
+        "type": "object"
+      },
+      "SeedSkipped": {
+        "properties": {
+          "detector_label": {
+            "title": "Detector Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "exists",
+              "deprecated"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "detector_label",
+          "reason"
+        ],
+        "title": "SeedSkipped",
+        "type": "object"
+      },
+      "SeededClass": {
+        "description": "A class created (or, on a dry run, that would be created).",
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "detector_label": {
+            "title": "Detector Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "name",
+          "detector_label"
+        ],
+        "title": "SeededClass",
+        "type": "object"
+      },
       "SegmenterEntry": {
         "properties": {
           "choice": {
@@ -22512,6 +22766,59 @@
           }
         },
         "summary": "Merge Class",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/classes/seed_from_detector": {
+      "post": {
+        "description": "Create registry classes from the ingest detector's labels, by name.\n\nAppend-only and idempotent: a label whose slug (``traffic light`` ->\n``traffic_light``) already names a class, active or deprecated, is\nskipped, and ids are assigned after the current maximum, never aligned to\nthe detector's own class ids. Items are never read or written.\n``dry_run`` (the default) only reports the plan. ``422`` for a requested\nname the detector does not have; ``503`` when no detector (or no label\nlist) is configured.",
+        "operationId": "seed_from_detector_curation_projects__project__classes_seed_from_detector_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedFromDetectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedFromDetectorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Seed From Detector",
         "tags": [
           "Curation"
         ]

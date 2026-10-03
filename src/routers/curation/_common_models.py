@@ -379,10 +379,38 @@ class IngestRegionDrainConfig(BaseModel):
     stable_polls: int
 
 
+class IngestDetectorLabel(BaseModel):
+    class_id: int
+    # The detector's own label, as stored in an item's ``proposal_name``.
+    name: str
+    # The registry class name this label maps to (``traffic light`` ->
+    # ``traffic_light``); empty when the label has no slug-safe form.
+    slug: str
+
+
+class IngestDetectorInfo(BaseModel):
+    """The deployment's ingest detector, read-only."""
+
+    model: str
+    version: str
+    input_size: int
+    assigns_class: bool
+    # The deployment-level hard drop by model class id (sorted), or null when
+    # every class is stored (the default).
+    class_ids_filter: list[int] | None
+    # The confidence floor only applies when the detector assigns classes; a
+    # proposer stores every detection the engine emits.
+    confidence_floor_applies: bool
+    n_labels: int
+    labels: list[IngestDetectorLabel]
+
+
 class IngestConfigResponse(BaseModel):
     upload: IngestUploadConfig
     batch: IngestBatchConfig
     region_drain: IngestRegionDrainConfig
+    # Null when no ingest detector is configured (ingest answers 503).
+    detector: IngestDetectorInfo | None = None
 
 
 class RegionDependencyStatusResponse(BaseModel):

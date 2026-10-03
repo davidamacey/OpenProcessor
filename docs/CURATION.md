@@ -96,9 +96,15 @@ done
 curl -s $API/classes | jq '.classes | length'
 ```
 
-A duplicate name is a 409. `scripts/curation/seed_class_registry.py --model
-<detector.onnx>` seeds the registry from a detector's own label space when
-you want all of it.
+A duplicate name is a 409. To start from the ingest detector's own label
+space (all 80 COCO classes for the stock detector), seed it by name:
+`POST /curation/projects/{project}/classes/seed_from_detector` (dry run by
+default; send `{"dry_run": false}` to write). Labels with spaces become slugs
+(`traffic light` -> `traffic_light`), existing names are skipped, and ids are
+appended, never aligned to the detector's. `GET /curation/projects/{project}/ingest/config`
+now returns a `detector` block (model, label list with raw name and slug, env
+class-id filter if set). `scripts/curation/seed_class_registry.py --model
+<detector.onnx>` remains for a model that assigns registry classes by id.
 
 **3. Write a region profile.** Start from
 [`examples/region_profiles/vehicle_wheel.json`](../examples/region_profiles/vehicle_wheel.json).

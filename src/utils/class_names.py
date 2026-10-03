@@ -136,9 +136,25 @@ def clear_class_name_cache() -> None:
         _class_name_cache.clear()
 
 
+_NON_SLUG_RUN = re.compile(r'[^a-z0-9]+')
+
+
+def normalize_class_name(text: str) -> str:
+    """The registry slug form of a class name (``^[a-z0-9_]+$``).
+
+    Lowercases, turns every run of other characters into one ``_`` and trims
+    edge underscores, so a detector label such as ``traffic light`` and the
+    registry class ``traffic_light`` compare equal. Returns ``''`` when
+    nothing slug-safe remains. This is the one name-equality rule; class
+    identity is by name, never by a model's class id.
+    """
+    return _NON_SLUG_RUN.sub('_', text.strip().lower()).strip('_')
+
+
 __all__ = [
     'clear_class_name_cache',
     'get_class_names',
     'invalidate_class_names',
+    'normalize_class_name',
     'resolve_class_name',
 ]
