@@ -100,6 +100,7 @@
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
+  import EmptyQueueEmbed from '$components/embedding/EmptyQueueEmbed.svelte';
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
@@ -2232,6 +2233,14 @@
             >
           </p>
         {/if}
+        <!-- The served empty_state offers the exact request that embeds the
+             items this queue skips; renders only when it applies. -->
+        <p class="mt-2 text-xs">
+          <EmptyQueueEmbed
+            emptyState={reviewTabsVocabularyStore.emptyState}
+            reasonText={`${emptyReason ?? ''} ${sortFallbackReason ?? ''}`}
+          />
+        </p>
       </div>
     {:else}
       <!-- Source image with bbox -->

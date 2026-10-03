@@ -14,7 +14,9 @@
 from __future__ import annotations
 
 from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from test_dataset_import import FORMATS
 
+import copy
 import struct
 import zlib
 
@@ -258,6 +260,57 @@ def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(
     link = empty.get_by_role("link", name="Run a probe on /train")
     link.wait_for(timeout=5000)
     assert link.get_attribute("href") == "/p/default/train"
+
+
+_EMBED_REQUEST = {
+    "targets": {"filter": {"embedding_state": ["not_selected", "failed"]}},
+    "scopes": ["embed"],
+    "embed": {"only_missing": True},
+    "dry_run": True,
+}
+
+
+def test_empty_queue_offers_embed_them_only_when_served_and_relevant(stub, page, app_url):
+    """v0.4.0: an empty queue whose served reason says items have no vector
+    offers the served `suggested_reprocess` as "Embed them"; the same
+    empty_state with an unrelated reason offers nothing."""
+    _stub_review(
+        stub,
+        empty_uncertainty=True,
+        empty_reason="12 items have no embedding, so this queue skips them: embed them",
+        empty_state={
+            "has_probe_predictions": True,
+            "has_item_scores": True,
+            "has_unembedded_items": True,
+            "suggested_reprocess": _EMBED_REQUEST,
+        },
+    )
+    # Reprocess is present only while the deployment serves the W10 vocabulary.
+    stub.on("GET", r"/datasets/formats(\?|$)", copy.deepcopy(FORMATS))
+    page.set_viewport_size({"width": 1600, "height": 1000})
+    page.goto(f"{app_url}/p/default/review?tab=uncertainty")
+    empty = page.get_by_test_id("queue-empty")
+    empty.wait_for(timeout=ACTION_TIMEOUT_MS)
+    empty.get_by_role("button", name="Embed them").wait_for(timeout=ACTION_TIMEOUT_MS)
+
+
+def test_empty_queue_hides_embed_them_for_an_unrelated_reason(stub, page, app_url):
+    _stub_review(
+        stub,
+        empty_uncertainty=True,
+        empty_reason="no probe predictions — run a probe",
+        empty_state={
+            "has_probe_predictions": False,
+            "has_item_scores": True,
+            "has_unembedded_items": True,
+            "suggested_reprocess": _EMBED_REQUEST,
+        },
+    )
+    page.goto(f"{app_url}/p/default/review?tab=uncertainty")
+    empty = page.get_by_test_id("queue-empty")
+    empty.wait_for(timeout=ACTION_TIMEOUT_MS)
+    empty.get_by_role("link", name="Run a probe on /train").wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert empty.get_by_role("button", name="Embed them").count() == 0
 
 
 _CANDIDATE_BBOX = [0.15, 0.25, 0.55, 0.75]
