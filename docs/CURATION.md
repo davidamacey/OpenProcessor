@@ -619,6 +619,42 @@ all skip them, so the API says so instead of returning a silent gap:
 The VLM stage works on embedded items only, so one setting (whether an item
 is embedded) bounds both the embedding and the VLM work.
 
+### Embedding use cases
+
+Normal flow: every detection is embedded at ingest. Filtering, selecting,
+searching and clustering are views over the embedded items. The cases below
+are the ways an item needs a vector after ingest, and what happens today.
+
+1. **A new object or box.** An item is created only by ingest (detector) or a
+   dataset import; both embed it through the same code. A region box that the
+   region worker writes (SAM 3 or a region profile) gets its box vector in the
+   same pass. A box a person draws is stored without a vector until an embed
+   run covers it.
+2. **A moved or resized box.** An item's own box is never edited. A region box
+   a person moves or deletes has its stored vector pruned at once (a vector
+   records the geometry it was computed from, so a moved box counts as having
+   none), and the box is embedded again by the next embed run. Nothing
+   re-embeds it automatically yet.
+3. **An embedding failed at ingest.** The item is stored with
+   `embedding_state: failed` and counted in `n_not_embedded`. Retry with
+   `POST /curation/projects/{project}/reprocess` and scope `embed` on the
+   item or its image; the item becomes `embedded`.
+4. **An ingest policy skipped it** (`selected`, `lazy`, per-image caps). Not
+   available yet: ingest embeds everything. `embedding_state` already has
+   `not_selected` and `deferred` for it, and the same `embed` scope will be
+   the embed-missing action.
+5. **An imported dataset** (YOLO, COCO or your own export). Import embeds each
+   item through the ingest path, so imported items are `embedded` (or
+   `failed` and retried as in 3). A project import that excludes vectors, and
+   a combine that drops a vector the target cannot use, leave items
+   without one (`deferred` for a dropped vector); embed them with the `embed`
+   scope.
+6. **The embedding model changed.** A full re-embed, not embed-missing: run the
+   `embed` scope over every image. It rewrites every crop, frame and box
+   vector and keeps labels and locks untouched. The index mapping fixes the
+   vector dimension, so a model with a different dimension needs a new
+   project (re-ingest or combine), not an in-place re-embed.
+
 For bulk work from a shell:
 
 - `scripts/curation/ingest_walker.py`: walk a directory with a resumable
