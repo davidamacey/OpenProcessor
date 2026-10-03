@@ -10,7 +10,7 @@ describe('normalizeClassName', () => {
     ['traffic light', 'traffic_light'],
     ['  Hot  Dog ', 'hot_dog'],
     ['t-shirt', 't_shirt'],
-    ['car', 'car'],
+    ['widget', 'widget'],
     ['__x__', 'x'],
     ['a - b', 'a_b'],
     ['', ''],
@@ -18,16 +18,16 @@ describe('normalizeClassName', () => {
     expect(normalizeClassName(raw)).toBe(slug);
   });
   it('folds case, spaces and hyphens to an underscore', () => {
-    expect(normalizeClassName('Sports Car')).toBe('sports_car');
-    expect(normalizeClassName('sports-car')).toBe('sports_car');
-    expect(normalizeClassName('SPORTS_CAR')).toBe('sports_car');
+    expect(normalizeClassName('Blue Widget')).toBe('blue_widget');
+    expect(normalizeClassName('blue-widget')).toBe('blue_widget');
+    expect(normalizeClassName('BLUE_WIDGET')).toBe('blue_widget');
   });
 });
 
 describe('findActiveClassByName', () => {
   it('matches across the folded spellings', () => {
-    expect(findActiveClassByName([c(1, 'sports_car')], 'Sports Car')?.id).toBe(1);
-    expect(findActiveClassByName([c(1, 'Sports-Car')], 'sports car')?.id).toBe(1);
+    expect(findActiveClassByName([c(1, 'blue_widget')], 'Blue Widget')?.id).toBe(1);
+    expect(findActiveClassByName([c(1, 'Blue-Widget')], 'blue widget')?.id).toBe(1);
   });
 
   it('an ACTIVE class wins over a deprecated one with the same name', () => {

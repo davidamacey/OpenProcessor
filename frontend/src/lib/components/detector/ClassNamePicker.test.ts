@@ -37,24 +37,24 @@ function typeAndAdd(text: string): void {
 
 describe('ClassNamePicker', () => {
   it('adds a name typed twice once', () => {
-    const onchange = render({ value: [], options: ['car'] });
+    const onchange = render({ value: [], options: ['widget'] });
     typeAndAdd('foo, foo');
     expect(onchange).toHaveBeenCalledWith(['foo']);
   });
 
   it('control: distinct names are both added', () => {
-    const onchange = render({ value: [], options: ['car'] });
+    const onchange = render({ value: [], options: ['widget'] });
     typeAndAdd('bar, baz');
     expect(onchange).toHaveBeenCalledWith(['bar', 'baz']);
   });
 
   it('mounts with repeated option names (detector id gaps are served as empty names)', () => {
-    render({ value: [], options: ['person', '', 'car', ''] });
+    render({ value: [], options: ['person', '', 'widget', ''] });
     expect(target.querySelectorAll('input[type="checkbox"]').length).toBe(4);
   });
 
   it('mounts when the value already holds a name twice', () => {
-    render({ value: ['foo', 'foo'], options: ['car'] });
+    render({ value: ['foo', 'foo'], options: ['widget'] });
     expect(target.querySelectorAll('button.chip').length).toBe(2);
   });
 });
