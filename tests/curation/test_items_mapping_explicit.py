@@ -56,6 +56,7 @@ def test_aggregatable_region_fields_are_keyword(attr: str) -> None:
     ('field', 'expected'),
     [
         ('proposal_name', 'keyword'),
+        ('embedding_state', 'keyword'),
         ('vlm_confidence', 'keyword'),
         ('vlm_raw_class', 'keyword'),
         ('vlm_proposed_class', 'keyword'),

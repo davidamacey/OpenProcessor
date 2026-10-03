@@ -85,6 +85,7 @@ async def ordered_crops_page(
             crops=items,
             method=order,
             n_pool=n_pool,
+            n_unembedded=max(0, n_pool - pool_count),
         )
 
     if order == 'diverse':
@@ -106,6 +107,7 @@ async def ordered_crops_page(
             crops=items,
             method='diverse',
             n_pool=n_pool,
+            n_unembedded=max(0, n_pool - pool_count),
         )
     return None
 

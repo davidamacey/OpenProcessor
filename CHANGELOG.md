@@ -11,6 +11,17 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
+### Added
+- `POST /curation/projects/{project}/classes/seed_from_detector`: create registry classes from the ingest detector's labels by name (dry run by default, idempotent, labels with spaces become slugs).
+- `GET /curation/projects/{project}/ingest/config` returns a `detector` block (model, label list with raw name and slug, env class-id filter).
+- `embedding_state` on every item (`embedded`, `failed`, `deferred`, `not_selected`; null for older items). An encoder failure at ingest is now marked `failed` and counted (`n_embedded`, `n_not_embedded` per image and in the batch summary) instead of silently storing a vectorless item.
+- `unembedded_in_scope` on text search, `n_unembedded` on outlier and diverse orderings, an `embedding` block in dataset stats, `items_embedded` in project counts, `unembedded` in the pipeline snapshots.
+- `docs/PERFORMANCE.md` "Ingest cost per image" baseline and `scripts/bench/ingest_cost_probe.py`.
+
+### Changed
+- The VLM stage (worker and auto-label sweep) works on embedded items only; one shared clause (`embedding_state.embedded_clause`) now defines "has a vector" for every consumer.
+- The quick start, README and `env.template` no longer tell users to set `OP_INGEST_PRIMARY_CLASS_IDS`; the stock detector keeps its full 80-class vocabulary, stored as unlabeled proposals.
+
 ## [0.4.0] - 2026-10-02
 
 ### Documentation

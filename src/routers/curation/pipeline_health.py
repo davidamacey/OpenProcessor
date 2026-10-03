@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from src.core.logging import get_logger
 from src.routers.curation._common import items_index
+from src.services.curation.embedding_state import not_embedded_clause
 
 
 if TYPE_CHECKING:
@@ -49,6 +50,9 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
                         }
                     },
                     'has_class': {'filter': {'exists': {'field': 'class_id'}}},
+                    # Not yet in the working set: no vector, so the VLM, clustering
+                    # and search skip them.
+                    'unembedded': {'filter': not_embedded_clause()},
                     'mismatched_cluster': {
                         'filter': {
                             'bool': {
@@ -84,5 +88,6 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
         'validated': int((aggs.get('validated') or {}).get('doc_count', 0)),
         'unvalidated': int((aggs.get('unvalidated') or {}).get('doc_count', 0)),
         'has_class': int((aggs.get('has_class') or {}).get('doc_count', 0)),
+        'unembedded': int((aggs.get('unembedded') or {}).get('doc_count', 0)),
         'cluster_id_mismatched': int((aggs.get('mismatched_cluster') or {}).get('doc_count', 0)),
     }

@@ -23,6 +23,7 @@
     "class_name",
     "class_source",
     "confidence",
+    "embedding_state",
     "class_confidence",
     "class_confidence_source",
     "label_source",
@@ -504,6 +505,24 @@
         ],
         "default": null,
         "title": "Dup Is Representative"
+      },
+      "embedding_state": {
+        "anyOf": [
+          {
+            "enum": [
+              "embedded",
+              "not_selected",
+              "deferred",
+              "failed"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Embedding State"
       },
       "excluded_at": {
         "anyOf": [

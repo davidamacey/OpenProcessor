@@ -162,8 +162,8 @@ room for more, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and
 curation tiers need: the ingest detector (`OP_INGEST_PRIMARY_*`), the
 segmenter and VLM endpoints, the feature flags and the GPU keys. Projects,
 prompt packs, region profiles, keymaps and the active VLM are not `.env`
-settings: they are created and activated through the API. The installer writes exactly that block; with `--sample-data`
-it also points ingest at the COCO sample's classes. `./openprocessor sample
+settings: they are created and activated through the API. The installer writes exactly that block; the detector keeps
+its full class vocabulary (leave the class-id filter unset). `./openprocessor sample
 coco` fetches the public, license-filtered COCO sample (200 images; `--full`
 for 800) into `data/samples/`. Details: [docs/CURATION.md](docs/CURATION.md).
 

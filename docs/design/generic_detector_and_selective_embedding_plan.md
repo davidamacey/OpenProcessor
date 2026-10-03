@@ -434,6 +434,22 @@ trade-off is visible, and `GET /ingest/config` echoes the policy.
    exist in that class name, the UI offers the embed action (frontend delta
    F7). No automatic embedding on view.
 
+### 5.8 Embedding use cases (owner addition 2026-10-03)
+
+Normal flow: embed everything at ingest (default `all`); filtering, selecting
+and clustering are views over embedded items. Six ways a detection needs a
+vector AFTER ingest, with the state of the code after W3 (the user-facing text
+is in `docs/CURATION.md`, "Embedding use cases"):
+
+| # | Case | Today (after W3) | Follow-up |
+|---|---|---|---|
+| 1 | New object or box (user, SAM 3, region profile) | Items are created only by ingest or dataset import, and both embed. The region worker embeds the region boxes it writes. A region box a person draws has no vector until an embed run. | W5/W7: embed a human-drawn box on write (embed in the box-edit route through the app encoder, or queue it for the embed-missing job). Decide with the owner; GPU work in a PUT is allowed by P4, a GET never. |
+| 2 | Box moved or resized | An item's own box is never edited. A moved or deleted region box has its vector pruned at once (`prune_box_embeddings`), so it counts as missing. Nothing re-embeds it automatically. | Same follow-up as 1: re-embed the pruned box after the edit. |
+| 3 | Embedding failed at ingest | W3: state `failed`, counted in `n_not_embedded`. Retry path: reprocess scope `embed` (now writes `embedding_state=embedded`). | W5: item-unit selector `embedding_state=failed` so a retry does not re-embed the whole image. |
+| 4 | Skipped by an ingest policy | No policy yet (W4). The states `not_selected` and `deferred` exist. | W4 writes them; W5 embed-missing selects them. |
+| 5 | Imported dataset | Import embeds through `index_items` (test: `test_import_run.py`), so items are `embedded` or `failed`. Project import without vectors and a combine that drops a vector leave items vectorless (`deferred` for the drop). | W5 embed-missing covers them; project import should set `deferred`. |
+| 6 | Embedding model changed | Full re-embed with reprocess scope `embed` over every image (same dimension only: the mapping fixes it). Distinct from embed-missing. | W5: keep a full-rewrite option next to only-missing; document the dimension limit (done). |
+
 ## 6. Wave breakdown
 
 Each wave is independently shippable and testable. Red-first: write the named

@@ -23,6 +23,7 @@ from PIL import Image, ImageOps
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.embedding_state import EMBEDDED
 from src.services.curation.image_serving import is_servable_image_path
 from src.services.curation.ingest_index import crop_pil
 from src.services.curation.region_box_embeddings import (
@@ -150,7 +151,9 @@ async def reembed_items(
             if crops:
                 vectors = await pe.embed_crops(crops, max_batch=_BATCH)
                 for (cid, _), vec in zip(boxed, vectors, strict=True):
-                    item_updates.setdefault(cid, {})['pe_embedding'] = [float(v) for v in vec]
+                    item_updates.setdefault(cid, {}).update(
+                        pe_embedding=[float(v) for v in vec], embedding_state=EMBEDDED
+                    )
                     counts['crop_written'] += 1
         if 'region' in parts:
             work = [

@@ -22,11 +22,11 @@ unchanged and stays the quality refinement for small objects.
 ## 2. Current state (findings)
 
 ### 2.1 Segmenter service (`docker/segmenter/`)
-- `docker/segmenter/main.py`: `POST /segment` (`SegmentRequest`, ~L94) takes
+- `docker/segmenter/main.py`: the segmenter `segment` route (post, no prefix) (`SegmentRequest`, ~L94) takes
   `crop_jpeg_b64` (any JPEG, the field name says crop but it is just an
   image), `text_prompt` (required), `max_candidates` (default 4, cap 128 =
   `MAX_CANDIDATES_CAP` in `sam3_backend.py` ~L62), optional `min_score`,
-  `return_masks`. `POST /segment/batch` (`BatchSegmentRequest`, up to 64
+  `return_masks`. `segment/batch` (`BatchSegmentRequest`, up to 64
   images, ONE shared prompt). Response candidates: `bbox_norm` in the
   SUBMITTED image frame, `score`, `mask_iou`, optional `mask_polygon`
   (largest external contour, <= 256 points, normalized, from W5).
@@ -243,7 +243,7 @@ call `decide`; #46's part ships first in its own change, this plan consumes it.
    enabled, estimated SAM calls, estimated minutes from the section-7 model,
    `locked_skipped`). Also available via `POST /images/{id}/reprocess`.
    Default entry point for existing datasets.
-2. Per-image test route for the UI: `POST /open_vocab/test` with an image id
+2. Per-image test route for the UI: post `/open_vocab/test` (proposed) with an image id
    or uploaded image, a candidate target (not saved), returns
    boxes/scores/polygons and which tier decided, WITHOUT writing items
    (mirrors `POST /region_profiles/test`, `region_test_run.py`).
@@ -335,7 +335,7 @@ queue/export with correct class name.
 **Wave 5: triggers.**
 Files: `reprocess_models.py` (`open_vocab` scope), `reprocess.py` /
 `reprocess_images.py`, `src/routers/curation/reprocess.py`, new
-`POST /open_vocab/test`, optional ingest hook + worker stage in
+post `/open_vocab/test` (proposed), optional ingest hook + worker stage in
 `scripts/curation/worker/` (status field via `RegionFields`-style config, so
 the no-literal-field guard stays green). Tests: dry-run counts,
 `locked_skipped`, scope validation, test route writes nothing. Mutation:
@@ -388,7 +388,7 @@ running project is not modified except in a throwaway project created for
 the test. Steps for the implementing agent:
 1. Create a scratch project; ingest ~200 COCO images.
 2. Save a set with targets "traffic light" and "cup" (class names equal);
-   run `POST /open_vocab/test` on 5 images known to contain them; confirm
+   run post `/open_vocab/test` (proposed) on 5 images known to contain them; confirm
    boxes land on the objects (view the screenshot).
 3. Dry-run then run `POST /reprocess` scope `open_vocab` over the 200
    images; record: wall-clock, images/s, SAM calls, hit rate, gate skips.

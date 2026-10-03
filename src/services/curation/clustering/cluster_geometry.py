@@ -42,6 +42,7 @@ from src.config import get_curation_config
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.export_support import scroll_hits
 
 
@@ -87,7 +88,7 @@ def _members_query(cluster_id: int) -> dict[str, Any]:
         'bool': {
             'filter': [
                 {'term': {'cluster_id': cluster_id}},
-                {'exists': {'field': ITEM_EMBEDDING_FIELD}},
+                embedded_clause(ITEM_EMBEDDING_FIELD),
             ],
             'must_not': [{'term': {'class_excluded': True}}],
         }
@@ -101,7 +102,7 @@ async def _cluster_ids(client: Any, index: str) -> list[int]:
             'bool': {
                 'filter': [
                     {'range': {'cluster_id': {'gte': 0}}},
-                    {'exists': {'field': ITEM_EMBEDDING_FIELD}},
+                    embedded_clause(ITEM_EMBEDDING_FIELD),
                 ],
                 'must_not': [{'term': {'class_excluded': True}}],
             }

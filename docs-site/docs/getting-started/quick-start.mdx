@@ -136,26 +136,25 @@ make export-pe
 # 1. Fetch a sample
 make sample-coco-readme
 
-# 2. Configure the ingest detector, narrow it to the classes you care
-#    about, and point the source mount at the samples directory
+# 2. Configure the ingest detector and point the source mount at the
+#    samples directory. The detector keeps its whole 80-class vocabulary.
 cat >> .env <<'EOF'
 OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
-OP_INGEST_PRIMARY_CLASS_IDS=2,3,5,7
 OP_SOURCE_ROOT_HOST=./data/samples
 EOF
 docker compose up -d --force-recreate yolo-api
 
 # 3. Create a project, then its classes (the registry starts empty)
 API=http://localhost:4603
-P=coco-vehicles
+P=coco-sample
 curl -s -X POST "$API/curation/projects" \
   -H 'content-type: application/json' \
-  -d "{\"slug\": \"$P\", \"display_name\": \"COCO vehicles\"}"
-for name in car truck bus motorcycle bicycle; do
-  curl -s -X POST "$API/curation/projects/$P/classes" \
-    -H 'content-type: application/json' \
-    -d "{\"name\": \"$name\", \"group\": \"vehicle\"}"
-done
+  -d "{\"slug\": \"$P\", \"display_name\": \"COCO sample\"}"
+# Seed the classes from the detector's own labels (dry run is the default;
+# "dry_run": false writes). Or create your own with POST .../classes.
+curl -s -X POST "$API/curation/projects/$P/classes/seed_from_detector" \
+  -H 'content-type: application/json' \
+  -d '{"dry_run": false}'
 
 # 4. Ingest into the project. --root is a container path under the
 #    /data/source mount
@@ -173,9 +172,20 @@ Things that trip people up:
 
 - **Every curation data route is under `/curation/projects/{project}/`.**
   An unscoped path such as `/curation/classes` is a `404`.
-- **`OP_INGEST_PRIMARY_CLASS_IDS`** matters. Without it, a stock detector's
-  whole label space (all 80 COCO classes) becomes item proposals.
-  `2,3,5,7` is car, motorcycle, bus and truck in COCO's id order.
+- **The detector stores everything it sees.** A stock detector's whole label
+  space (all 80 COCO classes) becomes unlabeled item proposals, each carrying
+  the detector's own label (person, dog, pizza and so on, not only vehicles).
+  Do not set `OP_INGEST_PRIMARY_CLASS_IDS` to narrow it: that is an optional
+  hard drop by model class id, applied before anything is stored and shared by
+  every project. Filter and choose what to keep after ingest instead.
+- **Cost of the full vocabulary.** Each stored detection also gets an
+  embedding by default, so the full COCO vocabulary stores about 3.6x the
+  data of a vehicle-only run (the "Ingest cost per image" section of
+  `docs/PERFORMANCE.md`).
+- **Switching detectors.** Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and
+  `OP_INGEST_PRIMARY_LABELS_PATH` if the model directory has no `labels.txt`)
+  in `.env`, then recreate `yolo-api`. The model must be loaded in Triton and
+  serve the end2end four-tensor output. The detector is deployment-wide.
 - **Ingest returns `503`** until `OP_INGEST_PRIMARY_DETECTOR_MODEL` is set
   and that model is loaded in Triton.
 - **`OP_SOURCE_ROOT_HOST`** is the host side of a fixed `/data/source`

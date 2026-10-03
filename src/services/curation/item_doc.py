@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.services.curation.embedding_state import EMBEDDED
 from src.services.curation.region_scope import in_parent_classes
 from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.profile_registry import get_active_region_profile
@@ -65,6 +66,8 @@ class DetectedItem:
     proposal_name: str | None = None
     pe_embedding: Any | None = None  # np.ndarray | None, kept loose to avoid a numpy import here
     backbone_embedding: Any | None = None  # np.ndarray | None — BACKBONE_EMBEDDING_FIELD
+    # Why there is no ``pe_embedding``; ignored when the vector is present.
+    embedding_state: str | None = None
     cluster_id: int | None = None
     cluster_distance: float | None = None
     # Model name + version of whichever detector last set this item's
@@ -204,6 +207,9 @@ def build_item_doc(
             doc['cluster_distance_cluster_id'] = item.cluster_id
     if item.pe_embedding is not None:
         doc['pe_embedding'] = list(item.pe_embedding)
+        doc['embedding_state'] = EMBEDDED
+    elif item.embedding_state is not None:
+        doc['embedding_state'] = item.embedding_state
     if item.backbone_embedding is not None:
         doc[BACKBONE_EMBEDDING_FIELD] = [float(x) for x in item.backbone_embedding]
     if item.class_detector:

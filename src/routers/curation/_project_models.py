@@ -60,6 +60,9 @@ class ProjectCounts(BaseModel):
     # ``src.services.projects.stats.validated_count``); ``null`` when it
     # could not be counted, never a made-up 0.
     validated: int | None = None
+    # Items that have a vector (clustering, search and the VLM work on these);
+    # the rest are stored but not embedded. ``null`` when uncountable.
+    items_embedded: int | None = None
 
 
 class ProjectSummary(BaseModel):
@@ -275,6 +278,7 @@ class ProjectStatsCounts(BaseModel):
     items: int
     # Same count and same null-when-uncountable rule as ProjectCounts.validated.
     validated: int | None
+    items_embedded: int | None
     pending_detection: int
     holdout_items: int
     classes: int

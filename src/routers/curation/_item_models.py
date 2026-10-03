@@ -11,6 +11,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+# Runtime import: pydantic resolves the annotation from module globals.
+from src.services.curation.embedding_state import EmbeddingState  # noqa: TC001
+
 
 class ItemTextLine(BaseModel):
     """One OCR text line on the item crop (``box_norm`` in the item-crop
@@ -44,6 +47,9 @@ class ItemDoc(BaseModel):
     class_source: str | None = ''
     # The detector/classifier score, whatever wrote the label.
     confidence: float = 0.0
+    # 'embedded' = has a vector; the other values say why not. Null = written
+    # before the field existed (unknown; treat as embedded when it has a cluster).
+    embedding_state: EmbeddingState | None = None
     # Confidence of the writer that set the label: the VLM category mapped
     # through high 0.92 / medium 0.70 / low 0.40 ('vlm'), or the classifier
     # score ('model'); null for human / merge / import / proposal labels.
@@ -209,6 +215,9 @@ class CropsPageResponse(BaseModel):
     method: str | None = None
     version: str | None = None
     n_pool: int | None = None
+    # Of n_pool, the items an ordering could not rank because they have no
+    # vector (never embedded, or embedding failed); null for unordered pages.
+    n_unembedded: int | None = None
 
 
 __all__ = ['CropsPageResponse', 'ItemDoc', 'ItemTextLine']

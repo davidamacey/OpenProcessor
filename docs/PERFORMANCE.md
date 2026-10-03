@@ -13,6 +13,7 @@ Complete guide for optimizing FastAPI and Triton Inference Server performance.
 5. [Profiling](#profiling)
 6. [Tuning Parameters](#tuning-parameters)
 7. [Troubleshooting](#troubleshooting)
+8. [Ingest cost per image](#ingest-cost-per-image)
 
 ---
 
@@ -318,6 +319,38 @@ Kubernetes with:
 **Bottleneck**: Network, orchestration overhead
 
 ---
+
+## Ingest cost per image
+
+What a detector vocabulary and an embedding choice cost per 1,000 images.
+Measured by: the live stack measurement of 2026-10-03 (project of 2,000 COCO
+images, narrow vehicle detector) recorded in
+`docs/design/generic_detector_and_selective_embedding_plan.md` (findings F12 and
+section 4). The per-1,000 figures below are derived from those numbers with
+`scripts/bench/ingest_cost_probe.py`; they are not a new run. A full re-measure
+on the public 4,000-image COCO set is a later step.
+
+Inputs: 1.37 stored items per image with the narrow detector, 7 per image with
+the full 80-class vocabulary, about 1.8 KB of metadata per item, 8.4 KB per
+1024-d vector (one per embedded item, one per image for the whole frame).
+
+| Scenario (per 1,000 images) | Items | Total MB | vs narrow | Crop encoder calls |
+|---|---:|---:|---:|---:|
+| Narrow detector, every item embedded | 1,370 | 22.4 | 1.0x | 1,370 |
+| Full vocabulary, every item embedded | 7,000 | 79.8 | 3.6x | 7,000 |
+| Full vocabulary, no item embedded | 7,000 | 21.0 | 0.9x | 0 |
+| Full vocabulary, only the narrow classes embedded | 7,000 | 32.5 | 1.45x | 1,370 |
+
+Reading: keeping every detection costs about 3.6x the storage and 5x the crop
+encoder and VLM calls of the narrow detector when each one gets a vector. Keeping
+them without a vector costs about the same storage as the narrow setup, so
+storage is the small number and encoder and VLM time is the real cost. The
+detector itself runs once per image whatever the number of classes. Reproduce
+the table with your own per-image figures:
+
+```bash
+python scripts/bench/ingest_cost_probe.py --images 1000 --full-items 7
+```
 
 ## Benchmarking
 

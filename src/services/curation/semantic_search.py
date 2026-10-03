@@ -27,6 +27,7 @@ from src.config.project_context import project_api_base, run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation import review_queries
+from src.services.curation.embedding_state import not_embedded_clause
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
@@ -205,7 +206,13 @@ async def semantic_text_search(
     ``loop.run_in_executor``.
     """
     if not query or not query.strip():
-        return {'items': [], 'total': 0, 'page': page, 'page_size': page_size}
+        return {
+            'items': [],
+            'total': 0,
+            'page': page,
+            'page_size': page_size,
+            'unembedded_in_scope': 0,
+        }
 
     cfg = config or get_curation_config()
     region_fields = fields or get_region_fields()
@@ -256,7 +263,19 @@ async def semantic_text_search(
 
     items = [_hydrate_item(h, region_fields, project_api_base()) for h in hits]
 
-    return {'items': items, 'total': total, 'page': page, 'page_size': page_size}
+    # kNN only sees items with a vector, so "no results" must not read as "no
+    # matches": say how many in-scope items it could not search.
+    unembedded = await opensearch.count(
+        index=cfg.items_index,
+        body={'query': {'bool': {'filter': [*filter_clause, not_embedded_clause()]}}},
+    )
+    return {
+        'items': items,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'unembedded_in_scope': int((unembedded or {}).get('count', 0)),
+    }
 
 
 __all__ = [

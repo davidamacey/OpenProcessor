@@ -96,6 +96,7 @@ from pydantic import BaseModel, Field
 
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, items_index, router
 from src.services.curation import review_queries
+from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.selection import k_center_greedy
 from src.services.curation.selection.pool_fetch import (
     EMBEDDING_FIELD,
@@ -253,7 +254,7 @@ def _build_scope_query(scope: SelectDiverseScope) -> dict[str, Any]:
     operation and must never leak the frozen holdout into what gets
     labeled next).
     """
-    must: list[dict[str, Any]] = [{'exists': {'field': EMBEDDING_FIELD}}]
+    must: list[dict[str, Any]] = [embedded_clause(EMBEDDING_FIELD)]
     must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
 
     if scope.cluster_id is not None:

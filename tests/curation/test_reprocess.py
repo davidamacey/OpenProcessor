@@ -370,7 +370,7 @@ async def test_embed_rewrites_vectors_only_and_includes_locked_items(
     after = docs(fake)
     for cid in ('locked', 'plain'):
         changed = {k for k in after[cid] if after[cid][k] != before[cid].get(k)}
-        assert changed <= {'pe_embedding', F.box_embeddings}, (cid, changed)
+        assert changed <= {'pe_embedding', 'embedding_state', F.box_embeddings}, (cid, changed)
         assert after[cid]['pe_embedding'] == [0.0, 0.0, 1.0]
     assert current_vectors(after['locked']) == {'b1': pytest.approx([0.0, 0.0, 1.0])}
     assert F.box_embeddings not in after['plain']  # no accepted/false-positive box to embed
@@ -378,6 +378,29 @@ async def test_embed_rewrites_vectors_only_and_includes_locked_items(
     assert image_after['pe_embedding'] == [0.0, 1.0, 0.0]
     assert {k for k in image_after if image_after[k] != image_before.get(k)} == {'pe_embedding'}
     assert pe.frame_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_embed_is_the_retry_path_for_a_failed_item(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = servable_root(tmp_path, monkeypatch)
+    path = root / 'a.jpg'
+    path.write_bytes(jpeg_bytes())
+    failed = item(
+        'failed', image_path=str(path), bbox_norm=(0.2, 0.2, 0.6, 0.6), embedding_state='failed'
+    )
+    fake = make_fake([failed], [{'image_id': 'img-1', 'image_path': str(path)}])
+    service = make_service(fake, FakeTriton([]), FakePE())
+
+    await apply_reprocess(
+        fake, _req(scopes=['embed'], crops=['failed'], dry_run=False),
+        service_factory=_factory(service),
+    )  # fmt: skip
+
+    doc = docs(fake)['failed']
+    assert doc['pe_embedding'] == [0.0, 0.0, 1.0]
+    assert doc['embedding_state'] == 'embedded'
 
 
 @pytest.mark.asyncio

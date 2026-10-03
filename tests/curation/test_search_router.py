@@ -166,4 +166,10 @@ def test_search_text_no_hits_returns_empty(app_client: TestClient):
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body == {'items': [], 'total': 0, 'page': 1, 'page_size': 30}
+    assert body == {
+        'items': [],
+        'total': 0,
+        'page': 1,
+        'page_size': 30,
+        'unembedded_in_scope': 0,
+    }

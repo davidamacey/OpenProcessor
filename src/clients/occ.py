@@ -36,6 +36,7 @@ from src.clients.occ_locks import _is_locked_marker, is_locked_box, is_locked_cl
 from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
 from src.config.curation import items_index
 from src.core.logging import get_logger
+from src.services.curation.embedding_state import keep_stored_vector_state
 from src.services.curation.history import CLASS_STATE_FIELDS
 
 
@@ -556,6 +557,7 @@ async def occ_upsert_bulk(
                 human_field_guards=human_field_guards,
             )
             filled = _apply_fill_if_absent(merged, source, fill_if_absent)
+            keep_stored_vector_state(merged, source)
             merge_effects[doc_id] = (preserved_fields, filled)
             return merged
 

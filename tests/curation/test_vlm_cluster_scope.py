@@ -40,7 +40,11 @@ pytestmark = pytest.mark.usefixtures('vlm_env')
 
 
 def _docs() -> dict[str, dict[str, Any]]:
-    base = {'updated_at': '2026-09-01T00:00:00+00:00', 'bbox_norm': [0, 0, 1, 1]}
+    base = {
+        'updated_at': '2026-09-01T00:00:00+00:00',
+        'bbox_norm': [0, 0, 1, 1],
+        'pe_embedding': [0.1],
+    }
     return {
         'a': {**base, 'crop_id': 'a', 'cluster_id': CLUSTER},
         'b': {**base, 'crop_id': 'b', 'cluster_id': CLUSTER, 'class_source': 'vlm_unmatched'},

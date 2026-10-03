@@ -24,6 +24,7 @@ import numpy as np
 from src.core.logging import get_logger, get_request_id
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
+from src.services.curation.embedding_state import EMBEDDED, FAILED
 from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.item_doc import (
     DetectedItem,
@@ -122,6 +123,8 @@ async def index_items(
                 item.pe_embedding = emb
     except Exception as exc:
         logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
+    for item in items:
+        item.embedding_state = EMBEDDED if item.pe_embedding is not None else FAILED
 
     now = datetime.now(UTC).isoformat()
     image_doc: dict[str, Any] | None = None
@@ -249,6 +252,8 @@ async def index_items(
             source_identifier=ctx.source_identifier,
             imohash=ctx.imohash,
             n_crops=len(crop_docs),
+            n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
+            n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
             crops_created=bulk_result.get('crops_created', 0),
             crops_updated=bulk_result.get('crops_updated', 0),
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),

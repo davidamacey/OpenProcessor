@@ -11,6 +11,7 @@ from typing import Any
 
 from src.config.project_context import current_project
 from src.core.logging import get_logger
+from src.services.curation.embedding_state import embedded_clause
 
 
 logger = get_logger(__name__)
@@ -33,15 +34,26 @@ async def _term_count(client: Any, index: str, field: str, value: Any) -> int:
 VALIDATED_ITEMS_QUERY: dict[str, Any] = {'term': {'class_validated': True}}
 
 
+async def _query_count(
+    client: Any, items_index: str, query: dict[str, Any], what: str
+) -> int | None:
+    try:
+        resp = await client.count(index=items_index, body={'query': query})
+        return int(resp.get('count') or 0)
+    except Exception as exc:
+        logger.warning('project_count_unavailable', what=what, index=items_index, error=str(exc))
+        return None
+
+
 async def validated_count(client: Any, items_index: str) -> int | None:
     """Validated items in ``items_index``, or ``None`` when it could not
     be counted -- never a made-up 0. Caller binds the owning project."""
-    try:
-        resp = await client.count(index=items_index, body={'query': VALIDATED_ITEMS_QUERY})
-        return int(resp.get('count') or 0)
-    except Exception as exc:
-        logger.warning('project_validated_count_unavailable', index=items_index, error=str(exc))
-        return None
+    return await _query_count(client, items_index, VALIDATED_ITEMS_QUERY, 'validated')
+
+
+async def embedded_count(client: Any, items_index: str) -> int | None:
+    """Items with a vector (the working set), or ``None`` when uncountable."""
+    return await _query_count(client, items_index, embedded_clause(), 'embedded')
 
 
 async def index_count(client: Any, index: str) -> int:
@@ -88,6 +100,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
     images_count = await index_count(client, images_idx)
     items_count = await index_count(client, items_idx)
     validated = await validated_count(client, items_idx)
+    items_embedded = await embedded_count(client, items_idx)
     from src.config.region_state import RegionStatus
 
     pending_detection = await _term_count(
@@ -109,6 +122,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
             'images': images_count,
             'items': items_count,
             'validated': validated,
+            'items_embedded': items_embedded,
             'pending_detection': pending_detection,
             'holdout_items': holdout_items,
             'classes': classes_count,
