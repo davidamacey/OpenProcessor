@@ -9,6 +9,7 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 import type { ModelClassMappingSummary } from './types_models';
+import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
  *  (curation_api_contract.md "class_source values"): `human*`, the fixed
@@ -555,6 +556,17 @@ export interface Crop {
   combine_conflict?: boolean;
   combine_conflict_origins?: string[];
   combine_merged_origins?: string[];
+  /** v0.4.0: whether the item has a vector; `null` on an item written
+   *  before the field existed. */
+  embedding_state?: EmbeddingState | null;
+  /** v0.4.0 open vocabulary: the prompt, set and set revision that found
+   *  this item, its image-normalised mask outline, and why the region
+   *  gate skipped it. `null` when not served. */
+  source_prompt?: string | null;
+  open_vocab_set?: string | null;
+  open_vocab_revision?: number | null;
+  mask_polygon?: number[][] | null;
+  region_gate_skip?: string | null;
   updated_at: string;
 }
 
@@ -872,6 +884,12 @@ export interface PaginatedResponse<T> {
    *  real `pure_min`/`mixed_min` (0.85/0.6). Absent on every other
    *  endpoint. */
   purity_thresholds?: { pure_min: number; mixed_min: number } | null;
+  /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
+   *  when the route did not compute it). Absent on every other endpoint. */
+  n_unembedded?: number | null;
+  /** v0.4.0 `GET {API_PREFIX}/search/text`: items in the search scope a
+   *  semantic search cannot reach because they have no vector. */
+  unembedded_in_scope?: number | null;
 }
 
 /**
@@ -920,7 +938,10 @@ export interface SelectJobStatus {
   error?: string | null;
 }
 
-export interface CropFilter {
+/** `GET {API_PREFIX}/crops` query: the shared item filter
+ *  (`ItemFilterQuery`: class names, confidence and area bands, `max_rank`,
+ *  origin, embedding and review state) plus this route's own keys. */
+export interface CropFilter extends ItemFilterQuery {
   class_id?: number | null;
   cluster_id?: number | null;
   label_source?: LabelSource;
@@ -931,14 +952,10 @@ export interface CropFilter {
   /** `GET {API_PREFIX}/crops?source=` — renamed off the removed `?hdd_source=` param
    *  by the OpenProcessor 1327181 naming sweep (F9). */
   source?: string;
-  conf_min?: number;
-  conf_max?: number;
   sort?: string;
   limit?: number;
   page?: number;
   // -- Primary-subject filters -------------------------------------------
-  /** Keep only crops with crop_rank_in_image <= max_rank (1 or 2). */
-  max_rank?: number | null;
   /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
   min_blur_ratio?: number | null;
   /** Mine the low-confidence pool: classifier_raw_confidence < this OR no v6 box. */
@@ -1275,6 +1292,12 @@ export interface IngestImageResult {
    * identifier).
    */
   source_identifier: string | null;
+  /** v0.4.0: items that got a vector, items the embedding policy (or an
+   *  encoder failure) left without one, and boxes the ingest policy's
+   *  detect filter dropped. */
+  n_embedded: number;
+  n_not_embedded: number;
+  n_filtered: number;
   /**
    * OpenProcessor d72cc63: set when the image itself ingested but the
    * optional secondary detector failed on it (so it carries only the
@@ -1288,6 +1311,11 @@ export interface BatchIngestSummary {
   duplicates: number;
   failed: number;
   crops_indexed: number;
+  /** v0.4.0: the per-image `n_embedded` / `n_not_embedded` / `n_filtered`
+   *  summed over the batch. */
+  n_embedded: number;
+  n_not_embedded: number;
+  n_filtered: number;
   /** d72cc63: how many results carry a `secondary_detector_error`. */
   secondary_detector_failures?: number;
 }

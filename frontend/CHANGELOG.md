@@ -6,8 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+<!-- track-A open-vocab -->
+
+<!-- track-B detector+embedding -->
+
+<!-- track-C item-filter -->
+
+<!-- track-D projects+hardening -->
+
 ### Changed
 
+- Vendored OpenProcessor v0.4.0 (fce17771); item cards carry embedding and open-vocabulary fields; repeatable query parameters are sent as repeats.
 - Docs screenshots: the capture script gained import, multi-box review, box editor, region-profile test and Imported-tab states (read-only allow-list extended for `/region_profiles/test` and `/datasets/preview`); the matching docs slots now render real captures.
 
 ### Fixed

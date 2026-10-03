@@ -20,6 +20,8 @@
   import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
+  import IngestDetectorCard from '$lib/components/ingest/IngestDetectorCard.svelte';
+  import RegionStagePanel from '$lib/components/ingest/RegionStagePanel.svelte';
   import { resolve } from '$app/paths';
   import { getIngestConfig } from '$lib/api';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
@@ -88,6 +90,10 @@
   {:else if !config}
     <p class="text-sm text-zinc-500">Loading…</p>
   {:else}
+    {#if servedConfig}
+      <IngestDetectorCard config={servedConfig} />
+    {/if}
+
     {#if !config.uploadEnabled}
       <p class="text-sm text-zinc-400" data-testid="ingest-upload-disabled">
         Browser uploads are disabled on this deployment.
@@ -144,6 +150,7 @@
             pollIntervalS={config.regionDrainPollIntervalS}
             onUpdate={onDrainUpdate}
           />
+          <RegionStagePanel />
         </div>
       {/if}
     </section>

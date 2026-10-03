@@ -10,6 +10,7 @@ import type { ReprocessRegionMode, ReprocessScope } from '$lib/types_import';
 
 export const REPROCESS_SCOPES: readonly ReprocessScope[] = [
   'detect',
+  'open_vocab',
   'region',
   'vlm',
   'embed',

@@ -35,6 +35,7 @@ export function datasetStatsFixture(overrides: Partial<DatasetStats> = {}): Data
       noise_count: 0,
       method: null,
     },
+    embedding: { embedded: 1000, not_embedded: 0, by_state: { embedded: 1000 } },
     ...overrides,
   };
 }

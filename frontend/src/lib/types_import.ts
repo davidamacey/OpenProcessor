@@ -6,6 +6,12 @@
  * Pinned field-for-field to the vendored OpenAPI (OpenProcessor f582aa05)
  * by `contract/datasetsContract.test.ts`.
  */
+import type {
+  EmbeddingState,
+  ItemOrigin,
+  ReviewStatus,
+  SelectionSample,
+} from '$lib/types_itemFilter';
 
 /** `LabeledChoice`: a served vocabulary entry (`value` is the wire id). */
 export interface LabeledChoice {
@@ -374,30 +380,67 @@ export interface DatasetErrorDetail {
 
 // -- Reprocess (W10.13) --------------------------------------------------
 
-/** The ids the contract enumerates (`ReprocessOneRequest.scopes`). */
-export type ReprocessScope = 'detect' | 'region' | 'vlm' | 'embed';
+/** The ids the contract enumerates (`ReprocessOneRequest.scopes`), in
+ *  served order. */
+export type ReprocessScope = 'detect' | 'open_vocab' | 'region' | 'vlm' | 'embed';
 export type ReprocessRegionMode = 'redetect' | 'reverify';
 
-/** `ReprocessFilter`. */
+/** `ReprocessFilter`: the reprocess-only keys plus the shared item filter
+ *  (`ItemFilter`, `types_itemFilter.ts`). */
 export interface ReprocessFilter {
+  all_images?: boolean;
   class_id?: number | null;
+  class_names?: string[];
+  class_source?: string | null;
+  classifier_conf_lt?: number | null;
+  cluster_id?: number | null;
+  conf_max?: number | null;
+  conf_min?: number | null;
   dataset_split?: string | null;
   detector?: string[];
+  embedding_state?: EmbeddingState[];
+  exclude_class_names?: string[];
   import_id?: string | null;
   include_detected?: boolean;
+  item_text?: string | null;
+  label_source?: string | null;
+  label_validated?: boolean | null;
+  max_area?: number | null;
+  max_rank?: number | null;
+  min_area?: number | null;
+  min_blur_ratio?: number | null;
   missing_provenance?: boolean;
   missing_status?: boolean;
+  needs_new_class?: boolean | null;
+  on_negative_frame?: boolean | null;
+  open_vocab_set?: string | null;
+  open_vocab_status?: string[];
+  origin?: ItemOrigin[];
   profile_not?: string | null;
   profile_revision_below?: number | null;
+  proposed_by_import?: boolean | null;
   reason?: string[];
+  region_gate_skipped?: boolean | null;
   region_status?: string[];
+  review_dismissed?: boolean | null;
+  review_status?: ReviewStatus[];
   source?: string | null;
+  source_prompt?: string | null;
 }
 
 export interface ReprocessTargets {
   image_ids?: string[] | null;
   crop_ids?: string[] | null;
   filter?: ReprocessFilter | null;
+  limit?: number | null;
+  sample?: SelectionSample | null;
+  seed?: number;
+}
+
+/** `EmbedOptions`: what the `embed` scope encodes. */
+export interface EmbedOptions {
+  only_missing?: boolean;
+  parts?: ('crop' | 'frame' | 'region')[] | null;
 }
 
 export interface ReprocessRequest {
@@ -405,6 +448,7 @@ export interface ReprocessRequest {
   scopes: ReprocessScope[];
   region_mode?: ReprocessRegionMode;
   dry_run?: boolean;
+  embed?: EmbedOptions;
 }
 
 export interface ReprocessOneRequest {
@@ -429,7 +473,9 @@ export interface ReprocessScopeResult {
   failed?: number;
   not_found?: number;
   breakdown?: BreakdownRow[];
-  detail?: Record<string, number>;
+  /** Per-scope served facts; the open-vocabulary dry run serves a boolean
+   *  (`segmenter_reachable`) and floats beside the counts. */
+  detail?: Record<string, number | boolean>;
 }
 
 /** `ReprocessJobInfo`. */

@@ -102,7 +102,7 @@ describe('ReprocessControl', () => {
     const labels = [...document.querySelectorAll('fieldset label')].map((l) =>
       l.textContent?.trim(),
     );
-    expect(labels).toEqual(['Detect', 'Region', 'VLM', 'Embed']);
+    expect(labels).toEqual(['Detect', 'Open vocab', 'Region', 'VLM', 'Embed']);
     expect(document.querySelector('[data-testid="reprocess-lock-rule"]')).toBeNull();
     expect(document.querySelector('select')).toBeNull();
     check('Region');

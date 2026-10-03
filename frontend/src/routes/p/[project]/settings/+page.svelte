@@ -35,6 +35,8 @@
   import { hasFieldCoverage, type MethodInfoBase } from '$lib/strategies';
   import ScoresCard from '$lib/components/ScoresCard.svelte';
   import KeymapCard from '$lib/components/settings/KeymapCard.svelte';
+  import OpenVocabCard from '$lib/components/settings/OpenVocabCard.svelte';
+  import IngestPolicyCard from '$lib/components/settings/IngestPolicyCard.svelte';
   import { keymapAvailability } from '$stores/keymap.svelte';
   import { resolve } from '$app/paths';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
@@ -422,6 +424,9 @@
       >
     </section>
   {/if}
+
+  <OpenVocabCard />
+  <IngestPolicyCard />
 
   {#if vlmAvailability.available === true}
     <section
