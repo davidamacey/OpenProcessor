@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -22,7 +22,9 @@ from src.config.projects import DEFAULT_SLUG, ProjectStatus
 from src.core.logging import get_logger
 from src.routers.curation._config_common_models import ModelSharingUser, api_error
 from src.services.config_store.project_usage import model_dependents
+from src.services.projects.mlflow_cleanup import MlflowCleanup, delete_experiment
 from src.services.projects.registry import get_project_registry, get_record_with_seq
+from src.services.training.model_classes import owned_model_names
 
 
 if TYPE_CHECKING:
@@ -162,7 +164,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     # that is a strict SUBSET of ownership, not the ownership report
     # itself. Previously this was always `[]` for a private-only
     # project, even though those models were never unloaded either.
-    promoted_models = await _owned_models(record)
+    promoted_models = owned_model_names(record.slug)
     referenced_by: list[dict[str, str]] = []
     try:
         referenced_by = await model_dependents(
@@ -442,33 +444,10 @@ async def delete_project(
     return deleting
 
 
-async def _owned_models(record: ProjectRecord) -> list[str]:
-    """Every Triton model this project owns (``promote.json.project ==
-    record.slug``), private and shared alike -- plan §4 step 4's "the
-    owned Triton models". This is the FULL ownership enumeration: a
-    project's own models are always cleaned up on a real delete
-    regardless of whether they opted into cross-project sharing.
-    :func:`_shared_model_users` narrows this to the ``shared=True``
-    subset for the ``in_use`` refusal only -- ``force`` bypasses THAT
-    refusal (a shared model another project might depend on), never
-    whether unload runs at all."""
-    from src.services.training.model_classes import model_owner_project
-    from src.services.training.triton_promote import resolve_triton_models_dir
-
-    models_dir = resolve_triton_models_dir()
-    if not models_dir.is_dir():
-        return []
-    return sorted(
-        entry.name
-        for entry in models_dir.iterdir()
-        if entry.is_dir() and model_owner_project(entry.name) == record.slug
-    )
-
-
 async def _shared_model_users(record: ProjectRecord) -> list[str]:
     """§5.5 in_use guard: which of this project's own promoted models
     have opted into cross-project sharing (``PUT /models/{name}/sharing``,
-    ``promote.json.shared``)? A strict subset of :func:`_owned_models` --
+    ``promote.json.shared``)? A strict subset of :func:`owned_model_names` --
     used ONLY to decide the ``in_use`` refusal (bypassable with
     ``force=True``), never to decide whether unload runs (see
     :func:`_unload_owned_models`, which unloads every owned model,
@@ -481,12 +460,12 @@ async def _shared_model_users(record: ProjectRecord) -> list[str]:
     """
     from src.services.training.model_classes import is_model_shared
 
-    return [name for name in await _owned_models(record) if is_model_shared(name)]
+    return [name for name in owned_model_names(record.slug) if is_model_shared(name)]
 
 
 async def _unload_owned_models(record: ProjectRecord) -> list[str]:
     """M5 step 4 / P3F pass-3 MA2: unload every one of this project's
-    own promoted models -- private and shared alike (:func:`_owned_models`,
+    own promoted models -- private and shared alike (:func:`owned_model_names`,
     the full ownership enumeration; NOT :func:`_shared_model_users`,
     which only narrows the ``in_use`` refusal) -- from Triton and remove
     their model repo directories, reusing P2's own unload primitive
@@ -502,7 +481,7 @@ async def _unload_owned_models(record: ProjectRecord) -> list[str]:
     from src.services.training.triton_promote import ModelNotPromotedError, unload_triton_model
 
     failed: list[str] = []
-    for name in await _owned_models(record):
+    for name in owned_model_names(record.slug):
         try:
             await unload_triton_model(name)
         except ModelNotPromotedError:
@@ -521,11 +500,20 @@ async def _unload_owned_models(record: ProjectRecord) -> list[str]:
     return failed
 
 
-async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
+@dataclass(frozen=True)
+class DeleteFinished:
+    """Result of a finished delete: the tombstone plus what became of the
+    project's MLflow experiment (never silently skipped)."""
+
+    record: ProjectRecord
+    mlflow_cleanup: MlflowCleanup
+
+
+async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
     """Steps 3-9 of the guarded delete (§4): validate every dir path,
     drain wait, unload the project's own promoted models, delete the
-    exact indexes, remove the dirs, soft-delete the MLflow experiment if
-    reachable, tombstone.
+    exact indexes, remove the dirs, soft-delete the MLflow experiment over REST
+    (outcome reported in :class:`DeleteFinished`), tombstone.
 
     Path validation (m-a) runs FIRST, before any irreversible step --
     previously it ran only inside the dir-removal step, itself after
@@ -558,7 +546,9 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
         raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
     record = stored
     if record.status == 'deleted':
-        return record
+        return DeleteFinished(
+            record, MlflowCleanup('done', 'already deleted; cleaned up by the first finish')
+        )
 
     if slug in _FINISH_IN_PROGRESS:
         raise api_error(
@@ -655,7 +645,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
             )
 
         await _delete_dirs(record)
-        await _soft_delete_mlflow(record)
+        mlflow_cleanup = await delete_experiment(record.resources.mlflow_experiment)
 
         # MA1: expect_status='deleting' -- the same defense as the
         # rollback above, on the write that makes the tombstone
@@ -670,24 +660,15 @@ async def delete_project_finish(client: Any, *, slug: str) -> ProjectRecord:
 
         invalidate_capacity_cache()  # m7: the delete just freed this project's shards
 
-        logger.info('project_deleted', project=slug)
-        return tombstoned
+        logger.info(
+            'project_deleted',
+            project=slug,
+            mlflow_cleanup=mlflow_cleanup.outcome,
+            mlflow_cleanup_reason=mlflow_cleanup.reason,
+        )
+        return DeleteFinished(tombstoned, mlflow_cleanup)
     finally:
         _FINISH_IN_PROGRESS.discard(slug)
 
 
-async def _soft_delete_mlflow(record: ProjectRecord) -> None:
-    """Best-effort MLflow experiment soft-delete; unreachable server is
-    reported, never fatal to the delete."""
-    try:
-        import mlflow
-
-        client = mlflow.tracking.MlflowClient()
-        experiment = client.get_experiment_by_name(record.resources.mlflow_experiment)
-        if experiment is not None:
-            client.delete_experiment(experiment.experiment_id)
-    except Exception as exc:
-        logger.info('project_delete_mlflow_skipped', project=record.slug, error=str(exc))
-
-
-__all__ = ['delete_project', 'delete_project_finish', 'dry_run_delete']
+__all__ = ['DeleteFinished', 'delete_project', 'delete_project_finish', 'dry_run_delete']

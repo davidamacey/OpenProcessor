@@ -9,9 +9,11 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from src.clients.curation_opensearch import ClassRegistry
 from src.config.project_context import current_project
 from src.core.logging import get_logger
 from src.services.curation.embedding_state import embedded_clause
+from src.services.training.model_classes import owned_model_names
 
 
 logger = get_logger(__name__)
@@ -90,12 +92,11 @@ def _disk_usage(slug: str, resources: Any) -> dict[str, Any]:
 
 async def project_stats(client: Any) -> dict[str, Any]:
     """Must run inside a bound project (the route is scoped)."""
-    from src.config.curation import classes_index, images_index, items_index
+    from src.config.curation import images_index, items_index
 
     bound = current_project()
     items_idx = items_index()
     images_idx = images_index()
-    classes_idx = classes_index()
 
     images_count = await index_count(client, images_idx)
     items_count = await index_count(client, items_idx)
@@ -106,8 +107,10 @@ async def project_stats(client: Any) -> dict[str, Any]:
     pending_detection = await _term_count(
         client, items_idx, 'region_status', RegionStatus.PENDING_DETECTION.value
     )
-    holdout_items = await _term_count(client, items_idx, 'holdout', True)
-    classes_count = await index_count(client, classes_idx)
+    holdout_items = await _term_count(client, items_idx, 'test_holdout', True)
+    classes_count = len(
+        ClassRegistry(path=bound.record.resources.class_registry_path).load().classes
+    )
 
     indexes = []
     for role, name in bound.record.resources.indexes.items():
@@ -126,7 +129,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
             'pending_detection': pending_detection,
             'holdout_items': holdout_items,
             'classes': classes_count,
-            'promoted_models': 0,
+            'promoted_models': len(owned_model_names(bound.record.slug)),
         },
         'indexes': indexes,
         'disk': _disk_usage(bound.record.slug, bound.record.resources),

@@ -81,6 +81,22 @@ def _classes_from_promote_json(triton_name: str) -> list[ModelClass] | None:
         return None
 
 
+def owned_model_names(slug: str) -> list[str]:
+    """Every Triton model ``slug`` owns (``promote.json.project == slug``),
+    private and shared alike. The one ownership enumeration: project
+    delete (unload) and ``/stats`` (``promoted_models``) both read it."""
+    from src.services.training.triton_promote import resolve_triton_models_dir
+
+    models_dir = resolve_triton_models_dir()
+    if not models_dir.is_dir():
+        return []
+    return sorted(
+        entry.name
+        for entry in models_dir.iterdir()
+        if entry.is_dir() and model_owner_project(entry.name) == slug
+    )
+
+
 def is_model_shared(triton_name: str) -> bool:
     """``promote.json.shared`` -- ``False`` (never shared) for anything
     without a promote.json, e.g. every core-pipeline / base model."""
@@ -205,4 +221,5 @@ __all__ = [
     'model_classes',
     'model_owner_project',
     'model_sharing_revision',
+    'owned_model_names',
 ]

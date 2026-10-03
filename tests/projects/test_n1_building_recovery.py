@@ -92,7 +92,7 @@ def test_bump_revision_failure_after_building_write_ends_failed_not_wedged(monke
     asyncio.run(registry.ensure_fresh())
     deleting = asyncio.run(lifecycle.delete_project(client, slug='gamma', confirm='gamma'))
     assert deleting.status == 'deleting'
-    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='gamma'))
+    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='gamma')).record
     assert tombstoned.status == 'deleted'
 
 
@@ -136,7 +136,7 @@ def test_stale_building_record_is_deletable() -> None:
     # 'building' -- a rollback must never recreate the N1 wedge.
     assert deleting.pre_delete_status == 'failed'
 
-    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='stuck'))
+    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='stuck')).record
     assert tombstoned.status == 'deleted'
 
 

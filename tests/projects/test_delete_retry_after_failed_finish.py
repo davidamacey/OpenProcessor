@@ -116,7 +116,7 @@ def test_delete_retry_after_failed_index_delete_succeeds(leak_env: LeakEnv) -> N
     assert retry_resp.json()['project']['status'] == 'deleting'
 
     # The transient fault has cleared; the retried finish now succeeds.
-    finished = asyncio.run(lifecycle.delete_project_finish(guarded_client, slug='alpha'))
+    finished = asyncio.run(lifecycle.delete_project_finish(guarded_client, slug='alpha')).record
     assert finished.status == 'deleted'
 
     final = client_http.get(f'{API}/alpha')

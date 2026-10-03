@@ -68,7 +68,7 @@ global_router = APIRouter(
 _BACKGROUND_DELETE_TASKS: dict[str, asyncio.Task[None]] = {}
 
 
-def _publish_lifecycle_event(event_type: str, record: Any) -> None:
+def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -> None:
     """M5 step 9: every project.* lifecycle event on the global stream
     (never scoped -- these routes act *on* a project, not *within* one),
     so any open Cropwright tab (not just the one that made the request)
@@ -80,6 +80,7 @@ def _publish_lifecycle_event(event_type: str, record: Any) -> None:
         target=record.slug,
         status=record.status,
         revision=record.revision,
+        **extra,
     )
 
 
@@ -301,7 +302,11 @@ async def delete_project(
             # (docstring above; delta 10) -- published only once the
             # tombstone write itself succeeded, never on a busy/failed
             # retry (M3/M4 leave the record retryable with no event).
-            _publish_lifecycle_event('project.deleted', finished)
+            _publish_lifecycle_event(
+                'project.deleted',
+                finished.record,
+                mlflow_cleanup=finished.mlflow_cleanup.to_wire(),
+            )
 
     # MA1 probe 2 / M11: only schedule a new finish task for this slug if
     # none is already running -- a re-DELETE on an already-'deleting'

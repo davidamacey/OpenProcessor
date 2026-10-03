@@ -109,7 +109,7 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
 
         deleting = await lifecycle.delete_project(client, slug='cars', confirm='cars', force=True)
         assert deleting.status == 'deleting'
-        finished = await lifecycle.delete_project_finish(client, slug='cars')
+        finished = (await lifecycle.delete_project_finish(client, slug='cars')).record
         assert finished.status == 'deleted'
 
     asyncio.run(_run())
@@ -145,7 +145,7 @@ def test_real_delete_unloads_a_private_promoted_model_with_no_force(tmp_path, mo
         # No force=True: a private model must never trip `in_use`.
         deleting = await lifecycle.delete_project(client, slug='cars', confirm='cars')
         assert deleting.status == 'deleting'
-        finished = await lifecycle.delete_project_finish(client, slug='cars')
+        finished = (await lifecycle.delete_project_finish(client, slug='cars')).record
         assert finished.status == 'deleted'
 
     asyncio.run(_run())

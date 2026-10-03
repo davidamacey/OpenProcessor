@@ -295,6 +295,10 @@ def test_evaluator_gets_the_same_mlflow_tracking_url_as_the_trainer() -> None:
     evaluator_url = _value(evaluator_env, 'MLFLOW_TRACKING_URI')
     assert trainer_url is not None
     assert evaluator_url == trainer_url
+    api_env = services['yolo-api'].get('environment') or []
+    assert _value(api_env, 'MLFLOW_TRACKING_URI') == trainer_url, (
+        'project delete cleans the MLflow experiment over REST from the API'
+    )
 
 
 def test_api_evaluator_segmenter_gpu_ids_are_env_driven_not_hardcoded() -> None:

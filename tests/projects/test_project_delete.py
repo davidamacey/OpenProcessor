@@ -113,7 +113,7 @@ def test_delete_removes_exact_indexes_and_tombstones_slug() -> None:
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
-    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert tombstoned.status == 'deleted'
     assert set(client.deleted_indexes) == expected_indexes  # exact names, never a pattern
 
@@ -130,11 +130,11 @@ def test_delete_finish_is_idempotent_after_crash_between_steps() -> None:
     asyncio.run(registry.ensure_fresh())
 
     asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
-    first = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    first = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert first.status == 'deleted'
     # A crash could leave delete_project_finish re-run against an
     # already-deleted record; it must be a no-op, not an error.
-    second = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    second = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert second.status == 'deleted'
 
 
@@ -242,7 +242,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
     # A retried delete_project_finish, once the transient failure clears,
     # succeeds and tombstones -- idempotent resumability, not a dead end.
     client.indices.delete = real_delete  # type: ignore[method-assign]
-    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert tombstoned.status == 'deleted'
 
 
@@ -323,3 +323,16 @@ def test_drain_timeout_rollback_preserves_a_concurrent_patch(monkeypatch) -> Non
     assert rolled_back.display_name == 'Renamed mid-drain', (
         'm2: the concurrent PATCH must not be silently discarded by the rollback'
     )
+
+
+def test_delete_finish_reports_mlflow_cleanup_outcome(monkeypatch) -> None:
+    """#83: the delete result carries an explicit mlflow_cleanup outcome."""
+    monkeypatch.delenv('MLFLOW_TRACKING_URI', raising=False)
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    finished = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    assert finished.mlflow_cleanup.outcome == 'skipped_not_configured'
