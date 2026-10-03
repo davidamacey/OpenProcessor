@@ -34,8 +34,7 @@ _SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
 
 async def _resolve_and_bind(slug: str) -> ProjectRecord:
     registry = get_project_registry()
-    await registry.ensure_fresh()
-    record = registry.get(slug)
+    record = await registry.lookup(slug)
     if record is None or record.status == 'deleted':
         raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
     if record.status == 'building':
