@@ -795,8 +795,12 @@ generated contracts (`contracts/openapi/curation.json`, `contracts/ts/*.ts`,
     as query parameters scope the embed and VLM stages; the job stage list gains
     `embed_missing` (first); `result.stages.embed_missing` is `{images,
     images_failed, embedded}` or `{skipped, reason}` or `{status: 'error'}`.
+    Any stage reporting `status: 'error'` (including an embed with failed
+    images) ends the job `failed`, naming the stages; the result is kept.
 13. `POST /export/yolo`: optional `item_filter` (the filter as an object),
-    recorded in the manifest as `item_filter`.
+    recorded in the manifest as `item_filter`. It takes no `dry_run`: only the
+    run-on-selection routes of item 9 do. Size an export with `GET /stats/dataset`
+    over the same filter.
 14. The regions review queue with the region profile off answers an empty queue with
     `empty_reason`; `/review/regions/locate` answers reason `region_profile_off`.
     Show the reason, not a blank grid.

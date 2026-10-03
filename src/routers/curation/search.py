@@ -21,6 +21,7 @@ from fastapi import HTTPException, Query, Request
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.services.curation import semantic_search
+from src.services.curation.item_filter import item_filter_clauses
 
 
 def _semantic_search_enabled() -> bool:
@@ -88,6 +89,11 @@ async def search_text(
             status_code=400,
             detail='semantic search is disabled (set OP_SEMANTIC_SEARCH_ENABLED=1 to enable)',
         )
+
+    try:
+        item_filter_clauses(item_filter)  # a malformed band is the caller's 400, not an outage
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     pe_encoder = _get_pe_encoder(request)
     if pe_encoder is None or not getattr(pe_encoder, 'text_ready', False):
