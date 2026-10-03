@@ -1,19 +1,19 @@
 {
-  "uid": "gpu-metrics",
-  "title": "OpenProcessor / GPUs",
-  "description": "Per-GPU utilization, VRAM, power, thermals, clocks and codecs from DCGM.",
+  "uid": "op-overview",
+  "title": "OpenProcessor / Overview",
+  "description": "Service health at a glance: targets, API, Triton, GPUs, host and alerts.",
   "tags": [
     "openprocessor",
-    "gpu"
+    "overview"
   ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
   "schemaVersion": 39,
   "version": 1,
-  "refresh": "15s",
+  "refresh": "30s",
   "time": {
-    "from": "now-1h",
+    "from": "now-3h",
     "to": "now"
   },
   "links": [
@@ -68,36 +68,13 @@
         "hide": 0,
         "refresh": 1,
         "regex": ""
-      },
-      {
-        "type": "query",
-        "name": "gpu",
-        "label": "GPU",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${ds}"
-        },
-        "query": {
-          "query": "label_values(DCGM_FI_DEV_GPU_UTIL, gpu)",
-          "refId": "vgpu"
-        },
-        "definition": "label_values(DCGM_FI_DEV_GPU_UTIL, gpu)",
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "allValue": ".*",
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "sort": 1
       }
     ]
   },
   "panels": [
     {
       "type": "row",
-      "title": "Cards at a glance",
+      "title": "Service health",
       "id": 1,
       "collapsed": false,
       "gridPos": {
@@ -120,14 +97,14 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Current state of each GPU (3-card layout: use the gpu variable to focus one). Source: DCGM, which sees every process on the card."
+        "content": "Is everything up and answering? Red means a scrape target is down or an alert is firing."
       },
       "transparent": true
     },
     {
-      "type": "gauge",
-      "title": "Utilization",
-      "description": "",
+      "type": "stat",
+      "title": "Scrape targets up",
+      "description": "Share of the stack scrape targets (Triton, API, DCGM, node-exporter) that Prometheus can reach.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -138,59 +115,62 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_GPU_UTIL{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
+          "expr": "avg(up{job=~\"triton|yolo-api|dcgm|node\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
+          "unit": "percentunit",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "#56A64B",
+                "color": "#E02F44",
                 "value": null
               },
               {
                 "color": "#E0B400",
-                "value": 75
+                "value": 0.75
               },
               {
-                "color": "#E02F44",
-                "value": 95
+                "color": "#56A64B",
+                "value": 1
               }
             ]
           },
           "color": {
-            "mode": "thresholds"
-          }
+            "mode": "thresholds",
+            "fixedColor": "#3274D9"
+          },
+          "mappings": []
         },
         "overrides": []
       },
       "options": {
+        "colorMode": "background",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
         },
-        "showThresholdMarkers": true
+        "textMode": "auto"
       },
       "id": 3,
       "gridPos": {
-        "h": 7,
-        "w": 6,
+        "h": 4,
+        "w": 4,
         "x": 0,
         "y": 3
       }
     },
     {
-      "type": "gauge",
-      "title": "VRAM used",
-      "description": "",
+      "type": "stat",
+      "title": "API requests / s",
+      "description": "All API routes except /metrics and /health.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -201,59 +181,55 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "100 * DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"} / (DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"} + DCGM_FI_DEV_FB_FREE{gpu=~\"$gpu\"})",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
+          "expr": "sum(rate(http_request_duration_seconds_count{route!~\"/metrics|/health\"}[$__rate_interval]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
+          "unit": "reqps",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "#56A64B",
+                "color": "#3274D9",
                 "value": null
-              },
-              {
-                "color": "#E0B400",
-                "value": 85
-              },
-              {
-                "color": "#E02F44",
-                "value": 95
               }
             ]
           },
           "color": {
-            "mode": "thresholds"
-          }
+            "mode": "fixed",
+            "fixedColor": "#3274D9"
+          },
+          "mappings": [],
+          "decimals": 2
         },
         "overrides": []
       },
       "options": {
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
         },
-        "showThresholdMarkers": true
+        "textMode": "auto"
       },
       "id": 4,
       "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 6,
+        "h": 4,
+        "w": 4,
+        "x": 4,
         "y": 3
       }
     },
     {
-      "type": "gauge",
-      "title": "Temperature",
-      "description": "",
+      "type": "stat",
+      "title": "API 5xx ratio",
+      "description": "Server errors as a share of API requests.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -264,16 +240,15 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
+          "expr": "sum(rate(http_request_duration_seconds_count{status=~\"5..\",route!~\"/metrics|/health\"}[$__rate_interval])) / clamp_min(sum(rate(http_request_duration_seconds_count{route!~\"/metrics|/health\"}[$__rate_interval])),1e-9)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "celsius",
-          "min": 0,
-          "max": 100,
+          "unit": "percentunit",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -283,40 +258,111 @@
               },
               {
                 "color": "#E0B400",
-                "value": 75
+                "value": 0.01
               },
               {
                 "color": "#E02F44",
-                "value": 85
+                "value": 0.05
               }
             ]
           },
           "color": {
-            "mode": "thresholds"
-          }
+            "mode": "thresholds",
+            "fixedColor": "#3274D9"
+          },
+          "mappings": [],
+          "decimals": 2
         },
         "overrides": []
       },
       "options": {
+        "colorMode": "background",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
         },
-        "showThresholdMarkers": true
+        "textMode": "auto"
       },
       "id": 5,
       "gridPos": {
-        "h": 7,
-        "w": 6,
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 3
+      }
+    },
+    {
+      "type": "stat",
+      "title": "API p95 latency",
+      "description": "95th percentile request time, all routes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route!~\"/metrics|/health\"}[$__rate_interval])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E0B400",
+                "value": 1
+              },
+              {
+                "color": "#E02F44",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#3274D9"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
         "x": 12,
         "y": 3
       }
     },
     {
-      "type": "gauge",
-      "title": "Power draw",
-      "description": "Scale is 350 W, the limit of the largest card in the layout.",
+      "type": "stat",
+      "title": "Triton failures / s",
+      "description": "Failed inference requests across all models.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -327,16 +373,15 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_POWER_USAGE{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
+          "expr": "sum(rate(nv_inference_request_failure[$__rate_interval])) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 350,
+          "unit": "ops",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -346,69 +391,45 @@
               },
               {
                 "color": "#E0B400",
-                "value": 250
+                "value": 0.01
               },
               {
                 "color": "#E02F44",
-                "value": 300
+                "value": 1
               }
             ]
           },
           "color": {
-            "mode": "thresholds"
-          }
+            "mode": "thresholds",
+            "fixedColor": "#3274D9"
+          },
+          "mappings": [],
+          "decimals": 3
         },
         "overrides": []
       },
       "options": {
+        "colorMode": "background",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
         },
-        "showThresholdMarkers": true
+        "textMode": "auto"
       },
-      "id": 6,
+      "id": 7,
       "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
+        "h": 4,
+        "w": 4,
+        "x": 16,
         "y": 3
       }
     },
     {
-      "type": "row",
-      "title": "Utilization and memory",
-      "id": 7,
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 10
-      },
-      "panels": []
-    },
-    {
-      "type": "text",
-      "title": "",
-      "id": 8,
-      "gridPos": {
-        "h": 2,
-        "w": 24,
-        "x": 0,
-        "y": 11
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "Load and VRAM over time."
-      },
-      "transparent": true
-    },
-    {
-      "type": "timeseries",
-      "title": "GPU utilization",
-      "description": "",
+      "type": "stat",
+      "title": "Alerts firing",
+      "description": "Prometheus alert rules currently firing (see monitoring/alerts).",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -419,26 +440,15 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_GPU_UTIL{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
+          "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 12,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "line"
-            }
-          },
+          "unit": "short",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -447,43 +457,116 @@
                 "value": null
               },
               {
+                "color": "#E0B400",
+                "value": 1
+              },
+              {
                 "color": "#E02F44",
-                "value": 95
+                "value": 3
               }
             ]
           },
-          "min": 0,
-          "max": 100
+          "color": {
+            "mode": "thresholds",
+            "fixedColor": "#3274D9"
+          },
+          "mappings": []
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
           "calcs": [
-            "mean",
-            "max",
             "lastNotNull"
           ]
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "textMode": "auto"
+      },
+      "id": 8,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 3
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Scrape target status",
+      "description": "One row per scrape job. Gaps mean Prometheus could not scrape.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "up{job=~\"triton|yolo-api|dcgm|node|loki\"}",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E02F44",
+                "value": null
+              },
+              {
+                "color": "#56A64B",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "#E02F44"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "#56A64B"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
         }
       },
       "id": 9,
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 13
+        "y": 7
       }
     },
     {
-      "type": "timeseries",
-      "title": "Memory-copy utilization",
-      "description": "",
+      "type": "table",
+      "title": "Active alerts",
+      "description": "Firing and pending rules from monitoring/alerts/triton-alerts.yml.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -494,209 +577,73 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_MEM_COPY_UTIL{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
+          "expr": "ALERTS{alertstate=~\"firing|pending\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "group": true,
+              "job": true,
+              "alertstate": true
+            }
+          }
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 12,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "min": 0,
-          "max": 100
-        },
+        "defaults": {},
         "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "max",
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
       },
       "id": 10,
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 13
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "VRAM used",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "expr": "DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"} * 1024 * 1024",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 12,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "max",
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 11,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 21
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "VRAM free",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "expr": "DCGM_FI_DEV_FB_FREE{gpu=~\"$gpu\"} * 1024 * 1024",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 12,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "max",
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 12,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 21
+        "y": 7
       }
     },
     {
       "type": "row",
-      "title": "Power, thermals and clocks",
-      "id": 13,
+      "title": "API traffic",
+      "id": 11,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 14
       },
       "panels": []
     },
     {
       "type": "text",
       "title": "",
-      "id": 14,
+      "id": 12,
       "gridPos": {
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 15
       },
       "options": {
         "mode": "markdown",
-        "content": "Sustained high temperature with falling clocks means thermal throttling."
+        "content": "Request volume, errors and latency for the FastAPI service."
       },
       "transparent": true
     },
     {
       "type": "timeseries",
-      "title": "Power draw",
-      "description": "",
+      "title": "Requests / s by status",
+      "description": "Stacked by HTTP status code.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -707,27 +654,26 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_POWER_USAGE{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
+          "expr": "sum by (status) (rate(http_request_duration_seconds_count{route!~\"/metrics|/health\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
+          "unit": "reqps",
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 12,
             "showPoints": "never",
             "spanNulls": false,
             "stacking": {
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
             }
-          },
-          "min": 0
+          }
         },
         "overrides": []
       },
@@ -746,18 +692,18 @@
           "sort": "desc"
         }
       },
-      "id": 15,
+      "id": 13,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 17
       }
     },
     {
       "type": "timeseries",
-      "title": "Temperature",
-      "description": "",
+      "title": "Latency p50 / p95 / p99",
+      "description": "Request time across all routes; the dashed line marks 5 s.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -768,8 +714,8 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} core",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{route!~\"/metrics|/health\"}[$__rate_interval])))",
+          "legendFormat": "p50",
           "refId": "A"
         },
         {
@@ -777,14 +723,23 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_MEMORY_TEMP{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} memory",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route!~\"/metrics|/health\"}[$__rate_interval])))",
+          "legendFormat": "p95",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route!~\"/metrics|/health\"}[$__rate_interval])))",
+          "legendFormat": "p99",
+          "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "celsius",
+          "unit": "s",
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 12,
@@ -806,7 +761,7 @@
               },
               {
                 "color": "#E02F44",
-                "value": 85
+                "value": 5
               }
             ]
           }
@@ -828,18 +783,47 @@
           "sort": "desc"
         }
       },
-      "id": 16,
+      "id": 14,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 32
+        "y": 17
       }
     },
     {
+      "type": "row",
+      "title": "Inference (Triton)",
+      "id": 15,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "",
+      "id": 16,
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Per-model request rate and how long requests wait before they compute."
+      },
+      "transparent": true
+    },
+    {
       "type": "timeseries",
-      "title": "SM clock",
-      "description": "",
+      "title": "Inferences / s by model",
+      "description": "Individual inferences (a batched request counts each item).",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -850,14 +834,14 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_SM_CLOCK{gpu=~\"$gpu\"} * 1e6",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
+          "expr": "sum by (model) (rate(nv_inference_count[$__rate_interval]))",
+          "legendFormat": "{{model}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "hertz",
+          "unit": "ops",
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 12,
@@ -869,8 +853,7 @@
             "thresholdsStyle": {
               "mode": "off"
             }
-          },
-          "min": 0
+          }
         },
         "overrides": []
       },
@@ -894,13 +877,13 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 28
       }
     },
     {
       "type": "timeseries",
-      "title": "Energy used (rate)",
-      "description": "Average watts derived from the energy counter.",
+      "title": "Pending requests by model",
+      "description": "Requests queued inside Triton.",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds}"
@@ -911,14 +894,14 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "rate(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION{gpu=~\"$gpu\"}[$__rate_interval]) / 1000",
-          "legendFormat": "GPU {{gpu}} {{modelName}}",
+          "expr": "sum by (model) (nv_inference_pending_request_count)",
+          "legendFormat": "{{model}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
+          "unit": "short",
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 12,
@@ -928,8 +911,21 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E02F44",
+                "value": 50
+              }
+            ]
           }
         },
         "overrides": []
@@ -954,19 +950,19 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 28
       }
     },
     {
       "type": "row",
-      "title": "Codecs and health",
+      "title": "GPUs",
       "id": 19,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 36
       },
       "panels": []
     },
@@ -978,17 +974,17 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 37
       },
       "options": {
         "mode": "markdown",
-        "content": "Hardware video engines and error counters."
+        "content": "Per-card load and VRAM from DCGM (every process on the card, not only Triton)."
       },
       "transparent": true
     },
     {
       "type": "timeseries",
-      "title": "NVENC / NVDEC utilization",
+      "title": "GPU utilization",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1000,18 +996,9 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "DCGM_FI_DEV_ENC_UTIL{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} enc",
+          "expr": "DCGM_FI_DEV_GPU_UTIL",
+          "legendFormat": "GPU {{gpu}} {{modelName}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "expr": "DCGM_FI_DEV_DEC_UTIL{gpu=~\"$gpu\"}",
-          "legendFormat": "GPU {{gpu}} dec",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -1026,8 +1013,21 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E02F44",
+                "value": 90
+              }
+            ]
           },
           "min": 0,
           "max": 100
@@ -1054,103 +1054,12 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 39
       }
-    },
-    {
-      "type": "stat",
-      "title": "XID errors (last code)",
-      "description": "Non-zero means the driver reported a GPU error; look up the code in NVIDIA docs.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "expr": "max(DCGM_FI_DEV_XID_ERRORS{gpu=~\"$gpu\"})",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#56A64B",
-                "value": null
-              },
-              {
-                "color": "#E02F44",
-                "value": 1
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds",
-            "fixedColor": "#3274D9"
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "auto"
-      },
-      "id": 22,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 51
-      }
-    },
-    {
-      "type": "row",
-      "title": "Triton view",
-      "id": 23,
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 59
-      },
-      "panels": []
-    },
-    {
-      "type": "text",
-      "title": "",
-      "id": 24,
-      "gridPos": {
-        "h": 2,
-        "w": 24,
-        "x": 0,
-        "y": 60
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "What Triton itself reports; compare with DCGM to see how much of the card is not Triton."
-      },
-      "transparent": true
     },
     {
       "type": "timeseries",
-      "title": "Triton GPU memory used",
+      "title": "GPU memory used",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1162,14 +1071,140 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "nv_gpu_memory_used_bytes",
-          "legendFormat": "{{gpu_uuid}}",
+          "expr": "100 * DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE)",
+          "legendFormat": "GPU {{gpu}} {{modelName}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes",
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E0B400",
+                "value": 85
+              },
+              {
+                "color": "#E02F44",
+                "value": 95
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 22,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      }
+    },
+    {
+      "type": "row",
+      "title": "Host",
+      "id": 23,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "",
+      "id": 24,
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "CPU load and memory headroom from node-exporter."
+      },
+      "transparent": true
+    },
+    {
+      "type": "timeseries",
+      "title": "Load average",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "node_load1",
+          "legendFormat": "1m",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "node_load5",
+          "legendFormat": "5m",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "node_load15",
+          "legendFormat": "15m",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 12,
@@ -1181,8 +1216,7 @@
             "thresholdsStyle": {
               "mode": "off"
             }
-          },
-          "min": 0
+          }
         },
         "overrides": []
       },
@@ -1206,12 +1240,12 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 62
+        "y": 50
       }
     },
     {
       "type": "timeseries",
-      "title": "Triton GPU utilization",
+      "title": "Memory available",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1223,8 +1257,8 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "100 * nv_gpu_utilization",
-          "legendFormat": "{{gpu_uuid}}",
+          "expr": "100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+          "legendFormat": "available %",
           "refId": "A"
         }
       ],
@@ -1268,7 +1302,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 62
+        "y": 50
       }
     }
   ]

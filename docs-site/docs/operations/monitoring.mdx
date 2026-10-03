@@ -71,38 +71,35 @@ if you need notifications.
 Grafana is provisioned from `monitoring/grafana-datasources.yml`
 (Prometheus as the default data source, plus Loki) and
 `monitoring/grafana-dashboards.yml`, which loads every JSON file in
-`monitoring/dashboards/`. Two dashboards ship:
+`monitoring/dashboards/`. Open Grafana (port 4605) and use the
+**OpenProcessor dashboards** link at the top of any dashboard, or search by
+the `openprocessor` tag. Every dashboard has a data-source variable, a
+"Firing alerts" annotation toggle, and short row descriptions.
 
-**OpenProcessor Triton Dashboard** (`triton-unified-dashboard.json`), the
-all-in-one view:
+| Dashboard | Use it to | Metrics |
+|---|---|---|
+| **Overview** (`overview.json`) | See service health at a glance: scrape targets, API rate/5xx/p95, Triton failures, firing alerts, GPU and host load | `up`, `http_request_duration_seconds_*`, `nv_inference_*`, `ALERTS`, `DCGM_FI_DEV_*`, `node_*` |
+| **Ingest pipeline** (`ingest-pipeline.json`) | Find the slow ingest stage; watch decode, prefetch, thumbnail and crop caches, write conflicts | `op_pipeline_stage_seconds_*`, `op_pipeline_stage_bytes_total`, `op_source_image_*`, `op_thumbnail_cache_*`, `op_shm_crop_cache_*`, `op_open_vocab_items_written_total`, `op_ingest_occ_final_conflict_total` |
+| **API and labeling** (`api-curation.json`) | Per-route traffic, errors, latency; VLM call mix and parse failures | `http_request_duration_seconds_*`, `op_vlm_*` |
+| **OpenProcessor Triton Dashboard** (`triton-unified-dashboard.json`) | Per-model throughput, latency, batching, queue time | `nv_inference_*`, `nv_gpu_*`, `node_*` |
+| **GPUs** (`gpu-metrics-dashboard.json`) | Per-card utilization, VRAM, power, temperature, clocks, codecs, XID errors (`gpu` variable) | `DCGM_FI_DEV_*`, `nv_gpu_*` |
+| **Logs** (`logs.json`) | Log volume, error and warning counts, recent errors, search (Loki; `job`, `container`, search variables) | Loki streams from Alloy |
 
-- Service overview gauges: models ready, total throughput, average
-  latency, queue time, pending requests, GPU usage.
-- System gauges: host CPU, memory, 1-minute load, CPU cores.
-- Per-model comparisons: throughput, average/p95/p99 latency, a latency
-  leaderboard, average batch size (requests per execution, so you can see
-  whether dynamic batching is kicking in), queue time, pending and failed
-  requests.
-- GPU utilization, memory, power and temperature from Triton's own
-  metrics, then CPU by mode and a memory breakdown.
+:::note[Aggregating API metrics across workers]
+The API's `op_*` and request metrics are per-process counters. With more
+than one API worker, set `PROMETHEUS_MULTIPROC_DIR` so the workers share one
+view; the shipped compose file does not set it yet, so each scrape may show a
+single worker's counts. The ingest dashboard also stays flat until images are
+ingested.
+:::
 
-**GPU Metrics** (`gpu-metrics-dashboard.json`): per-card utilization,
-memory used, power and temperature from DCGM, with host CPU and memory
-alongside. Use it when Triton shares a host with other GPU work (the
-segmenter, the VLM, training), because DCGM sees every process on each
-card while Triton's metrics see only Triton.
-
-<Screenshot
-  name="backend-grafana-triton.png"
-  alt="Grafana OpenProcessor Triton Dashboard: per-model throughput, average/p95/p99 latency and a latency leaderboard under read-only inference load"
-  caption="OpenProcessor Triton Dashboard under read-only COCO traffic on a public-sample-data stack: per-model throughput, latency and leaderboard (last 5 minutes)"
-/>
-
-<Screenshot
-  name="backend-grafana-gpu.png"
-  alt="Grafana GPU Metrics dashboard: per-card GPU utilization, memory, power and temperature plus host CPU and memory"
-  caption="GPU Metrics dashboard: every card on the host, from DCGM (last 5 minutes)"
-/>
+:::note[Panels without data]
+The error-ratio and error-log panels are empty when nothing is failing, and
+the latency percentiles of idle stages are empty because there are no
+observations. The segmenter and detection worker export no metrics, so they
+have no panels; see the tracking issue "observability: metrics needed for the
+Grafana dashboards".
+:::
 
 Panels only move while the API is serving requests; an idle stack shows
 flat lines. To add a dashboard, drop its JSON into

@@ -459,3 +459,11 @@ Exposed on port 9100:
 | `node_network_*` | Network interface metrics |
 
 **View all system metrics:** `curl http://localhost:9100/metrics`
+
+## Dashboards (provisioned from `monitoring/dashboards/`)
+
+`overview.json`, `ingest-pipeline.json`, `api-curation.json`,
+`triton-unified-dashboard.json`, `gpu-metrics-dashboard.json`, `logs.json`.
+All carry the `openprocessor` tag and a links dropdown. Metric names are
+pinned by `tests/test_monitoring_metrics.py`. See
+`docs-site/docs/operations/monitoring.mdx` for what each panel uses.

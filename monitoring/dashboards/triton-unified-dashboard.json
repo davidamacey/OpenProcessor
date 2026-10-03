@@ -6,7 +6,18 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "title": "OpenProcessor dashboards",
+      "type": "dashboards",
+      "tags": [
+        "openprocessor"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
   "panels": [
     {
       "datasource": "Prometheus",
@@ -1669,9 +1680,10 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
+    "openprocessor",
     "triton",
-    "yolo",
-    "unified"
+    "unified",
+    "yolo"
   ],
   "templating": {
     "list": []
