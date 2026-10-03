@@ -212,16 +212,12 @@ class CurationConfig:
     grafana_url: str | None = None
     prometheus_url: str | None = None
     dashboards_url: str | None = None
-    triton_metrics_url: str | None = None
-    dcgm_url: str | None = None
     # Host ports the services are published on (compose defaults; 0 =
     # disabled). Unset URLs are derived as <request host>:<port>.
     grafana_port: int = 4605
     prometheus_port: int = 4604
     dashboards_port: int = 4608
     mlflow_port: int = 4609
-    triton_metrics_port: int = 4602
-    dcgm_port: int = 4610
 
     # Confidence floor gating the item wire's `probe_actionable` field
     # (see `src.services.curation.wire.serialize_item` and
@@ -391,14 +387,10 @@ class CurationConfig:
             grafana_url=_optional_str('GRAFANA_URL', defaults.grafana_url),
             prometheus_url=_optional_str('PROMETHEUS_URL', defaults.prometheus_url),
             dashboards_url=_optional_str('DASHBOARDS_URL', defaults.dashboards_url),
-            triton_metrics_url=_optional_str('TRITON_METRICS_URL', defaults.triton_metrics_url),
-            dcgm_url=_optional_str('DCGM_URL', defaults.dcgm_url),
             grafana_port=_int('GRAFANA_PORT', defaults.grafana_port),
             prometheus_port=_int('PROMETHEUS_PORT', defaults.prometheus_port),
             dashboards_port=_int('DASHBOARDS_PORT', defaults.dashboards_port),
             mlflow_port=_int('MLFLOW_PORT', defaults.mlflow_port),
-            triton_metrics_port=_int('TRITON_METRICS_PORT', defaults.triton_metrics_port),
-            dcgm_port=_int('DCGM_PORT', defaults.dcgm_port),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
             encoder_embedding_dim=_int('ENCODER_EMBEDDING_DIM', defaults.encoder_embedding_dim),
             backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),
