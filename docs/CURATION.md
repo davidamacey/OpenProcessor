@@ -683,10 +683,11 @@ curl -s -X POST $API/reprocess -H 'content-type: application/json' -d '{
 }' | jq
 ```
 
-- `scopes`: any of `detect`, `region`, `vlm`, `embed`.
+- `scopes`: any of `detect`, `open_vocab`, `region`, `vlm`, `embed`.
 - `targets`: `crop_ids`, `image_ids` or a `filter` (`class_id`, `source`,
   `import_id`, `dataset_split`, `region_status`, `missing_status`,
-  `profile_not`, `profile_revision_below`, ...).
+  `profile_not`, `profile_revision_below`, ...). The image-level selectors
+  `all_images` and `open_vocab_status` also reach images with no item yet.
 - `region_mode`: `redetect` (clear and re-run the cascade) or `reverify`
   (re-run VLM verification on existing boxes).
 - Detect and embed over many images return a job; poll
@@ -696,6 +697,47 @@ curl -s -X POST $API/reprocess -H 'content-type: application/json' -d '{
 - `POST /curation/projects/{project}/crops/{crop_id}/reprocess` and
   `POST /curation/projects/{project}/images/{image_id}/reprocess` run one
   target.
+
+## Open-vocabulary detection
+
+A prompt set (config axis `open_vocab`) lists text prompts such as "traffic
+cone". SAM 3 runs each prompt on the WHOLE source image and every hit becomes a
+normal item with `class_source: open_vocab_proposal`, `class_detector: sam3`,
+`source_prompt`, `open_vocab_set`, `open_vocab_revision` and (with `mask`) a
+`mask_polygon`. The target's `class_name` is the registry class, by name; an
+empty one stores the hit as an unlabeled proposal named by the prompt. It
+needs the segmenter (`OP_SEGMENTER_URL`).
+
+| Operation | Route |
+|---|---|
+| Sets: list, create, read, save, delete, clone | `GET /curation/projects/{project}/open_vocab`, `POST /curation/projects/{project}/open_vocab`, `GET /curation/projects/{project}/open_vocab/{name}`, `PUT /curation/projects/{project}/open_vocab/{name}`, `DELETE /curation/projects/{project}/open_vocab/{name}`, `POST /curation/projects/{project}/open_vocab/{name}/clone` |
+| Validate, form schema | `POST /curation/projects/{project}/open_vocab/validate`, `GET /curation/projects/{project}/open_vocab/schema` |
+| Activate, deactivate, roll back | `POST /curation/projects/{project}/open_vocab/{name}/activate`, `POST /curation/projects/{project}/open_vocab/deactivate`, `POST /curation/projects/{project}/open_vocab/active/rollback`, `GET /curation/projects/{project}/open_vocab/active` |
+| Try one unsaved target on one image | `POST /curation/projects/{project}/open_vocab/test` |
+| Run over images | `POST /curation/projects/{project}/reprocess` with scope `open_vocab` |
+
+- A pass writes through the same item writer as ingest, so a hit gets its crop,
+  embedding, cluster and region seed like any detector item. Ids are
+  deterministic in (image, box): a re-run upserts, and output of the same set
+  that a re-run no longer produces is removed.
+- Lock rule: a hit overlapping a locked item (IoU 0.8 or more, any class) is
+  skipped and counted; an existing item of the same class name that overlaps at
+  `dedup_iou` or more wins. A locked item is never overwritten, replaced or
+  deleted.
+- A segmenter outage is never "no hit": the image is left as it was. A target
+  named like a primary-detector class is a warning. At most
+  `max_enabled_targets` (default 8, ceiling 32) targets may be enabled.
+- `run_on_ingest` (off by default) queues newly ingested images in a background
+  task and stamps them `open_vocab_status: pending` until done.
+- One gate decides whether to spend a segmenter call: registry rules
+  (`parent_classes`), an optional vision-model yes/no
+  (`gating.tier2_vlm_precheck`) and an optional hit-rate sampler
+  (`gating.tier3_hit_rate`); both optional tiers are off by default and a
+  skipped target keeps its earlier output.
+- Metrics: `op_open_vocab_call_seconds`, `op_segmenter_gate_decisions_total`,
+  `op_open_vocab_hits_dropped_total`, `op_open_vocab_items_written_total`.
+
+See the [Open-vocabulary detection guide](../docs-site/docs/guides/open-vocabulary.mdx).
 
 ## Combine projects
 

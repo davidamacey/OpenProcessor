@@ -1,0 +1,163 @@
+---
+sidebar_position: 14
+title: Open-vocabulary detection
+---
+
+# Open-vocabulary detection
+
+An open-vocabulary pass finds objects the primary detector has no class for.
+You define a **prompt set**: a list of text prompts such as "traffic cone" or
+"cup". SAM 3 runs each prompt on the whole source image, and every hit becomes
+a normal item (its own crop, embedding, cluster, label and export row), exactly
+like an item from the primary detector. Crop-scoped region detection is
+unchanged and stays the refinement for small objects.
+
+It needs the segmenter service (`OP_SEGMENTER_URL`). `API=http://localhost:4603`
+and project `cars` are assumed.
+
+## Concepts
+
+- **Prompt set.** A versioned, project-scoped config document with the same
+  lifecycle as prompt packs and region profiles: create, edit with an
+  `expected_revision`, clone, revisions, activate, deactivate, roll back. One
+  set is active per project. A shipped template (`street_objects`) is
+  read-only; clone it to use it.
+- **Target.** One row of a set. `prompt` is what SAM 3 looks for;
+  `class_name` is the registry class the hits become, by name (a name the
+  registry lacks is added when the first hit is written). An empty
+  `class_name` is **discovery mode**: hits are stored as unlabeled proposals
+  named by the prompt, for a person or the VLM to name later.
+  `min_score`, `min_area_frac`, `max_area_frac` and `max_instances` bound what is
+  kept; `mask` also keeps the outline; `parent_classes` limits the target to
+  images that already hold an item of one of those classes.
+- **Set options.** `image_max_side` (the image is scaled down to this long side
+  before the call, never up), `dedup_iou`, `run_on_ingest` (off by default)
+  and `max_enabled_targets` (default 8, at most 32): cost is linear in the
+  number of enabled targets.
+- **A target named like a detector class** is a warning, not an error. The
+  detector is the cheaper source for that class, but the set is yours.
+- **Provenance.** Every hit carries `class_source: open_vocab_proposal`,
+  `class_detector: sam3`, `source_prompt`, `open_vocab_set` and
+  `open_vocab_revision`, and (with `mask`) a `mask_polygon` in the source
+  frame. The item is machine output until a person or the VLM decides its
+  class, so the lock rule never protects it.
+- **Embeddings.** A hit is stored and indexed through the same writer as every
+  other item, so whatever the project's embedding policy says about a stored
+  detection applies to it.
+
+## Routes
+
+| Call | Purpose |
+|---|---|
+| `GET /curation/projects/{project}/open_vocab` | List sets (and templates with `include_templates=true`) |
+| `POST /curation/projects/{project}/open_vocab` | Create a set |
+| `GET /curation/projects/{project}/open_vocab/schema` | Field specs with ranges and defaults, for a form |
+| `POST /curation/projects/{project}/open_vocab/validate` | Validate a draft without saving |
+| `POST /curation/projects/{project}/open_vocab/test` | Try one unsaved target on one image; writes nothing |
+| `GET /curation/projects/{project}/open_vocab/active` | The active set |
+| `POST /curation/projects/{project}/open_vocab/active/rollback` | Re-activate the previous set |
+| `POST /curation/projects/{project}/open_vocab/deactivate` | Turn the pass off for the project |
+| `GET /curation/projects/{project}/open_vocab/{name}` | One set |
+| `PUT /curation/projects/{project}/open_vocab/{name}` | Save a new revision |
+| `DELETE /curation/projects/{project}/open_vocab/{name}` | Delete a set that is not active |
+| `POST /curation/projects/{project}/open_vocab/{name}/activate` | Activate a revision |
+| `POST /curation/projects/{project}/open_vocab/{name}/clone` | Copy a set or template, optionally from another project |
+| `GET /curation/projects/{project}/open_vocab/{name}/revisions` | Revision history |
+
+Activation re-validates the set and needs a configured, reachable segmenter
+and at least one enabled target; `force: true` bypasses only the segmenter
+checks. Cloning a project with the `open_vocab` axis copies the stored sets and
+the activation of the one in use.
+
+## Try a target first
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/open_vocab/test" \
+  -H 'Content-Type: application/json' \
+  -d '{"image_id": "IMG_A", "target": {"prompt": "traffic cone", "class_name": "traffic_cone"}}'
+```
+
+The response lists every candidate with its normalized `bbox_norm`,
+`score`, optional `mask_polygon`, whether it was `selected` and, if not, the
+`drop_reason` (`below_min_score`, `too_small`, `too_large`, `nms`, `over_max`,
+`cross_target_nms`, `agree_existing`, `skipped_locked`). `gate` says whether the
+segmenter gate let the call through. Send `image_base64` instead of `image_id`
+to try an uploaded image. A segmenter outage is `502 segmenter_error`, never an
+empty result.
+
+## Run it
+
+Batch: the `open_vocab` reprocess scope runs the active set over images. It is
+a dry run by default, and the dry run returns the estimate.
+
+```bash
+curl -s -X POST "$API/curation/projects/cars/reprocess" \
+  -H 'Content-Type: application/json' \
+  -d '{"targets": {"filter": {"all_images": true}}, "scopes": ["open_vocab"], "dry_run": true}'
+```
+
+`detail` carries `enabled_targets`, `estimated_calls`, `segmenter_instances`,
+`segmenter_reachable` and `estimated_minutes`; `locked_skipped` counts locked
+items on those images. About 3 seconds per call is the planning figure; images
+per second is roughly `instances / (targets x seconds per call)`. Two targets
+on one instance is about 10 images a minute. Over `OP_REPROCESS_SYNC_MAX`
+images the run is a background job.
+
+At ingest: set `run_on_ingest: true` in the active set. Newly created images
+are stamped `open_vocab_status: pending` and processed by a background task, one
+image at a time, never inside the ingest request. Whatever the task does not
+reach (segmenter down, restart) stays `pending`; run the scope with
+`{"filter": {"open_vocab_status": ["pending"]}}` to pick it up. The other
+states are `done`, `skipped_gate` (the gate spent no call) and `failed`.
+
+A run is idempotent: ids are deterministic in (image, box), so a re-run
+upserts. Output of the same set that a re-run no longer produces is removed
+once at least one target ran. A segmenter outage aborts that image before
+anything is written or removed, and a run that finds the segmenter down stops
+after three images in a row.
+
+## Duplicates and the lock rule
+
+A hit is dropped when an existing item of the same class name overlaps it at
+`dedup_iou` or more (the existing item wins) and, whatever its class, when a
+locked item (human or imported label, locked box) overlaps it at 0.8 or more.
+A locked item is never overwritten, replaced or deleted. A hit on exactly the
+box of an item of another class is dropped too (`id_collision`), because it
+would overwrite that item. Different classes on overlapping boxes otherwise
+coexist.
+
+## The segmenter gate
+
+Whether to spend a call is one function shared with the crop region stage:
+
+1. **Registry rules.** The target is enabled and, if it names `parent_classes`,
+   the image holds an item of one of them.
+2. **Vision-model yes/no** (`gating.tier2_vlm_precheck`, off by default): "is a
+   prompt visible?" on the scaled image. Only a "no" skips. A model error, an
+   unreadable reply or no active VLM runs the call.
+3. **Hit rate** (`gating.tier3_hit_rate.enabled`, off by default): after
+   `miss_threshold` misses in the last `window` runs a target is only sampled at
+   `sample_floor`, so it can recover. Windows persist per project.
+
+The gate decides whether to spend a call and nothing else: it never edits a
+label, a box or a lock, and a target it skipped keeps its earlier output.
+Skips are counted in the run's `detail` (`skipped_gate_tier<N>_<reason>`) and
+in Prometheus.
+
+## Metrics
+
+| Metric | Meaning |
+|---|---|
+| `op_open_vocab_call_seconds{outcome}` | Whole-image call time, by `hit`, `miss` or `error` |
+| `op_segmenter_gate_decisions_total{scope,decision,tier,reason}` | `run`, `sample` or `skip` decisions; `scope` is `image` |
+| `op_open_vocab_hits_dropped_total{reason}` | Discarded candidates by reason |
+| `op_open_vocab_items_written_total` | Items written |
+
+## Cost and quality
+
+A miss costs as much as a hit. The levers, in order: the gate, `image_max_side`
+(smaller is faster, but small objects suffer; crop-scoped region detection stays
+the refinement), fewer targets, and more segmenter instances where VRAM allows.
+False positives become items, so keep `min_score` meaningful and use the
+`open_vocab_set` and `source_prompt` filters on `GET /crops` to review or
+remove one prompt's output.

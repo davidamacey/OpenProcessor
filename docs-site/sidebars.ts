@@ -32,6 +32,7 @@ const sidebars: SidebarsConfig = {
         'guides/reprocess',
         'guides/combine-projects',
         'guides/test-on-crop',
+        'guides/open-vocabulary',
       ],
     },
     {

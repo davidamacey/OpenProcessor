@@ -53,8 +53,11 @@ project's scope and standards.
   endpoints need an explicit acknowledgement because crops leave the host.
 - **Dataset import.** YOLO, COCO and OpenProcessor-export layouts, with
   preview, by-name class mapping, undo and resume.
-- **Unified reprocess.** One route re-runs detect, region, VLM and embed scopes
-  over selected items, with a dry run by default.
+- **Unified reprocess.** One route re-runs detect, open-vocabulary, region, VLM
+  and embed scopes over selected items, with a dry run by default.
+- **Open-vocabulary detection.** A project-level set of text prompts ("traffic
+  cone") that SAM 3 runs on the whole image; every hit is a normal item, with
+  a dry-run cost estimate, a per-image test route and a shared segmenter gate.
 - **Combine projects.** Merge up to eight projects into a new one with class
   mapping, dedup and holdout handling.
 - **Class identity by name.** Import, combine, export, train, promote and
@@ -377,6 +380,7 @@ store one with `./openprocessor vlm key set <slug>` and reference it as
 | Preview, with class suggestions | `POST /curation/projects/{project}/datasets/preview` |
 | Start, read, undo | `POST /curation/projects/{project}/datasets/imports`, `GET /curation/projects/{project}/datasets/imports/{import_id}`, `POST /curation/projects/{project}/datasets/imports/{import_id}/undo` |
 | Re-run scopes on items | `POST /curation/projects/{project}/reprocess`, `GET /curation/projects/{project}/reprocess/jobs/{job_id}` |
+| Open-vocabulary prompt sets, and a test on one image | `GET /curation/projects/{project}/open_vocab`, `POST /curation/projects/{project}/open_vocab/test` |
 
 Every dataset class that has boxes needs a mapping decision (`map`, `create`,
 `skip` or `region`); mapping is by class name. A COCO layout must say

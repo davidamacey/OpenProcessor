@@ -356,11 +356,27 @@ and activation is checked against the other settings before it applies.
 | POST | `/region_profiles/{name}/clone` | Copy a profile |
 | GET | `/region_profiles/{name}/revisions` | Revision history; `/revisions/{revision}` returns one |
 
+| GET | `/open_vocab` | List open-vocabulary prompt sets and templates |
+| POST | `/open_vocab` | Create a set |
+| GET | `/open_vocab/schema` | Field specs, ranges and defaults, for a form |
+| POST | `/open_vocab/validate` | Validate a draft without saving |
+| POST | `/open_vocab/test` | Try one unsaved target on one image; writes nothing |
+| GET | `/open_vocab/active` | The active set |
+| POST | `/open_vocab/active/rollback` | Re-activate the previous set |
+| POST | `/open_vocab/deactivate` | Turn the pass off for the project |
+| GET | `/open_vocab/{name}` | One set |
+| PUT | `/open_vocab/{name}` | Save a new revision |
+| DELETE | `/open_vocab/{name}` | Delete a set |
+| POST | `/open_vocab/{name}/activate` | Activate a revision |
+| POST | `/open_vocab/{name}/clone` | Copy a set or template, optionally from another project |
+| GET | `/open_vocab/{name}/revisions` | Revision history; `/revisions/{revision}` returns one |
+
 The test routes read stored crops and write nothing. They are limited to
 2 concurrent VLM runs and 4 concurrent segmenter calls (`429 test_busy`),
 a 60 s bound (`504 test_timeout`) and a crop cap (`422 too_many_crops`).
 See [Test on a crop](../guides/test-on-crop.mdx),
-[Prompt packs](../guides/prompt-packs.mdx) and
+[Prompt packs](../guides/prompt-packs.mdx),
+[Open-vocabulary detection](../guides/open-vocabulary.mdx) and
 [Settings and config store](../guides/settings-and-config.mdx).
 
 ## VLM endpoints
