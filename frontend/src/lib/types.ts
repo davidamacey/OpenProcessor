@@ -9,6 +9,7 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 import type { ModelClassMappingSummary } from './types_models';
+import type { IngestDetectorInfo, IngestPolicy } from '$lib/types_detector';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
@@ -1413,4 +1414,8 @@ export interface IngestConfig {
   };
   batch: { enabled: boolean; max_items: number; source_roots: string[] };
   region_drain: { poll_interval_s: number; stable_polls: number };
+  /** v0.4.0: the deployment detector, `null` when none is reported. */
+  detector: IngestDetectorInfo | null;
+  /** v0.4.0: the project ingest policy echo. */
+  policy?: IngestPolicy;
 }
