@@ -121,7 +121,13 @@ def _nested_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
     return any(matches(el, clause['query']) for el in _nested_elements(doc, clause['path']))
 
 
+def _match_phrase_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    ((field, value),) = clause.items()
+    return any(str(v) == str(value) for v in _values(doc, field))
+
+
 _LEAF_MATCHERS = {
+    'match_phrase': _match_phrase_matches,
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
     'wildcard': _wildcard_matches,
     'nested': _nested_matches,
@@ -280,6 +286,15 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             if spec.get('aggs'):
                 filter_bucket.update(_aggregate(kept, spec['aggs']))
             out[name] = filter_bucket
+            continue
+        if 'filters' in spec:
+            named = spec['filters']['filters']
+            out[name] = {
+                'buckets': {
+                    key: {'doc_count': sum(1 for d in docs if matches(d, clause))}
+                    for key, clause in named.items()
+                }
+            }
             continue
         if 'nested' in spec:
             path = spec['nested']['path']

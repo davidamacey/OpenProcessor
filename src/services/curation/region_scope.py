@@ -48,8 +48,9 @@ def out_of_scope_reason(
     if in_parent_classes(parent_classes, class_name=class_name, proposal_name=proposal_name):
         return None
     wanted = ', '.join(_normalized(parent_classes))
+    evaluated = (class_name or '').strip() or (proposal_name or '').strip() or '(none)'
     return (
-        f"item class {class_name or '(none)'!r} is not one of the profile's "
+        f"item class {evaluated!r} is not one of the profile's "
         f'parent classes ({wanted}); the worker skips it'
     )
 

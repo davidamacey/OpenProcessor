@@ -34,6 +34,16 @@ def embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
     return {'exists': {'field': field}}
 
 
+def state_clause(state: str) -> dict[str, Any]:
+    """Items whose recorded ``embedding_state`` is ``state``.
+
+    ``match_phrase`` answers identically on a keyword mapping and on the
+    dynamic ``text`` mapping an index created before the field was mapped
+    carries (a ``term`` or a terms aggregation would 400 or miss on those).
+    """
+    return {'match_phrase': {'embedding_state': state}}
+
+
 def not_embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
     """Items without the vector ``field``."""
     return {'bool': {'must_not': [embedded_clause(field)]}}
@@ -50,21 +60,31 @@ def legacy_embedded_clause() -> dict[str, Any]:
     }
 
 
+# Gentle on a small-heap node: a bounded scroll rate, no parallel slices.
+_BACKFILL_REQUESTS_PER_SECOND = 500
+
+
 async def backfill_embedded_state(client: Any, index: str) -> int:
     """Record ``embedded`` on every legacy item that has its vector, so the
     stored state, the wire item, the stats breakdown and the filter agree
     (the vector is excluded from item reads, so the wire cannot derive it).
-    Idempotent: after one pass nothing matches. Returns the items updated."""
+    Idempotent: after one pass nothing matches, and a cheap count says so
+    without starting a task. Returns the items updated."""
+    query = legacy_embedded_clause()
+    if int((await client.count(index=index, body={'query': query})).get('count') or 0) == 0:
+        return 0
     resp = await client.update_by_query(
         index=index,
         body={
-            'query': legacy_embedded_clause(),
+            'query': query,
             'script': {
                 'lang': 'painless',
                 'source': f"ctx._source.embedding_state = '{EMBEDDED}'",
             },
         },
         conflicts='proceed',
+        slices=1,
+        requests_per_second=_BACKFILL_REQUESTS_PER_SECOND,
         refresh=True,
     )
     return int(resp.get('updated', 0))
@@ -93,4 +113,5 @@ __all__ = [
     'keep_stored_vector_state',
     'legacy_embedded_clause',
     'not_embedded_clause',
+    'state_clause',
 ]

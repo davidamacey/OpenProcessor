@@ -210,7 +210,7 @@ def test_region_class_kind_marking_is_a_noop_without_an_active_profile(
     """No region profile configured -- a class happening to be named
     'license_plate' must NOT be marked kind='region' (it isn't hardcoded
     to that literal)."""
-    registry.add_class('license_plate', group='region')
+    registry.add_class('license_plate', group='vehicle')
 
     resp = app_client.get('/curation/projects/default/classes')
     assert resp.status_code == 200, resp.text
@@ -218,6 +218,20 @@ def test_region_class_kind_marking_is_a_noop_without_an_active_profile(
     assert entry['kind'] == 'item'
     assert entry['sample_count'] == 0
     assert entry['validated_count'] == 0
+
+
+def test_a_region_group_class_stays_region_without_an_active_profile(
+    app_client: TestClient,
+    registry: ClassRegistry,
+    fake_opensearch: AsyncMock,
+) -> None:
+    """The stored group keeps the kind stable across processes and after the
+    profile is deactivated."""
+    registry.add_class('wheel', group='region')
+
+    resp = app_client.get('/curation/projects/default/classes')
+    entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'wheel')
+    assert entry['kind'] == 'region'
 
 
 def test_region_class_kind_marking_uses_a_differently_named_profiles_region_class(

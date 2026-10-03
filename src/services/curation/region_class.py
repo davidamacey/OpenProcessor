@@ -36,15 +36,19 @@ def ensure_region_class() -> int | None:
     ).class_id
 
 
+def is_region_class(entry: RegistryClassEntry) -> bool:
+    """Whether ``entry`` is a sub-box (region) class: seeded under the
+    ``region`` group, or named by the active profile. The group is stored, so
+    the answer does not flip with a process whose config snapshot has not
+    loaded the active profile yet."""
+    if entry.group == REGION_CLASS_GROUP:
+        return True
+    profile = get_active_region_profile()
+    name = (profile.region_class_name if profile else '').strip().lower()
+    return bool(name) and entry.class_name.strip().lower() == name
+
+
 def item_classes(classes: Iterable[RegistryClassEntry]) -> list[RegistryClassEntry]:
     """The classes an item labeler may assign to a whole item: every active
     class except the region class, which only ever labels a sub-box."""
-    profile = get_active_region_profile()
-    region = (profile.region_class_name if profile else '').strip().lower()
-    # ``group == 'region'`` marks a class seeded by ensure_region_class: it
-    # stays a sub-box class after the profile is deactivated.
-    return [
-        c
-        for c in classes
-        if not c.deprecated and c.group != REGION_CLASS_GROUP and c.class_name.lower() != region
-    ]
+    return [c for c in classes if not c.deprecated and not is_region_class(c)]

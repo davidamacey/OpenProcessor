@@ -16,11 +16,7 @@ from src.services.curation import review_queries
 from src.services.curation.embedding_state import EmbeddingState
 from src.services.curation.item_filter import Origin, ReviewStatus
 from src.services.curation.review_filter_specs import EMBEDDING_STATE_LABELS, FILTER_SPECS
-from src.services.curation.stats_embedding import (
-    UNKNOWN_STATE_BUCKET,
-    EmbeddingByState,
-    embedding_summary,
-)
+from src.services.curation.stats_embedding import EmbeddingByState, embedding_summary
 
 
 CONTRACT = Path(__file__).resolve().parents[2] / 'contracts' / 'openapi' / 'curation.json'
@@ -117,7 +113,7 @@ def test_the_legacy_unknown_state_is_a_typed_documented_key() -> None:
 
 
 def test_by_state_always_carries_every_key() -> None:
-    summary = embedding_summary({'embedded_items': {'doc_count': 1}}, 1)
+    summary = embedding_summary({'embedded_items': {'doc_count': 1}}, 0)
     assert summary['by_state'] == {
         'embedded': 0,
         'not_selected': 0,
@@ -128,14 +124,7 @@ def test_by_state_always_carries_every_key() -> None:
 
 
 def test_a_state_outside_the_vocabulary_counts_as_unknown_instead_of_vanishing() -> None:
-    aggs = {
-        'embedding_states': {
-            'buckets': [
-                {'key': UNKNOWN_STATE_BUCKET, 'doc_count': 2},
-                {'key': 'some_future_state', 'doc_count': 3},
-            ]
-        }
-    }
+    aggs = {'embedding_states': {'buckets': {'failed': {'doc_count': 0}}}}
     assert embedding_summary(aggs, 5)['by_state']['unknown'] == 5
 
 

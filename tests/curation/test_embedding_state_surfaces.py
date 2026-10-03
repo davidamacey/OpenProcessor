@@ -20,13 +20,7 @@ from src.services.projects.combine.copy_docs import transform_item
 def test_stats_summary_splits_reasons_and_counts_unknown_legacy() -> None:
     aggs = {
         'embedded_items': {'doc_count': 6},
-        'embedding_states': {
-            'buckets': [
-                {'key': 'embedded', 'doc_count': 5},
-                {'key': 'failed', 'doc_count': 2},
-                {'key': '__none__', 'doc_count': 3},
-            ]
-        },
+        'embedding_states': {'buckets': {'embedded': {'doc_count': 5}, 'failed': {'doc_count': 2}}},
     }
     assert embedding_summary(aggs, 10) == {
         'embedded': 6,
@@ -44,6 +38,32 @@ def test_stats_summary_splits_reasons_and_counts_unknown_legacy() -> None:
         'embedded_items',
         'legacy_embedded_items',
     }
+
+
+def _terms_fields(node: Any) -> list[str]:
+    found: list[str] = []
+    if isinstance(node, dict):
+        if isinstance(node.get('terms'), dict) and 'field' in node['terms']:
+            found.append(node['terms']['field'])
+        for v in node.values():
+            found += _terms_fields(v)
+    return found
+
+
+def test_stats_never_terms_aggregates_embedding_state() -> None:
+    # A text-mapped legacy field 400s on a terms aggregation.
+    assert 'embedding_state' not in _terms_fields(embedding_aggregations())
+    filters = embedding_aggregations()['embedding_states']['filters']['filters']
+    assert set(filters) == {'embedded', 'not_selected', 'deferred', 'failed'}
+    assert filters['failed'] == {'match_phrase': {'embedding_state': 'failed'}}
+
+
+def test_item_filter_state_uses_the_shared_state_clause() -> None:
+    from src.services.curation.embedding_state import state_clause
+    from src.services.curation.item_filter import item_filter_clauses
+
+    out = item_filter_clauses(ItemFilter(embedding_state=['failed']))
+    assert out == [state_clause('failed')]
 
 
 @pytest.mark.asyncio
@@ -175,9 +195,29 @@ def test_legacy_items_with_a_vector_count_as_embedded_in_by_state() -> None:
     aggs = {
         'embedded_items': {'doc_count': 2740},
         'legacy_embedded_items': {'doc_count': 2740},
-        'embedding_states': {'buckets': [{'key': '__none__', 'doc_count': 2740}]},
+        'embedding_states': {'buckets': {}},
     }
     summary = embedding_summary(aggs, 2740)
     assert summary['embedded'] == summary['by_state']['embedded'] == 2740
     assert summary['by_state']['unknown'] == 0
     assert sum(summary['by_state'].values()) == 2740
+
+
+def test_by_state_end_to_end_over_mixed_legacy_and_stated_items() -> None:
+    from curation.query_fakes import _aggregate
+
+    docs: list[dict[str, Any]] = [
+        {'pe_embedding': [1.0], 'embedding_state': 'embedded'},
+        {'pe_embedding': [1.0]},
+        {'embedding_state': 'failed'},
+        {'embedding_state': 'some_future_state'},
+        {},
+    ]
+    summary = embedding_summary(_aggregate(docs, embedding_aggregations()), len(docs))
+    assert summary['by_state'] == {
+        'embedded': 2,
+        'not_selected': 0,
+        'deferred': 0,
+        'failed': 1,
+        'unknown': 2,
+    }
