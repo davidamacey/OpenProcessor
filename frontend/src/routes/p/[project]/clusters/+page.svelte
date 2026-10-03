@@ -876,21 +876,11 @@
   });
 
   // Re-load the gallery whenever a filter, the top-N rank gate, or the
-  // selected region cluster changes. When no cluster is selected, also refresh the
-  // cluster-card grid so it reflects the current rank gate.
+  // selected region cluster changes (typed filters debounce, the cluster
+  // grid reloads only for the rank gate or a closed bucket; see
+  // `reloadOnFilterChange`).
   $effect(() => {
-    const gallery = slotGallery;
-    if (!gallery) return;
-    void gallery.detectorFilter;
-    void gallery.verifiedOnly;
-    void gallery.minScore;
-    void gallery.textQuery;
-    void gallery.statusFilter;
-    void gallery.boxStateFilter;
-    void gallery.maxRank;
-    void gallery.selectedCluster;
-    void gallery.loadFirst();
-    if (gallery.selectedCluster == null) void gallery.loadClusters();
+    slotGallery?.reloadOnFilterChange();
   });
 
   // Purity banding is served (`purity_tier`, `{API_PREFIX}/clusters`'

@@ -14,6 +14,7 @@
  * convention (a plain object of `$state` fields + closures, not a class).
  */
 
+import { untrack } from 'svelte';
 import {
   batchRegionStatus,
   buildRegionFpCentroids,
@@ -292,6 +293,48 @@ export function createSlotGalleryController(slot: SlotSpec) {
     } finally {
       clusterBusy = false;
     }
+  }
+
+  // Filter-driven reloads, called from one page $effect (so the state it
+  // reads is what the effect tracks). Discrete filters reload the browse
+  // at once; typed ones (text, min score) wait for a pause, since each
+  // reload is a request. The cluster grid depends only on the rank gate and
+  // the selected bucket, so a filter change never refetches it.
+  const TYPED_FILTER_DEBOUNCE_MS = 250;
+  let lastBrowseKey: string | null = null;
+  let lastTypedKey: string | null = null;
+  let lastClusterKey: string | null = null;
+  let typedDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  function reloadOnFilterChange(): void {
+    const browseKey = JSON.stringify([
+      detectorFilter,
+      verifiedOnly,
+      statusFilter,
+      boxStateFilter,
+      maxRank,
+      selectedCluster,
+    ]);
+    const typedKey = JSON.stringify([minScore, textQuery]);
+    const clusterKey = JSON.stringify([maxRank, selectedCluster]);
+    const clustersNeeded = selectedCluster == null && clusterKey !== lastClusterKey;
+    untrack(() => {
+      if (browseKey !== lastBrowseKey) {
+        if (typedDebounce) clearTimeout(typedDebounce);
+        typedDebounce = null;
+        void loadFirst();
+      } else if (typedKey !== lastTypedKey) {
+        if (typedDebounce) clearTimeout(typedDebounce);
+        typedDebounce = setTimeout(() => {
+          typedDebounce = null;
+          if (!disposed) void loadFirst();
+        }, TYPED_FILTER_DEBOUNCE_MS);
+      }
+      if (clustersNeeded) void loadClusters();
+    });
+    lastBrowseKey = browseKey;
+    lastTypedKey = typedKey;
+    lastClusterKey = clusterKey;
   }
 
   // Set by the owning page's teardown: the clustering polls below stop, and
@@ -794,8 +837,11 @@ export function createSlotGalleryController(slot: SlotSpec) {
     loadSuspectedFp,
     runBuildFpCentroids,
     runClustering,
+    reloadOnFilterChange,
     dispose(): void {
       disposed = true;
+      if (typedDebounce) clearTimeout(typedDebounce);
+      typedDebounce = null;
     },
     runRefineCluster,
     openCluster,

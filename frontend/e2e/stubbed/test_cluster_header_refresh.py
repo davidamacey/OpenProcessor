@@ -153,3 +153,34 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected in the label/header-refresh flow: {errors[:3]}"
+
+
+def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
+    """The cluster card read failing (the crops still load) used to render
+    "Cluster #N" with no sign that anything was wrong; the served reason is
+    shown instead of a silent unlabeled identity."""
+    stub.on(
+        "GET",
+        r"(?<!/stats)/classes(\?|$)",
+        {
+            "classes": [],
+            "thresholds": {
+                "block_below": 0,
+                "warn_below": 5,
+                "min_test_per_class": 5,
+                "aug_target_min": 500,
+                "aug_target_max": 500,
+            },
+            "reserved_hotkeys": [],
+        },
+    )
+    stub.on("GET", r"/clusters(\?|$)", (400, {"detail": "aggregation unavailable"}))
+    stub.on(
+        "GET",
+        r"/crops(\?|$)",
+        {"total": 1, "page": 1, "page_size": 60, "crops": [crop(0)]},
+    )
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
+    expect(page.get_by_test_id("cluster-card-error")).to_contain_text(
+        "aggregation unavailable", timeout=ACTION_TIMEOUT_MS
+    )

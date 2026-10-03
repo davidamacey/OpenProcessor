@@ -2445,7 +2445,12 @@ export async function getCluster(
      */
     k?: number | null;
   } = {},
-): Promise<{ cluster: Cluster; crops: PaginatedResponse<Crop> }> {
+): Promise<{
+  cluster: Cluster;
+  crops: PaginatedResponse<Crop>;
+  /** Why the cluster card could not be read (the crops still render), or null. */
+  cardError: string | null;
+}> {
   // Two parallel calls: paginated crops + the authoritative cluster
   // card from {API_PREFIX}/clusters (server-computed). The page no longer
   // derives any of the cluster's identity fields client-side.
@@ -2483,6 +2488,7 @@ export async function getCluster(
   if (opts.classifierConfLt != null) cropQuery.classifier_conf_lt = opts.classifierConfLt;
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
+  let cardError: string | null = null;
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`${scoped()}/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
@@ -2497,7 +2503,11 @@ export async function getCluster(
       `${scoped()}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
       {},
       signal,
-    ).catch(() => null),
+    ).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e;
+      cardError = apiErrorText(e);
+      return null;
+    }),
   ]);
   const items = cropPage.crops.map(mapRawCrop);
   const found = clustersResp?.items?.find((c) => c.cluster_id === id) ?? null;
@@ -2525,6 +2535,7 @@ export async function getCluster(
       };
   return {
     cluster,
+    cardError,
     crops: {
       items,
       total: cropPage.total,

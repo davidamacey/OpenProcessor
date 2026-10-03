@@ -55,6 +55,9 @@
   const clusterId = $derived(Number(clusterIdParam));
 
   let cluster = $state<Cluster | null>(null);
+  // Set when the cluster card read failed but the crops loaded: the header
+  // would otherwise show a fabricated unlabeled identity with no hint why.
+  let cardError = $state<string | null>(null);
 
   // The served `cluster_kind` (not an id-equality guess) decides whether
   // this cluster has a class at all — 'class' clusters carry their own
@@ -121,6 +124,7 @@
     fetchPage: async (page) => {
       const res = await getCluster(clusterId, page, pageSize, undefined, cropQuery());
       cluster = res.cluster;
+      cardError = res.cardError;
       orderMeta =
         orderMode === 'diverse'
           ? {
@@ -857,6 +861,11 @@
       {/if}
     </h1>
     <ShortcutsButton />
+    {#if cardError}
+      <span class="text-xs text-amber-300" data-testid="cluster-card-error"
+        >Cluster details unavailable: {cardError}</span
+      >
+    {/if}
     {#if cluster}
       <span class="text-xs text-zinc-400">
         size {cluster.size.toLocaleString()} · dominant

@@ -904,6 +904,54 @@ describe('getCluster order param', () => {
  * caller (gated by {API_PREFIX}/methods, see strategies.test.ts's
  * isDiverseOverlayAvailable coverage) decided to send.
  */
+describe('getCluster card lookup failure', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stub(clustersResponse: () => Response) {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url.startsWith(`${API_PREFIX}/crops`)
+              ? new Response(
+                  JSON.stringify({ total: 3, page: 1, page_size: 60, crops: [] }),
+                  { status: 200, headers: { 'content-type': 'application/json' } },
+                )
+              : clustersResponse(),
+          ),
+        ),
+    );
+  }
+
+  it('reports why the cluster card could not be read instead of hiding the failure', async () => {
+    stub(
+      () =>
+        new Response(JSON.stringify({ detail: 'aggregation unavailable' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    const res = await getCluster(42);
+    expect(res.cardError).toBe('aggregation unavailable');
+    expect(res.crops.total).toBe(3);
+  });
+
+  it('control: a served card reports no error', async () => {
+    stub(
+      () =>
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    expect((await getCluster(42)).cardError).toBeNull();
+  });
+});
+
 describe('getCluster k param', () => {
   const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {

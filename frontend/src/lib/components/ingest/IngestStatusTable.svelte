@@ -33,8 +33,8 @@
     if (document.visibilityState === 'visible') void load();
   }
 
+  // The first read is the refreshToken effect below (it also runs on mount).
   onMount(() => {
-    void load();
     intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') void load();
     }, 10_000);
