@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from src.services.curation.embedding_state import embedded_clause
+from src.services.curation.embedding_state import embedded_clause, legacy_embedded_clause
 
 
 UNKNOWN_STATE_BUCKET = '__none__'
@@ -46,14 +46,7 @@ def embedding_aggregations() -> dict[str, Any]:
         'embedded_items': {'filter': embedded_clause()},
         # An item written before embedding_state existed that has its vector is
         # embedded; it must not read as "unknown" beside embedded=N.
-        'legacy_embedded_items': {
-            'filter': {
-                'bool': {
-                    'must': [embedded_clause()],
-                    'must_not': [{'exists': {'field': 'embedding_state'}}],
-                }
-            }
-        },
+        'legacy_embedded_items': {'filter': legacy_embedded_clause()},
     }
 
 

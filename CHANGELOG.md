@@ -193,6 +193,12 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+
+- Items written before `embedding_state` existed now have `embedded` recorded at startup when they hold a vector, so the item wire, the stats breakdown and the filter agree (`unknown` stays only for truly unknown items).
+- Activating a region profile, or the worker applying a stored or env profile, registers the profile's region class (kind region, group region) in the project registry; re-activation is a no-op and deactivation never deletes a class.
+- `stats/dataset` and the combine preview read their own writes after ingest: each ingest call (single or batch) refreshes the images and items indexes once at its end, never per item.
+- The reprocess embed dry run reports `images_to_embed` from the same targets and work test the applied run uses, so it equals the applied `queued`; images with nothing to write are no longer read or counted as queued.
+- Global `DELETE /models/{name}` (GH #86) addresses the exact directory name `/models/status` lists, through one shared resolver also used by load; a project-promoted model answers a typed 409 `project_owned_model` with `owner_project` instead of 404.
 - `GET .../stats` serves real counts: `holdout_items` counts the frozen `test_holdout` items (the old field name never matched, so it was always 0), `promoted_models` counts the models the project owns, and `classes` reads the class registry instead of the lagging OpenSearch mirror.
 - The API no longer logs every OpenSearch client request at INFO (the per-project `config_revision` poll was about 64% of all lines); the client loggers stay at WARNING and above.
 - Project delete soft-deletes the project's MLflow experiment over the tracking server's REST API (`MLFLOW_TRACKING_URI`, now set on the API service) instead of importing a module the API image does not have, and `project.deleted` reports `mlflow_cleanup` (`done`, `skipped_not_configured` or `failed` with a reason).

@@ -191,6 +191,7 @@ async def _bootstrap_once() -> Any:
     if not registry.refreshed:
         raise RuntimeError('project registry not readable yet')
     _seed_region_classes()
+    await _backfill_embedding_states(client)
     return registry
 
 
@@ -215,6 +216,20 @@ def _seed_region_classes() -> None:
             ensure_region_class()
         except Exception as exc:
             logger.warning('region_class_seed_failed', project=slug, error=str(exc))
+
+
+async def _backfill_embedding_states(client: Any) -> None:
+    from src.config import get_curation_config
+    from src.services.curation.embedding_state import backfill_embedded_state
+
+    for slug in for_each_project():
+        try:
+            updated = await backfill_embedded_state(client, get_curation_config().items_index)
+        except Exception as exc:
+            logger.warning('embedding_state_backfill_failed', project=slug, error=str(exc))
+        else:
+            if updated:
+                logger.info('embedding_state_backfilled', project=slug, items=updated)
 
 
 async def shutdown_project_registry(task: Any | None) -> None:
