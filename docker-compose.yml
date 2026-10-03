@@ -162,6 +162,14 @@ services:
       # models fit.
       - OP_LOCAL_VLM_ENDPOINT=${OP_LOCAL_VLM_ENDPOINT:-}
       - OP_LOCAL_VLM_GPU_TOTAL_MIB=${VLM_GPU_TOTAL_MIB:-}
+      # With --workers=N each worker has its own metrics registry, so
+      # without this a Prometheus scrape sees one random worker and the
+      # ingest-pipeline dashboard reads ~0. The directory (tmpfs below, so
+      # it is empty at every container start) lets /metrics aggregate all
+      # workers. See src/core/metrics.py.
+      - PROMETHEUS_MULTIPROC_DIR=/var/run/prom-multiproc
+    tmpfs:
+      - /var/run/prom-multiproc:mode=1777
     # G-10: on Linux, host.docker.internal only resolves with this mapping
     # (Docker Desktop adds it automatically; the Linux engine does not).
     # Needed for the "point OP_VLM_URL at a VLM running on the host" example
