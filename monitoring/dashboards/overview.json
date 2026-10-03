@@ -271,7 +271,8 @@
             "fixedColor": "#3274D9"
           },
           "mappings": [],
-          "decimals": 2
+          "decimals": 2,
+          "noValue": "0%"
         },
         "overrides": []
       },
