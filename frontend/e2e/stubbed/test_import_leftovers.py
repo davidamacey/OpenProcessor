@@ -168,6 +168,7 @@ def test_combine_conflict_chip_from_the_url_is_sent(stub, page, app_url):
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip = page.get_by_test_id("filter-chip-combine-conflict")
     expect(chip).to_contain_text("Combine conflicts only", timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     reqs = review_requests(seen, "all")
     assert reqs and reqs[0]["combine_conflict"] == ["true"], reqs
 
