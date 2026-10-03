@@ -280,5 +280,6 @@ export const SEARCH_EXTRA_KEYS = [
 ] as const;
 export const TRAINING_CANDIDATE_EXTRA_KEYS = [
   'region_box_id',
+  'row_key',
   'selection_reason',
 ] as const;
