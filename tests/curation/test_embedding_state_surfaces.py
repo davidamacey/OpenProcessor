@@ -11,6 +11,7 @@ import pytest
 from src.config.region_fields import get_region_fields
 from src.services.curation import semantic_search
 from src.services.curation.crop_orders import ordered_crops_page
+from src.services.curation.item_filter import ItemFilter
 from src.services.curation.review_empty_reason import compute_empty_reason
 from src.services.curation.stats_embedding import embedding_aggregations, embedding_summary
 from src.services.projects.combine.copy_docs import transform_item
@@ -30,7 +31,13 @@ def test_stats_summary_splits_reasons_and_counts_unknown_legacy() -> None:
     assert embedding_summary(aggs, 10) == {
         'embedded': 6,
         'not_embedded': 4,
-        'by_state': {'embedded': 5, 'failed': 2, 'unknown': 3},
+        'by_state': {
+            'embedded': 5,
+            'not_selected': 0,
+            'deferred': 0,
+            'failed': 2,
+            'unknown': 3,
+        },
     }
     assert set(embedding_aggregations()) == {'embedding_states', 'embedded_items'}
 
@@ -77,6 +84,7 @@ async def test_ordered_page_reports_how_many_it_could_not_rank(
         order='diverse',
         query_clause={'match_all': {}},
         cluster_id=None,
+        item_filter=ItemFilter(),
         page=1,
         page_size=10,
         k=None,
@@ -85,6 +93,11 @@ async def test_ordered_page_reports_how_many_it_could_not_rank(
     )
     assert page is not None
     assert (page['n_pool'], page['n_unembedded']) == (10, 3)
+    # The ordering cannot rank them and never embeds: it hands back the request that would.
+    request = page['suggested_reprocess']
+    assert request['scopes'] == ['embed']
+    assert request['dry_run'] is True
+    assert request['targets']['filter']['embedding_state'] == ['not_selected', 'deferred', 'failed']
 
 
 @pytest.mark.asyncio

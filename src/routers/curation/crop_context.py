@@ -17,7 +17,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic field type
 from src.services.curation.wire import (
-    item_list_source_excludes,
+    item_context_source_excludes,
     item_source_excludes,
     serialize_item,
 )
@@ -138,7 +138,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
             'size': _MAX_SIBLINGS,
             'query': {'term': {'image_id': image_id}},
             'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
-            '_source': {'excludes': item_list_source_excludes()},
+            '_source': {'excludes': item_context_source_excludes()},
         }
         try:
             resp = await opensearch.search(index=items_index(), body=body)

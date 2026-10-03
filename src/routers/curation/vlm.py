@@ -27,6 +27,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._vlm_route_models import (
     VlmLabelBatchRequest,
     VlmRegionVisibleBatchRequest,
@@ -334,7 +335,7 @@ async def vlm_label_batch(
     }
 
 
-@router.post('/vlm/verify_regions')
+@router.post('/vlm/verify_regions', responses=REGION_PROFILE_RESPONSES)
 async def vlm_verify_regions(
     payload: VlmVerifyRegionsRequest,
     opensearch: OpenSearchDep,
@@ -449,7 +450,11 @@ async def vlm_verify_regions(
     return {'verified': n_verified}
 
 
-@router.post('/vlm/verify_region_batch', response_model=VlmVerifyRegionBatchResponse)
+@router.post(
+    '/vlm/verify_region_batch',
+    response_model=VlmVerifyRegionBatchResponse,
+    responses=REGION_PROFILE_RESPONSES,
+)
 async def vlm_verify_region_batch(
     payload: VlmVerifyRegionBatchRequest,
     opensearch: OpenSearchDep,
@@ -538,7 +543,11 @@ async def vlm_verify_region_batch(
     return VlmVerifyRegionBatchResponse(results=results)
 
 
-@router.post('/vlm/region_visible_batch', response_model=VlmRegionVisibleBatchResponse)
+@router.post(
+    '/vlm/region_visible_batch',
+    response_model=VlmRegionVisibleBatchResponse,
+    responses=REGION_PROFILE_RESPONSES,
+)
 async def vlm_region_visible_batch(
     payload: VlmRegionVisibleBatchRequest,
     opensearch: OpenSearchDep,

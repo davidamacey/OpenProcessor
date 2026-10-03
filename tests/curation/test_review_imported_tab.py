@@ -93,7 +93,7 @@ def test_filters_by_import_split_and_class(client: TestClient) -> None:
     assert _ids(client, import_id='imp1') == {'a'}
     assert _ids(client, import_id='imp2') == {'b'}
     assert _ids(client, dataset_split='val') == {'b'}
-    assert _ids(client, class_id=3) == {'a'}
+    assert _ids(client, class_name='car') == {'a'}
     assert _ids(client, import_id='imp1', dataset_split='val') == set()
 
 
@@ -107,7 +107,8 @@ def test_the_import_filters_belong_to_this_tab_only(client: TestClient) -> None:
 def test_the_catalog_serves_the_tab_with_its_filters_and_split_options(client: TestClient) -> None:
     tabs = {t['id']: t for t in client.get(f'{BASE}/tabs').json()['tabs']}
     tab = tabs['imported']
-    assert {'import_id', 'dataset_split', 'class_id'} <= set(tab['filters'])
+    assert {'import_id', 'dataset_split', 'class_name'} <= set(tab['filters'])
+    assert 'class_id' not in tab['filters']
     assert tab['label'] == 'Imported labels'
     split_spec = next(s for s in tab['filter_specs'] if s['param'] == 'dataset_split')
     assert [o['value'] for o in split_spec['options']] == ['train', 'val', 'test']

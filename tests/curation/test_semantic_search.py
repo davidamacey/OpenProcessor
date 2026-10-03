@@ -67,7 +67,6 @@ def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
 def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
     filt = semantic_search._build_filter(
         tab=None,
-        class_id=None,
         cluster_id=None,
         date_from=None,
         date_to=None,
@@ -88,7 +87,6 @@ def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
 def test_build_filter_include_test_keeps_holdout_crops():
     filt = semantic_search._build_filter(
         tab=None,
-        class_id=None,
         cluster_id=None,
         date_from=None,
         date_to=None,
@@ -102,10 +100,9 @@ def test_build_filter_include_test_keeps_holdout_crops():
     assert {'term': {'test_holdout': True}} not in must_not
 
 
-def test_build_filter_class_and_cluster_ids():
+def test_build_filter_cluster_id():
     filt = semantic_search._build_filter(
         tab=None,
-        class_id=7,
         cluster_id=42,
         date_from=None,
         date_to=None,
@@ -114,14 +111,12 @@ def test_build_filter_class_and_cluster_ids():
         hide_near_duplicates=False,
         include_test=False,
     )
-    assert {'term': {'class_id': 7}} in filt
     assert {'term': {'cluster_id': 42}} in filt
 
 
 def test_build_filter_date_range():
     filt = semantic_search._build_filter(
         tab=None,
-        class_id=None,
         cluster_id=None,
         date_from='2026-01-01',
         date_to='2026-06-01',
@@ -136,7 +131,6 @@ def test_build_filter_date_range():
 def test_build_filter_reuses_tab_query():
     filt = semantic_search._build_filter(
         tab='uncertainty',
-        class_id=None,
         cluster_id=None,
         date_from=None,
         date_to=None,
@@ -156,7 +150,6 @@ def test_build_filter_unknown_tab_raises_400():
     with pytest.raises(HTTPException):
         semantic_search._build_filter(
             tab='not_a_real_tab',
-            class_id=None,
             cluster_id=None,
             date_from=None,
             date_to=None,
@@ -170,7 +163,6 @@ def test_build_filter_unknown_tab_raises_400():
 def test_build_filter_hide_near_duplicates():
     filt = semantic_search._build_filter(
         tab=None,
-        class_id=None,
         cluster_id=None,
         date_from=None,
         date_to=None,

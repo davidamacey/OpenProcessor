@@ -107,7 +107,10 @@ def test_unknown_name_is_422_and_writes_nothing(
 ) -> None:
     r = client.post(URL, json={'names': ['person', 'unicorn'], 'dry_run': False})
     assert r.status_code == 422
-    assert 'unicorn' in r.text
+    detail = r.json()['detail']
+    assert detail['error'] == 'unknown_detector_names'
+    assert detail['unknown_names'] == ['unicorn']
+    assert 'unicorn' in detail['message']
     assert _names(registry) == []
 
 
@@ -117,7 +120,10 @@ def test_extra_fields_are_rejected(client: TestClient, labels_file: None) -> Non
 
 def test_no_detector_configured_is_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', raising=False)
-    assert client.post(URL, json={}).status_code == 503
+    r = client.post(URL, json={})
+    assert r.status_code == 503
+    assert r.json()['detail']['error'] == 'detector_unavailable'
+    assert r.json()['detail']['message']
 
 
 def test_seeding_never_touches_items(

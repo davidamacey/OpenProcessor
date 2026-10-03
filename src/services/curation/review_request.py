@@ -31,7 +31,6 @@ class ReviewFilters:
     min_blur_ratio: float | None = None
     min_mistakenness: float | None = None
     hide_near_duplicates: bool = False
-    class_id: int | None = None
     source: str | None = None
     # The shared item filter (class names, confidence band, size, origin,
     # embedding state, review status), minus ``max_rank``, which a tab can
@@ -96,8 +95,6 @@ async def build_review_request(
                 }
             }
         )
-    if filters.class_id is not None:
-        must.append({'term': {'class_id': filters.class_id}})
     if filters.source:
         must.append({'term': {'source': filters.source}})
     if filters.combine_conflict:

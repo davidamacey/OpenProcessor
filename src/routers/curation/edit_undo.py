@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, logger, router
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation.label_undo import _items_by_ids
 from src.services.curation.edit_history import (
     EDIT_HISTORY_FIELD,
@@ -83,7 +84,7 @@ async def undo_edit(opensearch: Any, crop_id: str, kind: EditKind, writer: str) 
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
 
 
-@router.post('/crops/{crop_id}/region/undo')
+@router.post('/crops/{crop_id}/region/undo', responses=REGION_PROFILE_RESPONSES)
 async def undo_crop_region(
     crop_id: str, opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> dict[str, Any]:
@@ -104,7 +105,7 @@ async def undo_crop_region(
     return items[0]
 
 
-@router.post('/crops/region/undo_batch')
+@router.post('/crops/region/undo_batch', responses=REGION_PROFILE_RESPONSES)
 async def undo_crop_regions(
     payload: CropRegionUndoBatchRequest, opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> dict[str, Any]:

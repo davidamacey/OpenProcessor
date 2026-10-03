@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 # Runtime import: pydantic resolves the annotation from module globals.
 from src.services.curation.embedding_state import EmbeddingState  # noqa: TC001
+from src.services.curation.reprocess_models import ReprocessRequest  # noqa: TC001
 
 
 class ItemTextLine(BaseModel):
@@ -116,7 +117,7 @@ class ItemDoc(BaseModel):
     # Full-image open-vocabulary pass provenance: the target prompt that found
     # the item, the prompt set and revision that ran it, and the outline
     # (normalized (x, y) points in the source frame; null in list responses,
-    # present on GET /crops/{id}).
+    # present on GET /crops/{id} and the items of GET /crops/{id}/context).
     source_prompt: str | None = None
     open_vocab_set: str | None = None
     open_vocab_revision: int | None = None
@@ -230,6 +231,9 @@ class CropsPageResponse(BaseModel):
     # Of n_pool, the items an ordering could not rank because they have no
     # vector (never embedded, or embedding failed); null for unordered pages.
     n_unembedded: int | None = None
+    # With n_unembedded > 0: the embed request to POST to /reprocess (dry run first)
+    # for the items the ordering could not rank; reads never embed. Null otherwise.
+    suggested_reprocess: ReprocessRequest | None = None
 
 
 __all__ = ['CropsPageResponse', 'ItemDoc', 'ItemTextLine']

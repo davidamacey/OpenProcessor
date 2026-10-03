@@ -24,7 +24,18 @@ from src.config import get_region_fields
 from src.config.curation import get_curation_config
 from src.config.region_state import RegionStatus
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, router
-from src.routers.curation.regions_edit import _batch_write, _Recorder, _write_error
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
+from src.routers.curation._region_write_models import (
+    RegionBatchWriteResponse,
+    RegionBoxPatchResponse,
+    RegionItemWriteResponse,
+)
+from src.routers.curation.regions_edit import (
+    _batch_write,
+    _Recorder,
+    _write_error,
+    empty_batch_result,
+)
 from src.services.curation.region_box_edits import (
     apply_put_boxes,
     boxes_with_status,
@@ -247,7 +258,11 @@ def _put_boxes_build(
     return _build
 
 
-@router.put('/crops/{crop_id}/regions')
+@router.put(
+    '/crops/{crop_id}/regions',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionItemWriteResponse}},
+)
 async def set_crop_regions(
     crop_id: str,
     payload: ItemRegionsRequest,
@@ -285,7 +300,11 @@ async def set_crop_regions(
     return {'crop_id': crop_id, 'item': rec.item(crop_id), 'vector_refresh': embedding}
 
 
-@router.put('/crops/batch_regions')
+@router.put(
+    '/crops/batch_regions',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionBatchWriteResponse}},
+)
 async def batch_set_crop_regions(
     payload: ItemBatchRegionsRequest,
     opensearch: OpenSearchDep,
@@ -305,7 +324,7 @@ async def batch_set_crop_regions(
     _check_box_states('PUT /crops/batch_regions', payload.boxes)
     _check_put_status(payload)
     if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+        return empty_batch_result()
     build = _put_boxes_build(payload, profile, frame='source')
     result = await _batch_write(opensearch, payload.crop_ids, build, 'human:batch_set_crop_regions')
     embedding = await refresh_box_embeddings(
@@ -314,7 +333,11 @@ async def batch_set_crop_regions(
     return {**result, 'vector_refresh': embedding}
 
 
-@router.patch('/crops/{crop_id}/regions/{box_id}')
+@router.patch(
+    '/crops/{crop_id}/regions/{box_id}',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionBoxPatchResponse}},
+)
 async def patch_crop_region_box(
     crop_id: str,
     box_id: str,
@@ -368,7 +391,11 @@ async def patch_crop_region_box(
     }
 
 
-@router.post('/regions/batch_box_state')
+@router.post(
+    '/regions/batch_box_state',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionBatchWriteResponse}},
+)
 async def batch_set_region_box_state(
     payload: BatchBoxStateRequest,
     opensearch: OpenSearchDep,
@@ -386,7 +413,7 @@ async def batch_set_region_box_state(
     except RegionBoxWriteError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not payload.targets:
-        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+        return empty_batch_result()
 
     by_crop: dict[str, list[str]] = {}
     for t in payload.targets:

@@ -138,3 +138,44 @@ def test_preview_caps_per_image_using_one_images_items(client: TestClient) -> No
         f'{URL}/preview', json={'embedding': {'mode': 'selected', 'max_per_image': 1}}
     ).json()
     assert body['would_embed'] == 2  # one per image (i1: person, i2: traffic light 0.7)
+
+
+class _Pool:
+    def __init__(self, *, ready: bool, outputs: list[str]) -> None:
+        self._ready, self._outputs = ready, outputs
+
+    async def is_model_ready(self, _model: str) -> bool:
+        return self._ready
+
+    async def get_model_output_names(self, _model: str) -> list[str]:
+        return self._outputs
+
+
+def test_an_unservable_detector_override_is_a_typed_422_with_every_reason(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        'src.main.get_async_triton_pool', lambda: _Pool(ready=False, outputs=[]), raising=False
+    )
+    r = client.put(URL, json={'expected_revision': 0, 'detector': {'model': 'ghost'}})
+    assert r.status_code == 422, r.text
+    detail = r.json()['detail']
+    assert detail['error'] == 'detector_not_servable'
+    assert detail['reasons'] == ["'ghost' is not loaded and ready on Triton"]
+    assert detail['message'] == detail['reasons'][0]
+
+
+def test_no_triton_pool_is_a_typed_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _no_pool() -> Any:
+        raise RuntimeError('not started')
+
+    monkeypatch.setattr('src.main.get_async_triton_pool', _no_pool, raising=False)
+    r = client.put(URL, json={'expected_revision': 0, 'detector': {'model': 'ghost'}})
+    assert r.status_code == 503
+    assert r.json()['detail']['error'] == 'detector_unavailable'
+
+
+def test_a_stale_revision_is_a_typed_409(client: TestClient) -> None:
+    r = client.put(URL, json={'expected_revision': 5})
+    assert r.status_code == 409
+    assert r.json()['detail']['error'] == 'revision_conflict'

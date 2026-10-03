@@ -233,15 +233,15 @@ async def occ_skip_on_conflict_bulk(
       unchanged (``True``/``False``/``'wait_for'``).
 
     Returns:
-        ``{updated, skipped_due_to_conflict, skipped_ids, errors}`` --
-        ``skipped_ids`` names the docs a conflict skipped, for a caller
+        ``{updated, updated_ids, skipped_due_to_conflict, skipped_ids, errors}`` --
+        ``updated_ids`` names the docs written; ``skipped_ids`` names the docs a conflict skipped, for a caller
         whose write must not be lost (it re-merges and retries them).
     """
     if index is None:
         index = items_index()
     from src.clients.curation_opensearch import mget_crops
 
-    updated = 0
+    updated_ids: list[str] = []
     skipped = 0
     skipped_ids: list[str] = []
     errors: list[dict[str, Any]] = []
@@ -311,7 +311,7 @@ async def occ_skip_on_conflict_bulk(
             action = item.get('update') or {}
             status = action.get('status')
             if status in (200, 201):
-                updated += 1
+                updated_ids.append(doc_id)
                 continue
             error = action.get('error') or {}
             err_type = error.get('type', '')
@@ -330,7 +330,8 @@ async def occ_skip_on_conflict_bulk(
             errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(error or action)})
 
     return {
-        'updated': updated,
+        'updated': len(updated_ids),
+        'updated_ids': updated_ids,
         'skipped_due_to_conflict': skipped,
         'skipped_ids': skipped_ids,
         'errors': errors,

@@ -260,13 +260,21 @@ async def test_unexclude_returns_validated_item_to_its_class_cluster(crops, regi
     await _label(crops, fake, registry, 'v', ids['gadget'])
     fake.docs(ITEMS)['v']['cluster_subid'] = f'{ids["gadget"]}a'
 
-    assert await _exclude(crops, fake, ['v', 'u']) == {'excluded': 2, 'errors': 0}
+    assert await _exclude(crops, fake, ['v', 'u']) == {
+        'excluded': 2,
+        'updated_ids': ['v', 'u'],
+        'errors': 0,
+    }
     for doc in fake.docs(ITEMS).values():
         assert doc['class_excluded'] is True
         assert doc['cluster_id'] == -2
         assert doc['class_validated'] is False
 
-    assert await _unexclude(crops, fake, ['v', 'u']) == {'unexcluded': 2, 'errors': 0}
+    assert await _unexclude(crops, fake, ['v', 'u']) == {
+        'unexcluded': 2,
+        'updated_ids': ['v', 'u'],
+        'errors': 0,
+    }
     v, u = fake.docs(ITEMS)['v'], fake.docs(ITEMS)['u']
     assert v['class_excluded'] is False
     assert v['class_validated'] is True
@@ -429,7 +437,12 @@ async def test_unexclude_leaves_non_excluded_items_untouched(crops, registry, id
     fake = QueryFakeOpenSearch({ITEMS: {'v': _proposal_doc('v')}})
     await _label(crops, fake, registry, 'v', ids['widget'])
     before = dict(fake.docs(ITEMS)['v'])
-    assert await _unexclude(crops, fake, ['v']) == {'unexcluded': 1, 'errors': 0}
+    # Nothing was restored, so nothing is reported (and no id offered for undo).
+    assert await _unexclude(crops, fake, ['v']) == {
+        'unexcluded': 0,
+        'updated_ids': [],
+        'errors': 0,
+    }
     assert fake.docs(ITEMS)['v'] == before
 
 

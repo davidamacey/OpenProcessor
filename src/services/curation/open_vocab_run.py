@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from PIL import Image
 
     from src.services.curation.ingest import CurationIngestService
+    from src.services.curation.open_vocab_fields import OpenVocabStatus
     from src.services.detection.cascade_detect import RegionCandidate
     from src.services.detection.open_vocab_set import OpenVocabSet, OpenVocabTarget
 
@@ -340,10 +341,11 @@ async def plan_open_vocab_image(
     )
 
 
-async def stamp_open_vocab_status(opensearch: AsyncOpenSearch, image_id: str, status: str) -> None:
-    """Record the pass's state on the image doc (``pending`` | ``done`` |
-    ``failed``). The state is bookkeeping: a failed stamp is logged, never
-    allowed to fail the image whose items are already written."""
+async def stamp_open_vocab_status(
+    opensearch: AsyncOpenSearch, image_id: str, status: OpenVocabStatus
+) -> None:
+    """Record the pass's state on the image doc (see :data:`OpenVocabStatus`).
+    The state is bookkeeping: a failed stamp is logged, never allowed to fail the image whose items are already written."""
     try:
         await opensearch.update(
             index=get_curation_config().images_index,

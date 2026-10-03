@@ -19,10 +19,13 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_similarity
 from src.services.curation.crop_browse import crops_page, embedding_pool_query_and_count
+from src.services.curation.detections_summary import suggested_embed_request
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from src.services.curation.item_filter import ItemFilter
 
 
 CLUSTER_ORDERS = ('outliers', 'core_first')
@@ -37,6 +40,14 @@ def with_live_distance(item: dict[str, Any], distance: float | None) -> dict[str
     return item
 
 
+def _embed_suggestion(item_filter: ItemFilter, n_unembedded: int) -> dict[str, Any] | None:
+    """The embed request for the items an ordering could not rank (none when
+    every item in the pool has a vector). Reads never embed: the client POSTs it."""
+    if n_unembedded <= 0:
+        return None
+    return suggested_embed_request(item_filter).model_dump(mode='json')
+
+
 def _page(ids: list[str], page: int, page_size: int) -> list[str]:
     start = (page - 1) * page_size
     return ids[start : start + page_size]
@@ -49,6 +60,7 @@ async def ordered_crops_page(
     order: str,
     query_clause: dict[str, Any],
     cluster_id: int | None,
+    item_filter: ItemFilter,
     page: int,
     page_size: int,
     k: int | None,
@@ -86,6 +98,7 @@ async def ordered_crops_page(
             method=order,
             n_pool=n_pool,
             n_unembedded=max(0, n_pool - pool_count),
+            suggested_reprocess=_embed_suggestion(item_filter, n_pool - pool_count),
         )
 
     if order == 'diverse':
@@ -108,6 +121,7 @@ async def ordered_crops_page(
             method='diverse',
             n_pool=n_pool,
             n_unembedded=max(0, n_pool - pool_count),
+            suggested_reprocess=_embed_suggestion(item_filter, n_pool - pool_count),
         )
     return None
 

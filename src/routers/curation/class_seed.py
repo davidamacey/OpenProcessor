@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
-
 from src.clients.curation_opensearch import ClassRegistryError
 from src.routers.curation._class_models import (
     SeedConflict,
@@ -13,6 +11,11 @@ from src.routers.curation._class_models import (
     SeedSkipped,
 )
 from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
+from src.routers.curation._config_common_models import api_error
+from src.routers.curation._error_models import (
+    DetectorUnavailableResponse,
+    UnknownDetectorNamesResponse,
+)
 from src.routers.curation.classes import create_registry_class
 from src.routers.curation.ingest import _get_detection_profile
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
@@ -20,7 +23,14 @@ from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy
 
 
-@router.post('/classes/seed_from_detector', response_model=SeedFromDetectorResponse)
+@router.post(
+    '/classes/seed_from_detector',
+    response_model=SeedFromDetectorResponse,
+    responses={
+        422: {'model': UnknownDetectorNamesResponse},
+        503: {'model': DetectorUnavailableResponse},
+    },
+)
 async def seed_from_detector(
     payload: SeedFromDetectorRequest, opensearch: OpenSearchDep
 ) -> SeedFromDetectorResponse:
@@ -40,18 +50,22 @@ async def seed_from_detector(
         )
         labels = detector_labels(profile) if profile.detector_model else []
     except (ValueError, OSError) as exc:
-        raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
+        raise api_error(503, 'detector_unavailable', f'ingest misconfigured: {exc}') from exc
     if not labels:
-        raise HTTPException(
-            status_code=503,
-            detail='no ingest detector labels available; set OP_INGEST_PRIMARY_DETECTOR_MODEL',
+        raise api_error(
+            503,
+            'detector_unavailable',
+            'no ingest detector labels available; set OP_INGEST_PRIMARY_DETECTOR_MODEL',
         )
     reg = get_class_registry()
     existing = {c.class_name: c.deprecated for c in reg.load().classes}
     plan = plan_seed(labels, existing, payload.names)
     if plan.unknown:
-        raise HTTPException(
-            status_code=422, detail=f'names not in the detector vocabulary: {plan.unknown}'
+        raise api_error(
+            422,
+            'unknown_detector_names',
+            f'names not in the detector vocabulary: {plan.unknown}',
+            unknown_names=list(plan.unknown),
         )
     created: list[SeededClass] = []
     skipped = [

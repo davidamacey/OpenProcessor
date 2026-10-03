@@ -52,6 +52,7 @@ async def test_selected_mode_embeds_only_chosen_classes_and_stores_the_rest(
 
     assert result.n_crops == 3
     assert (result.n_embedded, result.n_not_embedded) == (1, 2)
+    assert result.n_embed_failed == 0, 'a policy skip is not an encoder failure'
     assert encoder.embed_crops_calls == [1]  # only the selected crop reached the encoder
 
     docs = _by_score(os_fake)
@@ -91,6 +92,7 @@ async def test_lazy_mode_stores_everything_deferred() -> None:
     svc, os_fake = _service(IngestPolicy(embedding=EmbeddingPolicy(mode='lazy')))
     result = await svc.ingest_one(_jpeg_bytes(), '/tmp/a.jpg')
     assert (result.n_embedded, result.n_not_embedded) == (0, 3)
+    assert result.n_embed_failed == 0
     assert svc.pe_encoder.embed_crops_calls == []
     assert {d['embedding_state'] for d in os_fake.items.values()} == {'deferred'}
     assert all('pe_embedding' not in d for d in os_fake.items.values())

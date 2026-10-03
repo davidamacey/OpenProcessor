@@ -94,7 +94,10 @@ def test_exclude_by_filter_matches_the_dry_run_and_is_reversible(
     dry = client.post(f'{P}/crops/batch_exclude', json={'selection': PEOPLE, 'dry_run': True})
     r = client.post(f'{P}/crops/batch_exclude', json={'selection': PEOPLE, 'reason': 'blurry'})
     assert r.status_code == 200, r.text
-    assert r.json() == {'excluded': dry.json()['selected'], 'errors': 0}
+    body = r.json()
+    assert body['excluded'] == dry.json()['selected']
+    assert sorted(body['updated_ids']) == ['p0', 'p1', 'p2'], 'the ids are the undo target'
+    assert body['errors'] == 0
     assert _excluded(fake) == {'p0', 'p1', 'p2'}
 
     undo = {'selection': {'filter': {'review_status': ['excluded']}}}
@@ -103,7 +106,9 @@ def test_exclude_by_filter_matches_the_dry_run_and_is_reversible(
         'selected': 3,
     }
     r = client.post(f'{P}/crops/batch_unexclude', json=undo)
-    assert r.json() == {'unexcluded': 3, 'errors': 0}
+    assert r.json()['unexcluded'] == 3
+    assert sorted(r.json()['updated_ids']) == ['p0', 'p1', 'p2']
+    assert r.json()['errors'] == 0
     assert _excluded(fake) == set()
 
 
@@ -155,5 +160,5 @@ def test_a_selection_over_the_bulk_limit_is_refused_not_truncated(
 
 def test_explicit_ids_still_work_unchanged(client: TestClient, fake: QueryFakeOpenSearch) -> None:
     r = client.post(f'{P}/crops/batch_exclude', json={'crop_ids': ['p0', 'c0']})
-    assert r.json() == {'excluded': 2, 'errors': 0}
+    assert r.json() == {'excluded': 2, 'updated_ids': ['p0', 'c0'], 'errors': 0}
     assert _excluded(fake) == {'p0', 'c0'}

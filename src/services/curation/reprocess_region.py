@@ -117,7 +117,7 @@ async def plan_region_filter(
         result.selected += int(with_locked['total'])
         result.locked_skipped += int(with_locked['total']) - int(unlocked['total'])
         # Items with no box at all are invisible to the per-box breakdown.
-        result.detail['no_box'] = result.detail.get('no_box', 0) + int(unlocked['no_box'])
+        result.add_count('no_box', int(unlocked['no_box']))
         for det in unlocked['by_detector']:
             for reason in det['reasons']:
                 key = (det['detector'], reason['reason'])

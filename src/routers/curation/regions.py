@@ -24,6 +24,7 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
@@ -56,14 +57,17 @@ def _box_clause(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
     return {'bool': {'filter': parts}} if parts else None
 
 
-@router.get('/regions', response_model=None, responses={200: {'model': RegionRowPage}})
+@router.get(
+    '/regions',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionRowPage}},
+)
 async def list_regions(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
     item_filter: ItemFilterQuery,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    class_id: int | None = Query(None),
     cluster_id: int | None = Query(None, description='Filter by the ITEM cluster.'),
     region_cluster_id: int | None = Query(None, description='Box filter: region cluster bucket.'),
     region_cluster_subid: str | None = Query(None, description='Box filter: AHC sub-cluster.'),
@@ -101,7 +105,7 @@ async def list_regions(
     ``min_score``, ``max_score``, ``text``, ``region_cluster_id``,
     ``region_cluster_subid``, ``box_state``) all select the SAME box, and
     each matching box is its own row (``region_box_id``). The item filters
-    (``status``, ``class_id``, ``cluster_id``, ``verified`` and the shared item
+    (``status``, ``cluster_id``, ``verified`` and the shared item
     filter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,
     ``max_rank``, ``origin``, ``embedding_state``, ``review_status``)
     select items. ``page`` / ``page_size`` page items; ``total`` counts
@@ -155,8 +159,6 @@ async def list_regions(
         filt.append({'term': {F.status: status}})
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
-    if class_id is not None:
-        filt.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
         filt.append({'term': {'cluster_id': cluster_id}})
     try:
@@ -331,7 +333,9 @@ def _training_candidate_query(
 
 
 @router.get(
-    '/regions/training_candidates', response_model=None, responses={200: {'model': RegionRowPage}}
+    '/regions/training_candidates',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionRowPage}},
 )
 async def training_candidates(
     opensearch: OpenSearchDep,

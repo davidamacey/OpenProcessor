@@ -12,8 +12,10 @@ from __future__ import annotations
 from typing import Any
 
 from src.config import IndexRole, get_curation_config, index_name
+from src.services.curation.detections_summary import suggested_embed_request
 from src.services.curation.embedding_state import not_embedded_clause
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.services.curation.item_filter import ItemFilter
 
 
 # Tabs whose own selection requires a probe-scored item
@@ -98,14 +100,22 @@ async def compute_empty_reason(tab: str, filters: Any, opensearch: Any) -> str:
     return 'no items match'
 
 
-async def review_tabs_empty_state(opensearch: Any) -> dict[str, bool]:
+async def review_tabs_empty_state(opensearch: Any) -> dict[str, Any]:
     """The underlying-state flags :func:`compute_empty_reason` reads,
     served once on ``GET /review/tabs`` so a client can annotate ANY
-    tab's zero-result state without one ``count`` round-trip per tab."""
+    tab's zero-result state without one ``count`` round-trip per tab.
+    ``suggested_reprocess`` (the shared embed request) is set exactly when
+    ``has_unembedded_items``, so an empty queue can offer the embed action."""
+    has_probe_predictions = await _field_has_any_value(opensearch, 'probe_pred_entropy')
+    has_item_scores = await _field_has_any_value(opensearch, 'mistakenness_score')
+    has_imported_labels = await _imported_labels_exist(opensearch)
+    unembedded = await _count_unembedded(opensearch)
     return {
-        'has_probe_predictions': await _field_has_any_value(opensearch, 'probe_pred_entropy'),
-        'has_item_scores': await _field_has_any_value(opensearch, 'mistakenness_score'),
-        'has_imported_labels': await _imported_labels_exist(opensearch),
+        'has_probe_predictions': has_probe_predictions,
+        'has_item_scores': has_item_scores,
+        'has_imported_labels': has_imported_labels,
+        'has_unembedded_items': unembedded > 0,
+        'suggested_reprocess': suggested_embed_request(ItemFilter()) if unembedded else None,
     }
 
 

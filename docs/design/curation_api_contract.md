@@ -917,7 +917,7 @@ default state of a new box.
 |---|---|---|
 | GET | `/crops` | `CropsPageResponse`: `crops[]`, `total`, `page`, `page_size`, `method`, `version`, `n_pool` |
 | GET | `/crops/{crop_id}` | item (`404` when unknown) |
-| GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500 |
+| GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500. Items carry `mask_polygon` here (lists send it as null), so one call draws every sibling outline |
 | GET | `/crops/{crop_id}/history` | `{crop_id, entries[]}`: `class_id_history` oldest first |
 | GET | `/classes/{class_id}/crops` | `CropsPageResponse` (`page`, `page_size`, `include_test`) |
 
@@ -927,7 +927,7 @@ default state of a new box.
 |---|---|
 | `page`, `page_size` (1 to 500, default 50), `limit` | paging. `limit` is an alias of `page_size` and wins when both are set |
 | `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. Fields: `updated_at`, `created_at`, `confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_distance`, `mistakenness_score`, `uniqueness_score`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
-| `class_id`, `cluster_id`, `label_source`, `class_source`, `label_validated`, `source` | exact filters |
+| `cluster_id`, `label_source`, `class_source`, `label_validated`, `source` | exact filters. A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
 | `needs_new_class`, `review_dismissed` | boolean filters |
 | `ids` | comma-separated, at most 500. Returns exactly those items in that order, drops missing ids and ignores every other filter |
 | `include_test`, `include_excluded` | include frozen test-holdout and excluded items |
@@ -953,8 +953,8 @@ applies to automated writers.
 | PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[]}` | `conflicts` is `[{crop_id, current_source}]`, not written. `updated_ids` are the ids to pass to `undo_batch` |
 | POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[]}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
 | POST | `/crops/flag_new_class` | `{crop_ids, note}` | `{flagged, errors}` | sets `needs_new_class` |
-| POST | `/crops/batch_exclude` | `{crop_ids, reason}` | `{excluded, errors}` | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
-| POST | `/crops/batch_unexclude` | `{crop_ids}` | `{unexcluded, errors}` | restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
+| POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
+| POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
 | POST | `/crops/{crop_id}/discard` | `{clear_class: true, dismiss_from_review: false}`, `422` if both false | the item | clears class, provenance and validation and drops the item to the residual pool, and/or hides it from every review tab. Recorded and undoable |
 | POST | `/crops/discard_batch` | `{crop_ids, clear_class, dismiss_from_review}` | `{items[], discarded, conflicts, not_found}` | |
 | POST | `/crops/{crop_id}/review_dismiss` | | `{crop_id, dismissed}` | one-way review hide, not recorded. Prefer `discard` with `clear_class: false` and `dismiss_from_review: true` |
@@ -995,7 +995,7 @@ applies to automated writers.
 
 The region write routes, `GET /regions`, `GET /regions/training_candidates`, `GET /regions/suspected_false_positives`, `POST /regions/cluster`, `POST /regions/fp_centroids/build`, the region undo routes and the region
 cluster card and refine routes need an active region profile. Without one they
-answer `409` with the plain detail `no region profile is configured`.
+answer `409` `{detail: {error: "no_active_profile", message: "no region profile is configured"}}` (published as `RegionProfileUnavailableResponse` on every such route).
 
 ### Per-box edits
 
@@ -1097,7 +1097,7 @@ and `false_positive`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/regions` | `RegionRowPage`. Filters: `page`, `page_size` (max 200), `class_id`, `cluster_id` (the item cluster), `region_cluster_id`, `region_cluster_subid`, `sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
+| GET | `/regions` | `RegionRowPage`. Filters: `page`, `page_size` (max 200), `cluster_id` (the item cluster), `region_cluster_id`, `region_cluster_subid`, `sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
 | GET | `/regions/statuses` | the lifecycle vocabulary (see above) |
 | GET | `/regions/vocabulary` | `RegionVocabularyResponse`: `detectors[]` (`id`, `label`, `role`, `filterable`), `region_sources[]`, `chain_actors[]`, `rejection_reasons[]`, `text_rules`, `text_choices`, `region_profile` summary. Built from the active profile, the ingest profiles and the VLM registry, never from a fixed model id |
 | GET | `/regions/training_candidates` | `RegionRowPage`, `mode` required |
@@ -1123,7 +1123,7 @@ so some of its rows are missing.
 `max_score`, `text`, `region_cluster_id`, `region_cluster_subid`,
 `box_state`) all apply to the same box, and each matching box is its own row.
 With no box filter and no `status` the rows are the accepted and
-`false_positive` boxes. The item filters (`status`, `class_id`, `cluster_id`,
+`false_positive` boxes. The item filters (`status`, `cluster_id`,
 `verified`, `max_rank`) select items. `status` is any value from
 `GET /regions/statuses` (`400` otherwise) and lists every item in that status
 as item rows. `box_state` is `proposed`, `accepted`, `rejected` or
@@ -1202,17 +1202,25 @@ validated count. `trainable` is validated minus test-holdout minus excluded;
 `{tabs: [{id, label, description, filters, filter_defaults, filter_specs}], empty_state}`.
 `filters` is the list of query parameters a tab honors (a parameter that is
 not listed is accepted and ignored). `filter_defaults` is the value applied
-when a parameter is omitted. `filter_specs` self-describes each enum filter
-(`{param, kind: "enum", label, options: [{value, label}]}`) so a client
-renders it generically. `empty_state` is `{has_probe_predictions,
-has_item_scores, has_imported_labels}`. The `regions` tab is offered only
+when a parameter is omitted. `filter_specs` self-describes EVERY filter in
+`filters` (`{param, kind, label, options: [{value, label}], min, max,
+description}`) so a client renders it generically. `kind` is `enum` (pick
+one of `options`), `multi_enum` (repeatable parameter, any of `options`:
+`origin`, `embedding_state`, `review_status`), `class_names` (repeatable
+class NAME, no fixed options: the names come from `GET /classes` and the
+detector labels of `GET /ingest/config`), `bool`, `number` / `integer`
+(`min`, `max`) or `text`. `empty_state` is `{has_probe_predictions,
+has_item_scores, has_imported_labels, has_unembedded_items,
+suggested_reprocess}`: `suggested_reprocess` is the dry-run embed
+`ReprocessRequest` exactly when `has_unembedded_items`, so an empty queue
+can offer the embed action. The `regions` tab is offered only
 while a region profile is active.
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/review/tabs` | `ReviewTabsResponse` |
-| GET | `/review/{tab}` | `items[]` (item plus `reason`), `total`, `page`, `page_size`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
-| GET | `/review/{tab}/locate` | where one item sits in a tab. `crop_id` required. Same filters and `sort` as the queue plus `page_size` |
+| GET | `/review/{tab}` | `ReviewQueuePage`: `items[]` (item plus `reason`), `total`, `page`, `page_size`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
+| GET | `/review/{tab}/locate` | `ReviewLocateResponse`: where one item sits in a tab. `crop_id` required. Same filters and `sort` as the queue plus `page_size` |
 | GET | `/review/new_class_proposals/summary` | `size`, `samples`. Counts and terms behind the `new_class_proposals` tab |
 | POST | `/review/new_class_proposals/resolve` | bulk-resolve every item proposing one name. `dry_run` query |
 | GET | `/review/raw_label_clusters` | `size`, `samples_per_cluster`. Groups of unmatched raw VLM answers |
@@ -1234,8 +1242,9 @@ Tabs:
 | `imported` | validated labels a dataset import wrote (`import_id`, `dataset_split`) |
 
 Common filters: `include_test`, `max_rank`, `min_blur_ratio`,
-`min_mistakenness`, `hide_near_duplicates`, `class_id`, `source`,
-`conf_min`, `conf_max` (`400` if `conf_min` is above `conf_max`),
+`min_mistakenness`, `hide_near_duplicates`, `class_name` and
+`exclude_class_name` (repeatable), `source`, `conf_min`, `conf_max`, `min_area`, `max_area`,
+`origin`, `embedding_state`, `review_status` (`400` if `conf_min` is above `conf_max`),
 `combine_conflict`, `on_negative_frame`, `sort`, `page`, `page_size` (max
 200). Tab-only filters: `text` and `region_status` on `regions`; `import_id`
 and `dataset_split` on `imported`.
@@ -1351,7 +1360,7 @@ Cluster ids partition into ranges:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/clusters` | cluster cards. Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `class_id`, `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit` |
+| GET | `/clusters` | cluster cards. Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit` |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters`, `class_id`, `offset` |
 | POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`. Validates members of pure clusters |
 | POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
@@ -1874,7 +1883,7 @@ it. Request: `triton_name`, `force`, `fp16`, `input_size`, `max_batch_size`,
 
 | Method | Path | Body or query | Response | Errors |
 |---|---|---|---|---|
-| GET | `/models/status` | `include_other_projects` | `{models[]}`: Triton models and the segmenter and VLM services. Each Triton entry carries `project`, `shared`, `owned`, `sharing_revision`, `class_mapping`, `optional`. VLM rows are one per registered endpoint with `kind: vlm`, `active` and `active_in` (the bound project only) | |
+| GET | `/models/status` | `include_other_projects` | `{models[]}`: Triton models and the segmenter and VLM services. Exactly one `kind: external` segmenter row is always listed (named by the region profile's `segmenter_name`, else `sam3`) with `status` `ready`, `unavailable` or `not_configured`; the same fact is `GET /open_vocab` `segmenter {configured, reachable}`. Each Triton entry carries `project`, `shared`, `owned`, `sharing_revision`, `class_mapping`, `optional`. VLM rows are one per registered endpoint with `kind: vlm`, `active` and `active_in` (the bound project only) | |
 | GET | `/models/{model_name}/class_mapping` | | `{model, model_project, project, entries[], unmapped[], not_covered[], labels}` | `404 model_not_found` |
 | PUT | `/models/{model_name}/sharing` | `{shared, expected_revision}`, query `force` | `{name, project, shared, revision, used_by[]}` | `404 model_not_found`, `409 revision_conflict`, `409 in_use` (another project's active detection profile uses the model; typed `ModelSharingConflictResponse`: `detail.projects[]` slugs and `detail.used_by[]` rows `{project, profile}`; `force` bypasses), `503 config_store_unavailable` (typed `ModelSharingUnavailableResponse`; `force` bypasses) |
 | DELETE | `/models/{model_name}` | query `force` | `{triton_name, triton_unloaded, directory_removed, forced, warning}` | `404`, `400`, `403`, `409` |
@@ -1946,7 +1955,7 @@ classes are reported.
 | POST | `/probe/run` | `{job_id, architecture, gpu, resume}`. Runs the active-learning probe from a finished training job (`409` when that job is unknown, not `finished`, has no checkpoint, or the GPU cannot be claimed; one job at a time) |
 | GET | `/probe/status` | `ProbeStatusResponse` (`status`, `job_id`, `train_job_id`, `model_path`, `gpu`, `updated_count`, `error`, `actionable_min_confidence`) |
 | POST | `/probe/cancel` | |
-| GET | `/search/text` | `q` (required), `page`, `page_size`, `class_id`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is off, `503` while the text encoder is not ready |
+| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is off, `503` while the text encoder is not ready |
 | GET | `/stats` | project counts, indexes, disk, jobs |
 | GET | `/stats/classes` | per-class counts with `thresholds`, `adequacy`, `trainable`, `trainable_gap`, `aug_target`, `aug_gap` |
 | GET | `/stats/dataset` | the dashboard roll-up |
@@ -1976,6 +1985,9 @@ items is `422`. Response: `n_frozen`, `n_classes_covered`,
   verifier), `verified_by_import`, `validated_by_human`,
   `validated_by_import`. The detector and segmenter buckets match the active
   profile's names.
+- `embedding`: `{embedded, not_embedded, by_state}`; `by_state` always has the keys
+  `embedded`, `not_selected`, `deferred`, `failed` and `unknown` (items written before
+  `embedding_state` existed; it is not a value of the `embedding_state` filter).
 - `validated_by_import`, `as_of`, `total_crops`, `validated`, `test_holdout`,
   `by_source`, `in_progress` (with `region_stall_reason`, the same text as
   `GET /ingest/region_drain`).

@@ -4,7 +4,7 @@
   queue (rank + page) by *counting* the items that sort before it under
   the same query and sort — so a deep link works at any queue depth.
   Every queue sort ends in a ``crop_id`` tiebreak so that rank is exact.
-- ``/review/{tab}`` honours ``class_id``, ``source`` and the
+- ``/review/{tab}`` honours ``class_name``, ``source`` and the
   ``conf_min``/``conf_max`` band.
 - ``new_class_proposals`` lists human-flagged and VLM-proposed new-class
   items; ``/review/new_class_proposals/summary`` aggregates the VLM's
@@ -166,15 +166,49 @@ def test_queue_sort_ends_in_crop_id_tiebreak(monkeypatch: pytest.MonkeyPatch) ->
 def test_review_filters_class_source_and_confidence(monkeypatch: pytest.MonkeyPatch) -> None:
     base = {'class_source': 'vlm_unmatched'}
     docs = {
-        'a': {**base, 'crop_id': 'a', 'class_id': 1, 'source': 's1', 'confidence': 0.3},
-        'b': {**base, 'crop_id': 'b', 'class_id': 2, 'source': 's1', 'confidence': 0.3},
-        'c': {**base, 'crop_id': 'c', 'class_id': 1, 'source': 's2', 'confidence': 0.3},
-        'd': {**base, 'crop_id': 'd', 'class_id': 1, 'source': 's1', 'confidence': 0.9},
+        'a': {
+            **base,
+            'crop_id': 'a',
+            'class_id': 1,
+            'class_name': 'car',
+            'source': 's1',
+            'confidence': 0.3,
+        },
+        'b': {
+            **base,
+            'crop_id': 'b',
+            'class_id': 2,
+            'class_name': 'truck',
+            'source': 's1',
+            'confidence': 0.3,
+        },
+        'c': {
+            **base,
+            'crop_id': 'c',
+            'class_id': 1,
+            'class_name': 'car',
+            'source': 's2',
+            'confidence': 0.3,
+        },
+        'd': {
+            **base,
+            'crop_id': 'd',
+            'class_id': 1,
+            'class_name': 'car',
+            'source': 's1',
+            'confidence': 0.9,
+        },
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
     r = client.get(
         '/curation/projects/default/review/mismatches',
-        params={'class_id': 1, 'source': 's1', 'conf_min': 0.1, 'conf_max': 0.5},
+        params={
+            'class_id': 1,
+            'class_name': 'car',
+            'source': 's1',
+            'conf_min': 0.1,
+            'conf_max': 0.5,
+        },
     )
     assert r.status_code == 200, r.text
     assert [i['crop_id'] for i in r.json()['items']] == ['a']

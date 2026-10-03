@@ -25,6 +25,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._stats_models import DatasetStatsResponse
 from src.services.curation import stats_imports as imp
 from src.services.curation.dataset_thresholds import adequacy, aug_target, dataset_thresholds
 from src.services.curation.ingest_class_sources import (
@@ -332,7 +333,7 @@ async def stats_dataset(opensearch: Any) -> dict[str, Any]:
     return await dataset_stats(opensearch, ItemFilter())
 
 
-@router.get('/stats/dataset')
+@router.get('/stats/dataset', response_model=None, responses={200: {'model': DatasetStatsResponse}})
 async def stats_dataset_route(
     opensearch: OpenSearchDep, item_filter: ItemFilterQuery
 ) -> dict[str, Any]:

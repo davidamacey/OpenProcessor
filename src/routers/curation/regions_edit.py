@@ -31,6 +31,11 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
+from src.routers.curation._region_write_models import (
+    RegionBatchWriteResponse,
+    RegionMetaPatchResponse,
+)
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.region_box_refresh import refresh_box_embeddings
 from src.services.curation.region_boxes import RegionBoxWriteError
@@ -98,7 +103,11 @@ async def _write_one(
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
 
 
-@router.patch('/crops/{crop_id}/region_meta')
+@router.patch(
+    '/crops/{crop_id}/region_meta',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionMetaPatchResponse}},
+)
 async def patch_crop_region_meta(
     crop_id: str,
     payload: ItemRegionMetaRequest,
@@ -171,6 +180,17 @@ async def patch_crop_region_meta(
         'updated_fields': sorted(wire_fields),
         'item': rec.item(crop_id),
         'vector_refresh': embedding,
+    }
+
+
+def empty_batch_result() -> dict[str, Any]:
+    """The batch-write response for a batch that names nothing to write."""
+    return {
+        'updated': 0,
+        'conflicts': [],
+        'invalid': [],
+        'items': [],
+        'vector_refresh': {'embedded': 0, 'pending': 0},
     }
 
 
@@ -282,7 +302,11 @@ async def _batch_write(
     return {'updated': updated, 'conflicts': conflicts, 'invalid': invalid, 'items': items}
 
 
-@router.post('/regions/batch_status')
+@router.post(
+    '/regions/batch_status',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionBatchWriteResponse}},
+)
 async def batch_set_region_status(
     payload: CropBatchStatusRequest,
     opensearch: OpenSearchDep,
@@ -300,7 +324,7 @@ async def batch_set_region_status(
     """
     F = get_region_fields()
     if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+        return empty_batch_result()
     _validate_status(payload.region_status)
     base: dict[str, Any] = {
         F.label_source: payload.region_label_source,

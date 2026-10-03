@@ -58,7 +58,6 @@ class SemanticSearchDisabledError(RuntimeError):
 def _build_filter(
     *,
     tab: str | None,
-    class_id: int | None,
     cluster_id: int | None,
     date_from: str | None,
     date_to: str | None,
@@ -98,8 +97,6 @@ def _build_filter(
             filters.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
 
     filters.extend(item_filter_clauses(item_filter or ItemFilter()))
-    if class_id is not None:
-        filters.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
         filters.append({'term': {'cluster_id': cluster_id}})
 
@@ -186,7 +183,6 @@ async def semantic_text_search(
     query: str,
     page: int,
     page_size: int,
-    class_id: int | None = None,
     cluster_id: int | None = None,
     tab: str | None = None,
     date_from: str | None = None,
@@ -229,7 +225,6 @@ async def semantic_text_search(
     filter_clause = _build_filter(
         item_filter=item_filter.model_copy(update={'max_rank': None}),
         tab=tab,
-        class_id=class_id,
         cluster_id=cluster_id,
         date_from=date_from,
         date_to=date_to,

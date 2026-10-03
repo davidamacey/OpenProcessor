@@ -105,6 +105,13 @@ def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
     return [*item_source_excludes(storage), 'class_id_history', 'mask_polygon']
 
 
+def item_context_source_excludes(storage: RegionFields | None = None) -> list[str]:
+    """:func:`item_list_source_excludes` keeping ``mask_polygon``: the items of
+    ``GET /crops/{id}/context`` are drawn together over the source image, so
+    each carries its outline (bounded by that route's sibling cap)."""
+    return [e for e in item_list_source_excludes(storage) if e != 'mask_polygon']
+
+
 def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> dict[str, Any]:
     """Read every wire region attribute from a stored doc, keyed by its
     fixed wire name."""
@@ -339,7 +346,7 @@ def serialize_item(
         # Full-image open-vocabulary pass: the prompt that found the item, the
         # set@revision that ran it, and the outline (source frame, normalized).
         # List endpoints send ``mask_polygon`` as null (``item_list_source_excludes``);
-        # ``GET /crops/{id}`` carries it.
+        # ``GET /crops/{id}`` and ``GET /crops/{id}/context`` carry it.
         'source_prompt': src.get('source_prompt'),
         'open_vocab_set': src.get('open_vocab_set'),
         'open_vocab_revision': src.get('open_vocab_revision'),
@@ -485,6 +492,7 @@ __all__ = [
     'WIRE_REGION_FIELDS',
     'box_thumbnail_url',
     'current_cluster_distance',
+    'item_context_source_excludes',
     'item_list_source_excludes',
     'item_source_excludes',
     'region_box_to_wire',

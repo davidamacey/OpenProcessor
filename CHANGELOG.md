@@ -39,7 +39,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   counters; `VlmLabeler.prompt_visible`.
 - `GET /crops` filters `open_vocab_set` and `source_prompt`; item wire fields
   `source_prompt`, `open_vocab_set`, `open_vocab_revision` and `mask_polygon`
-  (list rows send the outline as null); class-source role `open_vocab`.
+  (list rows send the outline as null; `GET /crops/{id}` and `/context` carry it); class-source role `open_vocab`.
 - Segmenter client `segment_image` (per-call prompt, score floor and mask
   polygon); `ensure_class_by_name`, the one name-to-id path for classes created
   as a side effect.
@@ -87,6 +87,39 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   request. Worker metrics `op_region_segmenter_calls_total` and
   `op_region_segmenter_seconds_total` (profile, class, hit or miss).
 
+- Contract completeness (every curation response that gained a field in 0.4.0 is typed in
+  `contracts/openapi/curation.json`, and `tests/test_contract_typed_responses.py` fails for any
+  untyped JSON body not on its justified allowlist):
+  - Open-vocabulary enums with served labels: `OpenVocabStatus` (`pending`, `done`,
+    `skipped_gate`, `failed`; the reprocess filter `open_vocab_status` now rejects any other
+    value), the test hit `drop_reason` (8 values) and the gate `reason` (4 values).
+    `GET /open_vocab/schema` serves them as `vocabulary {statuses, drop_reasons, gate_reasons}`
+    (`{value, label}` rows).
+  - `GET /open_vocab` serves `segmenter {configured, reachable}`; `GET /models/status` always lists
+    one segmenter row (`kind: external`; status `not_configured`, `unavailable` or `ready`), also when
+    no region profile names a segmenter.
+  - `GET /review/tabs` serves `filter_specs` for every filter a tab honours (kinds `enum`,
+    `multi_enum`, `class_names`, `bool`, `number`, `integer`, `text`; labelled options for `origin`,
+    `embedding_state` and `review_status`; ranges for confidence and size), and `empty_state` carries
+    `has_unembedded_items` and `suggested_reprocess` so an empty queue can offer the embed action.
+  - Ordered `GET /crops` views (`outliers`, `core_first`, `diverse`) return `suggested_reprocess`
+    beside `n_unembedded`.
+  - `batch_exclude` and `batch_unexclude` return `updated_ids` (what `batch_label` and `move` already
+    returned), and count only the items they changed.
+  - `n_embed_failed` per image and in the batch summary, apart from `n_not_embedded` (which also
+    counts policy skips).
+  - `GET /crops/{id}/context` items carry `mask_polygon`.
+  - Response models for search (`unembedded_in_scope`), dataset stats (`embedding`, with the legacy
+    `unknown` state a typed, documented key), the region writes (`vector_refresh`), the selection
+    writes and their dry runs, `review/{tab}` and its locate route, the auto-label job state and
+    `open_vocab/validate`.
+  - Typed error bodies `{error, message, ...}`: 409 `no_active_profile` on every region route, seed
+    503 `detector_unavailable` and 422 `unknown_detector_names` (`unknown_names`), ingest policy PUT
+    422 `detector_not_servable` (`reasons: string[]`), 503 `detector_unavailable` and 409
+    `revision_conflict`.
+  - `ValidationIssue.field` documents its path format (`targets[2].prompt`,
+    `gating.tier3_hit_rate.window`); `ReprocessScopeResult.detail` is typed `int | float | bool | str`.
+
 ### Documentation
 - Full v0.4.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
   `INSTALLATION.md`, `docs/CURATION.md`, `docs/ARCHITECTURE.md`,
@@ -113,6 +146,13 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   suppress each other.
 - The VLM stage (worker and auto-label sweep) works on embedded items only; one shared clause (`embedding_state.embedded_clause`) now defines "has a vector" for every consumer.
 - The quick start, README and `env.template` no longer tell users to set `OP_INGEST_PRIMARY_CLASS_IDS`; the stock detector keeps its full 80-class vocabulary, stored as unlabeled proposals.
+- Class identity is by name on every list route: `class_id` is no longer a query parameter of
+  `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /search/text`, `GET /crops`, `GET /regions` and
+  `GET /clusters` (use `class_name`, repeatable; `GET /classes/{class_id}/crops` is unchanged). The
+  review tab catalog no longer lists `class_id` in `filters`.
+- A region route with no active region profile answers 409 `{error: "no_active_profile", message}`
+  instead of a plain string detail; the seed and ingest-policy errors above change from a string (or a
+  list of reasons) to the same `{error, message, ...}` shape.
 - `OP_INGEST_PRIMARY_CLASS_IDS` is retired and ignored (a `retired_env_ignored` warning is logged); use the per-project detect filter instead. Remove it from your `.env`.
 - `/review/regions` with the region profile off now answers an empty queue with an explanatory reason instead of stale rows (#51).
 - `classifier_class_sources()` always includes the primary detector's `_model` source, so by-name resolved classes count as machine labels.

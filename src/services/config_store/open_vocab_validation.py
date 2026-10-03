@@ -52,6 +52,15 @@ BYPASSABLE_CODES: frozenset[str] = frozenset({'segmenter_unreachable', 'segmente
 
 _MAX_CLASS_NAME_LEN = 64
 
+#: ``ValidationIssue.field`` paths are dotted from the body root, with a list
+#: index in brackets: ``targets[2].prompt``, ``gating.tier3_hit_rate.window``,
+#: ``image_max_side``. A whole-target issue names ``targets[2]``.
+HIT_RATE_PATH = 'gating.tier3_hit_rate'
+
+
+def target_path(index: int) -> str:
+    return f'targets[{index}]'
+
 
 def _norm(name: str | None) -> str:
     return normalize_class_name(name or '')
@@ -90,13 +99,13 @@ def _check_ranges(ov: OpenVocabSet) -> list[ValidationIssue]:
     ]
     hit_rate = ov.gating.tier3_hit_rate
     pairs += [
-        ('gating.tier3_hit_rate.window', 'window', hit_rate.window),
-        ('gating.tier3_hit_rate.miss_threshold', 'miss_threshold', hit_rate.miss_threshold),
-        ('gating.tier3_hit_rate.sample_floor', 'sample_floor', hit_rate.sample_floor),
+        (f'{HIT_RATE_PATH}.window', 'window', hit_rate.window),
+        (f'{HIT_RATE_PATH}.miss_threshold', 'miss_threshold', hit_rate.miss_threshold),
+        (f'{HIT_RATE_PATH}.sample_floor', 'sample_floor', hit_rate.sample_floor),
     ]
     issues: list[ValidationIssue] = []
     for i, t in enumerate(ov.targets):
-        base = f'targets[{i}]'
+        base = target_path(i)
         pairs += [
             (f'{base}.min_score', 'min_score', t.min_score),
             (f'{base}.min_area_frac', 'min_area_frac', t.min_area_frac),
@@ -117,8 +126,8 @@ def _check_ranges(ov: OpenVocabSet) -> list[ValidationIssue]:
             _issue(
                 'open_vocab_field_range',
                 'error',
-                'gating.tier3_hit_rate.miss_threshold cannot exceed window',
-                field='gating.tier3_hit_rate.miss_threshold',
+                f'{HIT_RATE_PATH}.miss_threshold cannot exceed window',
+                field=f'{HIT_RATE_PATH}.miss_threshold',
             )
         )
     issues.extend(i for i in (_range_issue(p, f, v) for p, f, v in pairs) if i is not None)
@@ -133,7 +142,7 @@ def _check_targets(
     detector = {_norm(n) for n in detector_class_names}
     seen: set[tuple[str, str]] = set()
     for i, t in enumerate(ov.targets):
-        base = f'targets[{i}]'
+        base = target_path(i)
         issues.extend(check_segmenter_prompt_text(t.prompt, sole_leg=True, field=f'{base}.prompt'))
         if t.class_name and (len(t.class_name) > _MAX_CLASS_NAME_LEN or not _norm(t.class_name)):
             issues.append(

@@ -92,7 +92,6 @@ async def _cards(*buckets: dict[str, Any]) -> dict[str, Any]:
         per_cluster=0,
         max_clusters=100,
         kind='all',
-        class_id=None,
         cluster_id=None,
         item_filter=ItemFilter(),
         min_blur_ratio=None,

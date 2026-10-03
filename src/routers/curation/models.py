@@ -26,7 +26,10 @@ from src.routers.curation._models_class_mapping import (
     discover_foreign_shared_models,
     listing_fields,
 )
-from src.routers.curation._models_segmenter import build_segmenter_entry
+from src.routers.curation._models_segmenter import (
+    build_segmenter_entry,
+    build_standalone_segmenter_entry,
+)
 from src.routers.curation._models_vlm import vlm_status_rows
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.model_unload_guard import (
@@ -219,6 +222,10 @@ async def models_status(
             models.append(_build_triton_entry(name, friendly, role, mtype, optional=True))
         else:
             models.append(_build_triton_entry(name, friendly, role, mtype))
+    if not segmenter_name:
+        # No region profile names a segmenter, but open-vocabulary sets still
+        # need one: always say whether it is configured and reachable.
+        models.append(await build_standalone_segmenter_entry())
 
     # Surface any additional model promoted through this pipeline (carries
     # promote.json) that isn't one of the fixed core models above, so a

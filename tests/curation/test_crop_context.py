@@ -213,3 +213,28 @@ def test_the_documented_context_model_matches_what_is_served() -> None:
         'responses'
     ]['200']['content']['application/json']['schema']
     assert ref['$ref'].endswith('/CropContextResponse')
+
+
+def test_context_items_carry_their_outline_while_lists_do_not() -> None:
+    """The fake does not apply ``_source.excludes``, so this pins what the routes ask for."""
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {'a1': {'crop_id': 'a1', 'image_id': 'img-a', 'crop_rank_in_image': 1}},
+            IMAGES: {'img-a': {'image_id': 'img-a', 'width': 10, 'height': 10}},
+        }
+    )
+    excludes: dict[str, list[str]] = {}
+    real_search = fake.search
+
+    async def _record(**kwargs: Any) -> Any:
+        label = 'context' if kwargs['body']['query'].get('term') else 'list'
+        excludes[label] = kwargs['body']['_source']['excludes']
+        return await real_search(**kwargs)
+
+    fake.search = _record  # type: ignore[method-assign]
+    client = _client(fake)
+    client.get('/curation/projects/default/crops/a1/context')
+    client.get('/curation/projects/default/crops')
+    assert 'mask_polygon' not in excludes['context'], 'sibling outlines come in the one call'
+    assert 'class_id_history' in excludes['context']
+    assert 'mask_polygon' in excludes['list']

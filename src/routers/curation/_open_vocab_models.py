@@ -14,6 +14,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.routers.curation._config_common_models import ActivateResponse, ActiveRef, ValidationReport
+from src.services.detection.open_vocab_select import DropReason  # noqa: TC001 - pydantic field type
 from src.services.detection.open_vocab_set import (
     DEFAULT_DEDUP_IOU,
     DEFAULT_IMAGE_MAX_SIDE,
@@ -24,6 +25,7 @@ from src.services.detection.open_vocab_set import (
     DEFAULT_MIN_SCORE,
     HitRateGate,
 )
+from src.services.detection.segmenter_gate import GateReason  # noqa: TC001 - pydantic field type
 
 
 SetSourceWire = Literal['stored', 'template']
@@ -97,12 +99,23 @@ class OpenVocabTemplateSummary(BaseModel):
     n_targets: int
 
 
+class SegmenterAvailability(BaseModel):
+    """The segmenter every open-vocabulary run needs. ``configured``: a
+    segmenter URL is set; ``reachable``: it answered its health probe and has
+    its model loaded (never true when not configured). The same fact
+    ``GET /models/status`` reports in its segmenter row."""
+
+    configured: bool
+    reachable: bool
+
+
 class OpenVocabList(BaseModel):
     sets: list[OpenVocabSummary]
     templates: list[OpenVocabTemplateSummary]
     active: ActiveRef
     config_revision: int
     stale: bool = False
+    segmenter: SegmenterAvailability
 
 
 class OpenVocabDoc(BaseModel):
@@ -188,16 +201,39 @@ class OpenVocabFieldSchema(BaseModel):
     help: str = ''
 
 
+class VocabularyOption(BaseModel):
+    value: str
+    label: str
+
+
+class OpenVocabVocabulary(BaseModel):
+    """Served labels for the pass's closed value sets: every value of the wire
+    enums ``OpenVocabStatus`` (an image's ``open_vocab_status``, the reprocess
+    filter), ``DropReason`` (a test hit's ``drop_reason``) and ``GateReason``
+    (a test gate skip's ``reason``)."""
+
+    statuses: list[VocabularyOption]
+    drop_reasons: list[VocabularyOption]
+    gate_reasons: list[VocabularyOption]
+
+
 class OpenVocabSchema(BaseModel):
     fields: list[OpenVocabFieldSchema]
     max_enabled_targets_ceiling: int
+    vocabulary: OpenVocabVocabulary
 
 
 class OpenVocabTestRequest(BaseModel):
     """Run one UNSAVED target on one image; exactly one of ``image_id`` (a
     stored image) and ``image_base64`` (an uploaded JPEG/PNG)."""
 
-    image_id: str | None = None
+    image_id: str | None = Field(
+        default=None,
+        description=(
+            "A stored image's id: the item wire's `image_id`, the same id "
+            '`POST /images/{image_id}/reprocess` takes.'
+        ),
+    )
     image_base64: str | None = None
     target: OpenVocabTargetBody
     image_max_side: int = DEFAULT_IMAGE_MAX_SIDE
@@ -215,7 +251,7 @@ class OpenVocabTestHit(BaseModel):
     score: float
     mask_polygon: list[list[float]] | None = None
     selected: bool
-    drop_reason: str | None = None
+    drop_reason: DropReason | None = None
 
 
 class OpenVocabTestImage(BaseModel):
@@ -229,7 +265,7 @@ class OpenVocabTestGate(BaseModel):
 
     run: bool
     tier: int | None = None
-    reason: str | None = None
+    reason: GateReason | None = None
 
 
 class OpenVocabTestResponse(BaseModel):

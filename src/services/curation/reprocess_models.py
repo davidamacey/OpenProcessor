@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.item_selection import Sample  # noqa: TC001 - pydantic resolves it
+from src.services.curation.open_vocab_fields import OpenVocabStatus  # noqa: TC001 - pydantic
 
 
 ReprocessScope = Literal['detect', 'open_vocab', 'region', 'vlm', 'embed']
@@ -46,7 +47,7 @@ class ReprocessFilter(ItemFilter):
     missing_status: bool = False
     missing_provenance: bool = False
     all_images: bool = False
-    open_vocab_status: list[str] = Field(default_factory=list)
+    open_vocab_status: list[OpenVocabStatus] = Field(default_factory=list)
     """Image-level selectors (``all_images``, ``open_vocab_status``) select
     from the images index, so they also reach images with no item yet; they
     only combine with the image-unit scopes and not with the item selectors."""
@@ -121,10 +122,17 @@ class ReprocessScopeResult(BaseModel):
     not_found: int = 0
     failed: int = 0
     breakdown: list[BreakdownRow] = Field(default_factory=list)
-    detail: dict[str, int] = Field(default_factory=dict)
-    """Scope-specific counters (``detect``: merged/refreshed/replaced/
-    created/removed; ``open_vocab``: see ``reprocess_open_vocab``; ``vlm``:
-    restored/cleared; ``embed``: images/items)."""
+    detail: dict[str, int | float | bool | str] = Field(default_factory=dict)
+    """Scope-specific facts: counters (``detect``: merged/refreshed/replaced/
+    created/removed; ``vlm``: restored/cleared; ``embed``: images/items and a
+    float ``estimated_vector_kb``), and for ``open_vocab`` also a float
+    ``estimated_minutes`` and a bool ``segmenter_reachable`` (see
+    ``reprocess_open_vocab``)."""
+
+    def add_count(self, key: str, n: int) -> None:
+        """Add ``n`` to the integer counter ``key`` (absent counts as 0)."""
+        current = self.detail.get(key, 0)
+        self.detail[key] = (current if isinstance(current, int) else 0) + n
 
 
 class ReprocessJobInfo(BaseModel):

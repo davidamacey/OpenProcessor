@@ -59,6 +59,30 @@ async def configured_segmenter_health() -> tuple[str, str | None]:
     return await _segmenter_health(url)
 
 
+async def segmenter_availability() -> tuple[bool, bool]:
+    """``(configured, reachable)``: the one fact the models roster and the
+    open-vocabulary page both read. ``reachable`` implies ``configured``."""
+    from src.services.detection.segmenter_http import first_segmenter_url
+
+    if first_segmenter_url() is None:
+        return False, False
+    status, _error = await configured_segmenter_health()
+    return True, status == 'ready'
+
+
+async def build_standalone_segmenter_entry() -> dict[str, Any]:
+    """The roster row for a project whose region profile names no segmenter
+    (open-vocabulary sets use the segmenter all the same)."""
+    from src.services.curation.open_vocab_run import OPEN_VOCAB_DETECTOR
+
+    return await build_segmenter_entry(
+        OPEN_VOCAB_DETECTOR,
+        'Segmenter',
+        'Runs prompted full-image detection for open-vocabulary sets.',
+        'Promptable segmentation',
+    )
+
+
 async def build_segmenter_entry(
     name: str,
     friendly: str,

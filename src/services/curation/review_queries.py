@@ -28,6 +28,11 @@ from src.services.curation.ingest_class_sources import (
     unlabeled_proposal_class_sources,
 )
 from src.services.curation.region_boxes import box_query, read_boxes
+from src.services.curation.review_filter_specs import (
+    FILTER_SPECS,
+    HAS_REJECTED_BOX,
+    REGION_STATUS_FILTER_VALUES,
+)
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD, EmptyClassReason
 
@@ -92,7 +97,6 @@ COMMON_FILTERS: tuple[str, ...] = (
     'min_blur_ratio',
     'min_mistakenness',
     'hide_near_duplicates',
-    'class_id',
     'source',
     'conf_min',
     'conf_max',
@@ -120,67 +124,12 @@ TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'regions': {'region_status': 'all'},
 }
 
-# The ``region_status`` filter's selectable values on the ``regions`` tab
-# (a verifier-rejected candidate is reviewable but was
-# unreachable from the queue). ``'all'`` is the default -- today's
-# accepted-but-unvalidated boxes plus a rejected candidate that still has
-# a box to show. Served through ``FILTER_SPECS`` below.
-# Not a RegionStatus: it selects on the box list, whatever the item status
-# (a `detected` item can carry a rejected box beside its accepted ones).
-HAS_REJECTED_BOX = 'has_rejected_box'
-REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
-    {'value': 'all', 'label': 'All (accepted + rejected boxes)'},
-    {'value': RegionStatus.DETECTED.value, 'label': 'Detected only'},
-    {
-        'value': RegionStatus.VERIFY_REJECTED.value,
-        'label': 'Items with only rejected boxes',
-    },
-    {'value': HAS_REJECTED_BOX, 'label': 'Items with any rejected box'},
-)
-REGION_STATUS_FILTER_VALUES: frozenset[str] = frozenset(
-    o['value'] for o in REGION_STATUS_FILTER_OPTIONS
-)
-# Self-describing specs for filters with a fixed, enumerable value set,
-# keyed by query parameter. Served as ``filter_specs`` on
-# ``GET /review/tabs`` so the frontend renders any enum filter generically.
-DATASET_SPLIT_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
-    {'value': 'train', 'label': 'Train'},
-    {'value': 'val', 'label': 'Validation'},
-    {'value': 'test', 'label': 'Test'},
-)
-ON_NEGATIVE_FRAME_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
-    {'value': 'true', 'label': 'Only items on a reviewed-negative frame'},
-    {'value': 'false', 'label': 'Hide items on a reviewed-negative frame'},
-)
-
 
 def negative_frame_clause(on_negative_frame: bool) -> dict[str, Any]:
     """The one definition of the ``on_negative_frame`` filter, shared by
     ``GET /crops`` and the review queue."""
     marked: dict[str, Any] = {'term': {'on_negative_frame': True}}
     return marked if on_negative_frame else {'bool': {'must_not': marked}}
-
-
-FILTER_SPECS: dict[str, dict[str, Any]] = {
-    'on_negative_frame': {
-        'param': 'on_negative_frame',
-        'kind': 'enum',
-        'label': 'Negative frames',
-        'options': ON_NEGATIVE_FRAME_FILTER_OPTIONS,
-    },
-    'dataset_split': {
-        'param': 'dataset_split',
-        'kind': 'enum',
-        'label': 'Split',
-        'options': DATASET_SPLIT_FILTER_OPTIONS,
-    },
-    'region_status': {
-        'param': 'region_status',
-        'kind': 'enum',
-        'label': 'Status',
-        'options': REGION_STATUS_FILTER_OPTIONS,
-    },
-}
 
 
 def tab_filters(tab: str) -> tuple[str, ...]:
@@ -209,9 +158,8 @@ def review_tab_catalog() -> list[dict[str, Any]]:
     ``filters`` lists the query parameters the tab honours (anything else
     is accepted but ignored); ``filter_defaults`` the value a tab applies
     when that parameter is omitted (``{}`` for none); ``filter_specs`` a
-    self-describing ``{param, kind, label, options: [{value, label}]}``
-    entry for each of those filters that has a fixed enum (``[]`` for a
-    tab with none), so the frontend renders it without per-filter code.
+    self-describing entry (``review_filter_specs``) for every one of those
+    filters, so the frontend renders it without per-filter code.
 
     Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
     a matching ``TAB_LABELS`` entry -- the same "one source of truth"
@@ -235,7 +183,6 @@ def review_tab_catalog() -> list[dict[str, Any]]:
             'filter_specs': [
                 {**FILTER_SPECS[name], 'options': [dict(o) for o in FILTER_SPECS[name]['options']]}
                 for name in tab_filters(tab)
-                if name in FILTER_SPECS
             ],
         }
         for tab in KNOWN_TABS
@@ -673,11 +620,7 @@ def build_tab_query(
 
 __all__ = [
     'COMMON_FILTERS',
-    'DATASET_SPLIT_FILTER_OPTIONS',
-    'FILTER_SPECS',
     'KNOWN_TABS',
-    'REGION_STATUS_FILTER_OPTIONS',
-    'REGION_STATUS_FILTER_VALUES',
     'TAB_EXTRA_FILTERS',
     'TAB_FILTER_DEFAULTS',
     'TAB_LABELS',

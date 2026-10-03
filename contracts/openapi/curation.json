@@ -549,6 +549,354 @@
         "title": "AugmentationSpec",
         "type": "object"
       },
+      "AutoLabelCancelResponse": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "description": "The arguments the run was started with.",
+            "title": "Args",
+            "type": "object"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Clustering backend, 'gpu' or 'cpu'; null before it ran.",
+            "title": "Backend"
+          },
+          "backend_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Detail"
+          },
+          "cancelled": {
+            "description": "A cancellation was requested for a running job.",
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Seconds"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "free_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Vram Mb"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "peak_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Vram Mb"
+          },
+          "pipeline": {
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "result": {
+            "additionalProperties": true,
+            "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
+            "title": "Result",
+            "type": "object"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_durations": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Wall seconds per finished stage.",
+            "title": "Stage Durations",
+            "type": "object"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "stage",
+          "processed",
+          "total",
+          "started_at",
+          "finished_at",
+          "error",
+          "error_detail",
+          "result",
+          "args",
+          "pipeline",
+          "backend",
+          "backend_detail",
+          "free_vram_mb",
+          "peak_vram_mb",
+          "stage_durations",
+          "eta_seconds",
+          "elapsed_seconds",
+          "cancelled"
+        ],
+        "title": "AutoLabelCancelResponse",
+        "type": "object"
+      },
+      "AutoLabelJobState": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "description": "The arguments the run was started with.",
+            "title": "Args",
+            "type": "object"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Clustering backend, 'gpu' or 'cpu'; null before it ran.",
+            "title": "Backend"
+          },
+          "backend_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Detail"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Seconds"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "free_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Vram Mb"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "peak_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Vram Mb"
+          },
+          "pipeline": {
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "result": {
+            "additionalProperties": true,
+            "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
+            "title": "Result",
+            "type": "object"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_durations": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Wall seconds per finished stage.",
+            "title": "Stage Durations",
+            "type": "object"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "stage",
+          "processed",
+          "total",
+          "started_at",
+          "finished_at",
+          "error",
+          "error_detail",
+          "result",
+          "args",
+          "pipeline",
+          "backend",
+          "backend_detail",
+          "free_vram_mb",
+          "peak_vram_mb",
+          "stage_durations",
+          "eta_seconds",
+          "elapsed_seconds"
+        ],
+        "title": "AutoLabelJobState",
+        "type": "object"
+      },
       "BakeoffComparison": {
         "properties": {
           "common_classes": {
@@ -1429,6 +1777,60 @@
         "title": "BatchBoxStateTarget",
         "type": "object"
       },
+      "BatchConflict": {
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "current_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The class_source that won the race.",
+            "title": "Current Source"
+          }
+        },
+        "required": [
+          "crop_id",
+          "current_source"
+        ],
+        "title": "BatchConflict",
+        "type": "object"
+      },
+      "BatchExcludeResponse": {
+        "description": "``POST /crops/batch_exclude``.",
+        "properties": {
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "excluded": {
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "updated_ids": {
+            "description": "The items actually excluded (the undo target).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "excluded",
+          "updated_ids",
+          "errors"
+        ],
+        "title": "BatchExcludeResponse",
+        "type": "object"
+      },
       "BatchIngestSummaryResponse": {
         "properties": {
           "crops_indexed": {
@@ -1444,6 +1846,11 @@
           "failed": {
             "default": 0,
             "title": "Failed",
+            "type": "integer"
+          },
+          "n_embed_failed": {
+            "default": 0,
+            "title": "N Embed Failed",
             "type": "integer"
           },
           "n_embedded": {
@@ -1473,6 +1880,65 @@
           }
         },
         "title": "BatchIngestSummaryResponse",
+        "type": "object"
+      },
+      "BatchRelabelResponse": {
+        "description": "``PUT /crops/batch_label`` and ``POST /crops/move``.",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/BatchConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          },
+          "updated_ids": {
+            "description": "The items actually written (the undo target).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "updated",
+          "updated_ids",
+          "conflicts"
+        ],
+        "title": "BatchRelabelResponse",
+        "type": "object"
+      },
+      "BatchUnexcludeResponse": {
+        "description": "``POST /crops/batch_unexclude``.",
+        "properties": {
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "unexcluded": {
+            "title": "Unexcluded",
+            "type": "integer"
+          },
+          "updated_ids": {
+            "description": "The items actually restored.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "unexcluded",
+          "updated_ids",
+          "errors"
+        ],
+        "title": "BatchUnexcludeResponse",
         "type": "object"
       },
       "Body_curation_ingest_upload_curation_projects__project__ingest_upload_post": {
@@ -2129,6 +2595,67 @@
           "expected_revision"
         ],
         "title": "CloneSettingsRequest",
+        "type": "object"
+      },
+      "ClusterStats": {
+        "properties": {
+          "cluster_count": {
+            "description": "Distinct clusters in the index now.",
+            "title": "Cluster Count",
+            "type": "integer"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_run_cluster_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last run's own count.",
+            "title": "Last Run Cluster Count"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "noise_count": {
+            "title": "Noise Count",
+            "type": "integer"
+          },
+          "residual_count": {
+            "title": "Residual Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "last_run_at",
+          "cluster_count",
+          "last_run_cluster_count",
+          "residual_count",
+          "noise_count",
+          "method"
+        ],
+        "title": "ClusterStats",
         "type": "object"
       },
       "CocoAnnotationFileSpec": {
@@ -3177,6 +3704,9 @@
               "archive_invalid",
               "reprocess_targets_invalid",
               "region_profile_required",
+              "detector_unavailable",
+              "unknown_detector_names",
+              "detector_not_servable",
               "combine_not_found",
               "combine_not_resumable",
               "unknown_vlm",
@@ -3326,6 +3856,20 @@
             ],
             "title": "Projects"
           },
+          "reasons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasons"
+          },
           "report": {
             "anyOf": [
               {
@@ -3372,6 +3916,20 @@
               }
             ],
             "title": "Unbound Class Hotkeys"
+          },
+          "unknown_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unknown Names"
           },
           "unmapped": {
             "anyOf": [
@@ -4063,6 +4621,16 @@
           "page_size": {
             "title": "Page Size",
             "type": "integer"
+          },
+          "suggested_reprocess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessRequest-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "total": {
             "title": "Total",
@@ -5543,6 +6111,71 @@
         "title": "DatasetSplitRow",
         "type": "object"
       },
+      "DatasetStatsResponse": {
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "by_source": {
+            "items": {
+              "$ref": "#/components/schemas/SourceBucket"
+            },
+            "title": "By Source",
+            "type": "array"
+          },
+          "clusters": {
+            "$ref": "#/components/schemas/ClusterStats"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingBreakdown"
+          },
+          "in_progress": {
+            "$ref": "#/components/schemas/InProgressStats"
+          },
+          "labeled": {
+            "$ref": "#/components/schemas/LabeledStats"
+          },
+          "regions": {
+            "$ref": "#/components/schemas/RegionStats"
+          },
+          "test_holdout": {
+            "title": "Test Holdout",
+            "type": "integer"
+          },
+          "total_crops": {
+            "title": "Total Crops",
+            "type": "integer"
+          },
+          "unlabeled": {
+            "$ref": "#/components/schemas/UnlabeledStats"
+          },
+          "validated": {
+            "title": "Validated",
+            "type": "integer"
+          },
+          "validated_by_import": {
+            "title": "Validated By Import",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "total_crops",
+          "validated",
+          "validated_by_import",
+          "test_holdout",
+          "by_source",
+          "labeled",
+          "regions",
+          "unlabeled",
+          "in_progress",
+          "clusters",
+          "embedding"
+        ],
+        "title": "DatasetStatsResponse",
+        "type": "object"
+      },
       "DatasetTotals": {
         "properties": {
           "boxes": {
@@ -6013,6 +6646,46 @@
         "title": "DetectorEntry",
         "type": "object"
       },
+      "DetectorNotServableDetail": {
+        "properties": {
+          "error": {
+            "const": "detector_not_servable",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "reasons"
+        ],
+        "title": "DetectorNotServableDetail",
+        "type": "object"
+      },
+      "DetectorNotServableResponse": {
+        "description": "422: the detector override cannot be served; ``reasons`` lists every problem.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/DetectorNotServableDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "DetectorNotServableResponse",
+        "type": "object"
+      },
       "DetectorOverride": {
         "additionalProperties": false,
         "description": "A per-project ingest detector: replaces the deployment's primary model for\nthis project. It must serve the end2end four-tensor contract, and its class\nids are never read as registry ids (its detections are proposals, or are\nresolved by name).",
@@ -6050,6 +6723,38 @@
           "model"
         ],
         "title": "DetectorOverride",
+        "type": "object"
+      },
+      "DetectorUnavailableDetail": {
+        "properties": {
+          "error": {
+            "const": "detector_unavailable",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "DetectorUnavailableDetail",
+        "type": "object"
+      },
+      "DetectorUnavailableResponse": {
+        "description": "503: no ingest detector (or no label list) is configured, the ingest\nconfiguration is invalid, or Triton cannot be asked.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/DetectorUnavailableDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "DetectorUnavailableResponse",
         "type": "object"
       },
       "DisagreementsWire": {
@@ -6161,11 +6866,7 @@
       "EmbeddingBreakdown": {
         "properties": {
           "by_state": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "By State",
-            "type": "object"
+            "$ref": "#/components/schemas/EmbeddingByState"
           },
           "embedded": {
             "title": "Embedded",
@@ -6182,6 +6883,39 @@
           "by_state"
         ],
         "title": "EmbeddingBreakdown",
+        "type": "object"
+      },
+      "EmbeddingByState": {
+        "description": "Items per recorded ``embedding_state``; every key is always present.",
+        "properties": {
+          "deferred": {
+            "default": 0,
+            "title": "Deferred",
+            "type": "integer"
+          },
+          "embedded": {
+            "default": 0,
+            "title": "Embedded",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "not_selected": {
+            "default": 0,
+            "title": "Not Selected",
+            "type": "integer"
+          },
+          "unknown": {
+            "default": 0,
+            "description": "Items written before embedding_state existed (no recorded state; not a value of the filter).",
+            "title": "Unknown",
+            "type": "integer"
+          }
+        },
+        "title": "EmbeddingByState",
         "type": "object"
       },
       "EmbeddingPolicy": {
@@ -7257,6 +7991,32 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InProgressStats": {
+        "properties": {
+          "region_drain_total_unfinished": {
+            "title": "Region Drain Total Unfinished",
+            "type": "integer"
+          },
+          "region_stall_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which region dependency is down, and since when; null when none is.",
+            "title": "Region Stall Reason"
+          }
+        },
+        "required": [
+          "region_drain_total_unfinished",
+          "region_stall_reason"
+        ],
+        "title": "InProgressStats",
+        "type": "object"
+      },
       "IndexWouldHaveMapped": {
         "properties": {
           "class_id": {
@@ -7506,6 +8266,11 @@
           "n_crops": {
             "default": 0,
             "title": "N Crops",
+            "type": "integer"
+          },
+          "n_embed_failed": {
+            "default": 0,
+            "title": "N Embed Failed",
             "type": "integer"
           },
           "n_embedded": {
@@ -10174,6 +10939,40 @@
         "title": "LabeledChoice",
         "type": "object"
       },
+      "LabeledStats": {
+        "description": "Class-label provenance of items that carry a class.",
+        "properties": {
+          "by_classifier": {
+            "title": "By Classifier",
+            "type": "integer"
+          },
+          "by_human": {
+            "title": "By Human",
+            "type": "integer"
+          },
+          "by_import": {
+            "title": "By Import",
+            "type": "integer"
+          },
+          "by_vlm": {
+            "title": "By Vlm",
+            "type": "integer"
+          },
+          "other": {
+            "title": "Other",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "by_human",
+          "by_vlm",
+          "by_classifier",
+          "by_import",
+          "other"
+        ],
+        "title": "LabeledStats",
+        "type": "object"
+      },
       "LatencyStats": {
         "properties": {
           "mean": {
@@ -11738,6 +12537,9 @@
             "title": "Config Revision",
             "type": "integer"
           },
+          "segmenter": {
+            "$ref": "#/components/schemas/SegmenterAvailability"
+          },
           "sets": {
             "items": {
               "$ref": "#/components/schemas/OpenVocabSummary"
@@ -11762,7 +12564,8 @@
           "sets",
           "templates",
           "active",
-          "config_revision"
+          "config_revision",
+          "segmenter"
         ],
         "title": "OpenVocabList",
         "type": "object"
@@ -11886,11 +12689,15 @@
           "max_enabled_targets_ceiling": {
             "title": "Max Enabled Targets Ceiling",
             "type": "integer"
+          },
+          "vocabulary": {
+            "$ref": "#/components/schemas/OpenVocabVocabulary"
           }
         },
         "required": [
           "fields",
-          "max_enabled_targets_ceiling"
+          "max_enabled_targets_ceiling",
+          "vocabulary"
         ],
         "title": "OpenVocabSchema",
         "type": "object"
@@ -12092,6 +12899,12 @@
           "reason": {
             "anyOf": [
               {
+                "enum": [
+                  "disabled",
+                  "no_parent_class",
+                  "vlm_no",
+                  "hit_rate"
+                ],
                 "type": "string"
               },
               {
@@ -12135,6 +12948,16 @@
           "drop_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "below_min_score",
+                  "too_small",
+                  "too_large",
+                  "nms",
+                  "over_max",
+                  "cross_target_nms",
+                  "agree_existing",
+                  "skipped_locked"
+                ],
                 "type": "string"
               },
               {
@@ -12226,6 +13049,7 @@
                 "type": "null"
               }
             ],
+            "description": "A stored image's id: the item wire's `image_id`, the same id `POST /images/{image_id}/reprocess` takes.",
             "title": "Image Id"
           },
           "image_max_side": {
@@ -12307,6 +13131,39 @@
           "body"
         ],
         "title": "OpenVocabValidateRequest",
+        "type": "object"
+      },
+      "OpenVocabVocabulary": {
+        "description": "Served labels for the pass's closed value sets: every value of the wire\nenums ``OpenVocabStatus`` (an image's ``open_vocab_status``, the reprocess\nfilter), ``DropReason`` (a test hit's ``drop_reason``) and ``GateReason``\n(a test gate skip's ``reason``).",
+        "properties": {
+          "drop_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyOption"
+            },
+            "title": "Drop Reasons",
+            "type": "array"
+          },
+          "gate_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyOption"
+            },
+            "title": "Gate Reasons",
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyOption"
+            },
+            "title": "Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "statuses",
+          "drop_reasons",
+          "gate_reasons"
+        ],
+        "title": "OpenVocabVocabulary",
         "type": "object"
       },
       "PackTestCropResult": {
@@ -14974,6 +15831,78 @@
         "title": "QuantizeRequest",
         "type": "object"
       },
+      "RegionBatchWriteResponse": {
+        "description": "``POST /regions/batch_status``, ``PUT /crops/batch_regions`` and\n``POST /regions/batch_box_state``: ``items`` are rows (the post-write wire\nitem, with ``region_box_id`` null for a whole-set write).",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "invalid": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Invalid",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegionRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          },
+          "vector_refresh": {
+            "$ref": "#/components/schemas/VectorRefresh",
+            "description": "Zero counts when the batch named nothing to write."
+          }
+        },
+        "required": [
+          "updated",
+          "conflicts",
+          "invalid",
+          "items",
+          "vector_refresh"
+        ],
+        "title": "RegionBatchWriteResponse",
+        "type": "object"
+      },
+      "RegionBoxPatchResponse": {
+        "description": "``PATCH /crops/{crop_id}/regions/{box_id}``.",
+        "properties": {
+          "box_id": {
+            "title": "Box Id",
+            "type": "string"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ItemDoc"
+          },
+          "vector_refresh": {
+            "$ref": "#/components/schemas/VectorRefresh"
+          }
+        },
+        "required": [
+          "crop_id",
+          "item",
+          "vector_refresh",
+          "box_id"
+        ],
+        "title": "RegionBoxPatchResponse",
+        "type": "object"
+      },
       "RegionDependencyStatusResponse": {
         "description": "One Triton model the active region profile depends on (V-1).",
         "properties": {
@@ -15012,6 +15941,58 @@
           "detail"
         ],
         "title": "RegionDependencyStatusResponse",
+        "type": "object"
+      },
+      "RegionItemWriteResponse": {
+        "description": "``PUT /crops/{crop_id}/regions``.",
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ItemDoc"
+          },
+          "vector_refresh": {
+            "$ref": "#/components/schemas/VectorRefresh"
+          }
+        },
+        "required": [
+          "crop_id",
+          "item",
+          "vector_refresh"
+        ],
+        "title": "RegionItemWriteResponse",
+        "type": "object"
+      },
+      "RegionMetaPatchResponse": {
+        "description": "``PATCH /crops/{crop_id}/region_meta``.",
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ItemDoc"
+          },
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          },
+          "vector_refresh": {
+            "$ref": "#/components/schemas/VectorRefresh"
+          }
+        },
+        "required": [
+          "crop_id",
+          "item",
+          "vector_refresh",
+          "updated_fields"
+        ],
+        "title": "RegionMetaPatchResponse",
         "type": "object"
       },
       "RegionProfileActivateRequest": {
@@ -16110,6 +17091,38 @@
           "path"
         ],
         "title": "RegionProfileTemplateSummary",
+        "type": "object"
+      },
+      "RegionProfileUnavailableDetail": {
+        "properties": {
+          "error": {
+            "const": "no_active_profile",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "RegionProfileUnavailableDetail",
+        "type": "object"
+      },
+      "RegionProfileUnavailableResponse": {
+        "description": "409: the route needs an active region profile and the project has none.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/RegionProfileUnavailableDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "RegionProfileUnavailableResponse",
         "type": "object"
       },
       "RegionProfileValidateRequest": {
@@ -17379,6 +18392,84 @@
         "title": "RegionStageState",
         "type": "object"
       },
+      "RegionStats": {
+        "properties": {
+          "boxed": {
+            "description": "Items with a region box right now.",
+            "title": "Boxed",
+            "type": "integer"
+          },
+          "by_detector": {
+            "title": "By Detector",
+            "type": "integer"
+          },
+          "by_human": {
+            "description": "Legacy name of by_human_drew.",
+            "title": "By Human",
+            "type": "integer"
+          },
+          "by_human_drew": {
+            "title": "By Human Drew",
+            "type": "integer"
+          },
+          "by_import": {
+            "title": "By Import",
+            "type": "integer"
+          },
+          "by_segmenter": {
+            "title": "By Segmenter",
+            "type": "integer"
+          },
+          "confirmed": {
+            "description": "Items whose region status is 'detected'.",
+            "title": "Confirmed",
+            "type": "integer"
+          },
+          "total_detected": {
+            "description": "Detector credit, rejected and failed attempts included; overstates real regions.",
+            "title": "Total Detected",
+            "type": "integer"
+          },
+          "validated_by_human": {
+            "description": "Drew the box or confirmed a proposed one.",
+            "title": "Validated By Human",
+            "type": "integer"
+          },
+          "validated_by_import": {
+            "title": "Validated By Import",
+            "type": "integer"
+          },
+          "verified_by_human": {
+            "title": "Verified By Human",
+            "type": "integer"
+          },
+          "verified_by_import": {
+            "title": "Verified By Import",
+            "type": "integer"
+          },
+          "verified_by_vlm": {
+            "title": "Verified By Vlm",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "boxed",
+          "confirmed",
+          "total_detected",
+          "by_detector",
+          "by_segmenter",
+          "by_human",
+          "by_human_drew",
+          "verified_by_human",
+          "verified_by_vlm",
+          "validated_by_human",
+          "by_import",
+          "verified_by_import",
+          "validated_by_import"
+        ],
+        "title": "RegionStats",
+        "type": "object"
+      },
       "RegionTestCandidate": {
         "description": "One raw candidate of a leg, as a complete region-box wire element\n(``box_id`` is ``null``: ids are assigned on write) plus what the\nselection did with it.",
         "properties": {
@@ -18548,6 +19639,12 @@
           },
           "open_vocab_status": {
             "items": {
+              "enum": [
+                "pending",
+                "done",
+                "skipped_gate",
+                "failed"
+              ],
               "type": "string"
             },
             "title": "Open Vocab Status",
@@ -18927,7 +20024,20 @@
           },
           "detail": {
             "additionalProperties": {
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string"
+                }
+              ]
             },
             "title": "Detail",
             "type": "object"
@@ -19330,12 +20440,30 @@
           "has_probe_predictions": {
             "title": "Has Probe Predictions",
             "type": "boolean"
+          },
+          "has_unembedded_items": {
+            "description": "Some item in the project has no vector, so a queue that skips them can be empty.",
+            "title": "Has Unembedded Items",
+            "type": "boolean"
+          },
+          "suggested_reprocess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessRequest-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The embed request to POST to /reprocess (dry run first) when has_unembedded_items; null otherwise."
           }
         },
         "required": [
           "has_probe_predictions",
           "has_item_scores",
-          "has_imported_labels"
+          "has_imported_labels",
+          "has_unembedded_items",
+          "suggested_reprocess"
         ],
         "title": "ReviewEmptyState",
         "type": "object"
@@ -19360,8 +20488,21 @@
       },
       "ReviewFilterSpec": {
         "properties": {
+          "description": {
+            "description": "How to fill the filter; empty when the label says it.",
+            "title": "Description",
+            "type": "string"
+          },
           "kind": {
-            "const": "enum",
+            "enum": [
+              "enum",
+              "multi_enum",
+              "class_names",
+              "bool",
+              "number",
+              "integer",
+              "text"
+            ],
             "title": "Kind",
             "type": "string"
           },
@@ -19369,7 +20510,32 @@
             "title": "Label",
             "type": "string"
           },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Upper bound of a number / integer filter.",
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lower bound of a number / integer filter.",
+            "title": "Min"
+          },
           "options": {
+            "description": "The fixed values of an enum / multi_enum filter; empty for every other kind.",
             "items": {
               "$ref": "#/components/schemas/ReviewFilterOption"
             },
@@ -19386,9 +20552,1260 @@
           "param",
           "kind",
           "label",
-          "options"
+          "options",
+          "min",
+          "max",
+          "description"
         ],
         "title": "ReviewFilterSpec",
+        "type": "object"
+      },
+      "ReviewItemDoc": {
+        "properties": {
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "blur_lap_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blur Lap Ratio"
+          },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_confidence_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vlm",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence Source"
+          },
+          "class_detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector"
+          },
+          "class_detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector Version"
+          },
+          "class_excluded": {
+            "default": false,
+            "title": "Class Excluded",
+            "type": "boolean"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_labeled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeled At"
+          },
+          "class_labeler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeler"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Name"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Source"
+          },
+          "class_validated": {
+            "default": false,
+            "title": "Class Validated",
+            "type": "boolean"
+          },
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Distance"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "cluster_is_core": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Is Core"
+          },
+          "cluster_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "class",
+                  "candidate",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Kind"
+          },
+          "cluster_nearest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Nearest Id"
+          },
+          "cluster_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Similarity"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "combine_conflict": {
+            "default": false,
+            "title": "Combine Conflict",
+            "type": "boolean"
+          },
+          "combine_conflict_origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Combine Conflict Origins",
+            "type": "array"
+          },
+          "combine_merged_origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Combine Merged Origins",
+            "type": "array"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "crop_area_norm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Area Norm"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "crop_rank_in_image": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Rank In Image"
+          },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
+          "dup_group_id": {
+            "title": "Dup Group Id"
+          },
+          "dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Group Size"
+          },
+          "dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Is Representative"
+          },
+          "embedding_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "embedded",
+                  "not_selected",
+                  "deferred",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding State"
+          },
+          "excluded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded At"
+          },
+          "excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "default": "",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "default": "",
+            "title": "Image Path",
+            "type": "string"
+          },
+          "import_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Import Ids",
+            "type": "array"
+          },
+          "import_standalone_region": {
+            "default": false,
+            "title": "Import Standalone Region",
+            "type": "boolean"
+          },
+          "imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          },
+          "item_text_lines": {
+            "items": {
+              "$ref": "#/components/schemas/ItemTextLine"
+            },
+            "title": "Item Text Lines",
+            "type": "array"
+          },
+          "label_locked": {
+            "default": false,
+            "title": "Label Locked",
+            "type": "boolean"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Label Source"
+          },
+          "label_validated": {
+            "default": false,
+            "title": "Label Validated",
+            "type": "boolean"
+          },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
+          "mistakenness_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Method"
+          },
+          "mistakenness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Score"
+          },
+          "mistakenness_scored_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Scored At"
+          },
+          "mistakenness_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Version"
+          },
+          "needs_new_class": {
+            "default": false,
+            "title": "Needs New Class",
+            "type": "boolean"
+          },
+          "needs_new_class_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class Note"
+          },
+          "on_negative_frame": {
+            "default": false,
+            "title": "On Negative Frame",
+            "type": "boolean"
+          },
+          "open_vocab_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Revision"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
+          },
+          "origin_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Image Id"
+          },
+          "origin_item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Item Id"
+          },
+          "origin_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Project"
+          },
+          "origin_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Split"
+          },
+          "probe_actionable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Actionable"
+          },
+          "probe_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Disagreement"
+          },
+          "probe_in_scope": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe In Scope"
+          },
+          "probe_model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Model Version"
+          },
+          "probe_pred_class": {
+            "title": "Probe Pred Class"
+          },
+          "probe_pred_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Class Id"
+          },
+          "probe_pred_entropy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Entropy"
+          },
+          "proposal_chain": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposal Chain",
+            "type": "array"
+          },
+          "proposal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Name"
+          },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
+          },
+          "proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Class Id"
+          },
+          "proposed_class_name": {
+            "default": "",
+            "title": "Proposed Class Name",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the item is in this tab's queue.",
+            "title": "Reason",
+            "type": "string"
+          },
+          "region_auto_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Auto Confirmed"
+          },
+          "region_boxes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Region Boxes",
+            "type": "array"
+          },
+          "region_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Class Id"
+          },
+          "region_count": {
+            "default": 0,
+            "title": "Region Count",
+            "type": "integer"
+          },
+          "region_detected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detected At"
+          },
+          "region_detector_chain": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detector Chain"
+          },
+          "region_gate_skip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Gate Skip"
+          },
+          "region_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Label Source"
+          },
+          "region_max_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Max Score"
+          },
+          "region_pairing": {
+            "title": "Region Pairing"
+          },
+          "region_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile"
+          },
+          "region_profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile Revision"
+          },
+          "region_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Reason"
+          },
+          "region_rejected_count": {
+            "default": 0,
+            "title": "Region Rejected Count",
+            "type": "integer"
+          },
+          "region_rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Rejection Reason"
+          },
+          "region_revision": {
+            "default": 0,
+            "title": "Region Revision",
+            "type": "integer"
+          },
+          "region_set_complete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Set Complete"
+          },
+          "region_skip_verify": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Skip Verify"
+          },
+          "region_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Status"
+          },
+          "region_validated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Validated"
+          },
+          "region_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified"
+          },
+          "region_verified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified At"
+          },
+          "region_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier"
+          },
+          "region_verifier_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier Version"
+          },
+          "region_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Visible"
+          },
+          "review_dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed At"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_image_path": {
+            "default": "",
+            "title": "Source Image Path",
+            "type": "string"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
+          },
+          "test_holdout": {
+            "default": false,
+            "title": "Test Holdout",
+            "type": "boolean"
+          },
+          "thumbnail_url": {
+            "default": "",
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "uniqueness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uniqueness Score"
+          },
+          "updated_at": {
+            "default": "",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vlm_class_attempted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Attempted At"
+          },
+          "vlm_class_empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Empty Reason"
+          },
+          "vlm_confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Confidence"
+          },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          },
+          "vlm_prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Prompt Pack"
+          },
+          "vlm_proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Id"
+          },
+          "vlm_proposed_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Name"
+          },
+          "vlm_raw_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Raw Class"
+          }
+        },
+        "required": [
+          "id",
+          "crop_id",
+          "reason"
+        ],
+        "title": "ReviewItemDoc",
+        "type": "object"
+      },
+      "ReviewLocateResponse": {
+        "description": "``GET /review/{tab}/locate``: where an item sits in the queue the same\nfilters and sort would serve. ``rank`` is 0-based; ``page`` is 1-based.",
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "in_queue": {
+            "title": "In Queue",
+            "type": "boolean"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_found",
+                  "filtered_out",
+                  "region_profile_off"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is not in the queue; null when in_queue.",
+            "title": "Reason"
+          },
+          "sort_applied": {
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Fallback Reason"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "crop_id",
+          "in_queue",
+          "rank",
+          "page",
+          "page_size",
+          "total",
+          "reason",
+          "sort_applied",
+          "sort_fallback_reason"
+        ],
+        "title": "ReviewLocateResponse",
+        "type": "object"
+      },
+      "ReviewQueuePage": {
+        "description": "``GET /review/{tab}``.",
+        "properties": {
+          "empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a zero-result queue is empty (probe never run, scores never computed, ...); null otherwise.",
+            "title": "Empty Reason"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "sort_applied": {
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the default sort's field has no coverage and sort_applied is its fallback.",
+            "title": "Sort Fallback Reason"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "items",
+          "sort_applied",
+          "sort_fallback_reason",
+          "empty_reason"
+        ],
+        "title": "ReviewQueuePage",
         "type": "object"
       },
       "ReviewTab": {
@@ -19580,6 +21997,1141 @@
         "title": "ScoresComputeRequest",
         "type": "object"
       },
+      "SearchItemDoc": {
+        "properties": {
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "blur_lap_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blur Lap Ratio"
+          },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_confidence_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vlm",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence Source"
+          },
+          "class_detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector"
+          },
+          "class_detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Detector Version"
+          },
+          "class_excluded": {
+            "default": false,
+            "title": "Class Excluded",
+            "type": "boolean"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_labeled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeled At"
+          },
+          "class_labeler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Labeler"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Name"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Class Source"
+          },
+          "class_validated": {
+            "default": false,
+            "title": "Class Validated",
+            "type": "boolean"
+          },
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Distance"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "cluster_is_core": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Is Core"
+          },
+          "cluster_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "class",
+                  "candidate",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Kind"
+          },
+          "cluster_nearest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Nearest Id"
+          },
+          "cluster_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Similarity"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "combine_conflict": {
+            "default": false,
+            "title": "Combine Conflict",
+            "type": "boolean"
+          },
+          "combine_conflict_origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Combine Conflict Origins",
+            "type": "array"
+          },
+          "combine_merged_origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Combine Merged Origins",
+            "type": "array"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "crop_area_norm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Area Norm"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "crop_rank_in_image": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Rank In Image"
+          },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
+          "dup_group_id": {
+            "title": "Dup Group Id"
+          },
+          "dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Group Size"
+          },
+          "dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dup Is Representative"
+          },
+          "embedding_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "embedded",
+                  "not_selected",
+                  "deferred",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding State"
+          },
+          "excluded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded At"
+          },
+          "excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "default": "",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "default": "",
+            "title": "Image Path",
+            "type": "string"
+          },
+          "import_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Import Ids",
+            "type": "array"
+          },
+          "import_standalone_region": {
+            "default": false,
+            "title": "Import Standalone Region",
+            "type": "boolean"
+          },
+          "imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          },
+          "item_text_lines": {
+            "items": {
+              "$ref": "#/components/schemas/ItemTextLine"
+            },
+            "title": "Item Text Lines",
+            "type": "array"
+          },
+          "label_locked": {
+            "default": false,
+            "title": "Label Locked",
+            "type": "boolean"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Label Source"
+          },
+          "label_validated": {
+            "default": false,
+            "title": "Label Validated",
+            "type": "boolean"
+          },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
+          "mistakenness_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Method"
+          },
+          "mistakenness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Score"
+          },
+          "mistakenness_scored_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Scored At"
+          },
+          "mistakenness_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mistakenness Version"
+          },
+          "needs_new_class": {
+            "default": false,
+            "title": "Needs New Class",
+            "type": "boolean"
+          },
+          "needs_new_class_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class Note"
+          },
+          "on_negative_frame": {
+            "default": false,
+            "title": "On Negative Frame",
+            "type": "boolean"
+          },
+          "open_vocab_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Revision"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
+          },
+          "origin_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Image Id"
+          },
+          "origin_item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Item Id"
+          },
+          "origin_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Project"
+          },
+          "origin_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Split"
+          },
+          "probe_actionable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Actionable"
+          },
+          "probe_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Disagreement"
+          },
+          "probe_in_scope": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe In Scope"
+          },
+          "probe_model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Model Version"
+          },
+          "probe_pred_class": {
+            "title": "Probe Pred Class"
+          },
+          "probe_pred_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Class Id"
+          },
+          "probe_pred_entropy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Entropy"
+          },
+          "proposal_chain": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposal Chain",
+            "type": "array"
+          },
+          "proposal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Name"
+          },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
+          },
+          "proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Class Id"
+          },
+          "proposed_class_name": {
+            "default": "",
+            "title": "Proposed Class Name",
+            "type": "string"
+          },
+          "region_auto_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Auto Confirmed"
+          },
+          "region_boxes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Region Boxes",
+            "type": "array"
+          },
+          "region_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Class Id"
+          },
+          "region_count": {
+            "default": 0,
+            "title": "Region Count",
+            "type": "integer"
+          },
+          "region_detected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detected At"
+          },
+          "region_detector_chain": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Detector Chain"
+          },
+          "region_gate_skip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Gate Skip"
+          },
+          "region_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Label Source"
+          },
+          "region_max_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Max Score"
+          },
+          "region_pairing": {
+            "title": "Region Pairing"
+          },
+          "region_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile"
+          },
+          "region_profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Profile Revision"
+          },
+          "region_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Reason"
+          },
+          "region_rejected_count": {
+            "default": 0,
+            "title": "Region Rejected Count",
+            "type": "integer"
+          },
+          "region_rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Rejection Reason"
+          },
+          "region_revision": {
+            "default": 0,
+            "title": "Region Revision",
+            "type": "integer"
+          },
+          "region_set_complete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Set Complete"
+          },
+          "region_skip_verify": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Skip Verify"
+          },
+          "region_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Status"
+          },
+          "region_validated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Validated"
+          },
+          "region_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified"
+          },
+          "region_verified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verified At"
+          },
+          "region_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier"
+          },
+          "region_verifier_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Verifier Version"
+          },
+          "region_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Visible"
+          },
+          "review_dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed At"
+          },
+          "semantic_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw kNN similarity of the item to the query.",
+            "title": "Semantic Score"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "source_image_path": {
+            "default": "",
+            "title": "Source Image Path",
+            "type": "string"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
+          },
+          "test_holdout": {
+            "default": false,
+            "title": "Test Holdout",
+            "type": "boolean"
+          },
+          "thumbnail_url": {
+            "default": "",
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "uniqueness_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uniqueness Score"
+          },
+          "updated_at": {
+            "default": "",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vlm_class_attempted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Attempted At"
+          },
+          "vlm_class_empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Empty Reason"
+          },
+          "vlm_confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Confidence"
+          },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          },
+          "vlm_prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Prompt Pack"
+          },
+          "vlm_proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Id"
+          },
+          "vlm_proposed_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Proposed Class Name"
+          },
+          "vlm_raw_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Raw Class"
+          }
+        },
+        "required": [
+          "id",
+          "crop_id",
+          "semantic_score"
+        ],
+        "title": "SearchItemDoc",
+        "type": "object"
+      },
+      "SearchTextResponse": {
+        "description": "``GET /search/text``.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SearchItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unembedded_in_scope": {
+            "description": "In-scope items the search cannot see because they have no vector: an empty result with a non-zero count is not \"no matches\".",
+            "title": "Unembedded In Scope",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "unembedded_in_scope"
+        ],
+        "title": "SearchTextResponse",
+        "type": "object"
+      },
       "SecretRef": {
         "properties": {
           "choice": {
@@ -19761,6 +23313,25 @@
         "title": "SeededClass",
         "type": "object"
       },
+      "SegmenterAvailability": {
+        "description": "The segmenter every open-vocabulary run needs. ``configured``: a\nsegmenter URL is set; ``reachable``: it answered its health probe and has\nits model loaded (never true when not configured). The same fact\n``GET /models/status`` reports in its segmenter row.",
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured",
+          "reachable"
+        ],
+        "title": "SegmenterAvailability",
+        "type": "object"
+      },
       "SegmenterEntry": {
         "properties": {
           "choice": {
@@ -19903,6 +23474,44 @@
           }
         },
         "title": "SelectDiverseScope",
+        "type": "object"
+      },
+      "SelectionDryRunResponse": {
+        "description": "What a ``dry_run`` request returns: the count the write would change, and nothing written.",
+        "properties": {
+          "dry_run": {
+            "const": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "selected"
+        ],
+        "title": "SelectionDryRunResponse",
+        "type": "object"
+      },
+      "SourceBucket": {
+        "properties": {
+          "doc_count": {
+            "title": "Doc Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "doc_count"
+        ],
+        "title": "SourceBucket",
         "type": "object"
       },
       "StartCampaignResponse": {
@@ -21185,6 +24794,79 @@
         "title": "TrainedModelList",
         "type": "object"
       },
+      "UnknownDetectorNamesDetail": {
+        "properties": {
+          "error": {
+            "const": "unknown_detector_names",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "unknown_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unknown Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "unknown_names"
+        ],
+        "title": "UnknownDetectorNamesDetail",
+        "type": "object"
+      },
+      "UnknownDetectorNamesResponse": {
+        "description": "422: a requested class name is not in the detector's vocabulary.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/UnknownDetectorNamesDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "UnknownDetectorNamesResponse",
+        "type": "object"
+      },
+      "UnlabeledStats": {
+        "properties": {
+          "by_proposal": {
+            "title": "By Proposal",
+            "type": "integer"
+          },
+          "no_label_source": {
+            "title": "No Label Source",
+            "type": "integer"
+          },
+          "pending_detection": {
+            "title": "Pending Detection",
+            "type": "integer"
+          },
+          "pending_verification": {
+            "title": "Pending Verification",
+            "type": "integer"
+          },
+          "vlm_no_class": {
+            "title": "Vlm No Class",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending_detection",
+          "pending_verification",
+          "no_label_source",
+          "vlm_no_class",
+          "by_proposal"
+        ],
+        "title": "UnlabeledStats",
+        "type": "object"
+      },
       "UnloadModelResponse": {
         "properties": {
           "directory_removed": {
@@ -21445,6 +25127,7 @@
                 "type": "null"
               }
             ],
+            "description": "Dotted path from the body root, a list index in brackets: `targets[2].prompt`, `gating.tier3_hit_rate.window`, `image_max_side`. A whole-element issue names the element (`targets[2]`); null when the issue is not about one field.",
             "title": "Field"
           },
           "message": {
@@ -21502,6 +25185,25 @@
           "ok"
         ],
         "title": "ValidationReport",
+        "type": "object"
+      },
+      "VectorRefresh": {
+        "description": "What the write did to the touched boxes' vectors: boxes embedded now,\nand boxes still without a valid vector (encoder unavailable, image\nunreadable or the encoder raised): retry with a reprocess ``embed``.",
+        "properties": {
+          "embedded": {
+            "title": "Embedded",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "embedded",
+          "pending"
+        ],
+        "title": "VectorRefresh",
         "type": "object"
       },
       "VlmActivateRequest": {
@@ -23438,6 +27140,24 @@
           }
         },
         "title": "VocabularyLabels",
+        "type": "object"
+      },
+      "VocabularyOption": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "VocabularyOption",
         "type": "object"
       },
       "_PathLookupRequest": {
@@ -25548,11 +29268,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/UnknownDetectorNamesResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectorUnavailableResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Seed From Detector",
@@ -26082,25 +29812,7 @@
             }
           },
           {
-            "description": "Filter to clusters containing this class",
-            "in": "query",
-            "name": "class_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter to clusters containing this class",
-              "title": "Class Id"
-            }
-          },
-          {
-            "description": "Filter to exactly this cluster_id. Distinct from class_id: cluster_id == class_id is only an invariant for \"class\" clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a \"candidate\" cluster (id >= that offset) has no matching class_id at all, so class_id can never be used to look one up by its own identity. This is the correct filter for \"fetch one cluster card by id\" regardless of kind.",
+            "description": "Filter to exactly this cluster_id. Distinct from a class: cluster_id == class_id is only an invariant for \"class\" clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a \"candidate\" cluster (id >= that offset) has no matching class_id at all, so class_id can never be used to look one up by its own identity. This is the correct filter for \"fetch one cluster card by id\" regardless of kind.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -26113,7 +29825,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter to exactly this cluster_id. Distinct from class_id: cluster_id == class_id is only an invariant for \"class\" clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a \"candidate\" cluster (id >= that offset) has no matching class_id at all, so class_id can never be used to look one up by its own identity. This is the correct filter for \"fetch one cluster card by id\" regardless of kind.",
+              "description": "Filter to exactly this cluster_id. Distinct from a class: cluster_id == class_id is only an invariant for \"class\" clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a \"candidate\" cluster (id >= that offset) has no matching class_id at all, so class_id can never be used to look one up by its own identity. This is the correct filter for \"fetch one cluster card by id\" regardless of kind.",
               "title": "Cluster Id"
             }
           },
@@ -26826,22 +30538,6 @@
           },
           {
             "in": "query",
-            "name": "class_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Class Id"
-            }
-          },
-          {
-            "in": "query",
             "name": "cluster_id",
             "required": false,
             "schema": {
@@ -27469,9 +31165,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Exclude Crops Curation Projects  Project  Crops Batch Exclude Post",
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BatchExcludeResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SelectionDryRunResponse"
+                    }
+                  ],
+                  "title": "Response 200 Batch Exclude Crops Curation Projects  Project  Crops Batch Exclude Post"
                 }
               }
             },
@@ -27524,9 +31226,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Label Crops Curation Projects  Project  Crops Batch Label Put",
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BatchRelabelResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SelectionDryRunResponse"
+                    }
+                  ],
+                  "title": "Response 200 Batch Label Crops Curation Projects  Project  Crops Batch Label Put"
                 }
               }
             },
@@ -27579,13 +31287,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Set Crop Regions Curation Projects  Project  Crops Batch Regions Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionBatchWriteResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -27634,9 +31350,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Unexclude Crops Curation Projects  Project  Crops Batch Unexclude Post",
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BatchUnexcludeResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SelectionDryRunResponse"
+                    }
+                  ],
+                  "title": "Response 200 Batch Unexclude Crops Curation Projects  Project  Crops Batch Unexclude Post"
                 }
               }
             },
@@ -27854,9 +31576,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Move Crops Curation Projects  Project  Crops Move Post",
-                  "type": "object"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BatchRelabelResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SelectionDryRunResponse"
+                    }
+                  ],
+                  "title": "Response 200 Move Crops Curation Projects  Project  Crops Move Post"
                 }
               }
             },
@@ -27916,6 +31644,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -28433,6 +32171,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -28489,13 +32237,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Patch Crop Region Meta Curation Projects  Project  Crops  Crop Id  Region Meta Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionMetaPatchResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -28635,13 +32391,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Set Crop Regions Curation Projects  Project  Crops  Crop Id  Regions Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionItemWriteResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -28708,13 +32472,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Patch Crop Region Box Curation Projects  Project  Crops  Crop Id  Regions  Box Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionBoxPatchResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -31093,15 +34865,35 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/DetectorNotServableResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectorUnavailableResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Put Policy",
@@ -32246,7 +36038,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Validate Open Vocab Route Curation Projects  Project  Open Vocab Validate Post"
+                  "$ref": "#/components/schemas/ValidationReport"
                 }
               }
             },
@@ -33101,9 +36893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Pipeline Auto Label Cancel Curation Projects  Project  Pipeline Auto Label Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AutoLabelCancelResponse"
                 }
               }
             },
@@ -33662,9 +37452,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Pipeline Auto Label Start Curation Projects  Project  Pipeline Auto Label Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AutoLabelJobState"
                 }
               }
             },
@@ -33707,9 +37495,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Pipeline Auto Label Status Curation Projects  Project  Pipeline Auto Label Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AutoLabelJobState"
                 }
               }
             },
@@ -33761,9 +37547,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Pipeline Auto Label Job Status Curation Projects  Project  Pipeline Auto Label Status  Job Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AutoLabelJobState"
                 }
               }
             },
@@ -35631,6 +39415,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -35674,6 +39468,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -35716,6 +39520,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -35735,7 +39549,7 @@
     },
     "/curation/projects/{project}/regions": {
       "get": {
-        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``class_id``, ``cluster_id``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
+        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``cluster_id``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
         "operationId": "list_regions_curation_projects__project__regions_get",
         "parameters": [
           {
@@ -35768,22 +39582,6 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "class_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Class Id"
             }
           },
           {
@@ -36224,6 +40022,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -36271,13 +40079,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Set Region Box State Curation Projects  Project  Regions Batch Box State Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionBatchWriteResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -36326,13 +40142,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Batch Set Region Status Curation Projects  Project  Regions Batch Status Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionBatchWriteResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -36435,6 +40259,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -36567,6 +40401,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -36621,6 +40465,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -36665,6 +40519,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -36842,6 +40706,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -36934,6 +40808,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -37624,24 +41508,6 @@
             }
           },
           {
-            "description": "Only items of this class.",
-            "in": "query",
-            "name": "class_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only items of this class.",
-              "title": "Class Id"
-            }
-          },
-          {
             "description": "Only items with this ingest source tag.",
             "in": "query",
             "name": "source",
@@ -37989,9 +41855,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Review Queue Curation Projects  Project  Review  Tab  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReviewQueuePage"
                 }
               }
             },
@@ -38141,24 +42005,6 @@
             }
           },
           {
-            "description": "Only items of this class.",
-            "in": "query",
-            "name": "class_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only items of this class.",
-              "title": "Class Id"
-            }
-          },
-          {
             "description": "Only items with this ingest source tag.",
             "in": "query",
             "name": "source",
@@ -38506,9 +42352,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Review Locate Curation Projects  Project  Review  Tab  Locate Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReviewLocateResponse"
                 }
               }
             },
@@ -38764,22 +42608,6 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "class_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Class Id"
             }
           },
           {
@@ -39137,9 +42965,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Search Text Curation Projects  Project  Search Text Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SearchTextResponse"
                 }
               }
             },
@@ -39969,9 +43795,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Stats Dataset Route Curation Projects  Project  Stats Dataset Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DatasetStatsResponse"
                 }
               }
             },
@@ -41778,9 +45602,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Vlm Label Cluster Curation Projects  Project  Vlm Label Cluster  Cluster Id  Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AutoLabelJobState"
                 }
               }
             },
@@ -41869,6 +45691,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -41951,6 +45783,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -42036,6 +45878,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {

@@ -10,6 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
+from src.routers.curation._autolabel_models import AutoLabelJobState
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation.pipeline_params import (
@@ -42,7 +43,9 @@ _EMBED_MISSING_DESC = (
 )
 
 
-@router.post('/pipeline/auto_label/start')
+@router.post(
+    '/pipeline/auto_label/start', response_model=None, responses={200: {'model': AutoLabelJobState}}
+)
 async def pipeline_auto_label_start(
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,

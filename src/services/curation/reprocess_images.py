@@ -106,7 +106,7 @@ async def embed_image_chunk(
     res.queued += counts['images']
     res.failed += counts['missing_image']
     for key in ('items', 'crop_written', 'frame_written', 'region_written'):
-        res.detail[key] = res.detail.get(key, 0) + counts[key]
+        res.add_count(key, counts[key])
 
 
 async def process_images(
@@ -160,7 +160,7 @@ async def process_images(
                 res.queued += 1
                 res.locked_skipped += counts['locked_untouched']
                 for key in ('merged', 'refreshed', 'replaced', 'created', 'removed'):
-                    res.detail[key] = res.detail.get(key, 0) + counts[key]
+                    res.add_count(key, counts[key])
         if ov_pass is not None:
             finished = 0
 

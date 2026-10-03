@@ -12,12 +12,17 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
+from src.routers.curation._autolabel_models import AutoLabelCancelResponse, AutoLabelJobState
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import PROMPT_PACK_DESC
 from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
 
 
-@router.get('/pipeline/auto_label/status')
+@router.get(
+    '/pipeline/auto_label/status',
+    response_model=None,
+    responses={200: {'model': AutoLabelJobState}},
+)
 async def pipeline_auto_label_status() -> dict[str, Any]:
     """Poll the current/last auto_label job state."""
     from src.services.curation.autolabel import job as auto_label_job
@@ -25,7 +30,11 @@ async def pipeline_auto_label_status() -> dict[str, Any]:
     return auto_label_job.get_state()
 
 
-@router.get('/pipeline/auto_label/status/{job_id}')
+@router.get(
+    '/pipeline/auto_label/status/{job_id}',
+    response_model=None,
+    responses={200: {'model': AutoLabelJobState}},
+)
 async def pipeline_auto_label_job_status(job_id: str) -> dict[str, Any]:
     """State of one auto_label job by the ``job_id`` its start returned.
 
@@ -41,7 +50,11 @@ async def pipeline_auto_label_job_status(job_id: str) -> dict[str, Any]:
     return state
 
 
-@router.post('/pipeline/auto_label/cancel')
+@router.post(
+    '/pipeline/auto_label/cancel',
+    response_model=None,
+    responses={200: {'model': AutoLabelCancelResponse}},
+)
 async def pipeline_auto_label_cancel() -> dict[str, Any]:
     """Request cancellation of the active auto_label job."""
     from src.services.curation.autolabel import job as auto_label_job
@@ -50,7 +63,11 @@ async def pipeline_auto_label_cancel() -> dict[str, Any]:
     return {'cancelled': cancelled, **auto_label_job.get_state()}
 
 
-@router.post('/vlm/label_cluster/{cluster_id}')
+@router.post(
+    '/vlm/label_cluster/{cluster_id}',
+    response_model=None,
+    responses={200: {'model': AutoLabelJobState}},
+)
 async def vlm_label_cluster(
     cluster_id: int,
     opensearch: OpenSearchDep,

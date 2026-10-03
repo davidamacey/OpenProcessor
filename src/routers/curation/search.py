@@ -20,6 +20,7 @@ from fastapi import HTTPException, Query, Request
 
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._page_models import SearchTextResponse
 from src.services.curation import semantic_search
 from src.services.curation.item_filter import item_filter_clauses
 
@@ -45,7 +46,7 @@ def _get_pe_encoder(request: Request) -> Any:
     return getattr(request.app.state, 'pe_encoder', None)
 
 
-@router.get('/search/text')
+@router.get('/search/text', response_model=None, responses={200: {'model': SearchTextResponse}})
 async def search_text(
     request: Request,
     opensearch: OpenSearchDep,
@@ -55,7 +56,6 @@ async def search_text(
     ],
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
-    class_id: int | None = Query(None),
     cluster_id: int | None = Query(None),
     tab: str | None = Query(
         None,
@@ -132,7 +132,6 @@ async def search_text(
             query=q,
             page=page,
             page_size=page_size,
-            class_id=class_id,
             cluster_id=cluster_id,
             tab=tab,
             date_from=date_from,

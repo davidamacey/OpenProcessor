@@ -248,6 +248,7 @@ async def run_ingest_batch(
             summary.crops_indexed += res.n_crops
             summary.n_embedded += res.n_embedded
             summary.n_not_embedded += res.n_not_embedded
+            summary.n_embed_failed += res.n_embed_failed
             summary.n_filtered += res.n_filtered
         else:
             summary.failed += 1

@@ -11,6 +11,7 @@ flip the stage for this project only (idempotent); like every region route they
 from __future__ import annotations
 
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.services.curation.region_stage_control import (
     RegionStageState,
     region_stage_state,
@@ -18,14 +19,16 @@ from src.services.curation.region_stage_control import (
 )
 
 
-@router.get('/region_stage', response_model=RegionStageState)
+@router.get('/region_stage', response_model=RegionStageState, responses=REGION_PROFILE_RESPONSES)
 async def get_region_stage(
     opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> RegionStageState:
     return await region_stage_state(opensearch)
 
 
-@router.post('/region_stage/pause', response_model=RegionStageState)
+@router.post(
+    '/region_stage/pause', response_model=RegionStageState, responses=REGION_PROFILE_RESPONSES
+)
 async def pause_region_stage(
     opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> RegionStageState:
@@ -35,7 +38,9 @@ async def pause_region_stage(
     return await region_stage_state(opensearch)
 
 
-@router.post('/region_stage/resume', response_model=RegionStageState)
+@router.post(
+    '/region_stage/resume', response_model=RegionStageState, responses=REGION_PROFILE_RESPONSES
+)
 async def resume_region_stage(
     opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> RegionStageState:

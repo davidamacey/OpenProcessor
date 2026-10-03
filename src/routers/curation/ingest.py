@@ -150,6 +150,7 @@ async def curation_ingest_image(
         n_regions=result.n_region_queued,
         n_embedded=result.n_embedded,
         n_not_embedded=result.n_not_embedded,
+        n_embed_failed=result.n_embed_failed,
         n_filtered=result.n_filtered,
         error=result.error,
         error_kind=result.error_kind,
@@ -252,6 +253,7 @@ def _batch_response(
                 n_regions=r.n_region_queued,
                 n_embedded=r.n_embedded,
                 n_not_embedded=r.n_not_embedded,
+                n_embed_failed=r.n_embed_failed,
                 n_filtered=r.n_filtered,
                 error=r.error,
                 error_kind=r.error_kind,
@@ -267,6 +269,7 @@ def _batch_response(
         summary.secondary_detector_failures += batch_result.summary.secondary_detector_failures
         summary.n_embedded += batch_result.summary.n_embedded
         summary.n_not_embedded += batch_result.summary.n_not_embedded
+        summary.n_embed_failed += batch_result.summary.n_embed_failed
         summary.n_filtered += batch_result.summary.n_filtered
 
     if summary.failed == 0:

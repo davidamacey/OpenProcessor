@@ -17,9 +17,11 @@ from src.routers.curation._common import OpenSearchDep, get_class_registry, rout
 from src.routers.curation._config_common_models import (
     ActiveConfigResponse,
     ActiveRef,
+    ValidationReport,
     active_conflict_error,
     api_error,
 )
+from src.routers.curation._models_segmenter import segmenter_availability
 from src.routers.curation._open_vocab_models import (
     OpenVocabActivateRequest,
     OpenVocabActivateResponse,
@@ -36,6 +38,7 @@ from src.routers.curation._open_vocab_models import (
     OpenVocabSummary,
     OpenVocabTemplateSummary,
     OpenVocabValidateRequest,
+    SegmenterAvailability,
 )
 from src.routers.curation._open_vocab_schema import build_open_vocab_schema
 from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
@@ -131,19 +134,18 @@ async def get_open_vocab_schema() -> OpenVocabSchema:
     return build_open_vocab_schema()
 
 
-@router.post('/open_vocab/validate')
+@router.post('/open_vocab/validate', response_model=ValidationReport)
 async def validate_open_vocab_route(
     body: OpenVocabValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
 ) -> Any:
     await get_config_store().refresh(opensearch)
-    report = await validate_open_vocab(
+    return await validate_open_vocab(
         body.name,
         body.body.model_dump(),
         existing_names=all_known_names(),
         for_activation=for_activation,
         **validation_inputs(),
     )
-    return report.model_dump()
 
 
 @router.get('/open_vocab/active', response_model=ActiveConfigResponse)
@@ -210,12 +212,14 @@ async def list_open_vocab(
             )
     ref = store.current.active_open_vocab
     active_name, active_revision = ref if isinstance(ref, tuple) else (None, None)
+    configured, reachable = await segmenter_availability()
     return OpenVocabList(
         sets=[_to_summary(r) for r in records if r is not None],
         templates=template_rows,
         active=ActiveRef(name=active_name, revision=active_revision),
         config_revision=store.current.config_revision,
         stale=store.current.stale,
+        segmenter=SegmenterAvailability(configured=configured, reachable=reachable),
     )
 
 
