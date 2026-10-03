@@ -166,6 +166,15 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- `POST .../cluster/umap/rebuild` no longer 500s on small pools: UMAP components and neighbours are clamped below the item count with random init, and a pool under 32 items is a typed `422 too_few_items` (`min_items`). One size guard (`pool_size`) serves every clustering entry point.
+- The route guard and `GET /projects/{project}` read one registry lookup, which confirms a `building`/`deleting` status at the project doc, so a finished combine no longer answers `409 project_building` after the GET reads `active`.
+- `GET /review/tabs` filter specs carry `default` (read off the filter models) and `allows_unset`; `region_status` now defaults to `all` on the wire.
+- `POST /ingest/policy/preview`: `by_class` names are class names (`traffic light`), and `embedded_because_labeled` separates items that embed only because a human or validated label always embeds.
+- `embedding.by_state` counts a pre-`embedding_state` item that has a vector as `embedded`, matching `embedding.embedded`.
+- Cloning a template no longer inherits its description, and `cloned_from` has no `@-` when the source has no revision.
+- Combine preview `target` serves `projected_images`/`projected_items`/`unclassed_items` (replacing `images`/`items`); unclassed items are copied, so they are now counted.
+- Promote warm-up covers batch 1 and `max_batch_size`, so `cold_start_expected_on_first_inference: false` holds for batched requests; single-class promotes write the project's class name into `labels.txt`.
+- `GET /models/status` lists one row per Triton model name; typed error bodies omit fields their code does not carry.
 
 - Activating a config on any axis (prompt pack, region profile, open-vocabulary set, VLM)
   with no `expected_active` answered 409 `active_conflict` even when nothing was active,
