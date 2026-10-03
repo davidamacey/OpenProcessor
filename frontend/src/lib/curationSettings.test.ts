@@ -23,45 +23,44 @@ import {
 import type { MethodsResponse } from './strategies';
 
 describe('parseCurationSettings', () => {
-  it('parses the real documented body', () => {
+  const LINK = {
+    id: 'grafana',
+    label: 'Grafana',
+    url: 'http://h:3000',
+    kind: 'service',
+    status: 'configured',
+    hint: 'Dashboards',
+    reachable: false,
+  };
+
+  it('parses the real documented body, resource_links in served order', () => {
+    const docs = { ...LINK, id: 'swagger', url: '/docs', kind: 'docs', reachable: null };
     const raw = {
       defaults: { cluster: 'ivf' },
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
-      monitoring_links: {
-        grafana: 'https://g.example',
-        prometheus: null,
-        opensearch_dashboards: 'http://os.example:5601',
-      },
+      resource_links: [docs, LINK],
     };
     expect(parseCurationSettings(raw)).toEqual({
       defaults: { cluster: 'ivf' },
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
-      monitoring_links: {
-        grafana: 'https://g.example',
-        prometheus: null,
-        opensearch_dashboards: 'http://os.example:5601',
-      },
+      resource_links: [docs, LINK],
     });
   });
 
-  it('reads an absent or malformed monitoring_links as all null, never a guessed URL', () => {
-    const none = { grafana: null, prometheus: null, opensearch_dashboards: null };
-    expect(parseCurationSettings({ defaults: {} }).monitoring_links).toEqual(none);
+  it('reads an absent or malformed resource_links as empty, never a guess', () => {
+    expect(parseCurationSettings({ defaults: {} }).resource_links).toEqual([]);
+    expect(parseCurationSettings({ resource_links: 'x' }).resource_links).toEqual([]);
     expect(
-      parseCurationSettings({ monitoring_links: { grafana: 5, prometheus: '' } })
-        .monitoring_links,
-    ).toEqual(none);
+      parseCurationSettings({
+        resource_links: [5, { id: 'a' }, { ...LINK, kind: 'x' }, LINK],
+      }).resource_links,
+    ).toEqual([LINK]);
   });
 
   it('treats the first-run body as normal, not an error', () => {
-    const raw = {
-      defaults: {},
-      updated_at: null,
-      updated_by: null,
-      monitoring_links: { grafana: null, prometheus: null, opensearch_dashboards: null },
-    };
+    const raw = { defaults: {}, updated_at: null, updated_by: null, resource_links: [] };
     expect(parseCurationSettings(raw)).toEqual(EMPTY_CURATION_SETTINGS);
   });
 

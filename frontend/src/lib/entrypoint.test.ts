@@ -63,9 +63,38 @@ describe('docker-entrypoint.sh input validation', () => {
   it('nginx.conf carries every placeholder the entrypoint substitutes', () => {
     const conf = readFileSync(path.resolve(process.cwd(), 'nginx.conf'), 'utf-8');
     expect(conf).toContain('set $docs_upstream __DOCS_UPSTREAM__;');
-    for (const loc of ['= /docs', '= /redoc', '= /openapi.json', '^~ /cropwright/']) {
+    for (const loc of [
+      '= /docs',
+      '= /redoc',
+      '= /openapi.json',
+      '= /docs/oauth2-redirect',
+      '^~ /docs-assets/',
+      '^~ /cropwright/',
+    ]) {
       expect(conf).toContain(`location ${loc} {`);
     }
+  });
+
+  // The backend builds service links from the host the client used, so every
+  // proxied location must carry the original host (with its port) through.
+  it('forwards the original host and scheme to the API on every API and docs location', () => {
+    const conf = readFileSync(path.resolve(process.cwd(), 'nginx.conf'), 'utf-8');
+    const headers = [
+      'proxy_set_header Host $http_host;',
+      'proxy_set_header X-Forwarded-Host $http_host;',
+      'proxy_set_header X-Forwarded-Proto $scheme;',
+      'proxy_set_header X-Real-IP $remote_addr;',
+      'proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+    ];
+    const blocks = [...conf.matchAll(/location ([^{]+)\{([^}]*)\}/g)].filter((m) =>
+      m[2]!.includes('proxy_pass $api_upstream'),
+    );
+    // ingest, dataset uploads, general API, five docs paths
+    expect(blocks.length).toBe(8);
+    for (const [, loc, body] of blocks) {
+      for (const h of headers) expect(body, `${loc} lacks ${h}`).toContain(h);
+    }
+    expect(conf).not.toContain('proxy_set_header Host $host;\n        proxy_pass $api');
   });
 
   for (const bad of ['ftp://d', 'http://d|x', 'http://d"x', 'http://d&x']) {

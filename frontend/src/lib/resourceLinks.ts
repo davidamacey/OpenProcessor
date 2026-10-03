@@ -1,50 +1,67 @@
 /**
- * Links the app offers to everything else behind its origin: the bundled
- * docs and the API's own interactive docs are same-origin nginx proxies
- * (nginx.conf), so these paths are constants owned by this repo. The
- * monitoring dashboards are NOT: they come only from the served
- * `GET /settings` `monitoring_links`, and MLflow from `mlflowBaseUrl`.
+ * What the Resources menu and the dashboards row show: exactly the served
+ * `GET /settings` `resource_links`, in the served order, behind one
+ * client-owned entry. Nothing is guessed: no host, port or path is built
+ * here, and an empty or failed settings read leaves only Documentation.
  */
 import { externalHref } from '$lib/mlflowLink';
-import type { MonitoringLinksServed } from '$lib/curationSettings';
+import type { ResourceLink } from '$lib/curationSettings';
 
-export interface ResourceLink {
-  key: string;
+/** The one client-owned entry: the bundled documentation is this repo's own
+ *  docs container, proxied same-origin by nginx.conf (`^~ /cropwright/`),
+ *  so the backend knows nothing of it and never serves it. */
+export const DOCS_ENTRY = {
+  id: 'docs',
+  label: 'Documentation',
+  href: '/cropwright/',
+} as const;
+
+/** A served URL as an `href`: an absolute http(s) URL, or a root-relative
+ *  path with a single leading slash (a docs entry, resolved against our own
+ *  origin). Svelte does not sanitize `href`, so `javascript:`, `data:`,
+ *  protocol-relative `//host` and anything else is refused (null). */
+export function safeHref(u: string | null | undefined): string | null {
+  if (!u) return null;
+  if (u.startsWith('/')) return /^\/[^/\\]/.test(u) || u === '/' ? u : null;
+  return externalHref(u);
+}
+
+export interface ResourceView {
+  id: string;
   label: string;
-  href: string;
+  kind: ResourceLink['kind'] | 'client';
+  /** null = render a muted row, not an anchor. */
+  href: string | null;
+  /** Why a row has no link ("not configured"); empty when it has one. */
+  note: string;
+  /** Served help text, shown as the row's tooltip. */
+  hint: string;
+  /** The server reports the configured service is not answering. */
+  notRunning: boolean;
 }
 
-/** Same-origin proxy paths; keep in step with nginx.conf. */
-export const SAME_ORIGIN_RESOURCES: readonly ResourceLink[] = [
-  { key: 'docs', label: 'Documentation', href: '/cropwright/' },
-  { key: 'swagger', label: 'API reference (Swagger UI)', href: '/docs' },
-  { key: 'redoc', label: 'API reference (ReDoc)', href: '/redoc' },
-  { key: 'openapi', label: 'OpenAPI JSON', href: '/openapi.json' },
-];
-
-const MONITORING = [
-  { key: 'grafana', label: 'Grafana' },
-  { key: 'prometheus', label: 'Prometheus' },
-  { key: 'opensearch_dashboards', label: 'OpenSearch' },
-] as const;
-
-/** Served monitoring dashboards that carry an absolute http(s) URL. */
-export function monitoringResourceLinks(
-  served: MonitoringLinksServed | null | undefined,
-): ResourceLink[] {
-  return MONITORING.flatMap((s) => {
-    const href = externalHref(served?.[s.key]);
-    return href ? [{ key: s.key, label: s.label, href }] : [];
-  });
-}
-
-export function resourceLinks(
-  served: MonitoringLinksServed | null | undefined,
-  mlflowHref: string | null,
-): ResourceLink[] {
+export function resourceViews(served: readonly ResourceLink[]): ResourceView[] {
   return [
-    ...SAME_ORIGIN_RESOURCES,
-    ...monitoringResourceLinks(served),
-    ...(mlflowHref ? [{ key: 'mlflow', label: 'MLflow', href: mlflowHref }] : []),
+    {
+      id: DOCS_ENTRY.id,
+      label: DOCS_ENTRY.label,
+      kind: 'client',
+      href: DOCS_ENTRY.href,
+      note: '',
+      hint: '',
+      notRunning: false,
+    },
+    ...served.map((l): ResourceView => {
+      const href = safeHref(l.url);
+      return {
+        id: l.id,
+        label: l.label,
+        kind: l.kind,
+        href,
+        note: href ? '' : l.url ? 'link unavailable' : 'not configured',
+        hint: l.hint,
+        notRunning: href !== null && l.reachable === false,
+      };
+    }),
   ];
 }

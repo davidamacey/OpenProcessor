@@ -56,7 +56,7 @@ const BARE_PREFIX_PATTERN = /(?:['"`]|\})\/curation(?:[/'"`]|\$)/;
  *
  * The `(?<!:)` guard keeps `http://…` intact — without it the line
  * comment rule truncates `` `http://${host}:${s.port}` ``
- * (`components/MonitoringLinks.svelte:33`). Over-stripping can only
+ * (`components/ResourceLinksRow.svelte`). Over-stripping can only
  * cause a missed violation, never a false alarm, but there is no reason
  * to accept even that.
  *

@@ -1,8 +1,8 @@
 /**
- * The MLflow dashboard link is the served `mlflow_public_url` of
- * `GET /health` (`OP_MLFLOW_PUBLIC_URL`, null when unset), and a run links
- * to its own served `mlflow_run_url` (null unless that public URL is set).
- * Nothing is derived from a run URL's origin, a port or an env override.
+ * Per-run MLflow links (`mlflow_run_url`) and other served external URLs
+ * (a model's `license_url`) render only when they are absolute http(s).
+ * The dashboard link of the Resources menu is a served `resource_links`
+ * entry instead (see `$lib/resourceLinks`).
  */
 /** A served URL as an `href`, only when it is an absolute http(s) URL:
  *  Svelte does not sanitize `href`, so a `javascript:` value would reach

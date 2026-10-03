@@ -8,7 +8,7 @@ whose result predates v2 (409) shows the legacy note, not an error.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, resource_link
 
 import json
 from urllib.parse import parse_qs, urlparse
@@ -361,19 +361,20 @@ def test_bakeoff_run_rejection_shows_served_detail(stub, page, app_url):
     assert page.get_by_test_id("run-status").count() == 0
 
 
-def test_monitoring_links_are_only_the_served_urls(stub, page, app_url):
+def test_dashboard_links_are_only_the_served_entries(stub, page, app_url):
     register_discovery(stub)
     stub.on("GET", r"/settings(\?|$)", {
         "defaults": {}, "updated_at": None, "updated_by": None,
-        "monitoring_links": {
-            "grafana": "https://grafana.example/d/abc",
-            "prometheus": None,
-            "opensearch_dashboards": None,
-        },
+        "resource_links": [
+            resource_link("swagger", "Swagger", "/docs", "docs"),
+            resource_link("grafana", "Grafana", "https://grafana.example/d/abc"),
+            resource_link("prometheus", "Prometheus", None),
+        ],
     })
     page.goto(f"{app_url}/p/default/bakeoff")
-    link = page.get_by_test_id("monitoring-link")
-    link.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert link.count() == 1
-    assert link.get_attribute("href") == "https://grafana.example/d/abc"
-    assert "Prometheus" not in page.content()
+    row = page.get_by_test_id("resource-row")
+    row.wait_for(timeout=ACTION_TIMEOUT_MS)
+    links = row.get_by_test_id("resource-link")
+    assert links.count() == 1
+    assert links.get_attribute("href") == "https://grafana.example/d/abc"
+    assert row.get_by_test_id("resource-muted").inner_text().strip() == "Prometheus: not configured"

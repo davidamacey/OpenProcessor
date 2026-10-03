@@ -12,7 +12,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { createBakeoffController } from '$lib/bakeoff/bakeoffController.svelte';
   import { formatTime, metricLabel } from '$lib/bakeoff/view';
-  import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
+  import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';
   import DatasetPicker from '$components/bakeoff/DatasetPicker.svelte';
   import ModelPicker from '$components/bakeoff/ModelPicker.svelte';
   import RunConfirmDialog from '$components/bakeoff/RunConfirmDialog.svelte';
@@ -66,7 +66,7 @@
     evaluator. Classes a model does not cover are shown, not hidden.
   </p>
 
-  <div class="mb-6"><MonitoringLinks /></div>
+  <div class="mb-6"><ResourceLinksRow /></div>
 
   {#if s.loadErrors.length}
     <ul

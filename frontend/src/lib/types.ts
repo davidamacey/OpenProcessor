@@ -713,7 +713,6 @@ export interface GlobalHealth {
   triton?: { reachable: boolean; detail?: string };
   opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
   vlm?: VlmHealth;
-  mlflow_public_url?: string | null;
   version?: string;
   api_version?: string;
 }

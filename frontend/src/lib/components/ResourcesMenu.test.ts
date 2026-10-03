@@ -3,10 +3,25 @@ import { flushSync, mount, unmount } from 'svelte';
 import { tick } from 'svelte';
 import ResourcesMenu from './ResourcesMenu.svelte';
 import { curationSettingsStore } from '$stores/curationSettings.svelte';
-import { EMPTY_CURATION_SETTINGS } from '$lib/curationSettings';
+import { EMPTY_CURATION_SETTINGS, type ResourceLink } from '$lib/curationSettings';
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
+
+const L = (o: Partial<ResourceLink>): ResourceLink => ({
+  id: 'grafana',
+  label: 'Grafana',
+  url: 'http://g:3000',
+  kind: 'service',
+  status: 'configured',
+  hint: 'help text',
+  reachable: null,
+  ...o,
+});
+
+function serve(links: ResourceLink[]): void {
+  curationSettingsStore.settings = { ...EMPTY_CURATION_SETTINGS, resource_links: links };
+}
 
 function render(): void {
   target = document.createElement('div');
@@ -16,6 +31,10 @@ function render(): void {
 }
 const trigger = () =>
   target.querySelector<HTMLButtonElement>('[data-testid="resources-trigger"]')!;
+function open(): void {
+  trigger().click();
+  flushSync();
+}
 function hrefs(): string[] {
   return [
     ...target.querySelectorAll<HTMLAnchorElement>('[data-testid="resource-link"]'),
@@ -37,47 +56,68 @@ describe('ResourcesMenu', () => {
     render();
     expect(trigger().getAttribute('aria-expanded')).toBe('false');
     expect(hrefs()).toEqual([]);
-    trigger().click();
-    flushSync();
+    open();
     expect(trigger().getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('always lists the same-origin links, with none of the unserved dashboards', () => {
+  it('with nothing served lists only Documentation', () => {
     render();
-    trigger().click();
-    flushSync();
-    expect(hrefs()).toEqual(['/cropwright/', '/docs', '/redoc', '/openapi.json']);
+    open();
+    expect(hrefs()).toEqual(['/cropwright/']);
   });
 
-  it('adds only the served monitoring links, as external new-tab anchors', () => {
-    curationSettingsStore.settings = {
-      ...EMPTY_CURATION_SETTINGS,
-      monitoring_links: {
-        grafana: 'http://g:3000',
-        prometheus: null,
-        opensearch_dashboards: 'http://os:5601',
-      },
-    };
-    render();
-    trigger().click();
-    flushSync();
-    expect(hrefs()).toEqual([
-      '/cropwright/',
-      '/docs',
-      '/redoc',
-      '/openapi.json',
-      'http://g:3000',
-      'http://os:5601',
+  it('lists exactly the served entries in the served order after Documentation', () => {
+    serve([
+      L({ id: 'swagger', label: 'Swagger', url: '/docs', kind: 'docs' }),
+      L({}),
+      L({ id: 'mlflow', label: 'MLflow', url: 'http://m:5000' }),
     ]);
-    const a = target.querySelector<HTMLAnchorElement>('[data-key="grafana"]')!;
-    expect(a.target).toBe('_blank');
-    expect(a.rel).toBe('noopener noreferrer');
+    render();
+    open();
+    expect(hrefs()).toEqual(['/cropwright/', '/docs', 'http://g:3000', 'http://m:5000']);
+    for (const a of target.querySelectorAll<HTMLAnchorElement>(
+      '[data-testid="resource-link"]',
+    )) {
+      expect(a.target).toBe('_blank');
+      expect(a.rel).toBe('noopener noreferrer');
+    }
+  });
+
+  it('a not_configured entry is a muted row with the hint as title and no anchor', () => {
+    serve([L({ url: null, status: 'not_configured', hint: 'set OP_GRAFANA_URL' })]);
+    render();
+    open();
+    expect(hrefs()).toEqual(['/cropwright/']);
+    const row = target.querySelector<HTMLElement>('[data-testid="resource-muted"]')!;
+    expect(row.textContent).toContain('Grafana: not configured');
+    expect(row.getAttribute('title')).toBe('set OP_GRAFANA_URL');
+    expect(row.querySelector('a')).toBeNull();
+  });
+
+  it('reachable false shows a not-running note; null and true show nothing', () => {
+    serve([
+      L({ id: 'a', label: 'A', reachable: false }),
+      L({ id: 'b', label: 'B', reachable: true }),
+      L({ id: 'c', label: 'C', reachable: null }),
+    ]);
+    render();
+    open();
+    const notes = target.querySelectorAll('[data-testid="resource-not-running"]');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.closest('[data-key]')!.getAttribute('data-key')).toBe('a');
+  });
+
+  it('an unsafe served url renders no anchor', () => {
+    serve([L({ url: 'javascript:alert(1)' })]);
+    render();
+    open();
+    expect(hrefs()).toEqual(['/cropwright/']);
+    expect(target.innerHTML).not.toContain('javascript:');
   });
 
   it('Escape closes the menu and returns focus to the button', async () => {
     render();
-    trigger().click();
-    flushSync();
+    open();
     target
       .querySelector('[data-testid="resources-list"]')!
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
