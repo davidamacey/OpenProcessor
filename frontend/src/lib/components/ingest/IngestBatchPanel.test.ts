@@ -45,6 +45,7 @@ function servedResponse(
       crops_indexed: 1,
       n_embedded: 0,
       n_not_embedded: 0,
+      n_embed_failed: 0,
       n_filtered: 0,
     },
     results: [
@@ -57,6 +58,7 @@ function servedResponse(
         n_regions: 0,
         n_embedded: 0,
         n_not_embedded: 0,
+        n_embed_failed: 0,
         n_filtered: 0,
         error: null,
         error_kind: null,
@@ -71,6 +73,7 @@ function servedResponse(
         n_regions: 0,
         n_embedded: 0,
         n_not_embedded: 0,
+        n_embed_failed: 0,
         n_filtered: 0,
         error: 'not a servable path',
         error_kind: 'unservable_path',

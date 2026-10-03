@@ -1297,6 +1297,9 @@ export interface IngestImageResult {
    *  detect filter dropped. */
   n_embedded: number;
   n_not_embedded: number;
+  /** Of `n_not_embedded`, how many failed in the encoder (the rest were
+   *  not selected or deferred by the policy). */
+  n_embed_failed: number;
   n_filtered: number;
   /**
    * OpenProcessor d72cc63: set when the image itself ingested but the
@@ -1315,6 +1318,9 @@ export interface BatchIngestSummary {
    *  summed over the batch. */
   n_embedded: number;
   n_not_embedded: number;
+  /** Of `n_not_embedded`, how many failed in the encoder (the rest were
+   *  not selected or deferred by the policy). */
+  n_embed_failed: number;
   n_filtered: number;
   /** d72cc63: how many results carry a `secondary_detector_error`. */
   secondary_detector_failures?: number;
