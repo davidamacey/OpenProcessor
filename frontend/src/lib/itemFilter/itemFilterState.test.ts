@@ -127,4 +127,15 @@ describe('ItemFilterState', () => {
     expect(s.openVocabSet).toBeNull();
     expect(s.valueOf('nope')).toBeUndefined();
   });
+
+  it('fromUrl collapses a repeated class_name / exclude_class_name', () => {
+    const s = new ItemFilterState();
+    s.fromUrl(
+      new URLSearchParams(
+        'class_name=a&class_name=a&exclude_class_name=b&exclude_class_name=b&class_name=c',
+      ),
+    );
+    expect(s.classNames).toEqual(['a', 'c']);
+    expect(s.excludeClassNames).toEqual(['b']);
+  });
 });

@@ -162,7 +162,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each a.applied as r (r.process + r.host)}
+            {#each a.applied as r, i (i)}
               <tr class="border-t border-zinc-800">
                 <td class="py-0.5 pr-3">{r.process}</td>
                 <td class="py-0.5 pr-3 font-mono">{r.host}</td>

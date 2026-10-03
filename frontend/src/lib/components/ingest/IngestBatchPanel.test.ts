@@ -316,4 +316,34 @@ describe('IngestBatchPanel', () => {
     );
     expect(btn?.disabled).toBe(true);
   });
+
+  it('renders one failure row per served result when a path was listed twice', async () => {
+    const failed = servedResponse().results[1]!;
+    vi.mocked(ingestBatch).mockResolvedValue(
+      servedResponse({
+        results: [failed, { ...failed }],
+        summary: { ...servedResponse().summary, successful: 0, failed: 2 },
+      }),
+    );
+    instance = mount(IngestBatchPanel, {
+      target,
+      props: {
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
+      },
+    });
+    flushSync();
+    textarea().value = '/data/b.jpg\n/data/b.jpg';
+    textarea().dispatchEvent(new Event('input'));
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Ingest 2 paths'))!
+      .click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(target.querySelectorAll('ul.max-h-48 li').length).toBe(2);
+    });
+  });
 });

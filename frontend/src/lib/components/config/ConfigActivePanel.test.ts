@@ -209,4 +209,19 @@ describe('ConfigActivePanel (region-profile words)', () => {
       ),
     );
   });
+
+  describe('ConfigActivePanel applied runtimes', () => {
+    it('lists two runtimes whose process+host concatenate to the same text', async () => {
+      const base = profileActiveFixture();
+      const row = base.applied[0]!;
+      await render({
+        ...base,
+        applied: [
+          { ...row, process: 'ab', host: 'c' },
+          { ...row, process: 'a', host: 'bc' },
+        ],
+      });
+      expect(target.querySelectorAll('[data-testid="applied-at"]').length).toBe(2);
+    });
+  });
 });

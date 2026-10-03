@@ -70,4 +70,17 @@ describe('DatasetIssueList', () => {
     render([]);
     expect(target.querySelector('[data-testid="dataset-issues-none"]')).not.toBeNull();
   });
+  it('renders two served issues that share a code (a Map row with no target plus an unmapped class)', () => {
+    const unmapped: DatasetIssue = {
+      code: 'class_unmapped',
+      severity: 'error',
+      blocking: true,
+      bypassable: false,
+      message: 'A dataset class with boxes has no mapping',
+      count: 1,
+      samples: [],
+    };
+    render([unmapped, { ...unmapped, count: 2 }]);
+    expect(target.querySelectorAll('li[data-code="class_unmapped"]').length).toBe(2);
+  });
 });

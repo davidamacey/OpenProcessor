@@ -198,4 +198,32 @@ describe('ingest policy page', () => {
       expect(q('policy-save-error')?.textContent).toContain('no labels file');
     });
   });
+  it('renders the backend-shaped 422 (message equals its only reason) once, without crashing', async () => {
+    // OpenProcessor raises detector_not_servable with message == '; '.join(reasons).
+    const problem = "'det_v2' is not loaded and ready on Triton";
+    putResponse = () =>
+      json(
+        {
+          detail: {
+            error: 'detector_not_servable',
+            message: problem,
+            reasons: [problem],
+          },
+        },
+        422,
+      );
+    await mountPage();
+    await chooseMode('lazy');
+    q('policy-save')!.click();
+    flushSync();
+    [...document.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Save policy' && b !== q('policy-save'))!
+      .click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('policy-save-error')).not.toBeNull();
+    });
+    expect(q('policy-save-error')!.querySelectorAll('p').length).toBe(1);
+    expect(q('policy-save-error')!.textContent).toContain(problem);
+  });
 });

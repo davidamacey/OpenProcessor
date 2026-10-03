@@ -163,7 +163,7 @@
 
     {#if notEmbedded.length > 0}
       <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-not-embedded-list">
-        {#each notEmbedded as r (r.image_path)}
+        {#each notEmbedded as r, i (i)}
           <li class="border-b border-zinc-900 py-1 font-mono">
             {r.image_path}
             <span class="text-amber-300">
@@ -178,7 +178,7 @@
     {#if secondaryFailures.length > 0}
       <!-- d72cc63: these images ingested with primary-detector crops only. -->
       <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-secondary-list">
-        {#each secondaryFailures as r (r.image_path)}
+        {#each secondaryFailures as r, i (i)}
           <li class="border-b border-zinc-900 py-1 font-mono">
             {r.image_path}
             <span class="text-amber-300">
@@ -209,7 +209,7 @@
         {/each}
       </div>
       <ul class="max-h-48 overflow-y-auto text-xs">
-        {#each visibleFailures as r (r.image_path)}
+        {#each visibleFailures as r, i (i)}
           <li class="border-b border-zinc-900 py-1 font-mono">
             {r.image_path}
             {#if r.error_kind}

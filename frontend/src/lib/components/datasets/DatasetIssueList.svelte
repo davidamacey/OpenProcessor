@@ -43,7 +43,7 @@
           {g.title}
         </h4>
         <ul class="space-y-1">
-          {#each g.items as issue (issue.code)}
+          {#each g.items as issue, idx (`${issue.code}:${idx}`)}
             <li class="rounded border px-3 py-2 text-xs {g.tone}" data-code={issue.code}>
               <div class="flex flex-wrap items-baseline gap-2">
                 <span class="font-semibold"

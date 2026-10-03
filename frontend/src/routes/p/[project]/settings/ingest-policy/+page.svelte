@@ -76,7 +76,7 @@
         data-testid="policy-conflict"
       >
         <p>The policy changed since you opened it.</p>
-        {#each editor.saveLines as line (line)}
+        {#each editor.saveLines as line, i (i)}
           <p class="text-xs">{line}</p>
         {/each}
         <div class="flex gap-2">
@@ -96,7 +96,7 @@
       </div>
     {:else if editor.saveLines.length > 0}
       <div class="space-y-1 text-sm text-red-300" data-testid="policy-save-error">
-        {#each editor.saveLines as line (line)}
+        {#each editor.saveLines as line, i (i)}
           <p>{line}</p>
         {/each}
       </div>
@@ -109,7 +109,7 @@
       >
         <p>These names are not in the detector's labels or the registry; saved anyway:</p>
         <ul class="mt-1 list-disc pl-5">
-          {#each editor.unknownNames as n (n)}
+          {#each editor.unknownNames as n, i (i)}
             <li class="font-mono">{n}</li>
           {/each}
         </ul>

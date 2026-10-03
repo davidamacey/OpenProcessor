@@ -122,10 +122,15 @@ describe('3f1a11e/W8: rejected-box badges style by the served rejection kind (ne
   it('the W8 multi-box panel badges each rejected box, branching on rejectionReasonKind, not just presence of a reason', () => {
     // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): no
     // separate "candidate" concept — one badge per rejected SlotBox.
-    expect(src).toMatch(/multiBox\.boxes\.filter\(\(b\) => b\.state === 'rejected'\)/);
-    expect(src).toMatch(/\{@const kind = regionVocabularyStore\.rejectionReasonKind\(/);
-    expect(src).toMatch(
-      /kind === 'needs_human'\s*\?\s*'candidate · needs review'\s*:\s*'rejected · confirm to accept'/,
+    expect(src).toMatch(/<RejectedBoxChips\s+boxes=\{multiBox\.boxes\}/);
+    const chips = readFileSync(
+      path.resolve(here, '../../../../lib/components/review/RejectedBoxChips.svelte'),
+      'utf-8',
+    );
+    expect(chips).toMatch(/boxes\.filter\(\(b\) => b\.state === 'rejected'\)/);
+    expect(chips).toMatch(/\{@const kind = regionVocabularyStore\.rejectionReasonKind\(/);
+    expect(chips).toMatch(
+      /kind === 'needs_human' \? 'candidate · needs review' : 'rejected · confirm to accept'/,
     );
   });
 });

@@ -50,7 +50,7 @@
         used.
       </p>
       <div class="flex max-h-40 flex-wrap gap-x-3 gap-y-1 overflow-y-auto">
-        {#each controller.labelNames as name (name)}
+        {#each controller.labelNames as name, i (i)}
           <label class="flex items-center gap-1">
             <input
               type="checkbox"
@@ -83,7 +83,7 @@
 
       {#if controller.errorLines.length > 0}
         <div class="space-y-1 text-red-300" data-testid="seed-error">
-          {#each controller.errorLines as line (line)}
+          {#each controller.errorLines as line, i (i)}
             <p>{line}</p>
           {/each}
         </div>
