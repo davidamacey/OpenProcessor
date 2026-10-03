@@ -427,27 +427,33 @@ async def _check_ocr_models(
     return issues
 
 
-def _check_segmenter_prompt_text(text_prompt: str, *, sole_leg: bool) -> list[ValidationIssue]:
-    """The text-prompt-only checks, also served alone by
-    ``POST /region_profiles/validate_segmenter_prompt``."""
+def check_segmenter_prompt_text(
+    text_prompt: str, *, sole_leg: bool, field: str = 'segmenter_text_prompt'
+) -> list[ValidationIssue]:
+    """The text-prompt-only checks: served alone by
+    ``POST /region_profiles/validate_segmenter_prompt`` and applied to every
+    open-vocabulary target prompt (``field`` names where the prompt lives)."""
     if not text_prompt:
         severity = 'error' if sole_leg else 'warning'
-        return [_issue('segmenter_prompt_empty', severity, 'segmenter_text_prompt is empty')]
+        return [_issue('segmenter_prompt_empty', severity, f'{field} is empty', field=field)]
     issues = []
     if len(text_prompt) > 200:
         issues.append(
-            _issue('segmenter_prompt_too_long', 'error', 'segmenter_text_prompt exceeds 200 chars')
+            _issue('segmenter_prompt_too_long', 'error', f'{field} exceeds 200 chars', field=field)
         )
     if len(text_prompt.split(',')) > 8:
         issues.append(
             _issue(
-                'segmenter_prompt_too_many_phrases', 'error', 'more than 8 comma-separated phrases'
+                'segmenter_prompt_too_many_phrases',
+                'error',
+                'more than 8 comma-separated phrases',
+                field=field,
             )
         )
     if '\n' in text_prompt:
         issues.append(
             _issue(
-                'segmenter_prompt_multiline', 'error', 'segmenter_text_prompt has multiple lines'
+                'segmenter_prompt_multiline', 'error', f'{field} has multiple lines', field=field
             )
         )
     return issues
@@ -461,7 +467,7 @@ async def _check_segmenter(
 ) -> list[ValidationIssue]:
     import os
 
-    issues = _check_segmenter_prompt_text(
+    issues = check_segmenter_prompt_text(
         profile.segmenter_text_prompt, sole_leg=not profile.detector_model
     )
     configured = bool(os.environ.get('OP_SEGMENTER_URL', '').strip())

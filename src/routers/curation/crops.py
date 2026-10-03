@@ -141,6 +141,12 @@ async def list_crops(
         Query(description='true = items an import created from the detector; false = the rest.'),
     ] = None,
     source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
+    open_vocab_set: Annotated[
+        str | None, Query(description='Items the full-image pass wrote for this prompt set.')
+    ] = None,
+    source_prompt: Annotated[
+        str | None, Query(description='Items the full-image pass found with this exact prompt.')
+    ] = None,
     needs_new_class: bool | None = None,
     review_dismissed: Annotated[
         bool | None, Query(description='true = only items hidden from review.')
@@ -240,6 +246,10 @@ async def list_crops(
         # class_source is mapped keyword directly on the live index — no
         # .keyword subfield exists.
         filt.append({'term': {'class_source': class_source}})
+    if open_vocab_set:
+        filt.append({'term': {'open_vocab_set': open_vocab_set}})
+    if source_prompt:
+        filt.append({'term': {'source_prompt': source_prompt}})
     if label_validated is not None:
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).

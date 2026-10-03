@@ -131,7 +131,8 @@
             "enum": [
               "prompt_pack",
               "detection_profile",
-              "vlm"
+              "vlm",
+              "open_vocab"
             ],
             "title": "Axis",
             "type": "string"
@@ -301,7 +302,8 @@
             "enum": [
               "prompt_pack",
               "detection_profile",
-              "vlm"
+              "vlm",
+              "open_vocab"
             ],
             "title": "Axis",
             "type": "string"
@@ -7790,6 +7792,23 @@
             "title": "Label Validated",
             "type": "boolean"
           },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
           "mistakenness_method": {
             "anyOf": [
               {
@@ -7854,6 +7873,28 @@
             "default": false,
             "title": "On Negative Frame",
             "type": "boolean"
+          },
+          "open_vocab_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Revision"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
           },
           "origin_image_id": {
             "anyOf": [
@@ -8271,6 +8312,17 @@
             "default": "",
             "title": "Source Image Path",
             "type": "string"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
           },
           "test_holdout": {
             "default": false,
@@ -10190,6 +10242,1108 @@
         "title": "OcrModelEntry",
         "type": "object"
       },
+      "OpenVocabActivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "OpenVocabActivateRequest",
+        "type": "object"
+      },
+      "OpenVocabActivateResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm",
+              "open_vocab"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation"
+        ],
+        "title": "OpenVocabActivateResponse",
+        "type": "object"
+      },
+      "OpenVocabBody-Input": {
+        "additionalProperties": true,
+        "properties": {
+          "dedup_iou": {
+            "default": 0.5,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "gating": {
+            "$ref": "#/components/schemas/OpenVocabGatingBody"
+          },
+          "image_max_side": {
+            "default": 1024,
+            "title": "Image Max Side",
+            "type": "integer"
+          },
+          "max_enabled_targets": {
+            "default": 8,
+            "title": "Max Enabled Targets",
+            "type": "integer"
+          },
+          "run_on_ingest": {
+            "default": false,
+            "title": "Run On Ingest",
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabTargetBody"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "title": "OpenVocabBody",
+        "type": "object"
+      },
+      "OpenVocabBody-Output": {
+        "additionalProperties": true,
+        "properties": {
+          "dedup_iou": {
+            "default": 0.5,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "gating": {
+            "$ref": "#/components/schemas/OpenVocabGatingBody"
+          },
+          "image_max_side": {
+            "default": 1024,
+            "title": "Image Max Side",
+            "type": "integer"
+          },
+          "max_enabled_targets": {
+            "default": 8,
+            "title": "Max Enabled Targets",
+            "type": "integer"
+          },
+          "run_on_ingest": {
+            "default": false,
+            "title": "Run On Ingest",
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabTargetBody"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "title": "OpenVocabBody",
+        "type": "object"
+      },
+      "OpenVocabCloneRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "from_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Project"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stored",
+                  "template"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "OpenVocabCloneRequest",
+        "type": "object"
+      },
+      "OpenVocabCreateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/OpenVocabBody-Input"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "OpenVocabCreateRequest",
+        "type": "object"
+      },
+      "OpenVocabDeactivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "OpenVocabDeactivateRequest",
+        "type": "object"
+      },
+      "OpenVocabDoc": {
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "body": {
+            "$ref": "#/components/schemas/OpenVocabBody-Output"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body"
+        ],
+        "title": "OpenVocabDoc",
+        "type": "object"
+      },
+      "OpenVocabFieldSchema": {
+        "properties": {
+          "advanced": {
+            "default": false,
+            "title": "Advanced",
+            "type": "boolean"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "help": {
+            "default": "",
+            "title": "Help",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "scope": {
+            "enum": [
+              "set",
+              "target",
+              "gating",
+              "tier3_hit_rate"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "int",
+              "float",
+              "bool",
+              "string_list"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "field",
+          "label",
+          "type",
+          "default"
+        ],
+        "title": "OpenVocabFieldSchema",
+        "type": "object"
+      },
+      "OpenVocabGatingBody": {
+        "additionalProperties": true,
+        "properties": {
+          "tier2_vlm_precheck": {
+            "default": false,
+            "title": "Tier2 Vlm Precheck",
+            "type": "boolean"
+          },
+          "tier3_hit_rate": {
+            "$ref": "#/components/schemas/OpenVocabHitRateBody"
+          }
+        },
+        "title": "OpenVocabGatingBody",
+        "type": "object"
+      },
+      "OpenVocabHitRateBody": {
+        "additionalProperties": true,
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "miss_threshold": {
+            "default": 15,
+            "title": "Miss Threshold",
+            "type": "integer"
+          },
+          "sample_floor": {
+            "default": 0.1,
+            "title": "Sample Floor",
+            "type": "number"
+          },
+          "window": {
+            "default": 20,
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "title": "OpenVocabHitRateBody",
+        "type": "object"
+      },
+      "OpenVocabList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabSummary"
+            },
+            "title": "Sets",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabTemplateSummary"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sets",
+          "templates",
+          "active",
+          "config_revision"
+        ],
+        "title": "OpenVocabList",
+        "type": "object"
+      },
+      "OpenVocabRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "OpenVocabRevisionSummary",
+        "type": "object"
+      },
+      "OpenVocabRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "OpenVocabRevisionsResponse",
+        "type": "object"
+      },
+      "OpenVocabRollbackRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "OpenVocabRollbackRequest",
+        "type": "object"
+      },
+      "OpenVocabSaveRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/OpenVocabBody-Input"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "OpenVocabSaveRequest",
+        "type": "object"
+      },
+      "OpenVocabSchema": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "max_enabled_targets_ceiling": {
+            "title": "Max Enabled Targets Ceiling",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fields",
+          "max_enabled_targets_ceiling"
+        ],
+        "title": "OpenVocabSchema",
+        "type": "object"
+      },
+      "OpenVocabSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "n_enabled_targets": {
+            "title": "N Enabled Targets",
+            "type": "integer"
+          },
+          "n_targets": {
+            "title": "N Targets",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "run_on_ingest": {
+            "title": "Run On Ingest",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "display_name",
+          "n_targets",
+          "n_enabled_targets",
+          "run_on_ingest",
+          "active"
+        ],
+        "title": "OpenVocabSummary",
+        "type": "object"
+      },
+      "OpenVocabTargetBody": {
+        "additionalProperties": true,
+        "properties": {
+          "class_name": {
+            "default": "",
+            "title": "Class Name",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "mask": {
+            "default": true,
+            "title": "Mask",
+            "type": "boolean"
+          },
+          "max_area_frac": {
+            "default": 0.9,
+            "title": "Max Area Frac",
+            "type": "number"
+          },
+          "max_instances": {
+            "default": 20,
+            "title": "Max Instances",
+            "type": "integer"
+          },
+          "min_area_frac": {
+            "default": 0.0005,
+            "title": "Min Area Frac",
+            "type": "number"
+          },
+          "min_score": {
+            "default": 0.5,
+            "title": "Min Score",
+            "type": "number"
+          },
+          "parent_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parent Classes",
+            "type": "array"
+          },
+          "prompt": {
+            "default": "",
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "title": "OpenVocabTargetBody",
+        "type": "object"
+      },
+      "OpenVocabTemplateSummary": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "n_targets": {
+            "title": "N Targets",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "read_only": {
+            "const": true,
+            "default": true,
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "source": {
+            "const": "template",
+            "default": "template",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "n_targets"
+        ],
+        "title": "OpenVocabTemplateSummary",
+        "type": "object"
+      },
+      "OpenVocabTestGate": {
+        "description": "What the gate decided for the target: ``run`` true, or a skip with the\n``tier`` (1 registry rules, 2 vision-model pre-check) and ``reason``.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "run": {
+            "title": "Run",
+            "type": "boolean"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          }
+        },
+        "required": [
+          "run"
+        ],
+        "title": "OpenVocabTestGate",
+        "type": "object"
+      },
+      "OpenVocabTestHit": {
+        "description": "One raw segmenter candidate, with what selection did with it. Boxes and\noutlines are normalized to the image: the client draws them.",
+        "properties": {
+          "bbox_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "drop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drop Reason"
+          },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bbox_norm",
+          "score",
+          "selected"
+        ],
+        "title": "OpenVocabTestHit",
+        "type": "object"
+      },
+      "OpenVocabTestImage": {
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "OpenVocabTestImage",
+        "type": "object"
+      },
+      "OpenVocabTestRequest": {
+        "description": "Run one UNSAVED target on one image; exactly one of ``image_id`` (a\nstored image) and ``image_base64`` (an uploaded JPEG/PNG).",
+        "properties": {
+          "dedup_iou": {
+            "default": 0.5,
+            "title": "Dedup Iou",
+            "type": "number"
+          },
+          "gating": {
+            "$ref": "#/components/schemas/OpenVocabGatingBody"
+          },
+          "image_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Base64"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "image_max_side": {
+            "default": 1024,
+            "title": "Image Max Side",
+            "type": "integer"
+          },
+          "target": {
+            "$ref": "#/components/schemas/OpenVocabTargetBody"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "OpenVocabTestRequest",
+        "type": "object"
+      },
+      "OpenVocabTestResponse": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "number"
+          },
+          "gate": {
+            "$ref": "#/components/schemas/OpenVocabTestGate"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/OpenVocabTestHit"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "image": {
+            "$ref": "#/components/schemas/OpenVocabTestImage"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "image",
+          "prompt",
+          "class_name",
+          "gate",
+          "hits",
+          "elapsed_ms",
+          "validation"
+        ],
+        "title": "OpenVocabTestResponse",
+        "type": "object"
+      },
+      "OpenVocabValidateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/OpenVocabBody-Input"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "OpenVocabValidateRequest",
+        "type": "object"
+      },
       "PackTestCropResult": {
         "properties": {
           "box_id": {
@@ -11263,6 +12417,7 @@
               "activations",
               "keymap",
               "prompt_packs",
+              "open_vocab",
               "vlm_activation"
             ],
             "items": {
@@ -12909,7 +14064,8 @@
             "enum": [
               "prompt_pack",
               "detection_profile",
-              "vlm"
+              "vlm",
+              "open_vocab"
             ],
             "title": "Axis",
             "type": "string"
@@ -14365,6 +15521,23 @@
             "title": "Label Validated",
             "type": "boolean"
           },
+          "mask_polygon": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Polygon"
+          },
           "mistakenness_method": {
             "anyOf": [
               {
@@ -14441,6 +15614,28 @@
             "default": false,
             "title": "On Negative Frame",
             "type": "boolean"
+          },
+          "open_vocab_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Revision"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
           },
           "origin_image_id": {
             "anyOf": [
@@ -14882,6 +16077,17 @@
             "default": "",
             "title": "Source Image Path",
             "type": "string"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
           },
           "suspected_fp_distance": {
             "anyOf": [
@@ -15976,6 +17182,11 @@
         "additionalProperties": false,
         "description": "The W4 requeue selection, moved here, plus provenance selectors.\n\n``profile_not`` / ``profile_revision_below`` select items not produced\nby the profile@revision named (both given: not produced by that exact\nprofile@revision); ``include_detected`` widens a region selection to\n``detected`` items and is only valid together with a profile selector.",
         "properties": {
+          "all_images": {
+            "default": false,
+            "title": "All Images",
+            "type": "boolean"
+          },
           "class_id": {
             "anyOf": [
               {
@@ -16030,6 +17241,13 @@
             "default": false,
             "title": "Missing Status",
             "type": "boolean"
+          },
+          "open_vocab_status": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Vocab Status",
+            "type": "array"
           },
           "profile_not": {
             "anyOf": [
@@ -16148,6 +17366,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -16213,6 +17432,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -16251,6 +17471,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -16293,6 +17514,7 @@
             "items": {
               "enum": [
                 "detect",
+                "open_vocab",
                 "region",
                 "vlm",
                 "embed"
@@ -16353,6 +17575,7 @@
           "scope": {
             "enum": [
               "detect",
+              "open_vocab",
               "region",
               "vlm",
               "embed"
@@ -18732,6 +19955,17 @@
               "text_fields_ignored",
               "display_name_missing",
               "parent_class_unknown",
+              "open_vocab_name_invalid",
+              "open_vocab_name_reserved",
+              "open_vocab_field_invalid",
+              "open_vocab_field_range",
+              "open_vocab_no_enabled_targets",
+              "open_vocab_too_many_targets",
+              "open_vocab_duplicate_target",
+              "open_vocab_class_name_invalid",
+              "open_vocab_detector_class",
+              "open_vocab_class_new",
+              "open_vocab_vlm_not_configured",
               "unmapped_class",
               "mapping_target_invalid",
               "source_not_found",
@@ -18953,7 +20187,8 @@
             "enum": [
               "prompt_pack",
               "detection_profile",
-              "vlm"
+              "vlm",
+              "open_vocab"
             ],
             "title": "Axis",
             "type": "string"
@@ -24141,6 +25376,42 @@
             }
           },
           {
+            "description": "Items the full-image pass wrote for this prompt set.",
+            "in": "query",
+            "name": "open_vocab_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass wrote for this prompt set.",
+              "title": "Open Vocab Set"
+            }
+          },
+          {
+            "description": "Items the full-image pass found with this exact prompt.",
+            "in": "query",
+            "name": "source_prompt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass found with this exact prompt.",
+              "title": "Source Prompt"
+            }
+          },
+          {
             "in": "query",
             "name": "needs_new_class",
             "required": false,
@@ -28391,6 +29662,805 @@
         ]
       }
     },
+    "/curation/projects/{project}/open_vocab": {
+      "get": {
+        "operationId": "list_open_vocab_curation_projects__project__open_vocab_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_templates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Templates",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_open_vocab_curation_projects__project__open_vocab_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/active": {
+      "get": {
+        "operationId": "get_active_open_vocab_curation_projects__project__open_vocab_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/active/rollback": {
+      "post": {
+        "operationId": "rollback_active_open_vocab_curation_projects__project__open_vocab_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/deactivate": {
+      "post": {
+        "operationId": "deactivate_open_vocab_curation_projects__project__open_vocab_deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/schema": {
+      "get": {
+        "operationId": "get_open_vocab_schema_curation_projects__project__open_vocab_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Open Vocab Schema",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/test": {
+      "post": {
+        "description": "404 ``image_not_found``; 422 ``validation_failed`` (the target, or not\nexactly one image source); 502 ``segmenter_error`` when the segmenter\ncannot answer (never reported as \"found nothing\"). Writes nothing.",
+        "operationId": "test_open_vocab_target_curation_projects__project__open_vocab_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Open Vocab Target",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/validate": {
+      "post": {
+        "operationId": "validate_open_vocab_route_curation_projects__project__open_vocab_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "for_activation",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "For Activation",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Validate Open Vocab Route Curation Projects  Project  Open Vocab Validate Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Open Vocab Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/{name}": {
+      "delete": {
+        "operationId": "delete_open_vocab_curation_projects__project__open_vocab__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_open_vocab_curation_projects__project__open_vocab__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "save_open_vocab_curation_projects__project__open_vocab__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/{name}/activate": {
+      "post": {
+        "operationId": "activate_open_vocab_curation_projects__project__open_vocab__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabActivateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/{name}/clone": {
+      "post": {
+        "operationId": "clone_open_vocab_curation_projects__project__open_vocab__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenVocabCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Open Vocab",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/{name}/revisions": {
+      "get": {
+        "operationId": "list_open_vocab_revisions_curation_projects__project__open_vocab__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Open Vocab Revisions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/open_vocab/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_open_vocab_revision_curation_projects__project__open_vocab__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenVocabDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Open Vocab Revision",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/pause": {
       "get": {
         "operationId": "get_pipeline_pause_state_curation_projects__project__pause_get",
@@ -32159,7 +34229,7 @@
     },
     "/curation/projects/{project}/reprocess": {
       "post": {
-        "description": "Re-run one or more scopes (``detect`` / ``region`` / ``vlm`` /\n``embed``) over images, items or a filter. Dry run by default: the\nresponse counts, per scope, what is selected and what the lock rule\nskips (``locked_skipped``). Detect and embed over many images return a\n``job`` to poll at ``GET /reprocess/jobs/{job_id}``.",
+        "description": "Re-run one or more scopes (``detect`` / ``open_vocab`` / ``region`` / ``vlm`` /\n``embed``) over images, items or a filter. Dry run by default: the\nresponse counts, per scope, what is selected and what the lock rule\nskips (``locked_skipped``). Detect and embed over many images return a\n``job`` to poll at ``GET /reprocess/jobs/{job_id}``.",
         "operationId": "reprocess_batch_curation_projects__project__reprocess_post",
         "parameters": [
           {

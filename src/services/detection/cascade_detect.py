@@ -78,12 +78,15 @@ class RegionCandidate:
             merged later without losing provenance.
         rectangularity: Mask-area / bbox-area ratio. ``None`` for a
             box-only detector; populated by mask-based detectors.
+        mask_polygon: Normalized ``(x, y)`` outline in the same frame as
+            ``bbox_norm``; only the full-image pass asks for it.
     """
 
     bbox_norm: tuple[float, float, float, float]
     score: float
     source: str = ''
     rectangularity: float | None = None
+    mask_polygon: tuple[tuple[float, float], ...] | None = None
 
 
 # =============================================================================

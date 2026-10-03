@@ -16,7 +16,9 @@ from src.core.logging import get_logger
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import ALL_PARTS, EmbedTarget, reembed_items
 from src.services.curation.reprocess_models import ReprocessScope, ReprocessScopeResult
+from src.services.curation.reprocess_open_vocab import OpenVocabPass, active_set_for_run
 from src.services.curation.reprocess_targets import existing_images, items_by_terms
+from src.services.detection.segmenter_http import segment_image_http
 
 
 if TYPE_CHECKING:
@@ -25,11 +27,12 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.ingest import CurationIngestService
+    from src.services.curation.open_vocab_run import SegmentImage
 
 logger = get_logger(__name__)
 
 CHUNK = 20
-IMAGE_SCOPES: tuple[ReprocessScope, ...] = ('detect', 'embed')
+IMAGE_SCOPES: tuple[ReprocessScope, ...] = ('detect', 'open_vocab', 'embed')
 
 
 async def _embed_targets(
@@ -64,6 +67,7 @@ async def process_images(
     image_ids: list[str],
     should_cancel: Callable[[], bool] = lambda: False,
     on_progress: Callable[[int, int], None] | None = None,
+    segment: SegmentImage | None = None,
 ) -> tuple[list[ReprocessScopeResult], bool]:
     """Run ``scopes`` (a subset of :data:`IMAGE_SCOPES`) over ``image_ids``.
 
@@ -72,6 +76,12 @@ async def process_images(
     ``failed`` for that scope; the rest continue.
     """
     results = {s: ReprocessScopeResult(scope=s, selected=len(image_ids)) for s in scopes}
+    ov_pass: OpenVocabPass | None = None
+    if 'open_vocab' in scopes:
+        ov, revision = await active_set_for_run(opensearch)
+        ov_pass = await OpenVocabPass.start(
+            opensearch, ov, revision, segment or segment_image_http, results['open_vocab']
+        )
     done = failed_images = 0
     cancelled = False
     for start in range(0, len(image_ids), CHUNK):
@@ -96,6 +106,15 @@ async def process_images(
                 res.locked_skipped += counts['locked_untouched']
                 for key in ('merged', 'refreshed', 'replaced', 'created', 'removed'):
                     res.detail[key] = res.detail.get(key, 0) + counts[key]
+        if ov_pass is not None:
+            for image_id, doc in docs.items():
+                if should_cancel():
+                    cancelled = True
+                    break
+                if ov_pass.tripped:
+                    ov_pass.skip()
+                    continue
+                await ov_pass.run_image(opensearch, service, image_id, doc)
         if 'embed' in scopes and docs:
             try:
                 counts = await reembed_items(
@@ -117,6 +136,8 @@ async def process_images(
         failed_images = max(r.failed + r.not_found for r in results.values())
         if on_progress is not None:
             on_progress(done, failed_images)
+    if ov_pass is not None:
+        await ov_pass.finish(opensearch)
     return [results[s] for s in scopes], cancelled
 
 

@@ -192,6 +192,18 @@ ValidationCode = Literal[
     'text_fields_ignored',
     'display_name_missing',
     'parent_class_unknown',
+    # Open-vocabulary prompt sets
+    'open_vocab_name_invalid',
+    'open_vocab_name_reserved',
+    'open_vocab_field_invalid',
+    'open_vocab_field_range',
+    'open_vocab_no_enabled_targets',
+    'open_vocab_too_many_targets',
+    'open_vocab_duplicate_target',
+    'open_vocab_class_name_invalid',
+    'open_vocab_detector_class',
+    'open_vocab_class_new',
+    'open_vocab_vlm_not_configured',
     # P4: combine-projects preview / start validation.
     'unmapped_class',
     'mapping_target_invalid',
@@ -445,7 +457,7 @@ class ActiveConfigResponse(BaseModel):
     has ever applied anything, e.g. an API-only deployment.
     """
 
-    axis: Literal['prompt_pack', 'detection_profile', 'vlm']
+    axis: Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab']
     active: ActiveRef
     source: Literal['stored', 'env', 'off']
     activated_at: str | None = None

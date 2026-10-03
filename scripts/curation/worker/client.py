@@ -372,24 +372,61 @@ class SegmenterClient:
     async def segment_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
         """Segment one crop, keeping every candidate (W8 multi-candidate leg).
 
-        Same HTTP call and payload as :meth:`segment` -- the segmenter
-        service already returns its full ``candidates`` list; this just
-        stops discarding everything but the top one. Malformed entries
-        (missing/short ``bbox_norm``) are dropped rather than failing the
-        whole response. Raises :class:`SegmenterUnavailable` when the request
-        failed or every host is UNHEALTHY (the crop must stay pending, not
-        be finalized as a miss). Returns ``[]`` for no candidates or when
-        this client is disabled.
+        The crop-stage call: the client-level prompt and candidate cap, no
+        score floor and no masks requested, so the payload is the one the
+        segmenter has always seen for crops. See :meth:`segment_image` for
+        the failure contract (shared).
         """
+        return await self._segment(crop_jpeg, self.text_prompt, self.max_candidates)
+
+    async def segment_image(
+        self,
+        jpeg: bytes,
+        prompt: str,
+        *,
+        min_score: float | None = None,
+        max_candidates: int | None = None,
+        return_masks: bool = False,
+    ) -> list[RegionCandidate]:
+        """Segment a whole image with a per-call ``prompt`` (full-image pass).
+
+        ``bbox_norm`` and ``mask_polygon`` come back in the submitted image's
+        normalized frame. ``min_score`` / ``return_masks`` are sent only
+        when set, so a caller that does not need them gets the segmenter's
+        defaults. Raises :class:`SegmenterUnavailable` when the request
+        failed or every host is UNHEALTHY (never reported as "no
+        candidate"). Returns ``[]`` for no candidates or when this client is
+        disabled.
+        """
+        return await self._segment(
+            jpeg,
+            prompt,
+            self.max_candidates if max_candidates is None else max_candidates,
+            min_score=min_score,
+            return_masks=return_masks,
+        )
+
+    async def _segment(
+        self,
+        jpeg: bytes,
+        prompt: str,
+        max_candidates: int,
+        *,
+        min_score: float | None = None,
+        return_masks: bool = False,
+    ) -> list[RegionCandidate]:
         if not self.enabled:
             return []
         t0 = self._now()
-        b64 = base64.b64encode(crop_jpeg).decode('ascii')
-        payload = {
-            'crop_jpeg_b64': b64,
-            'text_prompt': self.text_prompt,
-            'max_candidates': self.max_candidates,
+        payload: dict[str, Any] = {
+            'crop_jpeg_b64': base64.b64encode(jpeg).decode('ascii'),
+            'text_prompt': prompt,
+            'max_candidates': max_candidates,
         }
+        if min_score is not None:
+            payload['min_score'] = min_score
+        if return_masks:
+            payload['return_masks'] = True
         url = await self._pick_healthy_url()
         timing: dict[str, float] = {}
         resp = await self._post_with_retry(url, payload, timing=timing)
@@ -411,12 +448,12 @@ class SegmenterClient:
 
         await self._on_success(url)
 
-        cands = body.get('candidates') or []
         out: list[RegionCandidate] = []
-        for c in cands:
+        for c in body.get('candidates') or []:
             bbox = c.get('bbox_norm')
             if not bbox or len(bbox) != 4:
                 continue
+            polygon = c.get('mask_polygon') if return_masks else None
             out.append(
                 RegionCandidate(
                     bbox_norm=(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])),
@@ -424,6 +461,9 @@ class SegmenterClient:
                     source=self.source_name,
                     rectangularity=(
                         float(c['mask_iou']) if c.get('mask_iou') is not None else None
+                    ),
+                    mask_polygon=(
+                        tuple((float(x), float(y)) for x, y in polygon) if polygon else None
                     ),
                 )
             )

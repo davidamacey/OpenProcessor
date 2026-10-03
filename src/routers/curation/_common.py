@@ -46,6 +46,7 @@ from src.config.curation import (  # noqa: F401 - re-exported for the router mod
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
+from src.services.curation.open_vocab_fields import ensure_open_vocab_fields
 
 
 def get_class_registry() -> ClassRegistry:
@@ -288,6 +289,10 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
             await ensure_items_embedding_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_embedding_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_open_vocab_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_open_vocab_fields_migration_failed', error=str(exc))
         try:
             await ensure_labels_confirmed_fields(opensearch)
         except Exception as exc:

@@ -420,4 +420,5 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
         'backbone_embedding',
         'region_box_embeddings',
         'class_id_history',
+        'mask_polygon',
     }

@@ -100,6 +100,10 @@ def _region_profile_body() -> dict[str, Any]:
     return raw
 
 
+def _open_vocab_body() -> dict[str, Any]:
+    return {'display_name': 'Sweep', 'targets': [{'prompt': 'test object', 'class_name': 'sweep'}]}
+
+
 def _dataset_zip(slug: str) -> bytes:
     import io
     import zipfile
@@ -311,6 +315,24 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/region_profiles/{name}/activate'): {
             'json': {'revision': None, 'expected_active': None, 'force': True}
         },
+        # Open-vocabulary prompt sets: same shape as the region-profile routes.
+        ('POST', '/open_vocab'): {'json': {'name': f'{slug}-newset', 'body': _open_vocab_body()}},
+        ('POST', '/open_vocab/validate'): {'json': {'name': None, 'body': _open_vocab_body()}},
+        ('POST', '/open_vocab/test'): {
+            'json': {'image_id': f'{slug}-img-0001', 'target': _open_vocab_body()['targets'][0]}
+        },
+        ('POST', '/open_vocab/active/rollback'): {'json': {'expected_active': None}},
+        ('POST', '/open_vocab/deactivate'): {'json': {'expected_active': None}},
+        ('POST', '/open_vocab/{name}/clone'): {
+            'json': {'new_name': f'{slug}-setclone', 'source': 'stored'}
+        },
+        ('PUT', '/open_vocab/{name}'): {
+            'json': {'expected_revision': 1, 'body': _open_vocab_body()}
+        },
+        ('DELETE', '/open_vocab/{name}'): {'params': {'expected_revision': '1'}},
+        ('POST', '/open_vocab/{name}/activate'): {
+            'json': {'revision': None, 'expected_active': None, 'force': True}
+        },
     }
 
 
@@ -362,6 +384,8 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ): 'runs a pack call over a stored crop and previews; never writes',
     ('POST', '/region_profiles/validate'): 'dry-run report; never writes',
     ('POST', '/region_profiles/validate_segmenter_prompt'): 'dry-run report; never writes',
+    ('POST', '/open_vocab/validate'): 'dry-run report; never writes',
+    ('POST', '/open_vocab/test'): 'runs a target over a stored image and previews; never writes',
     (
         'POST',
         '/region_profiles/test',
@@ -384,6 +408,10 @@ EXPECTED_5XX: dict[tuple[str, str], str] = {
         '502 segmenter_error: the sweep has no network, so the only leg of the draft '
         'profile cannot run (a total leg failure is a 502 by design); the item is read '
         'from the bound project before that'
+    ),
+    ('POST', '/open_vocab/test'): (
+        '502 segmenter_error: the sweep has no segmenter (no network), so the call cannot '
+        'run (an outage is never "no hits"); the image is read from the bound project first'
     ),
     ('DELETE', '/models/{model_name}'): (
         '502: the dead in-process Triton never confirms the unload, so the route '
@@ -446,6 +474,10 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('POST', '/region_profiles/active/rollback'): (
         'a fresh per-slug config store has no prior activation to roll back to '
         '(409 no_previous); rollback success is covered by test_region_profiles_router.py'
+    ),
+    ('POST', '/open_vocab/active/rollback'): (
+        'a fresh per-slug config store has no prior activation to roll back to '
+        '(409 no_previous); rollback success is covered by test_open_vocab_router.py'
     ),
 }
 
@@ -689,6 +721,34 @@ def _prepare_vlm(env: Any, slug: str) -> None:
     _seed_vlm(env, slug)
 
 
+def _stored_open_vocab(env: Any, slug: str) -> None:
+    """(Re-)seed ``ovset:<slug>-model`` at a known revision 1, with no
+    activation recorded -- mirrors ``_stored_region_profile``."""
+    from src.config.curation import IndexRole
+
+    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
+    name = f'{slug}-model'
+    now = '2026-01-01T00:00:00+00:00'
+    docs = env.transport.store.setdefault(index, {})
+    doc = {
+        'doc_type': 'config',
+        'kind': 'open_vocab_set',
+        'name': name,
+        'revision': 1,
+        'body': _open_vocab_body(),
+        'description': '',
+        'created_at': now,
+        'updated_at': now,
+        'updated_by': None,
+        'cloned_from': None,
+    }
+    docs[f'ovset:{name}'] = doc
+    docs[f'ovset:{name}@1'] = {**doc, 'doc_type': 'revision'}
+    docs.pop('activation:open_vocab', None)
+    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
+    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+
+
 PREPARE: dict[tuple[str, str], Any] = {
     **dict.fromkeys(_VLM_KEYS, _prepare_vlm),
     ('POST', '/reprocess'): _region_failed_item,
@@ -709,6 +769,10 @@ PREPARE: dict[tuple[str, str], Any] = {
     ('PUT', '/region_profiles/{name}'): _stored_region_profile,
     ('DELETE', '/region_profiles/{name}'): _stored_region_profile,
     ('POST', '/region_profiles/{name}/activate'): _stored_region_profile,
+    ('POST', '/open_vocab/{name}/clone'): _stored_open_vocab,
+    ('PUT', '/open_vocab/{name}'): _stored_open_vocab,
+    ('DELETE', '/open_vocab/{name}'): _stored_open_vocab,
+    ('POST', '/open_vocab/{name}/activate'): _stored_open_vocab,
 }
 
 

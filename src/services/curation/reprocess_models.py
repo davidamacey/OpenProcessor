@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-ReprocessScope = Literal['detect', 'region', 'vlm', 'embed']
+ReprocessScope = Literal['detect', 'open_vocab', 'region', 'vlm', 'embed']
 RegionMode = Literal['redetect', 'reverify']
 
 MAX_TARGET_IDS = 5000
@@ -47,6 +47,11 @@ class ReprocessFilter(BaseModel):
     source: str | None = None
     class_id: int | None = None
     dataset_split: str | None = None
+    all_images: bool = False
+    open_vocab_status: list[str] = Field(default_factory=list)
+    """Image-level selectors (``all_images``, ``open_vocab_status``) select
+    from the images index, so they also reach images with no item yet; they
+    only combine with the image-unit scopes and not with the item selectors."""
 
     def is_empty(self) -> bool:
         return self == ReprocessFilter()
@@ -98,7 +103,8 @@ class ReprocessScopeResult(BaseModel):
     breakdown: list[BreakdownRow] = Field(default_factory=list)
     detail: dict[str, int] = Field(default_factory=dict)
     """Scope-specific counters (``detect``: merged/refreshed/replaced/
-    created/removed; ``vlm``: restored/cleared; ``embed``: images/items)."""
+    created/removed; ``open_vocab``: see ``reprocess_open_vocab``; ``vlm``:
+    restored/cleared; ``embed``: images/items)."""
 
 
 class ReprocessJobInfo(BaseModel):
