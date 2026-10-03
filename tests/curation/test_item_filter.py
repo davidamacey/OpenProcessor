@@ -52,7 +52,8 @@ CORPUS: dict[str, dict[str, Any]] = {
         'confidence': 0.6,
         'crop_area_norm': 0.2,
         'crop_rank_in_image': 2,
-        'detector': 'sam3',
+        'open_vocab_set': 'street',
+        'source_prompt': 'a sheep',
         'embedding_state': 'deferred',
         'class_excluded': True,
     },
@@ -101,6 +102,12 @@ def test_origin_is_a_union_and_detector_is_the_remainder() -> None:
     assert select(origin=['sam3']) == {'sheep_sam3'}
     assert select(origin=['detector']) == {'person_det', 'hotdog_det', 'legacy_no_state'}
     assert select(origin=['sam3', 'import']) == {'sheep_sam3', 'dog_import'}
+
+
+def test_open_vocab_provenance_filters() -> None:
+    assert select(open_vocab_set='street') == {'sheep_sam3'}
+    assert select(source_prompt='a sheep') == {'sheep_sam3'}
+    assert select(source_prompt='a goat') == set()
 
 
 def test_embedding_state_embedded_means_has_a_vector() -> None:

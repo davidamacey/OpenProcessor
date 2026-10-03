@@ -110,6 +110,8 @@ async def run_activation_gate(
     """
     from src.routers.curation._config_common_models import api_error
 
+    if axis == 'open_vocab':
+        return await _run_open_vocab_gate(name, revision, force=force, client=client, body=body)
     if axis == 'prompt_pack':
         from src.routers.curation.prompt_packs import _registry_class_names, _resolve_profile
         from src.services.config_store.pack_validation import BYPASSABLE_CODES, validate_pack
@@ -204,6 +206,46 @@ async def run_activation_gate(
         for e in report.errors
         if not (force and e.code in (VLM_BYPASSABLE if e in vlm_errors else BYPASSABLE_CODES))
     ]
+    if blocking:
+        raise api_error(
+            422,
+            'validation_failed',
+            f'{name!r} has {len(blocking)} blocking error(s)',
+            report=report,
+        )
+    return report
+
+
+async def _run_open_vocab_gate(
+    name: str,
+    revision: int | None,
+    *,
+    force: bool,
+    client: Any,
+    body: dict[str, Any] | None,
+) -> ValidationReport:
+    """The ``for_activation`` gate of a prompt set: its body must validate and
+    the segmenter it runs on must be configured and reachable (``force``
+    bypasses only the outage codes). It pairs with no other axis."""
+    from src.routers.curation._config_common_models import api_error
+    from src.routers.curation.open_vocab import validation_inputs
+    from src.services.config_store.open_vocab import build_record, get_revision_record
+    from src.services.config_store.open_vocab_validation import (
+        BYPASSABLE_CODES,
+        validate_open_vocab,
+    )
+
+    if body is None:
+        record = build_record(name, revision=revision)
+        if record is None and revision is not None and client is not None:
+            record = await get_revision_record(client, name, revision)
+        if record is None:
+            raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
+        if record.read_only and record.source == 'template':
+            raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+        body = record.body
+    report = await validate_open_vocab(name, body, for_activation=True, **validation_inputs())
+    blocking = [e for e in report.errors if not (force and e.code in BYPASSABLE_CODES)]
     if blocking:
         raise api_error(
             422,

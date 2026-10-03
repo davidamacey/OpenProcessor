@@ -20,6 +20,7 @@ export const CLASS_SOURCE_ROLES = [
   'human',
   'merge',
   'label_import',
+  'open_vocab',
 ] as const;
 
 export type ClassSourceRole = (typeof CLASS_SOURCE_ROLES)[number];

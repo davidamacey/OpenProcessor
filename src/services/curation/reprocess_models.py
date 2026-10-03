@@ -21,7 +21,7 @@ from src.services.curation.item_filter import ItemFilter
 from src.services.curation.item_selection import Sample  # noqa: TC001 - pydantic resolves it
 
 
-ReprocessScope = Literal['detect', 'region', 'vlm', 'embed']
+ReprocessScope = Literal['detect', 'open_vocab', 'region', 'vlm', 'embed']
 RegionMode = Literal['redetect', 'reverify']
 
 MAX_TARGET_IDS = 5000
@@ -45,6 +45,11 @@ class ReprocessFilter(ItemFilter):
     include_detected: bool = False
     missing_status: bool = False
     missing_provenance: bool = False
+    all_images: bool = False
+    open_vocab_status: list[str] = Field(default_factory=list)
+    """Image-level selectors (``all_images``, ``open_vocab_status``) select
+    from the images index, so they also reach images with no item yet; they
+    only combine with the image-unit scopes and not with the item selectors."""
 
 
 class ReprocessTargets(BaseModel):
@@ -118,7 +123,8 @@ class ReprocessScopeResult(BaseModel):
     breakdown: list[BreakdownRow] = Field(default_factory=list)
     detail: dict[str, int] = Field(default_factory=dict)
     """Scope-specific counters (``detect``: merged/refreshed/replaced/
-    created/removed; ``vlm``: restored/cleared; ``embed``: images/items)."""
+    created/removed; ``open_vocab``: see ``reprocess_open_vocab``; ``vlm``:
+    restored/cleared; ``embed``: images/items)."""
 
 
 class ReprocessJobInfo(BaseModel):

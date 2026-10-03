@@ -119,6 +119,7 @@ def test_search_text_happy_path(app_client: TestClient):
         'backbone_embedding',
         'region_box_embeddings',
         'class_id_history',
+        'mask_polygon',
     }
     assert 'knn' in body_sent['query']
     assert 'pe_embedding' in body_sent['query']['knn']

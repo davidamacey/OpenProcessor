@@ -552,12 +552,16 @@ class _Indices:
 
 
 class SettingsFakeOpenSearch(QueryFakeOpenSearch):
-    """``QueryFakeOpenSearch`` plus what the ingest-policy store needs: a 404 for a
-    missing document and an OCC-guarded ``index`` (create / ``if_seq_no``)."""
+    """``QueryFakeOpenSearch`` plus what the ingest-policy store needs: a real
+    ``NotFoundError`` for a missing document (the plain double raises a
+    ``KeyError``, which the config-store tests read as "OpenSearch unavailable"),
+    an OCC-guarded ``index`` (create / ``if_seq_no``) and upserting ``update``."""
 
     async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
         if id not in self.docs(index):
-            raise RuntimeError('404 not_found')
+            from opensearchpy.exceptions import NotFoundError
+
+            raise NotFoundError(404, f'[404] not found: {index}/{id}', {})
         return await super().get(index=index, id=id, **kw)
 
     async def index(

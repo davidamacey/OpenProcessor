@@ -180,9 +180,9 @@ async def validate_region_profile_route(
 @router.post('/region_profiles/validate_segmenter_prompt')
 async def validate_segmenter_prompt_route(body: SegmenterPromptValidateRequest) -> Any:
     from src.routers.curation._config_common_models import ValidationReport
-    from src.services.config_store.profile_validation import _check_segmenter_prompt_text
+    from src.services.config_store.profile_validation import check_segmenter_prompt_text
 
-    issues = _check_segmenter_prompt_text(body.text_prompt, sole_leg=body.sole_leg)
+    issues = check_segmenter_prompt_text(body.text_prompt, sole_leg=body.sole_leg)
     errors = [i for i in issues if i.severity == 'error']
     warnings = [i for i in issues if i.severity != 'error']
     return ValidationReport(

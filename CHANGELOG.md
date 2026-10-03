@@ -24,6 +24,27 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [0.4.0] - 2026-10-02
 
+### Added
+- Full-image SAM 3 detection (open-vocabulary pass). A project-level prompt set
+  (config axis `open_vocab`; routes under `/open_vocab`, with revisions, clone,
+  activation and project clone) lists text prompts; SAM 3 runs each on the whole
+  image and every hit becomes a normal item (`class_source: open_vocab_proposal`,
+  `class_detector: sam3`, `source_prompt`, `open_vocab_set`, `open_vocab_revision`,
+  `mask_polygon`). Run it with the new `open_vocab` reprocess scope (dry run with
+  a call and minutes estimate; image-level selectors `all_images` and
+  `open_vocab_status`), try one unsaved target with `POST /open_vocab/test`, or
+  opt in per set with `run_on_ingest` (off by default). Idempotent, under the
+  lock rule, with a segmenter outage never reported as "no hit".
+- One segmenter gate (registry rules, optional vision-model yes/no, optional
+  hit-rate sampling) shared with the crop region stage, with Prometheus
+  counters; `VlmLabeler.prompt_visible`.
+- `GET /crops` filters `open_vocab_set` and `source_prompt`; item wire fields
+  `source_prompt`, `open_vocab_set`, `open_vocab_revision` and `mask_polygon`
+  (list rows send the outline as null); class-source role `open_vocab`.
+- Segmenter client `segment_image` (per-call prompt, score floor and mask
+  polygon); `ensure_class_by_name`, the one name-to-id path for classes created
+  as a side effect.
+
 ### Documentation
 - Full v0.4.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
   `INSTALLATION.md`, `docs/CURATION.md`, `docs/ARCHITECTURE.md`,

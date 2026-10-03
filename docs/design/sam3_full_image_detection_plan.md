@@ -1,9 +1,13 @@
 # Full-image SAM 3 detection: design and implementation plan
 
-Status: plan only (nothing implemented). Issue: #30. Shares one gating layer
-with #46. Related: #52 (default detector / store-all-detections /
-embedding-policy; its plan is a sibling design doc under
-`docs/design/`, see section 12). Target release: after v0.4.0 (section 13).
+Status: implemented for v0.4.0 (all eight waves; the implementation record,
+including every deviation from this plan, is section 16, and the frontend
+deltas as built are section 9). Issue: #30. Shares one gating layer with #46.
+Related: #52 (default detector / store-all-detections / embedding-policy; its
+plan is a sibling design doc under `docs/design/`, see section 12). The owner
+decisions on the open questions (section 14) were: accept every
+recommendation, and ship all eight waves in v0.4.0 (this supersedes the
+release placement in section 15).
 
 A fresh agent with no memory should be able to implement this from this file
 alone. Paths are relative to the repo root. Line numbers are from main at
@@ -22,11 +26,11 @@ unchanged and stays the quality refinement for small objects.
 ## 2. Current state (findings)
 
 ### 2.1 Segmenter service (`docker/segmenter/`)
-- `docker/segmenter/main.py`: the segmenter `segment` route (post, no prefix) (`SegmentRequest`, ~L94) takes
+- `docker/segmenter/main.py`: the segment endpoint (`SegmentRequest`, ~L94) takes
   `crop_jpeg_b64` (any JPEG, the field name says crop but it is just an
   image), `text_prompt` (required), `max_candidates` (default 4, cap 128 =
   `MAX_CANDIDATES_CAP` in `sam3_backend.py` ~L62), optional `min_score`,
-  `return_masks`. `segment/batch` (`BatchSegmentRequest`, up to 64
+  `return_masks`. The batch endpoint (`BatchSegmentRequest`, up to 64
   images, ONE shared prompt). Response candidates: `bbox_norm` in the
   SUBMITTED image frame, `score`, `mask_iou`, optional `mask_polygon`
   (largest external contour, <= 256 points, normalized, from W5).
@@ -271,7 +275,7 @@ the live stack; each in-flight forward holds one instance lock).
   the refinement); (c) early exit on empty: process targets in descending
   prior hit rate and stop an image when `stop_after_first_hit` is set (off by
   default, only valid for "does any exist" use); (d) batch endpoint: the
-  shared-prompt `/segment/batch` batches many IMAGES for ONE target, so
+  shared-prompt batch endpoint batches many IMAGES for ONE target, so
   group work by target and send up to 64 images per call to amortize overhead
   (verify real gain in section 10; if per-image forward time dominates,
   batching only saves HTTP/decode); (e) reprocess ordering: group by target.
@@ -359,26 +363,51 @@ contract from wave 3/5 is the dependency.
 Order: 1, 2 can ship any time (no behavior change). 3, 4, 5 are the
 feature core. 6 is shared with #46 and may land earlier than 4.
 
-## 9. Frontend deltas for Cropwright (numbered)
-1. "Open-vocabulary targets" settings page: list/create/clone/revisions/
-   activate/rollback for prompt sets (same pattern as prompt packs and
-   profiles; consumes wave-3 routes and the schema endpoint, no hardcoded
-   fields).
-2. Target row editor: prompt, class name (autocomplete from the registry,
-   create-new hint), confidence, min/max area, max instances, mask toggle,
-   enabled; inline validation messages from the validate route.
-3. "Test on an image" panel: pick/upload an image, run the unsaved target,
-   draw returned boxes and polygons on the image CLIENT-SIDE (backend serves
-   clean image + data; no server overlays) and show which gate tier acted.
-4. Reprocess dialog: add the open-vocabulary scope with the dry-run count,
-   estimated time, locked-skipped, and a clear note that it uses the
-   segmenter (slow); progress and cancel reuse the existing job UI.
-5. Item provenance: show `detector=sam3`, source prompt and set@revision in
-   the item detail; filter chip "from open-vocabulary pass".
-6. Review-queue filter and badge for "skipped by gate" (shared with #46) with
-   a "re-run these" action.
-7. Disable/hide the feature with an explanatory empty state when no segmenter
-   is configured (health already reports it).
+## 9. Frontend deltas for Cropwright (numbered, as built)
+All paths are project-relative (under `/curation/projects/{project}`). The
+generated contracts (`contracts/openapi/curation.json`, `contracts/ts/*.ts`)
+carry every shape below.
+1. "Open-vocabulary targets" settings page over the `/open_vocab` routes:
+   list (`GET /open_vocab`, `include_templates=true` for the shipped template),
+   create, edit (`PUT` with `expected_revision`; 409 `revision_conflict`),
+   clone (`POST /open_vocab/{name}/clone`, `from_project` optional), revisions,
+   activate / deactivate / roll back (409 `active_conflict` carries `current`).
+   Build the form from `GET /open_vocab/schema`: rows have `scope`
+   (`set`, `target`, `gating`, `tier3_hit_rate`), `field`, `type`, `default`,
+   `min`, `max`, `advanced`, `help`; no field list is hardcoded.
+2. Target row editor: `prompt`, `class_name` (autocomplete from the class
+   registry; empty means discovery mode, say so), `min_score`, `min_area_frac`,
+   `max_area_frac`, `max_instances`, `parent_classes`, `mask`, `enabled`.
+   Inline messages from `POST /open_vocab/validate` (`errors`, `warnings`,
+   infos; codes `open_vocab_*`, `segmenter_prompt_*`, `parent_class_unknown`).
+   Warn on `open_vocab_detector_class`, inform on `open_vocab_class_new`.
+3. "Test on an image" panel: `POST /open_vocab/test` with `image_id` or
+   `image_base64`, an unsaved `target` and optional `gating`. Draw
+   `hits[].bbox_norm` and `hits[].mask_polygon` client-side; show
+   `selected` / `drop_reason` per hit and `gate` (`run`, `tier`, `reason`).
+   502 `segmenter_error` is an outage, not "nothing found".
+4. Reprocess dialog: scope `open_vocab` with the dry-run `detail`
+   (`enabled_targets`, `estimated_calls`, `segmenter_instances`,
+   `segmenter_reachable`, `estimated_minutes`) and `locked_skipped`; a note
+   that it uses the segmenter (slow). New filter fields `all_images` and
+   `open_vocab_status` (image-level; not combined with item selectors or the
+   `region` / `vlm` scopes). 422 `reprocess_targets_invalid` with "no
+   open-vocabulary set is active" means activate one first. Over
+   `OP_REPROCESS_SYNC_MAX` images the response carries a `job` (existing job UI).
+5. Item provenance: item wire fields `source_prompt`, `open_vocab_set`,
+   `open_vocab_revision`, `mask_polygon` (list responses send `mask_polygon`
+   as null; `GET /crops/{id}` carries it), `class_detector` is `sam3`. New
+   `GET /crops` filters `open_vocab_set` and `source_prompt`; the chip "from
+   open-vocabulary pass" is `class_source=open_vocab_proposal`. The class-source
+   catalog gains id `open_vocab_proposal` with role `open_vocab`.
+6. "Skipped by gate" is an image state, not an item state: filter images with
+   reprocess `open_vocab_status: ["skipped_gate"]` (and `["pending"]` for work
+   ingest queued but did not finish). The "re-run these" action is a
+   reprocess with that filter and scope `open_vocab`. Skip counts per tier are
+   in the run's `detail` (`skipped_gate_tier<N>_<reason>`).
+7. Hide the page with an explanatory empty state when no segmenter is
+   configured (the activation 422 `segmenter_not_configured` / `segmenter_unreachable`
+   and the validate warning say so; `GET /models/status` already reports it).
 8. Visual check: desktop and narrow full-page screenshots, opened and
    inspected, per project convention.
 
@@ -465,3 +494,59 @@ frontend surface; none is trivial. Only wave 1 (client plumbing) and the Tier-1
 `parent_classes` example-profile fix from #46 are small enough to consider for
 v0.4.0, and #46's note already scopes v0.4.0 to the parent_classes fix only.
 Target v0.5.0 with waves 1-2 anytime, 3-5 as the core, 6 shared with #46.
+
+## 16. Implementation record (v0.4.0)
+
+What was built, where it differs from the plan above, and what is left.
+
+- **Wave 1.** `SegmenterClient.segment_image` (per-call prompt, `min_score`,
+  `return_masks`, polygon) with `segment_multi` as the unchanged crop path;
+  `RegionCandidate.mask_polygon`. The API process uses the plain
+  `segment_image_http` (`src/services/detection/segmenter_http.py`, first
+  configured host, no circuit breaker); both raise or map to
+  `SegmenterCallError` / `SegmenterUnavailable`, and an outage is never "no hit".
+- **Wave 2.** `src/services/detection/open_vocab_select.py`:
+  `select_open_vocab_hits` (floor, area, NMS, cap, cross-target NMS for one class
+  name, dedup against existing boxes). Locked overlap threshold 0.8, any class.
+- **Wave 3.** Axis `open_vocab` (kind `open_vocab_set`, doc id prefix `ovset:`),
+  decoder `src/services/detection/open_vocab_set.py`, validation
+  `open_vocab_validation.py`, routes `open_vocab.py` / `_open_vocab_clone.py`,
+  project clone axis `open_vocab` (`clone_open_vocab.py`; the stored-config copy
+  is now `clone_stored.copy_stored_configs`, shared with `prompt_packs`). The
+  activation tables are `activation_apply.AXIS_STORAGE`. Not on the settings
+  defaults bridge (`PUT /settings`): sets have their own activate routes.
+  `max_enabled_targets` is a set field (default 8) with a ceiling of 32. A target
+  named like a detector class is a warning (`open_vocab_detector_class`).
+  Class names are not forced to a slug by the validator.
+- **Wave 4.** `open_vocab_run.run_open_vocab_image`. Items go through the same
+  `index_items` writer as ingest and reprocess `detect` (the shared item-writer
+  helper; a later embedding-policy change lands there once). `class_source` is
+  `open_vocab_proposal` (registered in `unlabeled_proposal_class_sources()` and
+  the class-source catalog); a named target creates its class by name
+  (`ensure_class_by_name`, group `open_vocab`). Items are stamped
+  `class_detector: sam3` (the wire's detector field) rather than a second
+  `detector` key. Not built: recording an "agree" note on the surviving
+  detector item (`sam3:open_vocab_agree`); agreement is counted as
+  `dropped_agree_existing`.
+- **Wave 5.** Scope `open_vocab` (dry-run estimate, locked count, outage trip
+  after three images), image-level filter selectors, `POST /open_vocab/test`,
+  and the ingest opt-in. The ingest-time pass runs as a background task of the
+  API process (not a `scripts/curation/worker` stage: that process has no item
+  writer or embedder), serialized per process, with a durable
+  `open_vocab_status` on the image doc. A process restart leaves `pending`
+  images for a reprocess with `open_vocab_status: ["pending"]`; there is no
+  periodic sweeper.
+- **Wave 6.** `src/services/detection/segmenter_gate.py`: `decide` with the
+  three tiers, used by the full-image pass. The crop region stage already applies
+  tier 1 (its `parent_classes` fetch and seed use the same predicate); wiring
+  tiers 2 and 3 into `stage_a_sam_consumer` for crops is left to the #46 change
+  that owns it (it needs a profile field for the opt-in). Defaults: tier 2 and
+  tier 3 are both off.
+- **Wave 7.** Section 9.
+- **Wave 8.** Metrics `op_open_vocab_call_seconds`,
+  `op_segmenter_gate_decisions_total`, `op_open_vocab_hits_dropped_total`,
+  `op_open_vocab_items_written_total`; docs in the guide, `docs/CURATION.md`,
+  README and the changelog.
+- **Not measured.** Section 10 (live throughput, recall against COCO ground
+  truth, batch-endpoint gain) needs the live stack; the dry-run estimate uses
+  the 3 s per call planning figure and the segmenter's reported instance count.

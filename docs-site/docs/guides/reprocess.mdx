@@ -19,11 +19,12 @@ It is a dry run by default.
   | Scope | Unit | What it regenerates |
   |---|---|---|
   | `detect` | image | Machine items from the ingest detectors. New proposals are merged with existing items |
+  | `open_vocab` | image | Items from the active open-vocabulary prompt set run on the whole image. See [Open-vocabulary detection](./open-vocabulary.mdx) |
   | `region` | item | Machine region boxes |
   | `vlm` | item | The VLM's class answer, so the VLM worker selects the item again |
   | `embed` | image | The PE vectors: item crop, whole frame, and one per accepted or false-positive region box |
 
-  Scopes run in the order detect, region, vlm, embed.
+  Scopes run in the order detect, open_vocab, region, vlm, embed.
 - **Lock rule.** Only machine output is regenerated. Human and imported
   labels and boxes are locked and never written. A locked item that has
   nothing to regenerate is reported as `locked_skipped`. `detect` never
@@ -67,6 +68,8 @@ All fields are optional but at least one must be set.
 | `missing_provenance` | Items with no recorded detector |
 | `import_id` | Items from one dataset import |
 | `source`, `class_id`, `dataset_split` | Narrow by item source, class or split |
+| `all_images` | Every stored image, including images with no item yet. For the image scopes only; not combined with the item selectors |
+| `open_vocab_status` | Images whose open-vocabulary state is one of `pending`, `done`, `skipped_gate`, `failed`. Same restrictions as `all_images` |
 
 The region scope needs `region_status`, `missing_status` or a profile
 selector. With only a profile selector it selects `detection_failed`,

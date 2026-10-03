@@ -235,14 +235,8 @@ async def list_clusters(
         gate_filter = item_filter_clauses(
             ItemFilter(
                 **item_filter.model_dump(exclude_defaults=True),
-                **{
-                    k: v
-                    for k, v in {
-                        'min_blur_ratio': min_blur_ratio,
-                        'class_source': class_source or None,
-                    }.items()
-                    if v is not None
-                },
+                min_blur_ratio=min_blur_ratio,
+                class_source=class_source,
             )
         )
     except ValueError as exc:

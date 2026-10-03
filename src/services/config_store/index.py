@@ -9,7 +9,9 @@ Doc ids (see any_domain_plan.md §3.1):
 - ``pack:<name>`` / ``pack:<name>@<rev>`` (current / immutable revision copy)
 - ``profile:<name>`` / ``profile:<name>@<rev>``
 - ``vlm:<name>`` / ``vlm:<name>@<rev>`` (W9; global index only)
-- ``activation:<axis>`` (``axis`` is ``prompt_pack`` | ``detection_profile`` | ``vlm``)
+- ``ovset:<name>`` / ``ovset:<name>@<rev>`` (open-vocabulary prompt sets)
+- ``activation:<axis>`` (``axis`` is ``prompt_pack`` | ``detection_profile`` | ``vlm`` |
+  ``open_vocab``)
 - ``activation_event:<uuid4>``
 - ``meta:config_revision``
 - ``runtime:<process>:<hostname>``
@@ -31,13 +33,14 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-ConfigKind = Literal['prompt_pack', 'region_profile', 'vlm_endpoint']
-ConfigAxis = Literal['prompt_pack', 'detection_profile', 'vlm']
+ConfigKind = Literal['prompt_pack', 'region_profile', 'vlm_endpoint', 'open_vocab_set']
+ConfigAxis = Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab']
 
 KIND_TO_PREFIX: dict[str, str] = {
     'prompt_pack': 'pack',
     'region_profile': 'profile',
     'vlm_endpoint': 'vlm',
+    'open_vocab_set': 'ovset',
 }
 
 META_CONFIG_REVISION_DOC_ID = 'meta:config_revision'

@@ -101,10 +101,17 @@ class ConfigSnapshot:
     active_vlm_body: StoredConfig | None = None
     active_vlm_ack_at: str | None = None
     acked_refs: frozenset[str] = frozenset()
+    # Open-vocabulary prompt sets: this project's stored sets and its
+    # activation (the activated revision's body pinned, like the other axes).
+    open_vocab_sets: dict[str, StoredConfig] = field(default_factory=dict)
+    active_open_vocab: AxisRef = None
+    active_open_vocab_body: StoredConfig | None = None
 
     def active_ref(self, axis: ConfigAxis) -> AxisRef:
         if axis == 'vlm':
             return self.active_vlm
+        if axis == 'open_vocab':
+            return self.active_open_vocab
         return self.active_pack if axis == 'prompt_pack' else self.active_profile
 
 
@@ -251,6 +258,7 @@ class ConfigStore:
         packs: dict[str, StoredConfig] = {}
         profiles: dict[str, StoredConfig] = {}
         vlm_endpoints: dict[str, StoredConfig] = {}
+        open_vocab_sets: dict[str, StoredConfig] = {}
         for hit in resp['hits']['hits']:
             src = hit['_source']
             item = StoredConfig(
@@ -269,6 +277,8 @@ class ConfigStore:
                 profiles[src['name']] = item
             elif src['kind'] == 'vlm_endpoint':
                 vlm_endpoints[src['name']] = item
+            elif src['kind'] == 'open_vocab_set':
+                open_vocab_sets[src['name']] = item
 
         from src.services.config_store import vlm_snapshot
 
@@ -284,6 +294,7 @@ class ConfigStore:
         profile_activation = await get_activation(client, self.index, 'detection_profile')
         active_pack = _axis_ref(pack_activation)
         active_profile = _axis_ref(profile_activation)
+        active_open_vocab = _axis_ref(await get_activation(client, self.index, 'open_vocab'))
         active_pack_body = await _resolve_active_body(
             client, self.index, kind='prompt_pack', ref=active_pack, current=packs
         )
@@ -298,6 +309,15 @@ class ConfigStore:
             active_profile=active_profile,
             active_pack_body=active_pack_body,
             active_profile_body=active_profile_body,
+            open_vocab_sets=open_vocab_sets,
+            active_open_vocab=active_open_vocab,
+            active_open_vocab_body=await _resolve_active_body(
+                client,
+                self.index,
+                kind='open_vocab_set',
+                ref=active_open_vocab,
+                current=open_vocab_sets,
+            ),
             loaded_at=time.monotonic(),
             stale=False,
             **vlm_fields,
@@ -342,6 +362,14 @@ class ConfigStore:
         current = self.current
         packs = dict(current.packs)
         profiles = dict(current.profiles)
+        open_vocab_sets = dict(current.open_vocab_sets)
+        if 'open_vocab_set' in patch:
+            ov_item: StoredConfig | None = patch['open_vocab_set']
+            ov_name = ov_item.name if ov_item is not None else patch['name']
+            if ov_item is None:
+                open_vocab_sets.pop(ov_name, None)
+            else:
+                open_vocab_sets[ov_name] = ov_item
         if 'pack' in patch:
             item: StoredConfig | None = patch['pack']
             name = item.name if item is not None else patch['name']
@@ -373,6 +401,11 @@ class ConfigStore:
             active_vlm_body=patch.get('active_vlm_body', current.active_vlm_body),
             active_vlm_ack_at=patch.get('active_vlm_ack_at', current.active_vlm_ack_at),
             acked_refs=patch.get('acked_refs', current.acked_refs),
+            open_vocab_sets=open_vocab_sets,
+            active_open_vocab=patch.get('active_open_vocab', current.active_open_vocab),
+            active_open_vocab_body=patch.get(
+                'active_open_vocab_body', current.active_open_vocab_body
+            ),
         )
         self.current = new_current
         if self.mode == 'pinned':

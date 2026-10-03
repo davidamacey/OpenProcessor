@@ -151,16 +151,12 @@ async def _apply_plan(
     return list(result['skipped'])
 
 
-async def redetect_image(
-    opensearch: AsyncOpenSearch,
-    service: CurationIngestService,
-    image_id: str,
-    image_doc: dict[str, Any],
-) -> dict[str, int]:
-    """Re-detect one stored image. Returns the merge counters
-    (``merged``/``refreshed``/``replaced``/``created``/``removed``/
-    ``locked_untouched``); raises on an unservable or unreadable image."""
-    cfg = get_curation_config()
+async def load_image_context(
+    service: CurationIngestService, image_id: str, image_doc: dict[str, Any]
+) -> ImageContext:
+    """The stored image ``image_id`` decoded for re-indexing (the one reader
+    every image-unit reprocess scope uses). Raises ``ValueError`` on an
+    unservable path or an undecodable image."""
     path = image_doc.get('image_path') or ''
     if not is_servable_image_path(path):
         raise ValueError(f'image path is not under a configured source root: {path!r}')
@@ -173,6 +169,20 @@ async def redetect_image(
     ctx.image_id = image_id
     ctx.image_path = path
     ctx.created = False
+    return ctx
+
+
+async def redetect_image(
+    opensearch: AsyncOpenSearch,
+    service: CurationIngestService,
+    image_id: str,
+    image_doc: dict[str, Any],
+) -> dict[str, int]:
+    """Re-detect one stored image. Returns the merge counters
+    (``merged``/``refreshed``/``replaced``/``created``/``removed``/
+    ``locked_untouched``); raises on an unservable or unreadable image."""
+    cfg = get_curation_config()
+    ctx = await load_image_context(service, image_id, image_doc)
 
     existing_docs = await items_by_terms(
         opensearch, 'image_id', [image_id], index=cfg.items_index, includes=_existing_includes()
@@ -207,4 +217,4 @@ async def redetect_image(
     }
 
 
-__all__ = ['REPROCESS_SOURCE', 'redetect_image']
+__all__ = ['REPROCESS_SOURCE', 'load_image_context', 'redetect_image']

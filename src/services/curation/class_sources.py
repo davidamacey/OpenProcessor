@@ -24,6 +24,7 @@ from src.services.curation.ingest_class_sources import (
     DEFAULT_PROPOSAL_CLASS_SOURCE,
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
+    OPEN_VOCAB_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
     is_classifier_class_source,
 )
@@ -74,6 +75,7 @@ CLASS_SOURCE_ROLES: tuple[str, ...] = (
     'human',
     'merge',
     'label_import',
+    'open_vocab',
 )
 
 _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
@@ -102,6 +104,12 @@ _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
     (HUMAN_MOVE_CLASS_SOURCE, 'Moved to a cluster by a human', 'human', 'Human move'),
     (CLASS_MERGE_CLASS_SOURCE, 'Relabeled by a class merge', 'merge', 'Merge'),
     (LABEL_IMPORT_CLASS_SOURCE, 'Imported label', 'label_import', 'Imported'),
+    (
+        OPEN_VOCAB_CLASS_SOURCE,
+        'Found by an open-vocabulary prompt',
+        'open_vocab',
+        'Open vocab',
+    ),
 )
 
 

@@ -9,6 +9,8 @@ scope      unit     what it regenerates
 =========  =======  ==========================================================
 detect     image    machine items from the ingest detectors (merged under the
                     lock rule: ``reprocess_detect``)
+open_vocab image    items from the active open-vocabulary prompt set run on
+                    the whole image (``reprocess_open_vocab``)
 region     item     machine region boxes (``reprocess_region``)
 vlm        item     the VLM's class answer (``reprocess_vlm``)
 embed      image    PE crop / frame / region vectors (``reprocess_embed``)
@@ -48,6 +50,7 @@ from src.services.curation.reprocess_models import (
     ReprocessScope,
     ReprocessScopeResult,
 )
+from src.services.curation.reprocess_open_vocab import plan_open_vocab_scope
 from src.services.curation.reprocess_region import (
     apply_region_filter,
     apply_region_ids,
@@ -58,6 +61,8 @@ from src.services.curation.reprocess_region import (
 from src.services.curation.reprocess_targets import (
     ReprocessTargetsError,
     existing_images,
+    has_image_selector,
+    image_filter_query,
     item_filter_query,
     items_by_terms,
     scan_items,
@@ -74,7 +79,7 @@ if TYPE_CHECKING:
 
 # Execution order: detection first, derived vectors last, so an embed pass
 # sees the items a detect pass just wrote.
-_ORDER: tuple[ReprocessScope, ...] = ('detect', 'region', 'vlm', 'embed')
+_ORDER: tuple[ReprocessScope, ...] = ('detect', 'open_vocab', 'region', 'vlm', 'embed')
 
 ServiceFactory = Callable[[], Awaitable['CurationIngestService']]
 
@@ -122,6 +127,15 @@ async def resolve_image_ids(
         images = [src['image_id'] for _, src in docs if src.get('image_id')]
         return list(dict.fromkeys(images)), len(wanted) - len(docs), [cid for cid, _ in docs]
     assert targets.filter is not None
+    if has_image_selector(targets.filter):
+        images = await scan_items(
+            opensearch,
+            image_filter_query(targets.filter),
+            index=_cfg_indexes()[1],
+            includes=['image_id'],
+            id_field='image_id',
+        )
+        return [image_id for image_id, _ in images], 0, None
     query = item_filter_query(targets.filter)
     if targets.limit is not None:
         capped = await resolve_ids(
@@ -228,6 +242,8 @@ async def _plan_images(
     if kind == 'image_ids':
         found = await existing_images(opensearch, image_ids, index=images_index)
         result.not_found = len(image_ids) - len(found)
+    if scope == 'open_vocab':
+        return await plan_open_vocab_scope(opensearch, image_ids, result.not_found)
     if scope == 'detect' and image_ids:
         docs = await items_by_terms(
             opensearch,
@@ -256,6 +272,16 @@ async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest)
     targets."""
     kind = validate_targets(request.targets)
     scopes = _ordered(request.scopes)
+    flt = request.targets.filter
+    if flt is not None and has_image_selector(flt):
+        if any(s in ('region', 'vlm') for s in scopes):
+            raise ReprocessTargetsError(
+                'all_images / open_vocab_status select images; region and vlm work on items'
+            )
+        if flt != type(flt)(all_images=flt.all_images, open_vocab_status=flt.open_vocab_status):
+            raise ReprocessTargetsError(
+                'all_images / open_vocab_status cannot be combined with the item selectors'
+            )
     plan = ReprocessPlan(kind=kind, results=[])
     if any(s in IMAGE_SCOPES for s in scopes):
         plan.image_ids, plan.not_found_crops, item_ids = await resolve_image_ids(

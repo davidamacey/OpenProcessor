@@ -137,6 +137,12 @@ async def list_crops(
         Query(description='true = items an import created from the detector; false = the rest.'),
     ] = None,
     source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
+    open_vocab_set: Annotated[
+        str | None, Query(description='Items the full-image pass wrote for this prompt set.')
+    ] = None,
+    source_prompt: Annotated[
+        str | None, Query(description='Items the full-image pass found with this exact prompt.')
+    ] = None,
     needs_new_class: bool | None = None,
     review_dismissed: Annotated[
         bool | None, Query(description='true = only items hidden from review.')
@@ -226,6 +232,8 @@ async def list_crops(
             'min_blur_ratio': min_blur_ratio,
             'classifier_conf_lt': classifier_conf_lt,
             'item_text': item_text,
+            'open_vocab_set': open_vocab_set,
+            'source_prompt': source_prompt,
         }
         flt = ItemFilter(
             **item_filter.model_dump(exclude_defaults=True),

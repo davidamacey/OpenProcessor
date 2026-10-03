@@ -32,8 +32,9 @@ Origin = Literal['detector', 'sam3', 'human', 'import']
 ReviewStatus = Literal['pending', 'validated', 'dismissed', 'excluded']
 
 HUMAN_CLASS_SOURCES: tuple[str, ...] = ('human', 'human_move')
-# The item field a full-image SAM 3 pass stamps on the items it writes.
-SAM3_DETECTOR = 'sam3'
+# Every item a full-image SAM 3 pass writes carries the prompt set it came from
+# (and keeps it after a human relabels it), so that field is what ``sam3`` means.
+SAM3_ORIGIN_FIELD = 'open_vocab_set'
 
 
 class ItemFilter(BaseModel):
@@ -68,6 +69,9 @@ class ItemFilter(BaseModel):
     min_blur_ratio: float | None = Field(default=None, ge=0.0)
     classifier_conf_lt: float | None = Field(default=None, ge=0.0, le=1.0)
     item_text: str | None = Field(default=None, max_length=200)
+    # Provenance of an item a full-image SAM 3 pass wrote.
+    open_vocab_set: str | None = None
+    source_prompt: str | None = None
 
     def is_empty(self) -> bool:
         return self == type(self)()
@@ -97,7 +101,7 @@ def _origin_clause(origin: str) -> dict[str, Any]:
     if origin == 'human':
         return {'terms': {'class_source': list(HUMAN_CLASS_SOURCES)}}
     if origin == 'sam3':
-        return {'term': {'detector': SAM3_DETECTOR}}
+        return {'exists': {'field': SAM3_ORIGIN_FIELD}}
     # detector: everything no other origin claims
     return {
         'bool': {'must_not': [_origin_clause(o) for o in ('import', 'human', 'sam3')]},
@@ -166,6 +170,8 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         ('dataset_split', f.dataset_split),
         ('label_source', f.label_source),
         ('class_source', f.class_source),
+        ('open_vocab_set', f.open_vocab_set),
+        ('source_prompt', f.source_prompt),
     ):
         if value is not None and value != '':
             out.append({'term': {field: value}})
@@ -234,7 +240,7 @@ def visibility_clauses(*, include_test: bool, include_excluded: bool) -> list[di
 
 __all__ = [
     'HUMAN_CLASS_SOURCES',
-    'SAM3_DETECTOR',
+    'SAM3_ORIGIN_FIELD',
     'ItemFilter',
     'Origin',
     'ReviewStatus',

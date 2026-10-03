@@ -29,6 +29,9 @@ CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE = 'classifier_vlm_agreement'
 CLASSIFIER_SOURCE_SUFFIX = '_model'
 # ItemDoc's default before any detector stamps a source.
 DEFAULT_PROPOSAL_CLASS_SOURCE = 'unlabeled_proposal'
+# Items the open-vocabulary SAM 3 pass writes: machine output named by the
+# prompt that found it, awaiting a human or VLM decision (never locked).
+OPEN_VOCAB_CLASS_SOURCE = 'open_vocab_proposal'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
 # ``label_source`` (not ``class_source``) value stamped by dataset import
@@ -38,9 +41,10 @@ LABEL_SOURCE_IMPORT = 'import'
 
 
 def unlabeled_proposal_class_sources() -> frozenset[str]:
-    """Sources of items the ingest detectors left without a class."""
+    """Sources of items no one has decided a class for yet: what the ingest
+    detectors left without a class, and the open-vocabulary pass's hits."""
     name = ingest_primary_profile().name
-    return frozenset({f'{name}_proposal', f'{name}_low_conf'})
+    return frozenset({f'{name}_proposal', f'{name}_low_conf', OPEN_VOCAB_CLASS_SOURCE})
 
 
 def classifier_class_sources() -> frozenset[str]:
@@ -82,6 +86,7 @@ __all__ = [
     'HUMAN_CLASS_SOURCE',
     'LABEL_IMPORT_CLASS_SOURCE',
     'LABEL_SOURCE_IMPORT',
+    'OPEN_VOCAB_CLASS_SOURCE',
     'VLM_CLASS_SOURCE',
     'classifier_class_sources',
     'confident_class_sources',

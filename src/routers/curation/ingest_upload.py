@@ -24,6 +24,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation.ingest import _batch_response, _get_ingest_service
 from src.services.curation.ingest_models import ERROR_KIND_UNSUPPORTED_TYPE
+from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
 
 
 # Kept as the interim fallback default; the served source of truth
@@ -185,4 +186,10 @@ async def curation_ingest_upload(
         if data
         else None
     )
+    if batch_result is not None:
+        await schedule_open_vocab_after_ingest(
+            opensearch,
+            service,
+            [r.image_id for r in batch_result.results if r.status == 'success' and r.image_id],
+        )
     return _batch_response(batch_result, failed_early)

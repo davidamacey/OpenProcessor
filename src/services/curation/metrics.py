@@ -144,6 +144,32 @@ OP_STAGE_A_SEGMENTER_DURATION_SECONDS = Histogram(
     buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
 )
 
+# Full-image open-vocabulary pass. ``scope`` on the gate counter is ``image``
+# here; the crop stage uses ``crop`` when it consumes the same gate.
+OP_OPEN_VOCAB_CALL_SECONDS = Histogram(
+    'op_open_vocab_call_seconds',
+    'Whole-image segmenter call duration in seconds, by outcome (a miss costs as much as a hit).',
+    labelnames=('outcome',),  # hit / miss / error
+    buckets=(0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
+)
+
+OP_SEGMENTER_GATE_DECISIONS_TOTAL = Counter(
+    'op_segmenter_gate_decisions_total',
+    'Segmenter gate decisions: run, sample (a tier-3 recovery run) or skip.',
+    labelnames=('scope', 'decision', 'tier', 'reason'),
+)
+
+OP_OPEN_VOCAB_HITS_DROPPED_TOTAL = Counter(
+    'op_open_vocab_hits_dropped_total',
+    'Candidates the open-vocabulary pass discarded, by reason.',
+    labelnames=('reason',),
+)
+
+OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL = Counter(
+    'op_open_vocab_items_written_total',
+    'Items the open-vocabulary pass wrote (upserts of an existing item included).',
+)
+
 OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS = Histogram(
     'op_stage_a_vlm_visible_duration_seconds',
     'Stage A.vlm_visible region_visible_batch call duration in seconds.',
@@ -268,7 +294,11 @@ __all__ = [
     'OP_INGEST_PRESERVED_HUMAN_LABEL',
     'OP_OCC_FINAL_CONFLICT',
     'OP_OCC_RETRY_COUNT',
+    'OP_OPEN_VOCAB_CALL_SECONDS',
+    'OP_OPEN_VOCAB_HITS_DROPPED_TOTAL',
+    'OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL',
     'OP_SEGMENTER_CIRCUIT_OPEN_TOTAL',
+    'OP_SEGMENTER_GATE_DECISIONS_TOTAL',
     'OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS',
     'OP_SEGMENTER_REQUEST_RESPONSE_SECONDS',
     'OP_SEGMENTER_REQUEST_RETRIES_TOTAL',
