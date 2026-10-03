@@ -28,6 +28,7 @@ from fastapi.responses import ORJSONResponse, Response
 from src.clients.occ import OCCFinalConflictError
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
+from src.core.cors import add_lan_cors
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.error_handlers import triton_unavailable_response
 from src.core.logging import (
@@ -37,6 +38,7 @@ from src.core.logging import (
     get_request_id,
     request_id_ctx,
 )
+from src.core.request_origin import RequestOriginMiddleware
 from src.routers import (
     analyze_router,
     clusters_router,
@@ -52,6 +54,7 @@ from src.routers import (
     search_router,
     v1_router,
 )
+from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
 from src.utils.retry import RetryExhaustedError
 
@@ -442,32 +445,13 @@ def create_app() -> FastAPI:
         version=_read_version(),
         lifespan=lifespan,
         default_response_class=ORJSONResponse,
+        docs_url=None,
+        redoc_url=None,
     )
+    install_api_docs(application)
 
-    # CORS — allow a labeler/curation frontend and any LAN client to reach
-    # the API. In production a reverse proxy usually handles routing so
-    # cross-origin calls are rare, but this covers: dev mode (vite/webpack
-    # dev servers on a different port), direct API access from LAN IPs, and
-    # any other internal network clients. Without this middleware, any
-    # frontend dev server talking to this API cross-origin fails
-    # (browser fetch fails with "Failed to fetch"/no CORS headers, even
-    # though the server itself processes and logs the request as 200).
-    from fastapi.middleware.cors import CORSMiddleware
-
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=(
-            r'^https?://(localhost|127\.0\.0\.1|host\.docker\.internal'
-            r'|192\.168\.\d+\.\d+'  # RFC-1918 class C
-            r'|10\.\d+\.\d+\.\d+'  # RFC-1918 class A
-            r'|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+'  # RFC-1918 class B
-            r')(:\d+)?$'
-        ),
-        allow_credentials=True,
-        allow_methods=['*'],
-        allow_headers=['*'],
-        expose_headers=['X-Request-ID', 'X-Process-Time'],
-    )
+    application.add_middleware(RequestOriginMiddleware)
+    add_lan_cors(application)
 
     # Performance Middleware (defined first, runs second in LIFO order)
     @application.middleware('http')

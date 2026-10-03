@@ -8,9 +8,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(.*\.md|.*\.txt|security-reports/)$
+        exclude: ^(.*\.md|.*\.txt|security-reports/|src/static/docs/)
       - id: end-of-file-fixer
-        exclude: ^(.*\.md|.*\.txt|security-reports/)$
+        exclude: ^(.*\.md|.*\.txt|security-reports/|src/static/docs/)
       - id: check-yaml
         args: [--unsafe]  # Allow custom YAML tags for docker-compose
       - id: check-json

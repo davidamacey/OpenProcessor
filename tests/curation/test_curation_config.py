@@ -243,7 +243,7 @@ def test_prompt_pack_paths_unset_is_empty(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 # =============================================================================
-# OP_GRAFANA_URL / OP_PROMETHEUS_URL / OP_DASHBOARDS_URL (served monitoring_links)
+# OP_GRAFANA_URL / OP_PROMETHEUS_URL / OP_DASHBOARDS_URL (served resource_links)
 # =============================================================================
 
 
@@ -260,22 +260,3 @@ def test_monitoring_urls_default_to_none_and_read_env(monkeypatch: pytest.Monkey
         None,
         'http://d:2',
     )
-
-
-def test_settings_response_serves_monitoring_links_from_config(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from src.routers.curation._common_models import CurationSettingsResponse
-
-    monkeypatch.setattr(
-        'src.config.get_curation_config',
-        lambda: CurationConfig(
-            grafana_url='http://g:1', prometheus_url=None, dashboards_url='http://d:2'
-        ),
-    )
-    links = CurationSettingsResponse().monitoring_links
-    assert links.model_dump() == {
-        'grafana': 'http://g:1',
-        'prometheus': None,
-        'opensearch_dashboards': 'http://d:2',
-    }

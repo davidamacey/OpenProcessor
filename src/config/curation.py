@@ -201,17 +201,27 @@ class CurationConfig:
     # The trainer only ever sees ``MLFLOW_TRACKING_URI``, a container
     # hostname (e.g. ``http://curation-mlflow:5000``) unreachable from a
     # browser -- ``src/services/training/jobs.py`` rewrites the served
-    # ``mlflow_run_url`` to use this base instead. ``None`` (the default)
-    # means "no public MLflow UI configured" -- the served field is then
-    # ``null`` rather than leaking the internal hostname.
+    # ``mlflow_run_url`` to use the public MLflow base instead: this URL
+    # verbatim when set, else <request host>:``mlflow_port``
+    # (``src.services.resource_links.service_url``); ``None`` outside a
+    # request, never the internal hostname.
     mlflow_public_url: str | None = None
 
     # Browser-reachable monitoring UIs, served on ``GET /settings`` as
-    # ``monitoring_links``. ``None`` = not configured / stack not running
-    # (the UI hides the link); no port is assumed.
+    # ``resource_links``; an explicit URL is served verbatim (reverse proxy).
     grafana_url: str | None = None
     prometheus_url: str | None = None
     dashboards_url: str | None = None
+    triton_metrics_url: str | None = None
+    dcgm_url: str | None = None
+    # Host ports the services are published on (compose defaults; 0 =
+    # disabled). Unset URLs are derived as <request host>:<port>.
+    grafana_port: int = 4605
+    prometheus_port: int = 4604
+    dashboards_port: int = 4608
+    mlflow_port: int = 4609
+    triton_metrics_port: int = 4602
+    dcgm_port: int = 4610
 
     # Confidence floor gating the item wire's `probe_actionable` field
     # (see `src.services.curation.wire.serialize_item` and
@@ -381,6 +391,14 @@ class CurationConfig:
             grafana_url=_optional_str('GRAFANA_URL', defaults.grafana_url),
             prometheus_url=_optional_str('PROMETHEUS_URL', defaults.prometheus_url),
             dashboards_url=_optional_str('DASHBOARDS_URL', defaults.dashboards_url),
+            triton_metrics_url=_optional_str('TRITON_METRICS_URL', defaults.triton_metrics_url),
+            dcgm_url=_optional_str('DCGM_URL', defaults.dcgm_url),
+            grafana_port=_int('GRAFANA_PORT', defaults.grafana_port),
+            prometheus_port=_int('PROMETHEUS_PORT', defaults.prometheus_port),
+            dashboards_port=_int('DASHBOARDS_PORT', defaults.dashboards_port),
+            mlflow_port=_int('MLFLOW_PORT', defaults.mlflow_port),
+            triton_metrics_port=_int('TRITON_METRICS_PORT', defaults.triton_metrics_port),
+            dcgm_port=_int('DCGM_PORT', defaults.dcgm_port),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
             encoder_embedding_dim=_int('ENCODER_EMBEDDING_DIM', defaults.encoder_embedding_dim),
             backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),

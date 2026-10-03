@@ -125,6 +125,10 @@ up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitori
 dev-up: ensure-host-bind-mount-dirs ## Single canonical dev deployment: dev overlay + GPU arbiter overlay + curation/segmenter/vlm/training profiles
 	$(DEV_COMPOSE) up -d --build
 
+.PHONY: dev-monitoring-up
+dev-monitoring-up: ensure-host-bind-mount-dirs ## 'make dev-up' PLUS the monitoring profile (Prometheus/Grafana/Loki/Alloy/DCGM + Dashboards); opt-in as in up-monitoring
+	$(DEV_COMPOSE) --profile monitoring up -d --build
+
 .PHONY: dev-down
 dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
 	$(DEV_COMPOSE) down
@@ -1255,5 +1259,5 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         opensearch-reset opensearch-status opensearch-indices \
         info docs docs-build \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
-        dev-up dev-down dev-restart dev-ps curation-up curation-down curation-logs curation-status curation-seed \
+        dev-up dev-monitoring-up dev-down dev-restart dev-ps curation-up curation-down curation-logs curation-status curation-seed \
         sample-coco sample-coco-readme sample-coco-cars sample-coco-import sample-plates sample-clean

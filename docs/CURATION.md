@@ -1411,3 +1411,9 @@ Item wire fields that were renamed or replaced in v0.4.0:
   you point `hyperparameters.model` at a local file.
 - Coverage is uneven across the surface; the least-tested routers are the
   older ones.
+
+## Resource links
+
+`GET /curation/projects/{project}/settings` includes `resource_links` (API docs plus the
+monitoring and MLflow UIs, each with `status` and `reachable`). The rules and
+env vars are in `docs-site/docs/operations/monitoring.mdx`.

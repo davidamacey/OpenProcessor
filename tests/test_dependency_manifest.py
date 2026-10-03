@@ -155,6 +155,7 @@ _IMPORT_TO_DIST = {
 # Third-party top-level imports under src/ that are intentionally *not*
 # required to appear in either manifest, with the reason each is safe.
 _ALLOWLIST = {
+    'starlette': 'transitive dependency of fastapi (ASGI types in src/core/request_origin.py)',
     # Pillow is a transitive dependency of ultralytics; requirements.txt
     # documents this in a comment rather than pinning it directly.
     'PIL': 'transitive dependency of ultralytics (see requirements.txt comment)',
