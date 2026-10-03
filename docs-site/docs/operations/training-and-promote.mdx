@@ -62,8 +62,11 @@ curl -s "$T/status"
 - **Preflight** returns blocking checks and warnings (empty train or val
   split, a trained class missing from a split, unlabeled objects on
   exported images, trainer reachability, GPU availability). `?force=true`
-  on `/train/start` bypasses blocking checks, except that only one run can
-  be active at a time.
+  on `/train/start` and `/train/start_campaign` bypasses blocking size and
+  balance checks, except that only one run can be active at a time and an
+  empty validation split is never bypassable: it answers
+  `422 empty_val_split` (the trainer cannot validate on an empty val folder).
+  Re-export with enough non-holdout validated items instead.
 - **GPUs:** `cuda_visible_devices` names host GPU ids, restricted to
   `OP_GPU_ALLOWED_IDS`; `GET /train/gpus` lists the options. An id outside
   that list, or a GPU the trainer container is not attached to (preflight

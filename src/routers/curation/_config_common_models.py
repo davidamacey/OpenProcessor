@@ -69,6 +69,7 @@ ErrorCode = Literal[
     'name_conflict',
     'invalid_transition',
     'export_outside_project',
+    'empty_val_split',
     'model_not_found',
     # W2b
     'class_hotkey_conflict',

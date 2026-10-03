@@ -193,6 +193,10 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- `GET .../stats` serves real counts: `holdout_items` counts the frozen `test_holdout` items (the old field name never matched, so it was always 0), `promoted_models` counts the models the project owns, and `classes` reads the class registry instead of the lagging OpenSearch mirror.
+- The API no longer logs every OpenSearch client request at INFO (the per-project `config_revision` poll was about 64% of all lines); the client loggers stay at WARNING and above.
+- Project delete soft-deletes the project's MLflow experiment over the tracking server's REST API (`MLFLOW_TRACKING_URI`, now set on the API service) instead of importing a module the API image does not have, and `project.deleted` reports `mlflow_cleanup` (`done`, `skipped_not_configured` or `failed` with a reason).
+- `POST /train/start` and `/train/start_campaign` with `force=true` no longer get past an empty validation split: it is a hard `422 empty_val_split` (balance and size warnings stay forceable). The dataset-import guide states that the dataset location is `source.path` (there is no `root` request parameter) and the accepted COCO layout.
 - Combine preview: every issue (`source_not_found`, `duplicate_source`, `target_is_source`) carries a human `message`, and `unclassed_items` is counted after dedup so it equals the finished target.
 - The served `Any` option (`""`) of an enum filter spec is accepted as unset on every route that serves it: `on_negative_frame=` / `dataset_split=` on `/crops` and `/review/*` no longer 422 (one shared validator).
 - `POST /ingest/policy/preview` no longer counts a label given after ingest as embedding a stored vectorless item (`embedded_because_labeled` only covers items that already have a vector), so preview matches what really happens.

@@ -1817,3 +1817,51 @@ def test_preflight_still_honors_an_explicit_dataset_export_dir(
     assert r.status_code == 200, r.text
     names = [c['name'] for c in r.json()['checks']]
     assert 'dataset_export_dir' not in names
+
+
+def _empty_val_report(empty: list[str]) -> Any:
+    from src.routers.curation_train import PreflightCheck, PreflightReport
+
+    return PreflightReport(
+        blocked=True,
+        checks=[
+            PreflightCheck(
+                name='export_splits_nonempty',
+                severity='block',
+                message=f'export has 0 images in {empty}',
+                detail={'empty_splits': empty},
+            )
+        ],
+    )
+
+
+@pytest.mark.parametrize('route', ['start', 'start_campaign'])
+def test_force_does_not_bypass_empty_val_split(
+    app_client: TestClient, project_export_root: Path, route: str
+) -> None:
+    export = str(project_export_root / 'x')
+    body: dict[str, Any] = (
+        {'dataset_export_dir': export, 'profile': 'medium'}
+        if route == 'start'
+        else {'dataset_export_dir': export, 'runs': [{'profile': 'nano', 'model_size': 'n'}]}
+    )
+    with patch(
+        'src.routers.curation_train._run_preflight',
+        new=AsyncMock(return_value=_empty_val_report(['val'])),
+    ):
+        r = app_client.post(f'/curation/projects/default/train/{route}?force=true', json=body)
+    assert r.status_code == 422, r.text
+    assert r.json()['detail']['error'] == 'empty_val_split'
+
+
+def test_force_still_bypasses_an_empty_train_only_block(
+    app_client: TestClient, project_export_root: Path
+) -> None:
+    """Only the val split is a hard failure; other blocks stay forceable."""
+    body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
+    with patch(
+        'src.routers.curation_train._run_preflight',
+        new=AsyncMock(return_value=_empty_val_report(['train'])),
+    ):
+        r = app_client.post('/curation/projects/default/train/start?force=true', json=body)
+    assert r.status_code == 201, r.text

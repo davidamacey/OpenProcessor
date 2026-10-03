@@ -27,6 +27,14 @@ index. A dataset's class order is not trusted across the boundary.
   `OP_SOURCE_PATH_ALIASES`), the project's upload root, or the project's
   export root. Anything a dataset names (a `data.yaml` path, a COCO
   `file_name`, an archive member) must stay inside it.
+- **There is no `root` request parameter.** The dataset location is
+  `source.path` only (a directory, or for YOLO a `data.yaml` file), in one
+  of the forms above; `root` is a field of the preview *response* (the
+  resolved directory) and is ignored as input. A COCO dataset is a directory
+  holding `images/` and `annotations/*.json` (for example
+  `/data/source/my_coco/images/` and `/data/source/my_coco/annotations/instances_train.json`),
+  with `"format": "coco"` or `"auto"`; pass the directory that contains those
+  two folders, not `images/` or a JSON file.
 - **Preview, then import.** A preview writes nothing and returns the
   detected format, totals, splits, a decision row per dataset class, issues
   and an `import_key`. The import re-scans and is authoritative.
