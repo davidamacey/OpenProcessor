@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Docs screenshots: the capture script gained import, multi-box review, box editor, region-profile test and Imported-tab states (read-only allow-list extended for `/region_profiles/test` and `/datasets/preview`); the matching docs slots now render real captures.
+
 ### Fixed
 
 - `/review`'s served enum filters (e.g. "Negative frames") no longer render a
