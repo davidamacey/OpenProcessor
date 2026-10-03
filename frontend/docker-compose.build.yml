@@ -8,3 +8,6 @@ services:
   cropwright:
     build: .
     image: cropwright-dev:local
+  docs:
+    build: docs-site
+    image: cropwright-docs-dev:local

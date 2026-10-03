@@ -7,8 +7,16 @@
 #
 #   docker compose pull && docker compose up -d
 #
-# Multi-arch image (linux/amd64 + linux/arm64), davidamacey/cropwright.
-# Pin a version with CROPWRIGHT_TAG=X.Y.Z; defaults to :latest.
+# Multi-arch images (linux/amd64 + linux/arm64): davidamacey/cropwright and
+# davidamacey/cropwright-docs. Pin a version with CROPWRIGHT_TAG=X.Y.Z;
+# defaults to :latest.
+#
+# Two services: `cropwright` (the app, the only published port) and `docs`
+# (the documentation site, no published port). Both sit on a private compose
+# network, so nginx reaches the docs at http://docs:8080 (DOCS_UPSTREAM) and
+# serves them at /cropwright/ on the app origin. The API's own Swagger UI /
+# ReDoc / openapi.json are proxied at /docs, /redoc and /openapi.json. Only
+# `cropwright` joins the external OpenProcessor network.
 #
 # Building from source instead of pulling is a DEVELOPMENT path — see
 # README's "Development" section for the docker-compose.build.yml overlay.
@@ -47,6 +55,8 @@ services:
       - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
       # nginx upload cap for a dataset archive, in MB (default 2048).
       - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
+      # Where nginx proxies /cropwright/ (the bundled docs).
+      - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
     ports:
       - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
     healthcheck:
@@ -57,9 +67,33 @@ services:
       timeout: 5s
       retries: 3
     networks:
+      - default
       - api
 
+  docs:
+    image: davidamacey/cropwright-docs:${CROPWRIGHT_TAG:-latest}
+    container_name: ${CROPWRIGHT_DOCS_CONTAINER_NAME:-cropwright-docs}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    # No published port: the docs are reached through the app origin.
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - default
+
 networks:
+  default: {}
   api:
     external: true
     name: ${OP_DOCKER_NETWORK:-openprocessor_triton_net}

@@ -20,7 +20,10 @@ function run(env: Record<string, string>) {
     'const B="__RUNTIME__";const P="__API_PREFIX__";',
   );
   const conf = path.join(dir, 'default.conf');
-  writeFileSync(conf, 'location ~ ^__API_PREFIX__/ { proxy_pass __API_UPSTREAM__; }');
+  writeFileSync(
+    conf,
+    'location ~ ^__API_PREFIX__/ { proxy_pass __API_UPSTREAM__; } set $d __DOCS_UPSTREAM__;',
+  );
   const patched = script
     .replaceAll('/usr/share/nginx/html', html)
     .replaceAll('/etc/nginx/conf.d/default.conf', conf);
@@ -32,6 +35,7 @@ function run(env: Record<string, string>) {
     status: r.status,
     stderr: r.stderr,
     js: readFileSync(path.join(html, 'a.js'), 'utf-8'),
+    conf: readFileSync(conf, 'utf-8'),
   };
 }
 
@@ -50,6 +54,27 @@ describe('docker-entrypoint.sh input validation', () => {
     expect(r.status).toBe(0);
     expect(r.js).toBe('const B="http://h:4603";const P="/api/v1";');
   });
+
+  it('substitutes DOCS_UPSTREAM into the nginx conf, defaulting to http://docs:8080', () => {
+    expect(run({}).conf).toContain('set $d http://docs:8080;');
+    expect(run({ DOCS_UPSTREAM: 'http://d:9' }).conf).toContain('set $d http://d:9;');
+  });
+
+  it('nginx.conf carries every placeholder the entrypoint substitutes', () => {
+    const conf = readFileSync(path.resolve(process.cwd(), 'nginx.conf'), 'utf-8');
+    expect(conf).toContain('set $docs_upstream __DOCS_UPSTREAM__;');
+    for (const loc of ['= /docs', '= /redoc', '= /openapi.json', '^~ /cropwright/']) {
+      expect(conf).toContain(`location ${loc} {`);
+    }
+  });
+
+  for (const bad of ['ftp://d', 'http://d|x', 'http://d"x', 'http://d&x']) {
+    it(`rejects DOCS_UPSTREAM=${bad} with a clear message`, () => {
+      const r = run({ DOCS_UPSTREAM: bad });
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('DOCS_UPSTREAM');
+    });
+  }
 
   for (const bad of ['http://h:1/a&b', 'http://h|x', 'ftp://h', 'http://h"x']) {
     it(`rejects PUBLIC_TRITON_API_URL=${bad} with a clear message`, () => {
