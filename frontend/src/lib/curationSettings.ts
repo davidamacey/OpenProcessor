@@ -44,15 +44,27 @@ export interface CurationSettings {
    * user-account system. Carried on the wire for when there is one.
    */
   updated_by: string | null;
-  /** The monitoring dashboards the deployment serves a URL for; `null` =
-   *  none served (no link is shown). */
-  monitoring_links: MonitoringLinksServed;
+  /** Every link the backend offers (API docs and monitoring services), in
+   *  its own order; empty = none served. */
+  resource_links: ResourceLink[];
 }
 
-export interface MonitoringLinksServed {
-  grafana: string | null;
-  prometheus: string | null;
-  opensearch_dashboards: string | null;
+export const RESOURCE_KINDS = ['service', 'docs'] as const;
+export const RESOURCE_STATUSES = ['configured', 'not_configured'] as const;
+
+/** One served `GET /settings` `resource_links` entry. `docs` urls are
+ *  path-relative (they resolve against this app's own origin); `service`
+ *  urls are absolute http(s). `url` is null when not configured.
+ *  `reachable` is the SERVER's view of the service: only `false` means
+ *  "not running"; null is unknown. */
+export interface ResourceLink {
+  id: string;
+  label: string;
+  url: string | null;
+  kind: (typeof RESOURCE_KINDS)[number];
+  status: (typeof RESOURCE_STATUSES)[number];
+  hint: string;
+  reachable: boolean | null;
 }
 
 /** The "no document has ever been written" record. A 200 with this body
@@ -61,7 +73,7 @@ export const EMPTY_CURATION_SETTINGS: CurationSettings = {
   defaults: {},
   updated_at: null,
   updated_by: null,
-  monitoring_links: { grafana: null, prometheus: null, opensearch_dashboards: null },
+  resource_links: [],
 };
 
 /**
@@ -228,6 +240,26 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
+/** One served entry, or nothing when it is malformed (dropped alone). */
+function parseResourceLink(raw: unknown): ResourceLink[] {
+  if (!isRecord(raw)) return [];
+  const { id, label, url, kind, status, hint, reachable } = raw;
+  if (typeof id !== 'string' || !id || typeof label !== 'string') return [];
+  if (!(RESOURCE_KINDS as readonly unknown[]).includes(kind)) return [];
+  if (!(RESOURCE_STATUSES as readonly unknown[]).includes(status)) return [];
+  return [
+    {
+      id,
+      label,
+      url: typeof url === 'string' && url ? url : null,
+      kind: kind as ResourceLink['kind'],
+      status: status as ResourceLink['status'],
+      hint: typeof hint === 'string' ? hint : '',
+      reachable: typeof reachable === 'boolean' ? reachable : null,
+    },
+  ];
+}
+
 /**
  * Parse a raw `{API_PREFIX}/settings` body. Never throws.
  *
@@ -245,17 +277,13 @@ export function parseCurationSettings(raw: unknown): CurationSettings {
       if (typeof k === 'string' && k && typeof v === 'string' && v) defaults[k] = v;
     }
   }
-  const links = isRecord(raw.monitoring_links) ? raw.monitoring_links : {};
-  const url = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
   return {
     defaults,
     updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null,
     updated_by: typeof raw.updated_by === 'string' ? raw.updated_by : null,
-    monitoring_links: {
-      grafana: url(links.grafana),
-      prometheus: url(links.prometheus),
-      opensearch_dashboards: url(links.opensearch_dashboards),
-    },
+    resource_links: Array.isArray(raw.resource_links)
+      ? raw.resource_links.flatMap(parseResourceLink)
+      : [],
   };
 }
 

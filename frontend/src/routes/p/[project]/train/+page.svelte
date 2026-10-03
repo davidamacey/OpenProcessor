@@ -48,7 +48,7 @@
   } from '$lib/api';
   import { formatCount } from '$lib/formatCount';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
+  import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
   import SlotCard from '$components/SlotCard.svelte';
@@ -985,7 +985,7 @@
         curation-trainer container and tails progress until it finishes.
       </p>
       <div class="mt-2">
-        <MonitoringLinks />
+        <ResourceLinksRow />
       </div>
     </div>
     <button

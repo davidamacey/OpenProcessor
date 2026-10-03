@@ -259,6 +259,22 @@ REPROCESS_VOCABULARY: dict = {
 }
 
 
+def resource_link(id, label, url, kind="service", status=None, hint="", reachable=None):
+    """One served `GET /settings` `resource_links` entry."""
+    return {
+        "id": id, "label": label, "url": url, "kind": kind, "hint": hint, "reachable": reachable,
+        "status": status or ("configured" if url else "not_configured"),
+    }
+
+
+# The backend's path-relative docs entries (same-origin nginx proxies).
+DOCS_RESOURCE_LINKS = [
+    resource_link("swagger", "API reference (Swagger UI)", "/docs", "docs"),
+    resource_link("redoc", "API reference (ReDoc)", "/redoc", "docs"),
+    resource_link("openapi_json", "OpenAPI JSON", "/openapi.json", "docs"),
+]
+
+
 class Stub:
     """Fail-closed router for `{api_prefix}/**`.
 
@@ -324,7 +340,7 @@ class Stub:
         # (`r"/settings(\?|$)"`), which is deliberately looser than most
         # patterns here to also match that bare path under `{api_prefix}`.
         # `test_curation_settings.py` overrides this per-test.
-        self.on("GET", r"/settings(\?|$)", {"defaults": {}, "updated_at": None, "updated_by": None, "monitoring_links": {"grafana": None, "prometheus": None, "opensearch_dashboards": None}})
+        self.on("GET", r"/settings(\?|$)", {"defaults": {}, "updated_at": None, "updated_by": None, "resource_links": DOCS_RESOURCE_LINKS})
         self.on("GET", r"/class_sources(\?|$)", {"class_sources": []})
         self.on(
             "GET",

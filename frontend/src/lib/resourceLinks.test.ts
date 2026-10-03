@@ -1,38 +1,82 @@
 import { describe, expect, it } from 'vitest';
-import { resourceLinks, monitoringResourceLinks } from './resourceLinks';
+import { DOCS_ENTRY, resourceViews, safeHref } from './resourceLinks';
+import type { ResourceLink } from './curationSettings';
 
-const NONE = { grafana: null, prometheus: null, opensearch_dashboards: null };
+const link = (o: Partial<ResourceLink>): ResourceLink => ({
+  id: 'grafana',
+  label: 'Grafana',
+  url: 'http://h:3000',
+  kind: 'service',
+  status: 'configured',
+  hint: 'help',
+  reachable: null,
+  ...o,
+});
 
-describe('resourceLinks', () => {
-  it('always offers the same-origin docs and API reference paths', () => {
-    expect(resourceLinks(NONE, null).map((l) => l.href)).toEqual([
-      '/cropwright/',
-      '/docs',
-      '/redoc',
-      '/openapi.json',
+describe('safeHref', () => {
+  it('accepts absolute http(s) URLs and single-slash root-relative paths', () => {
+    expect(safeHref('http://h:3000/x')).toBe('http://h:3000/x');
+    expect(safeHref('https://h/')).toBe('https://h/');
+    expect(safeHref('/docs')).toBe('/docs');
+    expect(safeHref('/openapi.json')).toBe('/openapi.json');
+  });
+
+  it('rejects script, data, protocol-relative and bare values', () => {
+    for (const bad of [
+      'javascript:alert(1)',
+      'data:text/html,x',
+      '//evil.example/x',
+      '/\\evil.example',
+      'docs',
+      'ftp://h/x',
+      '',
+      null,
+      undefined,
+    ]) {
+      expect(safeHref(bad)).toBeNull();
+    }
+  });
+});
+
+describe('resourceViews', () => {
+  it('puts the client-owned Documentation entry first, then the served list in order', () => {
+    const v = resourceViews([
+      link({ id: 'swagger', label: 'Swagger', url: '/docs', kind: 'docs' }),
+      link({}),
+    ]);
+    expect(v.map((x) => [x.id, x.href])).toEqual([
+      [DOCS_ENTRY.id, '/cropwright/'],
+      ['swagger', '/docs'],
+      ['grafana', 'http://h:3000'],
     ]);
   });
 
-  it('adds served monitoring links and MLflow after them, in order', () => {
-    const links = resourceLinks(
-      { ...NONE, grafana: 'http://g:3000', opensearch_dashboards: 'https://os/' },
-      'http://mlf:5000',
-    );
-    expect(links.slice(4).map((l) => [l.key, l.href])).toEqual([
-      ['grafana', 'http://g:3000'],
-      ['opensearch_dashboards', 'https://os/'],
-      ['mlflow', 'http://mlf:5000'],
-    ]);
+  it('with no served list is only Documentation, never a guess', () => {
+    expect(resourceViews([]).map((x) => x.id)).toEqual([DOCS_ENTRY.id]);
   });
 
-  it('drops null and non-http(s) served URLs', () => {
-    expect(
-      monitoringResourceLinks({
-        ...NONE,
-        grafana: 'javascript:alert(1)',
-        prometheus: '',
-      }),
-    ).toEqual([]);
-    expect(monitoringResourceLinks(undefined)).toEqual([]);
+  it('a null url is a muted not-configured row carrying the served hint', () => {
+    const [, g] = resourceViews([
+      link({ url: null, status: 'not_configured', hint: 'set OP_GRAFANA_URL' }),
+    ]);
+    expect(g).toMatchObject({
+      href: null,
+      note: 'not configured',
+      hint: 'set OP_GRAFANA_URL',
+    });
+  });
+
+  it('an unsafe url yields no href', () => {
+    const [, g] = resourceViews([link({ url: 'javascript:alert(1)' })]);
+    expect(g!.href).toBeNull();
+  });
+
+  it('flags not running only for reachable === false', () => {
+    const v = resourceViews([
+      link({ id: 'a', reachable: false }),
+      link({ id: 'b', reachable: true }),
+      link({ id: 'c', reachable: null }),
+    ]);
+    expect(v.slice(1).map((x) => x.notRunning)).toEqual([true, false, false]);
   });
 });
