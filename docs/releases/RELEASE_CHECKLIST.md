@@ -21,10 +21,11 @@ not 64-hex digests) and must all be filled; the installer refuses them.
 
 1. Pre-flight. Confirm `VERSION` is `0.4.0`, the `CHANGELOG.md` `[0.4.0]` date is the
    release day (edit if not), and the tree is clean on the branch to release.
-   Run the full gate: `pytest tests/ -q --ignore=tests/live -n 16`,
+   Re-read `docs/releases/v0.4.0.md` and `docs/design/README.md` (plan statuses) against what is merged, and run the full gate: `pytest tests/ -q --ignore=tests/live -n 16`,
    `.venv/bin/pre-commit run --all-files`,
    `.venv/bin/python scripts/codegen/generate_contracts.py --check`.
-2. Prove the asset set: `scripts/release/verify_release_assets.sh v0.4.0`
+2. Prove the asset set: `make release-verify` (runs `scripts/release/verify_release_assets.sh`;
+   it touches no running stack;
    (builds the assets to a temp dir, dry-runs the installer against them, checks
    that a tampered tarball and installer are refused).
 3. Build, Trivy-scan and dry-run the images, nothing pushed: `make release-dry-run`.

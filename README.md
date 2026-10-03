@@ -58,6 +58,16 @@ project's scope and standards.
 - **Open-vocabulary detection.** A project-level set of text prompts ("traffic
   cone") that SAM 3 runs on the whole image; every hit is a normal item, with
   a dry-run cost estimate, a per-image test route and a shared segmenter gate.
+- **Full detector vocabulary and ingest policy.** The stock detector stores every
+  detection of its label space as an unlabeled proposal. A per-project ingest
+  policy (`all`, `selected` or `lazy` embedding, plus a detect filter) decides
+  what is kept and what gets a vector; every item reports `embedding_state`.
+- **Shared filters and run on selection.** One item filter drives crops, review,
+  search, stats, clusters and regions, and batch actions, exports and embed or
+  reprocess runs can target a filter or a sampled selection, with a dry run.
+- **Region-stage cost control.** An optional hit-rate gate on the crop segmenter
+  and `POST /curation/projects/{project}/region_stage/pause` and `.../resume`
+  stop only the region stage without losing data.
 - **Combine projects.** Merge up to eight projects into a new one with class
   mapping, dedup and holdout handling.
 - **Class identity by name.** Import, combine, export, train, promote and

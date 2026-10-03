@@ -11,7 +11,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-10-02
+## [0.4.0] - 2026-10-03
 
 ### Added
 - `POST /curation/projects/{project}/classes/seed_from_detector`: create registry classes from the ingest detector's labels by name (dry run by default, idempotent, labels with spaces become slugs).
@@ -127,6 +127,22 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ### Fixed
 
+- Activating a config on any axis (prompt pack, region profile, open-vocabulary set, VLM)
+  with no `expected_active` answered 409 `active_conflict` even when nothing was active,
+  because an explicit off (stored `{name: null}`) never equalled a missing value (#73).
+  The one shared compare-and-set now treats never-activated and explicitly-off as the same
+  "nothing active" state; it still answers 409 when something is active and
+  `expected_active` is missing or differs. The VLM axis used to remember an explicit off
+  for this check and no longer does.
+- The 409 `active_conflict` message now spells out the `expected_active` shape
+  (`{"name": <string or null>, "revision": <integer or null>}`) for every axis, from one
+  shared builder; `POST .../region_profiles/deactivate` no longer fails with an unexplained
+  conflict.
+- The open-vocabulary sweeper took 10 to 12 minutes to recover images an API restart left
+  `pending` (fixed 600 s window). The window is now the setting `OP_OPEN_VOCAB_STALE_S`
+  (default 240 s, two sweep ticks; floor 30), so recovery takes 4 to 6 minutes (#74).
+- `GET .../open_vocab` and `GET .../region_profiles` describe `include_templates` in their
+  OpenAPI parameter (templates are listed only with `include_templates=true`).
 - Auto-label `embed_missing` stage embedded nothing because its Triton pool was never initialized (#69); any stage reporting `status: error` now ends the job `failed` (naming the stages, result kept) instead of `completed`. The worker writes its heartbeat before the `running` state, so a fresh run is no longer briefly reported as `heartbeat missing`.
 - Stored region profiles carrying the retired empty `class_ids` field are read and validated again (dropped on read, one shared function); the pinned-body warning stops and a GET body POSTs into another project (#70). A non-empty `class_ids` is still rejected.
 - `GET /search/text` answers 400, not 503, for `conf_min` above `conf_max` (#71).

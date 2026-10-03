@@ -359,6 +359,18 @@ the table with your own per-image figures:
 python scripts/bench/ingest_cost_probe.py --images 1000 --full-items 7
 ```
 
+### Measured ingest speed
+
+One run, not averaged, from `docs/design/storage_sizing_and_ingest_baselines.md`
+section 6: `POST /ingest/batch`, 32 images per request, 4 client threads, one 48 GB
+GPU for the detection models, API with 32 workers. A 2,000-image public COCO subset
+ingested at **13.39 images/s** (0 failed, 1.37 crops per image, batch p50 10.0 s). A
+4,000-image mixed set that is half 12 to 20 MP JPEGs ingested at 4.90 images/s
+(about 15 for the small photos, about 2.5 for the large ones; decode and resize
+dominate). Those runs used the narrow vehicle detector; the full-vocabulary
+policy rows above are computed, not measured. The larger public baseline set (#45)
+is not published yet.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
