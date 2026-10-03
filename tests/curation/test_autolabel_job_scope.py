@@ -138,7 +138,11 @@ class _NormalizingOpenSearch(QueryFakeOpenSearch):
 
 
 def _scope_docs() -> dict[str, dict[str, Any]]:
-    base = {'updated_at': '2026-09-01T00:00:00+00:00', 'bbox_norm': [0, 0, 1, 1]}
+    base = {
+        'updated_at': '2026-09-01T00:00:00+00:00',
+        'bbox_norm': [0, 0, 1, 1],
+        'pe_embedding': [0.1],
+    }
     return {
         # In the cluster, carrying a class but not yet in its class cluster.
         # (class_source 'vlm': what the VLM stage writes; normalization only

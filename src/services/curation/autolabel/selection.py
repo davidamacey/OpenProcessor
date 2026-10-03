@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.ingest_class_sources import classifier_class_sources
 from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
 
@@ -35,7 +36,8 @@ def vlm_selection_query(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """The ``query`` for the VLM stage's scroll."""
-    filters: list[dict[str, Any]] = []
+    # Only embedded items reach the VLM (the working set), same as the worker.
+    filters: list[dict[str, Any]] = [embedded_clause()]
     if class_id is not None:
         filters.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
@@ -63,10 +65,7 @@ def vlm_selection_query(
             # Asked recently and the answer had no class.
             recent_empty_answer_clause(now),
         ]
-    query: dict[str, Any] = {'bool': {'must_not': must_not}}
-    if filters:
-        query['bool']['filter'] = filters
-    return query
+    return {'bool': {'filter': filters, 'must_not': must_not}}
 
 
 def unvalidated_count_query(*, class_id: int | None, cluster_id: int | None) -> dict[str, Any]:

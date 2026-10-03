@@ -54,6 +54,7 @@ from scripts.curation._project_worker_utils import (
     unpaused_projects,
 )
 from src.config.project_context import bind_project
+from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import (
@@ -65,10 +66,6 @@ from src.services.projects.script_binding import (
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
 DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
-# Mirrors src.config.curation.ITEM_EMBEDDING_FIELD for the same no-src-import
-# reason; tests/curation/test_item_embedding_field.py pins the two together.
-ITEM_EMBEDDING_FIELD = 'pe_embedding'
-
 # How long a released-then-not-yet-refreshed crop id stays in the
 # released_at guard. Mirrors scripts/curation/worker/runner.py's
 # _RELEASED_AT_TTL_S.
@@ -169,7 +166,7 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
         must_not.append({'ids': {'values': exclude_ids}})
     return {
         'bool': {
-            'filter': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
+            'filter': [embedded_clause()],
             'must_not': must_not,
         },
     }

@@ -51,6 +51,7 @@ from src.services.curation.clustering.backend import (
     free_gpu_blocks,
     gpu_used_vram_mb,
 )
+from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.ingest_class_sources import confident_class_sources
 
 
@@ -161,7 +162,7 @@ async def fetch_residual_embeddings(
     operator-initiated cancel takes effect within a single scroll
     batch (~50 ms) instead of waiting for the full fetch to finish.
     """
-    filt: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [embedded_clause(RESIDUAL_EMBEDDING_FIELD)]
     # Exclude confidently-labeled crops from the residual pool. The
     # previous filter (class_validated != true) only caught the 102
     # human-validated rows because item_model and vlm writers don't
@@ -292,7 +293,7 @@ async def fetch_residual_embeddings_parallel(
     (older OpenSearch, missing _shard_doc sort support, etc.) so the
     pipeline never breaks on a fetch-layer issue.
     """
-    filt: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [embedded_clause(RESIDUAL_EMBEDDING_FIELD)]
     # Same residual-pool gate as the scroll variant — exclude
     # confidently-labeled crops so clustering only touches the truly
     # residual cohort. See CONFIDENT_CLASS_SOURCES for the rule.

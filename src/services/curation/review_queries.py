@@ -21,6 +21,7 @@ from src.config.region_fields import get_region_fields
 from src.config.region_rejection import compose_rejection_reason
 from src.config.region_state import RegionStatus
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
+from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.ingest_class_sources import (
     LABEL_IMPORT_CLASS_SOURCE,
     classifier_class_sources,
@@ -389,7 +390,7 @@ def build_tab_query(
                         {
                             'bool': {
                                 'must_not': [{'exists': {'field': 'class_id'}}],
-                                'filter': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
+                                'filter': [embedded_clause(ITEM_EMBEDDING_FIELD)],
                             }
                         },
                     ],

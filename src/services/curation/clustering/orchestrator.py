@@ -51,11 +51,12 @@ import numpy as np
 from src.config.curation import items_index
 from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.clustering.id_normalize import run_update_by_query_polled
 
 # Class clusters occupy cluster_id 0..OFFSET-1; candidate clusters produced
 # by ``cluster_residuals`` get the offset added so the namespaces never collide.
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.id_normalize import run_update_by_query_polled
+from src.services.curation.embedding_state import embedded_clause
 
 
 if TYPE_CHECKING:
@@ -607,7 +608,7 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
     """
     from src.services.curation.clustering import embedding_reduce as _ker
 
-    filt: list[dict[str, Any]] = [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [embedded_clause(_ker.RESIDUAL_EMBEDDING_FIELD)]
     if strict:
         filt.append(
             {
@@ -751,7 +752,7 @@ def _residual_pool_filter() -> dict[str, Any]:
     from src.services.curation.clustering import embedding_reduce as _ker
 
     return {
-        'filter': [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}],
+        'filter': [embedded_clause(_ker.RESIDUAL_EMBEDDING_FIELD)],
         'must_not': [
             {'term': {'class_validated': True}},
             {'terms': {'class_source': list(_ker.CONFIDENT_CLASS_SOURCES)}},
