@@ -80,6 +80,7 @@ export class ReprocessFlow {
 
   #deps: ReprocessDeps;
   #timer: ReturnType<typeof setTimeout> | null = null;
+  #destroyed = false;
 
   constructor(target: ReprocessTarget, deps: Partial<ReprocessDeps> = {}) {
     this.target = target;
@@ -222,6 +223,8 @@ export class ReprocessFlow {
   }
 
   #follow(job: ReprocessJob): void {
+    // A job read still in flight when the dialog closed lands here after destroy().
+    if (this.#destroyed) return;
     this.job = job;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = null;
@@ -245,6 +248,7 @@ export class ReprocessFlow {
   }
 
   destroy(): void {
+    this.#destroyed = true;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = null;
   }

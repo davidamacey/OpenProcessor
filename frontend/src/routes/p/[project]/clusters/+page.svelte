@@ -148,6 +148,10 @@
     }
     return g;
   }
+  // Leaving the page (or switching project) stops any region-clustering poll.
+  $effect(() => () => {
+    for (const g of galleriesBySlot.values()) g.dispose();
+  });
 
   const classFilter = $derived.by(() => {
     const v = page.url.searchParams.get('class');

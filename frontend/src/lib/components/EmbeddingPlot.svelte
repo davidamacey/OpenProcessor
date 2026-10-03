@@ -302,13 +302,24 @@
     jobPoll = null;
   }
 
+  // See ScoresCard: `destroyed` stops an adopt read that resolves after
+  // unmount from starting an orphan poll; `polling` stops a slow read from
+  // overlapping the next tick.
+  let destroyed = false;
+  let polling = false;
+
   async function pollJob(): Promise<void> {
+    if (polling) return;
+    polling = true;
     let st: VizProjectionJob;
     try {
       st = await getVizProjectionStatus();
     } catch {
       return; // transient — keep polling
+    } finally {
+      polling = false;
     }
+    if (destroyed || jobPoll === null) return;
     const outcome = classifyRebuildPoll(st.status, job !== null);
     if (outcome === 'running') {
       job = st;
@@ -326,11 +337,13 @@
 
   function startJobPoll(): void {
     stopJobPoll();
+    if (destroyed) return;
     jobPoll = setInterval(() => void pollJob(), JOB_POLL_MS);
   }
 
   // Adopt a rebuild already in flight (another tab, or before a reload).
   $effect(() => {
+    destroyed = false;
     void getVizProjectionStatus()
       .then((st) => {
         if (st.status === 'running') {
@@ -339,7 +352,10 @@
         }
       })
       .catch(() => {});
-    return stopJobPoll;
+    return () => {
+      destroyed = true;
+      stopJobPoll();
+    };
   });
 
   async function triggerRebuild(): Promise<void> {

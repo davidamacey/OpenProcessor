@@ -64,13 +64,24 @@
     jobPoll = null;
   }
 
+  // See ScoresCard: `destroyed` stops an adopt read that resolves after
+  // unmount (or after `eligible` flipped) from starting an orphan poll;
+  // `polling` stops a slow read from overlapping the next tick.
+  let destroyed = false;
+  let polling = false;
+
   async function pollJob(): Promise<void> {
+    if (polling) return;
+    polling = true;
     let st: ProbeStatusResponse;
     try {
       st = await getProbeStatus();
     } catch {
       return; // transient — keep polling
+    } finally {
+      polling = false;
     }
+    if (destroyed || jobPoll === null) return;
     const outcome = classifyProbePoll(st.status);
     if (outcome === 'running') {
       job = st;
@@ -95,6 +106,7 @@
 
   function startJobPoll(): void {
     stopJobPoll();
+    if (destroyed) return;
     jobPoll = setInterval(() => void pollJob(), JOB_POLL_MS);
   }
 
@@ -120,8 +132,12 @@
     // the component itself renders nothing in that case, so firing a
     // GET here would be a probe-status request on every unrelated past
     // run's Results panel for no visible effect.
+    destroyed = false;
     if (eligible) void adoptInFlightJob();
-    return stopJobPoll;
+    return () => {
+      destroyed = true;
+      stopJobPoll();
+    };
   });
 
   function openConfirm(): void {

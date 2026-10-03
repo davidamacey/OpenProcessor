@@ -79,6 +79,33 @@ describe('ReprocessFlow', () => {
     expect(f.job?.status).toBe('cancelled');
   });
 
+  it('does not re-arm its poll when destroyed while a job read is in flight', async () => {
+    const d = deps();
+    d.reprocessBatch.mockResolvedValueOnce(reprocessFixture()).mockResolvedValueOnce(
+      reprocessFixture({
+        dry_run: false,
+        job: { job_id: 'rj1', status: 'running', poll_after_s: 1 },
+      }),
+    );
+    let release!: (v: unknown) => void;
+    d.getReprocessJob.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    d.getReprocessJob.mockResolvedValue({
+      job_id: 'rj1',
+      status: 'running',
+      poll_after_s: 1,
+    });
+    const f = new ReprocessFlow({ kind: 'crops', cropIds: ['a'] }, d);
+    f.toggleScope('detect', true);
+    await f.preview();
+    await f.apply();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(d.getReprocessJob).toHaveBeenCalledTimes(1);
+    f.destroy();
+    release({ job_id: 'rj1', status: 'running', poll_after_s: 1 });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(d.getReprocessJob).toHaveBeenCalledTimes(1);
+  });
+
   it('one crop applies with dry_run false and returns the served crops', async () => {
     const d = deps();
     d.reprocessCrop.mockResolvedValue(
