@@ -49,6 +49,12 @@
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import type { ClusterFilter, RegistryClass, Cluster, Crop } from '$lib/types';
+  import {
+    filterPersistKey,
+    parsePersistedFilter,
+    type PersistedClusterFilter,
+  } from '$lib/clusters/persistedFilter';
+  import { projectsStore } from '$stores/projects.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -93,21 +99,17 @@
   // last view — they shouldn't have to re-click "Unlabeled only" every
   // time. sessionStorage survives back-nav + refresh within the session
   // regardless of how the user returns (back button, link, etc.).
-  const FILTER_PERSIST_KEY = 'clusters_filter_v1';
-  function loadPersistedFilter(): { sort?: string; unlabeledOnly?: boolean } | null {
-    if (typeof sessionStorage === 'undefined') return null;
-    try {
-      return JSON.parse(sessionStorage.getItem(FILTER_PERSIST_KEY) ?? 'null');
-    } catch {
-      return null;
-    }
+  const filterPersistKeyForProject = filterPersistKey(projectsStore.current?.slug ?? '');
+  function loadPersistedFilter(): PersistedClusterFilter {
+    if (typeof sessionStorage === 'undefined') return parsePersistedFilter(null);
+    return parsePersistedFilter(sessionStorage.getItem(filterPersistKeyForProject));
   }
   const _persistedFilter = loadPersistedFilter();
 
   let sort = $state<NonNullable<ClusterFilter['sort']>>(
-    (_persistedFilter?.sort as NonNullable<ClusterFilter['sort']>) ?? 'purity_asc',
+    _persistedFilter.sort ?? 'purity_asc',
   );
-  let unlabeledOnly = $state<boolean>(_persistedFilter?.unlabeledOnly ?? false);
+  let unlabeledOnly = $state<boolean>(_persistedFilter.unlabeledOnly);
   const pageSize = 24;
 
   // Primary-subject grid filters: card stats reflect only crops that pass.
@@ -128,7 +130,10 @@
   // site (toggle button, sort dropdown) without per-handler bookkeeping.
   $effect(() => {
     if (typeof sessionStorage === 'undefined') return;
-    sessionStorage.setItem(FILTER_PERSIST_KEY, JSON.stringify({ sort, unlabeledOnly }));
+    sessionStorage.setItem(
+      filterPersistKeyForProject,
+      JSON.stringify({ sort, unlabeledOnly }),
+    );
   });
 
   // --- Slot gallery (shown instead of the cluster grid when the class
@@ -160,7 +165,7 @@
     // the loaded registry, same lookup `open()` already does in the
     // opposite direction (cluster -> class name -> id -> slot route).
     const byName = classesStore.classes.find(
-      (c) => c.name.toLowerCase() === v.toLowerCase(),
+      (c) => !c.deprecated && c.name.toLowerCase() === v.toLowerCase(),
     );
     return byName?.id ?? null;
   });
@@ -595,7 +600,9 @@
     const browsePath = slot.capabilities.queue?.browsePath;
     const className = slot.bind.className?.toLowerCase();
     if (!browsePath || !className) return null;
-    const cls = classesStore.classes.find((c) => c.name.toLowerCase() === className);
+    const cls = classesStore.classes.find(
+      (c) => !c.deprecated && c.name.toLowerCase() === className,
+    );
     if (!cls) return null;
     try {
       // Pull a slightly larger window than 4 so we can drop items
@@ -929,13 +936,9 @@
     // "the first slot-bound class" — the latter silently routed every
     // slot-bound cluster to the first registered slot's class filter,
     // which breaks the instant a second capable slot exists.
-    if (slotForClassName(c.dominant_class_name) != null) {
-      const target = (c.dominant_class_name ?? '').toLowerCase();
-      const cls = classesStore.classes.find((k) => k.name.toLowerCase() === target);
-      if (cls) {
-        void goto(resolve(projectHref(`/clusters?class=${cls.id}`)));
-        return;
-      }
+    if (slotForClassName(c.dominant_class_name) != null && c.dominant_class_id != null) {
+      void goto(resolve(projectHref(`/clusters?class=${c.dominant_class_id}`)));
+      return;
     }
     void goto(resolve(projectHref(`/clusters/${c.id}`)));
   }
