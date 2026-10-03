@@ -258,6 +258,35 @@
                 {#if g.id === 'segmenter' && ed.vocabulary}
                   <SegmenterStatus segmenters={ed.vocabulary.segmenters} />
                 {/if}
+                {#if g.id === 'segmenter'}
+                  <div class="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-sm self-start"
+                      disabled={ed.promptChecking}
+                      data-testid="check-segmenter-prompt"
+                      onclick={() => void ed.checkSegmenterPrompt()}
+                      >{ed.promptChecking
+                        ? 'Checking…'
+                        : 'Check segmenter prompt'}</button
+                    >
+                    {#if ed.promptCheckError}
+                      <p class="text-xs text-red-300">{ed.promptCheckError}</p>
+                    {/if}
+                    {#if ed.promptReport}
+                      {@const r = ed.promptReport}
+                      <div class="space-y-1" data-testid="segmenter-prompt-check">
+                        <p class="text-xs text-zinc-400">
+                          {r.ok ? 'The prompt passes.' : 'The prompt has errors.'}
+                        </p>
+                        <ConfigIssueList
+                          issues={[...r.errors, ...r.warnings]}
+                          showField
+                        />
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
                 {#each visible as f (f.field)}
                   <ProfileFieldEditor
                     field={f}

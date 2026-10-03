@@ -155,6 +155,14 @@ export interface RegionProfileSchema {
 export type ProfileUpdateRequest = ConfigUpdateRequest<RegionProfileBody>;
 export type ProfileValidateRequest = ConfigValidateRequest<RegionProfileBody>;
 
+/** `SegmenterPromptValidateRequest`: the text-only prompt check. The
+ *  response is a `ValidationReport`. */
+export interface SegmenterPromptValidateRequest {
+  text_prompt: string;
+  /** True when the profile has no detector, so an empty prompt is an error. */
+  sole_leg?: boolean;
+}
+
 /** One `by_profile[]` row of `ActivationImpact`. */
 export interface ImpactByProfile {
   name: string | null;
