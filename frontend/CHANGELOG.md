@@ -16,6 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Documentation
 
+- **Docs screenshots captured from public COCO sample data.** 12 of the 21
+  pending slots now have real images; the capture script gained `--project`,
+  scripted dialog/editor states and an explicit allow-list of side-effect-free
+  calls (documented on the screenshots page), plus
+  `scripts/docs_screenshot_fixtures.py` for throwaway `cwlife-` projects.
+  The remaining slots stay pending, with the reason for each listed.
 - **Docs site updated for the v0.1.0 feature set.** New user-guide pages for
   combine projects, dataset import and Reprocess, the prompt-pack and
   region-profile editors (with test-on-a-crop), the VLM registry and per-run

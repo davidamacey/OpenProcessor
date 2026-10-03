@@ -28,5 +28,20 @@
     "name": "bakeoff-1600.png",
     "alt": "Cropwright model comparison setup",
     "caption": "Bake-off \u2014 compare trained runs on frozen test splits"
+  },
+  {
+    "name": "projects-1600.png",
+    "alt": "Cropwright projects page with capacity banner and a paused project",
+    "caption": "Projects \u2014 list, capacity banner and lifecycle actions"
+  },
+  {
+    "name": "combine-wizard-1600.png",
+    "alt": "Combine projects wizard with ordered sources, class mapping and preview",
+    "caption": "Combine \u2014 ordered sources, class mapping and a served preview"
+  },
+  {
+    "name": "prompt-pack-test-1600.png",
+    "alt": "Prompt-pack test panel with the VLM's raw reply and parsed answer",
+    "caption": "Prompt packs \u2014 test on a crop before activating"
   }
 ]
