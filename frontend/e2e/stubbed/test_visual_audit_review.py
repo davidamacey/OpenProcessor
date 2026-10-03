@@ -223,6 +223,8 @@ def test_empty_queue_explains_itself_and_dims_the_tab(stub, page, app_url):
     page.goto(f"{app_url}/p/default/review?tab=uncertainty")
     empty = page.get_by_test_id("queue-empty")
     empty.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # The panel mounts before the served tab description arrives; wait for it.
+    empty.get_by_text("High active-learning probe entropy").wait_for(timeout=ACTION_TIMEOUT_MS)
     text = empty.inner_text()
     assert "The Uncertainty queue is empty." in text, text
     assert "High active-learning probe entropy" in text, text
