@@ -1,0 +1,574 @@
+{
+  "uid": "op-logs",
+  "title": "OpenProcessor / Logs",
+  "description": "Loki log volume, errors and warnings for the API and Triton containers.",
+  "tags": [
+    "openprocessor",
+    "logs"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "links": [
+    {
+      "title": "OpenProcessor dashboards",
+      "type": "dashboards",
+      "tags": [
+        "openprocessor"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Firing alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "enable": true,
+        "iconColor": "#E02F44",
+        "expr": "ALERTS{alertstate=\"firing\"}",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{severity}} {{instance}}",
+        "step": "60s"
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "type": "datasource",
+        "name": "lds",
+        "label": "Loki",
+        "query": "loki",
+        "current": {},
+        "hide": 0,
+        "refresh": 1,
+        "regex": ""
+      },
+      {
+        "type": "query",
+        "name": "job",
+        "label": "Job",
+        "datasource": {
+          "type": "loki",
+          "uid": "${lds}"
+        },
+        "query": {
+          "label": "job",
+          "refId": "j",
+          "stream": "",
+          "type": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "type": "query",
+        "name": "container",
+        "label": "Container",
+        "datasource": {
+          "type": "loki",
+          "uid": "${lds}"
+        },
+        "query": {
+          "label": "container",
+          "refId": "c",
+          "stream": "",
+          "type": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "type": "textbox",
+        "name": "search",
+        "label": "Search",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Log volume",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "",
+      "id": 2,
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Container logs shipped by Alloy to Loki. Spikes in the error series are the first thing to look at."
+      },
+      "transparent": true
+    },
+    {
+      "type": "timeseries",
+      "title": "Log lines / s by container",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "sum by (container) (rate({job=~\"$job\", container=~\"$container\"}[$__auto]))",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 3,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 3
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors / s by container",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "sum by (container) (rate({job=~\"$job\", container=~\"$container\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" [$__auto]))",
+          "legendFormat": "{{container}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E02F44",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 4,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 3
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Errors (selected range)",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "sum(count_over_time({job=~\"$job\", container=~\"$container\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E0B400",
+                "value": 1
+              },
+              {
+                "color": "#E02F44",
+                "value": 100
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings (selected range)",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "sum(count_over_time({job=~\"$job\", container=~\"$container\"} |~ \"(?i)warn\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#56A64B",
+                "value": null
+              },
+              {
+                "color": "#E0B400",
+                "value": 1
+              },
+              {
+                "color": "#E02F44",
+                "value": 500
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      }
+    },
+    {
+      "type": "row",
+      "title": "Recent errors and warnings",
+      "id": 7,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "",
+      "id": 8,
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Newest first. Use the search box to narrow further."
+      },
+      "transparent": true
+    },
+    {
+      "type": "logs",
+      "title": "Errors",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "{job=~\"$job\", container=~\"$container\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" |~ \"(?i)$search\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false
+      },
+      "id": 9,
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Warnings",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "{job=~\"$job\", container=~\"$container\"} |~ \"(?i)warn\" |~ \"(?i)$search\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false
+      },
+      "id": 10,
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      }
+    },
+    {
+      "type": "row",
+      "title": "Full stream",
+      "id": 11,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "panels": []
+    },
+    {
+      "type": "text",
+      "title": "",
+      "id": 12,
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Everything from the selected containers."
+      },
+      "transparent": true
+    },
+    {
+      "type": "logs",
+      "title": "All logs",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "${lds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${lds}"
+          },
+          "expr": "{job=~\"$job\", container=~\"$container\"} |~ \"(?i)$search\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false
+      },
+      "id": 13,
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      }
+    }
+  ]
+}

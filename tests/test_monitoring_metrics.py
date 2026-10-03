@@ -39,10 +39,7 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD_PATHS = (
-    REPO_ROOT / 'monitoring' / 'dashboards' / 'triton-unified-dashboard.json',
-    REPO_ROOT / 'monitoring' / 'dashboards' / 'gpu-metrics-dashboard.json',
-)
+DASHBOARD_PATHS = tuple(sorted((REPO_ROOT / 'monitoring' / 'dashboards').glob('*.json')))
 ALERT_PATH = REPO_ROOT / 'monitoring' / 'alerts' / 'triton-alerts.yml'
 
 # Captured from Triton's own /metrics (this repo's Dockerfile.triton image,
@@ -87,6 +84,11 @@ _DCGM_METRICS = frozenset(
         'DCGM_FI_DEV_DEC_UTIL',
         'DCGM_FI_DEV_VGPU_LICENSE_STATUS',
         'DCGM_FI_DEV_FB_USED',
+        # Re-checked 2026-10-03 against the live dcgm-exporter /metrics.
+        'DCGM_FI_DEV_FB_FREE',
+        'DCGM_FI_DEV_SM_CLOCK',
+        'DCGM_FI_DEV_XID_ERRORS',
+        'DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION',
     }
 )
 
@@ -103,7 +105,37 @@ _NODE_EXPORTER_METRICS = frozenset(
     }
 )
 
-REAL_METRIC_NAMES = _TRITON_METRICS | _DCGM_METRICS | _NODE_EXPORTER_METRICS
+# Prometheus-side names for the API (op_* custom counters/histograms and the
+# HTTP instrumentation histogram), the node-exporter extras and the synthetic
+# ALERTS series. Captured 2026-10-03 from the live Prometheus label values.
+_API_METRICS = frozenset(
+    {
+        'http_request_duration_seconds_count',
+        'http_request_duration_seconds_bucket',
+        'op_pipeline_stage_seconds_count',
+        'op_pipeline_stage_seconds_sum',
+        'op_pipeline_stage_seconds_bucket',
+        'op_pipeline_stage_bytes_total',
+        'op_source_image_decode_count_total',
+        'op_source_image_prefetch_hits_total',
+        'op_source_image_prefetch_misses_total',
+        'op_thumbnail_cache_hits_total',
+        'op_thumbnail_cache_misses_total',
+        'op_shm_crop_cache_hits_total',
+        'op_shm_crop_cache_misses_total',
+        'op_shm_crop_cache_evictions_total',
+        'op_open_vocab_items_written_total',
+        'op_ingest_occ_final_conflict_total',
+        'op_vlm_call_combined_count_total',
+        'op_vlm_call_separate_count_total',
+        'op_vlm_combined_parse_failure_total',
+        'node_load5',
+        'node_load15',
+        'ALERTS',
+    }
+)
+
+REAL_METRIC_NAMES = _TRITON_METRICS | _DCGM_METRICS | _NODE_EXPORTER_METRICS | _API_METRICS
 
 # PromQL functions/aggregators/keywords that look like bare identifiers in
 # an `expr` string but are never metric names.
@@ -124,6 +156,12 @@ _PROMQL_KEYWORDS = frozenset(
         'histogram_quantile',
         'humanize',
         'humanizePercentage',
+        'or',
+        'vector',
+        'clamp_min',
+        'topk',
+        'increase',
+        'le',
         'mode',  # only ever a label key (node_cpu_seconds_total{mode=...}), never a metric
     }
 )
@@ -147,6 +185,7 @@ def _metric_names_in_expr(expr: str) -> set[str]:
     stripped = _LABEL_MATCHER_RE.sub(' ', expr)
     stripped = _AGGREGATION_CLAUSE_RE.sub(' ', stripped)
     stripped = _RANGE_VECTOR_RE.sub(' ', stripped)
+    stripped = re.sub(r'\b\d+(?:\.\d+)?(?:[eE][-+]?\d+)?\b', ' ', stripped)  # numeric literals
     names: set[str] = set()
     for m in _IDENTIFIER_RE.finditer(stripped):
         name = m.group(0)
@@ -167,6 +206,9 @@ def _dashboard_exprs(path: Path) -> list[str]:
     for panel in data.get('panels', []):
         for target in panel.get('targets', []) or []:
             expr = target.get('expr')
+            ds = target.get('datasource')
+            if isinstance(ds, dict) and ds.get('type') == 'loki':
+                continue  # LogQL, not PromQL
             if expr:
                 exprs.append(expr)
     return exprs
@@ -238,3 +280,15 @@ def test_gpu_temperature_panel_uses_dcgm() -> None:
     exprs = [t['expr'] for t in panels['GPU Temperature']['targets']]
     assert any('DCGM_FI_DEV_GPU_TEMP' in e for e in exprs)
     assert not any('nv_gpu_temperature' in e for e in exprs)
+
+
+def test_every_dashboard_is_provisionable_and_linked() -> None:
+    uids: set[str] = set()
+    for path in DASHBOARD_PATHS:
+        data = json.loads(path.read_text())
+        assert data['uid'] not in uids, path.name
+        uids.add(data['uid'])
+        assert data['title'], path.name
+        assert data['panels'], path.name
+        assert 'openprocessor' in data.get('tags', []), path.name
+        assert any(link.get('type') == 'dashboards' for link in data.get('links', [])), path.name
