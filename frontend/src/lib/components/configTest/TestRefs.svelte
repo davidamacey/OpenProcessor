@@ -4,6 +4,7 @@
    * answered, and how long it took (W5). Rendered as served; the VLM's
    * `endpoint` is its own `name@revision`.
    */
+  import { formatLatencyMs } from '$lib/formatLatency';
   import { refText } from '$lib/configTest/refText';
   import type { PackTestPackRef, PackTestVlmRef } from '$lib/types_configTest';
 
@@ -32,6 +33,6 @@
   {/if}
   {#if latencyMs != null}
     <dt class="text-zinc-500">Latency</dt>
-    <dd class="font-mono" data-testid="test-latency">{latencyMs} ms</dd>
+    <dd class="font-mono" data-testid="test-latency">{formatLatencyMs(latencyMs)}</dd>
   {/if}
 </dl>

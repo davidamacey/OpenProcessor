@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `/review`'s served enum filters (e.g. "Negative frames") no longer render a
+  blank select when neither the operator nor the served defaults name one of
+  the options: the first served option shows. The review panel's Reason row
+  now sizes its label column to its content so the value sits next to the
+  label at narrow widths. Served latencies on the pack/profile test panels and
+  the VLM probe panel print as whole milliseconds (`formatLatencyMs`). The live
+  tier's four region tests skip with a clear message when no region profile is
+  served (issue #24).
+
 - **Combine next-step buttons wait for the target project (#23).** They were
   offered as soon as the job was completed, so a click right then 409'd
   `project_building`. They now stay disabled, with the target's served status

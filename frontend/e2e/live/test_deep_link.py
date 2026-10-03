@@ -19,7 +19,10 @@ from fixtures.wire import REGION_TAB_URL_ID
 
 
 def test_deep_link_lands_on_the_requested_crop(
-    guarded_page: Any, live_url: str, live_project: dict
+    guarded_page: Any,
+    live_url: str,
+    live_project: dict,
+    require_region_profile: dict[str, Any],
 ) -> None:
     rejected = api_get(
         live_url, live_project, "/review/regions?region_status=verify_rejected&page_size=1"

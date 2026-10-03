@@ -8,6 +8,7 @@
    * render through the shared issue list.
    */
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
+  import { formatLatencyMs } from '$lib/formatLatency';
   import { formatTimestamp } from '$lib/formatDate';
   import type { VlmProbeResult } from '$lib/types_vlm';
 
@@ -35,8 +36,8 @@
     >
   </div>
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5">
-    <dt class="text-zinc-500">Latency (ms)</dt>
-    <dd class="font-mono">{num(probe.latency_ms)}</dd>
+    <dt class="text-zinc-500">Latency</dt>
+    <dd class="font-mono">{formatLatencyMs(probe.latency_ms)}</dd>
     <dt class="text-zinc-500">Models listed</dt>
     <dd class="break-all font-mono">
       {(probe.models_listed ?? []).length > 0 ? probe.models_listed!.join(', ') : '—'}

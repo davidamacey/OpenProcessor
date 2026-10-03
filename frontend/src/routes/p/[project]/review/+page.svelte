@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { enumFilterSelection } from '$lib/review/enumFilter';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
@@ -1983,11 +1984,11 @@
       <label class="flex shrink-0 items-center gap-1.5">
         <span class="text-zinc-400">{spec.label}</span>
         <select
-          value={enumFilterValues[spec.param] ??
-            String(
-              reviewTabsVocabularyStore.filterDefault(activeTabEndpointId, spec.param) ??
-                '',
-            )}
+          value={enumFilterSelection(
+            spec,
+            enumFilterValues[spec.param],
+            reviewTabsVocabularyStore.filterDefault(activeTabEndpointId, spec.param),
+          )}
           onchange={(e) => setEnumFilter(spec.param, e.currentTarget.value)}
           class="select-sm"
         >
@@ -2354,7 +2355,7 @@
           class="mt-3 pr-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
           data-testid="review-meta-pane"
         >
-          <dl class="grid grid-cols-2 gap-y-1 text-xs">
+          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
             {#if currentSlotRejectionReason}
               {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
                 currentSlotRejectionReason,
