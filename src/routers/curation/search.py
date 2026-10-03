@@ -19,6 +19,7 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query, Request
 
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
+from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.services.curation import semantic_search
 
 
@@ -47,6 +48,7 @@ def _get_pe_encoder(request: Request) -> Any:
 async def search_text(
     request: Request,
     opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
     q: Annotated[
         str, Query(min_length=1, description='Free-text query, e.g. "white pickup truck".')
     ],
@@ -65,7 +67,6 @@ async def search_text(
     ),
     date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
     date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
-    max_rank: int | None = Query(None, ge=1),
     min_blur_ratio: float | None = Query(None, ge=0.0),
     hide_near_duplicates: bool = False,
     min_score: float | None = Query(
@@ -130,7 +131,7 @@ async def search_text(
             tab=tab,
             date_from=date_from,
             date_to=date_to,
-            max_rank=max_rank,
+            item_filter=item_filter,
             min_blur_ratio=min_blur_ratio,
             hide_near_duplicates=hide_near_duplicates,
             min_score=min_score,

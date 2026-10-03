@@ -669,7 +669,7 @@ are the ways an item needs a vector after ingest, and what happens today.
    `POST .../regions/batch_box_state`, `PATCH .../crops/{crop_id}/region_meta`
    and `POST .../regions/batch_status`) prunes what the edit invalidated and
    then embeds the accepted and false-positive boxes that have no valid vector,
-   and returns `region_embedding: {embedded, pending}`. A box it could not
+   and returns `vector_refresh: {embedded, pending}`. A box it could not
    embed (encoder down, image unreadable) stays `pending`: the edit still
    succeeds and an `embed` run with `only_missing` picks the box up.
 3. **An embedding failed at ingest.** The item is stored with

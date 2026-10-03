@@ -24051,23 +24051,6 @@
           },
           {
             "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Max Rank"
-            }
-          },
-          {
-            "in": "query",
             "name": "min_blur_ratio",
             "required": false,
             "schema": {
@@ -24124,6 +24107,228 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],
@@ -24795,23 +25000,6 @@
           },
           {
             "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Max Rank"
-            }
-          },
-          {
-            "in": "query",
             "name": "min_blur_ratio",
             "required": false,
             "schema": {
@@ -24843,42 +25031,6 @@
                 }
               ],
               "title": "Classifier Conf Lt"
-            }
-          },
-          {
-            "in": "query",
-            "name": "conf_min",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Conf Min"
-            }
-          },
-          {
-            "in": "query",
-            "name": "conf_max",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Conf Max"
             }
           },
           {
@@ -24930,6 +25082,228 @@
               ],
               "description": "order=diverse only: rank just the first k picks.",
               "title": "K"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],
@@ -31828,7 +32202,7 @@
     },
     "/curation/projects/{project}/regions": {
       "get": {
-        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``class_id``, ``cluster_id``, ``verified``, ``max_rank``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
+        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``class_id``, ``cluster_id``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
         "operationId": "list_regions_curation_projects__project__regions_get",
         "parameters": [
           {
@@ -31943,25 +32317,6 @@
               "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
               "title": "Sort By Subid",
               "type": "boolean"
-            }
-          },
-          {
-            "description": "Only regions on top-N largest crops (crop_rank_in_image<=N).",
-            "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only regions on top-N largest crops (crop_rank_in_image<=N).",
-              "title": "Max Rank"
             }
           },
           {
@@ -32100,6 +32455,228 @@
               "default": false,
               "title": "Include Test",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],
@@ -33464,25 +34041,6 @@
             }
           },
           {
-            "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
-            "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
-              "title": "Max Rank"
-            }
-          },
-          {
             "description": "Clarity floor (null-safe).",
             "in": "query",
             "name": "min_blur_ratio",
@@ -33566,46 +34124,6 @@
               ],
               "description": "Only items with this ingest source tag.",
               "title": "Source"
-            }
-          },
-          {
-            "description": "Inclusive confidence band.",
-            "in": "query",
-            "name": "conf_min",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Inclusive confidence band.",
-              "title": "Conf Min"
-            }
-          },
-          {
-            "description": "Inclusive confidence band.",
-            "in": "query",
-            "name": "conf_max",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Inclusive confidence band.",
-              "title": "Conf Max"
             }
           },
           {
@@ -33708,6 +34226,228 @@
               ],
               "description": "true = only items on an imported reviewed-negative frame; false = hide them (GET /review/tabs filter_specs, param on_negative_frame).",
               "title": "On Negative Frame"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],
@@ -33818,25 +34558,6 @@
             }
           },
           {
-            "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
-            "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
-              "title": "Max Rank"
-            }
-          },
-          {
             "description": "Clarity floor (null-safe).",
             "in": "query",
             "name": "min_blur_ratio",
@@ -33920,46 +34641,6 @@
               ],
               "description": "Only items with this ingest source tag.",
               "title": "Source"
-            }
-          },
-          {
-            "description": "Inclusive confidence band.",
-            "in": "query",
-            "name": "conf_min",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Inclusive confidence band.",
-              "title": "Conf Min"
-            }
-          },
-          {
-            "description": "Inclusive confidence band.",
-            "in": "query",
-            "name": "conf_max",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Inclusive confidence band.",
-              "title": "Conf Max"
             }
           },
           {
@@ -34062,6 +34743,228 @@
               ],
               "description": "true = only items on an imported reviewed-negative frame; false = hide them (GET /review/tabs filter_specs, param on_negative_frame).",
               "title": "On Negative Frame"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],
@@ -34418,23 +35321,6 @@
           },
           {
             "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Max Rank"
-            }
-          },
-          {
-            "in": "query",
             "name": "min_blur_ratio",
             "required": false,
             "schema": {
@@ -34488,6 +35374,228 @@
               "default": false,
               "title": "Include Test",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],
@@ -34832,6 +35940,228 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
           }
         ],
         "responses": {
@@ -34866,8 +36196,8 @@
     },
     "/curation/projects/{project}/stats/dataset": {
       "get": {
-        "description": "Overall dataset balance + label-source + pipeline breakdown.\n\nSingle ``_search?size=0`` with composite aggregations. Backwards-\ncompatible: legacy callers still see ``total_crops``, ``validated``,\n``test_holdout``, ``by_source``.\n\nNew fields for the dashboard:\n\n- ``as_of`` — ISO8601 timestamp of the query.\n- ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts\n  derived from ``class_source`` plus the ``class_validated`` /\n  region-validated flags.\n- ``unlabeled.{pending_detection, pending_verification, no_label_source,\n  vlm_no_class, by_proposal}`` — the region-status field plus crops with\n  no ``class_id``. ``by_proposal`` is F-23's fixed accounting for\n  detector-proposed-but-not-yet-classified crops (moved here from the\n  always-0 ``labeled.by_proposal``, since those class_source values\n  never carry a class_id).\n- ``in_progress.region_drain_total_unfinished`` — matches the value\n  returned by ``/curation/ingest/region_drain``.\n- ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —\n  sourced from the persisted ``auto_label_job`` state when present;\n  ``cluster_count`` falls back to live ``cluster_id`` cardinality.",
-        "operationId": "stats_dataset_curation_projects__project__stats_dataset_get",
+        "description": "``GET /stats/dataset`` over the items the shared item filter selects (every\nitem when no filter parameter is set); see :func:`dataset_stats`.",
+        "operationId": "stats_dataset_route_curation_projects__project__stats_dataset_get",
         "parameters": [
           {
             "in": "path",
@@ -34877,6 +36207,228 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
           }
         ],
         "responses": {
@@ -34885,7 +36437,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Stats Dataset Curation Projects  Project  Stats Dataset Get",
+                  "title": "Response Stats Dataset Route Curation Projects  Project  Stats Dataset Get",
                   "type": "object"
                 }
               }
@@ -34903,7 +36455,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Stats Dataset",
+        "summary": "Stats Dataset Route",
         "tags": [
           "Curation"
         ]

@@ -214,6 +214,13 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return out
 
 
+def item_filter_query(f: ItemFilter) -> dict[str, Any]:
+    """The filter as one query (``match_all`` when it constrains nothing), for
+    routes that count or aggregate over the matching items."""
+    clauses = item_filter_clauses(f)
+    return {'bool': {'filter': clauses}} if clauses else {'match_all': {}}
+
+
 def visibility_clauses(*, include_test: bool, include_excluded: bool) -> list[dict[str, Any]]:
     """The browse defaults: hold-out items and human-ignored items are hidden
     unless asked for. Separate from the filter because only browse hides them."""
@@ -232,5 +239,6 @@ __all__ = [
     'Origin',
     'ReviewStatus',
     'item_filter_clauses',
+    'item_filter_query',
     'visibility_clauses',
 ]

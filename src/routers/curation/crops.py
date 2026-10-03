@@ -27,21 +27,16 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.services.curation.class_label import (
     candidate_move_update,
     human_label_update,
     human_move_class_update,
 )
 from src.services.curation.cluster_ids import cluster_kind
-from src.services.curation.crop_browse import (
-    classifier_low_confidence_clause,
-    confidence_band,
-    crops_page,
-    parse_crop_sort,
-)
+from src.services.curation.crop_browse import crops_page, parse_crop_sort
 from src.services.curation.crop_orders import ordered_crops_page
-from src.services.curation.item_text import item_text_query
-from src.services.curation.review_queries import negative_frame_clause
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.wire import (
     item_list_source_excludes,
     item_source_excludes,
@@ -102,6 +97,7 @@ async def _occ_bulk_human_relabel(
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
 async def list_crops(
     opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
     # Annotated defaults (not `= Query(...)`) so direct Python callers such
     # as GET /classes/{id}/crops get real values, not FieldInfo objects.
     page: Annotated[int, Query(ge=1)] = 1,
@@ -156,11 +152,8 @@ async def list_crops(
     ] = None,
     include_test: bool = False,
     include_excluded: bool = False,
-    max_rank: Annotated[int | None, Query(ge=1)] = None,
     min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
     classifier_conf_lt: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
-    conf_min: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
-    conf_max: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
     item_text: Annotated[
         str | None,
         Query(
@@ -216,83 +209,39 @@ async def list_crops(
     guard_page_depth(page, page_size)
     try:
         sort_clause = parse_crop_sort(sort)
-        conf_clause = confidence_band(conf_min, conf_max)
+        # The route's own params join the shared filter; one builder reads them all.
+        legacy = {
+            'class_id': class_id,
+            'cluster_id': cluster_id,
+            'label_source': label_source,
+            'class_source': class_source,
+            'label_validated': label_validated,
+            'import_id': import_id,
+            'dataset_split': dataset_split,
+            'on_negative_frame': on_negative_frame,
+            'proposed_by_import': proposed_by_import,
+            'source': source,
+            'needs_new_class': needs_new_class,
+            'review_dismissed': review_dismissed,
+            'min_blur_ratio': min_blur_ratio,
+            'classifier_conf_lt': classifier_conf_lt,
+            'item_text': item_text,
+        }
+        flt = ItemFilter(
+            **item_filter.model_dump(exclude_defaults=True),
+            **{k: v for k, v in legacy.items() if v is not None},
+        )
+        # Every clause is a pure predicate (term/exists/range/must_not), none
+        # scores, so all of it lives in filter context, not must.
+        filt = [
+            *item_filter_clauses(flt),
+            *visibility_clauses(
+                include_test=include_test,
+                include_excluded=include_excluded or 'excluded' in flt.review_status,
+            ),
+        ]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    # Every clause below is a pure predicate (term/exists/range/
-    # must_not-wrapped-term) — none score — so all of it lives in filter
-    # context, not must.
-    filt: list[dict[str, Any]] = []
-    if conf_clause is not None:
-        filt.append(conf_clause)
-    if item_text is not None:
-        text_clause = item_text_query(item_text)
-        if text_clause is None:
-            raise HTTPException(status_code=400, detail='item_text must contain a letter or digit')
-        filt.append(text_clause)
-    if class_id is not None:
-        filt.append({'term': {'class_id': class_id}})
-    if cluster_id is not None:
-        filt.append({'term': {'cluster_id': cluster_id}})
-    if label_source:
-        filt.append({'term': {'label_source': label_source}})
-    if class_source:
-        # class_source is mapped keyword directly on the live index — no
-        # .keyword subfield exists.
-        filt.append({'term': {'class_source': class_source}})
-    if label_validated is not None:
-        # Legacy query param maps to class_validated (the class-side flag —
-        # the common case for the labeler /clusters filter).
-        filt.append({'term': {'class_validated': label_validated}})
-    if import_id:
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'term': {'import_ids': import_id}},
-                        {'term': {'proposed_by_import': import_id}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
-    if dataset_split:
-        filt.append({'term': {'dataset_split': dataset_split}})
-    if on_negative_frame is not None:
-        filt.append(negative_frame_clause(on_negative_frame))
-    if proposed_by_import is not None:
-        proposed: dict[str, Any] = {'exists': {'field': 'proposed_by_import'}}
-        filt.append(proposed if proposed_by_import else {'bool': {'must_not': proposed}})
-    if source:
-        filt.append({'term': {'source': source}})
-    if review_dismissed is not None:
-        dismissed: dict[str, Any] = {'exists': {'field': 'review_dismissed_at'}}
-        filt.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
-    if needs_new_class is not None:
-        clause: dict[str, Any] = {'term': {'needs_new_class': True}}
-        filt.append(clause if needs_new_class else {'bool': {'must_not': clause}})
-    if not include_test:
-        filt.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
-    if not include_excluded:
-        filt.append({'bool': {'must_not': {'term': {'class_excluded': True}}}})
-    if max_rank is not None:
-        filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
-    if min_blur_ratio is not None:
-        # Crops with no blur score must NOT be hidden by the slider — only
-        # exclude crops that have a score and fall below it.
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'blur_lap_ratio': {'gte': min_blur_ratio}}},
-                        {'bool': {'must_not': {'exists': {'field': 'blur_lap_ratio'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
-    if classifier_conf_lt is not None:
-        filt.append(classifier_low_confidence_clause(classifier_conf_lt))
 
     bool_q: dict[str, Any] = {}
     if filt:

@@ -8,7 +8,7 @@ same shared ``router``.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import HTTPException, Path as PathParam, Query
 
@@ -26,15 +26,14 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resolves the aliases
     BlurQ,
     ClassIdQ,
     CombineConflictQ,
-    ConfQ,
     DatasetSplitQ,
     ImportIdQ,
     IncludeTest,
-    MaxRankQ,
     MistakeQ,
     NearDupQ,
     OnNegativeFrameQ,
@@ -241,20 +240,22 @@ async def review_raw_label_clusters(
     }
 
 
+if TYPE_CHECKING:
+    from src.services.curation.item_filter import ItemFilter
+
+
 _TAB_DESCRIPTION = 'One of: ' + ' | '.join(review_queries.KNOWN_TABS)
 
 
 def _filters(
     include_test: bool,
     text: str | None,
-    max_rank: int | None,
+    item_filter: ItemFilter,
     min_blur_ratio: float | None,
     min_mistakenness: float | None,
     hide_near_duplicates: bool,
     class_id: int | None,
     source: str | None,
-    conf_min: float | None,
-    conf_max: float | None,
     region_status: str | None,
     combine_conflict: bool,
     import_id: str | None,
@@ -264,14 +265,13 @@ def _filters(
     return ReviewFilters(
         include_test=include_test,
         text=text,
-        max_rank=max_rank,
+        max_rank=item_filter.max_rank,
         min_blur_ratio=min_blur_ratio,
         min_mistakenness=min_mistakenness,
         hide_near_duplicates=hide_near_duplicates,
         class_id=class_id,
         source=source,
-        conf_min=conf_min,
-        conf_max=conf_max,
+        item=item_filter.model_copy(update={'max_rank': None}),
         region_status=region_status,
         combine_conflict=combine_conflict,
         import_id=import_id,
@@ -309,18 +309,16 @@ async def review_tabs(opensearch: OpenSearchDep) -> dict[str, Any]:
 async def review_queue(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 30,
     include_test: IncludeTest = False,
     text: TextQ = None,
-    max_rank: MaxRankQ = None,
     min_blur_ratio: BlurQ = None,
     min_mistakenness: MistakeQ = None,
     hide_near_duplicates: NearDupQ = False,
     class_id: ClassIdQ = None,
     source: SourceQ = None,
-    conf_min: ConfQ = None,
-    conf_max: ConfQ = None,
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
     combine_conflict: CombineConflictQ = False,
@@ -343,14 +341,12 @@ async def review_queue(
     filters = _filters(
         include_test,
         text,
-        max_rank,
+        item_filter,
         min_blur_ratio,
         min_mistakenness,
         hide_near_duplicates,
         class_id,
         source,
-        conf_min,
-        conf_max,
         region_status,
         combine_conflict,
         import_id,
@@ -426,17 +422,15 @@ async def review_locate(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     crop_id: Annotated[str, Query(description='The item to find.')],
     opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
     page_size: Annotated[int, Query(ge=1, le=200)] = 30,
     include_test: IncludeTest = False,
     text: TextQ = None,
-    max_rank: MaxRankQ = None,
     min_blur_ratio: BlurQ = None,
     min_mistakenness: MistakeQ = None,
     hide_near_duplicates: NearDupQ = False,
     class_id: ClassIdQ = None,
     source: SourceQ = None,
-    conf_min: ConfQ = None,
-    conf_max: ConfQ = None,
     sort: SortQ = None,
     region_status: RegionStatusQ = None,
     combine_conflict: CombineConflictQ = False,
@@ -457,14 +451,12 @@ async def review_locate(
     filters = _filters(
         include_test,
         text,
-        max_rank,
+        item_filter,
         min_blur_ratio,
         min_mistakenness,
         hide_near_duplicates,
         class_id,
         source,
-        conf_min,
-        conf_max,
         region_status,
         combine_conflict,
         import_id,

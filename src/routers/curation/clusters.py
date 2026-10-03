@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import HTTPException, Query
 
 from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.services.curation.cluster_ids import (
     CORE_SIMILARITY_MIN,
     RESIDUAL_CLUSTER_ID_OFFSET,
@@ -20,6 +21,7 @@ from src.services.curation.cluster_purity import (
     purity_tier,
 )
 from src.services.curation.clustering.orchestrator import MAX_REFINE_MEMBERS
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import current_cluster_distance
 
 
@@ -154,6 +156,7 @@ async def _fill_page_representatives(
 @router.get('/clusters')
 async def list_clusters(
     opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
     per_cluster: int = Query(4, ge=0, le=10, description='Representative crops per cluster'),
     max_clusters: int = Query(1000, ge=1, le=10000),
     kind: Literal['class', 'candidate', 'all'] = Query('all'),
@@ -173,7 +176,6 @@ async def list_clusters(
     # Primary-subject grid filters: every card stat (size, reps, purity)
     # reflects only crops passing these — so a filtered grid shows clusters
     # of just the largest/clear crops, ready to drag-drop + AHC-refine.
-    max_rank: int | None = Query(None, ge=1),
     min_blur_ratio: float | None = Query(None, ge=0.0),
     class_source: str | None = Query(None),
     # Representatives are only computed for this page of the
@@ -229,25 +231,22 @@ async def list_clusters(
         _base_match = {'match_all': {}}
     # Primary-subject gate (filter context → cached, scopes every sub-agg).
     # Null-safe blur: crops with no blur score aren't hidden by the slider.
-    gate_filter: list[dict[str, Any]] = []
-    if max_rank is not None:
-        gate_filter.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
-    if min_blur_ratio is not None:
-        gate_filter.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'blur_lap_ratio': {'gte': min_blur_ratio}}},
-                        {'bool': {'must_not': {'exists': {'field': 'blur_lap_ratio'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
+    try:
+        gate_filter = item_filter_clauses(
+            ItemFilter(
+                **item_filter.model_dump(exclude_defaults=True),
+                **{
+                    k: v
+                    for k, v in {
+                        'min_blur_ratio': min_blur_ratio,
+                        'class_source': class_source or None,
+                    }.items()
+                    if v is not None
+                },
+            )
         )
-    if class_source:
-        # class_source is mapped keyword directly on the live index — no
-        # .keyword subfield exists (same root cause as top_class below).
-        gate_filter.append({'term': {'class_source': class_source}})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Pushes `kind` into the query as a bounded cluster_id range filter
     # *before* aggregating, rather than terms-aggregating every kind
     # together (size: max_clusters) and dropping mismatched-kind buckets

@@ -24,8 +24,10 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
+from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
+from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_boxes import BOX_STATES, box_query
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
@@ -58,6 +60,7 @@ def _box_clause(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
 async def list_regions(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
+    item_filter: ItemFilterQuery,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     class_id: int | None = Query(None),
@@ -71,9 +74,6 @@ async def list_regions(
             'come back contiguous across pages (the UI groups them with '
             'separators). Overrides the default outliers-first ordering.'
         ),
-    ),
-    max_rank: int | None = Query(
-        None, ge=1, description='Only regions on top-N largest crops (crop_rank_in_image<=N).'
     ),
     min_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
     max_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
@@ -101,7 +101,9 @@ async def list_regions(
     ``min_score``, ``max_score``, ``text``, ``region_cluster_id``,
     ``region_cluster_subid``, ``box_state``) all select the SAME box, and
     each matching box is its own row (``region_box_id``). The item filters
-    (``status``, ``class_id``, ``cluster_id``, ``verified``, ``max_rank``)
+    (``status``, ``class_id``, ``cluster_id``, ``verified`` and the shared item
+    filter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,
+    ``max_rank``, ``origin``, ``embedding_state``, ``review_status``)
     select items. ``page`` / ``page_size`` page items; ``total`` counts
     items, ``total_rows`` rows.
     """
@@ -157,8 +159,10 @@ async def list_regions(
         filt.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
         filt.append({'term': {'cluster_id': cluster_id}})
-    if max_rank is not None:
-        filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
+    try:
+        filt.extend(item_filter_clauses(item_filter))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if verified is not None:
         filt.append({'term': {F.verified: verified}})
 

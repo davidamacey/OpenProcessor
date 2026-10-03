@@ -282,7 +282,7 @@ async def set_crop_regions(
     rec = _Recorder(build, 'human:set_crop_regions')
     await _write_one_boxes(opensearch, crop_id, rec, 'human:set_crop_regions')
     embedding = await refresh_box_embeddings(opensearch, [crop_id])
-    return {'crop_id': crop_id, 'item': rec.item(crop_id), 'region_embedding': embedding}
+    return {'crop_id': crop_id, 'item': rec.item(crop_id), 'vector_refresh': embedding}
 
 
 @router.put('/crops/batch_regions')
@@ -311,7 +311,7 @@ async def batch_set_crop_regions(
     embedding = await refresh_box_embeddings(
         opensearch, [item['crop_id'] for item in result['items']]
     )
-    return {**result, 'region_embedding': embedding}
+    return {**result, 'vector_refresh': embedding}
 
 
 @router.patch('/crops/{crop_id}/regions/{box_id}')
@@ -364,7 +364,7 @@ async def patch_crop_region_box(
         'crop_id': crop_id,
         'box_id': box_id,
         'item': rec.item(crop_id),
-        'region_embedding': embedding,
+        'vector_refresh': embedding,
     }
 
 
@@ -440,5 +440,5 @@ async def batch_set_region_box_state(
         'conflicts': conflicts,
         'invalid': invalid,
         'items': items,
-        'region_embedding': embedding,
+        'vector_refresh': embedding,
     }

@@ -168,7 +168,7 @@ async def patch_crop_region_meta(
         'crop_id': crop_id,
         'updated_fields': sorted(wire_fields),
         'item': rec.item(crop_id),
-        'region_embedding': embedding,
+        'vector_refresh': embedding,
     }
 
 
@@ -316,4 +316,4 @@ async def batch_set_region_status(
     embedding = await refresh_box_embeddings(
         opensearch, [item['crop_id'] for item in result['items']]
     )
-    return {**result, 'region_embedding': embedding}
+    return {**result, 'vector_refresh': embedding}

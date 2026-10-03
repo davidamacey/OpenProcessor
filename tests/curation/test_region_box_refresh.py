@@ -189,4 +189,4 @@ def test_every_human_box_edit_route_refreshes_the_vectors(monkeypatch: pytest.Mo
         ]
     assert [r.status_code for r in responses] == [200] * 6, [r.text for r in responses]
     assert len(calls) == 6
-    assert all(r.json()['region_embedding'] == {'embedded': 0, 'pending': 0} for r in responses)
+    assert all(r.json()['vector_refresh'] == {'embedded': 0, 'pending': 0} for r in responses)
