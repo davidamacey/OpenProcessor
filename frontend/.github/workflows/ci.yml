@@ -106,7 +106,10 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED"
 
-          LAST_MSG="$(git log -1 --format=%B "$AFTER_SHA")"
+          # On pull_request, github.sha is the synthetic merge commit ("Merge X
+          # into Y"), never the author's last commit; read the PR head instead.
+          MSG_SHA="${HEAD_SHA:-$AFTER_SHA}"
+          LAST_MSG="$(git log -1 --format=%B "$MSG_SHA")"
           if echo "$LAST_MSG" | grep -qF '[skip-changelog]'; then
             echo "Last commit message contains [skip-changelog]; skipping."
             exit 0
