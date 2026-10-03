@@ -2664,6 +2664,25 @@ instead of silently rendering blanks or 404ing.
     `extras.datasetExport` paths) are anchored `MANUAL_OVERRIDES` in the
     test, not silently skipped.
 
+## Chunk-load recovery and new-version handling
+
+A failed module chunk (flaky network, a browser network-change abort, or a
+deploy that replaced the hashed chunks under an open tab) used to render a
+bare "500 Internal Error" until a manual reload. `src/hooks.client.ts`
+(`handleError` plus a `vite:preloadError` listener) detects it
+(`isChunkLoadError`, `src/lib/chunkRecovery.ts`) and does one
+`location.reload()`, guarded by a timestamp in `sessionStorage`
+(`cropwright.chunkReloadAt`, 30 s window; per tab, reconstructible, unreadable
+storage fails closed so it can never loop). A repeat inside the window falls
+through to `src/routes/+error.svelte`: neutral headline, a Reload button and
+the thrown message in a collapsed Details block. `kit.version.pollInterval`
+is 60 s, so the `updated` store flips after a deploy: the root layout shows a
+small "A new version is available" Reload banner, and SvelteKit itself does a
+full-page load on the next failed navigation when `updated` is true.
+`nginx.conf` serves `/_app/version.json` with `no-cache` (like `index.html`)
+so the poll cannot be answered from the browser cache. Tests:
+`chunkRecovery.test.ts`, `e2e/stubbed/test_chunk_recovery.py`.
+
 ## Deployment
 
 The API serves all images and crop thumbnails — the labeler does NOT mount

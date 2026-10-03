@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- A failed module-chunk load (flaky network, browser network-change abort, or
+  a deploy that replaced the hashed chunks under an open tab) no longer leaves
+  a dead "500 Internal Error" page: the app reloads once automatically
+  (sessionStorage loop guard, 30 s window), and a repeat failure shows an
+  error page with a Reload button and the cause. SvelteKit's version polling
+  is on (60 s) with a "new version available" Reload banner, and nginx serves
+  `_app/version.json` with `no-cache` so the check sees new deploys.
 - `/review`'s served enum filters (e.g. "Negative frames") no longer render a
   blank select when neither the operator nor the served defaults name one of
   the options: the first served option shows. The review panel's Reason row
