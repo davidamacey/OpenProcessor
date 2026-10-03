@@ -53,7 +53,7 @@ class FakeSettingsOpenSearch:
     def __init__(self) -> None:
         self._docs: dict[tuple[str, str], dict[str, Any]] = {}
 
-    async def get(self, index: str, id: str) -> dict[str, Any]:  # noqa: A002 - mirrors opensearchpy's kwarg name
+    async def get(self, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002 - mirrors opensearchpy's kwarg name
         key = (index, id)
         if key not in self._docs:
             raise _NotFoundError(f'[404] not found: {index}/{id}')

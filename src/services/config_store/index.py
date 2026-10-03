@@ -20,11 +20,14 @@ Doc ids (see any_domain_plan.md §3.1):
 from __future__ import annotations
 
 import datetime
+import os
+import time
 import uuid
 from typing import TYPE_CHECKING, Any, Literal
 
 from opensearchpy.exceptions import ConflictError, NotFoundError
 
+from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
 
 
@@ -47,6 +50,12 @@ KIND_TO_PREFIX: dict[str, str] = {
 }
 
 META_CONFIG_REVISION_DOC_ID = 'meta:config_revision'
+OP_CONFIG_POLL_S_DEFAULT = 5.0
+
+# (client id, index) -> monotonic deadline until which the revision doc is
+# known absent.
+_absent_until: dict[tuple[int, str], float] = {}
+_monotonic = time.monotonic
 
 
 def config_doc_id(kind: ConfigKind, name: str, revision: int | None = None) -> str:
@@ -99,15 +108,31 @@ async def bump_config_revision(client: Any, index: str) -> int:
         },
         retry_on_conflict=5,
     )
+    _absent_until.pop((id(client), index), None)
     doc = await client.get(index=index, id=META_CONFIG_REVISION_DOC_ID)
     return int(doc['_source']['config_revision'])
 
 
+def config_poll_interval_s() -> float:
+    """The config-store poll interval; also how long an absent revision doc
+    is remembered before it is looked up again."""
+    return float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
+
+
 async def get_config_revision(client: Any, index: str) -> int:
-    try:
-        doc = await client.get(index=index, id=META_CONFIG_REVISION_DOC_ID)
-    except NotFoundError:
+    """The project's ``config_revision``; 0 while ``meta:config_revision``
+    has never been written. An absent doc is cached for one poll interval
+    so steady-state polling of such a project costs one request per
+    interval; :func:`bump_config_revision` clears it."""
+    key = (id(client), index)
+    deadline = _absent_until.get(key)
+    if deadline is not None and _monotonic() < deadline:
         return 0
+    doc = await get_doc_or_none(client, index, META_CONFIG_REVISION_DOC_ID)
+    if doc is None:
+        _absent_until[key] = _monotonic() + config_poll_interval_s()
+        return 0
+    _absent_until.pop(key, None)
     return int(doc['_source'].get('config_revision', 0))
 
 
@@ -241,11 +266,8 @@ async def delete_config(
 
 
 async def get_activation(client: Any, index: str, axis: ConfigAxis) -> dict[str, Any] | None:
-    try:
-        doc = await client.get(index=index, id=activation_doc_id(axis))
-    except NotFoundError:
-        return None
-    return doc['_source']
+    doc = await get_doc_or_none(client, index, activation_doc_id(axis))
+    return None if doc is None else doc['_source']
 
 
 def _nothing_active(ref: dict[str, Any] | None) -> bool:

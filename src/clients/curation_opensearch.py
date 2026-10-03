@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from src.clients.optional_doc import get_doc_or_none
 from src.config import (
     BACKBONE_EMBEDDING_FIELD,
     CurationConfig,
@@ -830,8 +831,8 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
 
     source: dict[str, Any] = {}
     try:
-        resp = await client.get(index=index, id=CURATION_SETTINGS_DOC_ID)
-        source = resp.get('_source') or {} if isinstance(resp, dict) else {}
+        resp = await get_doc_or_none(client, index, CURATION_SETTINGS_DOC_ID)
+        source = (resp or {}).get('_source') or {}
     except Exception as exc:
         # Mirrors image_serving.fetch_crop_source's duck-typed not-found
         # check -- avoids a hard opensearchpy import just to catch

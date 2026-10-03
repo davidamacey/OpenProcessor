@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -34,6 +33,7 @@ from src.services.config_store.index import (
     ConfigAxis,
     ConfigKind,
     config_doc_id,
+    config_poll_interval_s,
     get_activation,
     get_config_revision,
 )
@@ -474,7 +474,6 @@ async def activate_axis(
 #: pack/profile activated in one uvicorn worker is visible in every
 #: other within one tick, cheap enough (one ``GET`` per project per
 #: tick when nothing changed) to run continuously.
-OP_CONFIG_POLL_S_DEFAULT = 5.0
 
 
 async def _poll_all_active_projects(client: Any, interval: float) -> None:
@@ -539,7 +538,7 @@ async def _bootstrap_config_store_once() -> tuple[Any, float]:
     # M3: needs no project bound (this index belongs to none) -- runs
     # first, so a later failure below never skips it.
     await ensure_global_configs_index(client)
-    interval = float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
+    interval = config_poll_interval_s()
     return client, interval
 
 

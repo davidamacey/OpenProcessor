@@ -29,7 +29,7 @@ class _PagedClient:
             }
         }
 
-    async def get(self, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         raise NotFoundError(404, 'not found', {})
 
 
