@@ -30,6 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The docs site and README no longer link to pages that do not exist yet: the
+  GitHub repository, issues, "edit this page", GitHub Pages and the raw
+  `docker-compose.yml` / `.env.example` downloads of a public Cropwright
+  repository all answered 404 (there is no public repository before the
+  OpenProcessor 0.5.0 release). Repository and issue links point at OpenProcessor,
+  the docs canonical URL is the app origin, and the quick start and upgrade
+  pages describe building from a source checkout.
 - The Wheels inventory card on `/clusters` crashed the page (`each_key_duplicate`)
   once a project had a multi-box region class: its close-ups were keyed by crop
   id, and boxes of one item share it. The region gallery count no longer divides

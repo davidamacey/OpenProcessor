@@ -1,7 +1,9 @@
 # Cropwright documentation site
 
 Docusaurus 3 site for Cropwright, modelled on a sister project's `docs-site/`.
-Deploys to GitHub Pages at `https://davidamacey.github.io/cropwright/`.
+Served by the Cropwright container at `/cropwright/` on the app origin (for
+example `http://localhost:5184/cropwright/`). GitHub Pages stays off until the
+OpenProcessor 0.5.0 release.
 
 ## Development
 

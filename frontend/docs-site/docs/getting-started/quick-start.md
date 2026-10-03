@@ -12,17 +12,15 @@ instance, started with `OP_API_PREFIX=/curation` (the default), on its own
 Docker network. Note that network's name — you'll need it below. See that
 project's own README for bringing it up.
 
-## 2. Get the compose file and configure it
+## 2. Get the code and configure it
 
-No checkout needed: Cropwright runs from the published image
-`davidamacey/cropwright`, which is multi-arch (`linux/amd64` and
-`linux/arm64`, so it runs on Intel/AMD hosts and on ARM machines such as
-Apple Silicon). Download the compose file and the example env file:
+Cropwright is not published as a standalone image yet; it ships with the
+OpenProcessor 0.5.0 release as the `ui` service of OpenProcessor's own
+compose project. Until then, run it from a source checkout, which builds both
+the app and these docs:
 
 ```bash
-mkdir cropwright && cd cropwright
-curl -fsSLO https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/.env.example -o .env
+cp .env.example .env
 ```
 
 Edit `.env` and set, at minimum:
@@ -33,7 +31,6 @@ Edit `.env` and set, at minimum:
 | `PUBLIC_API_PREFIX` | Must equal the backend's own `OP_API_PREFIX`                                              | `/curation`                          |
 | `OP_DOCKER_NETWORK` | The OpenProcessor backend's docker network name (`docker network ls`)                     | `openprocessor_triton_net`           |
 | `CROPWRIGHT_PORT`   | Host port to publish                                                                       | `5184`                               |
-| `CROPWRIGHT_TAG`    | Image version to run; pin one (e.g. `0.1.0`) for reproducible deploys                     | `latest`                             |
 
 See [Environment variables](../configuration/environment-variables.md) for
 the full list, including white-label, bind-address and upload-cap options.
@@ -41,14 +38,16 @@ the full list, including white-label, bind-address and upload-cap options.
 ## 3. Start it
 
 ```bash
-docker compose pull && docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set). The
 image runs nginx as a non-root user (uid 101) listening on container port
-8080; Compose maps `CROPWRIGHT_PORT` to it.
+8080; Compose maps `CROPWRIGHT_PORT` to it. The same origin also serves these
+docs (`/cropwright/`) and the backend's API reference (`/docs`, `/redoc`,
+`/openapi.json`); the top-bar **Resources** menu links to them.
 
-Building from source instead is for development — see
+For frontend development see
 [Development setup](../developer-guide/development-setup.md).
 
 ## 4. Verify the connection

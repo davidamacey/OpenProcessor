@@ -34,8 +34,8 @@ Yes — see [Running a second instance](./configuration/second-instance.md).
 
 ### Where do I report a bug or request a feature?
 
-Open an issue on [GitHub](https://github.com/davidamacey/OpenProcessor/issues)
-using the provided templates.
+Open an issue on [GitHub](https://github.com/davidamacey/OpenProcessor/issues).
+Cropwright is part of the OpenProcessor project.
 
 ### Can I keep different datasets or domains separate?
 

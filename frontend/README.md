@@ -28,8 +28,8 @@ Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEA
 
 Full documentation site (getting started, user guide, configuration,
 operations, developer guide, architecture diagrams, roadmap):
-**[davidamacey.github.io/cropwright](https://davidamacey.github.io/cropwright/)**
-(source in `docs-site/`).
+served by the app itself at **`/cropwright/`** on the app origin (for example
+`http://localhost:5184/cropwright/`; source in `docs-site/`).
 
 ## Security — read this before deploying
 
@@ -54,13 +54,12 @@ it has no data of its own to show.
 
 ## Quick start (Docker)
 
-No repo checkout needed — just the compose file and an env file. The
-published image (`davidamacey/cropwright`) is **multi-arch**
-(`linux/amd64` + `linux/arm64`):
+Cropwright is not published as a standalone image yet: it ships with the
+OpenProcessor 0.5.0 release. Until then, run it from a source checkout, which
+builds the app and its docs:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/.env.example -o .env
+cp .env.example .env
 ```
 
 Edit `.env` and set, at minimum:
@@ -78,13 +77,11 @@ Edit `.env` and set, at minimum:
   (default `0.0.0.0`: this machine and the local network). Set `127.0.0.1`
   for this machine only. The API has no authentication, so keep it on a
   trusted network.
-- `CROPWRIGHT_TAG` — pin a version, e.g. `CROPWRIGHT_TAG=0.2.0` in
-  `.env`. Defaults to `latest`.
 
 Then:
 
 ```bash
-docker compose pull && docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set).
@@ -218,13 +215,12 @@ chunk load).
 
 ## Development
 
-**Build the Docker image from source**, instead of pulling
-`davidamacey/cropwright`, with a repo checkout and the `docker-compose.build.yml`
-overlay (deliberately not an auto-loading `docker-compose.override.yml`
-— a clone-and-run user must pull by default, never silently build):
+**Build the Docker image from source** with a repo checkout and the
+`docker-compose.build.yml` overlay (deliberately not an auto-loading
+`docker-compose.override.yml`, which would make a plain `docker compose up`
+build instead of pull once the images are published):
 
 ```bash
-git clone https://github.com/davidamacey/OpenProcessor && cd cropwright
 cp .env.example .env   # edit as in "Quick start" above
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```

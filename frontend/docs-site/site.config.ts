@@ -28,11 +28,13 @@ export const siteConfig = {
   // GitHub Pages deployment target.
   organizationName: 'example-org',
   projectName: 'cropwright',
-  url: 'https://davidamacey.github.io',
+  url: 'http://localhost:5184',
   baseUrl: '/cropwright/',
 
   githubRepo: 'https://github.com/davidamacey/OpenProcessor',
-  editUrlBase: 'https://github.com/davidamacey/OpenProcessor/tree/main/docs-site/',
+  // No public Cropwright repository before the OpenProcessor 0.5.0 monorepo
+  // release, so there is no "Edit this page" target yet.
+  editUrlBase: undefined,
 
   license: 'AGPL-3.0-only',
   copyrightHolder: 'example-org LLC',

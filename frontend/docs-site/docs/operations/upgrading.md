@@ -5,18 +5,14 @@ title: Upgrading
 
 # Upgrading
 
-Fixes land on `main` and ship in the next tagged image. To upgrade, set
-`CROPWRIGHT_TAG` in `.env` to the new version (or leave it at `latest`),
-then:
+Until Cropwright ships as an image with OpenProcessor 0.5.0, upgrade from a
+source checkout: pull the new code, compare `.env.example` with your `.env`
+when the changelog mentions an environment change, and rebuild:
 
 ```bash
-docker compose pull && docker compose up -d
+git pull
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
-
-Re-download `docker-compose.yml` and compare `.env.example` when the
-release notes mention a compose or environment change. If you build from
-source, `git pull` and rerun
-`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
 
 Check `CHANGELOG.md` for anything that needs a matching backend version —
 Cropwright's vendored API contract (`contracts/openprocessor/`) is checked
