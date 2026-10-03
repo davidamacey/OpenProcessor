@@ -44,6 +44,15 @@ export interface CurationSettings {
    * user-account system. Carried on the wire for when there is one.
    */
   updated_by: string | null;
+  /** The monitoring dashboards the deployment serves a URL for; `null` =
+   *  none served (no link is shown). */
+  monitoring_links: MonitoringLinksServed;
+}
+
+export interface MonitoringLinksServed {
+  grafana: string | null;
+  prometheus: string | null;
+  opensearch_dashboards: string | null;
 }
 
 /** The "no document has ever been written" record. A 200 with this body
@@ -52,6 +61,7 @@ export const EMPTY_CURATION_SETTINGS: CurationSettings = {
   defaults: {},
   updated_at: null,
   updated_by: null,
+  monitoring_links: { grafana: null, prometheus: null, opensearch_dashboards: null },
 };
 
 /**
@@ -235,10 +245,17 @@ export function parseCurationSettings(raw: unknown): CurationSettings {
       if (typeof k === 'string' && k && typeof v === 'string' && v) defaults[k] = v;
     }
   }
+  const links = isRecord(raw.monitoring_links) ? raw.monitoring_links : {};
+  const url = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
   return {
     defaults,
     updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null,
     updated_by: typeof raw.updated_by === 'string' ? raw.updated_by : null,
+    monitoring_links: {
+      grafana: url(links.grafana),
+      prometheus: url(links.prometheus),
+      opensearch_dashboards: url(links.opensearch_dashboards),
+    },
   };
 }
 
