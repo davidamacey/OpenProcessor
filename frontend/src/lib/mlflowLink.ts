@@ -9,6 +9,19 @@
  * `/health` or a config endpoint, from `OP_MLFLOW_PUBLIC_URL`) so pages
  * without a run list (e.g. /bakeoff) can link to it too.
  */
+/** A served URL as an `href`, only when it is an absolute http(s) URL:
+ *  Svelte does not sanitize `href`, so a `javascript:` value would reach
+ *  the DOM verbatim. `null` means render the text without a link. */
+export function externalHref(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const { protocol } = new URL(u);
+    return protocol === 'http:' || protocol === 'https:' ? u : null;
+  } catch {
+    return null;
+  }
+}
+
 export function mlflowBaseUrl(
   runUrls: ReadonlyArray<string | null | undefined>,
   envUrl?: string | null,

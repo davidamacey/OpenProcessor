@@ -13,6 +13,7 @@
    */
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import type { VlmCatalogEntry, VlmCatalogResponse } from '$lib/types_vlm';
+  import { externalHref } from '$lib/mlflowLink';
 
   interface Props {
     catalog: VlmCatalogResponse;
@@ -154,11 +155,11 @@
               </td>
               <td class="py-1.5 pr-3 font-mono break-all">{e.hf_repo}</td>
               <td class="py-1.5 pr-3">
-                {#if /^https?:\/\//i.test(e.license_url)}
+                {#if externalHref(e.license_url)}
                   <!-- eslint-disable svelte/no-navigation-without-resolve -- external license page, not a SvelteKit route -->
                   <a
                     class="text-blue-300 hover:underline"
-                    href={e.license_url}
+                    href={externalHref(e.license_url)}
                     target="_blank"
                     rel="noreferrer noopener">{e.license}</a
                   >
