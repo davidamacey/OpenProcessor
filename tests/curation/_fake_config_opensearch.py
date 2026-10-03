@@ -49,7 +49,8 @@ class FakeConfigOpenSearch:
         self._seq += 1
         return self._seq
 
-    async def get(self, index: str, id: str) -> dict[str, Any]:  # noqa: A002
+    async def get(self, index: str, id: str, ignore: Any = None) -> dict[str, Any]:  # noqa: A002
+        del ignore
         entry = self._docs.get(index, {}).get(id)
         if entry is None:
             raise NotFoundError(404, f'[404] not found: {index}/{id}', {})

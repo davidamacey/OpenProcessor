@@ -217,6 +217,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ### Fixed
 
+- The config-store poll no longer logs a 404 WARNING per request for projects that never wrote `meta:config_revision`: optional documents (revision counter, activations, curation settings) are read through one shared reader that treats a miss as absent without a transport error, and an absent revision is remembered for one poll interval (`OP_CONFIG_POLL_S`).
 - `resource_links` no longer lists `triton_metrics` and `dcgm_metrics` (and `OP_TRITON_METRICS_*` / `OP_DCGM_*` are gone): they are Prometheus scrape endpoints bound to localhost, not browser UIs; Grafana and Prometheus show their data.
 - API `/metrics` now aggregates every uvicorn worker: compose sets `PROMETHEUS_MULTIPROC_DIR` to a tmpfs on `yolo-api`, so the `op_*` and request metrics behind the ingest and API dashboards reflect the whole API instead of one worker.
 - Items written before `embedding_state` existed now have `embedded` recorded at startup when they hold a vector, so the item wire, the stats breakdown and the filter agree (`unknown` stays only for truly unknown items).

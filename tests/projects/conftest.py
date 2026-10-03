@@ -53,7 +53,7 @@ class FakeRegistryOpenSearch:
     def _refresh_all(self) -> None:
         self._visible = set(self.docs.keys())
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         await asyncio.sleep(0)  # a real read yields; lets concurrent writers interleave
         if id not in self.docs:
             return {'found': False, '_id': id}
@@ -201,7 +201,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         self.indices: Any = _FakeLifecycleIndices(self)
         self.transport = _FakeTransport()
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002
         # Minor 3 (W2 review): a real ``client.get()`` with no ``id`` raises
         # ``NotFoundError`` -- it never returns a ``found: False`` body.
         # Every production caller (``registry.get_record_with_seq``,
