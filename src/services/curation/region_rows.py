@@ -103,7 +103,7 @@ def matched_box_ids(hit: dict[str, Any], F: RegionFields | None = None) -> list[
         offset = (ih.get('_nested') or {}).get('offset')
         if isinstance(offset, int) and 0 <= offset < len(stored):
             box_id = stored[offset].get('box_id')
-            if box_id:
+            if box_id and box_id not in ids:
                 ids.append(box_id)
     return ids
 
@@ -115,9 +115,23 @@ def matched_box_count(hit: dict[str, Any]) -> int:
     return int((block.get('total') or {}).get('value', 0))
 
 
+def row_key(crop_id: str, box_id: str | None) -> str:
+    """The stable, non-empty, list-unique key of a region row: one row per
+    ``(crop_id, box_id)``, and one item-level row (``box_id`` ``None``) per
+    ``crop_id``. ``region_box_id`` stays ``null`` on an item-level row (it is
+    the write key for box routes and an item has no box to write); a UI keys
+    its list on ``row_key``."""
+    return f'{crop_id}#{box_id or "item"}'
+
+
 def as_row(item: dict[str, Any], box_id: str | None, **row_keys: Any) -> dict[str, Any]:
     """``item`` (a wire item) as a row about ``box_id`` (``None``: item-level)."""
-    return {**item, 'region_box_id': box_id, **row_keys}
+    return {
+        **item,
+        'region_box_id': box_id,
+        'row_key': row_key(str(item.get('crop_id') or ''), box_id),
+        **row_keys,
+    }
 
 
 def region_rows(
@@ -227,6 +241,7 @@ __all__ = [
     'matched_box_count',
     'matched_box_ids',
     'region_rows',
+    'row_key',
     'rows_aggs',
     'rows_for_pairs',
     'search_region_rows',

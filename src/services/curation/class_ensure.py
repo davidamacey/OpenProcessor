@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, NamedTuple, Protocol
 
 from src.clients.curation_opensearch import ClassRegistryError
-from src.utils.class_names import normalize_class_name
+from src.utils.class_names import normalize_class_name, resolve_class_by_name
 
 
 class NamedClassRegistry(Protocol):
@@ -34,7 +34,7 @@ class ResolvedClass(NamedTuple):
 def ensure_class_by_name(
     registry: NamedClassRegistry, name: str, *, group: str, notes: str = ''
 ) -> ResolvedClass:
-    """The non-deprecated class named ``name``, added under ``group`` first
+    """The active class named ``name`` (see :func:`~src.utils.class_names.resolve_class_by_name`), added under ``group`` first
     when the registry lacks it. Names compare by
     :func:`~src.utils.class_names.normalize_class_name` (the one name-equality
     rule); a new class keeps the caller's (trimmed) spelling. A concurrent
@@ -44,10 +44,12 @@ def ensure_class_by_name(
         raise ClassRegistryError('class_name must contain a letter or digit')
 
     def find() -> ResolvedClass | None:
-        for entry in registry.load().classes:
-            if not entry.deprecated and normalize_class_name(entry.class_name) == wanted:
-                return ResolvedClass(entry.class_id, entry.class_name)
-        return None
+        match = resolve_class_by_name(registry.load().classes, name)
+        if match.active is None:
+            # A deprecated-only name is never reused: a new active class
+            # takes it (re-activation is the explicit restore route).
+            return None
+        return ResolvedClass(match.active.class_id, match.active.class_name)
 
     found = find()
     if found is not None:

@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock
 import numpy as np
 import pytest
 
+from src.services.curation import embedding_viz_read
+
 
 # =============================================================================
 # Own state slot — never the retired clustering reducer's names
@@ -231,13 +233,13 @@ async def test_double_start_raises_runtime_error(tmp_path, monkeypatch: pytest.M
 async def test_get_cached_projection_not_built_when_no_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.services.curation import embedding_viz
-
     fake_os = AsyncMock()
-    fake_os.get = AsyncMock(side_effect=Exception('not found'))
+    from opensearchpy.exceptions import NotFoundError
 
-    result = await embedding_viz.get_cached_projection(fake_os)
-    assert result == {'status': 'not_built'}
+    fake_os.get = AsyncMock(side_effect=NotFoundError(404, 'nf', {}))
+
+    with pytest.raises(embedding_viz_read.ProjectionNotBuiltError):
+        await embedding_viz_read.get_cached_projection(fake_os)
     fake_os.search.assert_not_called()
 
 
@@ -289,7 +291,7 @@ async def test_get_cached_projection_never_triggers_a_fit(
     )
     fake_os.count = AsyncMock(return_value={'count': 0})
 
-    result = await embedding_viz.get_cached_projection(fake_os, max_points=10)
+    result = await embedding_viz_read.get_cached_projection(fake_os, max_points=10)
     assert result['projection_version'] == 'umap_viz_v1'
     assert result['fitted_at'] == '2026-09-11T00:00:00+00:00'
     assert result['stale'] is False
@@ -309,8 +311,6 @@ async def test_get_cached_projection_never_triggers_a_fit(
 async def test_get_cached_projection_stale_when_uncovered_crops_exist(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.services.curation import embedding_viz
-
     fake_os = AsyncMock()
     fake_os.get = AsyncMock(
         return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
@@ -318,7 +318,7 @@ async def test_get_cached_projection_stale_when_uncovered_crops_exist(
     fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     fake_os.count = AsyncMock(return_value={'count': 3})  # 3 in-scope crops missing the projection
 
-    result = await embedding_viz.get_cached_projection(fake_os)
+    result = await embedding_viz_read.get_cached_projection(fake_os)
     assert result['stale'] is True
 
 
@@ -326,8 +326,6 @@ async def test_get_cached_projection_stale_when_uncovered_crops_exist(
 async def test_get_cached_projection_applies_cluster_and_class_filters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.services.curation import embedding_viz
-
     fake_os = AsyncMock()
     fake_os.get = AsyncMock(
         return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
@@ -335,7 +333,9 @@ async def test_get_cached_projection_applies_cluster_and_class_filters(
     fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     fake_os.count = AsyncMock(return_value={'count': 0})
 
-    await embedding_viz.get_cached_projection(fake_os, cluster_id=10173, class_id=7, max_points=5)
+    await embedding_viz_read.get_cached_projection(
+        fake_os, cluster_id=10173, class_id=7, max_points=5
+    )
 
     search_kwargs = fake_os.search.call_args.kwargs
     filter_clauses = search_kwargs['body']['query']['bool']['filter']
@@ -354,7 +354,6 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
     chunks instead -- no single search request may ask for size > 10000,
     even when max_points is the router's full 200_000 cap.
     """
-    from src.services.curation import embedding_viz
 
     fake_os = AsyncMock()
     fake_os.get = AsyncMock(
@@ -362,7 +361,7 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
     )
     fake_os.count = AsyncMock(return_value={'count': 0})
 
-    page_size = embedding_viz._VIZ_PROJECTION_PAGE_SIZE
+    page_size = embedding_viz_read._VIZ_PROJECTION_PAGE_SIZE
 
     def _page(crop_id: str) -> dict[str, Any]:
         return {
@@ -385,7 +384,7 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
     ]
     fake_os.search = AsyncMock(side_effect=responses)
 
-    result = await embedding_viz.get_cached_projection(fake_os, max_points=200_000)
+    result = await embedding_viz_read.get_cached_projection(fake_os, max_points=200_000)
 
     assert fake_os.search.await_count == 3
     for call in fake_os.search.await_args_list:

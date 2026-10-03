@@ -63,6 +63,7 @@ from src.services.curation.open_vocab_fields import (
     OPEN_VOCAB_ITEM_MAPPING,
 )
 from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
+from src.utils.class_names import resolve_class_by_name
 
 
 if TYPE_CHECKING:
@@ -2076,9 +2077,11 @@ class ClassRegistry:
         name_norm = name.strip()
         if not name_norm:
             raise ClassRegistryError('class_name must be non-empty')
-        for c in reg.classes:
-            if c.class_name == name_norm and not c.deprecated:
-                raise ClassRegistryError(f'duplicate class_name {name_norm!r} (id={c.class_id})')
+        taken = resolve_class_by_name(reg.classes, name_norm)
+        if taken.active is not None:
+            raise ClassRegistryError(
+                f'duplicate class_name {name_norm!r} (id={taken.active.class_id})'
+            )
 
         new_id = (max((c.class_id for c in reg.classes), default=-1)) + 1
         entry = RegistryClassEntry(
@@ -2100,11 +2103,13 @@ class ClassRegistry:
         new_name_norm = new_name.strip()
         if not new_name_norm:
             raise ClassRegistryError('new_name must be non-empty')
-        for c in reg.classes:
-            if c.class_name == new_name_norm and not c.deprecated and c.class_id != class_id:
-                raise ClassRegistryError(
-                    f'rename target {new_name_norm!r} already in use (id={c.class_id})'
-                )
+        taken = resolve_class_by_name(
+            (c for c in reg.classes if c.class_id != class_id), new_name_norm
+        )
+        if taken.active is not None:
+            raise ClassRegistryError(
+                f'rename target {new_name_norm!r} already in use (id={taken.active.class_id})'
+            )
         target: RegistryClassEntry | None = None
         for c in reg.classes:
             if c.class_id == class_id:
@@ -2196,16 +2201,14 @@ class ClassRegistry:
             raise ClassRegistryError(f'class_id {class_id} not found')
 
         if not deprecated and target.deprecated:
-            for c in reg.classes:
-                if (
-                    c.class_id != class_id
-                    and not c.deprecated
-                    and c.class_name == target.class_name
-                ):
-                    raise ClassRegistryError(
-                        f'cannot restore class_id {class_id}: name {target.class_name!r} '
-                        f'already in use by class_id {c.class_id}'
-                    )
+            taken = resolve_class_by_name(
+                (c for c in reg.classes if c.class_id != class_id), target.class_name
+            )
+            if taken.active is not None:
+                raise ClassRegistryError(
+                    f'cannot restore class_id {class_id}: name {target.class_name!r} '
+                    f'already in use by class_id {taken.active.class_id}'
+                )
 
         target.deprecated = deprecated
         if deprecated:

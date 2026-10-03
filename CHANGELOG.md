@@ -14,6 +14,32 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ## [0.4.0] - 2026-10-03
 
 ### Added
+
+- Region list rows (`/regions`, `/regions/training_candidates`,
+  `/regions/suspected_false_positives`, region clusters) carry a required,
+  non-empty `row_key` (`<crop_id>#<region_box_id>` or `<crop_id>#item`),
+  unique within a query. `region_box_id` stays null on item-level rows (it is
+  the box write key); `crop_id` repeats across the per-box rows of one item by
+  design. Every other item list returns one entry per distinct item.
+- By-name class resolution is one function
+  (`src.utils.class_names.resolve_class_by_name`): an active class always wins
+  over a deprecated one with the same name, a deprecated-only match is an
+  explicit `deprecated` result (never assigned to), and ties break on exact
+  spelling then lowest id. Creating an active class with a deprecated class's
+  name is allowed; two active classes can no longer share a name, compared by
+  the same normalization (`Car` vs `car`). Used by the registry add/rename/
+  restore checks, `ensure_class_by_name`, import mapping suggestions, import
+  adopt-existing and detector seeding.
+- Served facts so the frontend stops computing or hardcoding them:
+  `GET /export/status` gains `can_export` / `blocking_reasons` (same cohort
+  query and message the export's 422 uses); `GET /methods` export entries serve
+  `dedup_threshold_default` / `_min` / `_max` (export requests now reject a
+  `dedup_threshold` outside 0..1) and the `diverse` overlay serves `max_k` /
+  `select_max_k`; `GET /settings` serves `monitoring_links`
+  (`OP_GRAFANA_URL` / `OP_PROMETHEUS_URL` / `OP_DASHBOARDS_URL`, null when
+  unset); `GET /viz/projection` now answers
+  `404 projection_not_built` vs `503 projection_unavailable` (was `200
+  {"status": "not_built"}` for both) with a typed 200 body.
 - `POST /curation/projects/{project}/classes/seed_from_detector`: create registry classes from the ingest detector's labels by name (dry run by default, idempotent, labels with spaces become slugs).
 - `GET /curation/projects/{project}/ingest/config` returns a `detector` block (model, label list with raw name and slug, `assigns_class`) and the project `policy`.
 - `embedding_state` on every item (`embedded`, `failed`, `deferred`, `not_selected`; null for older items). An encoder failure at ingest is now marked `failed` and counted (`n_embedded`, `n_not_embedded` per image and in the batch summary) instead of silently storing a vectorless item.

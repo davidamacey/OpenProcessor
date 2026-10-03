@@ -15,7 +15,7 @@ from src.routers.curation._item_models import ItemDoc
 class RegionRow(ItemDoc):
     """A full wire item plus the box the row is about.
 
-    Key a row by ``(crop_id, region_box_id)``. The route-specific keys are
+    Key a row by ``row_key`` (equivalently ``(crop_id, region_box_id)``). The route-specific keys are
     present only on that route's rows.
     """
 
@@ -24,6 +24,13 @@ class RegionRow(ItemDoc):
         description=(
             'The box this row is about; null for an item-level row (an item '
             'selected without a box predicate).'
+        ),
+    )
+    row_key: str = Field(
+        description=(
+            'Non-empty, unique within a page and across pages of one query: '
+            '`<crop_id>#<region_box_id>`, or `<crop_id>#item` for an item-level row. '
+            'Key a list on this, not on region_box_id (null on item-level rows).'
         ),
     )
     selection_reason: str | None = Field(
