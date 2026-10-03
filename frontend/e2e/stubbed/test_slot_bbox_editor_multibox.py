@@ -14,7 +14,7 @@ or `page.expect_request`.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 
 from fixtures.wire import REGION_CLASS, make_item
 
@@ -159,7 +159,7 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(
 
     save_button = page.get_by_role("button", name="Save", exact=True)
     save_button.wait_for(timeout=ACTION_TIMEOUT_MS)
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "PUT" and "/regions" in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):

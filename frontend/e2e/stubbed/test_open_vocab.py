@@ -28,7 +28,7 @@ import zlib
 from pathlib import Path
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from fixtures.wire import make_item
 from playwright.sync_api import expect
 
@@ -280,7 +280,7 @@ def test_list_new_set_and_clone_a_template(stub, page, app_url):
 
     page.get_by_test_id("open-vocab-new").click()
     page.get_by_test_id("open-vocab-new-name").fill("fresh")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/open_vocab")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/open_vocab")):
         page.get_by_role("dialog").get_by_role("button", name="Create", exact=True).click()
     assert posts == [{"name": "fresh", "body": {}}], posts
     page.wait_for_url("**/settings/open-vocab/fresh", timeout=ACTION_TIMEOUT_MS)
@@ -289,7 +289,7 @@ def test_list_new_set_and_clone_a_template(stub, page, app_url):
     page.get_by_test_id("template-row").get_by_role("button", name="Clone").click()
     dialog = page.get_by_role("dialog")
     dialog.locator("input").first.fill("mine")
-    with page.expect_request(lambda r: r.url.endswith("/clone")):
+    with expect_handled(page, lambda r: r.url.endswith("/clone")):
         dialog.get_by_role("button", name="Clone", exact=True).click()
     assert clones[0]["new_name"] == "mine" and clones[0]["source"] == "template", clones
     page.wait_for_url("**/settings/open-vocab/mine", timeout=ACTION_TIMEOUT_MS)
@@ -359,7 +359,7 @@ def test_edit_a_target_validate_save_and_resolve_a_conflict(stub, page, app_url)
 
     open_editor(page, app_url)
     cell = page.locator('[data-field="targets[1].prompt"]')
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/open_vocab/validate")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/open_vocab/validate")):
         cell.locator("input").fill("")
     row = page.get_by_test_id("target-row").nth(1)
     expect(row.get_by_test_id("config-issue")).to_contain_text("A target needs a prompt.", timeout=ACTION_TIMEOUT_MS)
@@ -369,19 +369,19 @@ def test_edit_a_target_validate_save_and_resolve_a_conflict(stub, page, app_url)
     shoot(page, page.locator("body"), "editor-issue")
 
     cell.locator("input").fill("chipped widget")
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     assert puts[0]["expected_revision"] == 3, puts[0]
     assert puts[0]["body"]["targets"][1]["prompt"] == "chipped widget"
     expect(page.get_by_test_id("config-meta")).to_contain_text("revision 4", timeout=ACTION_TIMEOUT_MS)
 
     page.locator('[data-field="targets[0].min_score"] input').fill("0.7")
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     conflict = page.get_by_test_id("save-conflict")
     expect(conflict).to_contain_text("Revision 5 was saved after you opened this set.")
     conflict.get_by_test_id("keep-mine").click()
-    with page.expect_request(lambda r: r.method == "PUT"):
+    with expect_handled(page, lambda r: r.method == "PUT"):
         page.get_by_test_id("config-save").click()
     assert puts[2]["expected_revision"] == 5
     assert puts[2]["body"]["targets"][0]["min_score"] == 0.7
@@ -429,13 +429,13 @@ def test_activation_refusal_offers_force_only_when_allowed(stub, page, app_url):
     page.get_by_test_id("config-activate").click()
     dialog = page.get_by_role("dialog")
     expect(dialog.get_by_test_id("activate-force")).to_have_count(0)
-    with page.expect_request(lambda r: r.url.endswith("/activate")):
+    with expect_handled(page, lambda r: r.url.endswith("/activate")):
         dialog.get_by_role("button", name="Activate", exact=True).click()
     expect(dialog.get_by_test_id("activate-error")).to_have_text("widgets r3 has errors.")
     expect(dialog).to_contain_text("The segmenter did not answer.")
     shoot(page, dialog, "activate-refused")
     dialog.get_by_test_id("activate-force").check()
-    with page.expect_request(lambda r: r.url.endswith("/activate")):
+    with expect_handled(page, lambda r: r.url.endswith("/activate")):
         dialog.get_by_role("button", name="Activate anyway").click()
     expect(dialog).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     assert bodies == [
@@ -495,7 +495,7 @@ def test_test_panel_draws_hits_and_words_a_dropped_one(stub, page, app_url):
     open_editor(page, app_url)
     panel = page.get_by_test_id("open-vocab-test-panel")
     panel.get_by_test_id("ov-test-crop-id").fill("c_123")
-    with page.expect_request(lambda r: r.url.endswith("/open_vocab/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/open_vocab/test")):
         panel.get_by_test_id("ov-test-run").click()
     expect(panel.get_by_test_id("ov-test-hit")).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     assert tests == [
@@ -575,7 +575,7 @@ def test_rerun_sends_the_all_images_open_vocab_request(stub, page, app_url):
     shoot(page, page.locator("body"), "list-rerun")
     panel.get_by_test_id("reprocess-open").first.click()
     dialog = page.get_by_role("dialog", name="Reprocess")
-    with page.expect_request(lambda r: r.url.endswith("/reprocess")):
+    with expect_handled(page, lambda r: r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Check what would run").click()
     expect(dialog.get_by_test_id("reprocess-dry-run")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert posts == [
@@ -591,7 +591,7 @@ def test_rerun_sends_the_all_images_open_vocab_request(stub, page, app_url):
         "Re-run: Pass failed…",
     ], labels
     panel.get_by_test_id("reprocess-open").nth(2).click()
-    with page.expect_request(lambda r: r.url.endswith("/reprocess")):
+    with expect_handled(page, lambda r: r.url.endswith("/reprocess")):
         page.get_by_role("dialog", name="Reprocess").get_by_role("button", name="Check what would run").click()
     expect(page.get_by_role("dialog", name="Reprocess").get_by_test_id("reprocess-dry-run")).to_be_visible(
         timeout=ACTION_TIMEOUT_MS

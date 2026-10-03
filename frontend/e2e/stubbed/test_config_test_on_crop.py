@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 from test_prompt_packs import BODY as PACK_BODY
@@ -168,7 +168,7 @@ def test_pack_test_sends_the_draft_and_renders_the_contract_response(stub, page,
     page.locator('[data-field="class_system"] textarea').fill("You sort widgets.")
     panel = page.get_by_test_id("pack-test-panel")
     panel.get_by_test_id("test-crop-ids").fill("c_123, c_456")
-    with page.expect_request(lambda r: r.url.endswith("/prompt_packs/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/prompt_packs/test")):
         panel.get_by_test_id("test-run").click()
     # Only what the operator chose: no use_region_box, no VLM selection.
     assert bodies == [
@@ -206,7 +206,7 @@ def test_profile_test_draws_candidates_and_greys_a_dropped_one(stub, page, app_u
     open_profile_editor(page, app_url)
     panel = page.get_by_test_id("profile-test-panel")
     panel.get_by_test_id("profile-test-crop-id").fill("c_123")
-    with page.expect_request(lambda r: r.url.endswith("/region_profiles/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_profiles/test")):
         panel.get_by_test_id("test-run").click()
     assert len(bodies) == 1
     assert bodies[0]["crop_id"] == "c_123"
@@ -267,7 +267,7 @@ def test_profile_test_verify_block_and_vlm_verdicts_heading(stub, page, app_url)
     panel.get_by_test_id("profile-test-crop-id").fill("c_123")
     panel.get_by_test_id("test-segmenter-prompt").fill("a price tag")
     panel.get_by_test_id("test-verify").check()
-    with page.expect_request(lambda r: r.url.endswith("/region_profiles/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_profiles/test")):
         panel.get_by_test_id("test-run").click()
     assert bodies[0]["verify"] is True
     assert bodies[0]["segmenter_text_prompt"] == "a price tag"
@@ -522,7 +522,7 @@ def test_pack_test_sends_the_picked_vlm_and_the_acknowledgement(stub, page, app_
     assert picker.locator("option").all_inner_texts()[0] == "Active endpoint"
 
     # Left on the active endpoint: no vlm field.
-    with page.expect_request(lambda r: r.url.endswith("/prompt_packs/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/prompt_packs/test")):
         panel.get_by_test_id("test-run").click()
     assert "vlm_name" not in bodies[0] and "acknowledge_external" not in bodies[0], bodies
 
@@ -530,7 +530,7 @@ def test_pack_test_sends_the_picked_vlm_and_the_acknowledgement(stub, page, app_
     panel.get_by_test_id("vlm-run-select").select_option("cloud_vlm")
     expect(panel.get_by_test_id("vlm-run-ack")).to_contain_text(WARNING)
     panel.get_by_test_id("vlm-run-ack-checkbox").check()
-    with page.expect_request(lambda r: r.url.endswith("/prompt_packs/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/prompt_packs/test")):
         panel.get_by_test_id("test-run").click()
     assert bodies[1]["vlm_name"] == "cloud_vlm", bodies
     assert bodies[1]["vlm_revision"] is None
@@ -555,7 +555,7 @@ def test_profile_test_vlm_picker_follows_verify_and_sends_the_pick(stub, page, a
     panel.get_by_test_id("test-verify").check()
     expect(panel.get_by_test_id("vlm-run-picker")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     panel.get_by_test_id("vlm-run-select").select_option("local_vlm")
-    with page.expect_request(lambda r: r.url.endswith("/region_profiles/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_profiles/test")):
         panel.get_by_test_id("test-run").click()
     assert bodies[0]["verify"] is True
     assert bodies[0]["vlm_name"] == "local_vlm" and bodies[0]["vlm_revision"] is None, bodies
@@ -563,13 +563,13 @@ def test_profile_test_vlm_picker_follows_verify_and_sends_the_pick(stub, page, a
 
     panel.get_by_test_id("vlm-run-select").select_option("cloud_vlm")
     panel.get_by_test_id("vlm-run-ack-checkbox").check()
-    with page.expect_request(lambda r: r.url.endswith("/region_profiles/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_profiles/test")):
         panel.get_by_test_id("test-run").click()
     assert bodies[1]["vlm_name"] == "cloud_vlm" and bodies[1]["acknowledge_external"] is True, bodies
 
     # Verify off: the picker goes and the selection is not sent.
     panel.get_by_test_id("test-verify").uncheck()
     expect(panel.get_by_test_id("vlm-run-picker")).to_have_count(0)
-    with page.expect_request(lambda r: r.url.endswith("/region_profiles/test")):
+    with expect_handled(page, lambda r: r.url.endswith("/region_profiles/test")):
         panel.get_by_test_id("test-run").click()
     assert "vlm_name" not in bodies[2] and "verify" not in bodies[2], bodies

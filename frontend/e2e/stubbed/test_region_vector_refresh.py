@@ -92,12 +92,12 @@ def test_pending_vectors_are_reported_after_a_box_write_and_cleared_on_the_next_
 def test_nothing_is_shown_when_no_vector_is_pending(stub, page, app_url):
     open_region_review(stub, page, app_url, {"embedded": 3, "pending": 0})
     accept_box(page)
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
     assert page.get_by_test_id("vector-refresh-notice").count() == 0
 
 
 def test_nothing_is_shown_when_the_write_serves_no_vector_refresh(stub, page, app_url):
     open_region_review(stub, page, app_url, None)
     accept_box(page)
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
     assert page.get_by_test_id("vector-refresh-notice").count() == 0

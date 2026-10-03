@@ -24,7 +24,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}
@@ -353,7 +353,7 @@ def test_create_an_endpoint_validate_and_test_connection(stub, page, app_url):
     name.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # The name is checked with the draft: the served issue shows under it.
-    with page.expect_request(lambda r: r.method == "POST" and "/vlm/endpoints/validate" in r.url):
+    with expect_handled(page, lambda r: r.method == "POST" and "/vlm/endpoints/validate" in r.url):
         name.fill("local_vlm")
     expect(page.get_by_test_id("config-issue").first).to_contain_text(
         "An endpoint named local_vlm already exists.", timeout=ACTION_TIMEOUT_MS
@@ -365,7 +365,7 @@ def test_create_an_endpoint_validate_and_test_connection(stub, page, app_url):
     page.locator('[data-field="base_url"] input').fill("http://vlm.internal:8000/v1")
     page.locator('[data-field="model"] input').fill("example/vision-7b")
 
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/vlm/endpoints/validate?probe=true")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/vlm/endpoints/validate?probe=true")):
         page.get_by_test_id("vlm-test-connection").click()
     probe = page.get_by_test_id("vlm-probe")
     expect(probe).to_contain_text("probe ok", timeout=ACTION_TIMEOUT_MS)
@@ -373,7 +373,7 @@ def test_create_an_endpoint_validate_and_test_connection(stub, page, app_url):
     assert validated[-1][1]["name"] == "new_vlm"
     assert validated[-1][1]["body"]["model"] == "example/vision-7b"
 
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/vlm/endpoints")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/vlm/endpoints")):
         page.get_by_test_id("vlm-create").click()
     assert created[0]["name"] == "new_vlm"
     assert created[0]["description"] == ""
@@ -421,7 +421,7 @@ def test_activate_an_external_endpoint_needs_the_acknowledgement(stub, page, app
     expect(dialog.get_by_test_id("activate-external-warning")).to_have_text(WARNING)
     expect(dialog.get_by_test_id("activate-ack")).to_be_visible()
 
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/cloud_vlm/activate")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/cloud_vlm/activate")):
         dialog.get_by_role("button", name="Activate", exact=True).click()
     expect(dialog.get_by_test_id("activate-error")).to_contain_text(
         "acknowledge it first", timeout=ACTION_TIMEOUT_MS
@@ -430,7 +430,7 @@ def test_activate_an_external_endpoint_needs_the_acknowledgement(stub, page, app
     assert bodies[0] == {"revision": 1, "expected_active": {"name": "local_vlm", "revision": 3}, "force": False}
 
     dialog.get_by_test_id("activate-ack").check()
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/cloud_vlm/activate")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/cloud_vlm/activate")):
         dialog.get_by_role("button", name="Activate", exact=True).click()
     assert bodies[1] == {
         "revision": 1,
@@ -464,14 +464,14 @@ def test_rollback_and_turn_off_send_expected_active(stub, page, app_url):
 
     page.get_by_role("button", name="Roll back to env_default").click()
     dialog = page.get_by_role("dialog", name="Roll back the VLM endpoint")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/active/rollback")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/active/rollback")):
         dialog.get_by_role("button", name="Roll back").click()
     assert rollbacks == [{"expected_active": {"name": "local_vlm", "revision": 3}}]
     expect(page.get_by_test_id("active-ref")).to_have_text("env_default", timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_test_id("active-deactivate").click()
     dialog = page.get_by_role("dialog", name="Turn off the VLM for this project")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/vlm/endpoints/deactivate")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/vlm/endpoints/deactivate")):
         dialog.get_by_role("button", name="Turn off").click()
     assert deactivations == [{"expected_active": {"name": "env_default", "revision": None}}]
     expect(page.get_by_test_id("active-ref")).to_contain_text("off", timeout=ACTION_TIMEOUT_MS)
@@ -504,7 +504,7 @@ def test_switch_the_local_model_shows_the_restart_then_follows_the_server(stub, 
 
     switch.click()
     dialog = page.get_by_role("dialog", name="Switch the local model to Vision 30B")
-    with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/vlm/local/select")):
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/vlm/local/select")):
         dialog.get_by_role("button", name="Switch", exact=True).click()
     assert selects == [{"catalog_id": "vision-30b"}]
 
