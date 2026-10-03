@@ -20,7 +20,9 @@ calls below, with the project you create in step 1.
 You bring the models. At a minimum:
 
 - An item detector in Triton that proposes the objects you curate. A stock
-  80-class COCO YOLO works to start. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
+  80-class COCO YOLO works to start and keeps its full vocabulary (every detection is stored as an
+  unlabeled proposal; do not set a class-id filter). Set
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
   See [Model export](../getting-started/model-export.mdx).
 - The PE image encoder (`make export-pe`). Without it, ingest writes no
   embeddings, and search, near-duplicate detection and clustering have

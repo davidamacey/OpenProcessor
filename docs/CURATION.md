@@ -864,8 +864,16 @@ compose up -d --force-recreate yolo-api`, then re-run the export.
   [`../export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
 - **An item detector for ingest**: an end2end Triton model named by
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus other `OP_INGEST_PRIMARY_<FIELD>`).
-  `OP_INGEST_PRIMARY_CLASS_IDS` narrows which classes become items (unset is
-  all; a stock COCO checkpoint proposes all 80). By default the primary is a
+  `OP_INGEST_PRIMARY_CLASS_IDS` is an optional hard drop by model class id
+  (unset, the default, stores every class; a stock COCO checkpoint proposes all
+  80, and leaving it unset is recommended). To switch detectors set
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and `OP_INGEST_PRIMARY_LABELS_PATH` when
+  the model directory has no `labels.txt`) and recreate `yolo-api`; the model
+  must serve the end2end four-tensor output. The choice is deployment-wide.
+  `OP_INGEST_PRIMARY_CONFIDENCE_FLOOR` only applies when the primary assigns
+  classes; a proposer stores every detection the engine emits. A region profile
+  should keep `parent_classes` set, because with a full-vocabulary detector an
+  empty list matches every class. By default the primary is a
   proposer (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`): detections are unlabeled
   `<name>_proposal` items carrying the model's own label, never a registry
   class looked up by id. Set it true only when the primary was trained on your
@@ -977,14 +985,14 @@ Cropwright, or any frontend that consumes `/curation`, needs:
 1. Start the API (`docker compose up -d`). Indexes are created on startup.
 2. Create a project and classes ([Use your own domain](#use-your-own-domain)).
 3. Build the PE encoders and load them in Triton ([Models you must supply](#models-you-must-supply)).
-4. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` and `OP_INGEST_PRIMARY_CLASS_IDS`.
+4. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
 5. Ingest or import, start `--profile curation`, review, export, train.
 
 A per-deployment checklist of the `OP_*` variables the compose file reads:
 
 | Purpose | Vars |
 |---|---|
-| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_CLASS_IDS`, `OP_SOURCE_ROOT_HOST` |
+| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_SOURCE_ROOT_HOST` |
 | Region detection | `OP_REGION_PROFILE_PATH`, `OP_SEGMENTER_URL` / `OP_SEGMENTER_URLS` |
 | VLM | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` |
 | Feature flags | `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED` |
