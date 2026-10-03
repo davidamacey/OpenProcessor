@@ -25,6 +25,7 @@ export interface ItemWire {
   class_name: string | null;
   class_source: string | null;
   confidence: number;
+  embedding_state: string | null;
   class_confidence: number | null;
   class_confidence_source: string | null;
   label_source: string | null;
@@ -64,6 +65,10 @@ export interface ItemWire {
   crop_area_norm: number | null;
   blur_lap_ratio: number | null;
   proposal_name: string | null;
+  source_prompt: string | null;
+  open_vocab_set: string | null;
+  open_vocab_revision: number | null;
+  mask_polygon: number[][] | null;
   probe_pred_class: unknown;
   probe_pred_class_id: number | null;
   probe_pred_entropy: number | null;
@@ -99,6 +104,7 @@ export interface ItemWire {
   region_label_source: string | null;
   region_pairing: unknown;
   region_skip_verify: boolean | null;
+  region_gate_skip: string | null;
   region_boxes: Record<string, unknown>[];
   region_count: number;
   region_rejected_count: number;
@@ -136,6 +142,7 @@ export const ITEM_WIRE_KEYS = [
   'class_name',
   'class_source',
   'confidence',
+  'embedding_state',
   'class_confidence',
   'class_confidence_source',
   'label_source',
@@ -175,6 +182,10 @@ export const ITEM_WIRE_KEYS = [
   'crop_area_norm',
   'blur_lap_ratio',
   'proposal_name',
+  'source_prompt',
+  'open_vocab_set',
+  'open_vocab_revision',
+  'mask_polygon',
   'probe_pred_class',
   'probe_pred_class_id',
   'probe_pred_entropy',
@@ -210,6 +221,7 @@ export const ITEM_WIRE_KEYS = [
   'region_label_source',
   'region_pairing',
   'region_skip_verify',
+  'region_gate_skip',
   'region_boxes',
   'region_count',
   'region_rejected_count',
@@ -254,6 +266,7 @@ export const REGION_WIRE_KEYS = [
   'region_label_source',
   'region_pairing',
   'region_skip_verify',
+  'region_gate_skip',
 ] as const satisfies readonly ItemWireKey[];
 
 export type RegionWireKey = (typeof REGION_WIRE_KEYS)[number];
