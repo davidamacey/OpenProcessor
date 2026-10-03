@@ -267,3 +267,16 @@ def test_region_status_default_is_all_and_negative_frame_is_unset() -> None:
     assert FILTER_SPECS['region_status']['default'] == 'all'
     assert FILTER_SPECS['on_negative_frame']['default'] is None
     assert FILTER_SPECS['on_negative_frame']['allows_unset'] is True
+
+
+def test_api_error_serves_only_the_fields_the_code_carries() -> None:
+    from src.routers.curation._config_common_models import ModelSharingUser, api_error
+
+    exc = api_error(
+        409,
+        'in_use',
+        'still used',
+        projects=['b'],
+        used_by=[ModelSharingUser(project='b', profile='p')],
+    )
+    assert set(exc.detail) == {'error', 'message', 'projects', 'used_by'}

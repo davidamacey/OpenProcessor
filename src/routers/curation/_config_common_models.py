@@ -381,7 +381,7 @@ class ApiErrorResponse(BaseModel):
 def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:
     """Build ``HTTPException(status, {"detail": ConfigErrorDetail})``."""
     detail = ConfigErrorDetail(error=code, message=message, **fields)
-    return HTTPException(status_code=status, detail=detail.model_dump(exclude_none=False))
+    return HTTPException(status_code=status, detail=detail.model_dump(exclude_none=True))
 
 
 def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPException:
