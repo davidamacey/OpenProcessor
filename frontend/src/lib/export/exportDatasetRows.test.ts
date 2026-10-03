@@ -4,9 +4,7 @@ import {
   gapCellTitle,
   hasCurrentMulticlassExport,
   registryArtifactsAvailable,
-  isNothingExportable,
   splitExportClasses,
-  type ExportRow,
 } from './exportDatasetRows';
 import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
 
@@ -154,56 +152,6 @@ describe('registryArtifactsAvailable (F-61)', () => {
       registryArtifactsAvailable(null, { status: 'success', export_dir: null }),
     ).toBe(false);
     expect(registryArtifactsAvailable([], null)).toBe(false);
-  });
-});
-
-function row(over: Partial<ExportRow>): ExportRow {
-  return {
-    class_id: 1,
-    class_name: 'widget_a',
-    total: 10,
-    validated: 5,
-    aug_target: 0,
-    gap: 0,
-    test_count: 0,
-    trainable: 5,
-    trainableGap: 0,
-    testDeficient: false,
-    adequacy: 'ok',
-    ...over,
-  };
-}
-
-describe('isNothingExportable (DQ-M9 frontend half)', () => {
-  it('true when there are no rows at all', () => {
-    expect(isNothingExportable([])).toBe(true);
-  });
-
-  it('true when every row has 0 validated crops (the live repro: 0 class_validated dataset-wide)', () => {
-    expect(
-      isNothingExportable([
-        row({ validated: 0 }),
-        row({ validated: 0, adequacy: 'block' }),
-      ]),
-    ).toBe(true);
-  });
-
-  it('false when every class is at the served block adequacy tier but has validated crops (the server decides)', () => {
-    expect(
-      isNothingExportable([
-        row({ validated: 3, adequacy: 'block' }),
-        row({ validated: 2, adequacy: 'block' }),
-      ]),
-    ).toBe(false);
-  });
-
-  it('false when at least one class has validated crops and is not blocked', () => {
-    expect(
-      isNothingExportable([
-        row({ validated: 0, adequacy: 'block' }),
-        row({ validated: 20, adequacy: 'ok' }),
-      ]),
-    ).toBe(false);
   });
 });
 

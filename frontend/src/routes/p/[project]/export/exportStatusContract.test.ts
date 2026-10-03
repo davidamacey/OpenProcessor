@@ -93,8 +93,6 @@ function makeFetchMock(
   freezeCalls: Array<{ url: string; body: unknown }>,
   exportStatusBody: unknown = EXPORT_STATUS_SUCCESS,
   exportYoloCalls: Array<{ url: string; body: unknown }> = [],
-  // Non-empty by default so `isNothingExportable` doesn't disable the
-  // Export button in tests that need to click it.
   statsClassesBody: unknown = {
     classes: [
       {
