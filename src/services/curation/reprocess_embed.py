@@ -68,6 +68,20 @@ class EmbedTarget:
     """Crop ids that already have a vector and keep it (``only_missing``)."""
 
 
+def target_has_work(target: EmbedTarget, parts: frozenset[str], *, only_missing: bool) -> bool:
+    """Whether embedding ``target`` writes anything: the one test behind the
+    applied run's ``images`` count and the dry run's ``images_to_embed``."""
+    if 'frame' in parts:
+        return True
+    if 'crop' in parts and any(
+        s.get('bbox_norm') and cid not in target.skip_crop for cid, s in target.items
+    ):
+        return True
+    return 'region' in parts and any(
+        (missing_boxes(s) if only_missing else embeddable(read_boxes(s))) for _, s in target.items
+    )
+
+
 def _load_image(path: str) -> Image.Image | None:
     """The EXIF-transposed RGB image at ``path`` if it is a servable path,
     else ``None`` (fail closed: an unservable stored path is never read)."""
@@ -158,6 +172,8 @@ async def reembed_items(
     box_entries: dict[str, list[dict[str, Any]]] = {}
 
     for target in targets:
+        if not target_has_work(target, parts, only_missing=only_missing):
+            continue
         img = await asyncio.to_thread(_load_image, target.image_path)
         if img is None:
             counts['missing_image'] += 1
@@ -207,4 +223,4 @@ async def reembed_items(
     return counts
 
 
-__all__ = ['ALL_PARTS', 'EmbedTarget', 'reembed_items']
+__all__ = ['ALL_PARTS', 'EmbedTarget', 'reembed_items', 'target_has_work']

@@ -314,6 +314,14 @@ async def quiesce_and_swap(
     new_profile = get_active_profile()
     if new_profile is None:
         return None
+    # An env/stored profile applied here may never have been activated through
+    # the API in this project: register its region class (idempotent).
+    from src.services.curation.region_class import ensure_region_class
+
+    try:
+        ensure_region_class()
+    except Exception as exc:
+        logger.warning('region_class_seed_failed', project=slug, error=str(exc))
     new_pack = get_active_pack()
     # Resolved from the just-pinned snapshots. An activation that names an
     # endpoint revision that cannot be resolved raises here (fail closed):

@@ -11,15 +11,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
-from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.reprocess_detect import redetect_image
-from src.services.curation.reprocess_embed import ALL_PARTS, EmbedTarget, reembed_items
-from src.services.curation.reprocess_embed_spec import (
-    EmbedSpec,
-    embed_scope_items,
-    ids_without_vector,
-)
+from src.services.curation.reprocess_embed import ALL_PARTS, reembed_items
+from src.services.curation.reprocess_embed_spec import EmbedSpec, embed_targets
 from src.services.curation.reprocess_models import ReprocessScope, ReprocessScopeResult
 from src.services.curation.reprocess_open_vocab import OpenVocabPass, active_set_for_run
 from src.services.curation.reprocess_targets import existing_images
@@ -40,43 +35,6 @@ CHUNK = 20
 IMAGE_SCOPES: tuple[ReprocessScope, ...] = ('detect', 'open_vocab', 'embed')
 
 
-async def _embed_targets(
-    opensearch: AsyncOpenSearch, docs: dict[str, dict[str, Any]], spec: EmbedSpec
-) -> list[EmbedTarget]:
-    F = get_region_fields()
-    items = await embed_scope_items(
-        opensearch,
-        list(docs),
-        spec,
-        [
-            'image_id',
-            'bbox_norm',
-            F.boxes,
-            F.box_embeddings,
-            'class_id',
-            'cluster_id',
-            'crop_rank_in_image',
-            'blur_lap_ratio',
-        ],
-    )
-    skip: frozenset[str] = frozenset()
-    if spec.only_missing and items:
-        ids = [cid for cid, _ in items]
-        skip = frozenset(ids) - await ids_without_vector(opensearch, ids)
-    by_image: dict[str, list[tuple[str, dict[str, Any]]]] = {}
-    for crop_id, src in items:
-        by_image.setdefault(src.get('image_id') or '', []).append((crop_id, src))
-    return [
-        EmbedTarget(
-            image_id=image_id,
-            image_path=doc.get('image_path') or '',
-            items=by_image.get(image_id, []),
-            skip_crop=skip,
-        )
-        for image_id, doc in docs.items()
-    ]
-
-
 def _failed_images(results: dict[ReprocessScope, ReprocessScopeResult]) -> int:
     return max(r.failed + r.not_found for r in results.values())
 
@@ -95,7 +53,7 @@ async def embed_image_chunk(
         counts = await reembed_items(
             opensearch,
             pe,
-            await _embed_targets(opensearch, docs, spec),
+            await embed_targets(opensearch, docs, spec),
             parts=spec.part_set,
             only_missing=spec.only_missing,
         )

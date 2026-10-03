@@ -39,6 +39,37 @@ def not_embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
     return {'bool': {'must_not': [embedded_clause(field)]}}
 
 
+def legacy_embedded_clause() -> dict[str, Any]:
+    """Items that have the vector but were written before ``embedding_state``
+    existed: embedded by the authoritative test, with no recorded state."""
+    return {
+        'bool': {
+            'must': [embedded_clause()],
+            'must_not': [{'exists': {'field': 'embedding_state'}}],
+        }
+    }
+
+
+async def backfill_embedded_state(client: Any, index: str) -> int:
+    """Record ``embedded`` on every legacy item that has its vector, so the
+    stored state, the wire item, the stats breakdown and the filter agree
+    (the vector is excluded from item reads, so the wire cannot derive it).
+    Idempotent: after one pass nothing matches. Returns the items updated."""
+    resp = await client.update_by_query(
+        index=index,
+        body={
+            'query': legacy_embedded_clause(),
+            'script': {
+                'lang': 'painless',
+                'source': f"ctx._source.embedding_state = '{EMBEDDED}'",
+            },
+        },
+        conflicts='proceed',
+        refresh=True,
+    )
+    return int(resp.get('updated', 0))
+
+
 def keep_stored_vector_state(merged: dict[str, Any], existing: dict[str, Any]) -> None:
     """Drop (in place) an incoming ``embedding_state`` that would contradict a
     stored vector.
@@ -57,7 +88,9 @@ __all__ = [
     'FAILED',
     'NOT_SELECTED',
     'EmbeddingState',
+    'backfill_embedded_state',
     'embedded_clause',
     'keep_stored_vector_state',
+    'legacy_embedded_clause',
     'not_embedded_clause',
 ]

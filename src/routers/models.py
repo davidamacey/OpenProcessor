@@ -24,6 +24,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
+from src.routers.curation._config_common_models import api_error
 from src.schemas.models import (
     ExportFormat,
     ExportStatus,
@@ -44,6 +45,7 @@ from src.services.model_export import (
     save_uploaded_file,
     validate_pytorch_model,
 )
+from src.services.model_repository import promoted_owner, resolve_load_dir, resolve_model_dirs
 from src.services.model_unload_guard import UnloadRefusedError, check_unload
 from src.services.training.triton_promote import set_explicitly_unloaded
 from src.services.triton_control import TritonControlService
@@ -401,17 +403,13 @@ async def load_model(model_name: str):
     - `{name}_trt` for standard TRT
     - `{name}_trt_end2end` for End2End TRT
     """
-    # The name as given, else with the End2End / plain TRT suffix.
-    for candidate in (model_name, f'{model_name}_trt_end2end', f'{model_name}_trt'):
-        if (TRITON_MODELS_DIR / candidate).exists():
-            model_name = candidate
-            break
-    else:
+    model_dir = resolve_load_dir(TRITON_MODELS_DIR, model_name)
+    if model_dir is None:
         raise HTTPException(
             status_code=404,
             detail=f'Model {model_name} not found in Triton repository',
         )
-    model_dir = TRITON_MODELS_DIR / model_name
+    model_name = model_dir.name
 
     triton = TritonControlService()
     success, message = await triton.load_model(model_name)
@@ -462,22 +460,27 @@ async def delete_model(
 
     Removes:
     - PyTorch model file (pytorch_models/{name}.pt)
-    - TRT model directory (models/{name}_trt/)
-    - TRT End2End model directory (models/{name}_trt_end2end/)
-    - the ONNX End2End intermediate the export leaves (models/{name}_end2end/)
+    - the directory named ``name`` and the export family it expands to
+      (``_trt``, ``_trt_end2end``, the ONNX intermediate ``_end2end``)
 
-    Also unloads it from Triton. Every model removed goes through the shared
-    unload guard first (403 detector / OCR, 409 core without ``force``);
-    nothing is deleted when any is refused.
+    Also unloads it from Triton, through the shared unload guard first (403
+    detector / OCR, 409 core without ``force``); nothing is deleted when any is
+    refused. A project-promoted model is a 409 ``project_owned_model``.
     """
     triton = TritonControlService()
-    deleted_files = []
-    unloaded = False
-    model_dirs = [
-        TRITON_MODELS_DIR / f'{model_name}{suffix}'
-        for suffix in ('_trt', '_trt_end2end', '_end2end')
-        if (TRITON_MODELS_DIR / f'{model_name}{suffix}').exists()
-    ]
+    deleted_files, unloaded = [], False
+    model_dirs = resolve_model_dirs(TRITON_MODELS_DIR, model_name)
+    for model_dir in model_dirs:
+        owner = promoted_owner(model_dir)
+        if owner is not None:
+            raise api_error(
+                409,
+                'project_owned_model',
+                f'{model_dir.name!r} was promoted by project {owner!r}; delete it with '
+                f'DELETE /curation/projects/{owner}/models/{model_dir.name}, which carries '
+                'the in-use and sharing guards.',
+                owner_project=owner,
+            )
     try:
         for model_dir in model_dirs:
             check_unload(model_dir.name, force=force)
