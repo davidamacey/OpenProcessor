@@ -174,8 +174,13 @@ uses (`DetectedItem` -> `build_item_doc`), with:
 
 ### 3.3 Dedup against existing boxes
 After per-target selection, drop a SAM 3 box when it overlaps an existing item
-on the same image of the SAME class name with IoU >= `dedup_iou`, or of ANY
-class when IoU >= 0.8 and the existing item is locked (human/imported):
+on the same image with the SAME label at IoU >= `dedup_iou`, or of ANY class
+when IoU >= 0.8 and the existing item is locked (human/imported). A hit's label
+is its target's class name, or its prompt in discovery mode; an existing item's
+label is its class name or, for an unlabeled detector proposal, the detector's
+own label (`proposal_name`). A box with no label at all cannot agree with
+anything and never absorbs a hit (decided from the first live run, where unlabeled
+detector boxes absorbed hits of other objects):
 - Same class name + high IoU: the existing detector item wins (keep its box);
   the SAM 3 hit is recorded only as a provenance chain entry on that item
   (`sam3:open_vocab_agree`) so agreement is visible but no duplicate exists.
@@ -264,11 +269,19 @@ All three call one service function `run_open_vocab(image, set, project)`.
 Cost per image = (enabled targets not skipped by the gate) x per-call
 latency / effective parallelism. Parallelism = segmenter instance count (2 on
 the live stack; each in-flight forward holds one instance lock).
-- Per call ~2.5-4 s on crops (measured); assume 3 s as the planning number
-  until section 10 measures full-image calls.
-- Images/s ~= instances / (targets x per_call_s). Live stack: 2 / (1 x 3) =
-  ~0.67 img/s for ONE target; 3 targets ~0.22 img/s (~800 images/hour). With
-  8 instances (VRAM permitting with shared weights) ~4x.
+- Per call ~2.5-4 s on crops (measured). A FULL-image call measured 0.28-0.35 s
+  serial (about 0.36 s per target-image, linear in targets) on the first live
+  run (40 public COCO images, GPU 0 at 95-100%): 0.71 images/s at 4 targets
+  (2.9 calls/s). The old 3 s planning figure was about 4x pessimistic for full
+  images; the dry-run estimate now uses an exponential moving average of the
+  calls the API process makes (`segmenter_latency`), starting at 0.36 s.
+- Images/s ~= parallelism / (targets x per_call_s), where parallelism is
+  min(segmenter instances, `OP_OPEN_VOCAB_CONCURRENCY` x targets). The first
+  run showed no gain from the second instance because images were processed one
+  at a time (only the targets of one image overlapped); images now run
+  concurrently. Whether more concurrency helps beyond that depends on the GPU:
+  with it already saturated the instances share it, so measure with the
+  commands in section 16 before raising instance counts.
 - Levers, in order of payoff: (a) gate (Tier 2 VLM yes/no is far cheaper than
   a miss); (b) downscale to `image_max_side` (smaller input = faster, but the
   small-object quality tradeoff in #30 point 5; keep crop-region SAM 3 as
@@ -534,19 +547,52 @@ What was built, where it differs from the plan above, and what is left.
   API process (not a `scripts/curation/worker` stage: that process has no item
   writer or embedder), serialized per process, with a durable
   `open_vocab_status` on the image doc. A process restart leaves `pending`
-  images for a reprocess with `open_vocab_status: ["pending"]`; there is no
-  periodic sweeper.
+  images; the sweeper below (and a reprocess with `open_vocab_status:
+  ["pending"]`) picks them up.
 - **Wave 6.** `src/services/detection/segmenter_gate.py`: `decide` with the
   three tiers, used by the full-image pass. The crop region stage already applies
-  tier 1 (its `parent_classes` fetch and seed use the same predicate); wiring
-  tiers 2 and 3 into `stage_a_sam_consumer` for crops is left to the #46 change
-  that owns it (it needs a profile field for the opt-in). Defaults: tier 2 and
-  tier 3 are both off.
+  tier 1 (its `parent_classes` fetch and seed use the same predicate); tier 3
+  for crops is wired into `stage_a_sam_consumer` (see "Follow-ups closed").
+  Defaults: tier 2 and tier 3 are both off.
 - **Wave 7.** Section 9.
 - **Wave 8.** Metrics `op_open_vocab_call_seconds`,
   `op_segmenter_gate_decisions_total`, `op_open_vocab_hits_dropped_total`,
   `op_open_vocab_items_written_total`; docs in the guide, `docs/CURATION.md`,
   README and the changelog.
-- **Not measured.** Section 10 (live throughput, recall against COCO ground
-  truth, batch-endpoint gain) needs the live stack; the dry-run estimate uses
-  the 3 s per call planning figure and the segmenter's reported instance count.
+- **Not measured.** Recall against COCO ground truth and the batch-endpoint gain
+  still need a live run. Measured on the first live run: see section 7.
+
+### Follow-ups closed (after the first live run)
+
+- **Dedup** (GH #68.1). Compared by label (`open_vocab_select.hit_label`); an
+  unlabeled box never absorbs a hit; discovery prompts no longer suppress each
+  other. Decided by evidence: the old rule matched empty names to empty names.
+- **Parallelism** (GH #68.2). Cause: the pass handled one image at a time. Now
+  `OP_OPEN_VOCAB_CONCURRENCY` images are in flight (the jobs and the ingest drain
+  share `OpenVocabPass.run_images`); tested with a fake segmenter that records
+  overlapping calls. The estimate uses the measured latency.
+- **Progress** (GH #68.3). `images_done` and `updated_at` advance per image.
+- **VLM relabel** (GH #68.4). A named target writes `class_source:
+  open_vocab_target`; `keep_target_class` (applied by `with_class_snapshot`, so
+  every VLM writer) keeps class, source and cluster and stores the VLM answer as
+  `vlm_proposed_class`; the VLM worker asks such an item once.
+- **Sweeper** (GH #68.5). `open_vocab_sweeper` (API process, per project, file
+  lock across workers) drains `pending` older than ten minutes; the worker has no
+  item writer, so the sweeper is not a worker stage.
+- **Crop stage tiers** (GH #68.5, #46). The crop stage already had tier 1
+  (`parent_classes`) and tier 2 (its batched vision-model visibility check, run
+  before the segmenter); tier 3 is wired through `segmenter_gate.decide`
+  (`scripts/curation/worker/crop_gate.py`, region profile `gate_hit_rate`, off by
+  default). Tier 2 is not routed through `decide` per crop: the batch call is the
+  cheaper form of the same question. Skips are stamped `region_gate_skip`.
+- **#46 controls.** `GET /region_stage`, `POST /region_stage/pause` and
+  `POST /region_stage/resume`; reprocess filter `region_gate_skipped`; metrics
+  `op_region_segmenter_calls_total` / `op_region_segmenter_seconds_total`. The
+  plate example profile's `parent_classes` test exists
+  (`tests/curation/test_example_profiles.py`).
+
+Live checks for the coordinator (public COCO set, active set with 4 targets):
+`POST /reprocess` dry run, then the run with `OP_OPEN_VOCAB_CONCURRENCY=1` and
+`4` while polling `GET /reprocess/jobs/{job_id}` (`images_done` rises per image;
+compare images per second), and `GET /region_stage` before and after
+`POST /region_stage/pause`.

@@ -219,7 +219,7 @@ every uvicorn worker sees the same job.
 
 | Group | Variables (defaults) |
 |---|---|
-| Reprocess (`POST .../reprocess`) | `OP_REPROCESS_JOBS_DIR` (`/jobs/reprocess`), `OP_REPROCESS_SYNC_MAX` (20: `detect` or `embed` over more images than this runs as a job), `OP_OPEN_VOCAB_CONCURRENCY` (4: images of the open-vocabulary pass in flight at once) |
+| Reprocess (`POST .../reprocess`) | `OP_REPROCESS_JOBS_DIR` (`/jobs/reprocess`), `OP_REPROCESS_SYNC_MAX` (20: `detect` or `embed` over more images than this runs as a job), `OP_OPEN_VOCAB_CONCURRENCY` (4: images of the open-vocabulary pass in flight at once), `OP_OPEN_VOCAB_SWEEP_S` (120: sweep that resumes ingest-time passes left pending; 0 = off) |
 | Dataset import (`.../datasets/imports`) | `OP_DATASET_IMPORTS_DIR` (`/jobs/imports`), `OP_DATASET_IMPORT_CHUNK` (64), `OP_DATASET_IMPORT_MAX_PENDING` (2000: region-worker backpressure), `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` (5), `OP_DATASET_PREVIEW_MAX_FILES` (500000) |
 | Dataset upload (`.../datasets/uploads`) | `OP_DATASET_UPLOAD_MAX_BYTES` (2147483648), `OP_DATASET_UPLOAD_MAX_FILES` (200000), `OP_DATASET_UPLOAD_TTL_H` (72: extracted uploads are swept after this) |
 | Combine (`/curation/projects/combine*`) | `OP_COMBINE_JOBS_DIR` (`/jobs/combine`), `OP_COMBINE_PAGE_SIZE` (200) |

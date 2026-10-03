@@ -93,6 +93,7 @@ whose defaults are in `src/config/detection_profile.py`.
 | Identity and scope | `display_name`, `display_name_singular`, `region_class_name`, `parent_classes` |
 | Detector leg | `detector_model` (empty = none), `detector_version`, `input_size` (640), `confidence_floor` (0.4), `batch_limit` (16), `letterbox_fill`, `class_ids` |
 | Segmenter leg | `segmenter_name` (`sam3`), `segmenter_version`, `segmenter_text_prompt` (empty = off) |
+| Segmenter gating | `gate_hit_rate` (false), `gate_hit_window` (20), `gate_hit_miss_threshold` (15), `gate_hit_sample_floor` (0.1): skip the segmenter for an item class that keeps missing, still sampling it; skipped items are stamped `region_gate_skip` and re-run through the reprocess filter `region_gate_skipped`. Never applies to an item whose class a human owns or validated |
 | Selection | `max_regions_per_item` (1), `region_nms_iou` (0.5), `aspect_min`, `aspect_max`, `auto_confirm_aspect`, `auto_confirm_area_frac` |
 | Text reading | `text_reader` (`vlm_then_ocr`), `text_pattern`, `text_format`, `text_charset`, `text_uppercase`, `text_join`, `text_len_min`, `text_len_max`, `text_stopwords`, `text_min_confidence`, `text_placeholders`, `text_reject_sequences`, `text_crop_margin`, `text_crop_min_height`, `text_min_height_ratio`, `text_border_margin` |
 | OCR models | `ocr_pipeline_model`, `ocr_det_model`, `ocr_rec_model`, versions, `ocr_det_input_size`, `ocr_det_prob_floor` |
