@@ -65,11 +65,12 @@ describe('widget_tag assignment-hiding wiring', () => {
     expect(src).not.toMatch(/classVisibility/);
   });
 
-  it("the review page's class FILTER dropdown pool is unchanged (still !c.deprecated only)", () => {
-    const src = read('src/routes/p/[project]/review/+page.svelte');
+  it("the shared item filter's class pool is unchanged (still !c.deprecated only, no classVisibility)", () => {
+    const src = read('src/lib/components/itemFilter/ServedFilterField.svelte');
     expect(src).toMatch(
-      /const filterableClasses = \$derived\(classesStore\.classes\.filter\(\(c\) => !c\.deprecated\)\);/,
+      /classesStore\.classes\.filter\(\(c\) => !c\.deprecated\)\.map\(\(c\) => c\.name\)/,
     );
+    expect(src).not.toMatch(/classVisibility|isAssignableClass/);
   });
 
   it('the review page does not import classVisibility itself — it delegates to classPicker.ts/classesStore', () => {
