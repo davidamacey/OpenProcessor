@@ -113,6 +113,9 @@ IMGS_TEST/
 # and it was previously tracked, so every export run dirtied the tree
 # even when nothing about the repo's own config changed.
 /scripts/export_results.json
+# export_models.py --generate-config never replaces a differing tracked config.pbtxt;
+# it writes this beside it for a diff (export/config_write.py).
+models*/*/config.pbtxt.generated
 # Class registry generated at runtime (default OP_REGISTRY_PATH); the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json
@@ -168,6 +171,8 @@ docker-compose.*.yml
 # G-15: opt-in overlay shipped with the repo (not generated) -- see
 # docs/CURATION.md "GPU arbiter container coordination".
 !docker-compose.gpu-arbiter.yml
+# Opt-in GPU clustering overlay shipped with the repo (make cluster-gpu).
+!docker-compose.gpu-clustering.yml
 # Installer plan §1: build:/source-mount overlay shipped with the repo
 # (not generated) -- restores the checkout hot-reload workflow that the
 # now deploy-safe docker-compose.yml no longer carries by default.

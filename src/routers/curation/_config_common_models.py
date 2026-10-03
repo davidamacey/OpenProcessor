@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.routers.curation._dataset_issue_models import (
     DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
@@ -220,6 +220,8 @@ ValidationCode = Literal[
     'target_is_source',
     'label_conflicts',
     'holdout_recompute_contamination',
+    'embedding_model_mismatch',
+    'region_profiles_differ',
     'class_mapping_invalid',
     # W9: VLM endpoint validation (any_domain_plan.md W9.4/W9.5)
     'vlm_name_invalid',
@@ -269,6 +271,13 @@ class ProjectCapacityWire(BaseModel):
     max_shards_per_node: int
     data_nodes: int
     projects_until_soft_limit: int
+    shards_after_create: int = Field(
+        description='active_shards plus per_project_shards: the total if one more project is created.'
+    )
+    limit_source: Literal['heap', 'cluster_max_shards_per_node'] = Field(
+        description='Which limit soft_limit is: heap (heap GB x OP_SHARDS_PER_HEAP_GB) or the '
+        'cluster hard limit when that is lower.'
+    )
     message: str
     labels: dict[str, str]
 

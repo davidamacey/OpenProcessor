@@ -83,6 +83,8 @@ from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
     TaskBoxInput,
     _bbox_shape_is_plausible,
+    candidate_actor,
+    chain_entry,
     item_verification_fields,
     task_box_from_stored,
 )
@@ -1563,12 +1565,13 @@ async def run(args: argparse.Namespace) -> int:
                         # (the whole item's candidates share one leg per
                         # pass -- Path 1/2/segmenter never mix in the same
                         # combined_q push).
-                        actor = t.candidates[0].detector if t.candidates else 'unknown'
+                        actor = candidate_actor(t.candidates[0]) if t.candidates else 'unknown'
                         # The candidate's detector gets exactly one ``:hit``
                         # (Stage A records it for fresh detections; an
                         # ingest-time box awaiting verification has none).
-                        if f'{actor}:hit' not in t.detection_trace:
-                            t.detection_trace.append(f'{actor}:hit')
+                        for entry in chain_entry(actor, 'hit'):
+                            if entry not in t.detection_trace:
+                                t.detection_trace.append(entry)
 
                         resolution = await resolve_combined_reply(
                             t.candidates,

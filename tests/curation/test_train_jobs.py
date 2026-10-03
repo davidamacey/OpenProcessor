@@ -1022,3 +1022,14 @@ def test_artifact_media_type_png_and_csv() -> None:
     assert train_jobs.artifact_media_type('confusion_matrix.png') == 'image/png'
     assert train_jobs.artifact_media_type('results.csv') == 'text/csv'
     assert train_jobs.artifact_media_type('unknown.bin') == 'application/octet-stream'
+
+
+def test_hyperparameters_reject_top_level_spec_fields() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match='include_classes'):
+        TrainJobSpec(
+            dataset_export_dir='/data/exports/x',
+            hyperparameters={'include_classes': [1], 'epochs': 3},
+        )
+    TrainJobSpec(dataset_export_dir='/data/exports/x', hyperparameters={'epochs': 3})

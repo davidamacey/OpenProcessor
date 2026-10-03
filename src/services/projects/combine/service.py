@@ -48,6 +48,11 @@ _CLONE_AXES = ['settings_defaults', 'activations', 'prompt_packs']
 _SLUG_ERRORS = frozenset({'slug_taken', 'slug_retired', 'slug_invalid'})
 
 
+def target_embedding_dim() -> int:
+    """The vector size the target (the process-wide encoder) uses."""
+    return get_curation_config().encoder_embedding_dim
+
+
 def report_of(issues: list[CombineIssue]) -> ValidationReport:
     return ValidationReport(
         ok=not issues,
@@ -73,7 +78,7 @@ async def preview(client: Any, request: CombineRequest) -> tuple[CombinePreview,
     slug_available = not any(e.code in _SLUG_ERRORS for e in errors)
     if len(records) != len(request.sources):
         return _unreadable(request, errors, warnings, slug_available), None
-    analysis = await analyze(client, request, records)
+    analysis = await analyze(client, request, records, target_dim=target_embedding_dim())
     states = [await source_state(client, r) for r in records]
     result = build_preview(
         analysis,
@@ -187,7 +192,7 @@ async def _run(
         plan=load_plan(store),
         sources=sources,
         target=target,
-        embedding_dim=get_curation_config().encoder_embedding_dim,
+        embedding_dim=target_embedding_dim(),
         settle=settle,
     )
 

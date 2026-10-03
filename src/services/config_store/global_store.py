@@ -20,8 +20,25 @@ from src.services.config_store.store import ConfigStore
 
 def global_configs_index() -> str:
     """The one config-store index that belongs to no project -- mirrors
-    ``src.services.projects.registry.projects_index()`` for ``op_projects``."""
-    return os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
+    ``src.services.projects.registry.projects_index()`` for ``op_projects``.
+
+    Refuses a name that would collide with the project namespace (a
+    project-index prefix, which the project guard would then treat as one
+    project's index) or with the project registry itself."""
+    from src.config.projects import project_index_prefix
+    from src.services.projects.registry import projects_index
+
+    name = os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
+    if name.startswith(project_index_prefix()):
+        msg = (
+            f"OP_GLOBAL_CONFIGS_INDEX '{name}' starts with the project index prefix "
+            f"'{project_index_prefix()}'; the global store must live outside every project"
+        )
+        raise ValueError(msg)
+    if name == projects_index():
+        msg = f"OP_GLOBAL_CONFIGS_INDEX '{name}' is the project registry index (OP_PROJECTS_INDEX)"
+        raise ValueError(msg)
+    return name
 
 
 # Same config-store row shapes as a project's folded ``configs`` index
@@ -89,15 +106,14 @@ def get_global_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> Conf
     to be bound has no effect on which store it returns.
 
     That binding-independence is about which *store object* comes back,
-    not its I/O: the object returned here still needs an unbound client
-    to actually read/write (m2, W2-finish review) -- calling
-    :meth:`ConfigStore.refresh` on it while a project is bound gets
-    refused by the project guard (this index is unowned, so a bound
-    request has no business touching it) and silently degrades to a
-    stale, empty snapshot, the same as any other refresh failure. W9
-    (the first real consumer with project-bound call sites) must decide
-    the read-while-bound rule -- an unbound-read helper, or a guard
-    exception allowing read-only access the way ``op_projects`` gets it.
+    not its I/O. While a project is bound the guard refuses every access to
+    this index except a read made inside
+    :func:`~src.services.projects.guard.global_configs_read` (the config
+    store's own reads enter it). So :meth:`ConfigStore.refresh` called
+    directly on a bound request degrades to a stale, empty snapshot, and a
+    write through it (``activate_axis``) is refused by the guard before
+    anything is written: the activation is neither stored nor applied to the
+    in-process store. Global writes belong on unbound routes.
     """
     with _GLOBAL_STORE_LOCK:
         store = _GLOBAL_STORE.get(_GLOBAL_STORE_KEY)

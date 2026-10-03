@@ -45,7 +45,7 @@ def _activate(targets: list[dict[str, Any]], revision: int = 4) -> None:
     body = {'targets': targets}
     stored = StoredConfig(kind='open_vocab_set', name='street', revision=revision, body=body)
     store.apply_local(
-        config_revision=1,
+        config_revision=0,
         open_vocab_set=stored,
         active_open_vocab=('street', revision),
         active_open_vocab_body=stored,

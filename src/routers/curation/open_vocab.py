@@ -54,7 +54,7 @@ def validation_inputs() -> dict[str, Any]:
     segmenter probe): the one place they are assembled, so create, save,
     validate, clone and the activation gate cannot disagree."""
     from src.config.ingest_profiles import ingest_primary_profile
-    from src.routers.curation.region_profiles import _segmenter_health_fn
+    from src.routers.curation._models_segmenter import configured_segmenter_health
     from src.services.labeling.vlm_endpoints import vlm_configured
     from src.utils.class_names import get_class_names
 
@@ -65,7 +65,7 @@ def validation_inputs() -> dict[str, Any]:
         'detector_class_names': frozenset(get_class_names(detector).values())
         if detector
         else frozenset(),
-        'segmenter_health': _segmenter_health_fn,
+        'segmenter_health': configured_segmenter_health,
         'vlm_configured': vlm_configured(),
     }
 

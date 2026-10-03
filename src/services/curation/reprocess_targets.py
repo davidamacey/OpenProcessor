@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.item_filter import item_filter_clauses
-from src.services.curation.region_requeue import NONE_BUCKET, box_value_filter
+from src.services.curation.region_requeue import NONE_BUCKET, box_values_filter
 from src.services.curation.reprocess_models import MAX_TARGET_IDS, ReprocessFilter, ReprocessTargets
 
 
@@ -138,10 +138,10 @@ def item_filter_query(f: ReprocessFilter, F: RegionFields | None = None) -> dict
         filt.append({'terms': {F.status: list(f.region_status)}})
     if f.missing_status:
         must_not.append({'exists': {'field': F.status}})
-    if f.detector:
-        filt.append(box_value_filter(F, 'detector', tuple(f.detector)))
-    if f.reason:
-        filt.append(box_value_filter(F, 'rejection_reason', tuple(f.reason)))
+    if (
+        box_filter := box_values_filter(F, detectors=tuple(f.detector), reasons=tuple(f.reason))
+    ) is not None:
+        filt.append(box_filter)
     if f.missing_provenance:
         must_not.append({'exists': {'field': F.detector_chain}})
     return {'bool': {'filter': filt, 'must_not': must_not}}

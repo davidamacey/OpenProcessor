@@ -47,6 +47,18 @@ async def _segmenter_health(url: str) -> tuple[str, str | None]:
         return 'unavailable', str(exc)
 
 
+async def configured_segmenter_health() -> tuple[str, str | None]:
+    """:func:`_segmenter_health` of the first configured segmenter, or
+    ``('unavailable', reason)`` when ``OP_SEGMENTER_URL`` is unset. The one
+    probe the profile and config-test routes validate against."""
+    from src.services.detection.segmenter_http import first_segmenter_url
+
+    url = first_segmenter_url()
+    if url is None:
+        return 'unavailable', 'OP_SEGMENTER_URL is not configured'
+    return await _segmenter_health(url)
+
+
 async def build_segmenter_entry(
     name: str,
     friendly: str,

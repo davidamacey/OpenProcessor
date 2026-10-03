@@ -12,7 +12,7 @@ Endpoints:
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import ORJSONResponse
@@ -91,6 +91,15 @@ class OcrResult(BaseModel):
     num_texts: int = Field(default=0, description='Number of text regions')
 
 
+def _ocr_failure(ocr_result: dict[str, Any] | None) -> str | None:
+    """The message of an OCR result that failed (``None`` when it ran, even
+    with no text, or was not requested): a failed OCR must not look like an
+    image with no text."""
+    if ocr_result and ocr_result.get('status') == 'error':
+        return str(ocr_result.get('error') or 'OCR failed')
+    return None
+
+
 class AnalyzeResponse(BaseModel):
     """Response for combined analysis endpoint."""
 
@@ -115,6 +124,11 @@ class AnalyzeResponse(BaseModel):
 
     # OCR
     ocr: OcrResult | None = Field(default=None, description='OCR results (if enable_ocr=True)')
+    ocr_error: str | None = Field(
+        default=None,
+        description='Why OCR produced no result when enable_ocr=True and it failed; '
+        'null when OCR ran (even with no text) or was not requested',
+    )
 
     # Timing
     total_time_ms: float | None = Field(default=None, description='Total processing time in ms')
@@ -143,6 +157,7 @@ class BatchAnalyzeResult(BaseModel):
     faces: list[FaceResult] | None = Field(default=None)
     global_embedding: list[float] | None = Field(default=None)
     ocr: OcrResult | None = Field(default=None)
+    ocr_error: str | None = Field(default=None, description='Why OCR failed for this image')
 
 
 class BatchAnalyzeResponse(BaseModel):
@@ -416,6 +431,7 @@ def analyze_image(
             global_embedding=global_embedding,
             embedding_norm=embedding_norm,
             ocr=ocr,
+            ocr_error=_ocr_failure(ocr_result),
             timing=timing if timing else None,
         )
 
@@ -642,6 +658,7 @@ def analyze_batch(
                         full_text=' '.join(ocr_result.get('texts', [])),
                         num_texts=ocr_result.get('num_texts', 0),
                     )
+                result.ocr_error = _ocr_failure(ocr_result)
 
             results.append(result)
 

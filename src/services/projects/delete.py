@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Any, cast
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectStatus
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._config_common_models import ModelSharingUser, api_error
+from src.services.config_store.project_usage import model_dependents
 from src.services.projects.registry import get_project_registry, get_record_with_seq
 
 
@@ -162,6 +163,18 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     # itself. Previously this was always `[]` for a private-only
     # project, even though those models were never unloaded either.
     promoted_models = await _owned_models(record)
+    referenced_by: list[dict[str, str]] = []
+    try:
+        referenced_by = await model_dependents(
+            client, record.slug, await _shared_model_users(record)
+        )
+    except Exception:
+        blocking.append(
+            {
+                'code': 'config_store_unavailable',
+                'message': "could not read every project to see who uses this project's models",
+            }
+        )
 
     return {
         'indexes': indexes,
@@ -169,7 +182,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
         'promoted_models': promoted_models,
         'mlflow_experiment': record.resources.mlflow_experiment,
         'running_jobs': [j.to_wire() for j in jobs],
-        'referenced_by': [],
+        'referenced_by': referenced_by,
         'blocking': [b['code'] for b in blocking],
         'blocking_detail': blocking,
     }
@@ -384,25 +397,35 @@ async def delete_project(
         )
     await _last_active_check(record)
 
-    if not force:
-        shared_models = await _shared_model_users(record)
-        if shared_models:
+    shared_models = await _shared_model_users(record)
+    if shared_models and not force:
+        try:
+            dependents = await model_dependents(client, record.slug, shared_models)
+        except Exception as exc:
             raise api_error(
-                409,
-                'in_use',
-                f"'{slug}' has {len(shared_models)} model(s) opted into cross-project "
-                'sharing; deleting could break another project that depends on them',
-                project=slug,
-                projects=shared_models,
-            )
-    else:
-        shared_models = await _shared_model_users(record)
-        if shared_models:
-            logger.warning(
-                'project_delete_forced_past_shared_models',
-                project=slug,
-                shared_models=shared_models,
-            )
+                503,
+                'config_store_unavailable',
+                "could not read every project to see who uses this project's shared models; "
+                'retry, or pass force',
+            ) from exc
+        raise api_error(
+            409,
+            'in_use',
+            f"'{slug}' has {len(shared_models)} model(s) opted into cross-project "
+            f'sharing ({", ".join(shared_models)}); deleting could break another project '
+            'that depends on them',
+            project=slug,
+            projects=sorted({d['project'] for d in dependents}),
+            used_by=[
+                ModelSharingUser(project=d['project'], profile=d['profile']) for d in dependents
+            ],
+        )
+    if shared_models:
+        logger.warning(
+            'project_delete_forced_past_shared_models',
+            project=slug,
+            shared_models=shared_models,
+        )
 
     # m2: pre_delete_status is what M3's rollback (below, in
     # delete_project_finish) restores on a drain timeout -- if this
@@ -451,22 +474,10 @@ async def _shared_model_users(record: ProjectRecord) -> list[str]:
     :func:`_unload_owned_models`, which unloads every owned model,
     shared or not).
 
-    KNOWN GAP (flagged, not faked): this returns the *shared model
-    names*, not the *dependent project slugs* the plan asks for -- P2's
-    model-sharing plumbing (``src.services.training.model_classes``,
-    ``src.routers.curation._models_sharing``) has no reverse index of
-    "which projects actually reference model X as their active
-    detector". That scan needs each project's own bound
-    ``DetectionProfile`` read, which is explicitly the not-yet-landed W4
-    profile-CRUD wave's job (see the ``TODO(W4/profile_validation)`` in
-    ``_models_sharing.py``, which even ``PUT .../sharing`` itself defers
-    on). Until W4 lands there is no way to name which projects would
-    actually break, so a project with any ``shared=True`` promoted model
-    is still refused (``in_use``) unless ``force=True`` -- "opted into
-    sharing" is itself evidence someone may depend on it, and silently
-    allowing the delete would be the worse failure mode -- but the
-    caller must read the returned names as "these models of mine are
-    shared", not as consumer project slugs.
+    A project with any shared model is refused unless ``force=True``:
+    "opted into sharing" is itself evidence someone may depend on it.
+    :func:`~src.services.config_store.project_usage.model_dependents` names the projects that actually depend on
+    one today (their ACTIVE detection profile names the model).
     """
     from src.services.training.model_classes import is_model_shared
 

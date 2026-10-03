@@ -122,7 +122,15 @@ Issue codes include `too_many_sources`, `duplicate_source`,
 `target_is_source`, `source_not_found`, `source_not_ready`, `source_busy`,
 `slug_invalid`, `slug_taken`, `slug_retired`, `shard_budget_exceeded`,
 `shard_budget_high` (warning), `unmapped_class`, `mapping_target_invalid`,
-`label_conflicts` (warning) and `holdout_recompute_contamination` (warning).
+`label_conflicts` (warning), `holdout_recompute_contamination` (warning),
+`embedding_model_mismatch` (warning) and `region_profiles_differ` (warning).
+
+`embedding_model_mismatch` names a source whose stored vectors have a
+different dimension than the target encoder (`detail`: `project`, `items`,
+`source_dim`, `target_dim`). Those vectors are not copied; the items are
+deferred for re-embedding. `region_profiles_differ` lists each source's
+active region profile (`name`, content `hash`) and the `target_profile`
+(the `settings_from` source's, or `null`). Neither blocks the combine.
 
 ## Start
 

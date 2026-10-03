@@ -102,7 +102,8 @@ async def _prepare(request: DatasetPreviewRequest, registry: ClassRegistry) -> P
         raise api_error(
             422,
             'format_undetected',
-            'no YOLO, COCO or OpenProcessor-export layout was found at that path',
+            'no YOLO, COCO or OpenProcessor-export layout was found at that path; '
+            'see docs/CURATION.md, "Importing other formats", for conversion recipes',
             project=_slug(),
         ) from None
 

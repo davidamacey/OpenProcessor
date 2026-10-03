@@ -6,6 +6,7 @@ the ``scripts/curation/worker/`` package for the rest of the split.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -20,7 +21,13 @@ from src.config.region_rejection import (
 )
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
-from src.services.curation.region_boxes import RegionBox, derive_status, new_box_placeholder
+from src.services.curation.region_boxes import (
+    RegionBox,
+    derive_status,
+    has_human_text,
+    is_human_owned,
+    new_box_placeholder,
+)
 from src.services.curation.vlm_class_attempt import (
     class_attempt_fields,
     empty_answer_reason_for_index,
@@ -265,6 +272,10 @@ class TaskBoxInput:
     box_id: str | None = None
     hint_text: str | None = None
     hint_text_confidence: float | None = None
+    #: The stored box this candidate re-verifies (``None`` for a fresh
+    #: detection). Everything the pass does not judge (cluster placement,
+    #: human text, detector provenance) is kept from it.
+    stored: RegionBox | None = None
 
 
 def task_box_from_stored(
@@ -285,6 +296,43 @@ def task_box_from_stored(
         detector_version=box.detector_version or '1',
         source=box.source or 'human',
         box_id=box.box_id,
+        stored=box,
+    )
+
+
+def candidate_actor(cand: TaskBoxInput) -> str | None:
+    """The detector a candidate's detector-chain entries are filed under, or
+    ``None`` for a stored box a human owns or that has no detector: a person
+    is not a detector, and the chain feeds the training-cohort queries."""
+    if cand.stored is not None and (is_human_owned(cand.stored) or not cand.stored.detector):
+        return None
+    return cand.detector
+
+
+def chain_entry(actor: str | None, event: str) -> list[str]:
+    """``[f'{actor}:{event}']``, or nothing for a non-detector actor."""
+    return [] if actor is None else [f'{actor}:{event}']
+
+
+def candidate_box(
+    cand: TaskBoxInput, *, fallback_id: str, now: str | None = None, **updates: Any
+) -> RegionBox:
+    """The box a verdict on ``cand`` produces, with ``updates`` applied: the
+    stored box with only those fields changed when ``cand`` re-verifies one
+    (its id, cluster placement, detector provenance and human text survive),
+    otherwise a fresh box under ``fallback_id`` (a placeholder until the
+    writer mints a real id)."""
+    if cand.stored is not None:
+        return dataclasses.replace(cand.stored, **updates)
+    return RegionBox(
+        box_id=cand.box_id if cand.box_id is not None else fallback_id,
+        bbox_norm=cand.bbox_in_source,
+        score=cand.score,
+        detector=cand.detector,
+        detector_version=cand.detector_version,
+        source=cand.source,
+        detected_at=now,
+        **updates,
     )
 
 
@@ -335,7 +383,6 @@ def verdicts_to_boxes(
 
     boxes: list[RegionBox] = []
     for i, (cand, verdict) in enumerate(zip(candidates, verdicts, strict=True)):
-        box_id = cand.box_id if cand.box_id is not None else new_box_placeholder(i)
         state: str
         rejection_reason: str | None = None
         bbox_correct = verdict.bbox_correct
@@ -352,20 +399,19 @@ def verdicts_to_boxes(
         else:
             state = 'rejected'
             rejection_reason = REJECT_REASON_NO_VERDICT
+        text_update = (
+            {} if has_human_text(cand.stored) else {'text': verdict.text_reply or cand.hint_text}
+        )
         boxes.append(
-            RegionBox(
-                box_id=box_id,
-                bbox_norm=cand.bbox_in_source,
+            candidate_box(
+                cand,
+                fallback_id=new_box_placeholder(i),
+                now=now,
                 state=state,
-                score=cand.score,
-                detector=cand.detector,
-                detector_version=cand.detector_version,
-                source=cand.source,
                 bbox_correct=bbox_correct,
                 confidence=verdict.confidence,
                 rejection_reason=rejection_reason,
-                text=verdict.text_reply or cand.hint_text,
-                detected_at=now,
+                **text_update,
             )
         )
 

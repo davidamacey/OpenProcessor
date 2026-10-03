@@ -22,6 +22,7 @@ V := .venv/bin
 # system python3 for a fresh checkout that hasn't created .venv yet.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 API_SERVICE := yolo-api
+AUTO_LABEL_SERVICE := curation-auto-label-worker
 TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
 BENCHMARK_DIR := benchmarks
@@ -100,6 +101,16 @@ up: ensure-host-bind-mount-dirs ## Start the core stack (Triton + API + OpenSear
 	@echo "Services starting. Check status with: make status"
 	@echo "API available at: http://localhost:$(API_PORT)"
 	@echo "Monitoring (Prometheus/Grafana/Loki/dcgm) is opt-in: make up-monitoring"
+
+.PHONY: cluster-gpu
+cluster-gpu: ## Recreate the auto-label worker with one GPU (OP_CLUSTER_GPU_DEVICE, default 0) for cuML clustering
+	$(COMPOSE) -f docker-compose.gpu-clustering.yml --profile curation up -d --no-deps --force-recreate $(AUTO_LABEL_SERVICE)
+	@echo "Worker recreated with GPU passthrough. The next recluster probes free VRAM and reports backend gpu or cpu in the auto-label status."
+
+.PHONY: cluster-cpu
+cluster-cpu: ## Recreate the auto-label worker without GPU passthrough (sklearn / umap-learn)
+	$(COMPOSE) --profile curation up -d --no-deps --force-recreate $(AUTO_LABEL_SERVICE)
+	@echo "Worker recreated without GPU passthrough (clustering runs on CPU)."
 
 .PHONY: up-monitoring
 up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitoring (F-3: opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)

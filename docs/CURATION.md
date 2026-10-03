@@ -821,6 +821,26 @@ Properties:
   and injects label problems; the wheel boxes in the `yolo_region*` layouts
   are synthetic geometry, not annotations.
 
+### Importing other formats
+
+The importer reads YOLO (`data.yaml` plus `images/` and `labels/`), COCO
+(`images/` next to `annotations/*.json`) and OpenProcessor exports. Pascal
+VOC, CVAT, LabelMe, Label Studio and segmentation, OBB or keypoint-specific
+formats are not read directly. Convert them to YOLO or COCO first, then
+import the result:
+
+- Pascal VOC, CVAT (XML or "CVAT for images"), LabelMe, Label Studio:
+  convert with a general converter such as `fiftyone` (`fiftyone.utils`
+  importers plus `export(dataset_type=fo.types.YOLOv5Dataset)`) or
+  Roboflow's `supervision` (`sv.DetectionDataset.from_pascal_voc(...)` then
+  `.as_yolo(...)`). Keep one class name per class: the import decides by name.
+- Polygon, OBB or keypoint labels: YOLO rows with more than five columns are
+  imported as their bounding box (`yolo_polygon_to_box`); the extra geometry
+  is not kept.
+- After converting, check the result with `POST /datasets/preview` before
+  starting the import. A `format_undetected` error means no YOLO, COCO or
+  export layout was found at the path.
+
 Items from an import carry `import_ids` and an `imported` review tab.
 `GET /curation/projects/{project}/crops` and `GET /curation/projects/{project}/review/{tab}`
 filter by `import_id`, `dataset_split` and `on_negative_frame`.
@@ -1062,8 +1082,9 @@ Freeze a test holdout first with
 | Frozen artifacts | `GET /curation/projects/{project}/export/registry/{artifact}` |
 
 `export/yolo` always exports every class and rejects unknown body keys (422).
-To train a subset use `export/single_class`, or
-`hyperparameters.include_classes` on a training run. Both exporters record
+To train a subset use `export/single_class`, or the top-level
+`include_classes` field of the training spec (not `hyperparameters`, which
+rejects it with a 422). Both exporters record
 `dataset_sha`, a hash of the written label content plus the ordered class
 list, and flip their `current` symlink atomically. They split by source
 image, so items cut from one image never straddle splits; an image with a

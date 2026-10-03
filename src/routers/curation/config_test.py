@@ -18,7 +18,13 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException
 
 from src.clients.curation_opensearch import mget_crops
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._common import (
+    OpenSearchDep,
+    bound_project_slug,
+    get_class_registry,
+    items_index,
+    router,
+)
 from src.routers.curation._config_common_models import ValidationReport, api_error
 from src.routers.curation._config_test_models import (
     PackTestCropResult,
@@ -34,6 +40,7 @@ from src.routers.curation._config_test_models import (
     RegionTestResponse,
     RegionTestVerify,
 )
+from src.routers.curation._models_segmenter import configured_segmenter_health
 from src.routers.curation.pipeline_vlm import labeler_unavailable, resolve_test_vlm
 from src.services.config_store import (
     get_config_store,
@@ -363,28 +370,13 @@ async def _resolve_profile(
     report = await validate_profile(
         name,
         data,
-        segmenter_health=_segmenter_health,
+        segmenter_health=configured_segmenter_health,
         class_names=frozenset(_registry()[0]),
-        project_slug=_project_slug(),
+        project_slug=bound_project_slug(),
     )
     if not report.ok:
         raise api_error(422, 'profile_invalid', 'the profile has errors', report=report)
     return region_profile_from_dict({**data, 'name': name}, source=name), revision, stamp, report
-
-
-async def _segmenter_health() -> tuple[str, str | None]:
-    from src.routers.curation._models_segmenter import _segmenter_health as health
-
-    url = first_segmenter_url()
-    if url is None:
-        return 'unavailable', 'OP_SEGMENTER_URL is not configured'
-    return await health(url)
-
-
-def _project_slug() -> str | None:
-    from src.config import get_curation_config
-
-    return get_curation_config().project_slug
 
 
 def _leg_wire(leg: Leg) -> RegionTestLeg:
@@ -408,7 +400,9 @@ async def test_region_profile(
     A leg that fails is reported on that leg (200); only when no leg ran at all
     is it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;
     409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429
-    ``test_busy``. Writes nothing."""
+    ``test_busy``. Writes nothing. Not modeled: the worker's VLM
+    ``region_visible`` pre-filter, which may mark a crop ``no_region_visible``
+    before any detection runs; the preview always runs the legs."""
     await get_config_store().refresh(opensearch)
     profile, revision, stamp_name, report = await _resolve_profile(opensearch, body)
     verify: VerifyContext | None = None

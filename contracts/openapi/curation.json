@@ -9672,7 +9672,7 @@
         "type": "object"
       },
       "KeymapCloneConflictWire": {
-        "description": "W2b: one action the ``keymap`` clone axis dropped from the copy\nbecause its combo collides with the target's class hotkey -- a\nreport, never a silent unbind (CW-K §0 clause 1).",
+        "description": "W2b: one action whose combo collides with the target's class hotkey.\nThe ``keymap`` clone axis is all-or-nothing: on any conflict the whole\nkeymap is skipped and the target's keymap is left unchanged -- a\nreport, never a silent unbind (CW-K §0 clause 1).",
         "properties": {
           "action_id": {
             "title": "Action Id",
@@ -13252,6 +13252,15 @@
             "title": "Labels",
             "type": "object"
           },
+          "limit_source": {
+            "description": "Which limit soft_limit is: heap (heap GB x OP_SHARDS_PER_HEAP_GB) or the cluster hard limit when that is lower.",
+            "enum": [
+              "heap",
+              "cluster_max_shards_per_node"
+            ],
+            "title": "Limit Source",
+            "type": "string"
+          },
           "max_shards_per_node": {
             "title": "Max Shards Per Node",
             "type": "integer"
@@ -13266,6 +13275,11 @@
           },
           "projects_until_soft_limit": {
             "title": "Projects Until Soft Limit",
+            "type": "integer"
+          },
+          "shards_after_create": {
+            "description": "active_shards plus per_project_shards: the total if one more project is created.",
+            "title": "Shards After Create",
             "type": "integer"
           },
           "soft_limit": {
@@ -13292,6 +13306,8 @@
           "max_shards_per_node",
           "data_nodes",
           "projects_until_soft_limit",
+          "shards_after_create",
+          "limit_source",
           "message",
           "labels"
         ],
@@ -13801,6 +13817,12 @@
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "description": "Structured facts behind the note. For shard_budget_high: the same capacity block GET /curation/projects serves.",
+            "title": "Detail",
+            "type": "object"
           },
           "message": {
             "title": "Message",
@@ -21371,6 +21393,8 @@
               "target_is_source",
               "label_conflicts",
               "holdout_recompute_contamination",
+              "embedding_model_mismatch",
+              "region_profiles_differ",
               "class_mapping_invalid",
               "vlm_name_invalid",
               "vlm_name_reserved",
@@ -35019,7 +35043,7 @@
     },
     "/curation/projects/{project}/region_profiles/test": {
       "post": {
-        "description": "Run a profile's detector and segmenter legs over one stored crop, show\nevery raw candidate with what the worker's selection does with it, and the\nitem as the worker would leave it (optionally with the combined VLM call).\n\nA leg that fails is reported on that leg (200); only when no leg ran at all\nis it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;\n409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429\n``test_busy``. Writes nothing.",
+        "description": "Run a profile's detector and segmenter legs over one stored crop, show\nevery raw candidate with what the worker's selection does with it, and the\nitem as the worker would leave it (optionally with the combined VLM call).\n\nA leg that fails is reported on that leg (200); only when no leg ran at all\nis it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;\n409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429\n``test_busy``. Writes nothing. Not modeled: the worker's VLM\n``region_visible`` pre-filter, which may mark a crop ``no_region_visible``\nbefore any detection runs; the preview always runs the legs.",
         "operationId": "test_region_profile_curation_projects__project__region_profiles_test_post",
         "parameters": [
           {
@@ -39319,7 +39343,7 @@
         ]
       },
       "put": {
-        "description": "Partially update the shared curation-strategy defaults.\n\n``prompt_pack`` / ``detection_profile`` in ``body.defaults`` delegate\nto the config store's activation (W2, any_domain_plan.md §3.7): the\nid must be currently advertised for the axis (or ``off`` for\n``detection_profile``), else ``422``; ``null`` deactivates the axis\nthrough the store rather than clearing a settings-doc override. Every\nother axis keeps the prior behavior: it must be one of\n:data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`\nand each id must be currently advertised for that axis on\n``GET /methods``. ``updated_by`` is always ``None`` — no user-account\nsystem exists yet.",
+        "description": "Partially update the shared curation-strategy defaults.\n\n``prompt_pack`` / ``detection_profile`` in ``body.defaults`` delegate\nto the config store's activation (W2, any_domain_plan.md §3.7): the\nid must be currently advertised for the axis (or ``off`` for\n``detection_profile``), else ``422``; ``null`` deactivates the axis\nthrough the store rather than clearing a settings-doc override. Every\nother axis keeps the prior behavior: it must be one of\n:data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`\nand each id must be currently advertised for that axis on\n``GET /methods``. ``updated_by`` is always ``None`` — no user-account\nsystem exists yet.\n\nAtomicity: every axis is resolved and gated before any is written, so a\n422 never leaves one axis activated. The writes themselves are\nsequential, not transactional: a ``409 active_conflict`` on a later axis\nleaves the earlier axes applied, and two concurrent single-axis\nactivations each validate against the other's old state.",
         "operationId": "update_curation_settings_route_curation_projects__project__settings_put",
         "parameters": [
           {

@@ -1,0 +1,42 @@
+# Opt-in overlay: gives the auto-label worker one GPU so the clustering code
+# can use cuML UMAP (and cuML kNN for AHC) instead of sklearn / umap-learn.
+#
+# The backend is probed on every recluster (src/services/curation/
+# clustering/backend.py), so there is no toggle: with this overlay applied
+# AND cuml + cupy importable in the worker image, a recluster runs on the GPU
+# when enough VRAM is free; otherwise it silently runs on CPU. The auto-label
+# status reports which path ran (`backend`, `backend_detail`,
+# `stage_durations`, `peak_vram_mb`).
+#
+# VRAM thresholds (free VRAM at probe time):
+#   below 3 GB   -> CPU
+#   3 GB or more -> GPU, nn-descent UMAP build
+#   12 GB or more -> GPU, deterministic brute_force_knn build
+#
+# The stock image does not ship cuml/cupy (about 1.5 GB). Point OP_API_IMAGE
+# at an image that has them (cuml-cu13 plus the matching cupy wheel), or this
+# overlay passes the GPU through and the probe still reports `cpu`.
+#
+# One device, chosen by OP_CLUSTER_GPU_DEVICE (host GPU index, default 0).
+# `nvidia-smi -L` lists the indexes; pick a card with spare VRAM.
+#
+# Usage (recreates only the worker):
+#   make cluster-gpu     # apply this overlay
+#   make cluster-cpu     # recreate the worker without it
+# or by hand:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu-clustering.yml \
+#     --profile curation up -d --no-deps --force-recreate curation-auto-label-worker
+
+services:
+  curation-auto-label-worker:
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${OP_CLUSTER_GPU_DEVICE:-0}
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['${OP_CLUSTER_GPU_DEVICE:-0}']
+              capabilities: [gpu]

@@ -26,8 +26,9 @@ The pieces:
   (first requeue only, so the original verdict survives repeated passes),
   the rejection reason is cleared, and with ``clear_detection`` every box
   a human hasn't touched (:func:`~src.services.curation.region_boxes.
-  is_human_owned` — created OR explicitly accepted/rejected/transcribed
-  via the W8a per-box edit routes, W8c M3 fix) is dropped from
+  is_human_owned` — created, explicitly rejected or transcribed via the W8a
+  per-box edit routes, W8c M3 fix; an accept of a machine box leaves no
+  per-box trace) is dropped from
   ``region_boxes`` so the cascade starts fresh; the worker's own
   fresh-detection write later replaces whatever machine-sourced boxes
   this leaves behind with its new candidates, keeping any human-owned
@@ -75,8 +76,6 @@ from src.services.curation.reprocess_locks import region_locked_clause, region_s
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from opensearchpy import AsyncOpenSearch
 
 
@@ -152,21 +151,39 @@ def _value_filter(field: str, values: tuple[str, ...]) -> dict[str, Any]:
     return {'bool': {'should': options, 'minimum_should_match': 1}}
 
 
-def box_value_filter(F: RegionFields, box_attr: str, values: tuple[str, ...]) -> dict[str, Any]:
-    """W8c: ``_value_filter`` over a per-box attribute (e.g. ``detector``,
-    ``rejection_reason``), wrapped in the one nested-query shape every
-    ``region_boxes`` reader uses (:func:`~src.services.curation.region_boxes.box_query`).
+def box_values_filter(
+    F: RegionFields, *, detectors: tuple[str, ...] = (), reasons: tuple[str, ...] = ()
+) -> dict[str, Any] | None:
+    """W8c: the detector and rejection-reason selections as ONE nested
+    ``region_boxes`` clause (:func:`~src.services.curation.region_boxes.box_query`),
+    so both conditions must hold on the SAME box. Two separate nested clauses
+    would match an item whose box A has the detector and whose box B has the
+    reason. ``None`` when nothing is selected.
 
     A ``nested`` query can never match a parent with ZERO elements in the
     nested list -- there is no element to run the inner query against,
     even a ``must_not exists`` one (real OpenSearch semantics, not a fake
-    limitation). So :data:`NONE_BUCKET` ("no value recorded") is widened
-    with an explicit "this item has no box at all" branch alongside the
-    nested "has a box but this attribute is unset on it" case -- both are
-    "no value recorded", just at different granularities.
+    limitation). So when EVERY selected dimension includes
+    :data:`NONE_BUCKET` ("no value recorded"), an explicit "this item has no
+    box at all" branch is added alongside the nested "has a box but these
+    attributes are unset on it" case -- both are "no value recorded", just
+    at different granularities.
     """
-    nested = box_query(_value_filter(f'{F.boxes}.{box_attr}', values), F)
-    if NONE_BUCKET not in values:
+    by_attr = {'detector': detectors, 'rejection_reason': reasons}
+    selected = {attr: values for attr, values in by_attr.items() if values}
+    if not selected:
+        return None
+    nested = box_query(
+        {
+            'bool': {
+                'filter': [
+                    _value_filter(f'{F.boxes}.{attr}', values) for attr, values in selected.items()
+                ]
+            }
+        },
+        F,
+    )
+    if not all(NONE_BUCKET in values for values in selected.values()):
         return nested
     no_box = {'bool': {'must_not': [has_any_box_query(F)]}}
     return {'bool': {'should': [nested, no_box], 'minimum_should_match': 1}}
@@ -193,10 +210,10 @@ def requeue_query(
         must_not.append({'exists': {'field': F.status}})
     else:
         filt.append({'term': {F.status: sel.status.value}})
-    if sel.detectors:
-        filt.append(box_value_filter(F, 'detector', sel.detectors))
-    if sel.reasons:
-        filt.append(box_value_filter(F, 'rejection_reason', sel.reasons))
+    if (
+        box_filter := box_values_filter(F, detectors=sel.detectors, reasons=sel.reasons)
+    ) is not None:
+        filt.append(box_filter)
     if sel.missing_provenance:
         must_not.append({'exists': {'field': F.detector_chain}})
     if sel.target == RegionStatus.PENDING_VERIFICATION:
@@ -326,20 +343,45 @@ _ANY_STATUS = object()
 """``expected`` sentinel for an explicit-id requeue: any current status."""
 
 
-def _make_merger(
-    *,
-    expected: Any,
-    target: RegionStatus,
-    clear_detection: bool,
-    F: RegionFields,
-    now: str,
-) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
-    """The OCC merge body shared by the selection-driven and the
-    explicit-id requeue. ``expected`` is the terminal status the selection
-    named (``None`` = unseeded), or :data:`_ANY_STATUS`."""
-    to_clear = detection_fields(F) if clear_detection else ()
+class _Merger:
+    """The OCC merge body shared by the selection-driven and the explicit-id
+    requeue. ``expected`` is the terminal status the selection named
+    (``None`` = unseeded), or :data:`_ANY_STATUS`. An item it leaves
+    untouched (a validated set, a status another writer already moved, no
+    re-proposable box) is recorded in ``untouched`` so the caller can count
+    it as skipped."""
 
-    def _merge(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+    def __init__(
+        self,
+        *,
+        expected: Any,
+        target: RegionStatus,
+        clear_detection: bool,
+        F: RegionFields,
+        now: str,
+    ) -> None:
+        self.expected = expected
+        self.target = target
+        self.clear_detection = clear_detection
+        self.F = F
+        self.now = now
+        self.untouched: set[str] = set()
+
+    def drain_untouched(self) -> int:
+        """How many items were left untouched since the last call."""
+        n = len(self.untouched)
+        self.untouched.clear()
+        return n
+
+    def __call__(self, doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+        update = self._merge(current)
+        if not update:
+            self.untouched.add(doc_id)
+        return update
+
+    def _merge(self, current: dict[str, Any]) -> dict[str, Any]:
+        F, target, expected = self.F, self.target, self.expected
+        to_clear = detection_fields(F) if self.clear_detection else ()
         if region_set_locked(current, F):
             return {}
         if expected is not _ANY_STATUS and current.get(F.status) != expected:
@@ -373,7 +415,7 @@ def _make_merger(
             update[F.rejection_reason] = None
             if current.get(F.status_legacy) is None:
                 update[F.status_legacy] = prior
-        if clear_detection:
+        if self.clear_detection:
             # Drop every box that is not locked (human-owned or imported)
             # so the cascade starts fresh. The worker's own fresh-detection
             # write later replaces whatever machine-sourced boxes this
@@ -384,10 +426,8 @@ def _make_merger(
             if len(kept) != len(stored):
                 update.update(boxes_write_fields(kept, current_src=current, F=F))
         update.update(box_update)
-        update['updated_at'] = now
+        update['updated_at'] = self.now
         return update
-
-    return _merge
 
 
 def _check_target(target: RegionStatus, clear_detection: bool) -> None:
@@ -407,12 +447,11 @@ async def apply_requeue_ids(
     """:func:`apply_requeue` for explicit items (any current status): the
     per-item and per-image reprocess buttons. Returns ``{updated, skipped,
     errors}``; an item with nothing to change (a validated set, or a
-    ``pending_verification`` target with no re-proposable box) counts in
-    none of them."""
+    ``pending_verification`` target with no re-proposable box) is skipped."""
     _check_target(target, clear_detection)
     cfg = config or get_curation_config()
     F = fields or get_region_fields()
-    merger = _make_merger(
+    merger = _Merger(
         expected=_ANY_STATUS,
         target=target,
         clear_detection=clear_detection,
@@ -431,7 +470,7 @@ async def apply_requeue_ids(
         await opensearch.indices.refresh(index=cfg.items_index)
     return {
         'updated': int(result.get('updated', 0)),
-        'skipped': int(result.get('skipped_due_to_conflict', 0)),
+        'skipped': int(result.get('skipped_due_to_conflict', 0)) + merger.drain_untouched(),
         'errors': len(result.get('errors') or []),
     }
 
@@ -463,16 +502,17 @@ async def apply_requeue(
 
     Returns:
         ``{'updated', 'skipped', 'errors'}`` — ``skipped`` counts items a
-        concurrent writer changed first (their write wins); an item this
-        function decides has nothing to do (e.g. a ``pending_verification``
-        target with no re-proposable box, W8c M2) is silently excluded
-        from all three counts, same as any other no-op merge result.
+        concurrent writer changed first (their write wins) plus items the
+        merge left untouched: a validated set, a status that moved since
+        the selection, or a ``pending_verification`` target with no
+        re-proposable box (W8c M2). ``updated + skipped + errors`` is the
+        number of items the selection reached.
     """
     _check_target(sel.target, clear_detection)
     cfg = config or get_curation_config()
     F = fields or get_region_fields()
     expected = sel.status.value if sel.status is not None else None
-    merger = _make_merger(
+    merger = _Merger(
         expected=expected,
         target=sel.target,
         clear_detection=clear_detection,
@@ -510,7 +550,9 @@ async def apply_requeue(
                 opensearch, index=cfg.items_index, crop_ids=[h['_id'] for h in hits]
             )
         totals['updated'] += int(result.get('updated', 0))
-        totals['skipped'] += int(result.get('skipped_due_to_conflict', 0))
+        totals['skipped'] += (
+            int(result.get('skipped_due_to_conflict', 0)) + merger.drain_untouched()
+        )
         totals['errors'] += len(result.get('errors') or [])
         logger.info('region_requeue_page', status=expected, cursor=cursor, **totals)
         if cursor is None or len(hits) < size:
@@ -528,7 +570,7 @@ __all__ = [
     'RequeueSelection',
     'apply_requeue',
     'apply_requeue_ids',
-    'box_value_filter',
+    'box_values_filter',
     'detection_fields',
     'requeue_breakdown',
     'requeue_query',

@@ -54,11 +54,8 @@ async def clone_region_profile(
     name: str, body: RegionProfileCloneRequest, opensearch: OpenSearchDep
 ) -> RegionProfileDoc:
     from src.config import get_curation_config
-    from src.routers.curation.region_profiles import (
-        _registry_class_names,
-        _segmenter_health_fn,
-        _to_doc,
-    )
+    from src.routers.curation._models_segmenter import configured_segmenter_health
+    from src.routers.curation.region_profiles import _registry_class_names, _to_doc
 
     target_slug = get_curation_config().project_slug
 
@@ -80,7 +77,7 @@ async def clone_region_profile(
         body.new_name,
         source.body,
         existing_names=existing,
-        segmenter_health=_segmenter_health_fn,
+        segmenter_health=configured_segmenter_health,
         class_names=_registry_class_names(),
         project_slug=target_slug,
     )
@@ -96,7 +93,7 @@ async def clone_region_profile(
     report = await validate_profile(
         None,
         new_body,
-        segmenter_health=_segmenter_health_fn,
+        segmenter_health=configured_segmenter_health,
         class_names=_registry_class_names(),
         project_slug=target_slug,
     )

@@ -33,7 +33,7 @@ def _activate(*, run_on_ingest: bool) -> None:
     body = {'targets': [{'prompt': 'cone', 'class_name': 'cone'}], 'run_on_ingest': run_on_ingest}
     stored = StoredConfig(kind='open_vocab_set', name='street', revision=2, body=body)
     get_config_store().apply_local(
-        config_revision=1,
+        config_revision=0,
         open_vocab_set=stored,
         active_open_vocab=('street', 2),
         active_open_vocab_body=stored,

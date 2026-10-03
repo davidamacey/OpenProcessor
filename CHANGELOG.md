@@ -43,6 +43,30 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - Segmenter client `segment_image` (per-call prompt, score floor and mask
   polygon); `ensure_class_by_name`, the one name-to-id path for classes created
   as a side effect.
+- `docker-compose.gpu-clustering.yml` with `make cluster-gpu` / `make cluster-cpu` (#66):
+  gives the auto-label worker one GPU (`OP_CLUSTER_GPU_DEVICE`, default 0) for cuML
+  clustering and recreates only that worker. The worker image needs `cuml` and `cupy`
+  (the probe reports `backend: cpu` without them). Docker cannot strip a device from a
+  running container, so there is no restart-free "GPU off" target.
+- Combine preview warnings `embedding_model_mismatch` (a source's stored vectors have
+  another dimension than the target encoder; they are not copied, the items are deferred
+  for re-embedding) and `region_profiles_differ` (#55). The dimension check already had a
+  test.
+- Docs: "Importing other formats" in `docs/CURATION.md` (conversion recipes; the
+  `format_undetected` message points to it), per-project shard cost in
+  `docs/opensearch_schema_design.md`.
+- Training specs reject a top-level spec field (`include_classes`, ...) placed inside
+  `hyperparameters` (422) instead of ignoring it (#64).
+- `capacity` (on `GET /curation/projects`, the 409 `shard_budget_exceeded` and the
+  `shard_budget_high` warning's new `detail`) names the binding limit (`limit_source`)
+  and the total after a create (`shards_after_create`) (#53). A project is six shards
+  (six single-primary, no-replica indexes); `active_shards` counts every index in the
+  cluster.
+- `ocr_error` on `/analyze` and `/analyze/batch` results when OCR failed (#60).
+- `ProjectWarning.detail` (structured facts behind a lifecycle warning).
+- `python export/export_models.py --overwrite-config`: `--generate-config` now writes
+  `config.pbtxt.generated` beside a tracked `config.pbtxt` that differs instead of
+  replacing it (#59).
 - Open-vocabulary follow-ups: images of the pass run concurrently up to
   `OP_OPEN_VOCAB_CONCURRENCY` (default 4); a reprocess job reports `images_done`
   and `updated_at` after every image; the dry-run estimate uses the measured
@@ -2360,7 +2384,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   `warnings` empty (`ProjectLifecycleResponse.keymap_clone_conflicts` is
   the standalone `POST clone_settings` route's field, always `[]` on
   create). `create_project` now appends one `ProjectWarning` (code
-  `keymap_clone_conflict`) per dropped conflict to the `(record,
+  `keymap_clone_conflict`) per conflicting action to the `(record,
   warnings)` pair every caller already unpacks. Red-then-green:
   `test_create_project_surfaces_keymap_clone_conflicts_as_warnings`
   (new) failed with an empty `warnings` list before this change.
@@ -3920,6 +3944,32 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ### Removed
 - `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`
   (`quantize.coreml` returns 400).
+- **Regions never overwrite human data on a re-verify or a no-VLM accept** (#57). A
+  re-verified stored box keeps its cluster placement, detector provenance and human-typed
+  text (the verdict changes only state, verdict keys and rejection reason); a human or
+  detector-less box adds no `human:*` entry to the detector chain; a pass whose verdict
+  a human box edit invalidated writes nothing (no `region_verified`, verifier or
+  embedding); the no-VLM accept resolves every proposed box instead of the first; a
+  whole-set reject by a non-human `region_label_source` no longer takes the human reason
+  lock. The requeue detector and reason filters must hold on the same box, and
+  `skipped` counts every selected item left untouched.
+- OCR failures are errors (#60): `/ocr/predict` is 422 for an unusable image and 502 when
+  inference fails (it used to answer 200 `status: error`); the `error` body field is gone.
+- An explicit `POST /models/{name}/unload` of a promoted model survives the periodic reload
+  and a restart (`unloaded.marker`); a load, a promote or `POST /train/reload_promoted`
+  clears it. A promote now runs one warm-up inference after the load (#60).
+- `/health` and `/ready` `resources.gpu` is `resources.process_cuda_allocated_mb` and
+  `process_cuda_reserved_mb`: it was this API process's CUDA allocation, not GPU use (#60).
+- `OP_GLOBAL_CONFIGS_INDEX` inside the project index namespace, or equal to the registry
+  index, fails startup (#58). A keymap clone with any class-hotkey conflict skips the whole
+  keymap (the docs and warning said the action was dropped) and publishes `config_revision`
+  with `keymap_revision`. Deleting a project that shares a model is refused naming the
+  projects whose active profile uses it (`projects[]`, `used_by[]`), 503 when a project
+  cannot be read.
+- Segmenter and VLM 5xx errors no longer put the internal service URL in the 502 reason;
+  `eval_regions_vs_gt.py --import-id` refuses an entry whose `rel_path` leaves the dataset
+  root; `tests/test_full_system.py` deletes indexes only with `OP_TEST_ALLOW_INDEX_DELETE=1`
+  and a safe `OP_TEST_INDEX_PREFIX` (#59).
 
 ## [0.3.0] - 2026-09-21
 

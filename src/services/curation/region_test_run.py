@@ -75,7 +75,6 @@ class VerifyContext:
     pack_stamp: str
     class_names: list[str]
     name_to_id: dict[str, int]
-    vlm_name: str | None = None
 
 
 @dataclass

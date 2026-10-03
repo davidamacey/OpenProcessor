@@ -87,9 +87,23 @@ async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
     ]
 
 
+async def model_dependents(client: Any, owner_slug: str, models: list[str]) -> list[dict[str, str]]:
+    """``{project, profile, model}`` for every project OTHER than
+    ``owner_slug`` whose active detection profile names one of ``models``.
+    A project that cannot be read raises, so a caller that refuses on the
+    result fails closed."""
+    return [
+        {'project': slug, 'profile': profile, 'model': model}
+        for model in models
+        for slug, profile in await active_detector_users(client, model)
+        if slug != owner_slug
+    ]
+
+
 __all__ = [
     'INGEST_DETECTOR_USER',
     'active_detector_users',
     'ingest_detector_users',
+    'model_dependents',
     'read_each_project',
 ]

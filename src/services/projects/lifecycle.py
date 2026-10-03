@@ -105,7 +105,7 @@ class JobRef:
 
 async def _capacity_error_or_warning(
     client: Any,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Runs the §2.3 capacity check for one more project's shards.
     Raises 409 ``shard_budget_exceeded`` when blocked; otherwise returns
     ``[{"code": "shard_budget_high", ...}]`` on warn, else ``[]``."""
@@ -125,7 +125,13 @@ async def _capacity_error_or_warning(
             capacity=capacity.to_wire(),
         )
     if capacity.status == 'warn':
-        return [{'code': 'shard_budget_high', 'message': capacity.message}]
+        return [
+            {
+                'code': 'shard_budget_high',
+                'message': capacity.message,
+                'detail': capacity.to_wire(),
+            }
+        ]
     return []
 
 
@@ -259,7 +265,7 @@ async def create_project(
     clone_axes: list[str] | None = None,
     origin: dict | None = None,
     activate: bool = True,
-) -> tuple[ProjectRecord, list[dict[str, str]]]:
+) -> tuple[ProjectRecord, list[dict[str, Any]]]:
     """§4 ``POST /projects``. Steps: validate → capacity → record
     ``building`` → create indexes/dirs → optional clone → ``active``. A
     failure midway leaves the record ``failed`` with an error, never
@@ -383,7 +389,7 @@ async def create_project(
                                 f"keymap action '{conflict['action_id']}' combo "
                                 f"'{conflict['combo']}' collides with class "
                                 f"'{conflict['class_name']}' (id {conflict['class_id']}) "
-                                'and was dropped from the clone'
+                                'so the keymap was not cloned'
                             ),
                         }
                     )

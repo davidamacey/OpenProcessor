@@ -35,6 +35,7 @@ from src.services.curation.region_requeue import (
     RequeueSelection,
     apply_requeue,
     requeue_breakdown,
+    requeue_query,
 )
 
 
@@ -342,6 +343,7 @@ async def test_pending_verification_skips_item_whose_only_box_is_human_owned():
 
     # r1 is excluded (nothing to re-verify); r3 (non-human) still moves.
     assert totals['updated'] == 1
+    assert totals['skipped'] == 1, 'an item left untouched is reported, not dropped'
     r1 = fake.docs(ITEMS)['r1']
     assert r1 == before_r1, 'an item with nothing to re-verify must be left untouched'
     assert r1[F.status] == REJECTED  # untouched -- verify_rejected status stays
@@ -621,3 +623,50 @@ def test_cli_requires_exactly_one_of_status_or_missing_status(monkeypatch):
         _run_cli(monkeypatch, [], _fake())
     with pytest.raises(SystemExit):
         _run_cli(monkeypatch, ['--status', 'detection_failed', '--missing-status'], _fake())
+
+
+def test_detector_and_reason_must_hold_on_the_same_box():
+    """Box A has the detector, box B has the reason: neither box satisfies
+    both, so the item is not in a ``detector + reason`` selection."""
+    split = _item(
+        'x1',
+        FAILED,
+        boxes=(
+            _box('b1', detector='det_a', reason='tiny'),
+            _box('b2', detector='det_b', reason='aspect'),
+        ),
+    )
+    same = _item('x2', FAILED, boxes=(_box('b1', detector='det_a', reason='aspect'),))
+    query = requeue_query(RequeueSelection(FAILED, detectors=('det_a',), reasons=('aspect',)))
+    assert not matches(split, query)
+    assert matches(same, query)
+
+
+def test_none_bucket_matches_a_boxless_item_only_when_every_dimension_allows_it():
+    boxless = _item('x3', FAILED)
+    both_none = requeue_query(
+        RequeueSelection(FAILED, detectors=(NONE_BUCKET,), reasons=(NONE_BUCKET,))
+    )
+    detector_none_reason_named = requeue_query(
+        RequeueSelection(FAILED, detectors=(NONE_BUCKET,), reasons=('aspect',))
+    )
+    assert matches(boxless, both_none)
+    assert not matches(boxless, detector_none_reason_named)
+
+
+@pytest.mark.asyncio
+async def test_apply_reports_every_selected_item_it_did_not_move():
+    """Three selected items, one with a box to re-verify: updated=1,
+    skipped=2 (nothing to re-verify), not skipped=0."""
+    fake = QueryFakeOpenSearch()
+    docs = fake.docs(ITEMS)
+    docs['r1'] = _item('r1', REJECTED, boxes=(_box('b1'),))
+    for doc_id in ('r2', 'r3'):
+        docs[doc_id] = _item(
+            doc_id,
+            REJECTED,
+            boxes=(_box('b1', detector='human', source='human', reason=REJECT_REASON_HUMAN),),
+        )
+    sel = RequeueSelection(REJECTED, target=RegionStatus.PENDING_VERIFICATION)
+    totals = await apply_requeue(fake, sel, config=CFG)
+    assert totals == {'updated': 1, 'skipped': 2, 'errors': 0}

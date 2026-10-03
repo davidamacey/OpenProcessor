@@ -132,3 +132,20 @@ def test_health_is_alias_of_ready(client: TestClient, monkeypatch: pytest.Monkey
     health = client.get('/health')
     assert health.status_code == ready.status_code == 503
     assert health.json()['services'].keys() == ready.json()['services'].keys()
+
+
+def test_cuda_block_is_named_for_what_it_measures(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The API process's own CUDA allocation is not GPU telemetry, so it must
+    not sit under a ``gpu`` key."""
+    from src.routers import health as health_module
+
+    _patch_probes(monkeypatch, triton=(True, 'ok'), opensearch=(True, 'ok'))
+    monkeypatch.setattr(health_module.torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(health_module.torch.cuda, 'memory_allocated', lambda: 3 * 1024 * 1024)
+    monkeypatch.setattr(health_module.torch.cuda, 'memory_reserved', lambda: 5 * 1024 * 1024)
+    resources = client.get('/ready').json()['resources']
+    assert 'gpu' not in resources
+    assert resources['process_cuda_allocated_mb'] == 3.0
+    assert resources['process_cuda_reserved_mb'] == 5.0

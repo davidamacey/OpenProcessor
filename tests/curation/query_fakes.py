@@ -40,6 +40,8 @@ import copy
 import re
 from typing import Any
 
+from opensearchpy.exceptions import NotFoundError
+
 
 class _ConflictError(Exception):
     """Stands in for opensearchpy's ConflictError (name contains 'Conflict')."""
@@ -418,7 +420,12 @@ class QueryFakeOpenSearch:
     # ------------------------------------------------------------------ doc ops
 
     async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002
-        doc = self.docs(index)[id]
+        doc = self.docs(index).get(id)
+        if doc is None:
+            # A real cluster 404s; a config store refreshed against this fake
+            # therefore reads revision 0, so a test that pre-seeds a store
+            # (``apply_local``) uses ``config_revision=0`` to keep it.
+            raise NotFoundError(404, 'not_found', {'_index': index, '_id': id, 'found': False})
         return {
             '_id': id,
             '_source': copy.deepcopy(doc),

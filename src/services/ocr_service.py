@@ -28,7 +28,9 @@ Usage:
 
 import logging
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
+
+from fastapi import HTTPException
 
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
@@ -37,6 +39,22 @@ from src.utils.retry import RetryExhaustedError
 
 
 logger = logging.getLogger(__name__)
+
+OcrErrorKind = Literal['input', 'inference']
+
+
+def ocr_error_http(result: dict[str, Any]) -> HTTPException | None:
+    """The HTTP error for an OCR result that failed, ``None`` for one that did
+    not: 422 when the image itself was unusable, 502 when the inference
+    backend failed. One mapping for every route that surfaces an OCR result,
+    so an outage never reads as "no text"."""
+    if result.get('status') != 'error':
+        return None
+    if result.get('error_kind') == 'input':
+        return HTTPException(status_code=422, detail=result.get('error', 'unusable image'))
+    return HTTPException(
+        status_code=502, detail=f'OCR inference failed: {result.get("error", "unknown error")}'
+    )
 
 
 class OcrService:
@@ -82,16 +100,15 @@ class OcrService:
             - image_size: [height, width] of original image
         """
         try:
-            # Decode image first
-            image = decode_image(image_bytes)
-            if image is None:
-                return self._empty_result(error='Failed to decode image')
-
-            # Validate decoded image
+            # An unusable image is the caller's problem (422), not an
+            # inference failure (502).
             try:
+                image = decode_image(image_bytes)
+                if image is None:
+                    return self._empty_result(error='Failed to decode image', kind='input')
                 validate_image(image)
             except ValueError as e:
-                return self._empty_result(error=str(e))
+                return self._empty_result(error=str(e), kind='input')
 
             img_h, img_w = image.shape[:2]
 
@@ -100,7 +117,7 @@ class OcrService:
             result = client.infer_ocr(image_bytes)
 
             if result is None:
-                return self._empty_result(error='OCR inference failed')
+                return self._empty_result(error='OCR inference failed', kind='inference')
 
             # Parse results
             num_texts = int(result.get('num_texts', 0))
@@ -170,11 +187,8 @@ class OcrService:
         except RetryExhaustedError:
             raise
         except Exception as e:
-            logger.error(f'OCR extraction failed: {e}')
-            import traceback
-
-            traceback.print_exc()
-            return self._empty_result(error=str(e))
+            logger.exception('OCR extraction failed')
+            return self._empty_result(error=str(e), kind='inference')
 
     def extract_text_batch(
         self, image_bytes_list: list[bytes], filter_by_score: bool = True, max_workers: int = 16
@@ -213,9 +227,14 @@ class OcrService:
         return separator.join(texts)
 
     def _empty_result(
-        self, image_size: list[int] | None = None, error: str | None = None
+        self,
+        image_size: list[int] | None = None,
+        error: str | None = None,
+        kind: OcrErrorKind | None = None,
     ) -> dict[str, Any]:
-        """Create empty OCR result."""
+        """Create empty OCR result. An ``error`` result is NOT "no text found":
+        ``kind`` says whose fault it is (the caller's image, or the inference
+        backend), so a route can answer with a real error status."""
         result = {
             'status': 'error' if error else 'success',
             'texts': [],
@@ -229,6 +248,7 @@ class OcrService:
         }
         if error:
             result['error'] = error
+            result['error_kind'] = kind or 'inference'
         return result
 
 

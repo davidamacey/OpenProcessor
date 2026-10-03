@@ -29,6 +29,7 @@ from src.services.curation.keymap import (
     RevisionConflictError,
     get_keymap_doc,
     load_registry,
+    publish_keymap_changed,
     region_context_ids,
     reserved_hotkeys,
     save_keymap_doc,
@@ -266,26 +267,6 @@ async def _publish_classes_changed() -> None:
         logger.warning('classes_changed_publish_failed', error=str(exc))
 
 
-async def _publish_keymap_changed(doc: KeymapDoc, cfg: Any, opensearch: Any) -> None:
-    from src.services.config_store.index import get_config_revision
-    from src.services.curation.event_hub import get_event_hub
-
-    config_revision = await get_config_revision(opensearch, cfg.configs_index)
-    get_event_hub().publish(
-        {
-            'type': 'config.changed',
-            'topic': 'config',
-            'axis': 'keymap',
-            'name': None,
-            # M6 minor: CW-K §4.4 also serves the deployment-wide
-            # config_revision counter this doc's write bumped, not just
-            # the keymap doc's own per-project revision.
-            'config_revision': config_revision,
-            'keymap_revision': doc.revision,
-        }
-    )
-
-
 def _class_hotkey_conflict_error(
     class_conflicts: list[Any], class_conflict_issues: list[Any], current_revision: int
 ) -> Exception:
@@ -378,7 +359,7 @@ async def _write_keymap(
 
     if unbound:
         await _publish_classes_changed()
-    await _publish_keymap_changed(new_doc, cfg, opensearch)
+    await publish_keymap_changed(new_doc, cfg.configs_index, opensearch)
     logger.info(event, project=cfg.project_slug, revision=new_doc.revision)
     response = _build_response(new_doc, project=cfg.project_slug)
     return KeymapPutResponse(**response.model_dump(), unbound_class_hotkeys=unbound)

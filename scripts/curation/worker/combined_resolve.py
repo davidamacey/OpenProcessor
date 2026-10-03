@@ -25,6 +25,9 @@ from scripts.curation.worker.region_text_stage import (
 from scripts.curation.worker.verify import (
     _combined_class_update,
     boxes_auto_confirmed,
+    candidate_actor,
+    candidate_box,
+    chain_entry,
     item_verification_fields,
     verdicts_to_boxes,
 )
@@ -34,13 +37,14 @@ from src.services.curation.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     classifier_class_sources,
 )
-from src.services.curation.region_boxes import RegionBox, derive_status, new_box_placeholder
+from src.services.curation.region_boxes import derive_status, has_human_text, new_box_placeholder
 from src.services.labeling.region_overlay import VlmBoxVerdict
 
 
 if TYPE_CHECKING:
     from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
+    from src.services.curation.region_boxes import RegionBox
     from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
     from src.services.detection.region_text_rules import RegionTextRules
     from src.services.labeling.vlm_labeler import VlmCombinedReply
@@ -120,7 +124,7 @@ async def resolve_combined_reply(
     them, keeping their ids, instead of writing an empty terminal status).
     ``force_resolve`` is the no-verdict cap: every box resolves ``rejected``.
     """
-    actor = candidates[0].detector if candidates else 'unknown'
+    actor = candidate_actor(candidates[0]) if candidates else 'unknown'
     class_update = (
         None
         if reply is None
@@ -139,14 +143,10 @@ async def resolve_combined_reply(
             # list like every other verdict branch.
             boxes = [
                 resolve_rejected_box_text(
-                    RegionBox(
-                        box_id=cand.box_id or new_box_placeholder(i),
-                        bbox_norm=cand.bbox_in_source,
+                    candidate_box(
+                        cand,
+                        fallback_id=new_box_placeholder(i),
                         state='rejected',
-                        score=cand.score,
-                        detector=cand.detector,
-                        detector_version=cand.detector_version,
-                        source=cand.source,
                         rejection_reason=REJECT_REASON_VERIFIER,
                     ),
                     profile=profile,
@@ -167,7 +167,7 @@ async def resolve_combined_reply(
                 # `verified` means the VLM CONFIRMED a region: never here.
                 **item_verification_fields(verified=False, verifier=None),
             },
-            trace=[f'{actor}:combined_no_region_visible'],
+            trace=chain_entry(actor, 'combined_no_region_visible'),
             no_region_visible=True,
         )
 
@@ -186,11 +186,11 @@ async def resolve_combined_reply(
     assert verdict_status is not None  # only the no-verdict sentinel returns None
 
     if any(b.state == 'accepted' for b in boxes):
-        trace = [f'{actor}:combined_verify_ok']
+        trace = chain_entry(actor, 'combined_verify_ok')
     elif len(boxes) == 1 and boxes[0].rejection_reason:
-        trace = [f'{actor}:combined_verify_reject:{boxes[0].rejection_reason}']
+        trace = chain_entry(actor, f'combined_verify_reject:{boxes[0].rejection_reason}')
     else:
-        trace = [f'{actor}:combined_verify_reject']
+        trace = chain_entry(actor, 'combined_verify_reject')
 
     # Per-box text (VLM + OCR fallback) for every accepted box, using that
     # box's own crop-frame bbox. A non-accepted box never carries a raw,
@@ -199,6 +199,9 @@ async def resolve_combined_reply(
     for box, cand in zip(boxes, candidates, strict=True):
         if box.state != 'accepted':
             resolved.append(resolve_rejected_box_text(box, profile=profile, rules=rules))
+            continue
+        if has_human_text(box):
+            resolved.append(box)
             continue
         text_doc: dict[str, Any] = {}
         await apply_region_text(

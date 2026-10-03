@@ -195,6 +195,24 @@ class TritonUnloadError(PromoteError):
 # =============================================================================
 
 
+#: Dropped in a promoted model's repo directory by ``POST /models/{name}/unload``
+#: (which keeps the files): the periodic reload must not undo that unload. A
+#: promote, an explicit load and an explicit reload clear it.
+UNLOADED_MARKER = 'unloaded.marker'
+
+
+def set_explicitly_unloaded(model_dir: Path, unloaded: bool) -> None:
+    """Record (or clear) that an operator unloaded the promoted model in
+    ``model_dir``. A directory without ``promote.json`` is not a promoted
+    model and is left alone."""
+    marker = model_dir / UNLOADED_MARKER
+    if unloaded:
+        if (model_dir / 'promote.json').is_file():
+            marker.touch()
+    else:
+        marker.unlink(missing_ok=True)
+
+
 @dataclass(frozen=True)
 class PromoteResult:
     """Returned to the API caller."""
@@ -207,15 +225,14 @@ class PromoteResult:
     triton_loaded: bool
     version: str = '1'
     class_remap_source: str = 'none'
-    # Always true for this promoter's onnxruntime+TensorRT-accelerator
-    # config.pbtxt (see yolo_triton_config.py): Triton's /load only
-    # loads the ONNX graph -- the TensorRT execution accelerator JIT-
-    # builds the actual engine on the model's first real inference
-    # request, synchronously, on that request's thread. Final E2E run
-    # 2026-09-26 measured ~85s for this on a toy single-class model; a
-    # caller scripting immediate post-promote verification should expect
-    # a slow (not hung) first call and can optionally issue a throwaway
-    # warm-up request before treating latency as representative.
+    # This promoter's onnxruntime+TensorRT-accelerator config.pbtxt (see
+    # yolo_triton_config.py): Triton's /load only loads the ONNX graph --
+    # the TensorRT execution accelerator JIT-builds the actual engine on
+    # the model's first inference, synchronously (~85s on a toy
+    # single-class model, final E2E run 2026-09-26). promote() issues that
+    # first inference itself once the model is loaded, so a real request
+    # after it is warm. True only when the warm-up did not happen (Triton
+    # unreachable, load refused, or the warm-up request failed).
     cold_start_expected_on_first_inference: bool = True
 
 
@@ -460,8 +477,10 @@ class TritonPromoter:
                     error=str(exc),
                 )
 
-        # Trigger Triton load.
+        # Trigger Triton load, then pay the first-inference engine build here
+        # rather than on the first real request.
         loaded = await self._trigger_load(triton_name)
+        warmed = loaded and await self._warm_up(triton_name, input_size)
 
         # F-42 (fresh-start E2E findings 2026-09-25, round 2): drop any
         # cached class-name mapping for this model name so the very next
@@ -489,6 +508,7 @@ class TritonPromoter:
             triton_loaded=loaded,
             version=str(next_version),
             class_remap_source=remap.source,
+            cold_start_expected_on_first_inference=not warmed,
         )
 
     # ------------------------------------------------------------------
@@ -534,6 +554,39 @@ class TritonPromoter:
             raise CheckpointNotFoundError(status.job_id, onnx_path)
         return onnx_path
 
+    async def _warm_up(self, triton_name: str, input_size: int) -> bool:
+        """One throwaway inference (a blank image) so the TensorRT engine is
+        built now, not on the first real request. Best-effort: ``False`` when
+        it could not be done; the promote itself is already complete."""
+        body = {
+            'inputs': [
+                {
+                    'name': 'images',
+                    'shape': [1, 3, input_size, input_size],
+                    'datatype': 'FP32',
+                    'data': [0.0] * (3 * input_size * input_size),
+                }
+            ]
+        }
+        url = f'{self.triton_http_url}/v2/models/{triton_name}/infer'
+        try:
+            async with httpx.AsyncClient(timeout=self.http_timeout) as client:
+                resp = await client.post(url, json=body)
+        except httpx.HTTPError as exc:
+            logger.warning(
+                'train_promote_warm_up_unreachable', triton_name=triton_name, error=str(exc)
+            )
+            return False
+        if resp.status_code == 200:
+            return True
+        logger.warning(
+            'train_promote_warm_up_failed',
+            triton_name=triton_name,
+            status=resp.status_code,
+            body=resp.text[:300],
+        )
+        return False
+
     async def _trigger_load(self, triton_name: str) -> bool:
         """POST ``/v2/repository/models/<name>/load`` to Triton.
 
@@ -554,6 +607,9 @@ class TritonPromoter:
             )
             return False
         if resp.status_code == 200:
+            await asyncio.to_thread(
+                set_explicitly_unloaded, self.triton_models_dir / triton_name, False
+            )
             return True
         logger.error(
             'train_promote_triton_load_failed',
@@ -692,7 +748,9 @@ async def unload_triton_model(
     return await p.unload(triton_name)
 
 
-async def reload_promoted_models(promoter: TritonPromoter | None = None) -> dict[str, Any]:
+async def reload_promoted_models(
+    promoter: TritonPromoter | None = None, *, honor_unloaded: bool = True
+) -> dict[str, Any]:
     """Re-``/load`` every promoted model Triton doesn't report READY.
 
     Triton in explicit-control mode only loads its ``--load-model`` list
@@ -702,6 +760,10 @@ async def reload_promoted_models(promoter: TritonPromoter | None = None) -> dict
     any Triton restart until someone POSTs ``/load`` again. Call this
     once at API startup (see ``src/main.py``'s lifespan) so a Triton
     restart doesn't silently strand every previously-promoted model.
+
+    A model an operator unloaded on purpose (``UNLOADED_MARKER``) stays
+    unloaded unless ``honor_unloaded`` is false (the explicit
+    ``POST /train/reload_promoted``, which loads it and clears the marker).
 
     Best-effort throughout: a scan failure, an unreachable Triton, or a
     single model's load failure is logged and folded into the return
@@ -714,7 +776,13 @@ async def reload_promoted_models(promoter: TritonPromoter | None = None) -> dict
         logger.warning('reload_promoted_models_scan_failed', error=str(exc))
         return {'status': 'error', 'error': str(exc), 'reloaded': [], 'failed': []}
 
-    promoted_names = [e.name for e in entries if e.is_dir() and (e / 'promote.json').is_file()]
+    promoted_names = [
+        e.name
+        for e in entries
+        if e.is_dir()
+        and (e / 'promote.json').is_file()
+        and not (honor_unloaded and (e / UNLOADED_MARKER).exists())
+    ]
     if not promoted_names:
         return {'status': 'ok', 'reloaded': [], 'failed': []}
 
@@ -772,6 +840,7 @@ async def reload_promoted_models_best_effort(*, log_event: str) -> None:
 __all__ = [
     'DEFAULT_TRITON_HTTP_URL',
     'DEFAULT_TRITON_MODELS_DIR',
+    'UNLOADED_MARKER',
     'CheckpointNotFoundError',
     'ClassRemapMissingError',
     'ClassRemapResult',
@@ -791,6 +860,7 @@ __all__ = [
     'resolve_class_remap',
     'resolve_triton_http_url',
     'resolve_triton_models_dir',
+    'set_explicitly_unloaded',
     'unload_triton_model',
 ]
 

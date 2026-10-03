@@ -78,6 +78,8 @@ from typing import Any  # noqa: E402
 import yaml  # noqa: E402
 
 # Apply end2end patch for onnx_trt format
+from config_write import write_generated_config  # noqa: E402
+
 from ultralytics_patches import apply_end2end_patch  # noqa: E402
 
 
@@ -626,9 +628,11 @@ def save_triton_config(
     num_classes: int = 80,
     has_nms: bool = False,
     output_dtypes: dict[str, str] | None = None,
+    overwrite: bool = False,
 ) -> Path:
     """
-    Save Triton config.pbtxt file for a model.
+    Save Triton config.pbtxt file for a model (see ``config_write``: an
+    existing config that differs is kept unless ``overwrite``).
 
     Args:
         model_dir: Model directory path
@@ -650,21 +654,7 @@ def save_triton_config(
         output_dtypes=output_dtypes,
     )
 
-    config_path = model_dir / 'config.pbtxt'
-    # F-15: write only on change. This target regenerates a config every
-    # export run, and models/*/config.pbtxt is tracked in git -- writing
-    # unconditionally rewrote the file (touching mtime, and often nothing
-    # else) even when the generated content was byte-identical, dirtying
-    # the tree on every export.
-    if config_path.exists() and config_path.read_text() == config_content:
-        logger.info(f'Triton config unchanged, not rewriting: {config_path}')
-        return config_path
-
-    with open(config_path, 'w') as f:
-        f.write(config_content)
-
-    logger.info(f'Generated Triton config: {config_path}')
-    return config_path
+    return write_generated_config(model_dir / 'config.pbtxt', config_content, overwrite=overwrite)
 
 
 def enable_fp16_if_available(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
@@ -1087,6 +1077,7 @@ def export_model(
     normalize_boxes: bool = True,
     generate_config: bool = False,
     save_labels: bool = False,
+    overwrite_config: bool = False,
 ) -> dict[str, Any]:
     """
     Export a single model in specified formats.
@@ -1098,6 +1089,8 @@ def export_model(
         normalize_boxes: If True, output boxes in [0,1] range
         generate_config: If True, auto-generate Triton config.pbtxt files
         save_labels: If True, save class names to labels.txt
+        overwrite_config: Replace an existing, different config.pbtxt instead of
+            writing config.pbtxt.generated beside it
 
     Returns:
         Dict with export results for each format
@@ -1168,6 +1161,7 @@ def export_model(
                     max_batch=config['max_batch'],
                     num_classes=num_classes,
                     has_nms=False,
+                    overwrite=overwrite_config,
                 )
 
     if 'trt' in formats or 'all' in formats:
@@ -1191,6 +1185,7 @@ def export_model(
                     max_batch=config['max_batch'],
                     num_classes=num_classes,
                     has_nms=False,
+                    overwrite=overwrite_config,
                 )
 
     if 'onnx_end2end' in formats or 'all' in formats:
@@ -1229,6 +1224,7 @@ def export_model(
                     num_classes=num_classes,
                     has_nms=True,
                     output_dtypes=engine_output_dtypes(model_dir / '1' / 'model.plan'),
+                    overwrite=overwrite_config,
                 )
 
     return results
@@ -1382,6 +1378,14 @@ Examples:
     )
 
     parser.add_argument(
+        '--overwrite-config',
+        action='store_true',
+        default=False,
+        help='With --generate-config: replace an existing config.pbtxt that differs '
+        '(default: write config.pbtxt.generated beside it)',
+    )
+
+    parser.add_argument(
         '--save-labels',
         action='store_true',
         default=False,
@@ -1492,6 +1496,7 @@ Examples:
             normalize_boxes=args.normalize_boxes,
             generate_config=args.generate_config,
             save_labels=args.save_labels,
+            overwrite_config=args.overwrite_config,
         )
         results.append(result)
 

@@ -133,7 +133,8 @@ curl -s -X DELETE "$API/curation/projects/cars?dry_run=true"
 
 The 200 response lists `indexes` (name, doc count, size), `dirs` (path,
 bytes), `mlflow_experiment`, `promoted_models`, `running_jobs`,
-`referenced_by` and `blocking` / `blocking_detail`, the reasons a real
+`referenced_by` (other projects whose active detection profile uses one of its
+shared models) and `blocking` / `blocking_detail`, the reasons a real
 delete would be refused.
 
 Then the real delete. `confirm` must equal the slug:

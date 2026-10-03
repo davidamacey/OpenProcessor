@@ -264,10 +264,17 @@ make opensearch-indices         # list indexes
 bypasses the project guard because it does not go through the API. Delete a
 single project with `DELETE /curation/projects/{project}` instead.
 
-Shard budget: every project adds six single-shard indexes. The installer sets
+Shard budget: every project adds six indexes (`classes`, `configs`, `images`, `items`,
+`labels_confirmed`, `umap_state`), each with one primary shard and no replicas, so six
+shards. `active_shards` on `GET /curation/projects` counts every index in the cluster
+(the other projects, the `default` project's indexes, the project registry, the global
+config index and the legacy search indexes), not only the projects you made. The installer sets
 the OpenSearch heap from host RAM and a soft shard budget of 20 shards per heap
-GB (`OP_SHARDS_PER_HEAP_GB`); creating a project past the hard limit is refused
-with `shard_budget_exceeded`. See
+GB (`OP_SHARDS_PER_HEAP_GB`); creating a project past the hard limit (`cluster.max_shards_per_node` times
+the data nodes) is refused with `shard_budget_exceeded`; past the soft budget it succeeds with a
+`shard_budget_high` warning. The `capacity` block (and that warning's `detail`) names the
+binding limit (`limit_source`: `heap` or `cluster_max_shards_per_node`) and the total after a
+create (`shards_after_create`). See
 [INSTALLATION.md](../INSTALLATION.md#opensearch-heap-sizing).
 
 `index.knn` is a final setting: turning it on for an existing index needs a

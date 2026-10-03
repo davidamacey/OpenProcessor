@@ -190,6 +190,28 @@ def finalize_box_ids(
     return result
 
 
+def stale_verdict_ids(
+    stored: Sequence[RegionBox],
+    new: Sequence[RegionBox],
+    baseline: Sequence[RegionBox] | None,
+) -> frozenset[str]:
+    """Ids of boxes in ``new`` whose verdict must be dropped because a human
+    changed that box after the pass read ``baseline``: moved or edited it
+    (it differs in ``stored``) or deleted it (in ``baseline``, gone from
+    ``stored``). Only ids ``baseline`` knows are checked; a fresh detection
+    minted this pass is never stale. One rule, used by the merge and by the
+    caller that must also drop the item-level fields of a dropped verdict."""
+    if not baseline:
+        return frozenset()
+    base_by_id = {b.box_id: b for b in baseline}
+    stored_by_id = {b.box_id: b for b in stored}
+    return frozenset(
+        b.box_id
+        for b in new
+        if b.box_id in base_by_id and stored_by_id.get(b.box_id) != base_by_id[b.box_id]
+    )
+
+
 def merge_boxes_for_write(
     stored: Sequence[RegionBox],
     new: Sequence[RegionBox],
@@ -206,7 +228,7 @@ def merge_boxes_for_write(
     through unchanged, never silently dropped. A box in ``new`` with no
     stored counterpart (this pass's own fresh detection) is appended, in
     ``new``'s order. ``stored`` empty (the common fresh-detection case --
-    no prior box list at all) is a pure replace: unchanged behaviour.
+    no prior box list at all) is a pure replace.
 
     ``baseline`` (M1 residual / R-M3 fix, 2026-09-27 re-review): the
     snapshot of ``stored`` this pass actually READ before sending its
@@ -225,55 +247,45 @@ def merge_boxes_for_write(
     (the default) disables the guard entirely -- existing callers that
     never pass it keep the pre-fix behaviour.
     """
-    if not stored:
-        return list(new)
-    baseline_by_id = {b.box_id: b for b in (baseline or ())}
+    stale = stale_verdict_ids(stored, new, baseline)
     remaining = {b.box_id: b for b in new}
     merged: list[RegionBox] = []
     for s in stored:
         candidate = remaining.pop(s.box_id, None)
-        if candidate is None:
-            merged.append(s)
-            continue
-        base = baseline_by_id.get(s.box_id)
-        if base is not None and base != s:
-            # Human edit landed on this exact box while this pass's VLM
-            # call was in flight -- keep the human's current state, drop
-            # this pass's now-stale verdict for it.
-            merged.append(s)
-            continue
-        merged.append(candidate)
-    for b in new:
-        if b.box_id not in remaining:
-            continue
-        if b.box_id in baseline_by_id:
-            # Existed at fetch time, missing from `stored` now -- deleted
-            # by a human during this pass. Must not be resurrected.
-            continue
-        merged.append(b)
+        # A stale verdict keeps the human's current state; a box a human
+        # deleted (stale and absent from `stored`) is not resurrected below.
+        merged.append(s if candidate is None or s.box_id in stale else candidate)
+    merged.extend(b for b in new if b.box_id in remaining and b.box_id not in stale)
     return merged
+
+
+def has_human_text(box: RegionBox | None) -> bool:
+    """A human typed this box's text (an explicit empty text counts: it is a
+    human reading of "no text"). No machine reader may replace it."""
+    return box is not None and box.text_source == 'human'
 
 
 def is_human_owned(box: RegionBox) -> bool:
     """True if a human created this box OR explicitly acted on it (W8c M3).
 
     ``source == 'human'`` alone only covers a box a human CREATED (``PUT
-    .../regions`` with ``box_id: null``). A human's per-box accept/reject
-    verdict on a MACHINE-created box, via ``PATCH .../regions/{box_id}``
-    or ``POST /regions/batch_box_state``, leaves ``source``/``detector``
-    exactly as they were -- the only trace is the stamp those write paths
-    now also set on that verdict (``rejection_reason=REJECT_REASON_HUMAN``
-    for a reject, matching :func:`boxes_with_status`'s whole-set path;
-    ``text_source='human'`` for a human-typed transcription). Both
+    .../regions`` with ``box_id: null``). A human's per-box verdict on a
+    MACHINE-created box, via ``PATCH .../regions/{box_id}`` or ``POST
+    /regions/batch_box_state``, leaves ``source``/``detector`` exactly as
+    they were. The traces are the stamps those write paths set: ``rejection_reason=
+    REJECT_REASON_HUMAN`` for a reject (matching :func:`boxes_with_status`'s
+    whole-set path) and ``text_source='human'`` for a human-typed
+    transcription (an explicit empty human text counts: it is a human
+    reading of "no text"). A human ACCEPT of a machine box leaves no
+    per-box trace, so the box is NOT human-owned here; the item-level
+    ``validated`` flag is what protects an accepted set. Both
     :func:`~scripts.curation.worker.bulk_writer._merge` (fresh-detection
     replace-machine/keep-human) and :func:`region_requeue.apply_requeue`
     (``clear_detection``'s box drop) key their "never a human's" guarantee
     off this, not the narrower ``source`` check alone.
     """
     return (
-        box.source == 'human'
-        or box.rejection_reason == REJECT_REASON_HUMAN
-        or box.text_source == 'human'
+        box.source == 'human' or box.rejection_reason == REJECT_REASON_HUMAN or has_human_text(box)
     )
 
 
@@ -397,6 +409,7 @@ __all__ = [
     'derive_status',
     'finalize_box_ids',
     'has_any_box_query',
+    'has_human_text',
     'is_human_owned',
     'merge_boxes_for_write',
     'new_box_placeholder',

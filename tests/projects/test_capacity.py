@@ -155,3 +155,28 @@ def test_invalidate_capacity_cache_forces_a_fresh_read() -> None:
     invalidate_capacity_cache()
     asyncio.run(capacity_status(client))
     assert len(calls) > first_call_count, 'invalidation must force a real re-read, not a cache hit'
+
+
+def test_wire_names_the_binding_limit_and_the_total_after_a_create() -> None:
+    heap_bound = asyncio.run(
+        capacity_status(
+            _client(active_shards=36, max_shards_per_node=1000, heap_bytes=2 * 1024**3),
+            extra_shards=6,
+        )
+    )
+    assert heap_bound is not None
+    wire = heap_bound.to_wire()
+    assert (wire['soft_limit'], wire['limit_source']) == (40, 'heap')
+    assert wire['shards_after_create'] == 42
+    assert wire['status'] == 'warn'
+    assert 'every index in the cluster' in wire['message']
+
+    capacity_mod._cache = None
+    cluster_bound = asyncio.run(
+        capacity_status(
+            _client(active_shards=10, max_shards_per_node=30, heap_bytes=8 * 1024**3),
+            extra_shards=6,
+        )
+    )
+    assert cluster_bound is not None
+    assert cluster_bound.to_wire()['limit_source'] == 'cluster_max_shards_per_node'

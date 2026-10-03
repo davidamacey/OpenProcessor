@@ -195,8 +195,9 @@ combine target) and `paused`. A client enables buttons from the boolean flags
 and does not recompute them from `status`.
 
 Lifecycle responses carry `warnings[]` (for example `shard_budget_high`) and
-`keymap_clone_conflicts[]` (keymap actions that a `keymap` clone dropped
-because their combo collides with a class hotkey of the target).
+`keymap_clone_conflicts[]` (keymap actions whose combo collides with a class
+hotkey of the target; any conflict makes a `keymap` clone skip the whole keymap
+axis and leave the target's keymap unchanged).
 
 ### Create and clone
 
@@ -226,7 +227,11 @@ background. Follow the `project.deleted` event on `/curation/events`, or poll
 
 A delete is refused while the project has running jobs (`project_busy`), is
 the last active project, or has promoted models shared with other projects
-(`in_use`; `force=true` bypasses only this check). Repeating a `DELETE` for a
+(`in_use`; `force=true` bypasses only this check). The `in_use` body names the
+shared models in `message`, the projects whose active detection profile uses them
+in `projects[]` and `used_by[]` (`{project, profile}`); the dry run lists the
+same rows in `referenced_by[]`. A project that cannot be read makes the real
+delete `503 config_store_unavailable` (`force=true` bypasses). Repeating a `DELETE` for a
 project that is already `deleting` retries the background work.
 
 ### Pause
@@ -267,7 +272,11 @@ and its target busy (`project_busy`).
 (`CombineIssue`: `code`, `severity`, `message`, `project`, `detail`),
 `suggested_mapping`, `sources[]`, `target`, `dedup`, `bytes` and
 `preview_sha`. Starting with a different body than the one previewed is
-`409 preview_stale`.
+`409 preview_stale`. Warning codes: `shard_budget_high`, `label_conflicts`,
+`holdout_recompute_contamination`, `embedding_model_mismatch` (a source's
+stored vector dimension differs from the target encoder's; those vectors are
+not copied and the items are deferred for re-embedding) and
+`region_profiles_differ` (sources have different active region profiles).
 
 `CombineJobResponse`: `job_id`, `status` (`queued`, `running`, `completed`,
 `failed`, `cancelled`, `interrupted`), `phase`, `done`, `total`, `report`,

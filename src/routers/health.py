@@ -205,11 +205,15 @@ async def ready() -> JSONResponse:
         'cpu_percent': process.cpu_percent(),
     }
     if torch.cuda.is_available():
-        payload['resources']['gpu'] = {
-            'name': torch.cuda.get_device_name(0),
-            'memory_allocated_mb': round(torch.cuda.memory_allocated() / 1024 / 1024, 2),
-            'memory_reserved_mb': round(torch.cuda.memory_reserved() / 1024 / 1024, 2),
-        }
+        # What THIS API process holds in its own CUDA context (0 for an API
+        # that runs inference on Triton), not the GPU's memory use: for the
+        # GPU, read Triton or DCGM metrics.
+        payload['resources']['process_cuda_allocated_mb'] = round(
+            torch.cuda.memory_allocated() / 1024 / 1024, 2
+        )
+        payload['resources']['process_cuda_reserved_mb'] = round(
+            torch.cuda.memory_reserved() / 1024 / 1024, 2
+        )
     payload.setdefault('version', settings.api_version)
     return JSONResponse(status_code=status_code, content=payload)
 

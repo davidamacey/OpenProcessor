@@ -24,7 +24,21 @@ from projects.conftest import FakeLifecycleOpenSearch
 
 _DATA_INDEX = re.compile(r'^op_prj_.+__(items|images|labels_confirmed|classes|umap_state)$')
 _SERIALIZER = JSONSerializer()  # the client's own: handles numpy scalars, datetimes, UUIDs
-_WRITE_OPS = frozenset({'index', 'update', 'delete', 'create', 'bulk'})
+#: Every audit op that changes the cluster: what "never written" assertions use.
+WRITE_OPS = frozenset(
+    {
+        'delete_index',
+        'index',
+        'update',
+        'delete',
+        'create',
+        'bulk',
+        'put_settings',
+        'put_mapping',
+        'update_by_query',
+        'delete_by_query',
+    }
+)
 
 
 def _wire(obj: Any) -> Any:
@@ -70,7 +84,13 @@ class _Indices:
         return await self._o.data.indices.get_settings(index=index, **kw)
 
     async def put_settings(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+        self._o._log('put_settings', index)
         return await self._o.data.indices.put_settings(index=index, body=body, **kw)
+
+    async def put_mapping(self, *, index: str, **_kw: Any) -> dict[str, Any]:
+        """Logged as a write; the mapping itself is not modeled."""
+        self._o._log('put_mapping', index)
+        return {'acknowledged': True}
 
 
 class RoutedOpenSearch:
@@ -102,11 +122,7 @@ class RoutedOpenSearch:
         return self.lifecycle
 
     def touched(self, *, writes_only: bool = False) -> set[str]:
-        return {
-            index
-            for op, index in self.audit
-            if not writes_only or op in _WRITE_OPS or op == 'delete_index'
-        }
+        return {index for op, index in self.audit if not writes_only or op in WRITE_OPS}
 
     # ------------------------------------------------------------ operations
 
@@ -170,6 +186,14 @@ class RoutedOpenSearch:
             self.bulk_results.append(res)
             return res
         return await self.lifecycle.bulk(body=body, **kw)
+
+    async def update_by_query(self, *, index: str, **_kw: Any) -> dict[str, Any]:
+        self._log('update_by_query', index)
+        raise NotImplementedError('update_by_query is not modeled; the attempt is in the audit')
+
+    async def delete_by_query(self, *, index: str, **_kw: Any) -> dict[str, Any]:
+        self._log('delete_by_query', index)
+        raise NotImplementedError('delete_by_query is not modeled; the attempt is in the audit')
 
     async def scroll(self, **kw: Any) -> dict[str, Any]:
         return await self.data.scroll(**kw)

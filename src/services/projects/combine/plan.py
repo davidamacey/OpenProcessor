@@ -44,6 +44,7 @@ from src.services.projects.combine.models import (
     CombinePreview,
     CombineRequest,
 )
+from src.services.projects.combine.warnings import embedding_model_mismatch, region_profiles_differ
 
 
 if TYPE_CHECKING:
@@ -166,7 +167,12 @@ async def check_target(
         return errors, warnings
     try:
         warnings.extend(
-            CombineIssue(code='shard_budget_high', severity='warning', message=w.get('message', ''))
+            CombineIssue(
+                code='shard_budget_high',
+                severity='warning',
+                message=w.get('message', ''),
+                detail=w.get('detail') or {},
+            )
             for w in await lifecycle._capacity_error_or_warning(client)
         )
     except HTTPException as exc:
@@ -313,7 +319,9 @@ def _byte_counts(
     return link, copy
 
 
-async def analyze(client: Any, request: CombineRequest, records: list[ProjectRecord]) -> Analysis:
+async def analyze(
+    client: Any, request: CombineRequest, records: list[ProjectRecord], *, target_dim: int
+) -> Analysis:
     """Read the sources and compute the whole plan. ``records`` are in
     ``request.sources`` order, every source present."""
     from src.config.curation import base_curation_config
@@ -359,6 +367,8 @@ async def analyze(client: Any, request: CombineRequest, records: list[ProjectRec
                 'the recomputed test images',
             )
         )
+    warnings.extend(await embedding_model_mismatch(client, records, target_dim))
+    warnings.extend(await region_profiles_differ(client, request, records))
     return Analysis(
         request=request,
         records=records,

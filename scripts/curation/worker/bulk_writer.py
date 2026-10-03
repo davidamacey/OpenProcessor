@@ -187,6 +187,18 @@ async def _bulk_update_one_project(
                 status=task.pending_status,
                 empty_status=task.pending_empty_status,
             )
+            if box_pass.dropped:
+                # A human changed a box this pass judged: everything this
+                # write would add (verified/verifier, the embedding, the
+                # event) describes geometry that no longer exists. Write
+                # nothing; the box stays `proposed` and the next poll
+                # re-verifies it as it is now.
+                logger.info(
+                    'region_write_stale_verdict_skip',
+                    crop_id=doc_id,
+                    box_ids=sorted(box_pass.dropped),
+                )
+                return {}
             task.box_embedding_entries = _vector_entries(task, box_pass.merged, box_pass.finalized)
             update.update(box_pass.update)
             # R-M1 fix (2026-09-27 re-review): correct the PROVISIONAL

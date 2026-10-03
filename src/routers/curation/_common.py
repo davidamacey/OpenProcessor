@@ -190,6 +190,11 @@ async def warm_knn_indexes(opensearch: Any) -> None:
 _ensure_indexes_lock = asyncio.Lock()
 
 
+def bound_project_slug() -> str:
+    """The bound project's slug (raises when no project is bound)."""
+    return get_curation_config().project_slug
+
+
 async def _ensure_indexes(opensearch: Any) -> None:
     """Create the bound project's curation indexes on its first request
     in this process (idempotent).

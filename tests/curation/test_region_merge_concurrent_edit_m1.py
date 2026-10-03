@@ -25,11 +25,7 @@ from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch
-from .test_region_pending_verification_b1 import (
-    PROPOSED_BBOX,
-    SIBLING_BBOX,
-    _seed_via_real_put_route,
-)
+from .test_region_pending_verification_b1 import SIBLING_BBOX, _seed_via_real_put_route
 
 
 if TYPE_CHECKING:
@@ -89,24 +85,21 @@ class TestConcurrentMoveDuringVerification:
             until_writes=1,
         )
 
-        # Read the FIRST write's own merged doc -- deterministic regardless
-        # of whatever later poll cycles do (the box is still `proposed`
-        # after this fix, so the item stays eligible for re-fetch and may
-        # settle further during the drive's 0.6s tail window).
-        first_write_doc = fake_os.writes[0][1]
-        boxes_by_id = {b['box_id']: b for b in first_write_doc[F.boxes]}
-
-        # R-M3: the human's newer position survives -- never reverted to
-        # PROPOSED_BBOX (what this pass's VLM call verified against).
-        assert boxes_by_id['b3']['bbox_norm'] == MOVED_BBOX
-        assert boxes_by_id['b3']['bbox_norm'] != PROPOSED_BBOX
-        # The stale verdict for b3 is dropped -- it stays `proposed`
-        # (unresolved), not silently promoted to `accepted` against
-        # geometry the VLM never actually saw.
-        assert boxes_by_id['b3']['state'] == 'proposed'
-        # Untouched sibling unaffected.
-        assert boxes_by_id['b2']['state'] == 'rejected'
-        assert boxes_by_id['b2']['bbox_norm'] == SIBLING_BBOX
+        # The pass whose verdict was computed against the OLD geometry writes
+        # NOTHING (no box state, no verified/verifier, no embedding, no event):
+        # the next poll re-verifies the box where the human put it.
+        assert fake_os.writes, 'the re-verification of the moved box never wrote'
+        for _doc_id, written in fake_os.writes:
+            boxes_by_id = {b['box_id']: b for b in written[F.boxes]}
+            # R-M3: the human's newer position survives -- never reverted to
+            # PROPOSED_BBOX (what the dropped pass's VLM call verified).
+            assert boxes_by_id['b3']['bbox_norm'] == MOVED_BBOX
+            assert boxes_by_id['b2']['state'] == 'rejected'
+            assert boxes_by_id['b2']['bbox_norm'] == SIBLING_BBOX
+            # `verified` only describes a verdict on the geometry that is stored.
+            assert not written.get(F.verified) or boxes_by_id['b3']['state'] == 'accepted'
+        first = {b['box_id']: b for b in fake_os.writes[0][1][F.boxes]}
+        assert first['b3']['state'] == 'accepted', 'only the second, fresh verdict may land'
 
 
 class TestConcurrentDeleteDuringVerification:
@@ -124,6 +117,8 @@ class TestConcurrentDeleteDuringVerification:
                 calls.append(1)
                 live = fake_os.live['c1']
                 live[F.boxes] = [b for b in live[F.boxes] if b['box_id'] != 'b3']
+                # What the real delete route also does: re-derive the status.
+                live[F.status] = 'verify_rejected'
                 live[F.revision] = live.get(F.revision, 1) + 1
                 fake_os.searchable = copy.deepcopy(fake_os.live)
             return {c.crop_id: _accept_reply() for c in crops}
@@ -136,7 +131,7 @@ class TestConcurrentDeleteDuringVerification:
             segmenter=None,
             reply=_accept_reply(),
             combined_side_effect=combined_side_effect,
-            until_writes=1,
+            until_writes=0,
         )
 
         doc = fake_os.live['c1']
@@ -145,7 +140,7 @@ class TestConcurrentDeleteDuringVerification:
         # never be resurrected by that pass's stale merge.
         assert 'b3' not in box_ids, f'deleted box b3 was resurrected: {doc[F.boxes]}'
         assert 'b2' in box_ids
-        # No accepted/proposed box remains -- the merged status derives
-        # to the terminal verify_rejected (the sibling's own state), so
-        # the item stops being re-fetched.
+        # The item is terminal (`verify_rejected`) and the pass's verdict for
+        # the deleted box was dropped: nothing was written at all.
         assert doc[F.status] == 'verify_rejected'
+        assert not fake_os.writes

@@ -140,6 +140,15 @@ async def test_promote_fresh_model_uses_version_1(
     assert (scratch_models_dir / 'op_smoke_v1' / '1' / 'model.onnx').is_file()
 
 
+@pytest.fixture(autouse=True)
+def _no_real_warm_up(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """promote() warms the model up over HTTP; tests that are not about that
+    must never reach a real Triton URL."""
+    if 'warm_up' in request.node.name:
+        return
+    monkeypatch.setattr(TritonPromoter, '_warm_up', AsyncMock(return_value=False))
+
+
 @pytest.mark.asyncio
 async def test_promote_result_flags_cold_start(
     fake_status: TrainJobStatus,
@@ -158,6 +167,66 @@ async def test_promote_result_flags_cold_start(
         triton_name='op_smoke_cold_start',
         class_id_to_name=CLASS_MAP,
     )
+    assert result.cold_start_expected_on_first_inference is True
+
+
+@pytest.mark.asyncio
+async def test_promote_warm_up_runs_one_inference_after_the_load_and_clears_the_cold_flag(
+    fake_status: TrainJobStatus,
+    scratch_models_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    from src.services.training import triton_promote
+
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(200, json={})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        triton_promote.httpx,
+        'AsyncClient',
+        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+    )
+    promoter = _promoter(scratch_models_dir)
+    result = await promoter.promote(
+        status=fake_status, triton_name='op_warm_up_ok', class_id_to_name=CLASS_MAP
+    )
+    assert calls == [
+        '/v2/repository/models/op_warm_up_ok/load',
+        '/v2/models/op_warm_up_ok/infer',
+    ]
+    assert result.cold_start_expected_on_first_inference is False
+
+
+@pytest.mark.asyncio
+async def test_promote_warm_up_failure_keeps_the_cold_flag_and_does_not_fail_the_promote(
+    fake_status: TrainJobStatus,
+    scratch_models_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    from src.services.training import triton_promote
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500 if request.url.path.endswith('/infer') else 200)
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        triton_promote.httpx,
+        'AsyncClient',
+        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+    )
+    promoter = _promoter(scratch_models_dir)
+    result = await promoter.promote(
+        status=fake_status, triton_name='op_warm_up_bad', class_id_to_name=CLASS_MAP
+    )
+    assert result.triton_loaded is True
     assert result.cold_start_expected_on_first_inference is True
 
 

@@ -25,6 +25,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_region_fields
+from src.config.region_rejection import REJECT_REASON_VERIFIER
 from src.config.region_state import CONFIRM_STATUS, REGION_STATUS_INFO, RegionStatus
 from src.services.curation.region_box_edits import boxes_with_status
 from src.services.curation.region_boxes import (
@@ -104,8 +105,18 @@ def human_box_write(
     return doc
 
 
+def label_source_is_human(label_source: str | None) -> bool:
+    """A region edit is a person's when its ``region_label_source`` says so
+    (``human``, ``human_move``, ...); an auto-relabel job names another source."""
+    return (label_source or '').lower().startswith('human')
+
+
 def human_status_box_write(
-    region_status: str, current: dict[str, Any], *, rejection_reason: str | None = None
+    region_status: str,
+    current: dict[str, Any],
+    *,
+    rejection_reason: str | None = None,
+    label_source: str | None = 'human',
 ) -> dict[str, Any]:
     """The ``region_boxes``-based whole-set status write backing ``PATCH
     /crops/{id}/region_meta`` and ``POST /regions/batch_status``.
@@ -128,6 +139,10 @@ def human_status_box_write(
     """
     F = get_region_fields()
     status = RegionStatus(region_status)
+    if rejection_reason is None and not label_source_is_human(label_source):
+        # A whole-set reject by an automated source is a machine verdict: the
+        # default human reason would take the human lock on every box.
+        rejection_reason = REJECT_REASON_VERIFIER
     new_boxes = boxes_with_status(
         status.value, read_boxes(current, F), rejection_reason=rejection_reason
     )
@@ -192,6 +207,7 @@ def post_write_item(
 __all__ = [
     'human_box_write',
     'human_status_box_write',
+    'label_source_is_human',
     'parent_to_source_bbox',
     'post_write_item',
     'reason_only_box_write',

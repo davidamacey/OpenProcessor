@@ -1,6 +1,6 @@
 # Combine preview: embedding_model_mismatch and region_profiles_differ warnings
 
-Status: **open** (the rest of combine is implemented). Issue: #55.
+Status: **implemented** in `src/services/projects/combine/warnings.py` (issue #55). Items carry no encoder id, so the check is the vector dimension only.
 
 A fresh agent should be able to implement this from the file. Re-find code by symbol.
 

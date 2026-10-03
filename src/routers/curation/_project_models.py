@@ -164,11 +164,17 @@ class ProjectWarning(BaseModel):
 
     code: str
     message: str
+    detail: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Structured facts behind the note. For shard_budget_high: the same '
+        'capacity block GET /curation/projects serves.',
+    )
 
 
 class KeymapCloneConflictWire(BaseModel):
-    """W2b: one action the ``keymap`` clone axis dropped from the copy
-    because its combo collides with the target's class hotkey -- a
+    """W2b: one action whose combo collides with the target's class hotkey.
+    The ``keymap`` clone axis is all-or-nothing: on any conflict the whole
+    keymap is skipped and the target's keymap is left unchanged -- a
     report, never a silent unbind (CW-K §0 clause 1)."""
 
     action_id: str

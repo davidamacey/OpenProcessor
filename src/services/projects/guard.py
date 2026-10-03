@@ -41,6 +41,7 @@ from urllib.parse import quote, unquote
 from prometheus_client import Counter
 
 from src.config.project_context import current_project, try_current_project
+from src.config.projects import project_index_prefix
 from src.core.logging import get_logger
 
 
@@ -121,10 +122,6 @@ def _projects_index() -> str:
 
 def _global_configs_index() -> str:
     return os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
-
-
-def _project_index_prefix() -> str:
-    return os.environ.get('OP_PROJECT_INDEX_PREFIX', 'op_prj_')
 
 
 # --- The allowlist -----------------------------------------------------------
@@ -286,7 +283,7 @@ def _check_targets(
                         'the project registry is writable only by lifecycle code', target=name
                     )
                 continue
-            if name.startswith(_project_index_prefix()):
+            if name.startswith(project_index_prefix()):
                 raise _refuse(f'{name!r} belongs to no known project', target=name)
             if bound is not None and name == _global_configs_index() and not write:
                 if _GLOBAL_CONFIGS_READ.get():

@@ -229,3 +229,26 @@ async def test_r3_existing_target_previously_deactivated(tmp_path, monkeypatch):
     # from treating 'off' as `expected_active=None`) instead of proving
     # it is fixed.
     assert outcome == 'ok', f'clone into a previously-deactivated target must succeed: {outcome}'
+
+
+@pytest.mark.asyncio
+async def test_clone_into_a_target_with_a_stored_unactivated_pack_of_the_same_name_writes_nothing(
+    tmp_path, monkeypatch
+):
+    """The refusal comes from validation, before any write: a same-named
+    stored pack that was never activated is the target's own history."""
+    from src.config import get_curation_config
+
+    client = Fake()
+    source, target = _record('alpha', tmp_path), _record('beta', tmp_path)
+    await _save(client, source, 'prompt_pack', 'wheel', {'class_system': 'R1'})
+    await _activate(client, source, 'prompt_pack', 'wheel', 1)
+    await _save(client, target, 'prompt_pack', 'wheel', {'class_system': 'MINE'})
+    with bind_project(target):
+        tidx = get_curation_config().configs_index
+    before = {k: dict(v) for k, v in client._docs.get(tidx, {}).items()}
+    with pytest.raises(HTTPException) as exc:
+        await _clone(client, source, target, monkeypatch, axes=['settings_defaults', 'activations'])
+    assert exc.value.status_code == 409
+    assert exc.value.detail['error'] == 'target_not_empty'
+    assert client._docs.get(tidx, {}) == before
