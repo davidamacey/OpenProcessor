@@ -403,6 +403,100 @@ def state_review_imported(page, ctx: Ctx) -> None:
     _settle(page, 2500)
 
 
+SHARE_OWNER = os.environ.get("SHARE_OWNER_PROJECT", "model-demo-owner")
+SHARE_CONSUMER = os.environ.get("SHARE_CONSUMER_PROJECT", "model-demo-consumer")
+SHARE_MODEL = os.environ.get("SHARE_MODEL", "model-demo-owner__model_demo_car")
+
+
+def state_models_sharing(page, ctx: Ctx) -> None:
+    """The owner project's view of its model shared with other projects.
+
+    The consumer's view (with the "from <project>" chip and class mapping) is not
+    captured: the backend currently lists the shared model twice there and the
+    page's keyed list throws `each_key_duplicate`, so it never leaves "Loading...".
+    """
+    page.goto(f"{ctx.base}/p/{SHARE_OWNER}/models", wait_until="domcontentloaded", timeout=30_000)
+    card = page.locator(f"[data-testid='model-sharing-{SHARE_MODEL}']").first
+    card.wait_for(timeout=90_000)
+    card.scroll_into_view_if_needed()
+    _settle(page, 800)
+
+
+def state_models_unshare_force(page, ctx: Ctx) -> None:
+    """Owner clicks Stop sharing and confirms; the server must answer 409 in_use.
+
+    The one deliberate exception to the read-only guard: this attempts the
+    plain (non-force) unshare PUT on the owner's model. It is expected to be
+    refused with 409 `in_use` (the consumer's active profile uses the model), so
+    nothing changes. The handler below allows ONLY that URL, ONLY without a
+    `force` query param, ONLY with {shared: false}; anything else is aborted.
+    If the server does not answer 409 the unshare took effect, so the share is
+    restored at once and the state fails loudly. "Unshare anyway" is never armed.
+    """
+    path_re = re.compile(rf"/projects/{re.escape(SHARE_OWNER)}/models/{re.escape(SHARE_MODEL)}/sharing$")
+    log: list[tuple[str, str, int | None]] = []
+    outcome: dict = {}
+
+    def handler(route) -> None:
+        req = route.request
+        parts = urlsplit(req.url)
+        if req.method == "PUT" and path_re.search(parts.path):
+            body = req.post_data or ""
+            if "force" in parts.query.lower() or "force" in body.lower() or '"shared":false' not in body.replace(" ", ""):
+                print(f"  blocked (force/unexpected) {req.method} {req.url} {body}")
+                route.abort()
+                return
+            resp = route.fetch()
+            log.append((f"PUT {parts.path}?{parts.query} body={body}", "", resp.status))
+            print(f"  unshare attempt: PUT {parts.path}?{parts.query} {body} -> {resp.status}")
+            if resp.status != 409:
+                outcome["unexpected"] = resp.status
+            route.fulfill(response=resp)
+            return
+        _read_only(route)
+
+    page.route("**/*", handler)
+    page.goto(f"{ctx.base}/p/{SHARE_OWNER}/models", wait_until="domcontentloaded", timeout=30_000)
+    toggle = page.locator(f"[data-testid='model-share-toggle-{SHARE_MODEL}']")
+    toggle.wait_for(timeout=90_000)
+    toggle.click()
+    page.wait_for_selector("[data-testid='share-model-dialog']", timeout=10_000)
+    page.locator("[data-testid='share-model-confirm']").click()
+    try:
+        page.wait_for_selector("[data-testid='share-model-in-use']", timeout=15_000)
+    finally:
+        if outcome.get("unexpected"):
+            cur = api_get(ctx.base, f"/curation/projects/{SHARE_OWNER}/models/status")
+            m = next(x for x in cur["models"] if x["name"] == SHARE_MODEL)
+            print(f"!!! UNSHARE ANSWERED {outcome['unexpected']}: model shared={m['shared']}; restoring")
+            if not m["shared"]:
+                data = json.dumps({"shared": True, "expected_revision": m["sharing_revision"]}).encode()
+                rq = urllib.request.Request(
+                    f"{ctx.base}/curation/projects/{SHARE_OWNER}/models/{SHARE_MODEL}/sharing",
+                    data=data, method="PUT", headers={"Content-Type": "application/json"},
+                )
+                print("!!! restore ->", urllib.request.urlopen(rq, timeout=30).status)
+    if outcome.get("unexpected"):
+        raise RuntimeError(f"unshare answered {outcome['unexpected']}, not 409")
+    _settle(page, 600)
+
+
+def state_vlm_run_picker(page, ctx: Ctx) -> None:
+    """The assist bar expanded with the per-run VLM select opened; no run is started."""
+    page.goto(f"{ctx.base}/p/{SHARE_OWNER}/dashboard", wait_until="domcontentloaded", timeout=30_000)
+    page.get_by_role("button", name=re.compile("assist:")).first.click()
+    page.wait_for_selector("[data-testid='vlm-run-picker']", timeout=15_000)
+    page.get_by_role("heading", name="Dashboard").click()  # close the class list
+    # A native select popup is not part of a screenshot: show its options inline
+    # (display only; nothing is picked, no run is started).
+    page.locator("[data-testid='vlm-run-select']").evaluate(
+        "el => { el.size = el.options.length; }"
+    )
+    page.keyboard.press("Escape")
+    page.locator("[data-testid='vlm-run-picker']").scroll_into_view_if_needed()
+    _settle(page, 800)
+
+
 # name -> function; every state is captured at 1600px only.
 STATES = {
     "projects-delete-dry-run": state_projects_delete_dry_run,
@@ -420,6 +514,9 @@ STATES = {
     "import-wizard": state_import_wizard,
     "import-job": state_import_job,
     "review-imported": state_review_imported,
+    "models-sharing": state_models_sharing,
+    "models-unshare-force": state_models_unshare_force,
+    "vlm-run-picker": state_vlm_run_picker,
 }
 
 

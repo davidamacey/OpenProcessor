@@ -126,22 +126,29 @@ a manual capture or a small extension that drives the clicks read-only.
 | `region-profile-test` | same, Test on a crop | state | Candidates drawn over the source image |
 | `settings-models` | `/settings/models` | route | Active endpoint, registry table, local model panel |
 | `vlm-endpoint-editor` | `/settings/models/vlm/<name>` | state | A key reference and "host has it", no key value |
-| `vlm-run-picker` | the dashboard assist bar | state | Per-run picker with the external-images acknowledgement |
+| `vlm-run-picker` | the dashboard assist bar | state | Per-run VLM picker with its options listed (project default, served endpoints, off) |
 | `settings-keymap` | `/settings#keyboard` | route | The keyboard shortcut editor with verb groups |
-| `models-sharing` | `/models` | state | Another project's shared model and its class mapping |
-| `models-unshare-force` | `/models` | state | The in-use list and Unshare anyway |
+| `models-sharing` | `/models` | state | The owner's model marked "Shared with other projects" with Stop sharing |
+| `models-unshare-force` | `/models` | state | The 409 in-use list (project and profile) and the Unshare anyway button, never armed |
 
 The routes in `screenshot_routes.json` use bare paths, which redirect to the
 default project; the script follows the redirect. Check each capture for
 anything private: project slugs, host names, secret reference names and file
 paths must be sample-data values.
 
-### Still pending (cannot be captured from public sample data alone)
+### Notes on the sharing and picker slots
 
-| Slot | Why |
-| --- | --- |
-| `vlm-run-picker` | the acknowledgement only shows for an endpoint outside the deployment; only the built-in in-stack endpoint exists |
-| `models-sharing`, `models-unshare-force` | need a model another project has shared |
+The three slots come from the throwaway `model-demo-owner` /
+`model-demo-consumer` projects (a shared model used by the consumer's active
+profile). `models-unshare-force` is the one capture that sends a write: the
+plain unshare PUT, which the server must refuse with 409 `in_use`. The script
+allows only that URL, only without `force`, and restores the share and fails
+if the answer is anything but 409; "Unshare anyway" is never armed.
+`vlm-run-picker` shows the select's options inline (display only) and starts
+no run. Only the built-in endpoint exists, so the external-images
+acknowledgement is not shown. The consumer's own `/models` view (the "from
+project" chip and class mapping) is not captured: the backend lists the shared
+model twice there and the page stays on "Loading...".
 
 `vlm-endpoint-editor` shows the built-in endpoint's key reference with no key
 value; the "host has it" state needs a key file on the host, which the sample

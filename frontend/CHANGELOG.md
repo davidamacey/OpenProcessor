@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Docs screenshots `models-sharing`, `models-unshare-force` and `vlm-run-picker`, with
+  capture states in `scripts/capture_docs_screenshots.py` (the unshare state allows
+  only the non-force unshare PUT, which must answer 409, and aborts anything with `force`).
 - Open-vocabulary sets (OpenProcessor v0.4.0, SAM 3): a `/settings/open-vocab`
   list and editor for the sets that find things by describing them in words
   (create, clone a template, edit targets, served validation under the cell it

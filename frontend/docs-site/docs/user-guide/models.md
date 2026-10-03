@@ -46,6 +46,6 @@ registry is available.
 
 <Screenshot name="models-1600.png" alt="Cropwright Model registry page" caption="Models — live status of every inference service" />
 
-<Screenshot name="models-sharing-1600.png" alt="Models page showing a shared model with its class mapping" caption="Models — another project's shared model and its by-name class mapping" />
+<Screenshot name="models-sharing-1600.png" alt="Models page showing the owner's model shared with other projects" caption="Models — a model shared with other projects, with Stop sharing" />
 
-<Screenshot name="models-unshare-force-1600.png" alt="Unshare dialog listing the projects whose profile uses the model" caption="Unshare — the in-use projects and the confirmed Unshare anyway" />
+<Screenshot name="models-unshare-force-1600.png" alt="Unshare dialog listing the projects whose profile uses the model" caption="Unshare — the server refuses while another project's profile uses the model" />
