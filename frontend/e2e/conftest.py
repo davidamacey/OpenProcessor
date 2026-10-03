@@ -359,6 +359,28 @@ class Stub:
                 },
                 "batch": {"enabled": True, "max_items": 256, "source_roots": []},
                 "region_drain": {"poll_interval_s": 10, "stable_polls": 3},
+                # v0.4.0: no detector reported and the live default policy
+                # (revision 0, nothing filtered, embed every item).
+                "detector": None,
+                "policy": {
+                    "detect": {
+                        "min_confidence": None,
+                        "min_box_area_frac": None,
+                        "max_per_image": None,
+                        "classes": None,
+                        "exclude_classes": [],
+                        "class_resolution": "proposal",
+                    },
+                    "embedding": {
+                        "min_confidence": None,
+                        "min_box_area_frac": None,
+                        "max_per_image": None,
+                        "mode": "all",
+                        "classes": [],
+                    },
+                    "detector": None,
+                    "revision": 0,
+                },
             },
         )
         # K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
@@ -401,6 +423,17 @@ class Stub:
         # `GET {prefix}/projects/combine/<sentinel>` once. A plain 404 is the
         # "router not mounted" shape; Track B specs override it.
         self.on("GET", r"/projects/combine/[^/?]+(\?|$)", (404, {"detail": "Not Found"}))
+        # OpenProcessor v0.4.0 reads
+        # (docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §3 item 8).
+        # Default 404s so existing tests keep their zero-unhandled guarantee
+        # once the tracks add these reads: `/open_vocab` is the open-vocab
+        # editor's gate (404 = absent); the region stage, detections summary
+        # and ingest policy reads render their error line. Each track's
+        # specs override these with `stub.on(...)`.
+        self.on("GET", r"/open_vocab(\?|$)", (404, {"detail": "Not Found"}))
+        self.on("GET", r"/region_stage(\?|$)", (404, {"detail": "Not Found"}))
+        self.on("GET", r"/detections/summary(\?|$)", (404, {"detail": "Not Found"}))
+        self.on("GET", r"/ingest/policy(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 

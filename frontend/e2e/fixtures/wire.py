@@ -291,6 +291,14 @@ _EXPLICIT: dict[str, Any] = {
     "combine_conflict": False,
     "combine_conflict_origins": [],
     "combine_merged_origins": [],
+    # v0.4.0 item keys (backend fce17771): an ordinary embedded item that no
+    # open-vocabulary pass found and no region gate skipped.
+    "embedding_state": "embedded",
+    "source_prompt": None,
+    "open_vocab_set": None,
+    "open_vocab_revision": None,
+    "mask_polygon": None,
+    "region_gate_skip": None,
     # Backend main 22a3e65 (dq-region), adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
