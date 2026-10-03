@@ -2523,9 +2523,21 @@ owner decision) — reconstructable from the URL, so nothing is persisted.
   re-read the list.
 - **`/projects`** — see the Routes table. Wire types in
   `src/lib/types_projects.ts`, pinned key-for-key to the vendored OpenAPI
-  by `src/lib/contract/projectsContract.test.ts` (the `DELETE
-/projects/{project}` response and `capacity` are untyped in the served
-  OpenAPI, so they are documented, not pinned).
+  by `src/lib/contract/projectsContract.test.ts`: `capacity` is the typed
+  `ProjectCapacityWire` (served `shards_after_create`, and `limit_source`:
+  `heap` or `cluster_max_shards_per_node`, are carried; the served
+  `message` already states both facts, so there is no extra copy), and
+  `DeleteDryRunResponse` is pinned too. Only its `referenced_by` rows are
+  served as bare objects; `project` and `profile` are the keys read.
+  OpenProcessor v0.4.0 (fce17771) additions: an "Embedded" column
+  (`counts.items_embedded`, via `formatCount`, "—" when null) and, in
+  `DeleteProjectDialog`, the dry run's `referenced_by` listed ("`<project>`
+  uses a shared model (profile `<profile>`)"; blocking is still decided by
+  the served `blocking` alone), a 409 `in_use` showing the served message
+  plus its `used_by` (else `projects`), and a 503 `config_store_unavailable`
+  showing the served message with a Retry (re-runs the dry run, or resends
+  the same confirm). No force option is offered for the delete. Failed
+  lifecycle results carry the served `ProjectErrorDetail` as `detail`.
 - **Tests:** `projectPaths.test.ts`, `stores/projects.svelte.test.ts`,
   `stores/projectSwitchResets.test.ts`, `api.projectLifecycle.test.ts`
   (wrappers + stale guard), `projects/projectsAdminController.test.ts`,
@@ -2605,6 +2617,10 @@ typed as the backend builds them, every field optional.
   `CropMetaPanel`): origin project/item/image/split, an amber "Conflict
   between sources" chip with `combine_conflict_origins`, and
   `combine_merged_origins`, only when `origin_project` is non-null.
+- **v0.4.0 preview warnings.** `embedding_model_mismatch` and
+  `region_profiles_differ` are served as ordinary preview `warnings` and
+  render verbatim through `CombineIssueList` (served message and code; no
+  client wording, no code change); the preview stays startable.
 - **Recluster step.** The served `next_steps[0]` is
   `POST /cluster/umap/rebuild` (project-relative, OpenProcessor f14f4ddc);
   `endpointCatalog.test.ts`'s `runCombineNextStep` override is anchored to

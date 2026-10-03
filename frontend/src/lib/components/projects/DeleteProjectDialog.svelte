@@ -8,6 +8,11 @@
    * is no confirm field. Otherwise the operator types the slug and the
    * real delete sends it as `confirm`; any refusal (`project_protected`,
    * `project_busy`, `confirm_mismatch`, ...) renders its served message.
+   * A dry run's served `referenced_by` rows (another project's active
+   * profile uses a model this project shares) are listed; a 409 `in_use`
+   * shows its served `projects` / `used_by`; a 503
+   * `config_store_unavailable` shows its message with a Retry. No force
+   * is offered for any of them.
    * Only offered at all when the project's served `deletable` is true.
    * `title` renames the action for a combine target ("Undo combine" —
    * undoing a combine is deleting the target, projects_plan §6); the dry
@@ -16,7 +21,12 @@
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import type { ProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
-  import type { DeleteDryRunResponse, ProjectSummary } from '$lib/types_projects';
+  import { usedByText } from '$lib/modelSharing';
+  import type {
+    DeleteDryRunResponse,
+    ProjectErrorDetail,
+    ProjectSummary,
+  } from '$lib/types_projects';
   import { toastStore } from '$stores/toast.svelte';
 
   interface Props {
@@ -33,22 +43,47 @@
   let typed = $state('');
   let busy = $state(false);
   let errorText = $state<string | null>(null);
+  let dryRunCode = $state<string | null>(null);
+  let errorDetail = $state<ProjectErrorDetail | null>(null);
+  let attempt = $state(0);
 
   $effect(() => {
     const p = project;
+    void attempt;
     if (!p) return;
     report = null;
     dryRunError = null;
-    typed = '';
+    dryRunCode = null;
     errorText = null;
+    errorDetail = null;
     loadingReport = true;
     void admin.dryRunDelete(p).then((res) => {
       if (project?.slug !== p.slug) return;
       loadingReport = false;
       if (res.ok) report = res.report;
-      else dryRunError = res.message;
+      else {
+        dryRunError = res.message;
+        dryRunCode = res.code;
+      }
     });
   });
+
+  $effect(() => {
+    void project?.slug;
+    typed = '';
+  });
+
+  /** The served projects behind a 409 `in_use`: `used_by` rows when
+   *  served, else the bare `projects` slugs. */
+  const inUseText = $derived.by(() => {
+    const d = errorDetail;
+    if (!d || d.error !== 'in_use') return null;
+    if (d.used_by && d.used_by.length > 0) return usedByText(d.used_by);
+    return d.projects && d.projects.length > 0 ? d.projects.join(', ') : null;
+  });
+  const canRetry = $derived(
+    (errorDetail?.error ?? dryRunCode) === 'config_store_unavailable',
+  );
 
   /** Served blocking reasons: the structured detail when served, else
    *  the bare codes. */
@@ -77,6 +112,7 @@
     if (!project) return;
     busy = true;
     errorText = null;
+    errorDetail = null;
     const res = await admin.remove(project, typed.trim());
     busy = false;
     if (res.ok) {
@@ -86,7 +122,13 @@
       onclose();
     } else {
       errorText = res.message;
+      errorDetail = res.detail;
     }
+  }
+
+  async function retry(): Promise<void> {
+    if (report) await submit();
+    else attempt += 1;
   }
 </script>
 
@@ -122,6 +164,14 @@
         <p class="mb-3 text-xs text-red-300" data-testid="delete-project-dry-run-error">
           {dryRunError}
         </p>
+        {#if canRetry}
+          <button
+            type="button"
+            class="btn mb-3"
+            data-testid="delete-project-retry"
+            onclick={retry}>Retry</button
+          >
+        {/if}
       {:else if report}
         <div
           class="mb-3 max-h-56 overflow-auto rounded border border-zinc-800 p-2 text-xs"
@@ -149,6 +199,23 @@
             <p class="mt-2 text-amber-300">{report.running_jobs.length} running job(s)</p>
           {/if}
         </div>
+        {#if report.referenced_by.length > 0}
+          <div
+            class="mb-3 rounded border border-amber-900 bg-amber-950/40 px-2 py-1.5 text-xs text-amber-200"
+            data-testid="delete-project-references"
+          >
+            <p class="mb-1 font-semibold">Used by other projects:</p>
+            <ul class="list-inside list-disc">
+              {#each report.referenced_by as r (`${r.project}/${r.profile ?? ''}`)}
+                <li>
+                  <span class="font-mono">{r.project}</span> uses a shared model{r.profile
+                    ? ' (profile '
+                    : ''}{#if r.profile}<span class="font-mono">{r.profile}</span>){/if}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
         {#if blocking.length > 0}
           <div
             class="mb-3 rounded border border-red-900 bg-red-950/40 px-2 py-1.5 text-xs text-red-200"
@@ -189,7 +256,21 @@
             {errorText}
           </p>
         {/if}
+        {#if inUseText}
+          <p class="mb-3 text-xs text-zinc-300" data-testid="delete-project-in-use">
+            In use by: <span class="font-mono">{inUseText}</span>
+          </p>
+        {/if}
         <div class="flex items-center justify-end gap-2">
+          {#if canRetry && report}
+            <button
+              type="button"
+              class="btn"
+              data-testid="delete-project-retry"
+              onclick={retry}
+              disabled={busy}>Retry</button
+            >
+          {/if}
           <button type="button" class="btn" onclick={onclose} disabled={busy}
             >Cancel</button
           >
