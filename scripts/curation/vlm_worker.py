@@ -111,8 +111,14 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
     in Python.
     """
     # Lazy: keeps the module import light; src.config is all this pulls in.
-    from src.services.curation.ingest_class_sources import classifier_class_sources
-    from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
+    from src.services.curation.ingest_class_sources import (
+        OPEN_VOCAB_TARGET_CLASS_SOURCE,
+        classifier_class_sources,
+    )
+    from src.services.curation.vlm_class_attempt import (
+        VLM_CLASS_ATTEMPTED_AT_FIELD,
+        recent_empty_answer_clause,
+    )
 
     must_not: list[dict] = [
         {'term': {'class_validated': True}},
@@ -158,6 +164,18 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
                     # VLM already failed once — won't help to retry:
                     'vlm_unmatched',
                     'vlm_new_class_pending',
+                ],
+            },
+        },
+    )
+    # A user-named open-vocabulary class is never relabeled; the VLM is asked
+    # once so its answer can ride along as a suggestion.
+    must_not.append(
+        {
+            'bool': {
+                'filter': [
+                    {'terms': {'class_source': [OPEN_VOCAB_TARGET_CLASS_SOURCE]}},
+                    {'exists': {'field': VLM_CLASS_ATTEMPTED_AT_FIELD}},
                 ],
             },
         },

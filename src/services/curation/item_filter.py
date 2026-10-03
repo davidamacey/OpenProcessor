@@ -72,6 +72,9 @@ class ItemFilter(BaseModel):
     # Provenance of an item a full-image SAM 3 pass wrote.
     open_vocab_set: str | None = None
     source_prompt: str | None = None
+    # True: only items the region gate skipped (``region_gate_skip`` set; the
+    # segmenter was never asked, so they are safe to re-run).
+    region_gate_skipped: bool | None = None
 
     def is_empty(self) -> bool:
         return self == type(self)()
@@ -192,6 +195,10 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         from src.services.curation.review_queries import negative_frame_clause
 
         out.append(negative_frame_clause(f.on_negative_frame))
+    if f.region_gate_skipped is not None:
+        from src.config.region_fields import get_region_fields
+
+        out.append(_present(get_region_fields().gate_skip, f.region_gate_skipped))
     if f.needs_new_class is not None:
         out.append(_flag('needs_new_class', f.needs_new_class))
     if f.review_dismissed is not None:

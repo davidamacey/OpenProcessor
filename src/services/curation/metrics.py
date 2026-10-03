@@ -137,6 +137,20 @@ OP_THUMBNAIL_CACHE_MISSES = Counter(
 # histograms cannot.
 # ---------------------------------------------------------------------------
 
+# Crop-stage segmenter calls per profile and item class: the hit rate is
+# calls{outcome=hit} / all calls; seconds{outcome=miss} is the time spent on
+# calls that found nothing (what the tier-3 gate exists to cut).
+OP_REGION_SEGMENTER_CALLS_TOTAL = Counter(
+    'op_region_segmenter_calls_total',
+    'Crop-stage segmenter calls, by region profile, item class and outcome.',
+    labelnames=('profile', 'class_name', 'outcome'),  # hit / miss
+)
+OP_REGION_SEGMENTER_SECONDS_TOTAL = Counter(
+    'op_region_segmenter_seconds_total',
+    'Wall-clock seconds of crop-stage segmenter calls, by profile, item class and outcome.',
+    labelnames=('profile', 'class_name', 'outcome'),  # hit / miss
+)
+
 OP_STAGE_A_SEGMENTER_DURATION_SECONDS = Histogram(
     'op_stage_a_segmenter_duration_seconds',
     'Stage A segmenter segment call duration in seconds.',
@@ -297,6 +311,8 @@ __all__ = [
     'OP_OPEN_VOCAB_CALL_SECONDS',
     'OP_OPEN_VOCAB_HITS_DROPPED_TOTAL',
     'OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL',
+    'OP_REGION_SEGMENTER_CALLS_TOTAL',
+    'OP_REGION_SEGMENTER_SECONDS_TOTAL',
     'OP_SEGMENTER_CIRCUIT_OPEN_TOTAL',
     'OP_SEGMENTER_GATE_DECISIONS_TOTAL',
     'OP_SEGMENTER_REQUEST_INFLIGHT_SECONDS',

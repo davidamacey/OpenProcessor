@@ -67,6 +67,25 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - `python export/export_models.py --overwrite-config`: `--generate-config` now writes
   `config.pbtxt.generated` beside a tracked `config.pbtxt` that differs instead of
   replacing it (#59).
+- Open-vocabulary follow-ups: images of the pass run concurrently up to
+  `OP_OPEN_VOCAB_CONCURRENCY` (default 4); a reprocess job reports `images_done`
+  and `updated_at` after every image; the dry-run estimate uses the measured
+  per-call latency instead of a fixed 3 s; a sweeper (`OP_OPEN_VOCAB_SWEEP_S`,
+  default 120, 0 = off) finishes ingest-time passes a restart left `pending`.
+- A target with a `class_name` writes `class_source: open_vocab_target`: the VLM
+  never relabels it and its answer is kept as the name-only suggestion
+  `vlm_proposed_class_name`. A discovery hit stays `open_vocab_proposal`.
+- Region stage cost control (GH #46): optional per-class hit-rate gate on the
+  crop segmenter (region profile fields `gate_hit_rate`, `gate_hit_window`,
+  `gate_hit_miss_threshold`, `gate_hit_sample_floor`; off by default, never for an
+  item whose class a human owns or validated). A skipped item is written as
+  `no_region_box` with the new item field `region_gate_skip` and re-run with the
+  reprocess filter `region_gate_skipped`. `GET /region_stage`,
+  `POST /region_stage/pause` and `POST /region_stage/resume` (under
+  `/curation/projects/{project}`) pause only the region stage of a project
+  without losing data and report pending and skipped counts plus the re-run
+  request. Worker metrics `op_region_segmenter_calls_total` and
+  `op_region_segmenter_seconds_total` (profile, class, hit or miss).
 
 ### Documentation
 - Full v0.4.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
@@ -88,6 +107,10 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   anchor that does not resolve.
 
 ### Changed
+- Open-vocabulary dedup compares labels: a hit's label is its class name or its
+  prompt, an existing item's label is its class name or the detector's own label.
+  A box with no label no longer absorbs a hit, and two discovery prompts no longer
+  suppress each other.
 - The VLM stage (worker and auto-label sweep) works on embedded items only; one shared clause (`embedding_state.embedded_clause`) now defines "has a vector" for every consumer.
 - The quick start, README and `env.template` no longer tell users to set `OP_INGEST_PRIMARY_CLASS_IDS`; the stock detector keeps its full 80-class vocabulary, stored as unlabeled proposals.
 - `OP_INGEST_PRIMARY_CLASS_IDS` is retired and ignored (a `retired_env_ignored` warning is logged); use the per-project detect filter instead. Remove it from your `.env`.

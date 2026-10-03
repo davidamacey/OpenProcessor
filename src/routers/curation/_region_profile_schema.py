@@ -41,6 +41,7 @@ GROUPS: tuple[RegionProfileGroup, ...] = (
     RegionProfileGroup(id='items', label='Which items'),
     RegionProfileGroup(id='detector', label='Detector'),
     RegionProfileGroup(id='segmenter', label='Segmenter'),
+    RegionProfileGroup(id='gating', label='Segmenter gating'),
     RegionProfileGroup(id='verify', label='Verification'),
     RegionProfileGroup(id='text', label='Text reading'),
     RegionProfileGroup(id='advanced', label='Advanced'),
@@ -79,6 +80,10 @@ _CORE = frozenset(
 
 _HELP: dict[str, str] = {
     'parent_classes': 'Item classes that get the region stage. Empty means every item.',
+    'gate_hit_rate': (
+        'Skip the segmenter for an item class that keeps missing; the class is still sampled '
+        'so it can recover. Skipped items stay re-runnable.'
+    ),
     'detector_model': 'Triton detector that proposes boxes. Empty turns the detector leg off.',
     'confidence_floor': 'Detections scoring below this are dropped.',
     'max_regions_per_item': 'Boxes kept per item. Above 1 enables multi-box regions.',
@@ -95,6 +100,8 @@ def _group(name: str) -> str:
         return 'items'
     if name in _VERIFY:
         return 'verify'
+    if name.startswith('gate_'):
+        return 'gating'
     if name.startswith('segmenter_'):
         return 'segmenter'
     if name.startswith(('text_', 'ocr_')):
@@ -118,7 +125,7 @@ def _applies_when(name: str) -> AppliesWhen | None:
         return 'text_hint'
     if name.startswith(('text_', 'ocr_')) and name != 'text_reader':
         return 'reads_text'
-    if name.startswith('segmenter_'):
+    if name.startswith(('segmenter_', 'gate_')):
         return 'segmenter'
     if name.startswith('detector_') or name in ('input_size', 'confidence_floor', 'batch_limit'):
         return 'detector'

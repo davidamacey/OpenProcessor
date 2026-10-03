@@ -66,6 +66,7 @@ All fields are optional but at least one must be set.
 | `profile_not`, `profile_revision_below` | Items not produced by that region profile, or by a revision below the number. Given together: not produced by exactly that profile at that revision |
 | `include_detected` | Widen the region scope to `detected` items. Only valid with a profile selector |
 | `missing_provenance` | Items with no recorded detector |
+| `region_gate_skipped` | Items the region gate skipped (`region_gate_skip` set): the segmenter was never asked, so they are safe to re-run with scope `region` |
 | `import_id` | Items from one dataset import |
 | `source`, `class_id`, `dataset_split` | Narrow by item source, class or split |
 | `all_images` | Every stored image, including images with no item yet. For the image scopes only; not combined with the item selectors |

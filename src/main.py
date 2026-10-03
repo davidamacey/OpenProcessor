@@ -84,6 +84,7 @@ class AppResources:
     curation_knn_warmup_task: asyncio.Task[None] | None = None
     project_registry_poll_task: asyncio.Task[None] | None = None
     config_store_poll_task: asyncio.Task[None] | None = None
+    open_vocab_sweeper_task: asyncio.Task[None] | None = None
     event_bus_started: bool = False
 
 
@@ -330,6 +331,11 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
+    # Resume ingest-time open-vocabulary passes a restart left pending.
+    from src.services.curation.open_vocab_sweeper import start_open_vocab_sweeper
+
+    AppResources.open_vocab_sweeper_task = start_open_vocab_sweeper()
+
     logger.info(
         'service_ready',
         triton_url=settings.triton_url,
@@ -352,6 +358,11 @@ async def lifespan(app: FastAPI):
             await AppResources.arbiter_task
         AppResources.arbiter_task = None
         logger.info('gpu_arbiter_loop_stopped')
+
+    from src.services.curation.open_vocab_sweeper import stop_open_vocab_sweeper
+
+    await stop_open_vocab_sweeper(AppResources.open_vocab_sweeper_task)
+    AppResources.open_vocab_sweeper_task = None
 
     from src.services.projects.bootstrap import shutdown_project_registry
 

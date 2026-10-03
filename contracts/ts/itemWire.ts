@@ -104,6 +104,7 @@ export interface ItemWire {
   region_label_source: string | null;
   region_pairing: unknown;
   region_skip_verify: boolean | null;
+  region_gate_skip: string | null;
   region_boxes: Record<string, unknown>[];
   region_count: number;
   region_rejected_count: number;
@@ -220,6 +221,7 @@ export const ITEM_WIRE_KEYS = [
   'region_label_source',
   'region_pairing',
   'region_skip_verify',
+  'region_gate_skip',
   'region_boxes',
   'region_count',
   'region_rejected_count',
@@ -264,6 +266,7 @@ export const REGION_WIRE_KEYS = [
   'region_label_source',
   'region_pairing',
   'region_skip_verify',
+  'region_gate_skip',
 ] as const satisfies readonly ItemWireKey[];
 
 export type RegionWireKey = (typeof REGION_WIRE_KEYS)[number];

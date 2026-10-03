@@ -106,6 +106,10 @@ class RegionFields:
     # a literal with no matching attribute, add the attribute." (See
     # docs/design/curation_design_rationale.md §4.)
     skip_verify: str = 'region_skip_verify'
+    # Why the segmenter was NOT asked about this item (the crop gate's
+    # ``tier<N>_<reason>``): set with a ``no_region_box`` status, cleared by a
+    # region requeue. A skipped item is not a miss: it was never looked at.
+    gate_skip: str = 'region_gate_skip'
 
     # Legacy-suffixed columns kept for rollback (e.g. roi_*_legacy).
     status_legacy: str = 'region_status_legacy'

@@ -32,6 +32,10 @@ DEFAULT_PROPOSAL_CLASS_SOURCE = 'unlabeled_proposal'
 # Items the open-vocabulary SAM 3 pass writes: machine output named by the
 # prompt that found it, awaiting a human or VLM decision (never locked).
 OPEN_VOCAB_CLASS_SOURCE = 'open_vocab_proposal'
+# An open-vocabulary hit whose target NAMES a class: the class is the user's
+# word for what the prompt finds, so the VLM never relabels it (its answer
+# is kept as a suggestion, see ``keep_target_class``).
+OPEN_VOCAB_TARGET_CLASS_SOURCE = 'open_vocab_target'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
 # ``label_source`` (not ``class_source``) value stamped by dataset import
@@ -88,6 +92,7 @@ __all__ = [
     'LABEL_IMPORT_CLASS_SOURCE',
     'LABEL_SOURCE_IMPORT',
     'OPEN_VOCAB_CLASS_SOURCE',
+    'OPEN_VOCAB_TARGET_CLASS_SOURCE',
     'VLM_CLASS_SOURCE',
     'classifier_class_sources',
     'confident_class_sources',

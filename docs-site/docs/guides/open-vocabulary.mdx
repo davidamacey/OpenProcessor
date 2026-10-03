@@ -38,11 +38,15 @@ and project `cars` are assumed.
   number of enabled targets.
 - **A target named like a detector class** is a warning, not an error. The
   detector is the cheaper source for that class, but the set is yours.
-- **Provenance.** Every hit carries `class_source: open_vocab_proposal`,
-  `class_detector: sam3`, `source_prompt`, `open_vocab_set` and
-  `open_vocab_revision`, and (with `mask`) a `mask_polygon` in the source
-  frame. The item is machine output until a person or the VLM decides its
-  class, so the lock rule never protects it.
+- **Provenance.** Every hit carries `class_detector: sam3`, `source_prompt`,
+  `open_vocab_set` and `open_vocab_revision`, and (with `mask`) a
+  `mask_polygon` in the source frame. A target with a `class_name` writes
+  `class_source: open_vocab_target`: the class is your word for what the prompt
+  finds, so the VLM never relabels it; its answer is kept as the name-only
+  suggestion `vlm_proposed_class_name`, and a person's decision turns the item
+  into a human label. A discovery hit writes `class_source: open_vocab_proposal`
+  and stays machine output the VLM may label. Filter by `source_prompt` or
+  `open_vocab_set` to find either kind.
 - **Embeddings.** A hit is stored and indexed through the same writer as every
   other item, so whatever the project's embedding policy says about a stored
   detection applies to it.
@@ -100,17 +104,22 @@ curl -s -X POST "$API/curation/projects/cars/reprocess" \
 
 `detail` carries `enabled_targets`, `estimated_calls`, `segmenter_instances`,
 `segmenter_reachable` and `estimated_minutes`; `locked_skipped` counts locked
-items on those images. About 3 seconds per call is the planning figure; images
-per second is roughly `instances / (targets x seconds per call)`. Two targets
-on one instance is about 10 images a minute. Over `OP_REPROCESS_SYNC_MAX`
-images the run is a background job.
+items on those images. The estimate is calls times the measured per-call time
+(a moving average over this API process's calls; 0.36 s, the figure measured on
+the reference stack, until it has made one) divided by the calls in flight:
+the smaller of the segmenter's instance count and `OP_OPEN_VOCAB_CONCURRENCY`
+(images in flight, default 4) times the enabled targets. Over
+`OP_REPROCESS_SYNC_MAX` images the run is a background job whose `images_done`
+and `updated_at` advance after every image.
 
 At ingest: set `run_on_ingest: true` in the active set. Newly created images
-are stamped `open_vocab_status: pending` and processed by a background task, one
-image at a time, never inside the ingest request. Whatever the task does not
-reach (segmenter down, restart) stays `pending`; run the scope with
-`{"filter": {"open_vocab_status": ["pending"]}}` to pick it up. The other
-states are `done`, `skipped_gate` (the gate spent no call) and `failed`.
+are stamped `open_vocab_status: pending` and processed by a background task,
+never inside the ingest request. Whatever the task does not reach (segmenter
+down, restart) stays `pending`; a sweeper in the API (`OP_OPEN_VOCAB_SWEEP_S`,
+default every 120 s, 0 turns it off) takes `pending` images older than ten
+minutes while the active set has `run_on_ingest` on, or run the scope with
+`{"filter": {"open_vocab_status": ["pending"]}}` yourself. The other states are
+`done`, `skipped_gate` (the gate spent no call) and `failed`.
 
 A run is idempotent: ids are deterministic in (image, box), so a re-run
 upserts. Output of the same set that a re-run no longer produces is removed
@@ -120,17 +129,22 @@ after three images in a row.
 
 ## Duplicates and the lock rule
 
-A hit is dropped when an existing item of the same class name overlaps it at
+A hit is dropped when an existing item with the same label overlaps it at
 `dedup_iou` or more (the existing item wins) and, whatever its class, when a
 locked item (human or imported label, locked box) overlaps it at 0.8 or more.
 A locked item is never overwritten, replaced or deleted. A hit on exactly the
 box of an item of another class is dropped too (`id_collision`), because it
-would overwrite that item. Different classes on overlapping boxes otherwise
-coexist.
+would overwrite that item. Different labels on overlapping boxes otherwise
+coexist. The label of a hit is its target's `class_name`, or its prompt in
+discovery mode; the label of an existing item is its `class_name` or, for an
+unlabeled detector proposal, the detector's own label. A box with no label at
+all cannot agree with anything, so a hit over it is kept.
 
 ## The segmenter gate
 
-Whether to spend a call is one function shared with the crop region stage:
+Whether to spend a call is one function shared with the crop region stage (which applies tier 1 when it picks items, tier 2 as its
+batched visibility check and tier 3 per item class, see the region profile's
+`gate_hit_rate`):
 
 1. **Registry rules.** The target is enabled and, if it names `parent_classes`,
    the image holds an item of one of them.

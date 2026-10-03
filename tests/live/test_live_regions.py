@@ -236,3 +236,27 @@ def test_region_thumbnail_serves_real_pixels(
     assert api_client.get(f'/crops/{crop_id}/region_thumbnail').status_code == 422
     assert resp.headers['content-type'].startswith('image/')
     assert len(resp.content) > 100
+
+
+def test_region_stage_pause_resume_round_trip(api_client: Any) -> None:
+    state = api_client.get('/region_stage')
+    assert state.status_code == 200, state.text
+    body = state.json()
+    assert set(body['counts']) == {'pending_detection', 'pending_verification', 'gate_skipped'}
+    assert body['rerun_skipped']['scopes'] == ['region']
+    assert body['rerun_skipped']['dry_run'] is True
+
+    try:
+        paused = api_client.post('/region_stage/pause')
+        assert paused.status_code == 200, paused.text
+        assert paused.json()['paused'] is True
+        assert paused.json()['paused_since']
+        assert api_client.get('/region_stage').json()['paused'] is True
+    finally:
+        resumed = api_client.post('/region_stage/resume')
+    assert resumed.status_code == 200, resumed.text
+    assert resumed.json()['paused'] is False
+
+    dry = api_client.post('/reprocess', json=body['rerun_skipped'])
+    assert dry.status_code == 200, dry.text
+    assert dry.json()['dry_run'] is True

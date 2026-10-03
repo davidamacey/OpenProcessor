@@ -88,6 +88,10 @@ class RegionProfileBody(BaseModel):
     segmenter_text_prompt: str = ''
     secondary_shape_groups: list[str] = Field(default_factory=list)
     parent_classes: list[str] = Field(default_factory=list)
+    gate_hit_rate: bool = False
+    gate_hit_window: int = 20
+    gate_hit_miss_threshold: int = 15
+    gate_hit_sample_floor: float = 0.1
     assigns_class: bool = False
     labels_path: str = ''
     region_class_name: str = ''

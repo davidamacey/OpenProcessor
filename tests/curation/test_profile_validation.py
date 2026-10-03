@@ -130,6 +130,9 @@ def test_text_regex_invalid() -> None:
         ('max_regions_per_item', 65),
         ('confidence_floor', 1.1),
         ('region_nms_iou', 0),
+        ('gate_hit_window', 0),
+        ('gate_hit_miss_threshold', 0),
+        ('gate_hit_sample_floor', 1.5),
     ],
 )
 def test_field_ranges_out_of_bounds(field: str, value: float) -> None:
@@ -150,6 +153,17 @@ def test_input_size_must_be_multiple_of_32() -> None:
     body = _body(input_size=100)
     report = _run(validate_profile(None, body))
     assert any(e.code == 'profile_field_range' and e.field == 'input_size' for e in report.errors)
+
+
+def test_gate_miss_threshold_cannot_exceed_its_window() -> None:
+    body = _body(gate_hit_rate=True, gate_hit_window=10, gate_hit_miss_threshold=11)
+    report = _run(validate_profile(None, body))
+    assert any(
+        e.code == 'profile_field_range' and e.field == 'gate_hit_miss_threshold'
+        for e in report.errors
+    )
+    ok = _run(validate_profile(None, _body(gate_hit_rate=True)))
+    assert not [e for e in ok.errors if e.field and e.field.startswith('gate_')]
 
 
 def test_auto_confirm_area_frac_range() -> None:

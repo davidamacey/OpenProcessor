@@ -10,6 +10,7 @@ remaining one; the images it did not reach are counted, never marked done.
 
 from __future__ import annotations
 
+import asyncio
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +18,7 @@ from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.config_store import get_config_store
 from src.services.config_store.open_vocab import active_open_vocab_set
+from src.services.curation.dataset_import.limits import open_vocab_concurrency
 from src.services.curation.open_vocab_gate import active_vlm_visible, load_tracker, save_tracker
 from src.services.curation.open_vocab_run import (
     GateContext,
@@ -27,6 +29,7 @@ from src.services.curation.open_vocab_run import (
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_models import ReprocessScopeResult
 from src.services.curation.reprocess_targets import ReprocessTargetsError, items_by_terms
+from src.services.detection import segmenter_latency
 from src.services.detection.segmenter_http import (
     SegmenterCallError,
     first_segmenter_url,
@@ -35,6 +38,8 @@ from src.services.detection.segmenter_http import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.ingest import CurationIngestService
@@ -42,9 +47,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-#: Planning figure for one segmenter call on a full image (a miss costs the
-#: same as a hit); the dry run's minutes are calls x this / instances.
-ESTIMATED_SECONDS_PER_CALL = 3
 MAX_CONSECUTIVE_OUTAGES = 3
 
 
@@ -78,7 +80,10 @@ async def plan_open_vocab_scope(
     url = first_segmenter_url()
     instances = await segmenter_instances(url) if url else None
     calls = len(image_ids) * targets
-    minutes = math.ceil(calls * ESTIMATED_SECONDS_PER_CALL / (instances or 1) / 60)
+    # Calls in flight are capped by the pass's image concurrency (each image
+    # fans out one call per target) and by what the segmenter can run at once.
+    parallel = max(1, min(instances or 1, open_vocab_concurrency() * max(1, targets)))
+    minutes = math.ceil(calls * segmenter_latency.seconds_per_call() / parallel / 60)
     locked = 0
     if image_ids:
         docs = await items_by_terms(
@@ -207,9 +212,43 @@ class OpenVocabPass:
             if key != 'locked_untouched':
                 self._add(key, value)
 
+    async def run_images(
+        self,
+        opensearch: AsyncOpenSearch,
+        service: CurationIngestService,
+        docs: Mapping[str, dict[str, Any]],
+        *,
+        should_cancel: Callable[[], bool] = lambda: False,
+        on_image: Callable[[], None] | None = None,
+    ) -> bool:
+        """:meth:`run_image` over ``docs`` with up to
+        :func:`~...limits.open_vocab_concurrency` images in flight, so the
+        segmenter's instances are not idle while one image waits on another.
+        ``on_image`` fires after each image (done, skipped or failed) for
+        per-image progress. After a trip every remaining image is counted
+        ``not_attempted_segmenter_down``; ``True`` when ``should_cancel`` stopped
+        the run (the images it did not reach are neither counted nor stamped)."""
+        slots = asyncio.Semaphore(open_vocab_concurrency())
+        cancelled = False
+
+        async def one(image_id: str, doc: dict[str, Any]) -> None:
+            nonlocal cancelled
+            async with slots:
+                if should_cancel():
+                    cancelled = True
+                    return
+                if self.tripped:
+                    self.skip()
+                else:
+                    await self.run_image(opensearch, service, image_id, doc)
+            if on_image is not None:
+                on_image()
+
+        await asyncio.gather(*(one(i, d) for i, d in docs.items()))
+        return cancelled
+
 
 __all__ = [
-    'ESTIMATED_SECONDS_PER_CALL',
     'MAX_CONSECUTIVE_OUTAGES',
     'OpenVocabPass',
     'active_set_for_run',
