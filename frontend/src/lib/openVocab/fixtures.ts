@@ -16,6 +16,7 @@ import type {
   OpenVocabSchema,
   OpenVocabSummary,
   OpenVocabTestResponse,
+  OpenVocabVocabulary,
 } from '$lib/types_openVocab';
 
 export const cleanReport = (): ValidationReport => ({
@@ -57,9 +58,37 @@ const row = (over: Partial<OpenVocabFieldSchema>): OpenVocabFieldSchema => ({
   ...over,
 });
 
+export function vocabularyFixture(): OpenVocabVocabulary {
+  return {
+    statuses: [
+      { value: 'pending', label: 'Waiting for a pass' },
+      { value: 'done', label: 'Pass finished' },
+      { value: 'skipped_gate', label: 'Skipped by the gate' },
+      { value: 'failed', label: 'Pass failed' },
+    ],
+    drop_reasons: [
+      { value: 'below_min_score', label: 'Scored below the target minimum' },
+      { value: 'too_small', label: 'Smaller than the target allows' },
+      { value: 'too_large', label: 'Larger than the target allows' },
+      { value: 'nms', label: 'Overlapped a better hit' },
+      { value: 'over_max', label: 'Beyond the most instances' },
+      { value: 'cross_target_nms', label: 'Overlapped another target' },
+      { value: 'agree_existing', label: 'Matches an item already there' },
+      { value: 'skipped_locked', label: 'Skipped: the item is locked' },
+    ],
+    gate_reasons: [
+      { value: 'disabled', label: 'The target is disabled' },
+      { value: 'no_parent_class', label: 'No parent class on the image' },
+      { value: 'vlm_no', label: 'The VLM pre-check said no' },
+      { value: 'hit_rate', label: 'Its recent hit rate is too low' },
+    ],
+  };
+}
+
 export function schemaFixture(): OpenVocabSchema {
   return {
     max_enabled_targets_ceiling: 16,
+    vocabulary: vocabularyFixture(),
     fields: [
       row({ scope: 'set', field: 'display_name', label: 'Display name' }),
       row({
@@ -218,6 +247,7 @@ export function listFixture(over: Partial<OpenVocabList> = {}): OpenVocabList {
     active: { name: null, revision: null },
     config_revision: 7,
     stale: false,
+    segmenter: { configured: true, reachable: true },
     ...over,
   };
 }

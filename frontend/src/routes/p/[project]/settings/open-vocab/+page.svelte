@@ -11,6 +11,7 @@
   import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
   import OpenVocabRerunPanel from '$components/openVocab/OpenVocabRerunPanel.svelte';
+  import SegmenterNotice from '$components/openVocab/SegmenterNotice.svelte';
   import type { CloneSource } from '$lib/config/configList.svelte';
   import { formatTimestamp } from '$lib/formatDate';
   import { openVocabAvailability } from '$lib/openVocab/openVocabAvailability.svelte';
@@ -95,6 +96,8 @@
     unavailableText="Open-vocabulary sets are not available on this backend."
     testid="open-vocab-unavailable"
   >
+    <SegmenterNotice segmenter={list.list?.segmenter ?? null} />
+
     <ConfigActivePanel
       ctl={list.active}
       copy={OPEN_VOCAB_ACTIVE_COPY}
@@ -230,7 +233,10 @@
         </section>
       {/if}
 
-      <OpenVocabRerunPanel active={list.active.active?.active.name != null} />
+      <OpenVocabRerunPanel
+        active={list.active.active?.active.name != null}
+        vocabulary={list.vocabulary}
+      />
     {/if}
   </ConfigGate>
 </div>

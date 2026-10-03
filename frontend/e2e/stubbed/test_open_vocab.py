@@ -12,7 +12,9 @@ not expect fails the test.
      `expected_revision`; a 409 offers "Keep my edits".
   4. `test_activation_refusal_offers_force_only_when_allowed`.
   5. `test_test_panel_draws_hits_and_words_a_dropped_one`.
-  6. `test_rerun_sends_the_all_images_open_vocab_request`.
+  6. `test_rerun_sends_the_all_images_open_vocab_request` — also one re-run
+     per served status, labelled by the served vocabulary.
+  7. `test_segmenter_fact_is_shown_as_served_and_hides_nothing`.
 
 Screenshots (1600 and 800 px) land in `artifacts_local/v040-ui/open-vocab/`
 and are looked at by hand; the assertions here do not replace that.
@@ -50,8 +52,27 @@ def _row(scope: str, field: str, label: str, type_: str, default: Any, **over: A
     return base
 
 
+VOCABULARY: dict[str, Any] = {
+    "statuses": [
+        {"value": "pending", "label": "Waiting for a pass"},
+        {"value": "done", "label": "Pass finished"},
+        {"value": "skipped_gate", "label": "Skipped by the gate"},
+        {"value": "failed", "label": "Pass failed"},
+    ],
+    "drop_reasons": [
+        {"value": "below_min_score", "label": "Scored below the target minimum"},
+        {"value": "nms", "label": "Overlapped a better hit"},
+        {"value": "agree_existing", "label": "Matches an item already there"},
+    ],
+    "gate_reasons": [
+        {"value": "no_parent_class", "label": "No parent class on the image"},
+        {"value": "vlm_no", "label": "The VLM pre-check said no"},
+    ],
+}
+
 SCHEMA: dict[str, Any] = {
     "max_enabled_targets_ceiling": 16,
+    "vocabulary": VOCABULARY,
     "fields": [
         _row("set", "display_name", "Display name", "string", "", help="What this set is called."),
         _row("set", "run_on_ingest", "Run on ingest", "bool", False, help="Run on every new image."),
@@ -162,6 +183,7 @@ LIST: dict[str, Any] = {
     "active": {"name": None, "revision": None},
     "config_revision": 7,
     "stale": False,
+    "segmenter": {"configured": True, "reachable": True},
 }
 
 REVISIONS = {
@@ -271,6 +293,20 @@ def test_list_new_set_and_clone_a_template(stub, page, app_url):
         dialog.get_by_role("button", name="Clone", exact=True).click()
     assert clones[0]["new_name"] == "mine" and clones[0]["source"] == "template", clones
     page.wait_for_url("**/settings/open-vocab/mine", timeout=ACTION_TIMEOUT_MS)
+
+
+def test_segmenter_fact_is_shown_as_served_and_hides_nothing(stub, page, app_url):
+    served = copy.deepcopy(LIST)
+    served["segmenter"] = {"configured": False, "reachable": False}
+    serve_open_vocab(stub, served)
+    page.goto(f"{app_url}/p/default/settings/open-vocab")
+    notice = page.get_by_test_id("segmenter-notice")
+    expect(notice).to_have_attribute("data-state", "not_configured", timeout=ACTION_TIMEOUT_MS)
+    expect(notice).to_contain_text("No segmenter is configured")
+    expect(page.get_by_test_id("open-vocab-row")).to_have_count(1)
+    open_editor(page, app_url)
+    expect(page.get_by_test_id("segmenter-notice")).to_have_attribute("data-state", "not_configured")
+    expect(page.get_by_test_id("target-row")).to_have_count(2)
 
 
 def test_edit_a_target_validate_save_and_resolve_a_conflict(stub, page, app_url):
@@ -470,7 +506,7 @@ def test_test_panel_draws_hits_and_words_a_dropped_one(stub, page, app_url):
             "dedup_iou": 0.5,
         }
     ], tests
-    expect(panel.get_by_test_id("ov-test-hit").nth(1)).to_contain_text("Agrees with an existing item")
+    expect(panel.get_by_test_id("ov-test-hit").nth(1)).to_contain_text("Matches an item already there")
     expect(panel.get_by_test_id("overlay-extra-box")).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     assert panel.get_by_test_id("overlay-extra-box").nth(1).get_attribute("data-dimmed") == "true"
     shoot(page, panel, "test-panel")
@@ -536,12 +572,32 @@ def test_rerun_sends_the_all_images_open_vocab_request(stub, page, app_url):
     page.goto(f"{app_url}/p/default/settings/open-vocab")
     panel = page.get_by_test_id("open-vocab-rerun")
     expect(panel).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    panel.get_by_test_id("reprocess-open").click()
+    shoot(page, page.locator("body"), "list-rerun")
+    panel.get_by_test_id("reprocess-open").first.click()
     dialog = page.get_by_role("dialog", name="Reprocess")
     with page.expect_request(lambda r: r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Check what would run").click()
+    expect(dialog.get_by_test_id("reprocess-dry-run")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert posts == [
         {"targets": {"filter": {"all_images": True}}, "scopes": ["open_vocab"], "dry_run": True}
     ], posts
-    expect(dialog.get_by_test_id("reprocess-dry-run")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert len(posts) == 1
+    dialog.get_by_role("button", name="Cancel").click()
+
+    labels = [b.inner_text().strip() for b in panel.get_by_test_id("reprocess-open").all()]
+    assert labels == [
+        "Run on all images…",
+        "Re-run: Waiting for a pass…",
+        "Re-run: Skipped by the gate…",
+        "Re-run: Pass failed…",
+    ], labels
+    panel.get_by_test_id("reprocess-open").nth(2).click()
+    with page.expect_request(lambda r: r.url.endswith("/reprocess")):
+        page.get_by_role("dialog", name="Reprocess").get_by_role("button", name="Check what would run").click()
+    expect(page.get_by_role("dialog", name="Reprocess").get_by_test_id("reprocess-dry-run")).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
+    assert posts[1] == {
+        "targets": {"filter": {"open_vocab_status": ["skipped_gate"]}},
+        "scopes": ["open_vocab"],
+        "dry_run": True,
+    }, posts

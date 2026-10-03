@@ -171,12 +171,20 @@ describe('observe (later /health polls)', () => {
   });
 });
 
-describe("a region route's 409 'no region profile is configured'", () => {
+describe("a region route's 409 'no_active_profile'", () => {
   function conflict(): Response {
-    return new Response(JSON.stringify({ detail: 'no region profile is configured' }), {
-      status: 409,
-      headers: { 'content-type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        detail: {
+          error: 'no_active_profile',
+          message: 'no region profile is configured',
+        },
+      }),
+      {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
   }
 
   it('throws RegionProfileUnavailableError (no retry) and triggers the reload notice', async () => {
@@ -196,6 +204,36 @@ describe("a region route's 409 'no region profile is configured'", () => {
     expect(toastStore.toasts).toEqual([]);
     toastStore.error('Save failed: something else');
     expect(toastStore.toasts).toHaveLength(1);
+  });
+
+  it('the retired plain-string detail is an ordinary ApiError now', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'no region profile is configured' }), {
+          status: 409,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+    const err = await apiFetch(`${API_PREFIX}/regions`).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(RegionProfileUnavailableError);
+  });
+
+  it('a structured 409 with another error code is an ordinary ApiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ detail: { error: 'region_conflict', message: 'stale' } }),
+            { status: 409, headers: { 'content-type': 'application/json' } },
+          ),
+        ),
+    );
+    const err = await apiFetch(`${API_PREFIX}/regions`).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(RegionProfileUnavailableError);
   });
 
   it('any other 409 is an ordinary ApiError', async () => {

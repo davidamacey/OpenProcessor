@@ -129,6 +129,7 @@ describe('/settings/open-vocab', () => {
         }),
       );
     await mountPage(ListPage);
+    expect(q('segmenter-notice')!.getAttribute('data-state')).toBe('ready');
     expect(all('open-vocab-row')).toHaveLength(1);
     expect(q('open-vocab-active-chip')!.textContent).toContain('active r3');
     expect(all('template-row')).toHaveLength(1);
@@ -161,6 +162,21 @@ describe('/settings/open-vocab', () => {
     await settle();
     const del = requests.find((r) => r.method === 'DELETE')!;
     expect(del.url).toContain('/open_vocab/widgets?expected_revision=3');
+  });
+});
+
+describe('segmenter fact', () => {
+  it('is shown as served on the list and the editor, and never hides them', async () => {
+    routes['GET /open_vocab'] = () =>
+      json(listFixture({ segmenter: { configured: true, reachable: false } }));
+    await mountPage(ListPage);
+    expect(q('segmenter-notice')!.getAttribute('data-state')).toBe('unreachable');
+    expect(all('open-vocab-row')).toHaveLength(1);
+    unmount(instance!);
+    instance = null;
+    await mountPage(EditorPage);
+    expect(q('segmenter-notice')!.getAttribute('data-state')).toBe('unreachable');
+    expect(all('target-row')).toHaveLength(2);
   });
 });
 

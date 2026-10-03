@@ -7,7 +7,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api';
 import type { CurationEvent } from '$lib/sse';
-import { activeFixture, docFixture, listFixture, summaryFixture } from './fixtures';
+import {
+  activeFixture,
+  docFixture,
+  listFixture,
+  schemaFixture,
+  summaryFixture,
+} from './fixtures';
 import {
   OPEN_VOCAB_AXIS,
   createOpenVocabList,
@@ -21,6 +27,7 @@ function setup(over: Record<string, unknown> = {}) {
   let emit: (e: CurationEvent) => void = () => {};
   const deps = {
     listOpenVocab: vi.fn().mockResolvedValue(listFixture()),
+    getOpenVocabSchema: vi.fn().mockResolvedValue(schemaFixture()),
     getActiveOpenVocab: vi.fn().mockResolvedValue(activeFixture()),
     createOpenVocab: vi.fn().mockResolvedValue(docFixture({ name: 'fresh' })),
     cloneOpenVocab: vi.fn().mockResolvedValue(docFixture({ name: 'copy' })),
@@ -48,6 +55,28 @@ describe('OpenVocabList', () => {
     expect(list.list?.templates.map((t) => t.name)).toEqual(['starter_widgets']);
     expect(list.active.active?.axis).toBe('open_vocab');
     expect(deps.listOpenVocab).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the served vocabulary and segmenter fact with the list', async () => {
+    const { list } = setup();
+    await list.load();
+    expect(list.vocabulary?.statuses.map((o) => o.value)).toEqual([
+      'pending',
+      'done',
+      'skipped_gate',
+      'failed',
+    ]);
+    expect(list.list?.segmenter).toEqual({ configured: true, reachable: true });
+  });
+
+  it('a failed schema read leaves the vocabulary unread and the list loaded', async () => {
+    const { list } = setup({
+      getOpenVocabSchema: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    await list.load();
+    expect(list.vocabulary).toBeNull();
+    expect(list.list?.sets).toHaveLength(1);
+    expect(list.loadError).toBeNull();
   });
 
   it('rolls back with expected_active = the ref as read, then re-reads', async () => {

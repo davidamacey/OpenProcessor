@@ -17,6 +17,7 @@
   import ConfigRevisions from '$components/config/ConfigRevisions.svelte';
   import ConfigSavePanel from '$components/config/ConfigSavePanel.svelte';
   import ConfigViewingBanner from '$components/config/ConfigViewingBanner.svelte';
+  import SegmenterNotice from '$components/openVocab/SegmenterNotice.svelte';
   import OpenVocabTargetsTable from '$components/openVocab/OpenVocabTargetsTable.svelte';
   import OpenVocabTestPanel from '$components/openVocab/OpenVocabTestPanel.svelte';
   import ProfileFieldEditor from '$components/profiles/ProfileFieldEditor.svelte';
@@ -172,6 +173,8 @@
       <p class="text-sm text-zinc-500">Loading…</p>
     {:else}
       {@const d = ed.doc}
+      <SegmenterNotice segmenter={ed.segmenter} />
+
       <ConfigActivePanel
         ctl={ed.active}
         copy={OPEN_VOCAB_ACTIVE_COPY}
@@ -358,6 +361,7 @@
           targets={shown.targets ?? []}
           imageMaxSide={shown.image_max_side}
           dedupIou={shown.dedup_iou}
+          vocabulary={ed.schema.vocabulary}
         />
       {/key}
     {/if}

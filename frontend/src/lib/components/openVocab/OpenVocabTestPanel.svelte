@@ -11,9 +11,9 @@
   import { onDestroy } from 'svelte';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
-  import { dropReasonText, hitShapes } from '$lib/openVocab/hitShapes';
+  import { dropReasonText, hitShapes, optionLabel } from '$lib/openVocab/hitShapes';
   import { createOpenVocabTest } from '$lib/openVocab/openVocabTestController.svelte';
-  import type { OpenVocabTargetBody } from '$lib/types_openVocab';
+  import type { OpenVocabTargetBody, OpenVocabVocabulary } from '$lib/types_openVocab';
   import HitOverlay from './HitOverlay.svelte';
 
   interface Props {
@@ -21,9 +21,11 @@
     targets: OpenVocabTargetBody[];
     imageMaxSide?: number;
     dedupIou?: number;
+    /** The served labels for drop and gate reasons (`GET /open_vocab/schema`). */
+    vocabulary: OpenVocabVocabulary;
   }
 
-  let { targets, imageMaxSide, dedupIou }: Props = $props();
+  let { targets, imageMaxSide, dedupIou, vocabulary }: Props = $props();
 
   const t = createOpenVocabTest();
   let index = $state(0);
@@ -63,7 +65,9 @@
     t.upload = { name: file.name, base64: await readBase64(file) };
   }
 
-  const shapes = $derived(t.result ? hitShapes(t.result.hits) : []);
+  const shapes = $derived(
+    t.result ? hitShapes(t.result.hits, vocabulary.drop_reasons) : [],
+  );
 </script>
 
 <section
@@ -169,9 +173,13 @@
         data-testid="ov-test-gate"
       >
         {#if r.gate.run}
-          The gate let this run{r.gate.reason ? `: ${r.gate.reason}` : ''}.
+          The gate let this run{r.gate.reason
+            ? `: ${optionLabel(vocabulary.gate_reasons, r.gate.reason)}`
+            : ''}.
         {:else}
-          Skipped by tier {r.gate.tier ?? '?'}: {r.gate.reason ?? 'no reason served'}
+          Skipped by tier {r.gate.tier ?? '?'}: {r.gate.reason
+            ? optionLabel(vocabulary.gate_reasons, r.gate.reason)
+            : 'no reason served'}
         {/if}
       </p>
       {#if r.validation}
@@ -207,7 +215,7 @@
                   <td class="py-1 pr-3 font-mono">{h.score.toFixed(2)}</td>
                   <td class="py-1 pr-3">{h.selected ? 'yes' : 'no'}</td>
                   <td class="py-1" title={h.drop_reason ?? ''}
-                    >{dropReasonText(h.drop_reason)}</td
+                    >{dropReasonText(h.drop_reason, vocabulary.drop_reasons)}</td
                   >
                 </tr>
               {/each}

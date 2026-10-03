@@ -121,6 +121,7 @@ const CASES: [string, string[]][] = [
       active: true,
       config_revision: true,
       stale: true,
+      segmenter: true,
     } satisfies Record<keyof T.OpenVocabList, true>),
   ],
   [
@@ -139,8 +140,27 @@ const CASES: [string, string[]][] = [
   ],
   [
     'OpenVocabSchema',
-    keys({ fields: true, max_enabled_targets_ceiling: true } satisfies Record<
-      keyof T.OpenVocabSchema,
+    keys({
+      fields: true,
+      max_enabled_targets_ceiling: true,
+      vocabulary: true,
+    } satisfies Record<keyof T.OpenVocabSchema, true>),
+  ],
+  [
+    'OpenVocabVocabulary',
+    keys({ statuses: true, drop_reasons: true, gate_reasons: true } satisfies Record<
+      keyof T.OpenVocabVocabulary,
+      true
+    >),
+  ],
+  [
+    'VocabularyOption',
+    keys({ value: true, label: true } satisfies Record<keyof T.VocabularyOption, true>),
+  ],
+  [
+    'SegmenterAvailability',
+    keys({ configured: true, reachable: true } satisfies Record<
+      keyof T.SegmenterAvailability,
       true
     >),
   ],
@@ -331,7 +351,29 @@ describe('open-vocabulary types vs the vendored contract', () => {
           templates: true,
           active: true,
           config_revision: true,
+          segmenter: true,
         }),
+      ],
+      [
+        'OpenVocabSchema',
+        required<T.OpenVocabSchema>({
+          fields: true,
+          max_enabled_targets_ceiling: true,
+          vocabulary: true,
+        }),
+      ],
+      [
+        'OpenVocabVocabulary',
+        required<T.OpenVocabVocabulary>({
+          statuses: true,
+          drop_reasons: true,
+          gate_reasons: true,
+        }),
+      ],
+      ['VocabularyOption', required<T.VocabularyOption>({ value: true, label: true })],
+      [
+        'SegmenterAvailability',
+        required<T.SegmenterAvailability>({ configured: true, reachable: true }),
       ],
     ];
     for (const [name, declared] of pins) {
@@ -351,5 +393,39 @@ describe('open-vocabulary types vs the vendored contract', () => {
     ];
     expect([...scopes].sort()).toEqual([...props.scope!.enum!].sort());
     expect([...types].sort()).toEqual([...props.type!.enum!].sort());
+  });
+
+  it('the closed value sets are the served enums', () => {
+    const dropReasons: T.OpenVocabDropReason[] = [
+      'below_min_score',
+      'too_small',
+      'too_large',
+      'nms',
+      'over_max',
+      'cross_target_nms',
+      'agree_existing',
+      'skipped_locked',
+    ];
+    const gateReasons: T.OpenVocabGateReason[] = [
+      'disabled',
+      'no_parent_class',
+      'vlm_no',
+      'hit_rate',
+    ];
+    const statuses: T.OpenVocabStatus[] = ['pending', 'done', 'skipped_gate', 'failed'];
+    const anyOfEnum = (p: unknown): string[] =>
+      (p as { anyOf: { enum?: string[] }[] }).anyOf.find((a) => a.enum)!.enum!;
+    expect([...dropReasons].sort()).toEqual(
+      anyOfEnum(schemas.OpenVocabTestHit!.properties!.drop_reason).sort(),
+    );
+    expect([...gateReasons].sort()).toEqual(
+      anyOfEnum(schemas.OpenVocabTestGate!.properties!.reason).sort(),
+    );
+    const statusEnum = (
+      schemas.ReprocessFilter!.properties!.open_vocab_status as {
+        items: { enum: string[] };
+      }
+    ).items.enum;
+    expect([...statuses].sort()).toEqual([...statusEnum].sort());
   });
 });

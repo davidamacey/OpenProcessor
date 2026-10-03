@@ -7,7 +7,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { ApiError } from '$lib/api';
-import { bodyFixture, testResponseFixture } from '$lib/openVocab/fixtures';
+import {
+  bodyFixture,
+  testResponseFixture,
+  vocabularyFixture,
+} from '$lib/openVocab/fixtures';
 
 const mocks = vi.hoisted(() => ({
   getCrop: vi.fn(),
@@ -49,6 +53,7 @@ function render(over: Record<string, unknown> = {}) {
     target,
     props: {
       targets: bodyFixture().targets!,
+      vocabulary: vocabularyFixture(),
       imageMaxSide: 1024,
       dedupIou: 0.5,
       ...over,
@@ -107,7 +112,7 @@ describe('OpenVocabTestPanel', () => {
     expect(q('ov-test-gate').textContent).toContain('let this run');
     const hits = [...target.querySelectorAll('[data-testid="ov-test-hit"]')];
     expect(hits).toHaveLength(2);
-    expect(hits[1]!.textContent).toContain('Agrees with an existing item');
+    expect(hits[1]!.textContent).toContain('Matches an item already there');
     expect(hits[1]!.getAttribute('data-selected')).toBe('false');
     await vi.waitFor(() => {
       const polys = target.querySelectorAll('[data-testid="overlay-extra-box"]');
@@ -121,13 +126,14 @@ describe('OpenVocabTestPanel', () => {
     mocks.testOpenVocab.mockResolvedValue(
       testResponseFixture({
         hits: [],
-        gate: { run: false, tier: 1, reason: 'parent class not present' },
+        gate: { run: false, tier: 1, reason: 'no_parent_class' },
       }),
     );
     render();
     await runOnCrop();
     expect(q('ov-test-gate').textContent).toContain('Skipped by tier 1');
-    expect(q('ov-test-gate').textContent).toContain('parent class not present');
+    expect(q('ov-test-gate').textContent).toContain('No parent class on the image');
+    expect(q('ov-test-gate').textContent).not.toContain('no_parent_class');
     expect(q('ov-test-no-hits')).not.toBeNull();
   });
 
@@ -141,6 +147,28 @@ describe('OpenVocabTestPanel', () => {
     await runOnCrop();
     expect(q('ov-test-error').textContent).toBe('Segmenter error: Segmenter timed out.');
     expect(q('ov-test-no-hits')).toBeNull();
+  });
+
+  it('labels a reason served alongside a pass that did run', async () => {
+    mocks.testOpenVocab.mockResolvedValue(
+      testResponseFixture({ gate: { run: true, tier: 2, reason: 'vlm_no' } }),
+    );
+    render();
+    await runOnCrop();
+    expect(q('ov-test-gate').textContent).toContain('The gate let this run');
+    expect(q('ov-test-gate').textContent).toContain('The VLM pre-check said no');
+  });
+
+  it('prints a gate reason the vocabulary does not list verbatim', async () => {
+    mocks.testOpenVocab.mockResolvedValue(
+      testResponseFixture({
+        hits: [],
+        gate: { run: false, tier: 2, reason: 'new_reason' as never },
+      }),
+    );
+    render();
+    await runOnCrop();
+    expect(q('ov-test-gate').textContent).toContain('new_reason');
   });
 
   it('asks for a target before anything can run', () => {

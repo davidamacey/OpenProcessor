@@ -91,6 +91,20 @@ describe('RegionStage', () => {
     expect(s.state?.paused).toBe(false);
   });
 
+  it('shows a structured no_active_profile refusal by its served message', async () => {
+    const { s } = setup({
+      pauseRegionStage: vi.fn().mockRejectedValue(
+        new ApiError(409, '/x', {
+          detail: { error: 'no_active_profile', message: 'No region profile is active.' },
+        }),
+      ),
+    });
+    await s.load();
+    s.ask('pause');
+    expect(await s.confirm()).toBe(false);
+    expect(s.actionError).toBe('No region profile is active.');
+  });
+
   it('exposes the served rerun request untouched', async () => {
     const { s } = setup();
     await s.load();

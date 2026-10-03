@@ -14,6 +14,7 @@ import {
   docFixture,
   errorReport,
   issue,
+  listFixture,
   revisionsFixture,
   schemaFixture,
 } from './fixtures';
@@ -36,6 +37,7 @@ function setup(over: Record<string, unknown> = {}) {
   let emit: (e: CurationEvent) => void = () => {};
   const deps = {
     getOpenVocabSchema: vi.fn().mockResolvedValue(schemaFixture()),
+    listOpenVocab: vi.fn().mockResolvedValue(listFixture()),
     getOpenVocab: vi.fn().mockResolvedValue(docFixture()),
     getOpenVocabRevisions: vi.fn().mockResolvedValue(revisionsFixture()),
     getOpenVocabRevision: vi.fn().mockResolvedValue(docFixture({ revision: 2 })),
@@ -63,6 +65,26 @@ describe('OpenVocabEditor', () => {
     expect(ed.schema?.fields.length).toBeGreaterThan(0);
     expect(ed.revisions?.map((r) => r.revision)).toEqual([3, 2]);
     expect(ed.dirty).toBe(false);
+  });
+
+  it('reads the served segmenter fact alongside the doc', async () => {
+    const { ed } = setup({
+      listOpenVocab: vi
+        .fn()
+        .mockResolvedValue(
+          listFixture({ segmenter: { configured: true, reachable: false } }),
+        ),
+    });
+    await ed.load();
+    expect(ed.segmenter).toEqual({ configured: true, reachable: false });
+  });
+
+  it('a failed segmenter read leaves the fact unread and does not fail the load', async () => {
+    const { ed } = setup({ listOpenVocab: vi.fn().mockRejectedValue(new Error('boom')) });
+    await ed.load();
+    expect(ed.segmenter).toBeNull();
+    expect(ed.loadError).toBeNull();
+    expect(ed.doc?.revision).toBe(3);
   });
 
   it("addTarget appends a target built from the served rows' defaults", async () => {

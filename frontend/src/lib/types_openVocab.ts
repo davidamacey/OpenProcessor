@@ -15,7 +15,9 @@ import type {
   ConfigDocBase,
   ValidationReport,
 } from './types_config';
-import type { ReprocessRequest } from './types_import';
+import type { OpenVocabStatus, ReprocessRequest } from './types_import';
+
+export type { OpenVocabStatus };
 
 export type OpenVocabTargetBody = {
   prompt?: string;
@@ -81,12 +83,20 @@ export interface OpenVocabTemplateSummary {
   source?: 'template';
 }
 
+/** `SegmenterAvailability`: the segmenter every pass needs. `reachable` is
+ *  never true when it is not configured. */
+export interface SegmenterAvailability {
+  configured: boolean;
+  reachable: boolean;
+}
+
 export interface OpenVocabList {
   sets: OpenVocabSummary[];
   templates: OpenVocabTemplateSummary[];
   active: ActiveRef;
   config_revision: number;
   stale?: boolean;
+  segmenter: SegmenterAvailability;
 }
 
 export type OpenVocabFieldScope = 'set' | 'target' | 'gating' | 'tier3_hit_rate';
@@ -104,9 +114,25 @@ export interface OpenVocabFieldSchema {
   max?: number | null;
 }
 
+/** `VocabularyOption`: one served value and its label. */
+export interface VocabularyOption {
+  value: string;
+  label: string;
+}
+
+/** `OpenVocabVocabulary`: served labels for the pass's closed value sets
+ *  (an image's `open_vocab_status`, a hit's `drop_reason`, a gate skip's
+ *  `reason`). */
+export interface OpenVocabVocabulary {
+  statuses: VocabularyOption[];
+  drop_reasons: VocabularyOption[];
+  gate_reasons: VocabularyOption[];
+}
+
 export interface OpenVocabSchema {
   fields: OpenVocabFieldSchema[];
   max_enabled_targets_ceiling: number;
+  vocabulary: OpenVocabVocabulary;
 }
 
 export interface OpenVocabRevisionSummary {
@@ -175,18 +201,30 @@ export interface OpenVocabTestRequest {
   gating?: OpenVocabGatingBody;
 }
 
+export type OpenVocabDropReason =
+  | 'below_min_score'
+  | 'too_small'
+  | 'too_large'
+  | 'nms'
+  | 'over_max'
+  | 'cross_target_nms'
+  | 'agree_existing'
+  | 'skipped_locked';
+
+export type OpenVocabGateReason = 'disabled' | 'no_parent_class' | 'vlm_no' | 'hit_rate';
+
 export interface OpenVocabTestHit {
   bbox_norm: number[];
   score: number;
   selected: boolean;
-  drop_reason?: string | null;
+  drop_reason?: OpenVocabDropReason | null;
   mask_polygon?: number[][] | null;
 }
 
 export interface OpenVocabTestGate {
   run: boolean;
   tier?: number | null;
-  reason?: string | null;
+  reason?: OpenVocabGateReason | null;
 }
 
 export interface OpenVocabTestImage {

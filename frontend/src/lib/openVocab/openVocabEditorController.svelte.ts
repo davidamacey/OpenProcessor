@@ -14,6 +14,7 @@ import {
   getOpenVocabRevision,
   getOpenVocabRevisions,
   getOpenVocabSchema,
+  listOpenVocab,
   updateOpenVocab,
   validateOpenVocab,
 } from '$lib/api_openVocab';
@@ -26,6 +27,7 @@ import type {
   OpenVocabGatingBody,
   OpenVocabHitRateBody,
   OpenVocabSchema,
+  SegmenterAvailability,
   OpenVocabTargetBody,
 } from '$lib/types_openVocab';
 import { OpenVocabActive, type OpenVocabActiveDeps } from './openVocabActive.svelte';
@@ -35,6 +37,7 @@ import { isOpenVocabConfigEvent } from './openVocabListController.svelte';
 export interface OpenVocabEditorDeps extends OpenVocabActiveDeps {
   getOpenVocab: typeof getOpenVocab;
   getOpenVocabSchema: typeof getOpenVocabSchema;
+  listOpenVocab: typeof listOpenVocab;
   getOpenVocabRevisions: typeof getOpenVocabRevisions;
   getOpenVocabRevision: typeof getOpenVocabRevision;
   updateOpenVocab: typeof updateOpenVocab;
@@ -53,7 +56,11 @@ export class OpenVocabEditor extends ConfigEditor<
   activationChecking = $state(false);
   activationCheckError = $state<string | null>(null);
 
+  /** The served segmenter fact (`GET /open_vocab`); null while unread. */
+  segmenter = $state<SegmenterAvailability | null>(null);
+
   #validate: typeof validateOpenVocab;
+  #list: typeof listOpenVocab;
 
   constructor(name: string, deps: Partial<OpenVocabEditorDeps> = {}) {
     super(
@@ -74,6 +81,18 @@ export class OpenVocabEditor extends ConfigEditor<
       new OpenVocabActive(deps),
     );
     this.#validate = deps.validateOpenVocab ?? validateOpenVocab;
+    this.#list = deps.listOpenVocab ?? listOpenVocab;
+  }
+
+  /** The segmenter fact rides on the list read; a failed read leaves it
+   *  unread and never fails the editor's own load. */
+  protected override async loadExtras(): Promise<void> {
+    try {
+      this.segmenter = (await this.#list()).segmenter;
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      this.segmenter = null;
+    }
   }
 
   #setTargets(targets: OpenVocabTargetBody[]): void {

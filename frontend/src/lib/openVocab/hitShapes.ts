@@ -4,22 +4,32 @@
  * served; a dropped hit (`selected: false`) is dimmed.
  */
 import type { OverlayShape } from '$lib/configTest/overlayShapes';
-import { humanizeId } from '$lib/humanizeId';
-import type { OpenVocabTestHit } from '$lib/types_openVocab';
+import type { OpenVocabTestHit, VocabularyOption } from '$lib/types_openVocab';
 
-/** What a served `drop_reason` reads as; the raw id goes in a tooltip. */
-export function dropReasonText(reason: string | null | undefined): string {
-  if (!reason) return '';
-  return reason === 'agree_existing'
-    ? 'Agrees with an existing item'
-    : humanizeId(reason);
+/** A served value's served label; a value the options do not list prints
+ *  as it came, never as a guessed label. */
+export function optionLabel(options: VocabularyOption[], value: string): string {
+  return options.find((o) => o.value === value)?.label ?? value;
 }
 
-export function hitShapes(hits: OpenVocabTestHit[]): OverlayShape[] {
+/** What a served `drop_reason` reads as ('' for none). */
+export function dropReasonText(
+  reason: string | null | undefined,
+  options: VocabularyOption[],
+): string {
+  return reason ? optionLabel(options, reason) : '';
+}
+
+export function hitShapes(
+  hits: OpenVocabTestHit[],
+  dropReasons: VocabularyOption[],
+): OverlayShape[] {
   const out: OverlayShape[] = [];
   hits.forEach((h, i) => {
     const label = `hit #${i}`;
-    const dropped = h.drop_reason ? ` · dropped: ${dropReasonText(h.drop_reason)}` : '';
+    const dropped = h.drop_reason
+      ? ` · dropped: ${dropReasonText(h.drop_reason, dropReasons)}`
+      : '';
     const base = {
       dimmed: !h.selected,
       label,

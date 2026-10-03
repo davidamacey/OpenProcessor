@@ -9,6 +9,7 @@ import {
   cloneOpenVocab,
   createOpenVocab,
   deleteOpenVocab,
+  getOpenVocabSchema,
   listOpenVocab,
 } from '$lib/api_openVocab';
 import { configErrorText } from '$lib/api';
@@ -19,6 +20,7 @@ import type {
   OpenVocabCloneRequest,
   OpenVocabDoc,
   OpenVocabList,
+  OpenVocabVocabulary,
 } from '$lib/types_openVocab';
 import { OpenVocabActive, type OpenVocabActiveDeps } from './openVocabActive.svelte';
 
@@ -30,6 +32,7 @@ export function isOpenVocabConfigEvent(e: CurationEvent): boolean {
 
 export interface OpenVocabListDeps extends OpenVocabActiveDeps {
   listOpenVocab: typeof listOpenVocab;
+  getOpenVocabSchema: typeof getOpenVocabSchema;
   createOpenVocab: typeof createOpenVocab;
   cloneOpenVocab: typeof cloneOpenVocab;
   deleteOpenVocab: typeof deleteOpenVocab;
@@ -42,7 +45,12 @@ export class OpenVocabListState extends ConfigList<
   OpenVocabActive
 > {
   createError = $state<string | null>(null);
+  /** The served labels for the pass's closed value sets (from the schema);
+   *  null while unread or when the read failed, and then nothing that needs
+   *  a label is offered. */
+  vocabulary = $state<OpenVocabVocabulary | null>(null);
   #create: typeof createOpenVocab;
+  #schema: typeof getOpenVocabSchema;
 
   constructor(deps: Partial<OpenVocabListDeps> = {}) {
     super(
@@ -63,6 +71,20 @@ export class OpenVocabListState extends ConfigList<
       new OpenVocabActive(deps),
     );
     this.#create = deps.createOpenVocab ?? createOpenVocab;
+    this.#schema = deps.getOpenVocabSchema ?? getOpenVocabSchema;
+  }
+
+  override async load(): Promise<void> {
+    await Promise.all([super.load(), this.#loadVocabulary()]);
+  }
+
+  async #loadVocabulary(): Promise<void> {
+    try {
+      this.vocabulary = (await this.#schema()).vocabulary;
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      this.vocabulary = null;
+    }
   }
 
   async deactivate(): Promise<boolean> {
