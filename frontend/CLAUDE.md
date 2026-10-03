@@ -132,9 +132,9 @@ record.
   `page(kind, offset, limit, errorKind)`) over the served detail — no
   client-side prose parsing.
 - **Identifiers.** `${identifierPrefix}${relPath}` (default prefix
-  `${sourceTag}/`), computed by `src/lib/ingest/fileSource.ts`'s
-  `makeIdentifier` — normalizes backslashes, strips a leading `./`/`/`,
-  and rejects any `..` segment. `path_lookup` matches this identifier
+  `${sourceTag}/`), built from the collectors' normalized
+  `relPath` (`src/lib/ingest/fileSource.ts`: backslashes to `/`, a leading
+  `./`/`/` stripped, and any path with a `..` segment skipped). `path_lookup` matches this identifier
   exactly (against either `image_path` or, since BA-1, `source_identifier`
   — server-side), which is why the prefix matters: two different folders
   that both contain e.g. `img001.jpg` at their root would otherwise
