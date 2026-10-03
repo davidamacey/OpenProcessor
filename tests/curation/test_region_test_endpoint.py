@@ -201,6 +201,18 @@ def test_the_item_class_gates_eligibility_like_the_worker(stack, car) -> None:
 
     assert eligible.json()['item_eligible'] is True
     assert other.json()['item_eligible'] is False
+    assert eligible.json()['testable'] is True
+    assert eligible.json()['reason'] is None
+    assert other.json()['testable'] is False
+    assert 'widget' in other.json()['reason']
+
+
+def test_eligibility_is_case_insensitive_like_the_worker(stack, car) -> None:
+    stack.seed('dog2', class_id=1, class_name='Gadget', class_source='item_model')
+
+    body = stack.post(URL, crop_id='dog2', draft=profile_body(parent_classes=['gadget'])).json()
+
+    assert body['testable'] is True
 
 
 def test_an_empty_segmenter_answer_previews_no_region_box(stack, car) -> None:

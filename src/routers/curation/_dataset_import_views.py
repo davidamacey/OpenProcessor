@@ -25,9 +25,10 @@ from src.routers.curation._dataset_import_models import (
     ResolvedMapTarget,
 )
 from src.routers.curation._dataset_issue_models import issues_to_wire
+from src.services.curation.dataset_import.actions import import_actions
 from src.services.curation.dataset_import.options import DatasetImportOptions
 from src.services.curation.dataset_import.prepare import mapping_from_dict
-from src.services.curation.dataset_import.store import ACTIVE_STATUSES
+from src.services.curation.dataset_import.store import ACTIVE_STATUSES, active_import
 
 
 if TYPE_CHECKING:
@@ -191,6 +192,8 @@ def job_wire(store: ImportStore, *, project: str, reused: bool = False) -> Datas
     rate = state.get('images_per_s')
     status = state.get('status', 'queued')
     undo = state.get('undo')
+    live = active_import()
+    other_live = live.import_id if live and live.import_id != store.import_id else None
     return DatasetImportJob(
         project=project,
         import_id=store.import_id,
@@ -218,6 +221,7 @@ def job_wire(store: ImportStore, *, project: str, reused: bool = False) -> Datas
         ),
         issues_summary=store.read_scan().get('issues', []),
         undo=DatasetUndoReportWire(**undo) if undo else None,
+        actions=import_actions(state, other_live_id=other_live),
         next_steps=[NextStep(**s) for s in state.get('next_steps') or []],
         error=state.get('error'),
         started_at=state.get('started_at'),
