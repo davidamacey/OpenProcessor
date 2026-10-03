@@ -63,6 +63,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Error messages shown to the operator now come from the one `apiErrorText` helper everywhere (about 120 sites printed a raw `API 503 /curation/...` message), and `errorText.scan.test.ts` fails on a new raw `(e as Error).message`.
+- `/clusters` region gallery: selection is per box row (`row_key`), so bulk triage from an open region cluster flips only the boxes picked, never sibling boxes of the same item.
+- `CropCard` and `/review` print the VLM empty reason from one `vlmEmptyReasonText` (CropCard now reads "VLM gave no class — No answer"); the duplicate and the test-only `singleCharCombos` / `urlIdForTab` are removed. Source-scan tests assert the slice they scan is non-empty before their negative checks. CSP investigation recorded in `docs/design/csp-spike-2026-10-03.md` (no CSP is enabled).
 - Writes (POST/PUT/PATCH/DELETE) are no longer retried on a 5xx or a lost response: only GET/HEAD retry. A long export that hit a gateway timeout used to run up to four times, and a start-training or create-class could repeat.
 - Box editing: `[` and `]` (shrink / grow the right edge) work again on `/review` and in the box editor; they were listed as rebindable but handled by nothing.
 - Folder selection skips any path containing a `..` segment, the same rule the drag-and-drop walker applies.
