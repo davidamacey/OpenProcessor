@@ -391,7 +391,25 @@ def test_single_cls_rewrite_collapses_to_one_class(tmp_path: Path, export_dir: P
 
     remap = resolve_class_remap(job_id='j', checkpoint_path=weights_dir / 'best.pt', manifest=None)
     assert remap.single_cls is True
-    assert build_class_id_to_name(remap=remap, full_registry={9: 'serial_plate'}) == {0: 'object'}
+    # one source class: its own name, not the trainer's generic 'object'
+    assert build_class_id_to_name(remap=remap, full_registry={9: 'serial_plate'}) == {
+        0: 'serial_plate'
+    }
+
+
+def test_single_cls_collapsing_several_classes_keeps_the_trainer_name() -> None:
+    from src.services.training.triton_promote import ClassRemapResult
+
+    remap = ClassRemapResult(
+        mapping={1: 0, 2: 0},
+        names=['vehicle'],
+        single_cls=True,
+        include_classes=[1, 2],
+        source='manifest',
+    )
+    assert build_class_id_to_name(remap=remap, full_registry={1: 'car', 2: 'truck'}) == {
+        0: 'vehicle'
+    }
 
 
 def test_subset_rewrite_rejects_a_registry_id_outside_the_export(

@@ -156,9 +156,7 @@ async def list_projects(
 async def get_project(
     project: str,
 ) -> ProjectRecordResponse:
-    registry = get_project_registry()
-    await registry.ensure_fresh()
-    record = registry.get(project)
+    record = await get_project_registry().lookup(project)
     if record is None or record.status == 'deleted':
         raise api_error(404, 'project_not_found', f"no project named '{project}'", project=project)
 

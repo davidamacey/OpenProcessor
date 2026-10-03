@@ -2721,6 +2721,12 @@
             "title": "Detail",
             "type": "object"
           },
+          "id": {
+            "default": "",
+            "description": "Unique within the response (`code[:project[:class]]`, `#2` on a repeat).",
+            "title": "Id",
+            "type": "string"
+          },
           "message": {
             "default": "",
             "title": "Message",
@@ -3724,6 +3730,7 @@
               "no_box_to_verify",
               "no_class_names",
               "too_many_crops",
+              "too_few_items",
               "too_many_crop_ids",
               "pack_invalid",
               "profile_invalid",
@@ -3808,6 +3815,17 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "min_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Items"
           },
           "needed": {
             "anyOf": [
@@ -5820,6 +5838,12 @@
             "title": "Count",
             "type": "integer"
           },
+          "id": {
+            "default": "",
+            "description": "Unique within the response (`code[:subject]`, `#2` on a repeat).",
+            "title": "Id",
+            "type": "string"
+          },
           "message": {
             "title": "Message",
             "type": "string"
@@ -6913,7 +6937,7 @@
           },
           "unknown": {
             "default": 0,
-            "description": "Items written before embedding_state existed (no recorded state; not a value of the filter).",
+            "description": "Items written before embedding_state existed that have no vector (no recorded state; not a value of the filter). A legacy item with a vector counts as embedded.",
             "title": "Unknown",
             "type": "integer"
           }
@@ -8421,6 +8445,11 @@
             "title": "By Class",
             "type": "array"
           },
+          "embedded_because_labeled": {
+            "description": "Of would_embed, the items that embed only because a human or validated label always embeds; a fresh ingest of the same images has none of these.",
+            "title": "Embedded Because Labeled",
+            "type": "integer"
+          },
           "estimated_vector_mb": {
             "title": "Estimated Vector Mb",
             "type": "number"
@@ -8452,6 +8481,7 @@
           "truncated",
           "would_embed",
           "would_not_embed",
+          "embedded_because_labeled",
           "estimated_vector_mb",
           "by_class"
         ],
@@ -13852,6 +13882,7 @@
       "PolicyPreviewClass": {
         "properties": {
           "name": {
+            "description": "The class NAME as stored / as the detector labels it.",
             "title": "Name",
             "type": "string"
           },
@@ -20700,6 +20731,15 @@
       },
       "ReviewFilterSpec": {
         "properties": {
+          "allows_unset": {
+            "description": "True when the default is null (no filter). An enum then lists an explicit `{value: \"\", label: \"Any\"}` option: when it is selected, omit the parameter (never send an empty string).",
+            "title": "Allows Unset",
+            "type": "boolean"
+          },
+          "default": {
+            "description": "Value applied when the parameter is omitted, read off the filter model: null = no filter, [] = none selected, false = off.",
+            "title": "Default"
+          },
           "description": {
             "description": "How to fill the filter; empty when the label says it.",
             "title": "Description",
@@ -20767,7 +20807,9 @@
           "options",
           "min",
           "max",
-          "description"
+          "description",
+          "default",
+          "allows_unset"
         ],
         "title": "ReviewFilterSpec",
         "type": "object"
@@ -25396,6 +25438,12 @@
             ],
             "description": "Dotted path from the body root, a list index in brackets: `targets[2].prompt`, `gating.tier3_hit_rate.window`, `image_max_side`. A whole-element issue names the element (`targets[2]`); null when the issue is not about one field.",
             "title": "Field"
+          },
+          "id": {
+            "default": "",
+            "description": "Unique within the response (`code[:field]`, `#2` on a repeat): key rows on it, not on `code`, which two issues can share.",
+            "title": "Id",
+            "type": "string"
           },
           "message": {
             "title": "Message",
@@ -41824,6 +41872,7 @@
                   "type": "null"
                 }
               ],
+              "default": "all",
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }
@@ -42321,6 +42370,7 @@
                   "type": "null"
                 }
               ],
+              "default": "all",
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }

@@ -5,13 +5,14 @@ is a 422."""
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.services.curation.dataset_import.mapping import (
     ClassMappingEntry,  # noqa: TC001 - pydantic field type, resolved at runtime
 )
+from src.services.issue_ids import stamp_issue_ids
 
 
 MAX_SOURCES = 8
@@ -64,11 +65,20 @@ class CombineStartRequest(CombineRequest):
 class CombineIssue(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
+    id: str = Field(
+        default='',
+        description='Unique within the response (`code[:project[:class]]`, `#2` on a repeat).',
+    )
     code: str
     severity: Literal['error', 'warning'] = 'error'
     project: str | None = None
     message: str = ''
     detail: dict[str, Any] = Field(default_factory=dict)
+
+
+def _issue_subject(issue: CombineIssue) -> str | None:
+    parts = [issue.project, issue.detail.get('class')]
+    return ':'.join(str(p) for p in parts if p) or None
 
 
 class CombinePreview(BaseModel):
@@ -81,6 +91,11 @@ class CombinePreview(BaseModel):
     target: dict[str, Any]
     dedup: dict[str, Any]
     bytes: dict[str, int]
+
+    @model_validator(mode='after')
+    def _stamp_ids(self) -> Self:
+        stamp_issue_ids([*self.errors, *self.warnings], _issue_subject)
+        return self
 
 
 __all__ = [

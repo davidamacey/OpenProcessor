@@ -901,7 +901,8 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
                 'vlm_proposed_class': f'{slug}-proposal',
             },
         ),
-        *(crop(n, **unlabeled, cluster_id=None) for n in range(12, 18)),
+        # the residual pool must clear the clustering floor (32) for the UMAP refit to run
+        *(crop(n, **unlabeled, cluster_id=None) for n in range(12, 48)),
     ]
     labeled_image = f'{slug}-img-0002'
     return {

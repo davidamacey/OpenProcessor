@@ -65,7 +65,9 @@ curl -s "$T/status"
   on `/train/start` bypasses blocking checks, except that only one run can
   be active at a time.
 - **GPUs:** `cuda_visible_devices` names host GPU ids, restricted to
-  `OP_GPU_ALLOWED_IDS`; `GET /train/gpus` lists the options.
+  `OP_GPU_ALLOWED_IDS`; `GET /train/gpus` lists the options. An id outside
+  that list, or a GPU the trainer container is not attached to (preflight
+  check `trainer_gpus`, blocking), fails preflight before any job is written.
 - **Campaigns:** `POST /train/start_campaign` runs a progressive,
   multi-size sequence; `POST /train/cancel_campaign/{campaign_id}` cancels
   every non-terminal run in it.
@@ -160,6 +162,25 @@ triton_name_reserved_separator`). A promoted model belongs to its project:
 a project's classes by name, and `PUT .../models/{model_name}/sharing`
 opts it into use by other projects (for example as a region detector).
 
+`PUT .../models/{model_name}/sharing` takes `{"shared": bool,
+"expected_revision": int}`; `expected_revision` is the model's current
+`sharing_revision` (from `GET .../models/status`), and a stale one is `409
+revision_conflict` with `current_revision`. Unsharing while another project's
+active detector uses the model is `409 in_use` with `projects` and `used_by`;
+the query parameter `?force=true` bypasses that refusal (logged).
+`GET .../models/status?include_other_projects=true` also lists other
+projects' models that their owners shared (one row per model name; your own
+models and the core models come first).
+
+When a promoted model was trained on a single class, `labels.txt` carries that
+class's own name from the project registry; a run that collapsed several
+classes into one keeps the trainer's name for it.
+
+The promote response's `cold_start_expected_on_first_inference` is `false` only
+after the promote ran a warm-up inference at batch 1 and at the model's
+`max_batch_size`; a request with a batch size outside what the engine has seen
+makes the TensorRT accelerator rebuild (about 90 s), so both are warmed.
+
 It is gated on the run's `eval` block:
 
 | Gate | Threshold |
@@ -168,7 +189,10 @@ It is gated on the run's `eval` block:
 | Per-class precision | at least `0.50` for every class |
 | Per-class support | at least `5` for every class |
 
-A failing gate is a `422` whose body lists structured `failures` and says
+Each failure has a `code` (`no_eval_block`, `map50_below_floor`,
+`per_class_not_list`, and the per-class precision and support codes), for
+example `map50_below_floor` when mAP50 is under `0.65`. A failing gate is a
+`422` whose body lists structured `failures` and says
 whether `force=true` can bypass that particular failure (a run that isn't
 finished can't be forced). Other outcomes: `404` (no job or no ONNX yet),
 `409` (a model with that name exists; pass `overwrite=true`), `502`

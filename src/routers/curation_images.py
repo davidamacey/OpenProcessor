@@ -224,13 +224,18 @@ async def crop_region_thumbnail(
     ``no-cache`` and a matching ``If-None-Match`` gets a 304.
     """
     if not box_id:
-        raise HTTPException(status_code=422, detail={'error': 'box_id_required'})
+        raise HTTPException(
+            status_code=422, detail={'error': 'box_id_required', 'message': 'box_id is required'}
+        )
     crop = await _fetch_crop(crop_id, opensearch)
     region_bbox = next(
         (b.bbox_norm for b in read_boxes(crop, get_region_fields()) if b.box_id == box_id), None
     )
     if region_bbox is None:
-        raise HTTPException(status_code=404, detail={'error': 'unknown_box_id'})
+        raise HTTPException(
+            status_code=404,
+            detail={'error': 'unknown_box_id', 'message': f'the item has no box {box_id!r}'},
+        )
 
     image_path = _resolve_image_for_crop(crop)
     headers = _region_thumbnail_headers(image_path, region_bbox, size)

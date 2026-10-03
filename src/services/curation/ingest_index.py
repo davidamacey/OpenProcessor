@@ -36,6 +36,7 @@ from src.services.curation.item_doc import (
 from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
+from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
@@ -92,7 +93,8 @@ def crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) ->
     y1i = max(0, round(y1))
     x2i = max(x1i + 1, round(x2))
     y2i = max(y1i + 1, round(y2))
-    return img.crop((x1i, y1i, x2i, y2i))
+    with stage_timer('crop'):
+        return img.crop((x1i, y1i, x2i, y2i))
 
 
 def residual_placement(

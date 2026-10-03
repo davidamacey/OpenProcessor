@@ -78,6 +78,7 @@ from src.services.detection.pe_preprocess import (
     whole_frame_chw,
     whole_frame_chw_from_bytes,
 )
+from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
@@ -352,7 +353,8 @@ class PEEncoder:
         inp = InferInput('images', list(batch.shape), 'FP32')
         inp.set_data_from_numpy(batch)
         outs = [InferRequestedOutput('image_embeddings')]
-        result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
+        with stage_timer('embed', nbytes=batch.nbytes):
+            result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
         embeddings = np.asarray(result.as_numpy('image_embeddings'), dtype=np.float32)
         return _l2_normalize(embeddings)
 
@@ -382,10 +384,11 @@ class PEEncoder:
         if not crops:
             return np.zeros((0, PE_EMBEDDING_DIM), dtype=np.float32)
 
-        chws = np.stack(
-            [normalize_chw(resize_crop_rgb(crop)) for crop in crops],
-            axis=0,
-        ).astype(np.float32, copy=False)
+        with stage_timer('resize'):
+            chws = np.stack(
+                [normalize_chw(resize_crop_rgb(crop)) for crop in crops],
+                axis=0,
+            ).astype(np.float32, copy=False)
 
         rows: list[np.ndarray] = []
         for start in range(0, chws.shape[0], max_batch):

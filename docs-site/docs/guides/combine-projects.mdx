@@ -89,7 +89,7 @@ The response has:
 | `preview_sha` | The hash to pass back when starting |
 | `suggested_mapping` | Source project to a list of mapping rows (`dataset_class`, `action`, `class_id`, `new_class_name`, `new_class_group`) |
 | `sources` | Per source: `images`, `items`, `labeled_items`, `holdout_images` and its classes with `count` and `mapped_to` |
-| `target` | The slug and whether it is available |
+| `target` | `slug`, `slug_available`, the resulting `classes`, and what the finished target will hold: `projected_images`, `projected_items` (after duplicate merging; includes `unclassed_items`, which are copied without a class), `holdout_images`. A combine target is always new, so these are totals, not additions to existing data. |
 | `dedup` | `identical_images`, `merged_items`, `conflicts`, `conflict_samples` |
 | `bytes` | `to_link` and `to_copy` |
 

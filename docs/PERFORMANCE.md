@@ -20,6 +20,7 @@ Complete guide for optimizing FastAPI and Triton Inference Server performance.
 6. [Tuning Parameters](#tuning-parameters)
 7. [Troubleshooting](#troubleshooting)
 8. [Ingest cost per image](#ingest-cost-per-image)
+9. [Baseline protocol](#baseline-protocol)
 
 ---
 
@@ -376,6 +377,69 @@ ingested at **13.39 images/s** (0 failed, 1.37 crops per image, batch p50 10.0 s
 dominate). Those runs used the narrow vehicle detector; the full-vocabulary
 policy rows above are computed, not measured. The larger public baseline set (#45)
 is not published yet.
+
+## Baseline protocol
+
+Wave 0 of `docs/design/triton_pipeline_optimization_plan.md`: two fixed seeded
+image sets, one command each, and a per-stage report. Run on a quiet host with
+a dedicated GPU, three interleaved rounds per comparison (median and range),
+and keep the raw JSON outside the repo. All paths below are arguments; nothing
+has a default location.
+
+Set A, public (4,000 COCO val2017 images, each image's license recorded):
+
+```bash
+python scripts/bench/select_baseline_set.py coco \
+  --annotations <annotations_trainval2017.zip or instances_val2017.json, path or URL> \
+  --images <local val2017 dir, or the val2017 image URL> --download-dir <dir for URL downloads> \
+  --count 4000 --seed 42 --out <dir>/coco_4000.txt
+python scripts/bench/run_baseline.py <dir>/coco_4000.txt --api-url http://<api-host>:<port> \
+  --slug-prefix baseline-a --policy all --stages ingest,embed,region,vlm,cluster \
+  --opensearch-url http://<opensearch-host>:<port> --out <dir>/a_before
+```
+
+Set B, private (4,000 photos of about 12 to 20 MP from a private archive, taken
+round-robin across its first-level folders; decodable JPEG, min side 320 px,
+at most 40 MB):
+
+```bash
+python scripts/bench/select_baseline_set.py local --root <archive dir> \
+  --count 4000 --seed 42 --out <private dir>/set_b.txt
+python scripts/bench/run_baseline.py <private dir>/set_b.txt --api-url http://<api-host>:<port> \
+  --slug-prefix baseline-b --policy all --path-map <host archive dir>=<same dir inside the API container> \
+  --out <private dir>/b_before
+```
+
+Compare two runs: `python scripts/bench/run_baseline.py --compare before.json after.json`.
+
+The manifest is a text file: a `#` header (seed, count, bytes, per-source
+counts, date, sha256) and one path per line. The sha256 covers the path lines,
+and `run_baseline.py` refuses a manifest whose paths no longer match it. The
+COCO run also writes `<manifest>.licenses.csv` (license id, name and URL per
+image). `--api-prefix` (default `OP_API_PREFIX`, else `/curation`) selects the API mount. The batch ingest route reads each path inside the API container, so
+the API must be able to see the manifest paths (`--path-map HOST=CONTAINER`
+rewrites a prefix). The harness creates a new project per run and leaves it
+in place; delete it when you are done. The first 100 images (`--warmup`) are
+ingested but left out of the rates and the metric deltas.
+
+Recorded in the JSON and markdown report (aggregates only, never image content
+or paths): images/s, items/s, input MB/s, batch p50 and p99, failures; region,
+embed (lazy policy), VLM and cluster stage wall time; GPU mean utilization and
+peak memory per GPU from `nvidia-smi` (skipped if absent); the change in every
+`op_*` series of the API, optionally the worker (`--worker-metrics-url`) and
+the Triton metrics endpoint (`--triton-metrics-url`, whose `compute_input`
+counters are the host-to-device time); store bytes per image after a refresh
+and force-merge (`--opensearch-url`) and crop-cache bytes (`--crop-cache-dir`).
+
+The per-stage timers are the `op_pipeline_stage_seconds` histogram and the
+`op_pipeline_stage_bytes_total` counter, labelled `stage` = `decode`, `crop`,
+`jpeg_encode`, `resize`, `embed`, `opensearch_write`. With several API workers
+set `PROMETHEUS_MULTIPROC_DIR`, otherwise a scrape sees one worker only.
+
+Where numbers go: set A numbers go into this file, in a table with the commit,
+GPU model and the Triton, TensorRT, driver and torch versions. Set B numbers
+stay in private notes, and only an aggregate ratio or pass/fail is stated in
+public text.
 
 ## Benchmarking
 

@@ -128,7 +128,7 @@ def test_preview_counts_over_stored_items_and_writes_nothing(
     assert (body['total_items'], body['scanned'], body['truncated']) == (4, 4, False)
     assert (body['would_embed'], body['would_not_embed']) == (1, 3)  # only c2: car above 0.5
     by = {c['name']: (c['would_embed'], c['would_not_embed']) for c in body['by_class']}
-    assert by == {'car': (1, 1), 'person': (0, 1), 'traffic_light': (0, 1)}
+    assert by == {'car': (1, 1), 'person': (0, 1), 'traffic light': (0, 1)}
     assert body['estimated_vector_mb'] == pytest.approx(1 * 1024 * 4 / 1e6, abs=0.01)
     assert fake.write_calls == writes
 
@@ -162,7 +162,9 @@ def test_an_unservable_detector_override_is_a_typed_422_with_every_reason(
     detail = r.json()['detail']
     assert detail['error'] == 'detector_not_servable'
     assert detail['reasons'] == ["'ghost' is not loaded and ready on Triton"]
-    assert detail['message'] == detail['reasons'][0]
+    assert detail['message'] == "detector 'ghost' cannot serve ingest (1 problem(s); see reasons)"
+    assert detail['reasons'][0] not in detail['message']
+    assert len(set(detail['reasons'])) == len(detail['reasons'])
 
 
 def test_no_triton_pool_is_a_typed_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -179,3 +181,35 @@ def test_a_stale_revision_is_a_typed_409(client: TestClient) -> None:
     r = client.put(URL, json={'expected_revision': 5})
     assert r.status_code == 409
     assert r.json()['detail']['error'] == 'revision_conflict'
+
+
+def test_preview_equals_the_ingest_selection_and_names_labeled_extras(
+    client: TestClient, fake: SettingsFakeOpenSearch
+) -> None:
+    from src.services.curation.ingest_policy import EmbeddingPolicy, select_for_embedding
+    from src.services.curation.item_doc import DetectedItem
+
+    policy = EmbeddingPolicy(mode='selected', classes=['car'])
+    by_image: dict[str, list[DetectedItem]] = {}
+    for src in fake.store[get_curation_config().items_index].values():
+        side = src['crop_area_norm'] ** 0.5
+        by_image.setdefault(src['image_id'], []).append(
+            DetectedItem(
+                bbox_pixel=(0, 0, side * 100, side * 100),
+                score=src['confidence'],
+                proposal_name=src['proposal_name'],
+            )
+        )
+    ingest = sum(
+        s == 'embedded'
+        for items in by_image.values()
+        for s in select_for_embedding(items, policy, 100, 100)
+    )
+    body = client.post(f'{URL}/preview', json={'embedding': policy.model_dump()}).json()
+    assert body['would_embed'] == ingest == 2
+    assert body['embedded_because_labeled'] == 0
+
+    fake.store[get_curation_config().items_index]['c1']['class_validated'] = True  # the person
+    body = client.post(f'{URL}/preview', json={'embedding': policy.model_dump()}).json()
+    assert body['would_embed'] == ingest + 1
+    assert body['embedded_because_labeled'] == 1

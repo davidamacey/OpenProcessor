@@ -91,7 +91,9 @@ def test_per_box_text_edit_is_rejected_without_a_write(
         json={'text': 'ABC1234', 'region_label_source': 'human'},
     )
     assert resp.status_code == 422, resp.text
-    assert resp.json()['detail'] == {'error': 'region_text_disabled'}
+    detail = resp.json()['detail']
+    assert detail['error'] == 'region_text_disabled'
+    assert detail['message']
     assert fake_os.update_calls == []
     assert fake_os.bulk_calls == []
     assert fake_os._docs['crop-1'] == before

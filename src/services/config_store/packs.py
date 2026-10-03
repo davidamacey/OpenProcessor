@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 from src.services.config_store import get_config_store
 from src.services.config_store.index import (
+    TEMPLATE_DESCRIPTION,
     ActiveConflictError,
     RevisionConflictError,
     config_doc_id,
@@ -165,7 +166,7 @@ def build_record(name: str, *, revision: int | None = None) -> PackRecord | None
             read_only=True,
             revision=None,
             etag=_content_etag(name, body),
-            description='Template (clone to use)',
+            description=TEMPLATE_DESCRIPTION,
             body=body,
             active=False,
             active_revision=None,

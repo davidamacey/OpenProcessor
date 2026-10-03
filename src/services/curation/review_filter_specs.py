@@ -19,7 +19,7 @@ from typing import Any, get_args
 
 from src.config.region_state import RegionStatus
 from src.services.curation.embedding_state import EmbeddingState
-from src.services.curation.item_filter import Origin, ReviewStatus
+from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
 
 
 # The ``region_status`` filter's selectable values on the ``regions`` tab
@@ -30,8 +30,9 @@ from src.services.curation.item_filter import Origin, ReviewStatus
 # Not a RegionStatus: it selects on the box list, whatever the item status
 # (a `detected` item can carry a rejected box beside its accepted ones).
 HAS_REJECTED_BOX = 'has_rejected_box'
+REGION_STATUS_DEFAULT = 'all'
 REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
-    {'value': 'all', 'label': 'All (accepted + rejected boxes)'},
+    {'value': REGION_STATUS_DEFAULT, 'label': 'All (accepted + rejected boxes)'},
     {'value': RegionStatus.DETECTED.value, 'label': 'Detected only'},
     {
         'value': RegionStatus.VERIFY_REJECTED.value,
@@ -51,6 +52,9 @@ ON_NEGATIVE_FRAME_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
     {'value': 'true', 'label': 'Only items on a reviewed-negative frame'},
     {'value': 'false', 'label': 'Hide items on a reviewed-negative frame'},
 )
+
+# Selecting it means: omit the parameter (the filter is off).
+UNSET_OPTION: dict[str, str] = {'value': '', 'label': 'Any'}
 
 EMBEDDING_STATE_LABELS: dict[str, str] = {
     'embedded': 'Embedded',
@@ -86,6 +90,25 @@ _CLASS_NAMES_HELP = (
 )
 
 
+# Spec params whose filter-model field is named differently.
+_MODEL_FIELD = {'class_name': 'class_names', 'exclude_class_name': 'exclude_class_names'}
+
+
+def _model_default(param: str) -> Any:
+    """The value applied when ``param`` is omitted, read off the filter models
+    (``ReviewFilters`` first, then ``ItemFilter``) so a spec cannot drift."""
+    from src.services.curation.review_request import ReviewFilters
+
+    field = _MODEL_FIELD.get(param, param)
+    review = ReviewFilters()
+    if hasattr(review, field):
+        return getattr(review, field)
+    item = ItemFilter()
+    if hasattr(item, field):
+        return getattr(item, field)
+    raise KeyError(f'no filter-model field for spec param {param!r}')
+
+
 def _spec(
     param: str,
     kind: str,
@@ -96,6 +119,10 @@ def _spec(
     max_: float | None = None,
     description: str = '',
 ) -> dict[str, Any]:
+    default = _model_default(param)
+    if kind == 'enum' and default is None:
+        # The unset state is a visible choice, never an implied first option.
+        options = (UNSET_OPTION, *options)
     return {
         'param': param,
         'kind': kind,
@@ -104,6 +131,8 @@ def _spec(
         'min': min_,
         'max': max_,
         'description': description,
+        'default': default,
+        'allows_unset': default is None,
     }
 
 
@@ -150,6 +179,8 @@ __all__ = [
     'FILTER_SPECS',
     'HAS_REJECTED_BOX',
     'ON_NEGATIVE_FRAME_FILTER_OPTIONS',
+    'REGION_STATUS_DEFAULT',
     'REGION_STATUS_FILTER_OPTIONS',
     'REGION_STATUS_FILTER_VALUES',
+    'UNSET_OPTION',
 ]

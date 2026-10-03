@@ -51,6 +51,14 @@ from src.services.curation.clustering.backend import (
     free_gpu_blocks,
     gpu_used_vram_mb,
 )
+from src.services.curation.clustering.pool_size import (
+    MIN_RESIDUALS_FOR_CLUSTERING,
+    UMAP_N_COMPONENTS,
+    UMAP_N_NEIGHBORS,
+    TooFewItemsError,
+    require_min_items,
+    umap_shape,
+)
 from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.ingest_class_sources import confident_class_sources
 
@@ -74,8 +82,6 @@ def umap_state_joblib_path_cuml() -> str:
 
 
 # UMAP hyperparameters.
-UMAP_N_COMPONENTS = 50
-UMAP_N_NEIGHBORS = 15
 UMAP_MIN_DIST = 0.0
 UMAP_METRIC = 'cosine'
 UMAP_RANDOM_STATE = 42
@@ -507,20 +513,19 @@ async def _load_umap_state_from_opensearch(client: AsyncOpenSearch, *, state_id:
         return None
 
 
-def _build_cpu_reducer() -> Any:
+def _build_cpu_reducer(n_items: int) -> Any:
     """Construct a freshly-parameterised sklearn-side ``umap.UMAP``."""
     import umap
 
     return umap.UMAP(
-        n_components=UMAP_N_COMPONENTS,
-        n_neighbors=UMAP_N_NEIGHBORS,
+        **umap_shape(n_items),
         min_dist=UMAP_MIN_DIST,
         metric=UMAP_METRIC,
         random_state=UMAP_RANDOM_STATE,
     )
 
 
-def _build_gpu_reducer(build_algo: str) -> Any:
+def _build_gpu_reducer(build_algo: str, n_items: int) -> Any:
     """Construct a freshly-parameterised ``cuml.manifold.UMAP``.
 
     ``build_algo`` picks the kNN construction strategy:
@@ -532,9 +537,10 @@ def _build_gpu_reducer(build_algo: str) -> Any:
     """
     import cuml  # type: ignore[import-not-found]
 
+    shape = umap_shape(n_items)
     kwargs: dict[str, Any] = {
-        'n_components': UMAP_N_COMPONENTS,
-        'n_neighbors': UMAP_N_NEIGHBORS,
+        'n_components': shape['n_components'],
+        'n_neighbors': shape['n_neighbors'],
         'min_dist': UMAP_MIN_DIST,
         'metric': UMAP_METRIC,
         'random_state': UMAP_RANDOM_STATE,
@@ -603,7 +609,7 @@ async def get_or_fit_reducer(
 
     if reducer is None or mode == 'refit':
         if backend.name == 'gpu' and backend.build_algo is not None:
-            reducer = _build_gpu_reducer(backend.build_algo)
+            reducer = _build_gpu_reducer(backend.build_algo, len(embeddings))
             logger.info(
                 'curation_umap_fit_gpu',
                 build_algo=backend.build_algo,
@@ -611,7 +617,7 @@ async def get_or_fit_reducer(
                 n=len(embeddings),
             )
         else:
-            reducer = _build_cpu_reducer()
+            reducer = _build_cpu_reducer(len(embeddings))
             logger.info('curation_umap_fit_cpu', n=len(embeddings))
         try:
             reduced_raw = await asyncio.to_thread(reducer.fit_transform, embeddings)
@@ -659,6 +665,7 @@ async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
             'n_residuals': 0,
             'refit': False,
         }
+    require_min_items(len(ids))
     _, _reduced, refit_happened, backend = await get_or_fit_reducer(
         client, embeddings, mode='refit'
     )
@@ -672,15 +679,19 @@ async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
 
 
 __all__ = [
+    'MIN_RESIDUALS_FOR_CLUSTERING',
     'RESIDUAL_EMBEDDING_FIELD',
     'UMAP_METRIC',
     'UMAP_MIN_DIST',
     'UMAP_N_COMPONENTS',
     'UMAP_N_NEIGHBORS',
     'UMAP_RANDOM_STATE',
+    'TooFewItemsError',
     'fetch_residual_embeddings',
     'get_or_fit_reducer',
+    'require_min_items',
     'umap_rebuild',
+    'umap_shape',
     'umap_state_joblib_path',
     'umap_state_joblib_path_cuml',
 ]

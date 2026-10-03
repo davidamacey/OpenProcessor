@@ -437,8 +437,12 @@ def _target_wire(analysis: Analysis, slug_available: bool) -> dict[str, Any]:
                 origins.setdefault(target.class_name, []).append(
                     {'project': st.project, 'class': name}
                 )
+    # A combine target is always new, so there is no "before": these are the
+    # counts the finished target will have. An item with no class is copied
+    # unclassed (class_target), so it counts even though no mapping names it.
+    unclassed = sum(st.items - sum(st.classes.values()) for st in analysis.stats)
     images = sum(s.images for s in analysis.stats) - len(analysis.duplicates)
-    items = sum(counts.values()) - analysis.merged_items - analysis.conflicts
+    items = sum(counts.values()) + unclassed - analysis.merged_items - analysis.conflicts
     return {
         'slug': analysis.request.target.slug,
         'slug_available': slug_available,
@@ -446,8 +450,9 @@ def _target_wire(analysis: Analysis, slug_available: bool) -> dict[str, Any]:
             {'id': i, 'name': n, 'count': counts.get(n, 0), 'from': origins.get(n, [])}
             for i, n in enumerate(mapping.target_classes)
         ],
-        'images': images,
-        'items': items,
+        'projected_images': images,
+        'projected_items': items,
+        'unclassed_items': unclassed,
         'holdout_images': analysis.holdout_images,
     }
 

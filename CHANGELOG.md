@@ -45,6 +45,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - `embedding_state` on every item (`embedded`, `failed`, `deferred`, `not_selected`; null for older items). An encoder failure at ingest is now marked `failed` and counted (`n_embedded`, `n_not_embedded` per image and in the batch summary) instead of silently storing a vectorless item.
 - `unembedded_in_scope` on text search, `n_unembedded` on outlier and diverse orderings, an `embedding` block in dataset stats, `items_embedded` in project counts, `unembedded` in the pipeline snapshots.
 - `docs/PERFORMANCE.md` "Ingest cost per image" baseline and `scripts/bench/ingest_cost_probe.py`.
+- Baseline tooling (`docs/PERFORMANCE.md` "Baseline protocol"): `scripts/bench/select_baseline_set.py` (seeded, checksummed image-set manifests, COCO license sidecar), `scripts/bench/run_baseline.py` (one-command ingest run with per-stage timing, GPU, bytes and storage report, and `--compare`), and the `op_pipeline_stage_seconds` / `op_pipeline_stage_bytes_total` metrics for decode, crop, JPEG encode, resize, embed and OpenSearch write.
 - Per-project ingest policy (`GET/PUT /curation/projects/{project}/ingest/policy`, `POST .../ingest/policy/preview`): a detect filter (classes by name, confidence, box area, N largest per image), an embedding mode (`all` default, `selected`, `lazy`), `detect.class_resolution` (`proposal` or `by_name`) and an optional per-project detector (validated against Triton). Revisioned (409 on a stale write), copied by project clone with the `settings_defaults` axis. Ingest and the SAM 3 runner both follow it; `n_filtered` is reported per image and in batch summaries.
 - One shared item filter (`ItemFilter`, one query builder) on crops, review, text search, class and dataset stats, clusters, regions and the new `GET .../detections/summary` (embedding breakdown per detected label plus a `suggested_reprocess` body).
 - "Run on selection": `crop_ids` or a `selection` (filter, `limit`, `sample`, `seed`) plus `dry_run` on batch exclude, unexclude, label and move; `item_filter` on YOLO export (recorded in the manifest) and on pipeline start.
@@ -192,6 +193,16 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- `POST .../cluster/umap/rebuild` no longer 500s on small pools: UMAP components and neighbours are clamped below the item count with random init, and a pool under 32 items is a typed `422 too_few_items` (`min_items`). One size guard (`pool_size`) serves every clustering entry point.
+- The route guard and `GET /projects/{project}` read one registry lookup, which confirms a `building`/`deleting` status at the project doc, so a finished combine no longer answers `409 project_building` after the GET reads `active`.
+- `GET /review/tabs` filter specs carry `default` (read off the filter models) and `allows_unset`; an enum whose default is null (`on_negative_frame`, `dataset_split`) lists an explicit `{value: "", label: "Any"}` option (omit the parameter when chosen); `region_status` now defaults to `all` on the wire.
+- `POST /ingest/policy/preview`: `by_class` names are class names (`traffic light`), and `embedded_because_labeled` separates items that embed only because a human or validated label always embeds.
+- `embedding.by_state` counts a pre-`embedding_state` item that has a vector as `embedded`, matching `embedding.embedded`.
+- Cloning a template no longer inherits its description, and `cloned_from` has no `@-` when the source has no revision.
+- Combine preview `target` serves `projected_images`/`projected_items`/`unclassed_items` (replacing `images`/`items`); unclassed items are copied, so they are now counted.
+- Promote warm-up covers batch 1 and `max_batch_size`, so `cold_start_expected_on_first_inference: false` holds for batched requests; single-class promotes write the project's class name into `labels.txt`.
+- `422 detector_not_servable` has a short `message` and distinct `reasons`; validation reports, combine previews and import previews serve a unique `id` per issue (`code[:subject]`, `#2` on a repeat); `GET /ingest/config` `detector.labels` skips id gaps, empty and repeated names; every structured error detail carries a `message`.
+- `GET /models/status` lists one row per Triton model name; typed error bodies omit fields their code does not carry.
 
 - Activating a config on any axis (prompt pack, region profile, open-vocabulary set, VLM)
   with no `expected_active` answered 409 `active_conflict` even when nothing was active,

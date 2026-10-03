@@ -98,6 +98,7 @@ from src.services.curation.ingest_policy import (
 )
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
+from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
@@ -140,12 +141,13 @@ def _imohash_bytes(data: bytes) -> str:
 
 def _decode_image(image_bytes: bytes) -> tuple[Image.Image, int, int]:
     """Decode bytes -> EXIF-transposed RGB PIL image + (width, height)."""
-    img = Image.open(io.BytesIO(image_bytes))
-    img = ImageOps.exif_transpose(img)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-    w, h = img.size
-    return img, w, h
+    with stage_timer('decode', nbytes=len(image_bytes)):
+        img = Image.open(io.BytesIO(image_bytes))
+        img = ImageOps.exif_transpose(img)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        w, h = img.size
+        return img, w, h
 
 
 def _now_iso() -> str:
@@ -311,26 +313,28 @@ class CurationIngestService:
                 {'index': {'_index': self.config.images_index, '_id': image_doc['image_id']}},
                 image_doc,
             ]
-            resp = await self.opensearch.bulk(body=image_body, refresh=False)
+            with stage_timer('opensearch_write'):
+                resp = await self.opensearch.bulk(body=image_body, refresh=False)
             if isinstance(resp, dict) and resp.get('errors'):
                 logger.warning('ingest_bulk_partial_errors', items=resp.get('items', [])[:3])
             else:
                 result['images_indexed'] = 1
 
         if crop_docs:
-            upsert = await occ_upsert_bulk(
-                self.opensearch,
-                crop_docs,
-                index=self.config.items_index,
-                human_field_guards=list(self._CROP_HUMAN_FIELD_GUARDS),
-                writer_id='ingest',
-                created_ids=created_ids,
-                fill_if_absent=(
-                    (get_region_fields().status,)
-                    if seed_region and self.region_seed_status is not None
-                    else ()
-                ),
-            )
+            with stage_timer('opensearch_write'):
+                upsert = await occ_upsert_bulk(
+                    self.opensearch,
+                    crop_docs,
+                    index=self.config.items_index,
+                    human_field_guards=list(self._CROP_HUMAN_FIELD_GUARDS),
+                    writer_id='ingest',
+                    created_ids=created_ids,
+                    fill_if_absent=(
+                        (get_region_fields().status,)
+                        if seed_region and self.region_seed_status is not None
+                        else ()
+                    ),
+                )
             result['crops_created'] = upsert['created']
             result['crops_updated'] = upsert['updated']
             result['crops_preserved_human'] = upsert['preserved_human']

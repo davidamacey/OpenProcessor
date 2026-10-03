@@ -399,6 +399,7 @@ async def clone_prompt_pack(
 ) -> PromptPackDoc:
     from src.config import get_curation_config
     from src.services.config_store.clone_shared import (
+        cloned_description,
         cloned_from_tag,
         read_source_record,
         reject_invalid_clone_name,
@@ -447,7 +448,7 @@ async def clone_prompt_pack(
             name=body.new_name,
             body=new_body,
             expected_revision=None,
-            description=body.description if body.description is not None else source.description,
+            description=cloned_description(body.description, source.description),
             cloned_from=cloned_from,
         )
     except RevisionConflictError as exc:
