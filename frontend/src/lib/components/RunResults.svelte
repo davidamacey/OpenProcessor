@@ -311,13 +311,6 @@
                   class="max-h-64 max-w-full rounded object-contain"
                 />
               </button>
-            {:else if evalData.confusion_matrix_path}
-              <p class="text-zinc-500">
-                confusion matrix (server path, not viewable here):
-                <span class="ml-1 break-all font-mono text-zinc-400"
-                  >{evalData.confusion_matrix_path}</span
-                >
-              </p>
             {:else}
               <p class="text-zinc-500">confusion matrix: —</p>
             {/if}
@@ -341,10 +334,6 @@
                 class="text-blue-300 underline">{mlflowRunUrl}</a
               >
               <!-- eslint-enable svelte/no-navigation-without-resolve -->
-              <!-- TODO: backend is being asked to serve mlflow_run_url as
-                   null unless OP_MLFLOW_PUBLIC_URL is set (never the
-                   docker-internal hostname) — once that lands every
-                   non-null value here is guaranteed browser-reachable. -->
             {:else if mlflowRunId}
               {mlflowRunId}
               {#if !isTerminal}

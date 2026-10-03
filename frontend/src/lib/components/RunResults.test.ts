@@ -261,12 +261,15 @@ describe('RunResults — failed run', () => {
 });
 
 describe('RunResults — confusion matrix', () => {
-  it('renders confusion_matrix_path as text only, never as an <img>, when no url is served', async () => {
+  it('shows neither an <img> nor the server path when no url is served', async () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);
     await tick();
     flushSync();
-    expect(el.textContent).toContain(trainStatusFixture.eval?.confusion_matrix_path);
+    const path = trainStatusFixture.eval?.confusion_matrix_path as string;
+    expect(path).toBeTruthy();
+    expect(el.textContent).not.toContain(path);
+    expect(el.textContent).toContain('confusion matrix: —');
     expect(el.querySelector('img')).toBeNull();
   });
 
