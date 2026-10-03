@@ -654,6 +654,24 @@ class AppAssets:
         self.errors: list[str] = []
 
 
+def fetch_app_asset(route: Any, attempts: int = 3) -> Any:
+    """`route.fetch()` for one of the app's own files, retrying a connection
+    reset. `vite preview` closes idle keep-alive sockets; a request that
+    reuses one in that instant fails with `read ECONNRESET`, which used to be
+    aborted as a failed chunk and left the page without its first element.
+    Only a reset is retried (these are idempotent GETs); any other error, and
+    a reset that persists, propagates."""
+    for attempt in range(attempts):
+        try:
+            # 3xx goes to the browser as-is, so a navigation lands on the
+            # URL the server actually redirected to.
+            return route.fetch(max_redirects=0)
+        except Exception as exc:  # noqa: BLE001 — re-raised unless a retryable reset
+            if "ECONNRESET" not in str(exc) or attempt == attempts - 1:
+                raise
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 def serve_app_through_harness(page: Any, app_url: str) -> AppAssets:
     """Answer every request for the app's own origin (HTML, JS chunks,
     CSS, static files) with `route.fetch()` + `route.fulfill()` instead of
@@ -679,9 +697,7 @@ def serve_app_through_harness(page: Any, app_url: str) -> AppAssets:
 
     def handler(route: Any) -> None:
         try:
-            # 3xx goes to the browser as-is, so a navigation lands on the
-            # URL the server actually redirected to.
-            response = route.fetch(max_redirects=0)
+            response = fetch_app_asset(route)
             # Recorded before fulfilling: the browser's `requestfinished`
             # can be dispatched while `fulfill` is still waiting.
             assets.served.append(route.request.url)
