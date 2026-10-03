@@ -76,12 +76,20 @@ def test_settings_default_is_byte_identical_to_the_historical_value() -> None:
     """The default MUST stay exactly what was always hardcoded, so
     behavior is unchanged until someone explicitly overrides it via the
     ``YOLO_MODEL`` env var."""
-    import importlib
+    import importlib.util
 
     import src.config.settings as settings_mod
 
-    importlib.reload(settings_mod)
-    assert settings_mod.TritonModelConfig.YOLO_MODEL == LITERAL
+    # A private copy: reloading the live module would give every later test in
+    # this process a second ``TritonModelConfig`` that the code under test
+    # (which imported the first) never sees.
+    spec = importlib.util.spec_from_file_location('_settings_default_probe', settings_mod.__file__)
+    assert spec is not None
+    assert spec.loader is not None
+    fresh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)
+    assert fresh.TritonModelConfig.YOLO_MODEL == LITERAL
+    assert fresh.TritonModelConfig is not settings_mod.TritonModelConfig
 
 
 def test_downstream_call_sites_read_the_single_settings_pointer() -> None:
