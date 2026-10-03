@@ -32,6 +32,18 @@ class ReviewFilterSpec(BaseModel):
     min: float | None = Field(description='Lower bound of a number / integer filter.')
     max: float | None = Field(description='Upper bound of a number / integer filter.')
     description: str = Field(description='How to fill the filter; empty when the label says it.')
+    default: Any = Field(
+        description=(
+            'Value applied when the parameter is omitted, read off the filter model: '
+            'null = no filter, [] = none selected, false = off.'
+        )
+    )
+    allows_unset: bool = Field(
+        description=(
+            'True when the default is null: omit the parameter for "no filter" '
+            '(an enum then needs a client-side "Any" choice; never send an empty string).'
+        )
+    )
 
 
 class ReviewTab(BaseModel):

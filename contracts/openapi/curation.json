@@ -20500,6 +20500,15 @@
       },
       "ReviewFilterSpec": {
         "properties": {
+          "allows_unset": {
+            "description": "True when the default is null: omit the parameter for \"no filter\" (an enum then needs a client-side \"Any\" choice; never send an empty string).",
+            "title": "Allows Unset",
+            "type": "boolean"
+          },
+          "default": {
+            "description": "Value applied when the parameter is omitted, read off the filter model: null = no filter, [] = none selected, false = off.",
+            "title": "Default"
+          },
           "description": {
             "description": "How to fill the filter; empty when the label says it.",
             "title": "Description",
@@ -20567,7 +20576,9 @@
           "options",
           "min",
           "max",
-          "description"
+          "description",
+          "default",
+          "allows_unset"
         ],
         "title": "ReviewFilterSpec",
         "type": "object"
@@ -41569,6 +41580,7 @@
                   "type": "null"
                 }
               ],
+              "default": "all",
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }
@@ -42066,6 +42078,7 @@
                   "type": "null"
                 }
               ],
+              "default": "all",
               "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }

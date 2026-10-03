@@ -31,6 +31,7 @@ from src.services.curation.region_boxes import box_query, read_boxes
 from src.services.curation.review_filter_specs import (
     FILTER_SPECS,
     HAS_REJECTED_BOX,
+    REGION_STATUS_DEFAULT,
     REGION_STATUS_FILTER_VALUES,
 )
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
@@ -121,7 +122,7 @@ PRIMARY_SUBJECT_MAX_RANK = 2
 TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'primary_low_conf': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
     'classifier_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
-    'regions': {'region_status': 'all'},
+    'regions': {'region_status': REGION_STATUS_DEFAULT},
 }
 
 
@@ -395,7 +396,7 @@ def build_tab_query(
         # each in the region editor, adjusts the box if needed, and
         # confirms, which sets the human-only validated flag (a rejected
         # candidate's confirm promotes it into `bbox_norm` instead).
-        region_status_filter = region_status or 'all'
+        region_status_filter = region_status or REGION_STATUS_DEFAULT
         if region_status_filter not in REGION_STATUS_FILTER_VALUES:
             raise HTTPException(
                 status_code=400,

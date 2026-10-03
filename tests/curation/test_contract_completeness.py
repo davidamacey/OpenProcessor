@@ -241,3 +241,29 @@ def test_counters_accumulate_beside_non_counter_detail() -> None:
     result.add_count('items', 2)
     result.add_count('items', 3)
     assert result.detail == {'estimated_vector_kb': 2.5, 'items': 5}
+
+
+# --- review tabs: served defaults are the filter models' defaults -----------
+
+
+def test_every_spec_serves_its_filter_model_default() -> None:
+    from src.services.curation.item_filter import ItemFilter
+    from src.services.curation.review_request import ReviewFilters
+
+    alias = {'class_name': 'class_names', 'exclude_class_name': 'exclude_class_names'}
+    review, item = ReviewFilters(), ItemFilter()
+    for param, spec in FILTER_SPECS.items():
+        field = alias.get(param, param)
+        expected = getattr(review, field) if hasattr(review, field) else getattr(item, field)
+        assert spec['default'] == expected, param
+        assert spec['allows_unset'] is (expected is None), param
+    served = {t['id']: t for t in review_queries.review_tab_catalog()}
+    for tab in served.values():
+        for spec in tab['filter_specs']:
+            assert spec['default'] == FILTER_SPECS[spec['param']]['default']
+
+
+def test_region_status_default_is_all_and_negative_frame_is_unset() -> None:
+    assert FILTER_SPECS['region_status']['default'] == 'all'
+    assert FILTER_SPECS['on_negative_frame']['default'] is None
+    assert FILTER_SPECS['on_negative_frame']['allows_unset'] is True
