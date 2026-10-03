@@ -331,7 +331,7 @@ section 4). The per-1,000 figures below are derived from those numbers with
 on the public 4,000-image COCO set is a later step.
 
 Inputs: 1.37 stored items per image with the narrow detector, 7 per image with
-the full 80-class vocabulary, about 1.8 KB of metadata per item, 8.4 KB per
+the full 80-class vocabulary, about 1 KB of metadata per item (measured 0.85-1 KB), 8.4 KB per
 1024-d vector (one per embedded item, one per image for the whole frame).
 
 | Scenario (per 1,000 images) | Items | Total MB | vs narrow | Crop encoder calls |
