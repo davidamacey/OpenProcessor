@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from src.clients.curation_opensearch import get_class_registry
 from src.config import get_curation_config
 from src.core.logging import get_logger
-from src.services.curation.class_ensure import ensure_class_by_name
+from src.services.curation.class_ensure import ResolvedClass, ensure_class_by_name
 from src.services.curation.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
@@ -51,6 +51,7 @@ from src.services.detection.open_vocab_select import (
     select_open_vocab_hits,
 )
 from src.services.detection.segmenter_gate import GateDecision, GateSubject, HitRateTracker, decide
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -161,7 +162,7 @@ def _detected(
     target: OpenVocabTarget,
     ov: OpenVocabSet,
     revision: int | None,
-    class_id: int | None,
+    registry_class: ResolvedClass | None,
     width: int,
     height: int,
 ) -> DetectedItem:
@@ -175,8 +176,8 @@ def _detected(
     return DetectedItem(
         bbox_pixel=(x1 * width, y1 * height, x2 * width, y2 * height),
         score=hit.candidate.score,
-        class_id=class_id,
-        class_name=hit.class_name or None,
+        class_id=registry_class.class_id if registry_class else None,
+        class_name=registry_class.class_name if registry_class else None,
         class_source=OPEN_VOCAB_CLASS_SOURCE,
         # Discovery mode: no class yet, the prompt names the proposal.
         proposal_name=None if hit.class_name else hit.prompt,
@@ -400,10 +401,13 @@ async def run_open_vocab_image(
 
     by_target = {(t.prompt, t.class_name): t for t in todo}
     registry = get_class_registry()
-    class_ids: dict[str, int] = {}
+    resolved: dict[str, ResolvedClass] = {}
     for name in {h.class_name for h in kept if h.class_name}:
-        class_ids[name] = ensure_class_by_name(
-            registry, name, group=OPEN_VOCAB_CLASS_GROUP, notes='created by an open-vocabulary pass'
+        resolved[name] = ensure_class_by_name(
+            registry,
+            normalize_class_name(name),
+            group=OPEN_VOCAB_CLASS_GROUP,
+            notes='created by an open-vocabulary pass',
         )
     items = [
         _detected(
@@ -411,7 +415,7 @@ async def run_open_vocab_image(
             by_target[(h.prompt, h.class_name)],
             ov,
             revision,
-            class_ids.get(h.class_name),
+            resolved.get(h.class_name),
             ctx.width,
             ctx.height,
         )

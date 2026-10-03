@@ -17,12 +17,12 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.config_store.profile_validation import _issue, check_segmenter_prompt_text
-from src.services.detection.open_vocab_select import class_key
 from src.services.detection.open_vocab_set import (
     MAX_ENABLED_TARGETS_CEILING,
     OpenVocabSet,
     decode_open_vocab_set,
 )
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -51,6 +51,10 @@ OPEN_VOCAB_FIELD_RANGES: dict[str, tuple[float, float]] = {
 BYPASSABLE_CODES: frozenset[str] = frozenset({'segmenter_unreachable', 'segmenter_not_configured'})
 
 _MAX_CLASS_NAME_LEN = 64
+
+
+def _norm(name: str | None) -> str:
+    return normalize_class_name(name or '')
 
 
 def _check_name(name: str | None, existing_names: frozenset[str]) -> list[ValidationIssue]:
@@ -125,27 +129,23 @@ def _check_targets(
     ov: OpenVocabSet, class_names: frozenset[str], detector_class_names: frozenset[str]
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    registry = {class_key(n) for n in class_names}
-    detector = {class_key(n) for n in detector_class_names}
+    registry = {_norm(n) for n in class_names}
+    detector = {_norm(n) for n in detector_class_names}
     seen: set[tuple[str, str]] = set()
     for i, t in enumerate(ov.targets):
         base = f'targets[{i}]'
         issues.extend(check_segmenter_prompt_text(t.prompt, sole_leg=True, field=f'{base}.prompt'))
-        if t.class_name and (
-            len(t.class_name) > _MAX_CLASS_NAME_LEN
-            or '\n' in t.class_name
-            or t.class_name != t.class_name.strip()
-        ):
+        if t.class_name and (len(t.class_name) > _MAX_CLASS_NAME_LEN or not _norm(t.class_name)):
             issues.append(
                 _issue(
                     'open_vocab_class_name_invalid',
                     'error',
-                    f'{base}.class_name must be a single trimmed line of at most '
+                    f'{base}.class_name must contain a letter or digit and be at most '
                     f'{_MAX_CLASS_NAME_LEN} characters',
                     field=f'{base}.class_name',
                 )
             )
-        key = (t.prompt.strip().casefold(), class_key(t.class_name))
+        key = (t.prompt.strip().casefold(), _norm(t.class_name))
         if key in seen:
             issues.append(
                 _issue(
@@ -164,11 +164,11 @@ def _check_targets(
                 field=f'{base}.parent_classes',
             )
             for parent in t.parent_classes
-            if registry and class_key(parent) not in registry
+            if registry and _norm(parent) not in registry
         )
         if not t.class_name:
             continue
-        if class_key(t.class_name) in detector:
+        if _norm(t.class_name) in detector:
             issues.append(
                 _issue(
                     'open_vocab_detector_class',
@@ -178,12 +178,12 @@ def _check_targets(
                     field=f'{base}.class_name',
                 )
             )
-        if registry and class_key(t.class_name) not in registry:
+        if registry and _norm(t.class_name) not in registry:
             issues.append(
                 _issue(
                     'open_vocab_class_new',
                     'info',
-                    f'{base}: class {t.class_name!r} will be added to the class registry '
+                    f'{base}: class {_norm(t.class_name)!r} will be added to the class registry '
                     'when the first hit is written',
                     field=f'{base}.class_name',
                 )

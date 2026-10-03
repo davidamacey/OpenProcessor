@@ -16,7 +16,8 @@ class name, then the dedup against boxes already on the image:
 * any other overlap (a different class name on a machine item) keeps both.
 
 Pure: no I/O, deterministic for equal inputs. Class identity is by NAME
-(case-insensitive, trimmed), never by registry id.
+(:func:`~src.utils.class_names.normalize_class_name`, the one name-equality
+rule), never by registry id.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from typing import TYPE_CHECKING, Literal
 
 from src.services.detection.geometry import iou
 from src.services.detection.region_candidates import select_region_candidates
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -85,9 +87,8 @@ class OpenVocabSelection:
     dropped: list[tuple[Hit, DropReason]]
 
 
-def class_key(name: str | None) -> str:
-    """The one class-name comparison key (trimmed, case-insensitive)."""
-    return (name or '').strip().casefold()
+def _norm(name: str | None) -> str:
+    return normalize_class_name(name or '')
 
 
 def _area(box: tuple[float, float, float, float]) -> float:
@@ -134,9 +135,9 @@ def select_open_vocab_hits(
     pooled.sort(key=lambda h: (-h.candidate.score, *h.candidate.bbox_norm[:2], h.prompt))
     survivors: list[Hit] = []
     for h in pooled:
-        key = class_key(h.class_name)
+        key = _norm(h.class_name)
         if any(
-            class_key(k.class_name) == key
+            _norm(k.class_name) == key
             and iou(h.candidate.bbox_norm, k.candidate.bbox_norm) > dedup_iou
             for k in survivors
         ):
@@ -147,11 +148,11 @@ def select_open_vocab_hits(
     kept_hits: list[Hit] = []
     for h in survivors:
         box = h.candidate.bbox_norm
-        key = class_key(h.class_name)
+        key = _norm(h.class_name)
         if any(e.locked and iou(box, e.bbox_norm) >= LOCKED_OVERLAP_IOU for e in existing):
             dropped.append((h, 'skipped_locked'))
         elif any(
-            class_key(e.class_name) == key and iou(box, e.bbox_norm) >= dedup_iou for e in existing
+            _norm(e.class_name) == key and iou(box, e.bbox_norm) >= dedup_iou for e in existing
         ):
             dropped.append((h, 'agree_existing'))
         else:
@@ -166,6 +167,5 @@ __all__ = [
     'Hit',
     'OpenVocabSelection',
     'TargetRules',
-    'class_key',
     'select_open_vocab_hits',
 ]

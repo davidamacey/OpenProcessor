@@ -169,7 +169,8 @@ def test_a_stored_set_with_no_segmenter_configured_saves_but_does_not_activate(
             {},
             'open_vocab_duplicate_target',
         ),
-        ([{'prompt': 'cup', 'class_name': ' cup'}], {}, 'open_vocab_class_name_invalid'),
+        ([{'prompt': 'cup', 'class_name': ' !! '}], {}, 'open_vocab_class_name_invalid'),
+        ([{'prompt': 'cup', 'class_name': 'c' * 65}], {}, 'open_vocab_class_name_invalid'),
         ([{'prompt': 'cup', 'min_score': 1.5}], {}, 'open_vocab_field_range'),
         (
             [{'prompt': 'cup', 'min_area_frac': 0.5, 'max_area_frac': 0.2}],

@@ -44,20 +44,31 @@ class _Registry:
 
 def test_ensure_class_matches_by_name_ignoring_case_and_deprecated() -> None:
     reg = _Registry([_Entry(0, 'Cone', deprecated=True), _Entry(1, 'cone')])
-    assert ensure_class_by_name(reg, ' CONE ', group='g') == 1
+    assert ensure_class_by_name(reg, ' CONE ', group='g') == (1, 'cone')
+
+
+def test_ensure_class_uses_the_one_name_equality_rule_and_returns_the_registry_spelling() -> None:
+    reg = _Registry([_Entry(4, 'traffic_light')])
+    assert ensure_class_by_name(reg, 'Traffic Light', group='g') == (4, 'traffic_light')
+    assert len(reg.entries) == 1
 
 
 def test_ensure_class_adds_a_missing_name_once() -> None:
     reg = _Registry([_Entry(0, 'cup')])
-    assert ensure_class_by_name(reg, 'cone', group='g') == 1
-    assert ensure_class_by_name(reg, 'cone', group='g') == 1
+    assert ensure_class_by_name(reg, 'cone', group='g') == (1, 'cone')
+    assert ensure_class_by_name(reg, 'cone', group='g') == (1, 'cone')
     assert len(reg.entries) == 2
 
 
 def test_ensure_class_tolerates_a_concurrent_add_of_the_same_name() -> None:
     reg = _Registry([])
     reg.race = _Entry(7, 'cone')
-    assert ensure_class_by_name(reg, 'cone', group='g') == 7
+    assert ensure_class_by_name(reg, 'cone', group='g') == (7, 'cone')
+
+
+def test_ensure_class_refuses_a_name_with_nothing_slug_safe() -> None:
+    with pytest.raises(ClassRegistryError):
+        ensure_class_by_name(_Registry([]), ' !! ', group='g')
 
 
 def test_ensure_class_reraises_when_the_failure_is_not_a_race() -> None:

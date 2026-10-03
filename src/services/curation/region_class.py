@@ -33,7 +33,7 @@ def ensure_region_class() -> int | None:
         name,
         group=REGION_CLASS_GROUP,
         notes='seeded from the active region profile',
-    )
+    ).class_id
 
 
 def item_classes(classes: Iterable[RegistryClassEntry]) -> list[RegistryClassEntry]:

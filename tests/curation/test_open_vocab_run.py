@@ -298,3 +298,26 @@ async def test_an_unservable_image_fails_before_any_segmenter_call(
             fake, service, image_id, {**image_doc, 'image_path': '/etc/passwd'}, make_set(), seg
         )
     assert seg.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_target_name_resolves_to_the_registry_spelling_or_adds_a_slug(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, registry: StatefulRegistry
+) -> None:
+    fake, service, image_id, doc = await _world(tmp_path, monkeypatch)
+    seg = FakeSegmenter()
+    seg.by_prompt = {'a': [cand((0.1, 0.1, 0.3, 0.3))], 'b': [cand((0.5, 0.5, 0.8, 0.8))]}
+    ov = make_set(
+        targets=[
+            {'prompt': 'a', 'class_name': 'GADGET'},  # the registry has 'gadget' (id 0)
+            {'prompt': 'b', 'class_name': 'Traffic Cone'},
+        ]
+    )
+
+    await run_open_vocab_image(fake, service, image_id, doc, ov, revision=1, segment=seg)
+
+    by_prompt = {d['source_prompt']: d for d in docs(fake).values()}
+    assert (by_prompt['a']['class_id'], by_prompt['a']['class_name']) == (0, 'gadget')
+    assert by_prompt['b']['class_name'] == 'traffic_cone'
+    assert registry.added == ['traffic_cone']
+    assert by_prompt['b']['embedding_state'] == 'embedded'

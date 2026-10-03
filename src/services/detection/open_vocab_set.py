@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, fields
 from typing import Any
 
 from src.services.detection.open_vocab_select import TargetRules
+from src.utils.class_names import normalize_class_name
 
 
 DEFAULT_MIN_SCORE = 0.5
@@ -43,7 +44,7 @@ class OpenVocabTarget:
     @property
     def key(self) -> str:
         """Identity of the target across set revisions (hit-rate history)."""
-        return f'{self.class_name.strip().casefold()}|{self.prompt.strip().casefold()}'
+        return f'{normalize_class_name(self.class_name)}|{self.prompt.strip().casefold()}'
 
     def rules(self) -> TargetRules:
         return TargetRules(

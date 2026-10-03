@@ -8,9 +8,10 @@ open-vocabulary pass).
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 from src.clients.curation_opensearch import ClassRegistryError
+from src.utils.class_names import normalize_class_name
 
 
 class NamedClassRegistry(Protocol):
@@ -22,25 +23,39 @@ class NamedClassRegistry(Protocol):
     def add_class(self, name: str, group: str = ..., notes: str = ...) -> int: ...
 
 
+class ResolvedClass(NamedTuple):
+    """A registry class: its id and the name the registry spells it with (an
+    item stores this name, not the spelling the caller asked for)."""
+
+    class_id: int
+    class_name: str
+
+
 def ensure_class_by_name(
     registry: NamedClassRegistry, name: str, *, group: str, notes: str = ''
-) -> int:
-    """The id of the non-deprecated class named ``name`` (trimmed,
-    case-insensitive), adding it under ``group`` first when the registry
-    lacks it. A concurrent writer adding the same name first is not an error."""
-    wanted = name.strip().casefold()
+) -> ResolvedClass:
+    """The non-deprecated class named ``name``, added under ``group`` first
+    when the registry lacks it. Names compare by
+    :func:`~src.utils.class_names.normalize_class_name` (the one name-equality
+    rule); a new class keeps the caller's (trimmed) spelling. A concurrent
+    writer adding the same name first is not an error."""
+    wanted = normalize_class_name(name)
+    if not wanted:
+        raise ClassRegistryError('class_name must contain a letter or digit')
 
-    def find() -> int | None:
+    def find() -> ResolvedClass | None:
         for entry in registry.load().classes:
-            if not entry.deprecated and entry.class_name.casefold() == wanted:
-                return entry.class_id
+            if not entry.deprecated and normalize_class_name(entry.class_name) == wanted:
+                return ResolvedClass(entry.class_id, entry.class_name)
         return None
 
     found = find()
     if found is not None:
         return found
     try:
-        return registry.add_class(name.strip(), group=group, notes=notes)
+        return ResolvedClass(
+            registry.add_class(name.strip(), group=group, notes=notes), name.strip()
+        )
     except ClassRegistryError:
         found = find()
         if found is None:
@@ -48,4 +63,4 @@ def ensure_class_by_name(
         return found
 
 
-__all__ = ['ensure_class_by_name']
+__all__ = ['NamedClassRegistry', 'ResolvedClass', 'ensure_class_by_name']

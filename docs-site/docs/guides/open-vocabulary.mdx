@@ -23,8 +23,10 @@ and project `cars` are assumed.
   set is active per project. A shipped template (`street_objects`) is
   read-only; clone it to use it.
 - **Target.** One row of a set. `prompt` is what SAM 3 looks for;
-  `class_name` is the registry class the hits become, by name (a name the
-  registry lacks is added when the first hit is written). An empty
+  `class_name` is the registry class the hits become, by name: names compare
+  by their slug form (`Traffic Light` is `traffic_light`), the item stores the
+  registry's spelling, and a name the registry lacks is added, as a slug, when
+  the first hit is written. An empty
   `class_name` is **discovery mode**: hits are stored as unlabeled proposals
   named by the prompt, for a person or the VLM to name later.
   `min_score`, `min_area_frac`, `max_area_frac` and `max_instances` bound what is

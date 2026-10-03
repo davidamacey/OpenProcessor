@@ -117,3 +117,10 @@ def test_deterministic_regardless_of_input_order() -> None:
     one = select_open_vocab_hits([(_rules(), cands)], [], dedup_iou=0.5)
     two = select_open_vocab_hits([(_rules(), cands[::-1])], [], dedup_iou=0.5)
     assert [h.candidate for h in one.kept] == [h.candidate for h in two.kept]
+
+
+def test_class_names_compare_by_the_one_name_equality_rule() -> None:
+    existing = [ExistingBox(BOX, 'traffic_light', locked=False)]
+    rules = _rules('lamp', 'Traffic Light')
+    sel = select_open_vocab_hits([(rules, [_c(BOX)])], existing, dedup_iou=0.5)
+    assert _reasons(sel) == ['agree_existing']
