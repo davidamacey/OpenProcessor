@@ -38,6 +38,9 @@ const SCANNED_FILES = [
   'lib/components/SlotCard.svelte',
   'lib/api_vlm.ts',
   'lib/api_configTest.ts',
+  'lib/api_openVocab.ts',
+  'lib/api_regionStage.ts',
+  'lib/api_detector.ts',
 ] as const;
 
 /** Every file that composes a backend URL through `${globalApi()}` — the
@@ -250,6 +253,9 @@ describe('endpoint catalog: completeness', () => {
       'lib/api_vlm.ts': { scoped: true, global: true, prefix: false },
       'lib/api_combine.ts': { scoped: false, global: true, prefix: true },
       'lib/api_configTest.ts': { scoped: true, global: false, prefix: false },
+      'lib/api_openVocab.ts': { scoped: true, global: false, prefix: false },
+      'lib/api_regionStage.ts': { scoped: true, global: false, prefix: false },
+      'lib/api_detector.ts': { scoped: true, global: false, prefix: false },
     };
     const sets = {
       scoped: new Set<string>(SCANNED_FILES),
@@ -418,6 +424,9 @@ const TRACK_WRAPPER_FILES = new Set<string>([
   'lib/api_vlm.ts',
   'lib/api_combine.ts',
   'lib/api_configTest.ts',
+  'lib/api_openVocab.ts',
+  'lib/api_regionStage.ts',
+  'lib/api_detector.ts',
 ]);
 
 function describeCalls(

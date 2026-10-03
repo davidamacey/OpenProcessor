@@ -11,6 +11,7 @@
   import SlotBboxEditor from './SlotBboxEditor.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
+  import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
 
   interface Props {
     crop: Crop;
@@ -367,6 +368,7 @@
         </svg>
       </span>
     {/if}
+    <EmbeddingStateBadge state={crop.embedding_state ?? null} compact />
     {#if hasClass}
       <span
         class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-[10px] font-medium {badge.cls}"
