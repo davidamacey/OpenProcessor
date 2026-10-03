@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `npm run test:mutation` measures again: Stryker's vitest runner runs no tests
+  under vitest 5, so it now drives one command-runner pass per file
+  (`scripts/mutation.mjs`, `vitest related <file>` per mutant). Refs #26.
+
 ### Added
 
 - Cropwright is now the front door: `docker-compose.yml` runs the docs site as a

@@ -2510,7 +2510,7 @@ controller directly (`clusterController.test.ts`).
 Every new test in either category should be verified to fail against a
 mutated copy of the code it covers (edit a scratch copy, confirm red,
 restore byte-for-byte — never `git checkout`/`stash`/`restore`) before
-being trusted; `npm run test:mutation -- --mutate <file>` does this at
+being trusted; `npm run test:mutation -- <file>` does this at
 scale for a file already in `stryker.config.json`'s `mutate` list.
 
 ### End-to-end tests (`e2e/`)
@@ -2726,14 +2726,24 @@ test-audit-2026-09-24.md` flagged as most exposed to "the suite passes
 but doesn't actually test the behavior." It answers a different
 question than `npm test`: not "does every assertion pass" but "if I
 break this line on purpose, does some test actually notice." Takes
-about 15-20 minutes locally; not run in pre-commit or the per-push CI
-`check` job (too slow) — it runs on a schedule and `workflow_dispatch`
-via `.github/workflows/mutation.yml`. `thresholds.break` in the config
-ratchets up only when a real pass raises the score; don't lower it to
-make a red run go green. Run it locally after touching wire-mapping
-logic in `api.ts` or store logic in `stores/*.svelte.ts`, or whenever
-CI's scheduled run goes red, to see the exact surviving mutants
-(`reports/mutation/index.html`).
+about 5-8 minutes per small file (api.ts and the controllers take far
+longer; the full 17-file run takes hours); not run in pre-commit or the
+per-push CI `check` job (too slow) — it runs on a schedule and
+`workflow_dispatch` via `.github/workflows/mutation.yml`.
+`thresholds.break` in the config ratchets up only when a real pass raises
+the score; don't lower it to make a red run go green. Run it locally after
+touching wire-mapping logic in `api.ts` or store logic in
+`stores/*.svelte.ts`, or whenever CI's scheduled run goes red, to see the
+exact surviving mutants (`reports/mutation/<file>/index.html`).
+
+`npm run test:mutation [file ...]` is `scripts/mutation.mjs`, not a bare
+`stryker run`: `@stryker-mutator/vitest-runner` 10.0.0 (latest) does not work
+with vitest 5 (every mutant ran 0 tests, so everything survived), so the
+driver runs one Stryker command-runner pass per file, each mutant executing
+`vitest related <file> --run --bail 1` (`coverageAnalysis: off`, incremental
+off). A mutant is killed when a test importing the mutated file fails.
+Measured 2026-10-03: sourceBadge 72.7%, uploadPlanner 87.5%, classPicker
+80.9%. Revisit the stock `vitest` runner when a release supports vitest 5.
 
 The production build runs in a non-root
 `nginxinc/nginx-unprivileged:1.31.2-alpine3.23` container (uid 101, nginx on
