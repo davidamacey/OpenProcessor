@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
 PIPELINE_PAUSED_FLAG_NAME = 'pipeline_paused.flag'
+REGION_STAGE_PAUSED_FLAG_NAME = 'region_stage_paused.flag'
 
 
 def is_project_paused(record: ProjectRecord) -> bool:
@@ -27,6 +28,15 @@ def is_project_paused(record: ProjectRecord) -> bool:
     paused project's fetches and keep serving the others; the global GPU
     pause sentinel still pauses everything."""
     return (Path(record.resources.project_state_dir) / PIPELINE_PAUSED_FLAG_NAME).exists()
+
+
+def is_region_stage_paused(record: ProjectRecord) -> bool:
+    """The project's region stage alone is paused while
+    ``<project_state_dir>/region_stage_paused.flag`` exists: the region worker
+    fetches nothing for it and releases items it already holds before their
+    segmenter call, so they stay ``pending_detection``. Every other stage
+    keeps running."""
+    return (Path(record.resources.project_state_dir) / REGION_STAGE_PAUSED_FLAG_NAME).exists()
 
 
 async def unpaused_projects(registry: Any, only_slug: str | None) -> list[ProjectRecord]:

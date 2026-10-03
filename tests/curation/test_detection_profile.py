@@ -128,6 +128,10 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
         'CLASS_IDS': '2, 3,7',
         'PARENT_CLASSES': 'car, Bus',
+        'GATE_HIT_RATE': 'true',
+        'GATE_HIT_WINDOW': '30',
+        'GATE_HIT_MISS_THRESHOLD': '25',
+        'GATE_HIT_SAMPLE_FLOOR': '0.2',
         'ASSIGNS_CLASS': 'true',
         'LABELS_PATH': '/models/proposer/labels.txt',
         'REGION_CLASS_NAME': 'env_region_class',
@@ -166,6 +170,8 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.text_hint_enabled is False
     assert profile.text_hint_require_letters_and_digits is True
     assert profile.parent_classes == frozenset({'car', 'Bus'})
+    assert (profile.gate_hit_rate, profile.gate_hit_window) == (True, 30)
+    assert (profile.gate_hit_miss_threshold, profile.gate_hit_sample_floor) == (25, 0.2)
     assert profile.auto_confirm_aspect == (0.25, 4.5)
     assert profile.auto_confirm_area_frac == (0.01, 0.75)
     assert profile.text_pattern == r'[0-9]{3,}'

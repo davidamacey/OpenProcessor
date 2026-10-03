@@ -37,6 +37,7 @@ from src.services.detection.cascade_detect import (
 )
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.detection.region_candidates import select_region_candidates
+from src.services.detection.segmenter_gate import RUN
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 
 
@@ -47,10 +48,12 @@ from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.cascade import _resegment_from_text_hint
 from scripts.curation.worker.client import SegmenterUnavailable
 from scripts.curation.worker.combined_resolve import resolve_combined_reply, should_classify
+from scripts.curation.worker.crop_gate import CropGate
 from scripts.curation.worker.fairness import (
     FairnessScheduler,
     fetch_pending_multi_project,
     is_project_paused,
+    is_region_stage_paused,
     liveness_loop,
     write_liveness,
 )
@@ -1140,6 +1143,8 @@ async def run(args: argparse.Namespace) -> int:
             if poisoned:
                 return
 
+    crop_gate = CropGate()
+
     async def stage_a_sam_consumer(consumer_id: int) -> None:
         """Stage A.secondary: secondary-segmenter run + text-hint OCR fallback.
 
@@ -1153,6 +1158,13 @@ async def run(args: argparse.Namespace) -> int:
         """
 
         F = get_region_fields()
+
+        async def release_unprocessed(t: _ItemTask) -> None:
+            # Left exactly as fetched (``pending_detection``): the producer
+            # picks it up again once the stage runs.
+            async with in_flight_lock:
+                in_flight.discard(t.crop_id)
+            sam_q.task_done()
 
         async def leave_pending_segmenter_down(t: _ItemTask, exc: SegmenterUnavailable) -> None:
             # Infrastructure failure (a request failed or every secondary-
@@ -1183,6 +1195,24 @@ async def run(args: argparse.Namespace) -> int:
                 rt = _rt_for(t)
                 if t.crop_jpeg is None:
                     t.update_doc = unreadable_crop_update(t)
+                    await out_q.put(t)
+                    sam_q.task_done()
+                    continue
+
+                if t.project is not None and is_region_stage_paused(t.project):
+                    await release_unprocessed(t)
+                    continue
+                gate_verdict = (
+                    await crop_gate.decide(t, rt.profile) if rt.segmenter.enabled else RUN
+                )
+                if not gate_verdict.run:
+                    t.detection_trace.append(f'gate:{gate_verdict.label}')
+                    t.update_doc = _box_list_doc(
+                        t,
+                        [],
+                        RegionStatus.NO_REGION_BOX,
+                        extra={F.gate_skip: gate_verdict.label},
+                    )
                     await out_q.put(t)
                     sam_q.task_done()
                     continue
@@ -1219,6 +1249,8 @@ async def run(args: argparse.Namespace) -> int:
                     detector_version=rt.profile.segmenter_version,
                     source=CANDIDATE_SEGMENTER,
                 )
+                if rt.segmenter.enabled:
+                    crop_gate.observe(t, rt.profile, hit=bool(sam_selected), seconds=_sam_elapsed)
                 if sam_selected:
                     # High-conf-skip: bypass VLM verify entirely, but only
                     # when there is exactly ONE candidate to auto-accept
@@ -1768,6 +1800,7 @@ async def run(args: argparse.Namespace) -> int:
                 vlm_visible_kept=metrics['vlm_visible_kept'],
                 vlm_visible_skipped=metrics['vlm_visible_skipped'],
                 vlm_visible_skip_rate=round(vis_skip_rate, 3),
+                region_gate_skipped=crop_gate.skipped_total,
                 visible_no_verdict=metrics['visible_no_verdict'],
                 visible_no_verdict_cap_hits=metrics['visible_no_verdict_cap_hits'],
                 combined_bbox_wrong=metrics['combined_bbox_wrong'],

@@ -40,6 +40,9 @@ PROFILE_FIELD_RANGES: dict[str, tuple[float, float]] = {
     'max_regions_per_item': (1, 64),
     # W8.4: (0, 1] -- exclusive 0, checked separately below.
     'region_nms_iou': (0.0, 1.0),
+    'gate_hit_window': (1, 1000),
+    'gate_hit_miss_threshold': (1, 1000),
+    'gate_hit_sample_floor': (0.0, 1.0),
 }
 _MULTIPLE_OF_32_FIELDS = ('input_size', 'ocr_det_input_size')
 
@@ -170,6 +173,19 @@ def _check_ranges(profile: DetectionProfile) -> list[ValidationIssue]:
         for field in _MULTIPLE_OF_32_FIELDS
         if getattr(profile, field) % 32 != 0
     )
+    if profile.gate_hit_miss_threshold > profile.gate_hit_window:
+        issues.append(
+            _issue(
+                'profile_field_range',
+                'error',
+                'gate_hit_miss_threshold cannot exceed gate_hit_window',
+                field='gate_hit_miss_threshold',
+                detail={
+                    'value': profile.gate_hit_miss_threshold,
+                    'window': profile.gate_hit_window,
+                },
+            )
+        )
     lo_frac, hi_frac = profile.auto_confirm_area_frac
     if not (0 <= lo_frac < hi_frac <= 1):
         issues.append(

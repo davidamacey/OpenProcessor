@@ -148,6 +148,8 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     # Label import: caller-chosen, default 'external_label'.
     'label_source': 'external_label',
     'item.class_source': None,
+    # The crop gate's lock check builds a read-only doc from the task.
+    't.class_source': None,
     'class_source': None,
     "doc.get('class_source', '')": None,
     "src.get('class_source', '')": None,

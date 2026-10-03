@@ -48,6 +48,9 @@ class ReprocessFilter(BaseModel):
     class_id: int | None = None
     dataset_split: str | None = None
     all_images: bool = False
+    region_gate_skipped: bool = False
+    """Items the region gate skipped (``region_gate_skip`` set): the segmenter
+    was never asked, so they are safe to re-run."""
     open_vocab_status: list[str] = Field(default_factory=list)
     """Image-level selectors (``all_images``, ``open_vocab_status``) select
     from the images index, so they also reach images with no item yet; they

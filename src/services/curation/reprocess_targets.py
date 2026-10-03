@@ -100,6 +100,8 @@ def selector_clauses(f: ReprocessFilter, F: RegionFields | None = None) -> list[
         out.append({'term': {'class_id': f.class_id}})
     if f.dataset_split is not None:
         out.append({'term': {'dataset_split': f.dataset_split}})
+    if f.region_gate_skipped:
+        out.append({'exists': {'field': F.gate_skip}})
     return out
 
 
