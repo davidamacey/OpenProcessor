@@ -22,7 +22,15 @@ import type { KeymapDocument, KeymapValidationIssue } from './keymapFallback';
 import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
 import type { RegionBoxInput } from './annotations/multiBox';
-import type { EmbeddingState } from '$lib/types_itemFilter';
+import type {
+  EmbeddingState,
+  ItemFilter,
+  ItemFilterQuery,
+  ItemSelection,
+  SelectionDryRun,
+  SelectionExcludeResult,
+  VectorRefresh,
+} from '$lib/types_itemFilter';
 import {
   isNoRegionProfileDetail,
   notifyRegionProfileUnavailable,
@@ -1308,10 +1316,12 @@ export interface RegionsPage {
   rows_truncated?: boolean;
 }
 
-export interface RegionsQuery {
+export interface RegionsQuery extends Omit<
+  ItemFilterQuery,
+  'open_vocab_set' | 'source_prompt'
+> {
   page?: number;
   page_size?: number;
-  class_id?: number;
   cluster_id?: number;
   /** Region clustering bucket (independent of the item cluster_id). */
   region_cluster_id?: number;
@@ -1748,6 +1758,23 @@ export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
   return apiFetch<DatasetStats>(`${scoped()}/stats/dataset`, {}, signal);
 }
 
+/**
+ * `GET /stats/dataset?<item filter>` `total_crops` — how many items the
+ * served filter matches (the `/export` "Matching items" line). `null` when
+ * the response carries no total: nothing is counted client-side.
+ */
+export async function getMatchingItemCount(
+  filter: ItemFilterQuery,
+  signal?: AbortSignal,
+): Promise<number | null> {
+  const raw = await apiFetch<{ total_crops?: number | null }>(
+    `${scoped()}/stats/dataset${qs({ ...filter })}`,
+    {},
+    signal,
+  );
+  return typeof raw.total_crops === 'number' ? raw.total_crops : null;
+}
+
 export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   // The API returns
   //   {API_PREFIX}/stats/dataset:  {total_crops, validated, test_holdout, by_source}
@@ -1990,7 +2017,15 @@ export async function getClusters(
   const raw = await apiFetch<RawClustersResp>(
     `${scoped()}/clusters${qs({
       per_cluster: filter.per_cluster ?? 4,
-      class_id: filter.class_id ?? undefined,
+      class_name: filter.class_name,
+      exclude_class_name: filter.exclude_class_name,
+      conf_min: filter.conf_min ?? undefined,
+      conf_max: filter.conf_max ?? undefined,
+      min_area: filter.min_area ?? undefined,
+      max_area: filter.max_area ?? undefined,
+      origin: filter.origin,
+      embedding_state: filter.embedding_state,
+      review_status: filter.review_status,
       // DQ-M4: lets the caller fetch one card's representatives directly
       // by id, independent of the size-desc `offset`/`limit` window —
       // see ClusterFilter.cluster_id's doc comment.
@@ -2808,6 +2843,13 @@ export async function undoCropRegionBatch(
 /* are RegionBoxInput from annotations/multiBox.ts.                     */
 /* ------------------------------------------------------------------ */
 
+/** A per-item region write: the served post-write item and, when served,
+ *  how many of its boxes got a vector (`pending` > 0: embed them later). */
+export interface RegionItemWrite {
+  crop: Crop;
+  vectorRefresh: VectorRefresh | null;
+}
+
 /** `PUT /crops/{crop_id}/regions` (W8.8) — replaces the box list on one
  *  crop. `regionStatus` optionally applies a whole-set status to the
  *  built list in the same write (Enter-after-edit: `'detected'`). */
@@ -2816,7 +2858,7 @@ export async function putRegionBoxes(
   boxes: RegionBoxInput[],
   opts: { regionStatus?: string; expectedRegionRevision?: number } = {},
   signal?: AbortSignal,
-): Promise<Crop> {
+): Promise<RegionItemWrite> {
   const body: Record<string, unknown> = {
     boxes,
     frame: 'parent',
@@ -2826,12 +2868,12 @@ export async function putRegionBoxes(
   if (opts.expectedRegionRevision != null) {
     body.expected_region_revision = opts.expectedRegionRevision;
   }
-  const raw = await apiFetch<{ item: RawCrop }>(
+  const raw = await apiFetch<{ item: RawCrop; vector_refresh?: VectorRefresh | null }>(
     `${scoped()}/crops/${encodeURIComponent(cropId)}/regions`,
     { method: 'PUT', body: JSON.stringify(body) },
     signal,
   );
-  return mapRawCrop(raw.item);
+  return { crop: mapRawCrop(raw.item), vectorRefresh: raw.vector_refresh ?? null };
 }
 
 /** `PUT /crops/batch_regions` (W8.8) — replaces every listed crop's box
@@ -2842,15 +2884,16 @@ export async function putBatchRegions(
   boxes: Array<{ bbox_norm: [number, number, number, number]; state?: string }>,
   opts: { regionStatus?: string } = {},
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<{ vectorRefresh: VectorRefresh | null }> {
   assertNonEmptyBatch('batch region replace', cropIds);
   const body: Record<string, unknown> = { crop_ids: cropIds, boxes };
   if (opts.regionStatus != null) body.region_status = opts.regionStatus;
-  await apiFetch(
+  const raw = await apiFetch<{ vector_refresh?: VectorRefresh | null }>(
     `${scoped()}/crops/batch_regions`,
     { method: 'PUT', body: JSON.stringify(body) },
     signal,
   );
+  return { vectorRefresh: raw.vector_refresh ?? null };
 }
 
 /** `PATCH /crops/{crop_id}/regions/{box_id}` (W8.8) — per-box state/text
@@ -2860,19 +2903,19 @@ export async function patchRegionBox(
   boxId: string,
   patch: { state?: string; text?: string | null; expectedRegionRevision?: number },
   signal?: AbortSignal,
-): Promise<Crop> {
+): Promise<RegionItemWrite> {
   const body: Record<string, unknown> = {};
   if (patch.state != null) body.state = patch.state;
   if (patch.text !== undefined) body.text = patch.text;
   if (patch.expectedRegionRevision != null) {
     body.expected_region_revision = patch.expectedRegionRevision;
   }
-  const raw = await apiFetch<{ item: RawCrop }>(
+  const raw = await apiFetch<{ item: RawCrop; vector_refresh?: VectorRefresh | null }>(
     `${scoped()}/crops/${encodeURIComponent(cropId)}/regions/${encodeURIComponent(boxId)}`,
     { method: 'PATCH', body: JSON.stringify(body) },
     signal,
   );
-  return mapRawCrop(raw.item);
+  return { crop: mapRawCrop(raw.item), vectorRefresh: raw.vector_refresh ?? null };
 }
 
 /** A stale `expected_region_revision` is `409 region_conflict` on the
@@ -2916,6 +2959,7 @@ export interface RegionBatchBoxStateResult {
   invalid: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
   conflicts: RegionBatchConflict[];
   items: Crop[];
+  vectorRefresh: VectorRefresh | null;
 }
 
 /** `POST /regions/batch_box_state` (W8.8) — one state on many boxes
@@ -2934,6 +2978,7 @@ export async function postBatchBoxState(
     invalid?: Array<{ crop_id: string; box_id: string; error: string; message: string }>;
     conflicts?: RegionBatchConflict[];
     items?: RawCrop[];
+    vector_refresh?: VectorRefresh | null;
   };
   const raw = await apiFetch<Raw>(
     `${scoped()}/regions/batch_box_state`,
@@ -2952,6 +2997,7 @@ export async function postBatchBoxState(
     invalid: raw.invalid ?? [],
     conflicts: raw.conflicts ?? [],
     items: (raw.items ?? []).map(mapRawCrop),
+    vectorRefresh: raw.vector_refresh ?? null,
   };
 }
 
@@ -3135,11 +3181,28 @@ export interface ReviewFilterOption {
  *  `GET {API_PREFIX}/review/{tab}` and its `/locate` route; an unknown value 400s.
  *  The frontend renders one `<select>` per entry generically — no
  *  tab-specific code reads `param` by name. */
+export const REVIEW_FILTER_KINDS = [
+  'enum',
+  'multi_enum',
+  'class_names',
+  'bool',
+  'number',
+  'integer',
+  'text',
+] as const;
+export type ReviewFilterKind = (typeof REVIEW_FILTER_KINDS)[number];
+
 export interface ReviewFilterSpec {
   param: string;
-  kind: 'enum';
+  kind: ReviewFilterKind;
   label: string;
+  /** The fixed values of an `enum` / `multi_enum`; empty for every other kind. */
   options: ReviewFilterOption[];
+  /** Bounds of a `number` / `integer` filter. */
+  min: number | null;
+  max: number | null;
+  /** How to fill the filter; empty when the label says it. */
+  description: string;
 }
 
 /** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served
@@ -3978,10 +4041,18 @@ export async function searchCrops(
  * manifest (Section L14). Server returns 202 + job id while it runs.
  */
 export function exportYolo(
-  opts: { version_tag?: string; require_fully_labeled_images?: boolean } = {},
+  opts: {
+    version_tag?: string;
+    require_fully_labeled_images?: boolean;
+    /** The shared item filter; sent only when it names something. */
+    item_filter?: ItemFilter;
+  } = {},
   signal?: AbortSignal,
 ): Promise<ExportResult> {
   const body: Record<string, unknown> = {};
+  if (opts.item_filter && Object.keys(opts.item_filter).length > 0) {
+    body.item_filter = opts.item_filter;
+  }
   if (opts.version_tag) body.version_tag = opts.version_tag;
   // Default is false server-side — only send it when the operator opted
   // in, so the payload stays minimal for the common case.
@@ -4322,8 +4393,8 @@ export function excludeCrops(
   cropIds: string[],
   reason: ExcludeReason = 'ignore',
   signal?: AbortSignal,
-): Promise<{ excluded: number; errors: number }> {
-  return apiFetch<{ excluded: number; errors: number }>(
+): Promise<SelectionExcludeResult & { excluded: number }> {
+  return apiFetch<SelectionExcludeResult & { excluded: number }>(
     `${scoped()}/crops/batch_exclude`,
     {
       method: 'POST',
@@ -4336,12 +4407,91 @@ export function excludeCrops(
 export function unexcludeCrops(
   cropIds: string[],
   signal?: AbortSignal,
-): Promise<{ unexcluded: number; errors: number }> {
-  return apiFetch<{ unexcluded: number; errors: number }>(
+): Promise<SelectionExcludeResult & { unexcluded: number }> {
+  return apiFetch<SelectionExcludeResult & { unexcluded: number }>(
     `${scoped()}/crops/batch_unexclude`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds }),
+    },
+    signal,
+  );
+}
+
+// -- selection writes: act on every item a filter matches ----------------
+//
+// The four writes below take `selection` (an `ItemSelection`: a filter,
+// optionally limited / sampled) in place of `crop_ids`, plus `dry_run`.
+// A dry run answers `{dry_run: true, selected}` and writes nothing; the
+// real call returns the same body the crop-id form does.
+
+export type SelectionWrite<T> = T | SelectionDryRun;
+
+export function bulkLabelSelection(
+  selection: ItemSelection,
+  classId: number,
+  dryRun: boolean,
+  signal?: AbortSignal,
+): Promise<SelectionWrite<BulkLabelResult>> {
+  return apiFetch(
+    `${scoped()}/crops/batch_label`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        selection,
+        class_id: classId,
+        validated: true,
+        dry_run: dryRun,
+      }),
+    },
+    signal,
+  );
+}
+
+export function batchExcludeSelection(
+  selection: ItemSelection,
+  reason: ExcludeReason,
+  dryRun: boolean,
+  signal?: AbortSignal,
+): Promise<SelectionWrite<SelectionExcludeResult & { excluded: number }>> {
+  return apiFetch(
+    `${scoped()}/crops/batch_exclude`,
+    { method: 'POST', body: JSON.stringify({ selection, reason, dry_run: dryRun }) },
+    signal,
+  );
+}
+
+/** Restoring ignored items means selecting excluded ones, hence
+ *  `include_excluded`. */
+export function batchUnexcludeSelection(
+  selection: ItemSelection,
+  dryRun: boolean,
+  signal?: AbortSignal,
+): Promise<SelectionWrite<SelectionExcludeResult & { unexcluded: number }>> {
+  return apiFetch(
+    `${scoped()}/crops/batch_unexclude`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        selection: { ...selection, include_excluded: true },
+        dry_run: dryRun,
+      }),
+    },
+    signal,
+  );
+}
+
+export function moveSelectionToCluster(
+  selection: ItemSelection,
+  clusterId: number,
+  dryRun: boolean,
+  signal?: AbortSignal,
+): Promise<SelectionWrite<BulkLabelResult>> {
+  return apiFetch(
+    `${scoped()}/crops/move`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ selection, cluster_id: clusterId, dry_run: dryRun }),
     },
     signal,
   );

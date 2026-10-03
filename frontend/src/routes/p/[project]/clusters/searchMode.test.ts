@@ -85,8 +85,11 @@ describe('/clusters search mode', () => {
   });
 
   it('does not pass a cluster_id/tab scope into the SemanticSearchBox filter — global search is the point', () => {
-    const filterMatch = src.match(/filter=\{[^}]*\?\s*\{[^}]*\}\s*:\s*\{\}\}/);
+    // The scope is the shared item filter (class by name, bands, origin...)
+    // and nothing else.
+    const filterMatch = src.match(/<SemanticSearchBox[\s\S]*?filter=\{\{[^}]*\}\}/);
     expect(filterMatch).not.toBeNull();
+    expect(filterMatch![0]).toMatch(/filter=\{\{ \.\.\.gridItemFilter\(\) \}\}/);
     expect(filterMatch![0]).not.toMatch(/cluster_id/);
     expect(filterMatch![0]).not.toMatch(/\btab\b/);
   });

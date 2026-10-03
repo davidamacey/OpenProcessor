@@ -814,6 +814,7 @@
   async function runCohortQuery(
     cohort: CohortSpec,
     pageSize: number,
+    className: string,
   ): Promise<{ total: number; items: Array<RegionBrowseItem | Crop | ReviewItem> }> {
     if (cohort.query.kind !== 'endpoint') return { total: 0, items: [] };
     const { path, params } = cohort.query;
@@ -834,8 +835,10 @@
       return { total: res.total, items: res.items };
     }
     if (kind === 'crops') {
+      // `GET /crops` and `/review/{tab}` take the class by NAME (v0.4.0);
+      // only `/regions/training_candidates` still takes `class_id`.
       const res = await getCrops({
-        class_id: classId,
+        class_name: [className],
         label_validated:
           typeof params.label_validated === 'boolean'
             ? params.label_validated
@@ -850,7 +853,7 @@
     }
     if (kind === 'model_disagreements') {
       const res = await getReviewQueue('model_disagreements', 1, pageSize, {
-        class_id: classId,
+        class_name: [className],
       });
       return { total: res.total, items: res.items };
     }
@@ -883,7 +886,9 @@
   async function loadGroupCounts(group: CohortGroup): Promise<void> {
     const cohorts = await loadGroupCohorts(group);
     classCohorts = { ...classCohorts, [group.classId]: cohorts };
-    const results = await Promise.allSettled(cohorts.map((c) => runCohortQuery(c, 1)));
+    const results = await Promise.allSettled(
+      cohorts.map((c) => runCohortQuery(c, 1, group.className)),
+    );
     const next: Record<string, number | null> = { ...cohortCounts };
     cohorts.forEach((cohort, i) => {
       const r = results[i];
@@ -898,7 +903,7 @@
       g.cohorts.map((c) => ({ group: g, cohort: c })),
     );
     const results = await Promise.allSettled(
-      all.map(({ cohort }) => runCohortQuery(cohort, 1)),
+      all.map(({ group, cohort }) => runCohortQuery(cohort, 1, group.className)),
     );
     const next: Record<string, number | null> = { ...cohortCounts };
     all.forEach(({ group, cohort }, i) => {
@@ -918,7 +923,7 @@
     cohortPreviewError = null;
     cohortPreview = [];
     try {
-      const res = await runCohortQuery(cohort, 24);
+      const res = await runCohortQuery(cohort, 24, group.className);
       cohortPreview = res.items;
     } catch (e) {
       cohortPreviewError = (e as Error).message;

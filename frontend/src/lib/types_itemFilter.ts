@@ -94,3 +94,26 @@ export interface ItemSelection {
   sample?: SelectionSample | null;
   seed?: number;
 }
+
+/** What a `dry_run: true` selection write returns: the count the write
+ *  would change, and nothing written (`SelectionDryRunResponse`). */
+export interface SelectionDryRun {
+  dry_run: true;
+  selected: number;
+}
+
+/** `BatchExcludeResponse` / `BatchUnexcludeResponse`: `updated_ids` is the
+ *  undo target. */
+export interface SelectionExcludeResult {
+  excluded?: number;
+  unexcluded?: number;
+  updated_ids: string[];
+  errors: number;
+}
+
+/** `VectorRefresh` on every region write: boxes embedded now, and boxes
+ *  still without a valid vector (retry with a reprocess `embed`). */
+export interface VectorRefresh {
+  embedded: number;
+  pending: number;
+}

@@ -14,17 +14,17 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
 
 describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)', () => {
-  it('renders one <select> per activeFilterSpecs entry, keyed by spec.param', () => {
+  it('renders one ServedFilterField (drawn by the spec kind) per activeFilterSpecs entry, keyed by spec.param', () => {
     expect(src).toMatch(/\{#each activeFilterSpecs as spec \(spec\.param\)\}/);
-    expect(src).toMatch(
-      /onchange=\{\(e\) => setEnumFilter\(spec\.param, e\.currentTarget\.value\)\}/,
-    );
+    expect(src).toMatch(/<ServedFilterField[\s\S]*?onchange=\{setEnumFilter\}/);
   });
 
-  it('activeFilterSpecs is derived from reviewTabsVocabularyStore.filterSpecsFor(activeTabEndpointId)', () => {
+  it("activeFilterSpecs is the active tab's served specs minus the params the page draws itself", () => {
     expect(src).toMatch(
-      /const activeFilterSpecs = \$derived\(\s*reviewTabsVocabularyStore\.filterSpecsFor\(activeTabEndpointId\),?\s*\);/,
+      /const servedSpecs = \$derived\(\s*reviewTabsVocabularyStore\.filterSpecsFor\(activeTabEndpointId\),?\s*\);/,
     );
+    expect(src).toMatch(/const activeFilterSpecs = \$derived\(\s*servedSpecs\.filter\(/);
+    expect(src).toMatch(/!SELF_DRAWN_PARAMS\.has\(s\.param\)/);
   });
 
   it('_filter() forwards only params the active tab declares in filter_specs', () => {
@@ -35,7 +35,7 @@ describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)',
     // directly would forward unrelated/stale params to the backend.
     expect(filterFnBody).not.toMatch(/enumFilterValues/);
     expect(src).toMatch(
-      /for \(const spec of activeFilterSpecs\) \{\s*const value = enumFilterValues\[spec\.param\];\s*if \(value\) out\[spec\.param\] = value;\s*\}/,
+      /for \(const spec of activeFilterSpecs\) \{\s*const value = enumFilterValues\[spec\.param\];\s*if \(value && value\.length > 0\) out\[spec\.param\] = value;\s*\}/,
     );
   });
 
@@ -43,7 +43,8 @@ describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)',
     const fnStart = src.indexOf('function setEnumFilter(');
     expect(fnStart).toBeGreaterThan(-1);
     const fnBody = src.slice(fnStart, src.indexOf('\n  }\n', fnStart));
-    expect(fnBody).toMatch(/url\.searchParams\.set\(param, value\)/);
+    // A list value is persisted as repeated keys.
+    expect(fnBody).toMatch(/url\.searchParams\.append\(param, v\)/);
     expect(fnBody).toMatch(/url\.searchParams\.delete\(param\)/);
     expect(fnBody).toMatch(
       /replaceState\(resolve\(projectHref\(`\/review\$\{url\.search\}`\)\), \{\}\)/,
@@ -68,7 +69,9 @@ describe('3f1a11e: generic served-enum filter bar (no tab/param-specific code)',
     expect(effectIdx).toBeGreaterThan(-1);
     const effectBody = src.slice(effectIdx, effectIdx + 1500);
     expect(effectBody).toMatch(/void activeEnumParams;/);
-    expect(effectBody).toMatch(/activeEnumParams,\s*activeUrlFilters,\s*\]\);/);
+    expect(effectBody).toMatch(
+      /activeEnumParams,\s*activeUrlFilters,\s*itemFilterQuery,\s*\]\);/,
+    );
     expect(effectBody).not.toMatch(/void enumFilterValues;/);
   });
 });

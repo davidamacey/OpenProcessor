@@ -1,8 +1,9 @@
 /**
  * UndoStore — ring buffer of the last 50 human write *actions*, spanning
- * three kinds (`UndoEntry.kind`): class-label writes (`'label'`,
- * default), region writes (`'region'`, M6) and VLM-suggestion dismissals
- * (`'vlm_dismiss'`, M6/V1 undo). One entry per confirmed write, however
+ * kinds (`UndoEntry.kind`): class-label writes (`'label'`, default),
+ * region writes (`'region'`, M6), VLM-suggestion dismissals
+ * (`'vlm_dismiss'`, M6/V1 undo) and ignore / restore writes (`'exclude'`
+ * / `'unexclude'`, the selection actions). One entry per confirmed write, however
  * many crops it touched — a bulk label, a move, a batch region status
  * change, or a new-class-proposal resolve over N crops is ONE entry, so
  * one Z reverses the whole action. Calling code records what a confirmed
@@ -33,6 +34,8 @@ import {
   undoCropRegionBatch,
   undoLabelBatch,
   undoVlmDismiss,
+  excludeCrops,
+  unexcludeCrops,
 } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import { toastStore } from '$stores/toast.svelte';
@@ -131,6 +134,21 @@ class UndoStore {
     this.push({ crop_ids: [...updatedIds], at: Date.now(), kind: 'region' });
   }
 
+  /**
+   * An "ignore" write (selection exclude): Z restores the served ids with
+   * `batch_unexclude`. Same served-ids rule as `recordWrites`.
+   */
+  recordExclusion(updatedIds: string[]): void {
+    if (updatedIds.length === 0) return;
+    this.push({ crop_ids: [...updatedIds], at: Date.now(), kind: 'exclude' });
+  }
+
+  /** A "restore" write (selection unexclude): Z ignores the ids again. */
+  recordUnexclusion(updatedIds: string[]): void {
+    if (updatedIds.length === 0) return;
+    this.push({ crop_ids: [...updatedIds], at: Date.now(), kind: 'unexclude' });
+  }
+
   /** M6/V1: record a Reject-VLM (`vlm_dismiss`) as one undo entry. */
   recordVlmDismiss(cropId: string): void {
     this.push({ crop_ids: [cropId], at: Date.now(), kind: 'vlm_dismiss' });
@@ -162,6 +180,16 @@ class UndoStore {
     }
     const kind = entry.kind ?? 'label';
     try {
+      if (kind === 'exclude' || kind === 'unexclude') {
+        if (kind === 'exclude') await unexcludeCrops(entry.crop_ids);
+        else await excludeCrops(entry.crop_ids, 'ignore');
+        toastStore.success(
+          kind === 'exclude'
+            ? `Restored ${entry.crop_ids.length}.`
+            : `Ignored ${entry.crop_ids.length} again.`,
+        );
+        return [];
+      }
       if (kind === 'vlm_dismiss') {
         const crop = await undoVlmDismiss(entry.crop_ids[0]!);
         toastStore.success('VLM suggestion restored.');

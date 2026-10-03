@@ -155,3 +155,68 @@ describe('ItemFilterQuery', () => {
     expect(local.filter((k) => !declared.has(k))).toEqual([]);
   });
 });
+
+describe('the shared filter on every list route (V-12: class by name)', () => {
+  const routes: Array<[string, RegExp, boolean]> = [
+    ['GET /crops', /\/projects\/\{project\}\/crops$/, true],
+    ['GET /clusters', /\/projects\/\{project\}\/clusters$/, false],
+    ['GET /regions', /\/projects\/\{project\}\/regions$/, false],
+    ['GET /search/text', /\/projects\/\{project\}\/search\/text$/, false],
+    ['GET /review/{tab}', /\/projects\/\{project\}\/review\/\{tab\}$/, false],
+    [
+      'GET /review/{tab}/locate',
+      /\/projects\/\{project\}\/review\/\{tab\}\/locate$/,
+      false,
+    ],
+    ['GET /stats/dataset', /\/projects\/\{project\}\/stats\/dataset$/, false],
+  ];
+  const shared = [
+    'class_name',
+    'exclude_class_name',
+    'conf_min',
+    'conf_max',
+    'min_area',
+    'max_area',
+    'max_rank',
+    'origin',
+    'embedding_state',
+    'review_status',
+  ];
+
+  for (const [label, re, hasOpenVocab] of routes) {
+    it(`${label} declares the shared filter, not class_id`, () => {
+      const path = Object.keys(S.paths).find((p) => re.test(p));
+      if (!path) throw new Error(`${label} not found`);
+      const declared = new Set(
+        (S.paths[path].get.parameters ?? [])
+          .filter((p) => p.in === 'query')
+          .map((p) => p.name),
+      );
+      expect(shared.filter((k) => !declared.has(k))).toEqual([]);
+      expect(declared.has('class_id')).toBe(false);
+      expect(declared.has('open_vocab_set')).toBe(hasOpenVocab);
+      expect(declared.has('source_prompt')).toBe(hasOpenVocab);
+    });
+  }
+});
+
+describe('ReviewFilterSpec', () => {
+  it('has the served keys and kinds', async () => {
+    const { REVIEW_FILTER_KINDS } = await import('$lib/api');
+    const s = S.components.schemas['ReviewFilterSpec'] as unknown as {
+      properties: Record<string, Prop>;
+    };
+    expect(Object.keys(s.properties).sort()).toEqual([
+      'description',
+      'kind',
+      'label',
+      'max',
+      'min',
+      'options',
+      'param',
+    ]);
+    expect([...REVIEW_FILTER_KINDS].sort()).toEqual(
+      [...(s.properties.kind.enum ?? [])].sort(),
+    );
+  });
+});

@@ -462,3 +462,59 @@ describe('undoStore — cross-kind LIFO ordering', () => {
     });
   });
 });
+
+describe('undoStore: ignore / restore writes (selection exclude / unexclude)', () => {
+  beforeEach(() => {
+    undoStore.clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('an exclude entry is undone by batch_unexclude with its served ids', async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) =>
+      jsonResponse(200, { unexcluded: 2, updated_ids: ['a', 'b'], errors: 0 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    undoStore.recordExclusion(['a', 'b']);
+    expect(undoStore.stack[0]!.kind).toBe('exclude');
+
+    const crops = await undoStore.undoLast();
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${API_PREFIX}/crops/batch_unexclude`);
+    expect(JSON.parse(String(init?.body))).toEqual({ crop_ids: ['a', 'b'] });
+    expect(crops).toEqual([]);
+    expect(undoStore.stack).toHaveLength(0);
+    expect(toastStore.toasts.at(-1)?.kind).toBe('success');
+  });
+
+  it('an unexclude entry is undone by batch_exclude', async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) =>
+      jsonResponse(200, { excluded: 1, updated_ids: ['a'], errors: 0 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    undoStore.recordUnexclusion(['a']);
+    await undoStore.undoLast();
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${API_PREFIX}/crops/batch_exclude`);
+    expect(JSON.parse(String(init?.body))).toEqual({ crop_ids: ['a'], reason: 'ignore' });
+  });
+
+  it('records nothing for an empty served list', () => {
+    undoStore.recordExclusion([]);
+    undoStore.recordUnexclusion([]);
+    expect(undoStore.stack).toHaveLength(0);
+  });
+
+  it('a failed undo re-pushes the entry so Z stays retryable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(500, { detail: 'boom' })),
+    );
+    undoStore.recordExclusion(['a']);
+    await undoStore.undoLast();
+    expect(undoStore.stack).toHaveLength(1);
+    expect(undoStore.stack[0]!.kind).toBe('exclude');
+  });
+});

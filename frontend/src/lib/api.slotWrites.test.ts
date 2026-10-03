@@ -125,7 +125,7 @@ describe('putRegionBoxes (PUT /crops/{id}/regions)', () => {
   it('sends the box list, frame "parent", the human label source and the revision', async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
     vi.stubGlobal('fetch', fetchMock);
-    const item = await putRegionBoxes(
+    const { crop: item } = await putRegionBoxes(
       'c1',
       [{ box_id: 'b1' }, { box_id: null, bbox_norm: [0.1, 0.1, 0.2, 0.2] }],
       { regionStatus: 'detected', expectedRegionRevision: 3 },
@@ -152,6 +152,47 @@ describe('putRegionBoxes (PUT /crops/{id}/regions)', () => {
       frame: 'parent',
       region_label_source: 'human',
     });
+  });
+});
+
+describe('vector_refresh on the region writes', () => {
+  const refresh = { embedded: 1, pending: 2 };
+
+  it('putRegionBoxes and patchRegionBox return the served vector_refresh', async () => {
+    const fetchMock = vi.fn(async () =>
+      okResponse({ item: rawItem('c1'), vector_refresh: refresh }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const put = await putRegionBoxes('c1', []);
+    expect(put.vectorRefresh).toEqual(refresh);
+    const patch = await patchRegionBox('c1', 'b1', { state: 'accepted' });
+    expect(patch.vectorRefresh).toEqual(refresh);
+    expect(patch.crop.id).toBe('c1');
+  });
+
+  it('a response without vector_refresh reads null, never a guessed zero', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') })),
+    );
+    expect((await putRegionBoxes('c1', [])).vectorRefresh).toBeNull();
+  });
+
+  it('putBatchRegions and postBatchBoxState return it too', async () => {
+    const fetchMock = vi.fn(async () =>
+      okResponse({
+        updated: 1,
+        invalid: [],
+        conflicts: [],
+        items: [],
+        vector_refresh: refresh,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await putBatchRegions(['a'], [])).vectorRefresh).toEqual(refresh);
+    expect(
+      (await postBatchBoxState([{ cropId: 'a', boxId: 'b' }], 'accepted')).vectorRefresh,
+    ).toEqual(refresh);
   });
 });
 

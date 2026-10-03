@@ -44,6 +44,7 @@ import { putRegionBoxes, patchRegionBox, regionConflictDetail, ApiError } from '
 import { slotOf } from '$lib/annotations/cropSlots';
 import type { SlotSpec, BBoxNormLike } from '$lib/annotations/types';
 import type { Crop } from '$lib/types';
+import type { VectorRefresh } from '$lib/types_itemFilter';
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';
 
@@ -92,6 +93,10 @@ export interface MultiBoxRegionController {
   /** The item's served `region_revision`, echoed back as
    *  `expected_region_revision` on every write. */
   readonly revision: number | null;
+  /** The last write's served `vector_refresh`: `pending` boxes have no
+   *  vector yet. `null` before any write, after the next item is seeded,
+   *  and when a write served none. */
+  readonly vectorRefresh: VectorRefresh | null;
 }
 
 export interface MultiBoxRegionOptions {
@@ -110,6 +115,11 @@ export function createMultiBoxRegionController(
   let original = $state<EditableBox[]>([]);
   let selectedIndex = $state<number | null>(null);
   let busy = $state(false);
+  let vectorRefresh = $state<VectorRefresh | null>(null);
+  // The page re-seeds this controller whenever its copy of the current item
+  // is replaced (including by this controller's own write), so a re-seed of
+  // the SAME crop must not drop what that write just served.
+  let seededCropId: string | null = null;
   const dirty = $derived(boxes.some((b) => b.dirty) || boxes.length !== original.length);
 
   function seedFrom(crop: Crop | null): void {
@@ -120,6 +130,8 @@ export function createMultiBoxRegionController(
     original = editable;
     revision = data?.boxSet?.revision ?? null;
     selectedIndex = editable.length > 0 ? 0 : null;
+    if ((crop?.id ?? null) !== seededCropId) vectorRefresh = null;
+    seededCropId = crop?.id ?? null;
   }
 
   function select(index: number): void {
@@ -188,10 +200,11 @@ export function createMultiBoxRegionController(
     }
     busy = true;
     try {
-      const crop = await patchRegionBox(cropId, box.boxId, {
+      const { crop, vectorRefresh: vr } = await patchRegionBox(cropId, box.boxId, {
         state,
         expectedRegionRevision: revision ?? undefined,
       });
+      vectorRefresh = vr;
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
     } catch (e) {
@@ -221,10 +234,11 @@ export function createMultiBoxRegionController(
     try {
       const confirmed = confirmProposedBoxes(boxes);
       const body = buildRegionsPutBoxes(original, confirmed);
-      const crop = await putRegionBoxes(cropId, body, {
+      const { crop, vectorRefresh: vr } = await putRegionBoxes(cropId, body, {
         regionStatus: 'detected',
         expectedRegionRevision: revision ?? undefined,
       });
+      vectorRefresh = vr;
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
       return { ok: true, item: crop };
@@ -244,9 +258,10 @@ export function createMultiBoxRegionController(
     busy = true;
     try {
       const body = buildRegionsPutBoxes(original, boxes);
-      const crop = await putRegionBoxes(cropId, body, {
+      const { crop, vectorRefresh: vr } = await putRegionBoxes(cropId, body, {
         expectedRegionRevision: revision ?? undefined,
       });
+      vectorRefresh = vr;
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
       return { ok: true, item: crop };
@@ -270,10 +285,11 @@ export function createMultiBoxRegionController(
     }
     busy = true;
     try {
-      const crop = await patchRegionBox(cropId, box.boxId, {
+      const { crop, vectorRefresh: vr } = await patchRegionBox(cropId, box.boxId, {
         text,
         expectedRegionRevision: revision ?? undefined,
       });
+      vectorRefresh = vr;
       reseedFromWrittenCrop(crop);
       undoStore.recordRegionWrites([cropId]);
     } catch (e) {
@@ -303,6 +319,9 @@ export function createMultiBoxRegionController(
     },
     get revision() {
       return revision;
+    },
+    get vectorRefresh() {
+      return vectorRefresh;
     },
     seedFrom,
     select,
