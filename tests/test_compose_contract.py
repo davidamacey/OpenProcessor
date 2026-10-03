@@ -1074,3 +1074,68 @@ def test_docker_compose_renders_the_same_command() -> None:
     (source,) = _vlm_service()['command']
     assert script.replace('$$', '$') == source.replace('$$', '$') or script == source
     assert rendered['environment']['VLM_REASONING_PARSER'] == 'gemma4'
+
+
+GPU_CLUSTERING_OVERLAY = REPO_ROOT / 'docker-compose.gpu-clustering.yml'
+
+
+def test_gpu_clustering_overlay_touches_only_the_auto_label_worker() -> None:
+    overlay = _load_yaml(GPU_CLUSTERING_OVERLAY)['services']
+    assert set(overlay) == {'curation-auto-label-worker'}
+    assert 'curation-auto-label-worker' in _load_yaml(COMPOSE_PATH)['services']
+    worker = overlay['curation-auto-label-worker']
+    (device,) = worker['deploy']['resources']['reservations']['devices']
+    assert device['device_ids'] == ['${OP_CLUSTER_GPU_DEVICE:-0}']
+    assert 'NVIDIA_VISIBLE_DEVICES=${OP_CLUSTER_GPU_DEVICE:-0}' in worker['environment']
+
+
+@pytest.mark.skipif(shutil.which('docker') is None, reason='no docker CLI')
+def test_gpu_clustering_overlay_renders_one_pinned_device() -> None:
+    result = subprocess.run(
+        [
+            'docker',
+            'compose',
+            '-f',
+            str(COMPOSE_PATH),
+            '-f',
+            str(GPU_CLUSTERING_OVERLAY),
+            '--profile',
+            'curation',
+            'config',
+            '--format',
+            'json',
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={
+            'PATH': '/usr/bin:/bin:/usr/local/bin',
+            'HOME': str(REPO_ROOT),
+            'OP_CLUSTER_GPU_DEVICE': '2',
+        },
+    )
+    if result.returncode != 0:
+        pytest.skip(f'docker compose could not render the files here: {result.stderr[:200]}')
+    worker = json.loads(result.stdout)['services']['curation-auto-label-worker']
+    (device,) = worker['deploy']['resources']['reservations']['devices']
+    assert device['device_ids'] == ['2']
+    assert worker['environment']['NVIDIA_VISIBLE_DEVICES'] == '2'
+    assert worker['runtime'] == 'nvidia'
+
+
+@pytest.mark.skipif(shutil.which('make') is None, reason='no make')
+def test_cluster_make_targets_recreate_only_the_worker() -> None:
+    def dry_run(target: str) -> str:
+        return subprocess.run(
+            ['make', '-n', target],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+        ).stdout
+
+    gpu, cpu = dry_run('cluster-gpu'), dry_run('cluster-cpu')
+    assert '-f docker-compose.gpu-clustering.yml' in gpu
+    assert 'docker-compose.gpu-clustering.yml' not in cpu
+    for out in (gpu, cpu):
+        assert '--no-deps --force-recreate curation-auto-label-worker' in out

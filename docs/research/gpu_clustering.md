@@ -2,7 +2,7 @@
 
 Status: research snapshot (2026-05); measured on a single 49 GB workstation GPU shared with a segmentation model, plus a 12 GB consumer GPU as the "does not fit" reference; numbers will drift.
 
-Implemented in the public repo: partly. Runtime GPU/CPU backend detection, the cuML UMAP path, per-backend UMAP cache slots and cuML kNN graph construction for AHC are implemented in `src/services/curation/clustering/backend.py`, `src/services/curation/clustering/embedding_reduce.py` and `src/services/curation/clustering/methods/ahc.py`. The dedicated compose overlay and `make` targets described in section 6 are **not** in the public repo; they are a proposal. Note that the default clustering method is IVF k-means (see [clustering_methods.md](clustering_methods.md)), and UMAP is no longer a clustering pre-processor by default, so this document matters for the UMAP-based paths and for contributors reusing the GPU backend probe.
+Implemented in the public repo: partly. Runtime GPU/CPU backend detection, the cuML UMAP path, per-backend UMAP cache slots and cuML kNN graph construction for AHC are implemented in `src/services/curation/clustering/backend.py`, `src/services/curation/clustering/embedding_reduce.py` and `src/services/curation/clustering/methods/ahc.py`. The compose overlay (`docker-compose.gpu-clustering.yml`) and the `make cluster-gpu` / `make cluster-cpu` targets described in section 6 are in the public repo. Note that the default clustering method is IVF k-means (see [clustering_methods.md](clustering_methods.md)), and UMAP is no longer a clustering pre-processor by default, so this document matters for the UMAP-based paths and for contributors reusing the GPU backend probe.
 
 ## 1. Goal
 
@@ -60,9 +60,20 @@ VRAM budget on 90k x 1024:
 - The job result carries per-stage durations and peak VRAM (GPU runs only), and the dashboard shows a backend chip (`gpu` or `cpu` with library versions).
 - The per-cluster refine endpoint runs sklearn AHC inside `asyncio.to_thread` so a large refine cannot block the API event loop.
 
-## 6. Deployment (proposal, not in the public repo)
+## 6. Deployment
 
-A compose overlay would give only the clustering worker GPU access (`runtime: nvidia`, one pinned device) and two make targets would recreate the worker with or without that overlay. Because detection is per call, "GPU when available, sklearn fallback" needs no restart when the overlay is removed. cuML adds roughly 1.5 GB to a shared image; splitting a worker-only image is an option if that becomes painful.
+`docker-compose.gpu-clustering.yml` gives only the auto-label worker (`curation-auto-label-worker`) GPU access: `runtime: nvidia` and one device, selected by `OP_CLUSTER_GPU_DEVICE` (host GPU index, default `0`; see `nvidia-smi -L`).
+
+```bash
+make cluster-gpu   # recreate the worker with the overlay
+make cluster-cpu   # recreate the worker without it
+```
+
+Both targets recreate only the worker, so an in-flight recluster is interrupted. Docker cannot detach a device from a running container, so there is no "strip GPU access without restarting" target; recreate with `make cluster-cpu`. Because detection is per call, no other switch is needed.
+
+The stock image does not include `cuml` / `cupy` (roughly 1.5 GB). Set `OP_API_IMAGE` to an image that has `cuml-cu13` and the matching `cupy` wheel, or the GPU is passed through and the probe still reports `cpu`. Splitting a worker-only image is an option if the size becomes painful.
+
+The auto-label status reports the path that ran: `backend` (`gpu` or `cpu`), `backend_detail`, `stage_durations` (seconds per stage) and `peak_vram_mb` (GPU runs only).
 
 ## 7. Validation plan
 
