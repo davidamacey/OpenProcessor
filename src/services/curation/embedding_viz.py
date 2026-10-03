@@ -69,6 +69,7 @@ from src.config import get_curation_config
 from src.config.curation import items_index, umap_viz_state_index
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
+from src.services.curation.embedding_state import embedded_clause
 
 
 if TYPE_CHECKING:
@@ -343,7 +344,7 @@ async def _fetch_pool(
         query = {
             'bool': {
                 'filter': [
-                    {'exists': {'field': EMBEDDING_FIELD}},
+                    embedded_clause(EMBEDDING_FIELD),
                     {'term': {'cluster_id': cluster_id}},
                 ],
                 'must_not': [{'term': {'test_holdout': True}}],
@@ -617,7 +618,7 @@ async def get_cached_projection(
     if meta is None:
         return {'status': 'not_built'}
 
-    scope_must: list[dict[str, Any]] = [{'exists': {'field': EMBEDDING_FIELD}}]
+    scope_must: list[dict[str, Any]] = [embedded_clause(EMBEDDING_FIELD)]
     scope_must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
     if cluster_id is not None:
         scope_must.append({'term': {'cluster_id': cluster_id}})

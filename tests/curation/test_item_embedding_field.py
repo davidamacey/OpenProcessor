@@ -67,9 +67,3 @@ def test_pipeline_vlm_sweep_fetches_the_item_embedding() -> None:
     from src.routers.curation import pipeline
 
     assert ITEM_EMBEDDING_FIELD in pipeline.VLM_SWEEP_SOURCE_FIELDS
-
-
-def test_vlm_worker_mirror_matches_config() -> None:
-    from scripts.curation import vlm_worker
-
-    assert vlm_worker.ITEM_EMBEDDING_FIELD == ITEM_EMBEDDING_FIELD

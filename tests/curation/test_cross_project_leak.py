@@ -157,6 +157,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/crops/batch_exclude'): {'json': {'crop_ids': [proposal], 'reason': 'r'}},
         ('POST', '/crops/batch_unexclude'): {'json': {'crop_ids': [proposal]}},
         ('POST', '/classes'): {'json': {'name': f'{slug}_newclass'}},
+        ('POST', '/classes/seed_from_detector'): {
+            'json': {'names': ['seed probe'], 'dry_run': False}
+        },
         ('PUT', '/classes/{class_id}'): {'json': {'group': f'{slug}_group'}},
         ('POST', '/classes/merge'): {'json': {'source_id': 2, 'target_id': 1}},
         ('POST', '/crops/label/undo_batch'): {'json': {'crop_ids': [f'{slug}-item-0003']}},
@@ -1431,6 +1434,9 @@ def leak_env(
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '1')
     monkeypatch.setenv('OP_REGION_FIELD_EMBEDDING', 'pe_embedding')
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
+    # The seed-from-detector route reads the detector's label list.
+    (tmp_path / 'detector_labels.txt').write_text('seed probe\n')
+    monkeypatch.setenv('OP_INGEST_PRIMARY_LABELS_PATH', str(tmp_path / 'detector_labels.txt'))
     # W4: so a segmenter-only region-profile body (_region_profile_body())
     # never trips no_candidate_source in the sweep -- the segmenter health
     # probe itself still fails closed (network is disabled here), which is

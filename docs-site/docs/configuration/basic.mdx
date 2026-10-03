@@ -136,7 +136,7 @@ curation deployment actually sets:
 | Variable | Why |
 |---|---|
 | `OP_INGEST_PRIMARY_DETECTOR_MODEL` | **Required for ingest** (it `503`s without one): the Triton end2end model that proposes items, e.g. `yolov11_small_trt_end2end` |
-| `OP_INGEST_PRIMARY_CLASS_IDS` | Comma list of the detector's class ids that become items; unset means all of them |
+| `OP_INGEST_PRIMARY_CLASS_IDS` | Optional hard drop: a comma list of the detector's class ids that become items. Unset (recommended) stores every class |
 | `OP_INGEST_PRIMARY_ASSIGNS_CLASS` | `false` (default): detections are unlabeled proposals. `true` only if the detector was trained on your class registry |
 | `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in `yolo-api` and the detection worker (default `./data/source`) |
 | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | An OpenAI-compatible `/v1/chat/completions` endpoint. This defines the built-in `env` VLM endpoint; `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. More endpoints are registered through the API; see [VLM selection](../guides/vlm-selection.mdx) |

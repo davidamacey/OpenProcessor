@@ -96,9 +96,15 @@ done
 curl -s $API/classes | jq '.classes | length'
 ```
 
-A duplicate name is a 409. `scripts/curation/seed_class_registry.py --model
-<detector.onnx>` seeds the registry from a detector's own label space when
-you want all of it.
+A duplicate name is a 409. To start from the ingest detector's own label
+space (all 80 COCO classes for the stock detector), seed it by name:
+`POST /curation/projects/{project}/classes/seed_from_detector` (dry run by
+default; send `{"dry_run": false}` to write). Labels with spaces become slugs
+(`traffic light` -> `traffic_light`), existing names are skipped, and ids are
+appended, never aligned to the detector's. `GET /curation/projects/{project}/ingest/config`
+now returns a `detector` block (model, label list with raw name and slug, env
+class-id filter if set). `scripts/curation/seed_class_registry.py --model
+<detector.onnx>` remains for a model that assigns registry classes by id.
 
 **3. Write a region profile.** Start from
 [`examples/region_profiles/vehicle_wheel.json`](../examples/region_profiles/vehicle_wheel.json).
@@ -586,6 +592,69 @@ enters the region worker's queue. An existing region status is never
 overwritten on re-ingest. Items that exist before you activate a profile are
 picked up with [`POST /reprocess`](#reprocess).
 
+### Items without an embedding
+
+Every item carries `embedding_state`: `embedded` (it has a vector), `failed`
+(the encoder raised at ingest; the item is still stored), `deferred` (a vector
+was dropped because the target project could not use it, as in a combine) or
+`not_selected` (reserved for selective embedding). `null` means the item was
+written before the field existed. Whether an item has a vector is always the
+`exists` test on its embedding; the state only says why not.
+
+Items without a vector are stored and browsable, but clustering, kNN search,
+the outlier and diverse orderings, the review queue's unclassed view and the VLM stage
+all skip them, so the API says so instead of returning a silent gap:
+
+- Ingest results and the batch summary carry `n_embedded` and `n_not_embedded`;
+  `ingest_walker.py` warns when any item was stored without one.
+- `GET /curation/projects/{project}/search/text` returns `unembedded_in_scope`.
+- `GET /curation/projects/{project}/crops` with `order=outliers` or
+  `order=diverse` returns `n_unembedded` next to `n_pool`.
+- `GET /curation/projects/{project}/stats/dataset` returns an `embedding` block
+  (`embedded`, `not_embedded`, `by_state`); the project counts return
+  `items_embedded`; the auto-label `baseline`/`after` snapshots return
+  `unembedded`.
+- An empty review `all` queue explains when the cause is unembedded items.
+
+The VLM stage works on embedded items only, so one setting (whether an item
+is embedded) bounds both the embedding and the VLM work.
+
+### Embedding use cases
+
+Normal flow: every detection is embedded at ingest. Filtering, selecting,
+searching and clustering are views over the embedded items. The cases below
+are the ways an item needs a vector after ingest, and what happens today.
+
+1. **A new object or box.** An item is created only by ingest (detector) or a
+   dataset import; both embed it through the same code. A region box that the
+   region worker writes (SAM 3 or a region profile) gets its box vector in the
+   same pass. A box a person draws is stored without a vector until an embed
+   run covers it.
+2. **A moved or resized box.** An item's own box is never edited. A region box
+   a person moves or deletes has its stored vector pruned at once (a vector
+   records the geometry it was computed from, so a moved box counts as having
+   none), and the box is embedded again by the next embed run. Nothing
+   re-embeds it automatically yet.
+3. **An embedding failed at ingest.** The item is stored with
+   `embedding_state: failed` and counted in `n_not_embedded`. Retry with
+   `POST /curation/projects/{project}/reprocess` and scope `embed` on the
+   item or its image; the item becomes `embedded`.
+4. **An ingest policy skipped it** (`selected`, `lazy`, per-image caps). Not
+   available yet: ingest embeds everything. `embedding_state` already has
+   `not_selected` and `deferred` for it, and the same `embed` scope will be
+   the embed-missing action.
+5. **An imported dataset** (YOLO, COCO or your own export). Import embeds each
+   item through the ingest path, so imported items are `embedded` (or
+   `failed` and retried as in 3). A project import that excludes vectors, and
+   a combine that drops a vector the target cannot use, leave items
+   without one (`deferred` for a dropped vector); embed them with the `embed`
+   scope.
+6. **The embedding model changed.** A full re-embed, not embed-missing: run the
+   `embed` scope over every image. It rewrites every crop, frame and box
+   vector and keeps labels and locks untouched. The index mapping fixes the
+   vector dimension, so a model with a different dimension needs a new
+   project (re-ingest or combine), not an in-place re-embed.
+
 For bulk work from a shell:
 
 - `scripts/curation/ingest_walker.py`: walk a directory with a resumable
@@ -906,8 +975,16 @@ compose up -d --force-recreate yolo-api`, then re-run the export.
   [`../export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
 - **An item detector for ingest**: an end2end Triton model named by
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus other `OP_INGEST_PRIMARY_<FIELD>`).
-  `OP_INGEST_PRIMARY_CLASS_IDS` narrows which classes become items (unset is
-  all; a stock COCO checkpoint proposes all 80). By default the primary is a
+  `OP_INGEST_PRIMARY_CLASS_IDS` is an optional hard drop by model class id
+  (unset, the default, stores every class; a stock COCO checkpoint proposes all
+  80, and leaving it unset is recommended). To switch detectors set
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and `OP_INGEST_PRIMARY_LABELS_PATH` when
+  the model directory has no `labels.txt`) and recreate `yolo-api`; the model
+  must serve the end2end four-tensor output. The choice is deployment-wide.
+  `OP_INGEST_PRIMARY_CONFIDENCE_FLOOR` only applies when the primary assigns
+  classes; a proposer stores every detection the engine emits. A region profile
+  should keep `parent_classes` set, because with a full-vocabulary detector an
+  empty list matches every class. By default the primary is a
   proposer (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`): detections are unlabeled
   `<name>_proposal` items carrying the model's own label, never a registry
   class looked up by id. Set it true only when the primary was trained on your
@@ -1019,14 +1096,14 @@ Cropwright, or any frontend that consumes `/curation`, needs:
 1. Start the API (`docker compose up -d`). Indexes are created on startup.
 2. Create a project and classes ([Use your own domain](#use-your-own-domain)).
 3. Build the PE encoders and load them in Triton ([Models you must supply](#models-you-must-supply)).
-4. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` and `OP_INGEST_PRIMARY_CLASS_IDS`.
+4. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
 5. Ingest or import, start `--profile curation`, review, export, train.
 
 A per-deployment checklist of the `OP_*` variables the compose file reads:
 
 | Purpose | Vars |
 |---|---|
-| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_CLASS_IDS`, `OP_SOURCE_ROOT_HOST` |
+| Ingest / detector | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_SOURCE_ROOT_HOST` |
 | Region detection | `OP_REGION_PROFILE_PATH`, `OP_SEGMENTER_URL` / `OP_SEGMENTER_URLS` |
 | VLM | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` |
 | Feature flags | `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED` |

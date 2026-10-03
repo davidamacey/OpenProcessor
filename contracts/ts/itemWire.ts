@@ -25,6 +25,7 @@ export interface ItemWire {
   class_name: string | null;
   class_source: string | null;
   confidence: number;
+  embedding_state: string | null;
   class_confidence: number | null;
   class_confidence_source: string | null;
   label_source: string | null;
@@ -140,6 +141,7 @@ export const ITEM_WIRE_KEYS = [
   'class_name',
   'class_source',
   'confidence',
+  'embedding_state',
   'class_confidence',
   'class_confidence_source',
   'label_source',

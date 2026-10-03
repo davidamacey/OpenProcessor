@@ -20,7 +20,9 @@ calls below, with the project you create in step 1.
 You bring the models. At a minimum:
 
 - An item detector in Triton that proposes the objects you curate. A stock
-  80-class COCO YOLO works to start. Set `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
+  80-class COCO YOLO works to start and keeps its full vocabulary (every detection is stored as an
+  unlabeled proposal; do not set a class-id filter). Set
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
   See [Model export](../getting-started/model-export.mdx).
 - The PE image encoder (`make export-pe`). Without it, ingest writes no
   embeddings, and search, near-duplicate detection and clustering have
@@ -57,8 +59,10 @@ curl -s "$API/classes"
 Each class entry reports `class_id`, `kind` (`item` or `region`),
 `sample_count`, `validated_count` and `trainable`. A class can carry a
 `hotkey_letter` for the review UI; see [Keymaps](./keymaps.mdx).
-`scripts/curation/seed_class_registry.py --model <detector.onnx>` seeds
-the registry from a detector's own label space when you want all of it.
+`POST /curation/projects/{project}/classes/seed_from_detector` seeds the
+registry from the ingest detector's own label space (dry run by default,
+by name, idempotent). `scripts/curation/seed_class_registry.py --model
+<detector.onnx>` is the id-aligned variant for a model trained on your registry.
 A class is its name everywhere: import, combine, export, train and promote
 never carry a raw class index across a boundary.
 

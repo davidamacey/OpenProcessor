@@ -288,6 +288,8 @@ def serialize_item(
         # Human flagged "needs a class the registry doesn't have yet".
         'needs_new_class': bool(src.get('needs_new_class', False)),
         'needs_new_class_note': src.get('needs_new_class_note'),
+        # Why the item has no vector (null = written before the field existed).
+        'embedding_state': src.get('embedding_state'),
         'cluster_id': src.get('cluster_id'),
         'cluster_kind': cluster_kind(src.get('cluster_id')),
         # Null when measured against a cluster the item has since left.

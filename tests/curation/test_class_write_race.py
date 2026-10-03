@@ -71,6 +71,7 @@ def _discarded(crop_id: str) -> dict[str, Any]:
         'crop_id': crop_id,
         'image_path': f'/data/{crop_id}.jpg',
         'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+        'pe_embedding': [0.1],
         'updated_at': '2026-09-01T00:00:00+00:00',
         'class_id': None,
         'class_source': None,
@@ -226,7 +227,12 @@ async def test_registry_reclassify_skips_item_touched_after_read(tmp_path: Path)
     index = 'test_items'
     reg = ClassRegistry(path=tmp_path / 'class_registry.json')
     reg.add_class('widget')
-    base = {'class_source': 'vlm_unmatched', 'label_source': 'vlm', 'vlm_raw_label': 'widget'}
+    base = {
+        'class_source': 'vlm_unmatched',
+        'label_source': 'vlm',
+        'vlm_raw_label': 'widget',
+        'pe_embedding': [0.1],
+    }
     fake = QueryFakeOpenSearch(
         {index: {'t': {'crop_id': 't', **base}, 'u': {'crop_id': 'u', **base}}}
     )

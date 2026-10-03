@@ -44,6 +44,7 @@ async def test_import_maps_classes_by_name_not_index(tmp_path: Path, monkeypatch
         assert doc['label_source'] == 'import'
         assert doc['import_ids'] == [store.import_id]
         assert doc['pe_embedding']  # embedded by the shared index path
+        assert doc['embedding_state'] == 'embedded'
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
 
@@ -126,3 +126,49 @@ class ResolveNewClassResponse(BaseModel):
     updated_ids: list[str] = Field(default_factory=list)
     conflicts: list[ResolveConflict] = Field(default_factory=list)
     skipped: list[str] = Field(default_factory=list)
+
+
+class SeedFromDetectorRequest(BaseModel):
+    """Seed the class registry from the ingest detector's labels, by name.
+
+    ``names`` limits the seed to those detector labels (matched by their
+    registry slug, ``traffic light`` = ``traffic_light``); omitted means every
+    label. ``dry_run`` defaults to true: nothing is written until it is
+    explicitly false."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    names: list[str] | None = None
+    group: str = 'detector'
+    dry_run: bool = True
+
+
+class SeededClass(BaseModel):
+    """A class created (or, on a dry run, that would be created)."""
+
+    # None on a dry run: ids are assigned at write time, append-only.
+    class_id: int | None
+    name: str
+    detector_label: str
+
+
+class SeedSkipped(BaseModel):
+    name: str
+    detector_label: str
+    # exists: an active class has this name; deprecated: a retired one does
+    # (it is neither resurrected nor duplicated).
+    reason: Literal['exists', 'deprecated']
+
+
+class SeedConflict(BaseModel):
+    detector_label: str
+    class_id_in_detector: int
+    reason: Literal['duplicate_slug', 'unnamed_label']
+
+
+class SeedFromDetectorResponse(BaseModel):
+    dry_run: bool
+    detector_model: str
+    created: list[SeededClass]
+    skipped: list[SeedSkipped]
+    conflicts: list[SeedConflict]

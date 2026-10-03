@@ -131,7 +131,7 @@ async def run(
 
     batches = _batches(pending, batch_size)
     sem = asyncio.Semaphore(max(1, concurrency))
-    totals = {'successful': 0, 'duplicates': 0, 'failed': 0}
+    totals = {'successful': 0, 'duplicates': 0, 'failed': 0, 'n_embedded': 0, 'n_not_embedded': 0}
 
     async with httpx.AsyncClient() as client:
 
@@ -146,6 +146,8 @@ async def run(
                 totals['successful'] += summary.get('successful', 0)
                 totals['duplicates'] += summary.get('duplicates', 0)
                 totals['failed'] += summary.get('failed', 0)
+                totals['n_embedded'] += summary.get('n_embedded', 0)
+                totals['n_not_embedded'] += summary.get('n_not_embedded', 0)
                 # Record every path in this batch as submitted regardless of
                 # per-image outcome (duplicate/failed are terminal server-side
                 # states too) -- resuming should never re-hand the server work
@@ -160,6 +162,12 @@ async def run(
         await asyncio.gather(*[_one(b) for b in batches])
 
     logger.info('ingest walk complete: %s', totals)
+    if totals['n_not_embedded']:
+        logger.warning(
+            '%d stored items have no embedding (embedding_state failed); '
+            'they are excluded from clustering, search and the VLM',
+            totals['n_not_embedded'],
+        )
 
 
 def main() -> None:

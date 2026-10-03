@@ -246,6 +246,8 @@ async def run_ingest_batch(
         elif res.status == 'success':
             summary.successful += 1
             summary.crops_indexed += res.n_crops
+            summary.n_embedded += res.n_embedded
+            summary.n_not_embedded += res.n_not_embedded
         else:
             summary.failed += 1
         # F-43: an otherwise-'successful' ingest that silently skipped a

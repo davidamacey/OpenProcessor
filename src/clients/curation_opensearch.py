@@ -507,6 +507,8 @@ def _items_body() -> dict[str, Any]:
                 F.skip_verify: {'type': 'boolean'},
                 # Item label fields written by ingest and the VLM labeler.
                 'proposal_name': {'type': 'keyword'},
+                # Why an item has no vector (see services/curation/embedding_state.py).
+                'embedding_state': {'type': 'keyword'},
                 'vlm_confidence': {'type': 'keyword'},
                 'vlm_raw_class': {'type': 'keyword'},
                 'vlm_proposed_class': {'type': 'keyword'},

@@ -184,6 +184,7 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
         'class_labeler': 'ingest',
         'class_validated': False,
         'confidence': 0.4,
+        'pe_embedding': [0.1],
         **extra,
     }
 

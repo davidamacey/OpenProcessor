@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
+from src.services.curation.embedding_state import DEFERRED
 from src.services.detection.geometry import crop_id as make_crop_id
 
 
@@ -118,6 +119,7 @@ def transform_item(
         if vector in doc and not keep_vector(doc[vector], embedding_dim):
             if vector == 'pe_embedding':
                 dropped = True
+                doc['embedding_state'] = DEFERRED
             del doc[vector]
     if fields.box_embeddings in doc:
         entries = [

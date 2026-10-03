@@ -115,6 +115,8 @@ class Counters:
     duplicates: int = 0
     failed: int = 0
     crops_indexed: int = 0
+    n_embedded: int = 0
+    n_not_embedded: int = 0
     started: float = field(default_factory=time.monotonic)
 
     def as_dict(self) -> dict[str, Any]:
@@ -248,6 +250,8 @@ class UploadRunner:
                     self.counts.duplicates += int(summary.get('duplicates', 0))
                     self.counts.failed += int(summary.get('failed', 0))
                     self.counts.crops_indexed += int(summary.get('crops_indexed', 0))
+                    self.counts.n_embedded += int(summary.get('n_embedded', 0))
+                    self.counts.n_not_embedded += int(summary.get('n_not_embedded', 0))
                     _append_jsonl(
                         self.cfg.failed_log,
                         (

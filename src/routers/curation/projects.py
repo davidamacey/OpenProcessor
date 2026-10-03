@@ -90,7 +90,7 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
     box embedding, and skips what an idle shard has not refreshed yet) and
     how many are validated (``null`` when it could not be counted, the same
     rule ``/stats`` uses)."""
-    from src.services.projects.stats import index_count, validated_count
+    from src.services.projects.stats import embedded_count, index_count, validated_count
 
     result: dict[str, ProjectCounts] = {}
     for slug, record in snapshot.items():
@@ -100,7 +100,10 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
             images = await index_count(client, images_idx)
             items = await index_count(client, items_idx)
             validated = await validated_count(client, items_idx)
-        result[slug] = ProjectCounts(images=images, items=items, validated=validated)
+            embedded = await embedded_count(client, items_idx)
+        result[slug] = ProjectCounts(
+            images=images, items=items, validated=validated, items_embedded=embedded
+        )
     return result
 
 

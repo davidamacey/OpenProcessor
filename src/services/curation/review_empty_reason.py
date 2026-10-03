@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.config import IndexRole, get_curation_config, index_name
+from src.services.curation.embedding_state import not_embedded_clause
 from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 
 
@@ -35,6 +36,11 @@ async def _field_has_any_value(opensearch: Any, field: str) -> bool:
         index=_items_index(), body={'query': {'exists': {'field': field}}}
     )
     return int(resp.get('count', 0)) > 0
+
+
+async def _count_unembedded(opensearch: Any) -> int:
+    resp = await opensearch.count(index=_items_index(), body={'query': not_embedded_clause()})
+    return int(resp.get('count', 0))
 
 
 async def _imported_labels_exist(opensearch: Any) -> bool:
@@ -72,6 +78,10 @@ async def compute_empty_reason(tab: str, filters: Any, opensearch: Any) -> str:
             return 'no imported labels match these filters'
         if not await _imported_labels_exist(opensearch):
             return 'no imported labels: import a dataset first'
+    if tab == 'all':
+        unembedded = await _count_unembedded(opensearch)
+        if unembedded:
+            return f'{unembedded} items have no embedding, so this queue skips them: embed them'
     return 'no items match'
 
 

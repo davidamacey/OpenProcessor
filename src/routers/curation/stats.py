@@ -36,6 +36,7 @@ from src.services.curation.ingest_class_sources import (
     unlabeled_proposal_class_sources,
 )
 from src.services.curation.region_boxes import box_query
+from src.services.curation.stats_embedding import embedding_aggregations, embedding_summary
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -322,9 +323,7 @@ def _read_auto_label_clusters_meta(
 def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
     return {
         'size': 0,
-        # track_total_hits=True so total_crops reflects the real count, not
-        # the ES default 10000-hit cap. The dashboard prominently displays
-        # this number — under-counting at 10k looks like a stuck pipeline.
+        # Exact total_crops, not the default 10000-hit cap (it would look like a stuck pipeline).
         'track_total_hits': True,
         'aggs': {
             # --- legacy fields (preserved for back-compat) ----------------
@@ -437,6 +436,7 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                 }
             },
             **imp.import_aggregations(fields),
+            **embedding_aggregations(),
             'region_status': {
                 'terms': {'field': fields.status, 'size': 32},
             },
@@ -614,8 +614,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         fallback_residual=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
         fallback_noise=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
     )
-    # The last run's own count (often a residual pass) is not the index's
-    # total, so serve both under explicit names.
+    # The last run's count (often a residual pass) is not the index total: serve both.
     cluster_meta['last_run_cluster_count'] = cluster_meta['cluster_count'] or None
     cluster_meta['cluster_count'] = int(
         ((aggs.get('distinct_clusters') or {}).get('n') or {}).get('value', 0)
@@ -697,4 +696,5 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             'region_stall_reason': region_stall_reason,
         },
         'clusters': cluster_meta,
+        'embedding': embedding_summary(aggs, int(total)),
     }
