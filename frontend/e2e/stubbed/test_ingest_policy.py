@@ -27,7 +27,7 @@ DETECTOR = {
     "n_labels": 2,
     "labels": [
         {"class_id": 0, "name": "widget", "slug": "widget"},
-        {"class_id": 1, "name": "tag plate", "slug": "tag_plate"},
+        {"class_id": 1, "name": "tag label", "slug": "tag_label"},
     ],
 }
 
@@ -60,7 +60,7 @@ PREVIEW = {
     "estimated_vector_mb": 1.6,
     "by_class": [
         {"name": "widget", "would_embed": 300, "would_not_embed": 100},
-        {"name": "tag plate", "would_embed": 100, "would_not_embed": 500},
+        {"name": "tag label", "would_embed": 100, "would_not_embed": 500},
     ],
 }
 

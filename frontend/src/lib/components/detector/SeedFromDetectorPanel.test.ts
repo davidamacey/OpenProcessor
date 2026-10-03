@@ -17,7 +17,7 @@ afterEach(() => {
 const DRY: SeedFromDetectorResponse = {
   dry_run: true,
   detector_model: 'widget_detector_v1',
-  created: [{ class_id: null, name: 'tag_plate', detector_label: 'tag plate' }],
+  created: [{ class_id: null, name: 'tag_label', detector_label: 'tag label' }],
   skipped: [{ name: 'widget', detector_label: 'widget', reason: 'exists' }],
   conflicts: [{ detector_label: 'x', class_id_in_detector: 5, reason: 'duplicate_slug' }],
 };
@@ -34,7 +34,7 @@ function render(over: Partial<SeedDeps> = {}) {
         n_labels: 2,
         labels: [
           { class_id: 0, name: 'widget', slug: 'widget' },
-          { class_id: 1, name: 'tag plate', slug: 'tag_plate' },
+          { class_id: 1, name: 'tag label', slug: 'tag_label' },
         ],
       },
     }),
@@ -73,8 +73,8 @@ describe('SeedFromDetectorPanel', () => {
     });
     expect(vi.mocked(deps.seed).mock.calls[0]![0]).toEqual({ dry_run: true });
     expect(q('seed-created')!.textContent).toContain('would create');
-    expect(q('seed-created')!.textContent).toContain('tag_plate');
-    expect(q('seed-created')!.textContent).toContain('tag plate');
+    expect(q('seed-created')!.textContent).toContain('tag_label');
+    expect(q('seed-created')!.textContent).toContain('tag label');
     expect(q('seed-skipped')!.textContent).toContain('Exists');
     expect(q('seed-conflicts')!.textContent).toContain('Duplicate slug');
     expect(q('seed-conflicts')!.textContent).toContain('5');

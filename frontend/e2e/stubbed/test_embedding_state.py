@@ -244,7 +244,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
                         "items": 120,
                         "without_vector": 20,
                         "to_embed": 20,
-                        "estimated_vector_kb": 80.0,
+                        "estimated_cost": 80.0,
                         "region_boxes_to_embed": False,
                     },
                 }
@@ -269,7 +269,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
     dialog.get_by_role("button", name="Check what would run").click()
     detail = dialog.get_by_test_id("reprocess-detail")
     expect(detail).to_contain_text("To embed", timeout=ACTION_TIMEOUT_MS)
-    expect(detail).to_contain_text("Estimated vector op")
+    expect(detail).to_contain_text("Estimated cost")
     expect(detail).to_contain_text("no")
     _shots(page, "reprocess-detail")
     assert reprocess_bodies == [SUGGESTED], "the served request is sent as served"

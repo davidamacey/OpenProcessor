@@ -35,7 +35,7 @@ CLASSES = [
 DRY = {
     "dry_run": True,
     "detector_model": "widget_detector_v1",
-    "created": [{"class_id": None, "name": "tag_plate", "detector_label": "tag plate"}],
+    "created": [{"class_id": None, "name": "tag_label", "detector_label": "tag label"}],
     "skipped": [{"name": "widget", "detector_label": "widget", "reason": "exists"}],
     "conflicts": [
         {"detector_label": "??", "class_id_in_detector": 7, "reason": "unnamed_label"}
@@ -90,8 +90,8 @@ def test_dry_run_then_create_behind_a_confirm(stub, page, app_url):
 
     created = page.get_by_test_id("seed-created")
     expect(created).to_contain_text("would create", timeout=ACTION_TIMEOUT_MS)
-    expect(created).to_contain_text("tag_plate")
-    expect(created).to_contain_text("tag plate")
+    expect(created).to_contain_text("tag_label")
+    expect(created).to_contain_text("tag label")
     expect(page.get_by_test_id("seed-skipped")).to_contain_text("Exists")
     expect(page.get_by_test_id("seed-conflicts")).to_contain_text("Unnamed label")
     _shots(page, "seed-dry-run")

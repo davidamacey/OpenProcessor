@@ -8,7 +8,7 @@ const DRY: SeedFromDetectorResponse = {
   detector_model: 'm',
   created: [
     { class_id: null, name: 'widget', detector_label: 'widget' },
-    { class_id: null, name: 'tag_plate', detector_label: 'tag plate' },
+    { class_id: null, name: 'tag_label', detector_label: 'tag label' },
   ],
   skipped: [{ name: 'gadget', detector_label: 'gadget', reason: 'exists' }],
   conflicts: [{ detector_label: '??', class_id_in_detector: 7, reason: 'unnamed_label' }],
@@ -26,7 +26,7 @@ function deps(over: Partial<SeedDeps> = {}): SeedDeps {
         n_labels: 2,
         labels: [
           { class_id: 0, name: 'widget', slug: 'widget' },
-          { class_id: 1, name: 'tag plate', slug: 'tag_plate' },
+          { class_id: 1, name: 'tag label', slug: 'tag_label' },
         ],
       },
     })),
@@ -44,7 +44,7 @@ describe('SeedFromDetector', () => {
   it('lists the detector labels; no detector means no panel', async () => {
     const s = new SeedFromDetector(deps());
     await s.load();
-    expect(s.labelNames).toEqual(['widget', 'tag plate']);
+    expect(s.labelNames).toEqual(['widget', 'tag label']);
     expect(s.available).toBe(true);
 
     const none = new SeedFromDetector(
@@ -98,7 +98,7 @@ describe('SeedFromDetector', () => {
     const s = new SeedFromDetector(deps());
     await s.load();
     await s.preview();
-    s.setChosen(['tag plate']);
+    s.setChosen(['tag label']);
     expect(s.result).toBeNull();
   });
 

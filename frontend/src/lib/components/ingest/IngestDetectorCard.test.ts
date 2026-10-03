@@ -22,7 +22,7 @@ const DETECTOR: IngestDetectorInfo = {
   n_labels: 2,
   labels: [
     { class_id: 0, name: 'widget', slug: 'widget' },
-    { class_id: 1, name: 'tag plate', slug: 'tag_plate' },
+    { class_id: 1, name: 'tag label', slug: 'tag_label' },
   ],
 };
 
@@ -66,7 +66,7 @@ describe('IngestDetectorCard', () => {
     const rows = [...details.querySelectorAll('tbody tr')].map((r) =>
       [...r.querySelectorAll('td')].map((c) => c.textContent!.trim()).join('|'),
     );
-    expect(rows).toEqual(['0|widget|widget', '1|tag plate|tag_plate']);
+    expect(rows).toEqual(['0|widget|widget', '1|tag label|tag_label']);
   });
 
   it('summarises the served policy and links to the policy page', () => {

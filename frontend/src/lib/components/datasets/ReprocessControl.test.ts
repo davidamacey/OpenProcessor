@@ -333,7 +333,7 @@ describe('ReprocessControl', () => {
                 selected: 5,
                 detail: {
                   to_embed: 4,
-                  estimated_vector_kb: 12.5,
+                  estimated_cost: 12.5,
                   segmenter_reachable: false,
                 },
               },
@@ -350,7 +350,7 @@ describe('ReprocessControl', () => {
     const detail = document.querySelector('[data-testid="reprocess-detail"]')!;
     expect(detail.textContent).toContain('To embed');
     expect(detail.textContent).toContain('4');
-    expect(detail.textContent).toContain('Estimated vector op');
+    expect(detail.textContent).toContain('Estimated cost');
     expect(detail.textContent).toContain('12.5');
     expect(detail.textContent).toMatch(/Segmenter reachable\s*no/);
   });
