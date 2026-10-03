@@ -45,6 +45,7 @@ function servedResponse(
       crops_indexed: 1,
       n_embedded: 0,
       n_not_embedded: 0,
+      n_embed_failed: 0,
       n_filtered: 0,
     },
     results: [
@@ -57,6 +58,7 @@ function servedResponse(
         n_regions: 0,
         n_embedded: 0,
         n_not_embedded: 0,
+        n_embed_failed: 0,
         n_filtered: 0,
         error: null,
         error_kind: null,
@@ -71,6 +73,7 @@ function servedResponse(
         n_regions: 0,
         n_embedded: 0,
         n_not_embedded: 0,
+        n_embed_failed: 0,
         n_filtered: 0,
         error: 'not a servable path',
         error_kind: 'unservable_path',
@@ -245,6 +248,56 @@ describe('IngestBatchPanel', () => {
     expect(
       target.querySelector('[data-testid="batch-secondary-list"]')?.textContent,
     ).toContain('classifier unavailable');
+  });
+
+  it('shows the served embedding totals and lists the files left without a vector', async () => {
+    const base = servedResponse();
+    vi.mocked(ingestBatch).mockResolvedValue({
+      ...base,
+      summary: {
+        ...base.summary,
+        n_embedded: 7,
+        n_not_embedded: 2,
+        n_embed_failed: 1,
+        n_filtered: 3,
+      },
+      results: [
+        { ...base.results[0]!, n_embedded: 5, n_not_embedded: 2, n_embed_failed: 1 },
+      ],
+    });
+    instance = mount(IngestBatchPanel, {
+      target,
+      props: {
+        config: {
+          ...resolveIngestConfig(servedIngestConfig()),
+          batchSourceRoots: ['/data/archive'],
+        },
+      },
+    });
+    flushSync();
+    const ta = textarea();
+    ta.value = '/data/archive/a.jpg';
+    ta.dispatchEvent(new Event('input'));
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Ingest 1 path'))!
+      .click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(
+        target.querySelector('[data-testid="batch-embedding-totals"]'),
+      ).not.toBeNull();
+    });
+    const totals = target.querySelector(
+      '[data-testid="batch-embedding-totals"]',
+    )!.textContent!;
+    expect(totals).toContain('embedded 7');
+    expect(totals).toContain('not embedded 2');
+    expect(totals).toContain('encoder failed 1');
+    expect(totals).toContain('filtered out 3');
+    expect(
+      target.querySelector('[data-testid="batch-not-embedded-list"]')?.textContent,
+    ).toContain('/data/a.jpg');
   });
 
   it('the submit button is disabled with no paths (never sends an empty items list)', () => {

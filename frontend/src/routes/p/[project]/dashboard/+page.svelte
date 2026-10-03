@@ -33,6 +33,7 @@
   import VlmRunPicker from '$components/vlm/VlmRunPicker.svelte';
   import { vlmRunErrorText } from '$lib/vlm/runErrors';
   import DatasetStats from '$components/DatasetStats.svelte';
+  import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
   import {
     exportYolo,
@@ -238,6 +239,8 @@
   <AutoLabelPanel />
 
   <DatasetStats />
+
+  <DetectionsSummaryPanel />
 
   <!-- Class balance (D2, visual audit 2026-09-24): ClassBalanceChart. -->
   <section class="surface p-4">

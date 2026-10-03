@@ -346,4 +346,57 @@ describe('DatasetStats', () => {
     );
     expect(banner?.getAttribute('title')).toBe(raw);
   });
+
+  it('shows the served embedding counts and per-state chips, "unknown" verbatim', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        embedding: {
+          embedded: 900,
+          not_embedded: 100,
+          by_state: {
+            embedded: 900,
+            not_selected: 60,
+            deferred: 0,
+            failed: 15,
+            unknown: 25,
+          },
+        },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const card = target.querySelector('[data-testid="dataset-embedding"]')!;
+    expect(card.textContent).toContain('900');
+    expect(card.textContent).toContain('100');
+    const chips = [
+      ...card.querySelectorAll('[data-testid="embedding-by-state"] span'),
+    ].map((c) => c.textContent?.replace(/\s+/g, ' ').trim());
+    // Only states with a count are chips; legacy items report as `unknown`.
+    expect(chips).toEqual([
+      'No vector: encoder failed 15',
+      'Not embedded 60',
+      'unknown 25',
+    ]);
+  });
+
+  it('renders no Embedding card (and no error) when the served stats carry none', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    const stats = goodStats() as unknown as Record<string, unknown>;
+    delete stats.embedding;
+    capturedOpts?.onSnapshot?.({}, stats);
+    flushSync();
+
+    expect(target.querySelector('[data-testid="dataset-embedding"]')).toBeNull();
+    expect(target.textContent).toContain('Clusters (total now)');
+  });
 });

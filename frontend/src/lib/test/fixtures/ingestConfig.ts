@@ -12,6 +12,7 @@ export function servedIngestConfig(overrides: Partial<IngestConfig> = {}): Inges
     },
     batch: { enabled: true, max_items: 256, source_roots: [] },
     region_drain: { poll_interval_s: 10, stable_polls: 3 },
+    detector: null,
     ...overrides,
   };
 }

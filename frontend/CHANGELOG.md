@@ -24,7 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Pause and Resume, and "Re-run gate-skipped" with the request the server
   built.
 
-<!-- track-B detector+embedding -->
+- Ingest policy page (`/settings/ingest-policy`): edit what an ingest keeps and which detections get a vector (mode, criteria, detect filter, per-project detector override), with a live cost preview of the detections already stored, a confirm before every save, and the served refusals, conflicts and unknown names shown as served. The `/settings` page links to it.
+- `/ingest` shows the deployment's detector (model, version, input size, labels) and a summary of the ingest policy; an upload or server-path run shows the served per-file and total counts of embedded, not-embedded, encoder-failed and filtered detections.
+- `/classes` can create classes from the detector's labels (a dry run first, then a confirm).
+- Items without a vector are named on cards and in the Details panel ("No vector: encoder failed", "No vector yet", "Not embedded"), the dashboard has a detections summary with an "Embed N detections" action, and the stats show the embedding breakdown. Semantic search results and ordered cluster views say how many items in scope have no vector and offer to embed them; an empty review queue can offer the same.
+- Reprocess offers embed options on a batch of crops ("only items without a vector", which parts) and shows each scope's served detail; the recluster run has an "Embed missing vectors first" option and shows its embed stage and a failed run's error.
 
 - Shared item filter (OpenProcessor v0.4.0): `/review`, `/clusters` and `/export` get one filter bar (class by name, not-class, area band, origin, embedding and review state; the open-vocabulary set and prompt in the new "Matching items" view), and every `filter_specs` entry a review tab serves renders by its kind (enum, multi-enum, class names, bool, number, integer, text). `/clusters` lists "Matching items" and can ignore, restore, label or move all of them, with the server's dry-run count first and Z to undo; `/export` can limit an export to matching items and shows the served count. Region edits flag boxes that have no vector yet ("Embed now"). Classes are now sent by name (`class_name`), since `class_id` left the list queries.
 

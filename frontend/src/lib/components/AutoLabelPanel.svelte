@@ -74,6 +74,8 @@
   // run_vlm regardless of this checkbox, since a scoped run that skips
   // the VLM stage it claims to scope is a no-op (see start()).
   let runVlm: boolean = $state(false);
+  // v0.4.0: embed the items without a vector first. Sent only when ticked.
+  let embedMissing: boolean = $state(false);
 
   // Cluster scope — train + assign only the largest, clear crops (what the
   // business sorts on); smaller / blurrier crops are parked until a looser
@@ -120,6 +122,7 @@
   // 'vlm' because that's the only stage with a meaningful total.
   const STAGE_LABEL: Record<string, string> = {
     '': 'preparing…',
+    embed_missing: 'embedding items without a vector',
     cluster_id_normalize: 'aligning cluster_id with class_id',
     cluster_residuals: 'clustering residual pool',
     auto_promote: 'promoting high-purity clusters',
@@ -135,8 +138,16 @@
     'finalize',
   ];
 
-  function stageIndex(s: string): number {
-    const i = STAGE_ORDER.indexOf(s);
+  // The embed stage runs first, and only when the run asked for it (the
+  // job echoes its resolved args).
+  function stageOrderFor(j: AutoLabelJobState | null): string[] {
+    return j?.args?.embed_missing === true || j?.stage === 'embed_missing'
+      ? ['embed_missing', ...STAGE_ORDER]
+      : STAGE_ORDER;
+  }
+
+  function stageIndex(order: string[], s: string): number {
+    const i = order.indexOf(s);
     return i < 0 ? 0 : i;
   }
 
@@ -198,6 +209,7 @@
         // URL stays byte-identical to every request this panel has ever
         // sent — the backend already defaults run_vlm to False.
         ...(sendRunVlm ? { run_vlm: true } : {}),
+        ...(embedMissing ? { embed_missing: true } : {}),
       });
       toastStore.success(
         scopeClassName
@@ -254,8 +266,9 @@
   const isRunning: boolean = $derived(
     ((job as AutoLabelJobState | null)?.status ?? '') === 'running',
   );
+  const stageOrder: string[] = $derived(stageOrderFor(job as AutoLabelJobState | null));
   const stageIdx: number = $derived(
-    stageIndex((job as AutoLabelJobState | null)?.stage ?? ''),
+    stageIndex(stageOrder, (job as AutoLabelJobState | null)?.stage ?? ''),
   );
   const percent: number | null = $derived.by(() => {
     if (!job || job.total <= 0) return null;
@@ -402,6 +415,19 @@
           />
           Run VLM labeling stage
         </label>
+        <label
+          class="flex items-center gap-1.5 text-xs text-zinc-300"
+          title="Embed the items that have no vector (a lazy ingest policy, a failed encoder) before clustering. Off by default."
+        >
+          <input
+            type="checkbox"
+            class="h-3.5 w-3.5 accent-blue-500"
+            data-testid="embed-missing-checkbox"
+            bind:checked={embedMissing}
+            disabled={busy}
+          />
+          Embed missing vectors first
+        </label>
       {/if}
       {#if isRunning}
         <button class="btn btn-danger" type="button" onclick={cancel} disabled={busy}>
@@ -486,7 +512,7 @@
         {#if isRunning}
           <span class="text-zinc-300">{STAGE_LABEL[job.stage] ?? job.stage}</span>
           <span class="font-mono text-zinc-500">
-            stage {stageIdx + 1}/{STAGE_ORDER.length}
+            stage {stageIdx + 1}/{stageOrder.length}
           </span>
         {:else if job.status !== 'idle' && job.finished_at}
           <span class="text-zinc-400">finished {lastFinishedRel}</span>
@@ -545,7 +571,7 @@
         <p class="text-xs text-red-300">Error: {job.error}</p>
       {/if}
 
-      {#if job.status === 'completed'}
+      {#if job.status === 'completed' || job.status === 'failed'}
         <!-- Per-stage durations + peak VRAM (GPU runs only). Rendered as
              a compact table above the raw JSON so operators can answer
              "where did the wall time go?" without parsing the full result. -->
@@ -594,7 +620,12 @@
               </thead>
               <tbody>
                 {#each summarizeRunStages(job.result) as row (row.key)}
-                  <tr class="border-t border-zinc-800 align-top">
+                  <tr
+                    class="border-t border-zinc-800 align-top {row.status === 'error'
+                      ? 'bg-red-500/10 text-red-200'
+                      : ''}"
+                    data-stage-status={row.status}
+                  >
                     <td class="py-1 pr-3 text-zinc-200" title={row.key}>
                       {STAGE_LABEL[row.key] ?? row.key}
                     </td>

@@ -29,6 +29,7 @@ function successResponse(identifiers: string[]): BatchIngestResponse {
       crops_indexed: identifiers.length,
       n_embedded: 0,
       n_not_embedded: 0,
+      n_embed_failed: 0,
       n_filtered: 0,
     },
     results: identifiers.map((image_path) => ({
@@ -40,6 +41,7 @@ function successResponse(identifiers: string[]): BatchIngestResponse {
       n_regions: 0,
       n_embedded: 0,
       n_not_embedded: 0,
+      n_embed_failed: 0,
       n_filtered: 0,
       error: null,
       error_kind: null,
@@ -248,6 +250,7 @@ describe('createIngestRun — response handling', () => {
         crops_indexed: 1,
         n_embedded: 0,
         n_not_embedded: 0,
+        n_embed_failed: 0,
         n_filtered: 0,
       },
       results: [
@@ -260,6 +263,7 @@ describe('createIngestRun — response handling', () => {
           n_regions: 0,
           n_embedded: 0,
           n_not_embedded: 0,
+          n_embed_failed: 0,
           n_filtered: 0,
           error: null,
           error_kind: null,
@@ -274,6 +278,7 @@ describe('createIngestRun — response handling', () => {
           n_regions: 0,
           n_embedded: 0,
           n_not_embedded: 0,
+          n_embed_failed: 0,
           n_filtered: 0,
           error: null,
           error_kind: null,
@@ -288,6 +293,7 @@ describe('createIngestRun — response handling', () => {
           n_regions: 0,
           n_embedded: 0,
           n_not_embedded: 0,
+          n_embed_failed: 0,
           n_filtered: 0,
           error: 'decode error',
           error_kind: 'decode_failed',
@@ -333,6 +339,7 @@ describe('createIngestRun — response handling', () => {
           crops_indexed: req.identifiers.length,
           n_embedded: 0,
           n_not_embedded: 0,
+          n_embed_failed: 0,
           n_filtered: 0,
         },
         results: req.identifiers.map((identifier, i) => ({
@@ -346,6 +353,7 @@ describe('createIngestRun — response handling', () => {
           n_regions: 0,
           n_embedded: 0,
           n_not_embedded: 0,
+          n_embed_failed: 0,
           n_filtered: 0,
           error: null,
           error_kind: null,
@@ -388,6 +396,7 @@ describe('createIngestRun — response handling', () => {
           crops_indexed: 1,
           n_embedded: 0,
           n_not_embedded: 0,
+          n_embed_failed: 0,
           n_filtered: 0,
         },
         results: [
@@ -400,6 +409,7 @@ describe('createIngestRun — response handling', () => {
             n_regions: 0,
             n_embedded: 0,
             n_not_embedded: 0,
+            n_embed_failed: 0,
             n_filtered: 0,
             error: null,
             error_kind: null,
@@ -414,6 +424,7 @@ describe('createIngestRun — response handling', () => {
             n_regions: 0,
             n_embedded: 0,
             n_not_embedded: 0,
+            n_embed_failed: 0,
             n_filtered: 0,
             error: null,
             error_kind: null,
@@ -578,6 +589,7 @@ describe('createIngestRun — retry failed', () => {
             crops_indexed: 1,
             n_embedded: 0,
             n_not_embedded: 0,
+            n_embed_failed: 0,
             n_filtered: 0,
           },
           results: [
@@ -590,6 +602,7 @@ describe('createIngestRun — retry failed', () => {
               n_regions: 0,
               n_embedded: 0,
               n_not_embedded: 0,
+              n_embed_failed: 0,
               n_filtered: 0,
               error: null,
               error_kind: null,
@@ -604,6 +617,7 @@ describe('createIngestRun — retry failed', () => {
               n_regions: 0,
               n_embedded: 0,
               n_not_embedded: 0,
+              n_embed_failed: 0,
               n_filtered: 0,
               error: 'transient',
               error_kind: 'detector_infer',
@@ -633,5 +647,41 @@ describe('createIngestRun — retry failed', () => {
     )[0].identifiers;
     expect(secondCallIds).toEqual(['src/b.jpg']);
     expect(run.results.get('b.jpg')?.kind).toBe('ingested');
+  });
+});
+
+describe('createIngestRun - embedding counts (v0.4.0)', () => {
+  it('sums the served embedding counts and keeps them per file', async () => {
+    const upload = vi.fn(async (req: IngestUploadRequest) => {
+      const res = successResponse(req.identifiers);
+      res.summary = {
+        ...res.summary,
+        n_embedded: 3,
+        n_not_embedded: 2,
+        n_embed_failed: 1,
+        n_filtered: 4,
+      };
+      res.results[0] = {
+        ...res.results[0]!,
+        n_embedded: 3,
+        n_not_embedded: 2,
+        n_embed_failed: 1,
+        n_filtered: 4,
+      };
+      return res;
+    });
+    const run = createIngestRun(baseDeps({ upload }));
+    await run.start([mkFile('a.jpg')], {
+      source: 'src',
+      identifierPrefix: '',
+      skipLookup: true,
+    });
+    expect(run.totals.n_embedded).toBe(3);
+    expect(run.totals.n_not_embedded).toBe(2);
+    expect(run.totals.n_embed_failed).toBe(1);
+    expect(run.totals.n_filtered).toBe(4);
+    const r = run.results.get('a.jpg')!;
+    expect([r.n_embedded, r.n_not_embedded, r.n_embed_failed]).toEqual([3, 2, 1]);
+    expect(run.results.countNotEmbedded()).toBe(1);
   });
 });

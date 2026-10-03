@@ -138,4 +138,49 @@ describe('ReprocessFlow', () => {
     await f.apply();
     expect(d.reprocessBatch).toHaveBeenLastCalledWith({ ...request, dry_run: false });
   });
+
+  it('sends no embed options until one is touched, and only with the embed scope', async () => {
+    const d = deps();
+    d.reprocessBatch.mockResolvedValue(reprocessFixture());
+    const f = new ReprocessFlow({ kind: 'crops', cropIds: ['a'] }, d);
+    f.toggleScope('embed', true);
+    await f.preview();
+    expect(d.reprocessBatch.mock.calls.at(-1)![0]).not.toHaveProperty('embed');
+
+    f.setEmbedOnlyMissing(true);
+    expect(f.dryRun).toBeNull();
+    await f.preview();
+    expect(d.reprocessBatch.mock.calls.at(-1)![0]).toMatchObject({
+      embed: { only_missing: true },
+    });
+    expect(d.reprocessBatch.mock.calls.at(-1)![0].embed).not.toHaveProperty('parts');
+
+    f.toggleEmbedPart('frame', true);
+    await f.preview();
+    expect(d.reprocessBatch.mock.calls.at(-1)![0].embed).toEqual({
+      only_missing: true,
+      parts: ['frame'],
+    });
+
+    f.toggleScope('embed', false);
+    f.toggleScope('detect', true);
+    await f.preview();
+    expect(d.reprocessBatch.mock.calls.at(-1)![0]).not.toHaveProperty('embed');
+  });
+
+  it('a served request keeps its own embed options untouched', async () => {
+    const d = deps();
+    d.reprocessBatch.mockResolvedValue(reprocessFixture());
+    const request = {
+      targets: { crop_ids: ['a', 'b'] },
+      scopes: ['embed' as const],
+      embed: { only_missing: true, parts: ['crop' as const] },
+      dry_run: true,
+    };
+    const f = new ReprocessFlow({ kind: 'request', request }, d);
+    f.setEmbedOnlyMissing(false);
+    f.toggleEmbedPart('region', true);
+    await f.preview();
+    expect(d.reprocessBatch).toHaveBeenLastCalledWith({ ...request, dry_run: true });
+  });
 });

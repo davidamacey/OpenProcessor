@@ -801,6 +801,46 @@ describe('getCluster order param', () => {
     expect(cropsUrl).toContain('order=mistakenness');
   });
 
+  it('hands back the served n_unembedded and suggested_reprocess of an ordered view', async () => {
+    const request = {
+      targets: { filter: { embedding_state: ['deferred'] } },
+      scopes: ['embed'],
+      dry_run: true,
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith(`${API_PREFIX}/crops`)
+          ? jsonResponse({
+              total: 0,
+              page: 1,
+              page_size: 60,
+              crops: [],
+              n_unembedded: 9,
+              suggested_reprocess: request,
+            })
+          : jsonResponse({ items: [] }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getCluster(42, 1, 60, undefined, { order: 'outliers' });
+    expect(res.crops.n_unembedded).toBe(9);
+    expect(res.crops.suggested_reprocess).toEqual(request);
+
+    const plain = await getCluster(42, 1, 60, undefined, {});
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith(`${API_PREFIX}/crops`)
+          ? jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] })
+          : jsonResponse({ items: [] }),
+      ),
+    );
+    const none = await getCluster(42, 1, 60, undefined, {});
+    expect(none.crops.n_unembedded).toBeNull();
+    expect(none.crops.suggested_reprocess).toBeNull();
+    expect(plain).toBeDefined();
+  });
+
   it('omits order entirely when null (unchanged default behavior)', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.startsWith(`${API_PREFIX}/crops`)) {

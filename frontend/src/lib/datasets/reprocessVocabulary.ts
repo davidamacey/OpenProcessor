@@ -6,7 +6,11 @@
  * (question C-1: replace with served labels when they exist).
  */
 import { humanizeId } from '$lib/humanizeId';
-import type { ReprocessRegionMode, ReprocessScope } from '$lib/types_import';
+import type {
+  EmbedOptions,
+  ReprocessRegionMode,
+  ReprocessScope,
+} from '$lib/types_import';
 
 export const REPROCESS_SCOPES: readonly ReprocessScope[] = [
   'detect',
@@ -17,5 +21,13 @@ export const REPROCESS_SCOPES: readonly ReprocessScope[] = [
 ];
 
 export const REGION_MODES: readonly ReprocessRegionMode[] = ['redetect', 'reverify'];
+
+/** The `embed.parts` ids, pinned to the vendored `EmbedOptions` by
+ *  `contract/detectorContract.test.ts`. */
+export const EMBED_PARTS: readonly NonNullable<EmbedOptions['parts']>[number][] = [
+  'crop',
+  'frame',
+  'region',
+];
 
 export const reprocessLabel = (id: string): string => humanizeId(id);

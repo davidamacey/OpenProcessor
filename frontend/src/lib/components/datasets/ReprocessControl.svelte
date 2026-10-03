@@ -18,6 +18,7 @@
   import type { Crop } from '$lib/types';
   import type { ReprocessRegionMode } from '$lib/types_import';
   import {
+    EMBED_PARTS,
     REGION_MODES,
     REPROCESS_SCOPES,
     reprocessLabel,
@@ -107,6 +108,8 @@
       <h3 class="text-base font-semibold text-zinc-100">
         {#if f.target.kind === 'image'}
           Reprocess image
+        {:else if f.target.kind === 'request'}
+          Reprocess
         {:else}
           Reprocess {f.count.toLocaleString()}
           {f.count === 1 ? 'item' : 'items'}
@@ -146,6 +149,40 @@
             {/each}
           </select>
         </label>
+      {/if}
+
+      {#if f.embedOptionsEditable}
+        <fieldset class="space-y-1 text-xs" data-testid="reprocess-embed-options">
+          <legend class="mb-0.5 text-zinc-400">Embed options</legend>
+          <label class="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={f.embedOnlyMissing === true}
+              disabled={f.busy || f.result != null}
+              onchange={(e) =>
+                f.setEmbedOnlyMissing((e.currentTarget as HTMLInputElement).checked)}
+            />
+            <span class="text-zinc-200">Only items without a vector</span>
+          </label>
+          <div class="flex flex-wrap gap-x-3 gap-y-1">
+            <span class="text-zinc-400">Parts</span>
+            {#each EMBED_PARTS as part (part)}
+              <label class="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={f.embedParts?.includes(part) ?? false}
+                  disabled={f.busy || f.result != null}
+                  onchange={(e) =>
+                    f.toggleEmbedPart(
+                      part,
+                      (e.currentTarget as HTMLInputElement).checked,
+                    )}
+                />
+                <span class="text-zinc-200">{reprocessLabel(part)}</span>
+              </label>
+            {/each}
+          </div>
+        </fieldset>
       {/if}
 
       {#if f.dryRun && !f.result}

@@ -9,6 +9,8 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 import type { ModelClassMappingSummary } from './types_models';
+import type { IngestDetectorInfo, IngestPolicy } from '$lib/types_detector';
+import type { ReprocessRequest } from '$lib/types_import';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
@@ -887,6 +889,9 @@ export interface PaginatedResponse<T> {
   /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
    *  when the route did not compute it). Absent on every other endpoint. */
   n_unembedded?: number | null;
+  /** v0.4.0 ordered `GET /crops` views: the request that would embed the
+   *  unembedded items, sent only when `n_unembedded` is > 0. */
+  suggested_reprocess?: ReprocessRequest | null;
   /** v0.4.0 `GET {API_PREFIX}/search/text`: items in the search scope a
    *  semantic search cannot reach because they have no vector. */
   unembedded_in_scope?: number | null;
@@ -1298,6 +1303,9 @@ export interface IngestImageResult {
    *  detect filter dropped. */
   n_embedded: number;
   n_not_embedded: number;
+  /** Of `n_not_embedded`, how many failed in the encoder (the rest were
+   *  not selected or deferred by the policy). */
+  n_embed_failed: number;
   n_filtered: number;
   /**
    * OpenProcessor d72cc63: set when the image itself ingested but the
@@ -1316,6 +1324,9 @@ export interface BatchIngestSummary {
    *  summed over the batch. */
   n_embedded: number;
   n_not_embedded: number;
+  /** Of `n_not_embedded`, how many failed in the encoder (the rest were
+   *  not selected or deferred by the policy). */
+  n_embed_failed: number;
   n_filtered: number;
   /** d72cc63: how many results carry a `secondary_detector_error`. */
   secondary_detector_failures?: number;
@@ -1408,4 +1419,8 @@ export interface IngestConfig {
   };
   batch: { enabled: boolean; max_items: number; source_roots: string[] };
   region_drain: { poll_interval_s: number; stable_polls: number };
+  /** v0.4.0: the deployment detector, `null` when none is reported. */
+  detector?: IngestDetectorInfo | null;
+  /** v0.4.0: the project ingest policy echo. */
+  policy?: IngestPolicy;
 }

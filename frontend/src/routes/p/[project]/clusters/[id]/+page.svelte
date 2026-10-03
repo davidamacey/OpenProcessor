@@ -28,6 +28,7 @@
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import SemanticSearchBox from '$components/SemanticSearchBox.svelte';
+  import UnembeddedBanner from '$components/embedding/UnembeddedBanner.svelte';
   import ShortcutsButton from '$components/ShortcutsButton.svelte';
   import StrategyBar from '$components/StrategyBar.svelte';
   import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
@@ -41,6 +42,7 @@
   import { isAssignableClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type { Cluster, Crop, PaginatedResponse } from '$lib/types';
+  import type { ReprocessRequest } from '$lib/types_import';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
@@ -74,6 +76,14 @@
     method: string | null;
     version: string | null;
     n_pool: number | null;
+  } | null>(null);
+
+  // v0.4.0: an ordered view (outliers, diverse, core-first) cannot rank
+  // items without a vector; the server serves how many and, when there are
+  // any, the request that would embed them.
+  let unembedded = $state<{
+    count: number | null;
+    request: ReprocessRequest | null;
   } | null>(null);
 
   // Human-readable cluster name for the header: the served
@@ -119,6 +129,10 @@
               n_pool: res.crops.n_pool ?? null,
             }
           : null;
+      unembedded = {
+        count: res.crops.n_unembedded ?? null,
+        request: res.crops.suggested_reprocess ?? null,
+      };
       return res.crops as PaginatedResponse<Crop>;
     },
     keyOf: (c) => c.id,
@@ -972,7 +986,7 @@
         target={{ kind: 'crops', cropIds: [...sel.ids] }}
         disabled={sel.size === 0}
         buttonClass="btn"
-        onapplied={() => void cropPager.loadFirst()}
+        onapplied={() => void loadFirst()}
       />
       <button
         class="btn"
@@ -1181,6 +1195,13 @@
       showFilters={false}
       diverseKDefault={pageSize}
       diverseMeta={orderMeta}
+    />
+
+    <UnembeddedBanner
+      count={unembedded?.count}
+      context="ordered"
+      suggestedReprocess={unembedded?.request}
+      onapplied={() => void loadFirst()}
     />
 
     {#if subjectScope !== 0 || minBlurRatio !== null || !strategyBar.isDefault}
