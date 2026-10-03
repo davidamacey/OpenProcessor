@@ -13,6 +13,7 @@
   import { resolve } from '$app/paths';
   import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
   import ProjectUnavailable from '$components/ProjectUnavailable.svelte';
+  import ResourcesMenu from '$components/ResourcesMenu.svelte';
   import { projectHref, sectionOf } from '$lib/projectPaths';
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
@@ -416,6 +417,8 @@
           aria-current={navCurrent('settings')}>Settings</a
         >
       </ScrollStrip>
+
+      <ResourcesMenu />
 
       <span
         class="chip shrink-0 gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"

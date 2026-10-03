@@ -13,7 +13,8 @@
    * `PUBLIC_MLFLOW_URL`; with neither, the MLflow link is not shown.
    */
   import { onMount } from 'svelte';
-  import { externalHref, mlflowBaseUrl } from '$lib/mlflowLink';
+  import { mlflowBaseUrl } from '$lib/mlflowLink';
+  import { monitoringResourceLinks } from '$lib/resourceLinks';
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
 
   interface Props {
@@ -23,20 +24,11 @@
 
   let { mlflowRunUrls = [] }: Props = $props();
 
-  const SERVICES = [
-    { key: 'grafana', label: 'Grafana' },
-    { key: 'prometheus', label: 'Prometheus' },
-    { key: 'opensearch_dashboards', label: 'OpenSearch' },
-  ] as const;
-
   let mlflowEnv = $state<string | null>(null);
 
   const mlflowHref = $derived(mlflowBaseUrl(mlflowRunUrls, mlflowEnv));
   const links = $derived(
-    SERVICES.flatMap((s) => {
-      const href = externalHref(curationSettingsStore.settings.monitoring_links[s.key]);
-      return href ? [{ label: s.label, href }] : [];
-    }),
+    monitoringResourceLinks(curationSettingsStore.settings.monitoring_links),
   );
 
   onMount(() => {
