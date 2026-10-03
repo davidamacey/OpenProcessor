@@ -89,6 +89,7 @@ from src.services.curation.autolabel.job import (
     _Progress,
     _running_lock,
     _trigger_file,
+    failed_stages,
 )
 from src.services.curation.worker_liveness import write_heartbeat as _write_container_heartbeat
 from src.services.projects.guard import make_script_opensearch
@@ -221,6 +222,9 @@ async def _run_one(record: ProjectRecord, trigger: dict[str, Any], opensearch: A
             args=args,
             pipeline=pipeline_path,
         )
+        # Heartbeat first: the API repairs a 'running' state with no heartbeat
+        # to 'failed', so the file must exist before that state is visible.
+        _touch_heartbeat()
         _atomic_write(asdict(state))
         # running.lock kept for backward-compat with any external tooling
         # that inspects it. cross-container pid is meaningless here, hence
@@ -263,8 +267,13 @@ async def _run_one(record: ProjectRecord, trigger: dict[str, Any], opensearch: A
         try:
             result = await pipeline_fn(opensearch=opensearch, progress=progress, **args)
             state.result = result if isinstance(result, dict) else {'raw': str(result)}
-            state.status = 'completed'
-            logger.info('project=%s run completed job_id=%s', record.slug, job_id)
+            failed = failed_stages(state.result)
+            if failed:
+                state.status = 'failed'
+                state.error = f'stage(s) failed: {", ".join(failed)}'
+            else:
+                state.status = 'completed'
+            logger.info('project=%s run %s job_id=%s', record.slug, state.status, job_id)
         except asyncio.CancelledError:
             state.status = 'cancelled'
             state.error = state.error or 'cancelled by operator'

@@ -103,6 +103,7 @@ async def _embed_missing(
         from src.clients.triton_pool import AsyncTritonPool
 
         owned_pool = AsyncTritonPool(url=triton_url(), pool_size=1, max_concurrent=8)
+        await owned_pool.initialize()
         encoder = PEEncoder(triton_pool=owned_pool)
     result = ReprocessScopeResult(scope='embed', selected=len(plan.image_ids))
     try:
@@ -116,11 +117,16 @@ async def _embed_missing(
     finally:
         if owned_pool is not None and hasattr(owned_pool, 'close'):
             await owned_pool.close()
-    return {
+    summary: dict[str, Any] = {
         'images': result.queued,
         'images_failed': result.failed,
         'embedded': result.detail.get('crop_written', 0),
     }
+    if result.failed:
+        # Surfaces as a failed job (job.failed_stages), not a silent success.
+        summary['status'] = 'error'
+        summary['error'] = f'{result.failed} of {len(plan.image_ids)} images failed to embed'
+    return summary
 
 
 def _images_index() -> str:

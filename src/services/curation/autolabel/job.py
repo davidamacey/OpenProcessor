@@ -260,6 +260,17 @@ def reconcile_orphaned_jobs() -> bool:
     )
 
 
+def failed_stages(result: Any) -> list[str]:
+    """Names of the stages a finished run reported as ``status: error``; the
+    run goes on past a failed stage, but must not end as a success."""
+    stages = result.get('stages') if isinstance(result, dict) else None
+    if not isinstance(stages, dict):
+        return []
+    return [
+        name for name, s in stages.items() if isinstance(s, dict) and s.get('status') == 'error'
+    ]
+
+
 def get_state() -> dict[str, Any]:
     """Read-only snapshot from the on-disk state file.
 

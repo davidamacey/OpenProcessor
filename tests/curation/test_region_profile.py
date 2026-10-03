@@ -372,3 +372,13 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
     assert not worker._is_secondary_shape(task)
+
+
+def test_retired_empty_class_ids_is_dropped_on_read() -> None:
+    body = {'name': 'legacy', 'class_ids': []}
+    assert profile_registry.region_profile_from_dict(body).name == 'legacy'
+
+
+def test_non_empty_class_ids_stays_rejected() -> None:
+    with pytest.raises(ValueError, match='unknown field'):
+        profile_registry.region_profile_from_dict({'name': 'legacy', 'class_ids': [1]})
