@@ -16,30 +16,20 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
 
 # =============================================================================
-# GENERIC_ITEM_PACK's shipped synonym table — spot checks
+# GENERIC_ITEM_PACK -- registry-agnostic default
 # =============================================================================
 
 
-@pytest.mark.parametrize(
-    ('raw', 'expected'),
-    [
-        ('carton', 'box'),
-        ('package', 'box'),
-        ('mailer', 'envelope'),
-        ('poly bag', 'envelope'),
-    ],
-)
-def test_generic_pack_synonyms_canonical_mappings(raw: str, expected: str) -> None:
-    assert GENERIC_ITEM_PACK.synonyms[raw] == expected
+@pytest.mark.parametrize('registry', [frozenset(), frozenset({'person', 'car', 'bus'})])
+def test_shipped_default_pack_validates_with_zero_warnings(registry: frozenset[str]) -> None:
+    """A fresh install (empty or COCO registry) must not see vocabulary
+    warnings for the pack it ships as the default."""
+    from src.services.config_store.pack_validation import validate_pack
 
-
-@pytest.mark.parametrize('registry_name', ['box', 'envelope', 'tube'])
-def test_registry_names_are_not_synonym_keys(registry_name: str) -> None:
-    """Pass-through guard: a registry slug should not also appear as a key."""
-    assert registry_name not in GENERIC_ITEM_PACK.synonyms, (
-        f'{registry_name!r} should not be a synonyms key — it is already a '
-        'registry slug; keeping it would create a self-loop or shadow.'
-    )
+    report = validate_pack(None, GENERIC_ITEM_PACK.to_dict(), class_names=registry)
+    assert report.ok
+    loud = [w.code for w in report.warnings if w.severity == 'warning']
+    assert not loud, loud
 
 
 # =============================================================================
@@ -153,8 +143,8 @@ def test_resolve_skips_synonym_lookup_on_low_confidence(
 
 def test_resolve_class_name_defaults_to_generic_item_pack() -> None:
     name_to_id = {'box': 0, 'envelope': 1}
-    assert resolve_class_name('carton', name_to_id) == 'box'
-    assert resolve_class_name('unknown_thing', name_to_id) is None
+    assert resolve_class_name('box', name_to_id) == 'box'
+    assert resolve_class_name('carton', name_to_id) is None  # no shipped vocabulary
 
 
 # =============================================================================
@@ -168,7 +158,17 @@ def test_format_class_catalog_uses_pack_descriptions() -> None:
         {'class_name': 'envelope', 'group': 'flat'},
         {'class_name': 'deprecated_thing', 'group': 'flat', 'deprecated': True},
     ]
-    catalog = format_class_catalog(classes, GENERIC_ITEM_PACK)
+    pack = PromptPack.from_dict(
+        {
+            **GENERIC_ITEM_PACK.to_dict(),
+            'name': 'described',
+            'class_descriptions': {
+                'box': 'rectangular cardboard shipping box',
+                'envelope': 'flat paper or poly mailer',
+            },
+        }
+    )
+    catalog = format_class_catalog(classes, pack)
     assert 'containers: box (rectangular cardboard shipping box)' in catalog
     assert 'flat: envelope (flat paper or poly mailer)' in catalog
     assert 'deprecated_thing' not in catalog

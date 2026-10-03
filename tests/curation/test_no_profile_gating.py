@@ -118,3 +118,45 @@ def test_gated_route_is_not_409_with_an_active_profile(
         else getattr(app_client, method)(path)
     )
     assert resp.status_code != 409 or 'no region profile is configured' not in resp.text
+
+
+# Region-named routes that deliberately answer without an active profile.
+# Everything else containing "region" in its path MUST carry the shared gate.
+_UNGATED_REGION_ROUTES = frozenset(
+    {
+        # profile CRUD / activation: the way a profile becomes active at all
+        '/region_profiles',
+        # static vocabularies and read-only job snapshots
+        '/regions/statuses',
+        '/regions/vocabulary',
+        '/regions/cluster/status',
+        '/regions/fp_centroids/status',
+        # documented to answer 200 with empty region_dependencies
+        '/ingest/region_drain',
+    }
+)
+
+
+def _has_gate(dependant: Any) -> bool:
+    from src.routers.curation._common import _require_region_profile_dep
+
+    return dependant.call is _require_region_profile_dep or any(
+        _has_gate(d) for d in dependant.dependencies
+    )
+
+
+def test_every_region_route_carries_the_gate_or_is_documented_exempt() -> None:
+    from fastapi.routing import APIRoute
+
+    from src.routers.curation import router as curation_router
+
+    missing: list[str] = []
+    for route in curation_router.routes:
+        if not isinstance(route, APIRoute) or 'region' not in route.path:
+            continue
+        path = route.path
+        if path.startswith('/region_profiles') or path in _UNGATED_REGION_ROUTES:
+            continue
+        if not _has_gate(route.dependant):
+            missing.append(f'{sorted(route.methods)} {path}')
+    assert not missing, f'region routes without the no-profile gate: {missing}'

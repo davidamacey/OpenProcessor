@@ -352,7 +352,29 @@ async def upsert_runtime_doc(
     await client.index(index=index, id=doc_id, body=body)
 
 
+# Workers refresh their runtime doc every 60s; a doc several beats old
+# belongs to a replaced container (the hostname is the container id, so the
+# old row is never overwritten) and must not read as a lagging live worker.
+RUNTIME_DOC_MAX_AGE_S = 300.0
+
+
+def _runtime_doc_is_live(source: dict[str, Any], now: datetime.datetime) -> bool:
+    raw = source.get('applied_at')
+    if not raw:
+        return True
+    try:
+        applied = datetime.datetime.fromisoformat(str(raw))
+    except ValueError:
+        return True
+    if applied.tzinfo is None:
+        applied = applied.replace(tzinfo=datetime.UTC)
+    return (now - applied).total_seconds() <= RUNTIME_DOC_MAX_AGE_S
+
+
 async def get_runtime_docs(client: Any, index: str, *, process: str) -> list[dict[str, Any]]:
+    """Live ``runtime:<process>:<host>`` docs: those refreshed within
+    :data:`RUNTIME_DOC_MAX_AGE_S`. The one reader for every axis's
+    ``applied[]``."""
     resp = await client.search(
         index=index,
         body={
@@ -360,8 +382,10 @@ async def get_runtime_docs(client: Any, index: str, *, process: str) -> list[dic
             'query': {'bool': {'filter': [{'term': {'doc_type': 'runtime'}}]}},
         },
     )
+    now = datetime.datetime.now(datetime.UTC)
     return [
         hit['_source']
         for hit in resp['hits']['hits']
         if hit['_id'].startswith(f'runtime:{process}:')
+        and _runtime_doc_is_live(hit['_source'], now)
     ]

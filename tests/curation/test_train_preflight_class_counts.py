@@ -101,7 +101,9 @@ def test_default_target_classes_leave_out_the_region_class(monkeypatch: pytest.M
     from src.services.detection.profile_registry import get_active_region_profile
 
     def entry(class_id: int, name: str) -> SimpleNamespace:
-        return SimpleNamespace(class_id=class_id, class_name=name, deprecated=False)
+        return SimpleNamespace(
+            class_id=class_id, class_name=name, deprecated=False, group='unknown'
+        )
 
     profile = get_active_region_profile()
     assert profile is not None

@@ -12,18 +12,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
 from src.services.curation.wire import serialize_item
-
-
-if TYPE_CHECKING:
-    import pytest
 
 
 ITEMS = base_curation_config().items_index
@@ -120,6 +117,7 @@ def test_history_returns_sanitized_entries() -> None:
     assert client.get('/curation/projects/default/crops/nope/history').status_code == 404
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_suspected_fp_threshold_defaults_server_side(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.routers.curation import regions_fp
 
