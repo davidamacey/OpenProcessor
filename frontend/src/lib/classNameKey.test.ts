@@ -4,6 +4,19 @@ import { findActiveClassByName, normalizeClassName } from './classNameKey';
 const c = (id: number, name: string, deprecated = false) => ({ id, name, deprecated });
 
 describe('normalizeClassName', () => {
+  // The backend's own cases (src/utils/class_names.py normalize_class_name):
+  // lowercase, every RUN of non-alphanumerics becomes one `_`, edges trimmed.
+  it.each([
+    ['traffic light', 'traffic_light'],
+    ['  Hot  Dog ', 'hot_dog'],
+    ['t-shirt', 't_shirt'],
+    ['car', 'car'],
+    ['__x__', 'x'],
+    ['a - b', 'a_b'],
+    ['', ''],
+  ])('matches the backend rule: %j -> %j', (raw, slug) => {
+    expect(normalizeClassName(raw)).toBe(slug);
+  });
   it('folds case, spaces and hyphens to an underscore', () => {
     expect(normalizeClassName('Sports Car')).toBe('sports_car');
     expect(normalizeClassName('sports-car')).toBe('sports_car');
