@@ -518,8 +518,13 @@ export async function apiFetch<T>(
   };
   let attempt = 0;
   let lastError: unknown;
-  // 1 initial + 3 retries on 5xx => 4 attempts max.
-  for (; attempt < RETRY_DELAYS_MS.length + 1; attempt++) {
+  // Reads: 1 initial + 3 retries on 5xx => 4 attempts max. A write may
+  // already have been executed server-side (a 504 or a lost response), so it
+  // is sent exactly once.
+  const method = (init.method ?? 'GET').toUpperCase();
+  const maxAttempts =
+    method === 'GET' || method === 'HEAD' ? RETRY_DELAYS_MS.length + 1 : 1;
+  for (; attempt < maxAttempts; attempt++) {
     let retryAfterMs: number | null = null;
     try {
       const res = await fetch(url, {
@@ -574,7 +579,7 @@ export async function apiFetch<T>(
     // A retry after the project changed would fetch the OLD project's
     // URL again — stop instead.
     assertFresh();
-    if (attempt < RETRY_DELAYS_MS.length) {
+    if (attempt < maxAttempts - 1) {
       // A served `Retry-After` (503 only) replaces this attempt's fixed
       // backoff delay, clamped to MAX_RETRY_AFTER_MS — it never adds an
       // attempt or extends the total retry budget.
