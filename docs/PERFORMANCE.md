@@ -2,6 +2,12 @@
 
 Complete guide for optimizing FastAPI and Triton Inference Server performance.
 
+> **Status (v0.4.0):** this guide covers the API-layer tuning and benchmarks that are in
+> `main`. The GPU and Triton pipeline optimization (decode once, stay on the GPU) is
+> open work, tracked in #40 and planned in
+> [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md);
+> the numbers here are measured before it.
+
 ---
 
 ## Table of Contents
