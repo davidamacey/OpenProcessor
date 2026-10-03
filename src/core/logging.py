@@ -176,6 +176,10 @@ def configure_logging(json_logs: bool = True, log_level: str = 'INFO') -> None:
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
     root_logger.setLevel(getattr(logging, log_level.upper()))
+    # The client logs every request at INFO (the per-project config_revision
+    # poll was ~64% of all API lines); failures are WARNING and still surface.
+    for name in _OUTAGE_LOGGERS:
+        logging.getLogger(name).setLevel(max(root_logger.level, logging.WARNING))
 
 
 def get_logger(name: str) -> Any:
