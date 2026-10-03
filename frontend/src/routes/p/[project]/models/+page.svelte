@@ -187,7 +187,7 @@
     <p class="text-sm text-zinc-500">No models reported.</p>
   {:else}
     <ul class="grid grid-cols-1 gap-4 md:grid-cols-2">
-      {#each models as m (m.name)}
+      {#each models as m, i (`${i}:${m.name}`)}
         <li class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
           <div class="mb-2 flex items-start justify-between gap-3">
             <div class="min-w-0">

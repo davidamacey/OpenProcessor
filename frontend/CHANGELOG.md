@@ -46,6 +46,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `/models` no longer fails to load when the server lists the same model twice (a shared model after a re-share): each card is keyed by position as well as name, so both render instead of a Svelte `each_key_duplicate` error leaving the page on "Loading...".
+
 - A failed module-chunk load (flaky network, browser network-change abort, or
   a deploy that replaced the hashed chunks under an open tab) no longer leaves
   a dead "500 Internal Error" page: the app reloads once automatically

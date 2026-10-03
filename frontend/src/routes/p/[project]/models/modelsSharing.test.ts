@@ -267,6 +267,18 @@ describe('/models sharing', () => {
     expect(unloadButtons('model-sharing-own_det').length).toBeGreaterThan(0);
   });
 
+  it('renders a model the server lists twice instead of failing the whole page', async () => {
+    // Observed live: a shared model served twice after a re-share. A keyed
+    // each over the model name throws on the duplicate and leaves the page
+    // on "Loading..." for every card.
+    rows.push({ ...rows.find((r) => r.name === 'beta__det')! });
+    await render();
+    expect(
+      target.querySelectorAll('[data-testid="model-sharing-beta__det"]'),
+    ).toHaveLength(2);
+    expect(q('model-sharing-own_det')).not.toBeNull();
+  });
+
   it('share is confirm-gated and sends the served revision, then reloads', async () => {
     await render();
     click('model-share-toggle-own_det');
