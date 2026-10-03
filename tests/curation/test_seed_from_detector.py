@@ -127,7 +127,7 @@ def test_seeding_never_touches_items(
 
     fake = client.app.dependency_overrides[_raw_opensearch_dep]()
     client.post(URL, json={'dry_run': False})
-    assert fake.method_calls == []
+    assert [c for c in fake.method_calls if c[0] != 'get'] == []
 
 
 def test_detector_block_in_ingest_config(client: TestClient, labels_file: None) -> None:

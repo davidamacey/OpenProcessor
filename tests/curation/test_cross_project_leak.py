@@ -817,6 +817,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
     from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
     from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
     from src.services.curation.history import record_class_snapshot
+    from src.services.curation.ingest_class_sources import classifier_class_sources
     from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
     F = get_region_fields()
@@ -884,7 +885,12 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             for n in (5, 6)
         ),
         *(
-            crop(n, class_source='vlm', class_validated=False, cluster_id=10001)
+            crop(
+                n,
+                class_source=next(iter(sorted(classifier_class_sources()))),
+                class_validated=False,
+                cluster_id=10001,
+            )
             for n in range(7, 11)
         ),
         crop(

@@ -1,6 +1,6 @@
 # Generic detector, store-everything ingest and selective embedding: design and implementation plan
 
-Status: implemented (waves W0 to W9). Default embedding policy stays `all` (flip decision: keep). Deferred: arbitrary-filter clustering, a `DELETE /models` guard for a project's own detector, the optional `backfill_embedding_state.py`. Issues: #52 (default detector, store
+Status: implemented (waves W0 to W9). Default embedding policy stays `all` (flip decision: keep). Deferred: arbitrary-filter clustering, a model-delete guard for a project's own detector, the optional `backfill_embedding_state.py`. Issues: #52 (default detector, store
 every detection, embedding policy), #45 (public COCO baseline set, used for the
 before/after numbers). Sibling plan: `docs/design/sam3_full_image_detection_plan.md`
 (#30; its section 12 assumes this plan: a hit is always stored, whether it is
@@ -797,7 +797,7 @@ generated contracts (`contracts/openapi/curation.json`, `contracts/ts/*.ts`,
     images_failed, embedded}` or `{skipped, reason}` or `{status: 'error'}`.
 13. `POST /export/yolo`: optional `item_filter` (the filter as an object),
     recorded in the manifest as `item_filter`.
-14. `GET /review/regions` with the region profile off answers an empty queue with
+14. The regions review queue with the region profile off answers an empty queue with
     `empty_reason`; `/review/regions/locate` answers reason `region_profile_off`.
     Show the reason, not a blank grid.
 15. Stats and empty states: `embedding_states` breakdown in curation stats,
