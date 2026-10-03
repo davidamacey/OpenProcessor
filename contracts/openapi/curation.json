@@ -8446,7 +8446,7 @@
             "type": "array"
           },
           "embedded_because_labeled": {
-            "description": "Of would_embed, the items that embed only because a human or validated label always embeds; a fresh ingest of the same images has none of these.",
+            "description": "Of would_embed, the items that embed only because a human or validated label always embeds, counted only for items stored with a vector (a label given later does not embed a vectorless item); a fresh ingest of the same images has none.",
             "title": "Embedded Because Labeled",
             "type": "integer"
           },

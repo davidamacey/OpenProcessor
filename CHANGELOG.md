@@ -193,6 +193,9 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- Combine preview: every issue (`source_not_found`, `duplicate_source`, `target_is_source`) carries a human `message`, and `unclassed_items` is counted after dedup so it equals the finished target.
+- The served `Any` option (`""`) of an enum filter spec is accepted as unset on every route that serves it: `on_negative_frame=` / `dataset_split=` on `/crops` and `/review/*` no longer 422 (one shared validator).
+- `POST /ingest/policy/preview` no longer counts a label given after ingest as embedding a stored vectorless item (`embedded_because_labeled` only covers items that already have a vector), so preview matches what really happens.
 - `POST .../cluster/umap/rebuild` no longer 500s on small pools: UMAP components and neighbours are clamped below the item count with random init, and a pool under 32 items is a typed `422 too_few_items` (`min_items`). One size guard (`pool_size`) serves every clustering entry point.
 - The route guard and `GET /projects/{project}` read one registry lookup, which confirms a `building`/`deleting` status at the project doc, so a finished combine no longer answers `409 project_building` after the GET reads `active`.
 - `GET /review/tabs` filter specs carry `default` (read off the filter models) and `allows_unset`; an enum whose default is null (`on_negative_frame`, `dataset_split`) lists an explicit `{value: "", label: "Any"}` option (omit the parameter when chosen); `region_status` now defaults to `all` on the wire.

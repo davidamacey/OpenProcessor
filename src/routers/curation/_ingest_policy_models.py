@@ -40,7 +40,8 @@ class IngestPolicyPreview(BaseModel):
     embedded_because_labeled: int = Field(
         description=(
             'Of would_embed, the items that embed only because a human or validated label '
-            'always embeds; a fresh ingest of the same images has none of these.'
+            'always embeds, counted only for items stored with a vector (a label given later '
+            'does not embed a vectorless item); a fresh ingest of the same images has none.'
         )
     )
     estimated_vector_mb: float
