@@ -234,6 +234,8 @@ def _batch_response(
                 imohash=r.imohash,
                 n_crops=r.n_crops,
                 n_regions=r.n_region_queued,
+                n_embedded=r.n_embedded,
+                n_not_embedded=r.n_not_embedded,
                 error=r.error,
                 error_kind=r.error_kind,
                 source_identifier=r.source_identifier,
@@ -246,6 +248,8 @@ def _batch_response(
         summary.failed += batch_result.summary.failed
         summary.crops_indexed += batch_result.summary.crops_indexed
         summary.secondary_detector_failures += batch_result.summary.secondary_detector_failures
+        summary.n_embedded += batch_result.summary.n_embedded
+        summary.n_not_embedded += batch_result.summary.n_not_embedded
 
     if summary.failed == 0:
         status: Any = 'success'

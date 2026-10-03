@@ -1444,6 +1444,16 @@
             "title": "Failed",
             "type": "integer"
           },
+          "n_embedded": {
+            "default": 0,
+            "title": "N Embedded",
+            "type": "integer"
+          },
+          "n_not_embedded": {
+            "default": 0,
+            "title": "N Not Embedded",
+            "type": "integer"
+          },
           "secondary_detector_failures": {
             "default": 0,
             "title": "Secondary Detector Failures",
@@ -3947,6 +3957,17 @@
               }
             ],
             "title": "N Pool"
+          },
+          "n_unembedded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Unembedded"
           },
           "page": {
             "title": "Page",
@@ -7126,6 +7147,16 @@
             "title": "N Crops",
             "type": "integer"
           },
+          "n_embedded": {
+            "default": 0,
+            "title": "N Embedded",
+            "type": "integer"
+          },
+          "n_not_embedded": {
+            "default": 0,
+            "title": "N Not Embedded",
+            "type": "integer"
+          },
           "n_regions": {
             "default": 0,
             "title": "N Regions",
@@ -7653,6 +7684,23 @@
               }
             ],
             "title": "Dup Is Representative"
+          },
+          "embedding_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "embedded",
+                  "not_selected",
+                  "deferred",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding State"
           },
           "excluded_at": {
             "anyOf": [
@@ -11120,6 +11168,17 @@
             "title": "Items",
             "type": "integer"
           },
+          "items_embedded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items Embedded"
+          },
           "validated": {
             "anyOf": [
               {
@@ -11398,6 +11457,17 @@
             "title": "Items",
             "type": "integer"
           },
+          "items_embedded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items Embedded"
+          },
           "pending_detection": {
             "title": "Pending Detection",
             "type": "integer"
@@ -11422,6 +11492,7 @@
           "images",
           "items",
           "validated",
+          "items_embedded",
           "pending_detection",
           "holdout_items",
           "classes",
@@ -14188,6 +14259,23 @@
               }
             ],
             "title": "Dup Is Representative"
+          },
+          "embedding_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "embedded",
+                  "not_selected",
+                  "deferred",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding State"
           },
           "excluded_at": {
             "anyOf": [

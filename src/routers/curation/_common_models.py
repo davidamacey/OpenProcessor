@@ -42,6 +42,11 @@ class IngestImageResponse(BaseModel):
     imohash: str = ''
     n_crops: int = 0
     n_regions: int = 0
+    # Of n_crops: items stored with / without a vector. A failed encoder call
+    # leaves items without one (embedding_state 'failed') and is a warning,
+    # not a success.
+    n_embedded: int = 0
+    n_not_embedded: int = 0
     error: str | None = None
     # A stable machine code alongside the message, e.g.
     # 'unservable_path', 'unsupported_type', 'decode_failed', 'too_large',
@@ -69,6 +74,8 @@ class BatchIngestSummaryResponse(BaseModel):
     # secondary detector call failed and was silently skipped before this
     # fix. Previously only a per-image 'warning' log line, invisible here.
     secondary_detector_failures: int = 0
+    n_embedded: int = 0
+    n_not_embedded: int = 0
 
 
 class BatchIngestResponse(BaseModel):

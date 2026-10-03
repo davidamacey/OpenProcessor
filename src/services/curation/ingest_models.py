@@ -39,6 +39,10 @@ class IngestSummary(BaseModel):
     # Count of images where the secondary call failed (ingest still
     # succeeds on the primary detector's output alone).
     secondary_detector_failures: int = 0
+    # Stored items with / without a vector (a failed encoder call is the only
+    # reason an ingest leaves one without; see embedding_state).
+    n_embedded: int = 0
+    n_not_embedded: int = 0
 
 
 class IngestResult(BaseModel):
@@ -53,6 +57,10 @@ class IngestResult(BaseModel):
     crops_updated: int = 0
     crops_preserved_human: int = 0
     crops_final_conflicts: int = 0
+    # How many of ``n_crops`` got a vector / did not (``embedding_state`` on
+    # the item says why).
+    n_embedded: int = 0
+    n_not_embedded: int = 0
     # Items this ingest seeded ``pending_detection`` for the region worker
     # (0 when no region profile is active).
     n_region_queued: int = 0
