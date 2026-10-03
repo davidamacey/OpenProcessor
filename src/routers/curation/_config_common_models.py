@@ -125,6 +125,7 @@ ErrorCode = Literal[
     'no_box_to_verify',
     'no_class_names',
     'too_many_crops',
+    'too_few_items',
     'too_many_crop_ids',
     'pack_invalid',
     'profile_invalid',
@@ -354,6 +355,8 @@ class ConfigErrorDetail(BaseModel):
     unmapped: list[str] | None = None
     import_id: str | None = None
     limit: int | None = None
+    # 422 too_few_items: the smallest pool the clustering route accepts.
+    min_items: int | None = None
     # W9: unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None

@@ -3724,6 +3724,7 @@
               "no_box_to_verify",
               "no_class_names",
               "too_many_crops",
+              "too_few_items",
               "too_many_crop_ids",
               "pack_invalid",
               "profile_invalid",
@@ -3808,6 +3809,17 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "min_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Items"
           },
           "needed": {
             "anyOf": [

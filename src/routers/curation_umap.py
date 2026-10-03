@@ -21,7 +21,9 @@ from fastapi import APIRouter, Depends
 from src.config import get_curation_config
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.logging import get_logger
+from src.routers.curation._config_common_models import api_error
 from src.services.curation.clustering.embedding_reduce import umap_rebuild
+from src.services.curation.clustering.pool_size import TooFewItemsError
 
 
 logger = get_logger(__name__)
@@ -38,7 +40,10 @@ async def post_umap_rebuild(client: Any = Depends(_raw_opensearch_dep)) -> dict[
     Returns the same envelope as :func:`cluster_residuals` —
     ``{status, n_residuals, n_clusters, n_noise, refit, ...}``.
     """
-    result = await umap_rebuild(client)
+    try:
+        result = await umap_rebuild(client)
+    except TooFewItemsError as exc:
+        raise api_error(422, 'too_few_items', str(exc), min_items=exc.min_items) from exc
     logger.info(
         'curation_umap_rebuild_done',
         n_residuals=result.get('n_residuals'),
