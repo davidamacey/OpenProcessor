@@ -433,8 +433,8 @@ and force-merge (`--opensearch-url`) and crop-cache bytes (`--crop-cache-dir`).
 
 The per-stage timers are the `op_pipeline_stage_seconds` histogram and the
 `op_pipeline_stage_bytes_total` counter, labelled `stage` = `decode`, `crop`,
-`jpeg_encode`, `resize`, `embed`, `opensearch_write`. With several API workers
-set `PROMETHEUS_MULTIPROC_DIR`, otherwise a scrape sees one worker only.
+`jpeg_encode`, `resize`, `embed`, `opensearch_write`. The compose file sets
+`PROMETHEUS_MULTIPROC_DIR` on the API, so a scrape aggregates all workers.
 
 Where numbers go: set A numbers go into this file, in a table with the commit,
 GPU model and the Triton, TensorRT, driver and torch versions. Set B numbers

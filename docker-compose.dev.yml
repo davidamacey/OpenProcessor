@@ -47,8 +47,6 @@ services:
       - OP_PROMETHEUS_PORT=${PROMETHEUS_PORT:-4604}
       - OP_DASHBOARDS_PORT=${OPENSEARCH_DASHBOARDS_PORT:-4608}
       - OP_MLFLOW_PORT=${MLFLOW_PORT:-4609}
-      - OP_TRITON_METRICS_PORT=${TRITON_METRICS_PORT:-4602}
-      - OP_DCGM_PORT=${DCGM_PORT:-4610}
     volumes:
       - ./src:/app/src
       - ./export:/app/export

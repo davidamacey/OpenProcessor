@@ -122,6 +122,11 @@ services:
       # deploy-safe base file; docker-compose.dev.yml overrides it with a
       # writable-checkout mount for hot-reload editing.
     environment:
+      # Every --workers process writes its op_* / request metrics into this
+      # directory and /metrics aggregates them, so one scrape shows the whole
+      # API, not whichever worker answered. The directory is a tmpfs (see
+      # `tmpfs:` below), so it is empty on every container start.
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-multiproc
       # Triton gRPC endpoint (Docker service name)
       - TRITON_URL=triton-server:8001
       # HuggingFace cache configuration (appuser home directory)
@@ -164,6 +169,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     shm_size: 8g
+    tmpfs:
+      - /run/op-prom-multiproc:mode=1777
     stdin_open: true # Keep stdin open
     tty: true # Allocate a pseudo-TTY
     command:

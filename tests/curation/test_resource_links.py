@@ -55,8 +55,6 @@ def test_ids_are_stable_and_ordered(monkeypatch: pytest.MonkeyPatch) -> None:
         'prometheus',
         'opensearch_dashboards',
         'mlflow',
-        'triton_metrics',
-        'dcgm_metrics',
     ]
 
 
@@ -82,7 +80,6 @@ def test_lan_host_gets_its_own_host_and_service_port(monkeypatch: pytest.MonkeyP
     body = _app().get('/links', headers={'Host': '10.10.10.20:5184'}).json()
     assert body['grafana'] == 'http://10.10.10.20:4955'
     assert body['mlflow'] == 'http://10.10.10.20:4959'
-    assert body['triton_metrics'] == 'http://10.10.10.20:4602/metrics'
     assert body['swagger'] == '/docs'
 
 
@@ -140,8 +137,6 @@ async def test_refresh_populates_cache_for_enabled_only(monkeypatch: pytest.Monk
         monkeypatch,
         prometheus_port=0,
         dashboards_port=0,
-        triton_metrics_port=0,
-        dcgm_port=0,
     )
     seen: list[str] = []
 
@@ -179,8 +174,6 @@ async def test_schedule_refresh_does_not_block_and_is_ttl_gated(
         prometheus_port=0,
         dashboards_port=0,
         mlflow_port=0,
-        triton_metrics_port=0,
-        dcgm_port=0,
     )
     gate = asyncio.Event()
     calls = 0

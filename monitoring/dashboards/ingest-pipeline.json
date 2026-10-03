@@ -111,7 +111,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Each stage of the ingest path (decode, resize, crop, embed, jpeg_encode, opensearch_write). Series are empty until the API has processed images. Run the API with PROMETHEUS_MULTIPROC_DIR set so all workers are aggregated."
+        "content": "Each stage of the ingest path (decode, resize, crop, embed, jpeg_encode, opensearch_write). Series are empty until the API has processed images. All API workers are aggregated."
       },
       "transparent": true
     },
