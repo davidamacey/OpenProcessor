@@ -899,6 +899,8 @@ a failed or unwanted target is a complete undo. Jobs live under
 - Queues: `GET /curation/projects/{project}/review/tabs` lists them with
   their filters; `GET /curation/projects/{project}/review/{tab}` pages one and
   `GET /curation/projects/{project}/review/{tab}/locate` finds an item's page.
+  With the region profile off, the `regions` tab is an empty queue whose
+  `empty_reason` says so (rows written under an earlier profile are not served).
 - Search: `GET /curation/projects/{project}/search/text` (semantic, needs the
   PE text encoder and `OP_SEMANTIC_SEARCH_ENABLED`).
 - Item clustering: `GET /curation/projects/{project}/clusters`,

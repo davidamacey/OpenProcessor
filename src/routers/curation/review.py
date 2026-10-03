@@ -338,6 +338,17 @@ async def review_queue(
     ``crop_id``.
     """
     await _ensure_indexes(opensearch)
+    guard_page_depth(page, page_size)
+    if review_empty_reason.region_queue_is_off(tab):
+        return {
+            'total': 0,
+            'page': page,
+            'page_size': page_size,
+            'items': [],
+            'sort_applied': sort or 'default',
+            'sort_fallback_reason': None,
+            'empty_reason': review_empty_reason.REGION_PROFILE_OFF_REASON,
+        }
     filters = _filters(
         include_test,
         text,
@@ -353,7 +364,6 @@ async def review_queue(
         dataset_split,
         on_negative_frame,
     )
-    guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
     body = {
         'from': (page - 1) * page_size,
@@ -464,6 +474,18 @@ async def review_locate(
         on_negative_frame,
     )
     req = await _request(tab, filters, sort, opensearch)
+    if review_empty_reason.region_queue_is_off(tab):
+        return {
+            'crop_id': crop_id,
+            'in_queue': False,
+            'rank': None,
+            'page': None,
+            'page_size': page_size,
+            'total': 0,
+            'reason': 'region_profile_off',
+            'sort_applied': req.sort_applied,
+            'sort_fallback_reason': req.sort_fallback_reason,
+        }
     out: dict[str, Any] = {
         'crop_id': crop_id,
         'in_queue': False,
