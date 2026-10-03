@@ -185,6 +185,7 @@
             <th class="px-3 py-2 text-right font-normal">Images</th>
             <th class="px-3 py-2 text-right font-normal">Items</th>
             <th class="px-3 py-2 text-right font-normal">Validated</th>
+            <th class="px-3 py-2 text-right font-normal">Embedded</th>
             <th class="px-3 py-2 font-normal"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
@@ -243,6 +244,11 @@
               >
               <td class="px-3 py-2 text-right tabular-nums"
                 >{formatCount(p.counts.validated)}</td
+              >
+              <td
+                class="px-3 py-2 text-right tabular-nums"
+                data-testid="project-embedded-{p.slug}"
+                >{formatCount(p.counts.items_embedded)}</td
               >
               <td class="px-3 py-2">
                 <div class="flex flex-wrap justify-end gap-1.5">
@@ -311,7 +317,7 @@
           {:else}
             {#if !admin.loading}
               <tr>
-                <td colspan="6" class="px-3 py-6 text-center text-sm text-zinc-500">
+                <td colspan="7" class="px-3 py-6 text-center text-sm text-zinc-500">
                   No projects.
                 </td>
               </tr>

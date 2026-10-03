@@ -34,6 +34,8 @@ class Projects:
         self.writes: list[tuple[str, str, Any]] = []
         self.conflict_next_patch = False
         self.dry_run_blocking: list[dict[str, str]] = []
+        self.referenced_by: list[dict[str, str]] = []
+        self.delete_refusal: tuple[int, dict[str, Any]] | None = None
 
     def listed(self, include_archived: bool) -> list[dict[str, Any]]:
         return [
@@ -114,12 +116,14 @@ class Projects:
                 "promoted_models": [],
                 "mlflow_experiment": slug,
                 "running_jobs": [],
-                "referenced_by": [],
+                "referenced_by": self.referenced_by,
                 "blocking": [b["code"] for b in self.dry_run_blocking],
                 "blocking_detail": self.dry_run_blocking,
             })
         confirm = qs.get("confirm", [""])[0]
         self.writes.append(("DELETE", f"{slug}?confirm={confirm}", None))
+        if self.delete_refusal is not None:
+            return self.delete_refusal
         if confirm != slug:
             return (422, {"detail": {"error": "confirm_mismatch", "message": f"confirm must equal the slug '{slug}'"}})
         row = self.rows[slug]
@@ -237,6 +241,44 @@ def test_delete_blocked_by_the_dry_run_offers_no_confirm(stub, page, app_url):
     assert page.get_by_test_id("delete-project-confirm").count() == 0
     assert page.get_by_test_id("delete-project-submit").is_disabled()
     assert reg.writes == [("DELETE", "alpha?dry_run", None)]
+
+
+def test_delete_lists_referenced_by_and_renders_a_served_in_use_409(stub, page, app_url):
+    reg = Projects()
+    reg.referenced_by = [{"project": "beta", "profile": "tags_v2"}]
+    reg.delete_refusal = (
+        409,
+        {"detail": {
+            "error": "in_use",
+            "message": "a shared model of 'alpha' is in use by another project",
+            "projects": ["beta"],
+            "used_by": [{"project": "beta", "profile": "tags_v2"}],
+        }},
+    )
+    reg.install(stub)
+    open_projects(page, app_url)
+
+    page.get_by_test_id("project-delete-alpha").click()
+    refs = page.get_by_test_id("delete-project-references")
+    refs.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert "beta" in refs.inner_text() and "tags_v2" in refs.inner_text()
+
+    page.get_by_test_id("delete-project-confirm").fill("alpha")
+    page.get_by_test_id("delete-project-submit").click()
+    err = page.get_by_test_id("delete-project-error")
+    err.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert err.inner_text() == "a shared model of 'alpha' is in use by another project"
+    in_use = page.get_by_test_id("delete-project-in-use")
+    assert "beta" in in_use.inner_text() and "tags_v2" in in_use.inner_text()
+    assert page.get_by_test_id("delete-project-retry").count() == 0
+
+
+def test_embedded_column_renders_the_served_count(stub, page, app_url):
+    reg = Projects()
+    reg.rows["alpha"]["counts"]["items_embedded"] = 7
+    reg.install(stub)
+    open_projects(page, app_url)
+    assert page.get_by_test_id("project-embedded-alpha").inner_text().strip() == "7"
 
 
 def test_delete_confirms_with_the_typed_slug(stub, page, app_url):
