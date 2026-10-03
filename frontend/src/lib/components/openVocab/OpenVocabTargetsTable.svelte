@@ -54,6 +54,16 @@
   const enabledCount = $derived(targets.filter((t) => t.enabled !== false).length);
   let open = $state<Record<number, boolean>>({});
 
+  const facts = $derived(
+    [
+      `${enabledCount} enabled of ${targets.length}`,
+      maxEnabledTargets != null ? `up to ${maxEnabledTargets} enabled` : null,
+      maxEnabledTargetsCeiling != null ? `ceiling ${maxEnabledTargetsCeiling}` : null,
+    ]
+      .filter((p) => p != null)
+      .join(' · '),
+  );
+
   /** A per-row field: the served row, with its served issue path as its
    *  name so each cell in the list has its own label target. */
   const cell = (row: OpenVocabFieldSchema, i: number) => ({
@@ -65,11 +75,7 @@
 <section class="flex flex-col gap-3" data-testid="open-vocab-targets">
   <div class="flex flex-wrap items-baseline gap-3">
     <h2 class="text-sm font-semibold text-zinc-200">Targets</h2>
-    <span class="text-xs text-zinc-400" data-testid="targets-facts">
-      {enabledCount} enabled of {targets.length}{#if maxEnabledTargets != null}
-        · up to {maxEnabledTargets} enabled{/if}{#if maxEnabledTargetsCeiling != null}
-        (ceiling {maxEnabledTargetsCeiling}){/if}
-    </span>
+    <span class="text-xs text-zinc-400" data-testid="targets-facts">{facts}</span>
     <span class="grow"></span>
     {#if !readonly}
       <button type="button" class="btn btn-sm" data-testid="target-add" onclick={onadd}

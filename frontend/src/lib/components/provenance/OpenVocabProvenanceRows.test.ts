@@ -107,6 +107,16 @@ describe('OpenVocabProvenanceRows', () => {
     expect(params.get('source_prompt')).toBe('blue widget');
   });
 
+  it('links by prompt alone for an item with a prompt and no set', async () => {
+    serve(200);
+    await render({ source_prompt: 'blue widget', open_vocab_set: null });
+    const params = new URLSearchParams(
+      q('ov-matching-link')!.getAttribute('href')!.split('?')[1],
+    );
+    expect(params.get('source_prompt')).toBe('blue widget');
+    expect(params.has('open_vocab_set')).toBe(false);
+  });
+
   it('offers no matching-items link for an item with neither a set nor a prompt', async () => {
     serve(200);
     await render({ region_gate_skip: 'x' });
