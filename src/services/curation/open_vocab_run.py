@@ -29,7 +29,10 @@ from src.clients.curation_opensearch import get_class_registry
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.class_ensure import ResolvedClass, ensure_class_by_name
-from src.services.curation.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE
+from src.services.curation.ingest_class_sources import (
+    OPEN_VOCAB_CLASS_SOURCE,
+    OPEN_VOCAB_TARGET_CLASS_SOURCE,
+)
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
 from src.services.curation.item_doc import DetectedItem
@@ -179,7 +182,7 @@ def _detected(
         score=hit.candidate.score,
         class_id=registry_class.class_id if registry_class else None,
         class_name=registry_class.class_name if registry_class else None,
-        class_source=OPEN_VOCAB_CLASS_SOURCE,
+        class_source=OPEN_VOCAB_TARGET_CLASS_SOURCE if registry_class else OPEN_VOCAB_CLASS_SOURCE,
         # Discovery mode: no class yet, the prompt names the proposal.
         proposal_name=None if hit.class_name else hit.prompt,
         class_detector=OPEN_VOCAB_DETECTOR,

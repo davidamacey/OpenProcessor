@@ -26,6 +26,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from src.services.curation.history import record_class_snapshot
+from src.services.curation.ingest_class_sources import OPEN_VOCAB_TARGET_CLASS_SOURCE
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -179,11 +181,56 @@ def prediction_class_update(
     return update, None
 
 
+# What a VLM class answer writes about the item's class; none of it may land on
+# an item whose class the user named (see :func:`keep_target_class`).
+_CLASS_STATE_FIELDS = frozenset(
+    {
+        'class_id',
+        'class_name',
+        'class_source',
+        'class_detector',
+        'class_detector_version',
+        'class_labeler',
+        'class_labeled_at',
+        'cluster_id',
+        'cluster_subid',
+        'label_source',
+        'needs_new_class',
+        'vlm_raw_class',
+        'vlm_proposed_class',
+    }
+)
+
+
+def keep_target_class(update: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """``update`` made safe for ``current``: an open-vocabulary hit whose class
+    the user's target named keeps its class, source and cluster. The VLM's
+    answer is recorded as ``vlm_proposed_class`` (the wire's name-only VLM
+    suggestion) unless it is the same class (then any older suggestion is
+    cleared); the attempt marker and the VLM stamps still land. Any other
+    item gets ``update`` back unchanged."""
+    if (
+        current.get('class_source') != OPEN_VOCAB_TARGET_CLASS_SOURCE
+        or 'class_source' not in update
+    ):
+        return update
+    answer = (
+        update.get('class_name') or update.get('vlm_proposed_class') or update.get('vlm_raw_class')
+    )
+    kept = {k: v for k, v in update.items() if k not in _CLASS_STATE_FIELDS}
+    same = bool(answer) and normalize_class_name(str(answer)) == normalize_class_name(
+        str(current.get('class_name') or '')
+    )
+    kept['vlm_proposed_class'] = None if same else answer
+    return kept
+
+
 def with_class_snapshot(
     update: dict[str, Any], current: dict[str, Any], *, writer: str
 ) -> dict[str, Any]:
     """``update`` plus a restorable pre-write class snapshot when it
     changes the class (any ``class_source`` write); unchanged otherwise."""
+    update = keep_target_class(update, current)
     if 'class_source' not in update:
         return update
     return {
@@ -207,6 +254,7 @@ __all__ = [
     'EmptyClassReason',
     'class_attempt_fields',
     'empty_answer_reason_for_index',
+    'keep_target_class',
     'prediction_class_update',
     'prediction_empty_reason',
     'recent_empty_answer_clause',
