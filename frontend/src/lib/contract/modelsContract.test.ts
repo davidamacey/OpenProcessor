@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import spec from '../../../contracts/openprocessor/openapi/curation.json';
 import type * as M from '$lib/types_models';
+import type { ConfigErrorDetail } from '$lib/types_config';
 
 type Schema = { properties?: Record<string, unknown>; required?: string[] };
 const schemas = (spec as { components: { schemas: Record<string, Schema> } }).components
@@ -150,5 +151,12 @@ describe('types_models.ts matches the vendored OpenAPI', () => {
       none: true,
     };
     expect(Object.keys(ours).sort()).toEqual([...(entry.enum ?? [])].sort());
+  });
+
+  it('ConfigErrorDetail carries owner_project and the project_owned_model code', () => {
+    const k: keyof ConfigErrorDetail = 'owner_project';
+    const props = schemas.ConfigErrorDetail!.properties!;
+    expect(Object.keys(props)).toContain(k);
+    expect((props.error as { enum: string[] }).enum).toContain('project_owned_model');
   });
 });

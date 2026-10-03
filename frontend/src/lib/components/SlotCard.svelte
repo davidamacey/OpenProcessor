@@ -25,6 +25,7 @@
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import { getThumbUrl, resolveApiUrl, scoped, type RegionBrowseItem } from '$lib/api';
   import { readSlot } from '$lib/annotations/readSlot';
+  import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import { displayBoxOf, rowBoxOf } from '$lib/annotations/rowBox';
   import type { SlotSpec, XYXY } from '$lib/annotations/types';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
@@ -78,6 +79,9 @@
   const boxCount = $derived(data.subBoxes?.length ?? null);
   const rowBox = $derived(rowBoxOf(data, crop.region_box_id));
   const box = $derived(displayBoxOf(data, crop.region_box_id));
+  $effect(() => {
+    if (box?.locked) void reprocessVocabularyStore.init();
+  });
 
   // false_positive boxes stay visible (kept as hard negatives) but are
   // dimmed + badged so the operator sees the triage state at a glance.
@@ -144,7 +148,7 @@
       {#if box?.locked}
         <span
           class="absolute top-1 left-7 flex items-center rounded-sm bg-black/60 px-1 py-0.5 text-zinc-200"
-          title="Locked"
+          title={reprocessVocabularyStore.lockText()}
           data-testid="box-locked"
         >
           <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true">

@@ -44,9 +44,13 @@
     cloneFrom = from;
   }
 
-  async function doClone(name: string, description: string): Promise<void> {
+  async function doClone(
+    name: string,
+    description: string,
+    fromProject: string | null,
+  ): Promise<void> {
     if (!cloneFrom) return;
-    const doc = await list.clone(cloneFrom, name, description);
+    const doc = await list.clone(cloneFrom, name, description, fromProject);
     if (!doc) return;
     cloneFrom = null;
     toastStore.success(`Created ${doc.name}`);
@@ -295,7 +299,9 @@
     busy={list.busy}
     error={list.cloneError}
     report={list.cloneReport}
-    onconfirm={(name, description) => void doClone(name, description)}
+    offerProjects={cloneFrom.source !== 'template'}
+    onconfirm={(name, description, fromProject) =>
+      void doClone(name, description, fromProject)}
     oncancel={() => (cloneFrom = null)}
   />
 {/if}

@@ -352,8 +352,10 @@ Built against the frozen W10 spec before the backend ships it.
   `waiting_for`, a failed job's served `error.message`, `next_steps`
   (confirm, then run as served), paged issues/entries tables. Cancel /
   Resume / Undo (dry run first: the served `DatasetUndoReport`, including
-  "your edits are kept") are confirm-gated; which status offers which is a
-  client reading of the spec until the backend serves action flags.
+  "your edits are kept") are confirm-gated; whether each is offered is the
+  served `actions.can_cancel|can_resume|can_undo` `{allowed, reason}` (not
+  the status); a refused one is absent and its served `reason` is listed
+  under the buttons (`refusalReasons`).
 - **Reprocess** (`ReprocessControl.svelte` + `reprocessController.svelte.ts`):
   on `CropMetaPanel` (one crop, `POST /crops/{id}/reprocess`, `dry_run:
 false`; the served post-write crop is adopted by `CropDetailModal` and
@@ -363,16 +365,21 @@ false`; the served post-write crop is adopted by `CropDetailModal` and
   handed to `onreprocessed`; `/clusters/[id]` adopts them by `crop_id` via
   `clusterController.adoptItems`), and the `/clusters/[id]` selection toolbar
   (`POST /reprocess`, served dry run first, then apply; a served
-  `ReprocessJobInfo` is followed). The backend serves no Reprocess
-  vocabulary (`/datasets/formats` has no `reprocess` block), so the control
-  is present whenever `datasetsAvailability.available === true`, its scope
-  and region-mode ids are the contract's enums
+  `ReprocessJobInfo` is followed). The control is present whenever
+  `datasetsAvailability.available === true`; its scope, region-mode and
+  embed-part ids are the contract's enums
   (`src/lib/datasets/reprocessVocabulary.ts`, pinned to the vendored
-  `ReprocessOneRequest` by `contract/datasetsContract.test.ts`) labelled by
-  `humanizeId`, and there is no lock-rule or summary sentence: results show
-  the served counts only (`ReprocessCounts`: selected / locked skipped /
+  `ReprocessOneRequest` by `contract/datasetsContract.test.ts`). Scope
+  labels (and tooltips) come from the served `reprocess` block of
+  `GET /config/vocabulary` (`reprocessVocabularyStore`,
+  `$lib/stores/reprocessVocabulary.svelte`, types `ReprocessVocabulary` /
+  `VocabEntry` in `types_profiles.ts`, pinned by
+  `contract/reprocessVocabularyContract.test.ts`); an id it does not list, or
+  any id before it loads, prints as served. Region modes and embed parts have
+  no served vocabulary and still read through `humanizeId`. Results show the
+  served counts only (`ReprocessCounts`: selected / locked skipped /
   queued / failed / not found, and the breakdown rows; an omitted count
-  reads "—"). Question C-1 asks for served labels. On a batch of chosen crops the `embed` scope also offers the served-enum
+  reads "—"). On a batch of chosen crops the `embed` scope also offers the served-enum
   embed options (sent only once touched), and `ReprocessCounts` shows each
   scope's served `detail`; see "Detector, ingest policy and embedding state".
 - **Proxy.** `nginx.conf` has a `…/projects/*/datasets/uploads` location
@@ -410,7 +417,10 @@ has_imported_labels` is false (and W10 is served) the empty panel links
   - **Lock badges.** `CropCard`: a lock glyph when the served
     `label_locked` is true ("Label locked"); `SlotCard` and
     `MultiBoxCanvas`: a lock glyph on a box whose served `locked` is true
-    (the review page passes it by box id). No reason text (question C-2).
+    (the review page passes it by box id). The item serves only the flag, no
+    per-item reason id, so the tooltip is the served rule
+    (`reprocessVocabularyStore.lockText()`: every served `lock_reasons`
+    label and description), not a guessed single reason.
     `SlotBboxEditor`'s own canvas does not pass `locked`.
   - **Import provenance** (`provenance/ImportProvenanceRows.svelte`, in
     `CropMetaPanel`): label locked, `dataset_split`, `import_ids` (links to
@@ -500,9 +510,15 @@ before the backend ships it.
   `ConfigSavePanel`, `ConfigRevisions`, `ConfigViewingBanner`,
   `ConfigActivateDialog`, `ConfigRestoreDialog`, `ConfigCloneDialog`,
   `ConfigIssueList`, `ConfigGate`).
-- **Not yet built:** clone from another project (`from_project`, W3-Q8),
-  the `?profile=` validation context (W4), the test panel's VLM endpoint
-  picker (W9), create-from-nothing.
+- **Clone from another project.** `ConfigCloneDialog` takes `offerProjects`
+  (the three list pages: packs, profiles, open-vocab sets; not for a
+  template): a picker over the other served selectable projects; the chosen
+  slug goes as `from_project` (`ConfigList.clone(..., fromProject)`), omitted
+  otherwise, and the server clones the doc of that name from that project
+  (its refusal, e.g. no such doc there, is shown verbatim).
+  `contract/configCloneContract.test.ts` pins the request keys.
+- **Not yet built:** the `?profile=` validation context (W4), the test
+  panel's VLM endpoint picker (W9), create-from-nothing.
 - **Tests:** `api.promptPacks.test.ts`, `packs/*.test.ts`,
   `components/packs/*.test.ts`; e2e `test_prompt_packs.py` (conftest serves
   `/prompt_packs` 404 by default).
@@ -562,8 +578,9 @@ on the shared config machinery listed under "Prompt-pack editor".
   segmenter prompt override sent only when non-empty, "Verify with the
   VLM" (`verify: true` only when ticked), and, while verify is on, the same
   `TestVlmPicker` (the selection is sent only with `verify`).
-  Renders the served profile ref, "not eligible" (`item_eligible: false`,
-  no served reason, question W5-2), validation, the legs (served status,
+  Renders the served profile ref, the served `testable: false` with its
+  `reason` (`RegionTestResponse.testable`/`reason`, the worker's own
+  predicate; `item_eligible` is no longer read), validation, the legs (served status,
   reason, time; a candidate table of score / selected / drop reason / mask
   IoU / detector, dropped rows greyed with the reason in the tooltip), the
   candidates over the source image (`SourceImageOverlay`'s `extraShapes`:
@@ -578,8 +595,14 @@ on the shared config machinery listed under "Prompt-pack editor".
   schema-driven editor renders it with no code (`profileFields.test.ts` and
   `ProfileFieldEditor.test.ts` cover the group and its rows). The region stage's own pause, resume and
   gate-skipped re-run live on `/ingest`; see "Open-vocabulary sets" below.
-- **Not built:** create-from-nothing,
-  `validate_segmenter_prompt` (no surface, W4-Q4), `from_project` clone.
+- **Segmenter prompt check.** The segmenter group has a "Check segmenter
+  prompt" button (`ProfileEditor.checkSegmenterPrompt`,
+  `validateSegmenterPrompt`, `POST /region_profiles/validate_segmenter_prompt`
+  `{text_prompt, sole_leg}`): the served `ValidationReport` renders verbatim
+  and clears on the next edit. `sole_leg` is `!detector_model`, mirroring the
+  server's own call for a profile's prompt.
+- **Not built:** create-from-nothing, `from_project` clone of a profile from
+  the editor's "Clone to edit" (the list page offers it).
 - **Contract:** types in `src/lib/types_profiles.ts`; routes
   resolve for real in `endpointCatalog.test.ts`. **Tests:** `api.regionProfiles.test.ts`, `profiles/*.test.ts`,
   `config/configActive.test.ts`, `components/profiles/*.test.ts`,
@@ -1090,7 +1113,9 @@ constant (`docs/design/v040-adoption-brief-2026-10-03.md`).
   `monitoring_links` (`curationSettingsStore`), http(s) URLs only via
   `externalHref`. The hardcoded ports and the `PUBLIC_GRAFANA_URL` /
   `PUBLIC_PROMETHEUS_URL` / `PUBLIC_OPENSEARCH_DASHBOARDS_URL` overrides are
-  gone; `PUBLIC_MLFLOW_URL` stays.
+  gone. MLflow is the served `GET /health` `mlflow_public_url` (http(s) only,
+  `MonitoringLinks`, `ResourcesMenu`); `PUBLIC_MLFLOW_URL` and the run-URL
+  origin guess (`mlflowBaseUrl`) are gone.
 - **Embedding plot reads.** `getVizProjection` treats only the 404
   `projection_not_built` as "not built yet" (`built: false`); every other
   failure rejects and `EmbeddingPlot` shows the served message
@@ -1355,16 +1380,13 @@ map50_95}` row, never a per-key max spanning different epochs. Neither
 - **MLflow.** A non-null `mlflow_run_url` renders as a link; a null url
   with a non-null `mlflow_run_id` renders the id as copyable text; a
   null id while the run is still active (non-terminal state) shows
-  "pending" rather than "—". TODO: the backend is being asked to serve
-  `mlflow_run_url` as `null` unless `OP_MLFLOW_PUBLIC_URL` is set — never
-  the docker-internal hostname the live fixture still carries today
-  (`http://op-mlflow:5000/...`); this view already renders any non-null
-  value as a link on the assumption that contract lands.
-- **Confusion matrix.** `eval.confusion_matrix_path` (a server
-  filesystem path) renders as text only — never an `<img>`. TODO: once
-  the backend serves `eval.confusion_matrix_url`
-  (`GET /train/artifacts/{job_id}/{name}`), an `<img src>` renders from
-  that URL only.
+  "pending" rather than "—". The backend serves `mlflow_run_url` as `null`
+  unless `OP_MLFLOW_PUBLIC_URL` is set, so any non-null value is
+  browser-reachable (the stored fixture's docker-internal URL predates that).
+- **Confusion matrix.** An `<img>` renders from the served
+  `eval.confusion_matrix_url` (`GET /train/artifacts/{job_id}/{name}`) only;
+  the served `confusion_matrix_path` (a server filesystem path) is never
+  read or shown, and with no URL the line reads "confusion matrix: —".
 - **Lineage** (manifest, lazy): `export_dir`, `dataset_sha`,
   `dataset_version_tag`, `frozen_test_sha`, `test_label_sha` (the three
   export-identity fields added by #34 W1), `include_classes`,
@@ -2800,7 +2822,7 @@ backend's own `/docs`, `/docs/oauth2-redirect`, `/redoc` and `/openapi.json`
 there). `nginx-security-headers.conf` sets no CSP, so Swagger UI's CDN assets
 load without an override. The top bar's `ResourcesMenu` lists those four
 same-origin paths (constants in `src/lib/resourceLinks.ts`) plus every served
-`GET /settings` `monitoring_links` URL and MLflow (`PUBLIC_MLFLOW_URL`); served
+`GET /settings` `monitoring_links` URL and MLflow (the served `/health` `mlflow_public_url`); served
 links stay served-only (null = absent), `MonitoringLinks` on `/train` and
 `/bakeoff` shares the same `monitoringResourceLinks`. Tests:
 `resourceLinks.test.ts`, `components/ResourcesMenu.test.ts`, the DOCS_UPSTREAM

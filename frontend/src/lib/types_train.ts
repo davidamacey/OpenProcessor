@@ -151,8 +151,8 @@ export interface TrainEvalPerClass {
  *
  * `confusion_matrix_url` is the servable artifact URL
  * (`GET /train/artifacts/{job_id}/{name}`) — render an `<img>` from
- * this only, never from `confusion_matrix_path` (a server filesystem
- * path, text-only).
+ * this only. The served `confusion_matrix_path` (a server filesystem
+ * path) is never read or shown.
  */
 export interface TrainEval {
   map50?: number | null;
@@ -167,8 +167,6 @@ export interface TrainEval {
   /** Detection head this eval pass scored (OpenProcessor #34 W1),
    *  e.g. `'end2end'`; `null`/absent when not applicable. */
   head?: string | null;
-  /** Server filesystem path — text only, never an `<img src>`. */
-  confusion_matrix_path?: string | null;
   /** Servable URL (`GET {API_PREFIX}/train/artifacts/{job_id}/{name}`),
    *  API-prefix-relative; resolve with `resolveApiUrl`. */
   confusion_matrix_url?: string | null;
@@ -209,13 +207,8 @@ export interface TrainJobStatus {
    *  a run whose status.json predates this field. */
   best_checkpoint_metric?: TrainEpochMetric | null;
   mlflow_run_id?: string | null;
-  /**
-   * TODO: backend is being asked to serve this as `null` unless
-   * `OP_MLFLOW_PUBLIC_URL` is set — never the docker-internal hostname
-   * (e.g. `http://op-mlflow:5000/...`). Until that lands, this may be a
-   * URL a browser can't reach; we render it as a link whenever it's
-   * non-null anyway, per that request — see `RunResults.svelte`.
-   */
+  /** Served `null` unless `OP_MLFLOW_PUBLIC_URL` is set, so any non-null
+   *  value is browser-reachable; rendered as a link (`RunResults.svelte`). */
   mlflow_run_url?: string | null;
   checkpoint_path?: string | null;
   /** Forward-compat: not served on `TrainJobStatus` today (only on the

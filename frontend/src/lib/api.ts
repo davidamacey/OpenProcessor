@@ -143,6 +143,7 @@ import type {
   ProfileActivateResponse,
   ProfileUpdateRequest,
   ProfileValidateRequest,
+  SegmenterPromptValidateRequest,
   RegionProfileDoc,
   RegionProfileList,
   RegionProfileSchema,
@@ -5582,6 +5583,19 @@ export function validateRegionProfile(
 ): Promise<ValidationReport> {
   return apiFetch<ValidationReport>(
     `${scoped()}/region_profiles/validate${qs({ for_activation: forActivation })}`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `POST /region_profiles/validate_segmenter_prompt`: the served text-only
+ *  check of a segmenter prompt. */
+export function validateSegmenterPrompt(
+  body: SegmenterPromptValidateRequest,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
+  return apiFetch<ValidationReport>(
+    `${scoped()}/region_profiles/validate_segmenter_prompt`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );

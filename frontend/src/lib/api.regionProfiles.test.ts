@@ -23,6 +23,7 @@ import {
   rollbackRegionProfile,
   updateRegionProfile,
   validateRegionProfile,
+  validateSegmenterPrompt,
 } from './api';
 
 function json(body: unknown, status = 200): Response {
@@ -101,6 +102,16 @@ describe('W4 wrappers hit the scoped routes', () => {
     sent = capture({ ok: true, errors: [], warnings: [], force_allowed: false });
     await validateRegionProfile({ name: 'x', body: {} }, true);
     expect(sent().url).toBe(`${P}/validate?for_activation=true`);
+  });
+
+  it('validateSegmenterPrompt posts the text and sole_leg to the dedicated route', async () => {
+    const sent = capture({ ok: true, errors: [], warnings: [], force_allowed: false });
+    await validateSegmenterPrompt({ text_prompt: 'tag', sole_leg: false });
+    expect(sent()).toEqual({
+      url: `${P}/validate_segmenter_prompt`,
+      method: 'POST',
+      body: { text_prompt: 'tag', sole_leg: false },
+    });
   });
 
   it('writes: clone, update, delete with the served revision', async () => {

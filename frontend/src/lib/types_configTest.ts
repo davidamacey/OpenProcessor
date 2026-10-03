@@ -175,6 +175,9 @@ export interface RegionTestVerify {
 export interface RegionTestResponse {
   crop_id: string;
   item_eligible: boolean;
+  /** The worker's own eligibility predicate; `reason` says why not. */
+  testable: boolean;
+  reason?: string | null;
   legs: RegionTestLeg[];
   preview_basis: 'selection_accepted' | 'vlm_verdicts';
   preview_item: Record<string, unknown>;

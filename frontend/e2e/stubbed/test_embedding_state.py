@@ -303,7 +303,7 @@ def test_reprocess_embed_options_and_served_detail(stub, page, app_url):
     page.keyboard.press("a")
     page.get_by_test_id("reprocess-open").first.click()
     dialog = page.get_by_role("dialog", name="Reprocess")
-    dialog.get_by_label("Embed", exact=True).check()
+    dialog.get_by_label("Compute vectors", exact=True).check()
     options = dialog.get_by_test_id("reprocess-embed-options")
     expect(options).to_be_visible()
     dialog.get_by_role("button", name="Check what would run").click()

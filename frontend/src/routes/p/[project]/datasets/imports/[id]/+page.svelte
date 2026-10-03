@@ -195,6 +195,13 @@
               >
             {/if}
           </div>
+          {#if job.refusalReasons.length > 0}
+            <ul class="text-xs text-zinc-500" data-testid="job-action-reasons">
+              {#each job.refusalReasons as [name, reason] (name)}
+                <li>{name}: {reason}</li>
+              {/each}
+            </ul>
+          {/if}
           {#if job.actionError && !confirm && !pendingStep}
             <p class="text-sm text-red-300" data-testid="job-action-error">
               {job.actionError}

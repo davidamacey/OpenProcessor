@@ -149,9 +149,9 @@
         <span class="text-zinc-500">Profile</span>
         <span class="font-mono" data-testid="test-profile-ref">{refText(r.profile)}</span>
       </p>
-      {#if !r.item_eligible}
-        <p class="text-amber-300" data-testid="test-not-eligible">
-          This item is not eligible for this profile.
+      {#if !r.testable}
+        <p class="text-amber-300" data-testid="test-not-testable">
+          {r.reason ?? 'The server reports this item cannot be tested.'}
         </p>
       {/if}
       {#if r.validation}

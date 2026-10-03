@@ -46,6 +46,7 @@ function setup(over: Partial<ProfileEditorDeps> = {}) {
         profileDocFixture({ revision: 4, body: b.body }),
       ),
     validateRegionProfile: vi.fn().mockResolvedValue(cleanReport()),
+    validateSegmenterPrompt: vi.fn().mockResolvedValue(cleanReport()),
     getConfigVocabulary: vi.fn().mockResolvedValue(vocabularyFixture()),
     getActiveRegionProfile: vi.fn().mockResolvedValue(profileActiveFixture()),
     activateRegionProfile: vi.fn().mockResolvedValue(activateResponseFixture()),
@@ -135,6 +136,46 @@ describe('ProfileEditor', () => {
     expect(ed.report).toEqual(cleanReport());
     ed.setField('detector_model', '');
     expect(ed.activationReport).toBeNull();
+  });
+
+  it('"Check segmenter prompt" posts the draft prompt, keeps the served report apart and clears on edit', async () => {
+    const served = {
+      ok: false,
+      errors: [
+        issue({ code: 'segmenter_prompt_too_long', field: 'segmenter_text_prompt' }),
+      ],
+      warnings: [],
+      force_allowed: false,
+    };
+    const { ed, deps } = setup({
+      validateSegmenterPrompt: vi.fn().mockResolvedValue(served),
+    });
+    await ed.load();
+    ed.setField('segmenter_text_prompt', 'a widget tag');
+    await ed.checkSegmenterPrompt();
+    expect(deps.validateSegmenterPrompt).toHaveBeenCalledWith({
+      text_prompt: 'a widget tag',
+      sole_leg: false,
+    });
+    expect(ed.promptReport).toEqual(served);
+    ed.setField('segmenter_text_prompt', 'tag');
+    expect(ed.promptReport).toBeNull();
+  });
+
+  it('a profile with no detector is a sole-leg segmenter; a refusal is shown', async () => {
+    const { ed, deps } = setup();
+    await ed.load();
+    ed.setField('detector_model', '');
+    await ed.checkSegmenterPrompt();
+    expect(deps.validateSegmenterPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ sole_leg: true }),
+    );
+    deps.validateSegmenterPrompt.mockRejectedValueOnce(
+      refusal(422, { error: 'validation_failed', message: 'Bad prompt.' }),
+    );
+    await ed.checkSegmenterPrompt();
+    expect(ed.promptCheckError).toBe('Bad prompt.');
+    expect(ed.promptReport).toBeNull();
   });
 
   it('save sends expected_revision; a conflict can keep my edits', async () => {

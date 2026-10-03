@@ -4,6 +4,7 @@
   import { vlmEmptyReasonText } from '$lib/review/reviewCopy';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl } from '$lib/api';
+  import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import type { BBoxNorm, Crop } from '$lib/types';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
@@ -56,6 +57,10 @@
     ondetail,
     onreprocessed,
   }: Props = $props();
+
+  $effect(() => {
+    if (crop.label_locked) void reprocessVocabularyStore.init();
+  });
 
   const activeSlot = $derived(slot ?? subBoxSlotFor(crop, slotRegistry.all));
 
@@ -360,7 +365,7 @@
     {#if crop.label_locked}
       <span
         class="shrink-0 text-zinc-400"
-        title="Label locked"
+        title={reprocessVocabularyStore.lockText()}
         aria-label="Label locked"
         data-testid="label-locked-badge"
       >

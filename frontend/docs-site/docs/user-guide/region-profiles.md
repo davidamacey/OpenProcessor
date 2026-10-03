@@ -23,7 +23,8 @@ templates, with the **active** profile at the top:
 - **Show impact** reads what activating or keeping the profile means for
   existing data.
 - **Clone** copies a profile or template, and **Delete** removes one
-  (confirmed).
+  (confirmed). Clone can also copy the profile of the same name from another
+  project: pick it under "Copy from another project".
 - A collapsed, read-only **Models and sources** panel lists the detectors,
   segmenters, readers and other choices the backend knows about.
 
@@ -59,6 +60,9 @@ Region screens don't hot-swap. After an activation, rollback or turn-off,
 Cropwright re-reads the backend's health and shows the usual **reload to
 apply** notice; reload the page to see the new region screens.
 
+In the **Segmenter** group, **Check segmenter prompt** sends just the prompt
+to the backend's text-only validator and shows its report as returned.
+
 ## Test on a crop
 
 A **Test on a crop** panel runs the profile on one crop without saving
@@ -71,7 +75,7 @@ with score, whether it was selected, why it was dropped, and which detector
 made it (dropped ones greyed out); the candidates drawn over the source image
 (boxes and mask outlines, dropped ones dimmed) and in the crop's own frame;
 and a preview of the item under either **Selection (not verified)** or **VLM
-verdicts**. A crop the profile wouldn't process reads "not eligible".
+verdicts**. A crop the profile can't be tested on shows the backend's reason instead.
 
 <Screenshot name="region-profile-editor-1600.png" alt="Region-profile editor with grouped, typed fields and model pickers" caption="Region-profile editor — schema-driven form with model pickers" />
 

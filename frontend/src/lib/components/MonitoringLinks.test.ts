@@ -1,11 +1,11 @@
 /**
- * T1 (visual audit 2026-09-24): the MLflow link pointed at a hardcoded
- * `:5000` that has none of the runs. It now follows the served runs'
- * `mlflow_run_url` origin, and is absent when nothing is served.
+ * The MLflow link is the served `mlflow_public_url` of `GET /health`
+ * (`OP_MLFLOW_PUBLIC_URL`); nothing is derived from run URLs or a port.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import MonitoringLinks from './MonitoringLinks.svelte';
+import { healthStore } from '$stores/health.svelte';
 import { curationSettingsStore } from '$stores/curationSettings.svelte';
 import { EMPTY_CURATION_SETTINGS } from '$lib/curationSettings';
 
@@ -19,6 +19,7 @@ vi.mock('$lib/api', async () => {
 });
 
 beforeEach(() => {
+  healthStore.health = null;
   curationSettingsStore.reset();
   getCurationSettings.mockResolvedValue(EMPTY_CURATION_SETTINGS);
 });
@@ -40,18 +41,28 @@ function render(props: Record<string, unknown>): HTMLDivElement {
   return target;
 }
 
-describe('MonitoringLinks MLflow link (T1)', () => {
-  it("links to the served run URL's MLflow origin", () => {
-    const el = render({
-      mlflowRunUrls: [null, 'http://localhost:4731/#/experiments/1/runs/abc'],
-    });
+describe('MonitoringLinks MLflow link', () => {
+  it('links to the served mlflow_public_url, verbatim', () => {
+    healthStore.health = {
+      status: 'ok',
+      mlflow_public_url: 'https://mlflow.example/base',
+    };
+    const el = render({});
     const a = el.querySelector('[data-testid="mlflow-link"]');
-    expect(a?.getAttribute('href')).toBe('http://localhost:4731');
-    expect(el.innerHTML).not.toContain(':5000');
+    expect(a?.getAttribute('href')).toBe('https://mlflow.example/base');
   });
 
-  it('shows no MLflow link when no run URL is served', () => {
-    const el = render({ mlflowRunUrls: [null] });
+  it('ignores run URLs: the base comes only from the served health', () => {
+    healthStore.health = { status: 'ok', mlflow_public_url: null };
+    const el = render({
+      mlflowRunUrls: ['http://localhost:4731/#/experiments/1/runs/abc'],
+    });
+    expect(el.querySelector('[data-testid="mlflow-link"]')).toBeNull();
+  });
+
+  it('shows no MLflow link when none is served or the URL is not http(s)', () => {
+    healthStore.health = { status: 'ok', mlflow_public_url: 'javascript:alert(1)' };
+    const el = render({});
     expect(el.querySelector('[data-testid="mlflow-link"]')).toBeNull();
     expect(el.textContent).not.toContain('MLflow');
   });

@@ -5,25 +5,23 @@
    * anchors, so no resolve().
    */
   import { onMount } from 'svelte';
-  import { mlflowBaseUrl } from '$lib/mlflowLink';
+  import { externalHref } from '$lib/mlflowLink';
+  import { healthStore } from '$stores/health.svelte';
   import { resourceLinks } from '$lib/resourceLinks';
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
 
   let open = $state(false);
   let root = $state<HTMLDivElement | null>(null);
   let trigger = $state<HTMLButtonElement | null>(null);
-  let mlflowEnv = $state<string | null>(null);
 
   const links = $derived(
     resourceLinks(
       curationSettingsStore.settings.monitoring_links,
-      mlflowBaseUrl([], mlflowEnv),
+      externalHref(healthStore.health?.mlflow_public_url),
     ),
   );
 
   onMount(() => {
-    const env = import.meta.env as Record<string, string | undefined>;
-    mlflowEnv = env.PUBLIC_MLFLOW_URL ?? null;
     void curationSettingsStore.init();
   });
 

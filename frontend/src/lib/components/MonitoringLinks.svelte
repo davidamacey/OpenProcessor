@@ -8,32 +8,21 @@
    * absolute http(s) URL, shows no link (nothing is guessed from the host or
    * a port).
    *
-   * MLflow (T1, visual audit 2026-09-24): its link comes from the served
-   * runs' `mlflow_run_url` origin (see `mlflowBaseUrl`), or an explicit
-   * `PUBLIC_MLFLOW_URL`; with neither, the MLflow link is not shown.
+   * MLflow: its link is the served `mlflow_public_url` of `GET /health`
+   * (http(s) only); when none is served, the MLflow link is not shown.
    */
   import { onMount } from 'svelte';
-  import { mlflowBaseUrl } from '$lib/mlflowLink';
+  import { externalHref } from '$lib/mlflowLink';
+  import { healthStore } from '$stores/health.svelte';
   import { monitoringResourceLinks } from '$lib/resourceLinks';
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
 
-  interface Props {
-    /** Served `mlflow_run_url`s of the runs on this page, if any. */
-    mlflowRunUrls?: Array<string | null | undefined>;
-  }
-
-  let { mlflowRunUrls = [] }: Props = $props();
-
-  let mlflowEnv = $state<string | null>(null);
-
-  const mlflowHref = $derived(mlflowBaseUrl(mlflowRunUrls, mlflowEnv));
+  const mlflowHref = $derived(externalHref(healthStore.health?.mlflow_public_url));
   const links = $derived(
     monitoringResourceLinks(curationSettingsStore.settings.monitoring_links),
   );
 
   onMount(() => {
-    const env = import.meta.env as Record<string, string | undefined>;
-    mlflowEnv = env.PUBLIC_MLFLOW_URL ?? null;
     void curationSettingsStore.init();
   });
 </script>
@@ -48,7 +37,7 @@
         target="_blank"
         rel="noopener noreferrer"
         data-testid="mlflow-link"
-        title="MLflow server the runs below log to (from their served run URLs)"
+        title="MLflow server the runs log to (served by the API)"
         class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:border-zinc-500 hover:text-white"
       >
         MLflow ↗

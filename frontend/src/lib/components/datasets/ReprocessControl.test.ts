@@ -13,6 +13,8 @@ import { API_PREFIX } from '$lib/api';
 import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
 import { formatsFixture, reprocessFixture } from '$lib/test/fixtures/datasetImport';
 import type { ReprocessTarget } from '$lib/datasets/reprocessController.svelte';
+import { reprocessVocabularyFixture } from '$lib/test/fixtures/regionProfiles';
+import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
 import ReprocessControl from './ReprocessControl.svelte';
 
 function json(body: unknown, status = 200): Response {
@@ -33,6 +35,10 @@ function serve(routes: Record<string, (body: unknown) => Response>) {
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const u = String(url);
       if (u === `${API_PREFIX}/datasets/formats`) return routes.formats!(null);
+      if (u === `${API_PREFIX}/config/vocabulary`)
+        return routes.vocabulary
+          ? routes.vocabulary(null)
+          : json({ reprocess: reprocessVocabularyFixture() });
       const body = init.body ? JSON.parse(String(init.body)) : undefined;
       posts.push({ url: u, body });
       for (const [k, fn] of Object.entries(routes)) if (u.endsWith(k)) return fn(body);
@@ -46,6 +52,7 @@ async function render(t: ReprocessTarget, props: Record<string, unknown> = {}) {
   document.body.appendChild(target);
   instance = mount(ReprocessControl, { target, props: { target: t, ...props } });
   await datasetsAvailability.init();
+  if (datasetsAvailability.available) await reprocessVocabularyStore.init();
   flushSync();
 }
 
@@ -71,7 +78,10 @@ function check(label: string) {
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-beforeEach(() => datasetsAvailability.reset());
+beforeEach(() => {
+  datasetsAvailability.reset();
+  reprocessVocabularyStore.resetForProjectChange();
+});
 afterEach(() => {
   if (instance) unmount(instance);
   instance = undefined;
@@ -102,7 +112,13 @@ describe('ReprocessControl', () => {
     const labels = [...document.querySelectorAll('fieldset label')].map((l) =>
       l.textContent?.trim(),
     );
-    expect(labels).toEqual(['Detect', 'Open vocab', 'Region', 'VLM', 'Embed']);
+    expect(labels).toEqual([
+      'Find objects',
+      'Find by description',
+      'Region stage',
+      'Vision model',
+      'Compute vectors',
+    ]);
     expect(document.querySelector('[data-testid="reprocess-lock-rule"]')).toBeNull();
     expect(document.querySelector('select')).toBeNull();
     check('Region');
@@ -110,6 +126,21 @@ describe('ReprocessControl', () => {
       (o) => (o as HTMLOptionElement).value,
     );
     expect(modes).toEqual(['', 'redetect', 'reverify']);
+  });
+
+  it('prints every scope as served when the vocabulary read fails', async () => {
+    serve({
+      formats: () => json(formatsFixture()),
+      vocabulary: () => json({}, 500),
+    });
+    await render({ kind: 'crop', cropId: 'c1' });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    await flush();
+    flushSync();
+    const labels = [...document.querySelectorAll('fieldset label')].map((l) =>
+      l.textContent?.trim(),
+    );
+    expect(labels).toEqual(['detect', 'open_vocab', 'region', 'vlm', 'embed']);
   });
 
   it('one crop: apply with dry_run false and adopt the served crop', async () => {
@@ -128,7 +159,7 @@ describe('ReprocessControl', () => {
     await render({ kind: 'crop', cropId: 'c1' }, { onadopt });
     click(target.querySelector('[data-testid="reprocess-open"]'));
     expect(buttonNamed('Reprocess')?.disabled).toBe(true);
-    check('VLM');
+    check('Vision model');
     click(buttonNamed('Reprocess'));
     await flush();
     flushSync();
@@ -158,7 +189,7 @@ describe('ReprocessControl', () => {
     await render({ kind: 'image', imageId: 'img_1' }, { onadopt });
     click(target.querySelector('[data-testid="reprocess-open"]'));
     expect(document.querySelector('h3')?.textContent?.trim()).toBe('Reprocess image');
-    check('Detect');
+    check('Find objects');
     click(buttonNamed('Reprocess'));
     await flush();
     flushSync();
@@ -223,7 +254,7 @@ describe('ReprocessControl', () => {
       ...document.querySelectorAll('[data-testid="reprocess-result"] tbody tr td'),
     ].map((c) => c.textContent?.trim());
     // scope, selected, locked, queued, failed, not found: omitted counts read "—".
-    expect(cells).toEqual(['Region', '12', '3', '9', '—', '—']);
+    expect(cells).toEqual(['Region stage', '12', '3', '9', '—', '—']);
     expect(onapplied).toHaveBeenCalled();
   });
 
@@ -243,7 +274,7 @@ describe('ReprocessControl', () => {
     });
     await render({ kind: 'crops', cropIds: ['a'] });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    check('Embed');
+    check('Compute vectors');
     click(buttonNamed('Check what would run'));
     await flush();
     flushSync();
@@ -274,7 +305,7 @@ describe('ReprocessControl', () => {
     });
     await render({ kind: 'crops', cropIds: ['a'] });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    check('Detect');
+    check('Find objects');
     click(buttonNamed('Check what would run'));
     await flush();
     flushSync();
@@ -296,7 +327,7 @@ describe('ReprocessControl', () => {
     await render({ kind: 'crops', cropIds: ['a', 'b'] });
     click(target.querySelector('[data-testid="reprocess-open"]'));
     expect(document.querySelector('[data-testid="reprocess-embed-options"]')).toBeNull();
-    check('Embed');
+    check('Compute vectors');
     expect(
       document.querySelector('[data-testid="reprocess-embed-options"]'),
     ).not.toBeNull();
@@ -317,7 +348,7 @@ describe('ReprocessControl', () => {
     serve({ formats: () => json(formatsFixture()) });
     await render({ kind: 'crop', cropId: 'c1' });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    check('Embed');
+    check('Compute vectors');
     expect(document.querySelector('[data-testid="reprocess-embed-options"]')).toBeNull();
   });
 
@@ -343,7 +374,7 @@ describe('ReprocessControl', () => {
     });
     await render({ kind: 'crops', cropIds: ['a'] });
     click(target.querySelector('[data-testid="reprocess-open"]'));
-    check('Embed');
+    check('Compute vectors');
     click(buttonNamed('Check what would run'));
     await flush();
     flushSync();

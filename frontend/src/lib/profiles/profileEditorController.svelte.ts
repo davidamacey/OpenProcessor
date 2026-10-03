@@ -8,7 +8,9 @@
  * - the served vocabulary every model picker renders from, re-read with
  *   `include_other_projects` on request (projects_plan.md §5.5);
  * - "Check for activation": the draft posted with `for_activation=true`,
- *   its served report kept apart from the live one.
+ *   its served report kept apart from the live one;
+ * - "Check segmenter prompt": the draft's prompt posted to the text-only
+ *   route, its served report kept apart and cleared by the next edit.
  */
 import {
   apiErrorText,
@@ -19,6 +21,7 @@ import {
   getRegionProfileSchema,
   updateRegionProfile,
   validateRegionProfile,
+  validateSegmenterPrompt,
 } from '$lib/api';
 import { ConfigEditor } from '$lib/config/configEditor.svelte';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
@@ -39,6 +42,7 @@ export interface ProfileEditorDeps extends ProfileActiveDeps {
   getRegionProfileRevision: typeof getRegionProfileRevision;
   updateRegionProfile: typeof updateRegionProfile;
   validateRegionProfile: typeof validateRegionProfile;
+  validateSegmenterPrompt: typeof validateSegmenterPrompt;
   getConfigVocabulary: typeof getConfigVocabulary;
   subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
 }
@@ -124,10 +128,36 @@ export class ProfileEditor extends ConfigEditor<
     }
   }
 
+  promptReport = $state<ValidationReport | null>(null);
+  promptChecking = $state(false);
+  promptCheckError = $state<string | null>(null);
+
+  /** `POST /region_profiles/validate_segmenter_prompt` for the draft's
+   *  prompt. `sole_leg` mirrors the server's own call: no detector means
+   *  the segmenter is the only candidate source. */
+  async checkSegmenterPrompt(): Promise<void> {
+    this.promptChecking = true;
+    try {
+      this.promptReport = await (
+        this.#deps.validateSegmenterPrompt ?? validateSegmenterPrompt
+      )({
+        text_prompt: String(this.draftBody?.segmenter_text_prompt ?? ''),
+        sole_leg: !this.draftBody?.detector_model,
+      });
+      this.promptCheckError = null;
+    } catch (e) {
+      this.promptReport = null;
+      this.promptCheckError = apiErrorText(e);
+    } finally {
+      this.promptChecking = false;
+    }
+  }
+
   override setField(field: string, value: RegionProfileBody[string]): void {
     super.setField(field, value);
     // The check was for a different draft.
     this.activationReport = null;
+    this.promptReport = null;
   }
 }
 

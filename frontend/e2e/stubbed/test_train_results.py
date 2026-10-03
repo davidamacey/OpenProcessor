@@ -153,10 +153,10 @@ def test_finished_run_results_render(stub, page, app_url):
     )
     assert mlflow_link.count() > 0
 
-    # Confusion matrix path renders as text only, never an <img>.
-    assert (
-        page.get_by_text("confusion_matrix.png", exact=False).count() > 0
-    ), "confusion matrix server path should render as text"
+    # The served filesystem path is never shown, and with no served URL
+    # there is no <img> either.
+    assert page.get_by_text("confusion_matrix.png", exact=False).count() == 0
+    assert page.get_by_text("confusion matrix: —").count() > 0
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected: {errors[:3]}"

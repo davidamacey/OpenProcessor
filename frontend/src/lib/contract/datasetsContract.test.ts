@@ -321,6 +321,7 @@ const CASES: [string, string[]][] = [
       reused: true,
       progress: true,
       waiting_for: true,
+      actions: true,
       report: true,
       mapping: true,
       options: true,
@@ -335,6 +336,18 @@ const CASES: [string, string[]][] = [
       labels: true,
       error: true,
     } satisfies Record<keyof T.DatasetImportJob, true>),
+  ],
+  [
+    'ImportActions',
+    keys({
+      can_cancel: true,
+      can_resume: true,
+      can_undo: true,
+    } satisfies Record<keyof T.ImportActions, true>),
+  ],
+  [
+    'ImportAction',
+    keys({ allowed: true, reason: true } satisfies Record<keyof T.ImportAction, true>),
   ],
   [
     'DatasetImportEntry',

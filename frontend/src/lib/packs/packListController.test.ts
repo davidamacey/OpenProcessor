@@ -158,6 +158,21 @@ describe('PackList', () => {
     });
   });
 
+  it('clone from another project sends from_project only when one is chosen', async () => {
+    const { list, deps } = setup();
+    await list.clone({ name: 'widget_tag', source: null }, 'copy', '', 'alpha');
+    expect(deps.clonePromptPack).toHaveBeenLastCalledWith('widget_tag', {
+      new_name: 'copy',
+      revision: null,
+      source: null,
+      description: null,
+      from_project: 'alpha',
+    });
+    await list.clone({ name: 'widget_tag', source: null }, 'copy2', '', null);
+    const body = vi.mocked(deps.clonePromptPack).mock.calls.at(-1)![1];
+    expect('from_project' in body).toBe(false);
+  });
+
   it('clone: name_conflict and a validation report surface as served', async () => {
     const report = { ok: false, errors: [issue()], warnings: [], force_allowed: false };
     const { list } = setup({

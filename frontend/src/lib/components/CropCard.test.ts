@@ -8,6 +8,8 @@
  * rendered DOM.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
+import { reprocessVocabularyFixture } from '$lib/test/fixtures/regionProfiles';
 import { mount, unmount, flushSync } from 'svelte';
 import CropCard from './CropCard.svelte';
 import { classSourcesStore } from '$stores/classSources.svelte';
@@ -239,13 +241,18 @@ describe('CropCard — region sub-box editing follows the served region profile 
 });
 
 describe('CropCard — W10 label lock badge', () => {
+  afterEach(() => reprocessVocabularyStore.resetForProjectChange());
   const badge = (el: HTMLElement) =>
     el.querySelector('[data-testid="label-locked-badge"]');
 
   it('shows the lock only when the served label_locked is true', () => {
+    reprocessVocabularyStore.vocabulary = reprocessVocabularyFixture();
+    reprocessVocabularyStore.loaded = true;
     const locked = renderCard({ crop: baseCrop({ label_locked: true }) });
     expect(badge(locked)).not.toBeNull();
-    expect(badge(locked)?.getAttribute('title')).toBe('Label locked');
+    expect(badge(locked)?.getAttribute('title')).toBe(
+      'Locked. Locked when: Human label: Human label: served description; Validated: Validated: served description; Imported: Imported: served description; Test holdout: Test holdout: served description',
+    );
   });
 
   it('shows no lock for false or absent', () => {
@@ -362,7 +369,7 @@ describe('CropCard — W10 image Reprocess from the expanded view', () => {
     entry()!.click();
     flushSync();
     const box = [...document.querySelectorAll('fieldset label')]
-      .find((l) => l.textContent?.includes('Detect'))
+      .find((l) => l.textContent?.includes('detect'))
       ?.querySelector('input') as HTMLInputElement;
     box.checked = true;
     box.dispatchEvent(new Event('change', { bubbles: true }));

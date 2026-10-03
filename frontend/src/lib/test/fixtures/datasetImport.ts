@@ -6,6 +6,7 @@
 import type {
   DatasetFormatsResponse,
   DatasetImportJob,
+  ImportActions,
   DatasetPreview,
   DatasetUndoReport,
   ReprocessResponse,
@@ -157,6 +158,16 @@ export function previewFixture(over: Partial<DatasetPreview> = {}): DatasetPrevi
   };
 }
 
+/** Served `ImportActions`: nothing allowed unless a test says so. */
+export function importActionsFixture(over: Partial<ImportActions> = {}): ImportActions {
+  return {
+    can_cancel: { allowed: false, reason: 'The import is not running.' },
+    can_resume: { allowed: false, reason: 'Only a stopped import can resume.' },
+    can_undo: { allowed: false, reason: 'The import is still running.' },
+    ...over,
+  };
+}
+
 export function jobFixture(over: Partial<DatasetImportJob> = {}): DatasetImportJob {
   return {
     project: 'default',
@@ -175,6 +186,7 @@ export function jobFixture(over: Partial<DatasetImportJob> = {}): DatasetImportJ
       eta_s: 2,
     },
     waiting_for: null,
+    actions: importActionsFixture({ can_cancel: { allowed: true } }),
     report: {
       images_created: 40,
       images_reused: 0,

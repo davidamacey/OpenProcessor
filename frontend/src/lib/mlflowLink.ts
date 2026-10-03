@@ -1,13 +1,8 @@
 /**
- * T1 (visual audit 2026-09-24): the "MLflow" dashboard link was built as
- * `http://<host>:5000`, an MLflow that has none of the runs. Runs link to
- * whatever MLflow the backend put in each run's served `mlflow_run_url`,
- * so the dashboard link now uses that URL's origin. An explicit
- * `PUBLIC_MLFLOW_URL` still wins; with neither, there is no link.
- *
- * TODO(backend): serve the public MLflow base URL directly (e.g. on
- * `/health` or a config endpoint, from `OP_MLFLOW_PUBLIC_URL`) so pages
- * without a run list (e.g. /bakeoff) can link to it too.
+ * The MLflow dashboard link is the served `mlflow_public_url` of
+ * `GET /health` (`OP_MLFLOW_PUBLIC_URL`, null when unset), and a run links
+ * to its own served `mlflow_run_url` (null unless that public URL is set).
+ * Nothing is derived from a run URL's origin, a port or an env override.
  */
 /** A served URL as an `href`, only when it is an absolute http(s) URL:
  *  Svelte does not sanitize `href`, so a `javascript:` value would reach
@@ -20,22 +15,4 @@ export function externalHref(u: string | null | undefined): string | null {
   } catch {
     return null;
   }
-}
-
-export function mlflowBaseUrl(
-  runUrls: ReadonlyArray<string | null | undefined>,
-  envUrl?: string | null,
-): string | null {
-  if (envUrl) return envUrl;
-  for (const u of runUrls) {
-    if (!u) continue;
-    try {
-      const parsed = new URL(u);
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:')
-        return parsed.origin;
-    } catch {
-      // not an absolute URL; try the next run
-    }
-  }
-  return null;
 }

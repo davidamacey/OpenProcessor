@@ -985,7 +985,7 @@
         curation-trainer container and tails progress until it finishes.
       </p>
       <div class="mt-2">
-        <MonitoringLinks mlflowRunUrls={runs.map((r) => r.mlflow_run_url)} />
+        <MonitoringLinks />
       </div>
     </div>
     <button

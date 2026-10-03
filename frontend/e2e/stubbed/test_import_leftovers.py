@@ -18,6 +18,7 @@ any request the page makes that a test did not expect fails the test.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -207,7 +208,11 @@ def test_lock_badge_only_on_a_locked_label(stub, page, app_url):
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     badges = page.get_by_test_id("label-locked-badge")
     expect(badges).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
-    expect(badges.first).to_have_attribute("title", "Label locked")
+    # The tooltip is the served lock rule (the reprocess vocabulary), not a
+    # guessed single reason.
+    expect(badges.first).to_have_attribute(
+        "title", re.compile(r"^Locked\. Locked when: Human label: .*Test holdout: "), timeout=ACTION_TIMEOUT_MS
+    )
 
 
 def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
@@ -250,7 +255,7 @@ def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
     page.get_by_test_id("card-reprocess-image").get_by_test_id("reprocess-open").click()
     dialog = page.get_by_role("dialog", name="Reprocess")
     expect(dialog.get_by_role("heading", name="Reprocess image")).to_be_visible()
-    dialog.get_by_label("Detect", exact=True).check()
+    dialog.get_by_label("Find objects", exact=True).check()
     with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/images/img-0/reprocess")):
         dialog.get_by_role("button", name="Reprocess", exact=True).click()
     assert [b for _p, b in bodies] == [{"scopes": ["detect"], "dry_run": False}], bodies

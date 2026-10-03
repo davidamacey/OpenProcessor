@@ -5,7 +5,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api';
-import { jobFixture, undoReportFixture } from '$lib/test/fixtures/datasetImport';
+import {
+  importActionsFixture,
+  jobFixture,
+  undoReportFixture,
+} from '$lib/test/fixtures/datasetImport';
 import type { CurationEvent } from '$lib/sse';
 import { ImportJob } from './importJobController.svelte';
 
@@ -77,6 +81,7 @@ describe('following a job', () => {
         status: 'failed',
         poll_after_s: null,
         error: '6 consecutive chunks failed: index unavailable.',
+        actions: importActionsFixture({ can_resume: { allowed: true } }),
       }),
     ]);
     job.start();
@@ -116,12 +121,48 @@ describe('following a job', () => {
 });
 
 describe('actions', () => {
-  it('status decides which actions exist', async () => {
+  it('the served actions decide which actions exist, whatever the status', async () => {
     const { job } = make([
-      jobFixture({ status: 'paused_backpressure', poll_after_s: null }),
+      jobFixture({
+        status: 'completed',
+        poll_after_s: null,
+        actions: importActionsFixture({ can_undo: { allowed: true } }),
+      }),
     ]);
     await job.load();
-    expect([job.canCancel, job.canResume, job.canUndo]).toEqual([true, false, false]);
+    expect([job.canCancel, job.canResume, job.canUndo]).toEqual([false, false, true]);
+  });
+
+  it('a running status with every action refused offers none, and serves the reasons', async () => {
+    const { job } = make([
+      jobFixture({
+        status: 'running',
+        poll_after_s: null,
+        actions: importActionsFixture({
+          can_cancel: { allowed: false, reason: 'Cancel is already in flight.' },
+        }),
+      }),
+    ]);
+    await job.load();
+    expect([job.canCancel, job.canResume, job.canUndo]).toEqual([false, false, false]);
+    expect(job.refusalReasons).toEqual([
+      ['Cancel import', 'Cancel is already in flight.'],
+      ['Resume', 'Only a stopped import can resume.'],
+      ['Undo import', 'The import is still running.'],
+    ]);
+  });
+
+  it('an allowed action carries no reason line', async () => {
+    const { job } = make([
+      jobFixture({
+        poll_after_s: null,
+        actions: importActionsFixture({
+          can_cancel: { allowed: true, reason: 'ignored while allowed' },
+        }),
+      }),
+    ]);
+    await job.load();
+    expect(job.refusalReasons.map(([n]) => n)).toEqual(['Resume', 'Undo import']);
   });
 
   it('cancel adopts the served job; a 409 shows its served message', async () => {

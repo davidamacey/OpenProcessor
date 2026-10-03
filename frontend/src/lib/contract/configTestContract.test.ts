@@ -186,6 +186,8 @@ const CASES: [string, string[]][] = [
       preview_basis: true,
       preview_item: true,
       profile: true,
+      reason: true,
+      testable: true,
       validation: true,
       verify: true,
     } satisfies Record<Exclude<keyof T.RegionTestResponse, 'preview'>, true>),

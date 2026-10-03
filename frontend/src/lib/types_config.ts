@@ -132,6 +132,8 @@ export interface ConfigCloneRequest {
   /** `"template"` disambiguates a template from a doc of the same name. */
   source: ConfigSource | null;
   description: string | null;
+  /** Copy the doc of this name from another project; omitted otherwise. */
+  from_project?: string | null;
 }
 
 export interface ConfigUpdateRequest<B> {
@@ -172,6 +174,9 @@ export interface ConfigErrorDetail {
   crop_ids?: string[] | null;
   limit?: number | null;
   jobs?: ConfigErrorJobRef[] | null;
+  /** 409 `project_owned_model` on the global model delete: the project
+   *  that promoted the model, whose own route deletes it. */
+  owner_project?: string | null;
 }
 
 /** One running job blocking a lifecycle action (contract `JobRefWire`). */

@@ -4,12 +4,15 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
+import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
+import { reprocessVocabularyFixture } from '$lib/test/fixtures/regionProfiles';
 import MultiBoxCanvas, { type CanvasBox } from './MultiBoxCanvas.svelte';
 
 let target: HTMLDivElement;
 let instance: Record<string, unknown> | undefined;
 
 afterEach(() => {
+  reprocessVocabularyStore.resetForProjectChange();
   if (instance) unmount(instance);
   instance = undefined;
   target?.remove();
@@ -35,6 +38,8 @@ function render(boxes: CanvasBox[]) {
 
 describe('MultiBoxCanvas lock glyph', () => {
   it('marks exactly the locked boxes', () => {
+    reprocessVocabularyStore.vocabulary = reprocessVocabularyFixture();
+    reprocessVocabularyStore.loaded = true;
     const el = render([
       box(0.2, { locked: true }),
       box(0.5),
@@ -47,7 +52,9 @@ describe('MultiBoxCanvas lock glyph', () => {
     expect(rows[2]!.querySelector('[data-testid="box-locked"]')).toBeNull();
     expect(
       rows[0]!.querySelector('[data-testid="box-locked"]')?.getAttribute('title'),
-    ).toBe('Locked');
+    ).toBe(
+      'Locked. Locked when: Human label: Human label: served description; Validated: Validated: served description; Imported: Imported: served description; Test holdout: Test holdout: served description',
+    );
   });
 
   it('shows no lock glyph when no box is locked', () => {

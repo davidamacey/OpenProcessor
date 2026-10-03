@@ -8,6 +8,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { API_PREFIX } from '$lib/api';
 import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
 import { formatsFixture, reprocessFixture } from '$lib/test/fixtures/datasetImport';
+import { reprocessVocabularyFixture } from '$lib/test/fixtures/regionProfiles';
 import { vocabularyFixture } from '$lib/openVocab/fixtures';
 import type { OpenVocabVocabulary } from '$lib/types_openVocab';
 import OpenVocabRerunPanel from './OpenVocabRerunPanel.svelte';
@@ -31,6 +32,8 @@ function serve(reprocess: (body: unknown) => Response, formatsStatus = 200) {
       const u = String(url);
       if (u === `${API_PREFIX}/datasets/formats`)
         return formatsStatus === 200 ? json(formatsFixture()) : json({}, formatsStatus);
+      if (u === `${API_PREFIX}/config/vocabulary`)
+        return json({ reprocess: reprocessVocabularyFixture() });
       const body = init.body ? JSON.parse(String(init.body)) : undefined;
       posts.push({ url: u, body });
       return reprocess(body);

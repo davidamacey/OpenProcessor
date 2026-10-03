@@ -3,7 +3,7 @@
  * options; renders the served legs (a dropped candidate greyed with its
  * reason), the candidates over the source image (box and mask polygon,
  * dropped ones dimmed) and in the crop frame, the preview heading by the
- * served `preview_basis`, the verify block, the not-eligible line, and a
+ * served `preview_basis`, the verify block, the not-testable line, and a
  * refusal verbatim.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -310,13 +310,29 @@ describe('ProfileTestPanel', () => {
     expect(q('test-verify-block')).toBeNull();
   });
 
-  it('says so when the item is not eligible for the profile', async () => {
-    serve(() => json(regionTestResponseFixture({ item_eligible: false })));
+  it('shows the served reason when the item is not testable', async () => {
+    serve(() =>
+      json(
+        regionTestResponseFixture({
+          testable: false,
+          reason: 'Item has no region box to test.',
+        }),
+      ),
+    );
     render();
     await run();
-    expect(q('test-not-eligible')?.textContent).toContain(
-      'This item is not eligible for this profile',
+    expect(q('test-not-testable')?.textContent).toContain(
+      'Item has no region box to test.',
     );
+  });
+
+  it('shows no not-testable line when testable, whatever item_eligible says', async () => {
+    serve(() =>
+      json(regionTestResponseFixture({ testable: true, item_eligible: false })),
+    );
+    render();
+    await run();
+    expect(q('test-not-testable')).toBeNull();
   });
 
   it('shows the served profile ref', async () => {

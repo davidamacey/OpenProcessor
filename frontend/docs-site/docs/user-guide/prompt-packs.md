@@ -17,7 +17,8 @@ prompt packs; otherwise **Settings** has no Prompt packs card.
 templates the backend ships, with a panel for the **active pack**:
 
 - **Rollback** returns to the previously active revision (confirmed).
-- **Clone** copies any pack or template into a new editable pack.
+- **Clone** copies any pack or template into a new editable pack, or the pack
+  of the same name from another project ("Copy from another project").
 - **Delete** removes a pack (confirmed).
 
 The panel also shows whether the running workers have picked up the active

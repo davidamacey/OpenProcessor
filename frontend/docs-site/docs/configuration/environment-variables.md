@@ -29,7 +29,6 @@ Compose setting: the published image and the Compose stack never read them.
 | --- | --- | --- |
 | `PUBLIC_APP_NAME` | Top-bar wordmark, for a white-label deployment | `Cropwright` |
 | `PUBLIC_APP_BADGE` | Top-bar badge letters | `CW` |
-| `PUBLIC_MLFLOW_URL` | Override the MLflow dashboard link when no run serves one (Grafana, Prometheus and OpenSearch Dashboards links come from the served `/settings` `monitoring_links`) | unset |
 
 ## Read by `docker-compose.yml` / `docker-entrypoint.sh` only
 

@@ -74,7 +74,9 @@ button. An import's page (`/datasets/imports/<id>`) shows:
 
 The page follows the job on the backend's own polling cadence and wakes
 immediately when the backend announces progress. **Cancel**, **Resume** and
-**Undo** each ask for confirmation. **Undo** does a dry run first and shows
+**Undo** each ask for confirmation, and are offered only when the backend says
+they are allowed; when one is not, the backend's reason is listed under the
+buttons. **Undo** does a dry run first and shows
 what would change, including that **your own edits are kept**, then lets you
 choose whether to also remove the imported images and deprecate the classes
 the import created.
@@ -102,6 +104,8 @@ were skipped for that reason.
 
 A **lock** icon marks a label (on a crop card) or a box (on a region card or
 in the box editor) that a human has set and the backend will not overwrite.
+Hover it to read the backend's lock rule (what makes a label locked). The
+Reprocess scope names come from the backend as well.
 
 ## Import provenance
 

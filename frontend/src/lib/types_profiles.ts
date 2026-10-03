@@ -155,6 +155,14 @@ export interface RegionProfileSchema {
 export type ProfileUpdateRequest = ConfigUpdateRequest<RegionProfileBody>;
 export type ProfileValidateRequest = ConfigValidateRequest<RegionProfileBody>;
 
+/** `SegmenterPromptValidateRequest`: the text-only prompt check. The
+ *  response is a `ValidationReport`. */
+export interface SegmenterPromptValidateRequest {
+  text_prompt: string;
+  /** True when the profile has no detector, so an empty prompt is an error. */
+  sole_leg?: boolean;
+}
+
 /** One `by_profile[]` row of `ActivationImpact`. */
 export interface ImpactByProfile {
   name: string | null;
@@ -256,6 +264,22 @@ export interface VocabRegistryClass {
   choice: Choice;
 }
 
+/** `VocabEntry`: one served id with its label and description. */
+export interface VocabEntry {
+  id: string;
+  label: string;
+  description: string;
+}
+
+/** `ReprocessVocabulary`: the words for Reprocess scopes, filter fields,
+ *  job statuses and the lock rule. */
+export interface ReprocessVocabulary {
+  scopes: VocabEntry[];
+  filter_fields: VocabEntry[];
+  job_statuses: VocabEntry[];
+  lock_reasons: VocabEntry[];
+}
+
 export interface ConfigVocabulary {
   detectors: VocabModel[];
   segmenters: VocabSegmenter[];
@@ -274,5 +298,6 @@ export interface ConfigVocabulary {
   text_reader_modes: VocabTextReaderMode[];
   registry_classes: VocabRegistryClass[];
   prompt_pack_calls?: Choice[];
+  reprocess: ReprocessVocabulary;
   labels?: Record<string, Record<string, string>>;
 }

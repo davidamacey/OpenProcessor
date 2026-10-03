@@ -209,7 +209,6 @@ key a registered region slot's own keymap declares.
 | `CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
 | `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`                     | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
 | `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
-| `PUBLIC_MLFLOW_URL`                    | _(unset)_                  | build time    | Overrides the MLflow dashboard link when no run serves an `mlflow_run_url`. Grafana, Prometheus and OpenSearch Dashboards links come only from the served `/settings`.      |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
 **no** local database. State is reconstructed from API calls;

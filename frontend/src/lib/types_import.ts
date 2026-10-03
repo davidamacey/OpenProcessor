@@ -307,6 +307,19 @@ export interface DatasetUndoRequest {
   deprecate_created_classes: boolean;
 }
 
+/** `ImportAction`: whether an action is offered, and why not. */
+export interface ImportAction {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+/** `ImportActions`: the served availability of each job action. */
+export interface ImportActions {
+  can_cancel: ImportAction;
+  can_resume: ImportAction;
+  can_undo: ImportAction;
+}
+
 export interface DatasetImportJob {
   project: string;
   import_id: string;
@@ -316,6 +329,7 @@ export interface DatasetImportJob {
   reused: boolean;
   progress: DatasetImportProgress;
   waiting_for: string | null;
+  actions: ImportActions;
   report: DatasetImportReport;
   mapping: ResolvedMapTarget[];
   options: DatasetImportOptions;

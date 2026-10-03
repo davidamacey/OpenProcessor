@@ -24,7 +24,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from conftest import ACTION_TIMEOUT_MS, REPROCESS_VOCABULARY, expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}
@@ -130,6 +130,7 @@ VOCABULARY: dict[str, Any] = {
         {"class_id": 0, "class_name": "widget", "choice": {"id": "widget", "label": "widget"}}
     ],
     "prompt_pack_calls": [],
+    "reprocess": REPROCESS_VOCABULARY,
     "labels": {"scope": {}},
 }
 
@@ -407,6 +408,44 @@ def test_check_for_activation_shows_the_for_activation_report(stub, page, app_ur
     assert len(urls) == 1 and urls[0].endswith("/region_profiles/validate?for_activation=true"), urls
 
 
+def test_check_segmenter_prompt_shows_the_served_report_verbatim(stub, page, app_url):
+    serve_profiles(stub)
+    bodies: list[Any] = []
+
+    def check(request: Any, _m: Any):
+        bodies.append(request.post_data_json)
+        return (
+            200,
+            {
+                "ok": False,
+                "errors": [
+                    {
+                        "code": "segmenter_prompt_multiline",
+                        "id": "segmenter_prompt_multiline",
+                        "severity": "error",
+                        "field": "segmenter_text_prompt",
+                        "message": "segmenter_text_prompt has multiple lines",
+                        "detail": {},
+                        "bypassable": False,
+                    }
+                ],
+                "warnings": [],
+                "force_allowed": False,
+            },
+        )
+
+    stub.on("POST", r"/region_profiles/validate_segmenter_prompt$", check)
+
+    open_editor(page, app_url)
+    with page.expect_request(lambda r: r.url.endswith("/validate_segmenter_prompt")):
+        page.get_by_test_id("check-segmenter-prompt").click()
+    result = page.get_by_test_id("segmenter-prompt-check")
+    expect(result).to_contain_text(
+        "segmenter_text_prompt has multiple lines", timeout=ACTION_TIMEOUT_MS
+    )
+    assert bodies and set(bodies[0]) == {"text_prompt", "sole_leg"}, bodies
+
+
 def test_activate_force_then_impact_and_rerun(stub, page, app_url):
     state = serve_profiles(stub)
     stub.on("GET", r"/datasets/formats(\?|$)", copy.deepcopy(DATASET_FORMATS))
@@ -487,7 +526,7 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
     with expect_handled(page, lambda r: r.url.endswith("/reprocess")):
         confirm.get_by_role("button", name="Re-run", exact=True).click()
     expect(impact.get_by_test_id("rerun-result").locator("tbody tr td")).to_have_text(
-        ["Region", "940", "12", "928", "\u2014", "\u2014"], timeout=ACTION_TIMEOUT_MS
+        ["Region stage", "940", "12", "928", "\u2014", "\u2014"], timeout=ACTION_TIMEOUT_MS
     )
     expect(impact.get_by_test_id("rerun-job")).to_contain_text("rp-1")
     assert reprocesses[1] == {**SUGGESTED, "dry_run": False}, reprocesses

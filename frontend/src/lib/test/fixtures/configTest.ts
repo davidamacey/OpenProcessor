@@ -138,6 +138,7 @@ export function regionTestResponseFixture(
   return {
     crop_id: 'c_123',
     item_eligible: true,
+    testable: true,
     legs: legsFixture(),
     preview_basis: 'selection_accepted',
     preview_item: {
