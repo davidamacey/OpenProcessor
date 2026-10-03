@@ -27,6 +27,7 @@
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import MultiBoxCanvas from '$lib/components/MultiBoxCanvas.svelte';
+  import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
@@ -2389,6 +2390,9 @@
               </span>
             {/if}
           </div>
+          {#if current}
+            <VectorRefreshNotice cropId={current.id} refresh={multiBox.vectorRefresh} />
+          {/if}
         {/if}
 
         <!-- Everything below the image scrolls in its own region — the
