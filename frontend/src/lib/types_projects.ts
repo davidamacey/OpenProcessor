@@ -17,6 +17,8 @@ export interface ProjectCounts {
   items: number;
   /** `null` when the backend hasn't computed it (served, not faked as 0). */
   validated: number | null;
+  /** v0.4.0: items with a vector; `null` when not computed. */
+  items_embedded: number | null;
 }
 
 export interface ProjectOrigin {
@@ -108,6 +110,8 @@ export interface ProjectsResponse {
 export interface ProjectWarning {
   code: string;
   message: string;
+  /** v0.4.0: served facts behind the warning (untyped object). */
+  detail?: Record<string, unknown>;
 }
 
 /** One action the `keymap` clone axis dropped from the copy because its

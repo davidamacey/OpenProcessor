@@ -1275,6 +1275,12 @@ export interface IngestImageResult {
    * identifier).
    */
   source_identifier: string | null;
+  /** v0.4.0: items that got a vector, items the embedding policy (or an
+   *  encoder failure) left without one, and boxes the ingest policy's
+   *  detect filter dropped. */
+  n_embedded: number;
+  n_not_embedded: number;
+  n_filtered: number;
   /**
    * OpenProcessor d72cc63: set when the image itself ingested but the
    * optional secondary detector failed on it (so it carries only the
@@ -1288,6 +1294,11 @@ export interface BatchIngestSummary {
   duplicates: number;
   failed: number;
   crops_indexed: number;
+  /** v0.4.0: the per-image `n_embedded` / `n_not_embedded` / `n_filtered`
+   *  summed over the batch. */
+  n_embedded: number;
+  n_not_embedded: number;
+  n_filtered: number;
   /** d72cc63: how many results carry a `secondary_detector_error`. */
   secondary_detector_failures?: number;
 }

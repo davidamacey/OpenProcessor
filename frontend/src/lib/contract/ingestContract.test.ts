@@ -44,6 +44,9 @@ describe('ingest contract', () => {
       'image_path',
       'imohash',
       'n_crops',
+      'n_embedded',
+      'n_filtered',
+      'n_not_embedded',
       'n_regions',
       'secondary_detector_error',
       'source_identifier',
@@ -58,6 +61,9 @@ describe('ingest contract', () => {
       'duplicates',
       'failed',
       'crops_indexed',
+      'n_embedded',
+      'n_filtered',
+      'n_not_embedded',
       'secondary_detector_failures',
     ] satisfies (keyof BatchIngestSummary)[];
     expect([...SUMMARY_KEYS].sort()).toEqual(keysOf('BatchIngestSummaryResponse'));

@@ -503,7 +503,7 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
     # The backend serves no reprocess vocabulary or lock-rule copy: the
     # scopes are the contract's enums, labelled from their ids.
     expect(dialog.get_by_test_id("reprocess-lock-rule")).to_have_count(0)
-    expect(dialog.locator("fieldset label")).to_have_text(["Detect", "Region", "VLM", "Embed"])
+    expect(dialog.locator("fieldset label")).to_have_text(["Detect", "Open vocab", "Region", "VLM", "Embed"])
     dialog.get_by_label("Region", exact=True).check()
     dialog.get_by_role("combobox").select_option("redetect")
     with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/reprocess")):

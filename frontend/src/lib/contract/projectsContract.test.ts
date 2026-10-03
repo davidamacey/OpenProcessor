@@ -49,10 +49,12 @@ const CASES: [string, string[]][] = [
   ],
   [
     'ProjectCounts',
-    keys({ images: true, items: true, validated: true } satisfies Record<
-      keyof T.ProjectCounts,
-      true
-    >),
+    keys({
+      images: true,
+      items: true,
+      validated: true,
+      items_embedded: true,
+    } satisfies Record<keyof T.ProjectCounts, true>),
   ],
   [
     'ProjectsResponse',
@@ -95,7 +97,10 @@ const CASES: [string, string[]][] = [
   ],
   [
     'ProjectWarning',
-    keys({ code: true, message: true } satisfies Record<keyof T.ProjectWarning, true>),
+    keys({ code: true, message: true, detail: true } satisfies Record<
+      keyof T.ProjectWarning,
+      true
+    >),
   ],
   [
     'CreateProjectRequest',

@@ -84,6 +84,7 @@ const AXES = [
   'prompt_pack',
   'detection_profile',
   'vlm',
+  'open_vocab',
 ] as const satisfies readonly ConfigAxis[];
 
 describe('ActiveConfigResponse', () => {

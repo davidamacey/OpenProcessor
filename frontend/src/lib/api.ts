@@ -4220,6 +4220,7 @@ export type ClassSourceRole =
   | 'human'
   | 'merge'
   | 'label_import'
+  | 'open_vocab'
   | (string & {});
 
 /** One `class_source` value this deployment can write. */
