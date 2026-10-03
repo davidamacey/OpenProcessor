@@ -772,7 +772,8 @@ Client (Port 4603)
 - `curation-trainer`, `curation-mlflow` (4609) [`training`].
 - Prometheus (4604), Grafana (4605), Loki (4606), OpenSearch Dashboards (4608),
   DCGM exporter (4610), Alloy [`monitoring`]. Opt in with `make up-monitoring`
-  or `--with-monitoring`; `make up` does not start them.
+  or `--with-monitoring`; `make up` does not start them. `make dev-monitoring-up`
+  adds them to the dev stack.
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

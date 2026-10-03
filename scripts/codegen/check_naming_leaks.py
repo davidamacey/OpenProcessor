@@ -45,9 +45,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'naming_leak_allowlist.txt'
 
 # Paths excluded from `git grep` entirely rather than allowlisted, for files
-# where matching almost the whole file line-by-line would be noise. Empty
-# today; kept as the mechanism for the next such file.
-_ALWAYS_EXCLUDE_PATHS: tuple[str, ...] = ()
+# where matching almost the whole file line-by-line would be noise (vendored
+# minified API-docs bundles).
+_ALWAYS_EXCLUDE_PATHS: tuple[str, ...] = ('src/static/docs/*.js', 'src/static/docs/*.css')
 
 SCAN_A = codecs.decode(
     r'xvyyobl|Xvyyobl|XVYYOBL|(?<![N-Mn-m0-9])(?:xo|XO)_|\oXo[N-M]|/xo\o|\oxo-[n-m]|'

@@ -39,6 +39,16 @@ services:
       dockerfile: Dockerfile
       args:
         OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    environment:
+      # Host ports the served resource_links point at (<request host>:<port>,
+      # so LAN clients get their own host). A link whose profile is not
+      # running reads reachable=false. OP_*_URL in .env overrides (proxy).
+      - OP_GRAFANA_PORT=${GRAFANA_PORT:-4605}
+      - OP_PROMETHEUS_PORT=${PROMETHEUS_PORT:-4604}
+      - OP_DASHBOARDS_PORT=${OPENSEARCH_DASHBOARDS_PORT:-4608}
+      - OP_MLFLOW_PORT=${MLFLOW_PORT:-4609}
+      - OP_TRITON_METRICS_PORT=${TRITON_METRICS_PORT:-4602}
+      - OP_DCGM_PORT=${DCGM_PORT:-4610}
     volumes:
       - ./src:/app/src
       - ./export:/app/export

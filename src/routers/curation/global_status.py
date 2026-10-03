@@ -16,13 +16,14 @@ from fastapi import Query
 from fastapi.responses import StreamingResponse  # noqa: TC002 - resolved at runtime
 from pydantic import BaseModel, Field
 
-from src.config import get_curation_config, get_settings
+from src.config import get_settings
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001
 from src.routers.curation.events import sse_response
 from src.routers.curation.health import triton_status, vlm_status
 from src.routers.curation.projects import global_router
 from src.services.curation.event_hub import GLOBAL_STREAM, get_event_hub
 from src.services.projects.guard import make_curation_opensearch
+from src.services.resource_links import service_url
 
 
 class GlobalHealthResponse(BaseModel):
@@ -69,7 +70,7 @@ async def global_health(triton_pool: AsyncTritonDep) -> GlobalHealthResponse:
         triton=triton,
         opensearch=opensearch,
         vlm=vlm,
-        mlflow_public_url=get_curation_config().mlflow_public_url,
+        mlflow_public_url=service_url('mlflow'),
         version=get_settings().api_version,
         api_version='v1',
     )

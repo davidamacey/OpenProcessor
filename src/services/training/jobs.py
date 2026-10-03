@@ -522,7 +522,9 @@ def _public_mlflow_url(run_id: str | None, experiment_id: str | None) -> str | N
     """
     if not run_id or not experiment_id:
         return None
-    base = get_curation_config().mlflow_public_url
+    from src.services.resource_links import service_url
+
+    base = service_url('mlflow')
     if not base:
         return None
     return f'{base.rstrip("/")}/#/experiments/{experiment_id}/runs/{run_id}'

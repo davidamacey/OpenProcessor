@@ -707,6 +707,7 @@ class _FakeCurationConfig:
         train_jobs_dir: Path | None = None,
     ) -> None:
         self.mlflow_public_url = mlflow_public_url
+        self.mlflow_port = 0  # no request-derived URL in these tests
         self.api_prefix = api_prefix
         # _resolve_jobs_dir() reads this; these tests only care about
         # mlflow_public_url/api_prefix, so default to the same
@@ -722,31 +723,28 @@ class _FakeCurationConfig:
         )
 
 
+def _patch_cfg(monkeypatch: pytest.MonkeyPatch, cfg: _FakeCurationConfig) -> None:
+    # train_jobs reads the jobs dir through its own import; the MLflow URL
+    # goes through resource_links.service_url, which imports from src.config.
+    monkeypatch.setattr(train_jobs, 'get_curation_config', lambda: cfg)
+    monkeypatch.setattr('src.config.get_curation_config', lambda: cfg)
+
+
 def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        train_jobs,
-        'get_curation_config',
-        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
     url = train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7')
     assert url == 'https://mlflow.example.com/#/experiments/7/runs/abc123'
 
 
 def test_public_mlflow_url_none_when_base_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
     assert train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7') is None
 
 
 def test_public_mlflow_url_none_when_run_or_experiment_id_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        train_jobs,
-        'get_curation_config',
-        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
     assert train_jobs._public_mlflow_url(run_id=None, experiment_id='7') is None
     assert train_jobs._public_mlflow_url(run_id='abc123', experiment_id=None) is None
 
@@ -754,9 +752,7 @@ def test_public_mlflow_url_none_when_run_or_experiment_id_missing(
 def test_public_mlflow_url_never_leaks_the_internal_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """The internal tracking URI (a container hostname) must never be the
     fallback -- unset public base means null, full stop."""
-    monkeypatch.setattr(
-        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
     url = train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7')
     assert url is None
     assert url != 'http://curation-mlflow:5000/#/experiments/7/runs/abc123'
@@ -766,11 +762,7 @@ def test_public_mlflow_url_never_leaks_the_internal_host(monkeypatch: pytest.Mon
 async def test_read_status_rewrites_mlflow_url_and_confusion_matrix(
     jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        train_jobs,
-        'get_curation_config',
-        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
     (jobs_dir / 'realmlf.status.json').write_text(
         json.dumps(
             {
@@ -806,9 +798,7 @@ async def test_read_status_rewrites_mlflow_url_and_confusion_matrix(
 async def test_read_status_serves_null_mlflow_url_when_public_base_unset(
     jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
     (jobs_dir / 'nourl.status.json').write_text(
         json.dumps(
             {
@@ -832,9 +822,7 @@ async def test_read_status_serves_null_mlflow_url_when_public_base_unset(
 async def test_read_status_confusion_matrix_url_null_when_absent(
     jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        train_jobs, 'get_curation_config', lambda: _FakeCurationConfig(mlflow_public_url=None)
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
     (jobs_dir / 'noeval.status.json').write_text(
         json.dumps(
             {'job_id': 'noeval', 'state': 'finished', 'eval': {'map50': 0.5, 'split': 'val'}}
@@ -852,11 +840,7 @@ async def test_read_status_confusion_matrix_url_null_when_absent(
 async def test_read_manifest_rewrites_eval_and_mlflow_url(
     jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        train_jobs,
-        'get_curation_config',
-        lambda: _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'),
-    )
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
     (jobs_dir / 'manifjob.manifest.json').write_text(
         json.dumps(
             {

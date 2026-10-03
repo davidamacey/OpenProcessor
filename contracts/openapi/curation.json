@@ -4702,8 +4702,12 @@
             "title": "Defaults",
             "type": "object"
           },
-          "monitoring_links": {
-            "$ref": "#/components/schemas/MonitoringLinks"
+          "resource_links": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceLink"
+            },
+            "title": "Resource Links",
+            "type": "array"
           },
           "updated_at": {
             "anyOf": [
@@ -8002,7 +8006,7 @@
                 "type": "null"
               }
             ],
-            "description": "The browser-reachable MLflow base URL (CurationConfig.mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
+            "description": "The browser-reachable MLflow base URL: OP_MLFLOW_PUBLIC_URL verbatim, else the requesting host on OP_MLFLOW_PORT. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
             "title": "Mlflow Public Url"
           },
           "opensearch": {
@@ -12000,46 +12004,6 @@
           "project"
         ],
         "title": "ModelSharingUser",
-        "type": "object"
-      },
-      "MonitoringLinks": {
-        "description": "Browser-reachable monitoring UIs; each ``null`` when not configured\n(``OP_GRAFANA_URL`` / ``OP_PROMETHEUS_URL`` / ``OP_DASHBOARDS_URL``).",
-        "properties": {
-          "grafana": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Grafana"
-          },
-          "opensearch_dashboards": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Opensearch Dashboards"
-          },
-          "prometheus": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prometheus"
-          }
-        },
-        "title": "MonitoringLinks",
         "type": "object"
       },
       "NextStep": {
@@ -20788,6 +20752,70 @@
           "kind"
         ],
         "title": "ResolvedMapTarget",
+        "type": "object"
+      },
+      "ResourceLink": {
+        "properties": {
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "service",
+              "docs"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reachable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reachable"
+          },
+          "status": {
+            "enum": [
+              "configured",
+              "not_configured"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "url",
+          "kind",
+          "status",
+          "hint"
+        ],
+        "title": "ResourceLink",
         "type": "object"
       },
       "ReviewEmptyState": {

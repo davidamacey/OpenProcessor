@@ -33,6 +33,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.vlm import _get_vlm_labeler
+from src.services.resource_links import service_url
 
 
 async def triton_status(triton: Any) -> dict[str, Any]:
@@ -165,5 +166,5 @@ async def curation_health(
         vlm=vlm,
         registry=registry_status,
         region_profile=region_profile,
-        mlflow_public_url=cfg.mlflow_public_url,
+        mlflow_public_url=service_url('mlflow'),
     )

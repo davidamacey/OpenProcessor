@@ -39,6 +39,7 @@ from src.routers.curation._common import (
     _ensure_indexes,
     router,
 )
+from src.services.resource_links import schedule_reachability_refresh
 
 
 logger = get_logger(__name__)
@@ -168,6 +169,7 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     """
     from src.clients.curation_opensearch import get_curation_settings
 
+    schedule_reachability_refresh()
     await _ensure_indexes(opensearch)
     doc = await get_curation_settings(opensearch)
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (

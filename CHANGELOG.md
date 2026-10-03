@@ -42,9 +42,8 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   query and message the export's 422 uses); `GET /methods` export entries serve
   `dedup_threshold_default` / `_min` / `_max` (export requests now reject a
   `dedup_threshold` outside 0..1) and the `diverse` overlay serves `max_k` /
-  `select_max_k`; `GET /settings` serves `monitoring_links`
-  (`OP_GRAFANA_URL` / `OP_PROMETHEUS_URL` / `OP_DASHBOARDS_URL`, null when
-  unset); `GET /viz/projection` now answers
+  `select_max_k`; `GET /settings` serves `resource_links`
+  (see Changed); `GET /viz/projection` now answers
   `404 projection_not_built` vs `503 projection_unavailable` (was `200
   {"status": "not_built"}` for both) with a typed 200 body.
 - `POST /curation/projects/{project}/classes/seed_from_detector`: create registry classes from the ingest detector's labels by name (dry run by default, idempotent, labels with spaces become slugs).
@@ -174,6 +173,19 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   anchor that does not resolve.
 
 ### Changed
+- `GET /settings` `monitoring_links` is replaced by `resource_links`, one typed
+  list of `{id, label, url, kind: service|docs, status: configured|not_configured,
+  hint, reachable}`: `swagger`, `redoc`, `openapi_json` (path-relative `/docs`,
+  `/redoc`, `/openapi.json`) and the service UIs `grafana`, `prometheus`,
+  `opensearch_dashboards`, `mlflow`, `triton_metrics`, `dcgm_metrics`. A service
+  URL is the explicit `OP_*_URL` verbatim, else `<host the client used>:<service
+  port>` (`OP_*_PORT`, from `Host` / `X-Forwarded-Host` / `X-Forwarded-Proto`),
+  so LAN clients never get `localhost`. `mlflow_run_url` and `/health`
+  `mlflow_public_url` follow the same rule. `reachable` is a cached background
+  probe from the server (`null` until probed). `make dev-up` passes the stack's
+  ports; `make dev-monitoring-up` adds the monitoring profile.
+- `/docs` and `/redoc` are self-hosted (vendored Swagger UI and ReDoc under
+  `/docs-assets`, no CDN or web-font request), so they work offline.
 - Open-vocabulary dedup compares labels: a hit's label is its class name or its
   prompt, an existing item's label is its class name or the detector's own label.
   A box with no label no longer absorbs a hit, and two discovery prompts no longer

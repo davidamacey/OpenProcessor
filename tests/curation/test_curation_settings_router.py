@@ -57,12 +57,9 @@ def test_get_with_no_doc_yet_returns_empty_defaults(app_client: TestClient) -> N
     r = app_client.get('/curation/projects/default/settings')
     assert r.status_code == 200
     body = r.json()
-    assert body == {
-        'defaults': {},
-        'updated_at': None,
-        'updated_by': None,
-        'monitoring_links': {'grafana': None, 'prometheus': None, 'opensearch_dashboards': None},
-    }
+    links = body.pop('resource_links')
+    assert [lk['id'] for lk in links][:3] == ['swagger', 'redoc', 'openapi_json']
+    assert body == {'defaults': {}, 'updated_at': None, 'updated_by': None}
 
 
 def test_put_creates_the_document(app_client: TestClient) -> None:

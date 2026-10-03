@@ -21,6 +21,7 @@ from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_filter import ItemFilter  # noqa: TC001 - pydantic field type
 from src.services.detection.frame_dedup import FRAME_DEDUP_THRESHOLD_MAX, FRAME_DEDUP_THRESHOLD_MIN
+from src.services.resource_links import ResourceLink, resource_links_from_config
 
 
 # =============================================================================
@@ -248,8 +249,8 @@ class HealthResponse(BaseModel):
     mlflow_public_url: str | None = Field(
         default=None,
         description=(
-            'The browser-reachable MLflow base URL (CurationConfig.'
-            'mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. '
+            'The browser-reachable MLflow base URL: OP_MLFLOW_PUBLIC_URL '
+            'verbatim, else the requesting host on OP_MLFLOW_PORT. '
             'A served train run may carry its own mlflow_run_url that is '
             'correct host-side but unreachable from an operator browser -- '
             'a client should build the link from this base rather than '
@@ -479,26 +480,6 @@ class CropFlagNewClassRequest(BaseModel):
     note: str = ''
 
 
-class MonitoringLinks(BaseModel):
-    """Browser-reachable monitoring UIs; each ``null`` when not configured
-    (``OP_GRAFANA_URL`` / ``OP_PROMETHEUS_URL`` / ``OP_DASHBOARDS_URL``)."""
-
-    grafana: str | None = None
-    prometheus: str | None = None
-    opensearch_dashboards: str | None = None
-
-
-def monitoring_links_from_config() -> MonitoringLinks:
-    from src.config import get_curation_config
-
-    cfg = get_curation_config()
-    return MonitoringLinks(
-        grafana=cfg.grafana_url,
-        prometheus=cfg.prometheus_url,
-        opensearch_dashboards=cfg.dashboards_url,
-    )
-
-
 class CurationSettingsResponse(BaseModel):
     """``GET,PUT /curation/settings`` response envelope.
 
@@ -513,7 +494,7 @@ class CurationSettingsResponse(BaseModel):
     defaults: dict[str, str] = Field(default_factory=dict)
     updated_at: str | None = None
     updated_by: str | None = None
-    monitoring_links: MonitoringLinks = Field(default_factory=monitoring_links_from_config)
+    resource_links: list[ResourceLink] = Field(default_factory=resource_links_from_config)
 
 
 class CurationSettingsUpdateRequest(BaseModel):
