@@ -410,7 +410,7 @@ The manifest is a text file: a `#` header (seed, count, bytes, per-source
 counts, date, sha256) and one path per line. The sha256 covers the path lines,
 and `run_baseline.py` refuses a manifest whose paths no longer match it. The
 COCO run also writes `<manifest>.licenses.csv` (license id, name and URL per
-image). The batch ingest route reads each path inside the API container, so
+image). `--api-prefix` (default `OP_API_PREFIX`, else `/curation`) selects the API mount. The batch ingest route reads each path inside the API container, so
 the API must be able to see the manifest paths (`--path-map HOST=CONTAINER`
 rewrites a prefix). The harness creates a new project per run and leaves it
 in place; delete it when you are done. The first 100 images (`--warmup`) are

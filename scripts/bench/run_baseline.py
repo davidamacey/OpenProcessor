@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -147,7 +148,7 @@ def _dir_bytes(path: Path) -> int:
 
 
 def _scoped(slug: str, suffix: str) -> str:
-    return f'/curation/projects/{slug}{suffix}'
+    return f'/projects/{slug}{suffix}'
 
 
 def _set_policy(client: httpx.Client, slug: str, policy: str, classes: list[str]) -> None:
@@ -245,6 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument('manifest', type=Path)
     p.add_argument('--api-url', required=True)
+    p.add_argument('--api-prefix', default=os.environ.get('OP_API_PREFIX', '/curation'))
     p.add_argument('--slug-prefix', required=True)
     p.add_argument('--policy', choices=('all', 'selected', 'lazy'), required=True)
     p.add_argument(
@@ -292,14 +294,13 @@ def run(
     sizes = [Path(p).stat().st_size for p in paths]
     sent = [map_path(p, args.path_map) for p in paths]
     slug = f'{args.slug_prefix}-{datetime.now(UTC).strftime("%Y%m%d%H%M%S")}'
+    api_base = args.api_url.rstrip('/') + args.api_prefix.rstrip('/')
     wait = {'poll': args.poll_s, 'timeout': args.timeout_s, 'sleep': sleep, 'clock': clock}
 
     with httpx.Client(
-        timeout=httpx.Timeout(3600.0), transport=transport, base_url=args.api_url
+        timeout=httpx.Timeout(3600.0), transport=transport, base_url=api_base
     ) as client:
-        client.post(
-            '/curation/projects', json={'slug': slug, 'display_name': slug}
-        ).raise_for_status()
+        client.post('/projects', json={'slug': slug, 'display_name': slug}).raise_for_status()
         _set_policy(client, slug, args.policy, args.selected_classes)
 
         warm = min(args.warmup, len(sent))
