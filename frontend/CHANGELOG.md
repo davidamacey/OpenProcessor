@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 <!-- track-B detector+embedding -->
 
-<!-- track-C item-filter -->
+- Shared item filter (OpenProcessor v0.4.0): `/review`, `/clusters` and `/export` get one filter bar (class by name, not-class, area band, origin, embedding and review state; the open-vocabulary set and prompt in the new "Matching items" view), and every `filter_specs` entry a review tab serves renders by its kind (enum, multi-enum, class names, bool, number, integer, text). `/clusters` lists "Matching items" and can ignore, restore, label or move all of them, with the server's dry-run count first and Z to undo; `/export` can limit an export to matching items and shows the served count. Region edits flag boxes that have no vector yet ("Embed now"). Classes are now sent by name (`class_name`), since `class_id` left the list queries.
 
 - `/projects` shows an "Embedded" column (items with a vector), and its delete dialog lists the projects whose active profile uses a model the project shares, names them in a 409 "in use" refusal, and offers a Retry when the server cannot read every project. The shard-capacity block carries the served `limit_source` and `shards_after_create`.
 
