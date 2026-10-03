@@ -90,7 +90,11 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     stub.on("PUT", r"/crops/([^/]+)/label$", label_handler)
     stub.on("POST", r"/crops/([^/]+)/label/undo(_batch)?$", undo_handler)
 
-    page.goto(f"{app_url}/p/default/review")
+    # The page opens `default`'s event stream on load; the stub records it
+    # when it answers, which on a loaded runner can trail the send. Wait for
+    # that answer here so it is not counted as a post-switch request below.
+    with expect_handled(page, lambda r: _path(r.url) == f"{DEFAULT_PREFIX}/events"):
+        page.goto(f"{app_url}/p/default/review")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id("project-switcher-current").inner_text() == "Default"
 
