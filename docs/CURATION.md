@@ -915,6 +915,63 @@ a failed or unwanted target is a complete undo. Jobs live under
   `POST /curation/projects/{project}/select/diverse`,
   `POST /curation/projects/{project}/viz/projection/rebuild`.
 
+### Filter, select, act
+
+One item filter is shared by every route that lists, searches or counts
+items, and by every route that acts on a selection of them. Class identity is
+by name, never by model class id.
+
+| Parameter (query) / field (body) | Meaning |
+|---|---|
+| `class_name`, `exclude_class_name` | Class names, repeatable. Match an item's class name or the detector's own label; case, spaces and hyphens are normalized (`traffic light` is `traffic_light`) |
+| `conf_min`, `conf_max` | Inclusive confidence band |
+| `min_area`, `max_area` | Box area as a fraction of its image |
+| `max_rank` | The N largest boxes per image |
+| `origin` | `detector`, `sam3`, `human` or `import`, repeatable (how the item came to exist; `source` is the separate ingest tag) |
+| `embedding_state` | `embedded` (has a vector), `not_selected`, `deferred` or `failed`, repeatable |
+| `review_status` | `pending`, `validated`, `dismissed` or `excluded`, repeatable |
+
+Routes that take it as query parameters: `GET .../crops`,
+`GET .../review/{tab}` (and its `/locate`), `GET .../search/text`,
+`GET .../stats/classes`, `GET .../stats/dataset`, `GET .../clusters`,
+`GET .../regions` and `GET .../detections/summary`. Each keeps its own
+route-specific parameters on top. A malformed band (`conf_min` above
+`conf_max`, `min_area` above `max_area`) is a 400.
+
+`GET /curation/projects/{project}/detections/summary` answers "what did the
+detector store, and what is embedded?": a count per detector label with its
+embedding breakdown, over the items the filter selects, plus a
+`suggested_reprocess` body that embeds the missing ones.
+
+Acting on a selection, in two steps (filter, then act):
+
+- **Bulk writes** (`POST .../crops/batch_exclude`, `POST .../crops/batch_unexclude`,
+  `PUT .../crops/batch_label`, `POST .../crops/move`) take `crop_ids` or a
+  `selection`: `{filter, limit, sample, seed}`. `limit` caps the selection to
+  its `limit` largest boxes (`sample: largest`) or a seeded random draw
+  (`sample: random`). `dry_run: true` returns `{dry_run, selected}` and writes
+  nothing; the write then changes exactly those ids. A selection above 20000
+  items is refused (422), never truncated. Hold-out and excluded items are not
+  selected unless `include_test` / `include_excluded` (or
+  `review_status: [excluded]`) say so.
+- **Embedding**: `POST .../reprocess` with scope `embed` takes the same filter
+  (see [Reprocess](#reprocess)); `embedding_state` plus `only_missing` embeds
+  what the policy skipped.
+- **VLM labeling and the lazy embed trigger**:
+  `POST .../pipeline/auto_label/start` takes the filter as query parameters
+  and scopes the VLM stage and its unvalidated count to it (with `class_id`
+  and `cluster_id`). `embed_missing=true` adds a first stage that embeds the
+  in-scope items stored without a vector, so they are clustered and labeled
+  in the same run; the worker builds its encoder from `OP_TRITON_URL` or
+  `TRITON_URL` (default `triton-server:8001`). Clustering itself is index-wide
+  by design (the centroids are shared by ingest placement); the primary
+  subject gate (`gate_max_rank`, `gate_min_blur_ratio`) is its only scope.
+- **Export**: `POST .../export/yolo` takes an `item_filter` (the same filter
+  as a JSON object) that narrows the validated items written; the manifest
+  records it. The single-class export is scoped by `class_ids`. To hide items
+  from any export, exclude them (`POST .../crops/batch_exclude` with a
+  selection, reversible with `POST .../crops/batch_unexclude`).
+
 Cluster ids: items cluster on `pe_embedding` by default
 (`OP_RESIDUAL_EMBEDDING_FIELD`); region boxes cluster on their own box
 embedding.

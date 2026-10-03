@@ -77,6 +77,34 @@ async def _embed_targets(
     ]
 
 
+async def embed_image_chunk(
+    opensearch: AsyncOpenSearch,
+    pe: Any,
+    docs: dict[str, dict[str, Any]],
+    spec: EmbedSpec,
+    res: ReprocessScopeResult,
+) -> None:
+    """The ``embed`` scope over one chunk of existing images (``docs`` maps
+    image id to its images doc), accumulating into ``res``. An encoder failure
+    counts every image of the chunk as failed."""
+    try:
+        counts = await reembed_items(
+            opensearch,
+            pe,
+            await _embed_targets(opensearch, docs, spec),
+            parts=spec.part_set,
+            only_missing=spec.only_missing,
+        )
+    except Exception as exc:
+        logger.warning('reprocess_embed_failed', error=str(exc))
+        res.failed += len(docs)
+        return
+    res.queued += counts['images']
+    res.failed += counts['missing_image']
+    for key in ('items', 'crop_written', 'frame_written', 'region_written'):
+        res.detail[key] = res.detail.get(key, 0) + counts[key]
+
+
 async def process_images(
     opensearch: AsyncOpenSearch,
     service: CurationIngestService,
@@ -139,23 +167,9 @@ async def process_images(
                     continue
                 await ov_pass.run_image(opensearch, service, image_id, doc)
         if 'embed' in scopes and docs:
-            try:
-                counts = await reembed_items(
-                    opensearch,
-                    service.pe_encoder,
-                    await _embed_targets(opensearch, docs, embed_spec),
-                    parts=embed_spec.part_set,
-                    only_missing=embed_spec.only_missing,
-                )
-            except Exception as exc:
-                logger.warning('reprocess_embed_failed', error=str(exc))
-                results['embed'].failed += len(docs)
-            else:
-                res = results['embed']
-                res.queued += counts['images']
-                res.failed += counts['missing_image']
-                for key in ('items', 'crop_written', 'frame_written', 'region_written'):
-                    res.detail[key] = res.detail.get(key, 0) + counts[key]
+            await embed_image_chunk(
+                opensearch, service.pe_encoder, docs, embed_spec, results['embed']
+            )
         done += len(chunk)
         failed_images = max(r.failed + r.not_found for r in results.values())
         if on_progress is not None:
@@ -165,4 +179,4 @@ async def process_images(
     return [results[s] for s in scopes], cancelled
 
 
-__all__ = ['CHUNK', 'IMAGE_SCOPES', 'process_images']
+__all__ = ['CHUNK', 'IMAGE_SCOPES', 'embed_image_chunk', 'process_images']

@@ -69,7 +69,10 @@ def selection_query(sel: ItemSelection) -> dict[str, Any]:
     assert sel.filter is not None
     clauses = [
         *item_filter_clauses(sel.filter),
-        *visibility_clauses(include_test=sel.include_test, include_excluded=sel.include_excluded),
+        *visibility_clauses(
+            include_test=sel.include_test,
+            include_excluded=sel.include_excluded or 'excluded' in sel.filter.review_status,
+        ),
     ]
     return {'bool': {'filter': clauses}} if clauses else {'match_all': {}}
 

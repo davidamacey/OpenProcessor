@@ -3584,12 +3584,24 @@
             "type": "integer"
           },
           "crop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 5000,
-            "title": "Crop Ids",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "label_source": {
             "default": "human",
@@ -3600,10 +3612,19 @@
             ],
             "title": "Label Source",
             "type": "string"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
-          "crop_ids",
           "class_id"
         ],
         "title": "CropBatchLabelRequest",
@@ -3792,22 +3813,41 @@
         "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'wrong_class'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry items).",
         "properties": {
           "crop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 5000,
-            "title": "Crop Ids",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "reason": {
             "default": "ignore",
             "title": "Reason",
             "type": "string"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
-        "required": [
-          "crop_ids"
-        ],
         "title": "CropExcludeRequest",
         "type": "object"
       },
@@ -3864,16 +3904,37 @@
             "type": "integer"
           },
           "crop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 5000,
-            "title": "Crop Ids",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
-          "crop_ids",
           "cluster_id"
         ],
         "title": "CropMoveRequest",
@@ -3920,17 +3981,36 @@
         "description": "Reverse an exclusion (the labeler's Undo path for Ignore).",
         "properties": {
           "crop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 5000,
-            "title": "Crop Ids",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
-        "required": [
-          "crop_ids"
-        ],
         "title": "CropUnexcludeRequest",
         "type": "object"
       },
@@ -5815,6 +5895,47 @@
         "title": "DetectFilter",
         "type": "object"
       },
+      "DetectionsSummary": {
+        "properties": {
+          "by_label": {
+            "items": {
+              "$ref": "#/components/schemas/LabelSummary"
+            },
+            "title": "By Label",
+            "type": "array"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingBreakdown"
+          },
+          "labels_truncated": {
+            "title": "Labels Truncated",
+            "type": "boolean"
+          },
+          "suggested_reprocess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReprocessRequest-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "embedding",
+          "by_label",
+          "labels_truncated",
+          "suggested_reprocess"
+        ],
+        "title": "DetectionsSummary",
+        "type": "object"
+      },
       "DetectorEntry": {
         "additionalProperties": true,
         "properties": {
@@ -5987,6 +6108,32 @@
           }
         },
         "title": "EmbedOptions",
+        "type": "object"
+      },
+      "EmbeddingBreakdown": {
+        "properties": {
+          "by_state": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By State",
+            "type": "object"
+          },
+          "embedded": {
+            "title": "Embedded",
+            "type": "integer"
+          },
+          "not_embedded": {
+            "title": "Not Embedded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "embedded",
+          "not_embedded",
+          "by_state"
+        ],
+        "title": "EmbeddingBreakdown",
         "type": "object"
       },
       "EmbeddingPolicy": {
@@ -6793,6 +6940,16 @@
             "default": true,
             "title": "Include Negative Frames",
             "type": "boolean"
+          },
+          "item_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "max_images": {
             "anyOf": [
@@ -8742,6 +8899,322 @@
         "title": "ItemDoc",
         "type": "object"
       },
+      "ItemFilter": {
+        "additionalProperties": false,
+        "description": "Predicates over stored items. Every field unset = no constraint.",
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "class_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Class Names",
+            "type": "array"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Source"
+          },
+          "classifier_conf_lt": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classifier Conf Lt"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "conf_max": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conf Max"
+          },
+          "conf_min": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conf Min"
+          },
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
+          "embedding_state": {
+            "items": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding State",
+            "type": "array"
+          },
+          "exclude_class_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclude Class Names",
+            "type": "array"
+          },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Id"
+          },
+          "item_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Text"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Source"
+          },
+          "label_validated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Validated"
+          },
+          "max_area": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Area"
+          },
+          "max_rank": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Rank"
+          },
+          "min_area": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Area"
+          },
+          "min_blur_ratio": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Blur Ratio"
+          },
+          "needs_new_class": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class"
+          },
+          "on_negative_frame": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Negative Frame"
+          },
+          "open_vocab_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Vocab Set"
+          },
+          "origin": {
+            "items": {
+              "enum": [
+                "detector",
+                "sam3",
+                "human",
+                "import"
+              ],
+              "type": "string"
+            },
+            "title": "Origin",
+            "type": "array"
+          },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
+          },
+          "review_dismissed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed"
+          },
+          "review_status": {
+            "items": {
+              "enum": [
+                "pending",
+                "validated",
+                "dismissed",
+                "excluded"
+              ],
+              "type": "string"
+            },
+            "title": "Review Status",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Prompt"
+          }
+        },
+        "title": "ItemFilter",
+        "type": "object"
+      },
       "ItemRegionMetaRequest": {
         "additionalProperties": false,
         "description": "Patch region metadata without touching any box geometry.\n\nUse this for operator corrections like changing the status to\n``verify_rejected``. To edit a box's text, use ``PATCH\n/crops/{crop_id}/regions/{box_id}`` (per-box, W8.8) -- ``region_text``\nis REMOVED from this request (D decision, 2026-09-26): it was a\nper-box value on an item-level route. A stale client sending it gets\n422 (``extra='forbid'``). To set or clear a box's geometry, use ``PUT\n/crops/{crop_id}/regions``.\n\nEvery field is optional; only the provided ones are written. ``None``\non ``region_rejection_reason`` clears the reason. ``region_status``\nmust be one of ``HUMAN_REGION_STATUS_VALUES`` when present.",
@@ -8826,6 +9299,81 @@
           }
         },
         "title": "ItemRegionsRequest",
+        "type": "object"
+      },
+      "ItemSelection": {
+        "additionalProperties": false,
+        "description": "Exactly one of ``crop_ids`` / ``filter``; ``limit`` / ``sample`` apply to a filter.",
+        "properties": {
+          "crop_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Ids"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "include_excluded": {
+            "default": false,
+            "title": "Include Excluded",
+            "type": "boolean"
+          },
+          "include_test": {
+            "default": false,
+            "title": "Include Test",
+            "type": "boolean"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "sample": {
+            "anyOf": [
+              {
+                "enum": [
+                  "random",
+                  "largest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "title": "ItemSelection",
         "type": "object"
       },
       "ItemTextLine": {
@@ -9469,6 +10017,28 @@
           "reserved_hotkeys"
         ],
         "title": "KeymapValidateResponse",
+        "type": "object"
+      },
+      "LabelSummary": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingBreakdown"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "count",
+          "embedding"
+        ],
+        "title": "LabelSummary",
         "type": "object"
       },
       "LabeledChoice": {
@@ -28965,6 +29535,271 @@
         ]
       }
     },
+    "/curation/projects/{project}/detections/summary": {
+      "get": {
+        "description": "Stored detections per detector label, each with its embedding breakdown\n(embedded, not embedded and why), over the items the shared item filter\nselects (every item when no filter parameter is set), plus a\n``suggested_reprocess`` body that embeds the missing ones.",
+        "operationId": "get_detections_summary_curation_projects__project__detections_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionsSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Detections Summary",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/events": {
       "get": {
         "description": "SSE stream of advisory crop-state events for the bound project\nonly (global ``project: null`` events go to ``{api}/events``).\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
@@ -32342,6 +33177,240 @@
               "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
               "title": "Acknowledge External",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, cluster_id and the item filter.",
+            "in": "query",
+            "name": "embed_missing",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, cluster_id and the item filter.",
+              "title": "Embed Missing",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
             }
           }
         ],

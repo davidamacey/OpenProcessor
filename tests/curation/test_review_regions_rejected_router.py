@@ -25,6 +25,9 @@ from src.config.curation import base_curation_config
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
+# The regions queue exists only while a region profile is active (GH #51).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
 
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router

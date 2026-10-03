@@ -28,6 +28,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._selection import selected_crop_ids
 from src.services.curation.class_label import (
     candidate_move_update,
     human_label_update,
@@ -395,7 +396,10 @@ async def batch_label_crops(
     entry = reg.get(payload.class_id)
     class_name = entry.class_name if entry is not None else ''
 
-    if not payload.crop_ids:
+    ids = await selected_crop_ids(opensearch, payload)
+    if payload.dry_run:
+        return {'dry_run': True, 'selected': len(ids)}
+    if not ids:
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
@@ -411,7 +415,7 @@ async def batch_label_crops(
     # occ_update_bulk, instead of one occ_update_one round-trip per crop.
     return await _occ_bulk_human_relabel(
         opensearch,
-        payload.crop_ids,
+        ids,
         _merge,
         writer_id='human:batch_label_crops',
     )
@@ -455,7 +459,10 @@ async def move_crops(
             raise HTTPException(
                 status_code=400, detail=f'candidate cluster {target_id} has no members'
             )
-    if not payload.crop_ids:
+    ids = await selected_crop_ids(opensearch, payload)
+    if payload.dry_run:
+        return {'dry_run': True, 'selected': len(ids)}
+    if not ids:
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     target_name = target.class_name if target is not None else ''
@@ -473,7 +480,7 @@ async def move_crops(
     # Batched via occ_update_bulk — see batch_label_crops above.
     return await _occ_bulk_human_relabel(
         opensearch,
-        payload.crop_ids,
+        ids,
         _merge,
         writer_id='human:move_crops',
     )
@@ -536,7 +543,10 @@ async def batch_exclude_crops(
     ``reason`` defaults to ``'ignore'``; pass a tag like
     ``'blurry'`` to record why (e.g. a whole cluster of blurry items).
     """
-    if not payload.crop_ids:
+    ids = await selected_crop_ids(opensearch, payload)
+    if payload.dry_run:
+        return {'dry_run': True, 'selected': len(ids)}
+    if not ids:
         return {'excluded': 0, 'errors': 0}
     from src.services.curation.exclusion import exclusion_update
 
@@ -544,11 +554,11 @@ async def batch_exclude_crops(
     reason = payload.reason or 'ignore'
     n_errors = await _occ_bulk_human_write(
         opensearch,
-        payload.crop_ids,
+        ids,
         lambda _id, cur: exclusion_update(cur, reason=reason, now=now),
         writer_id='human:batch_exclude_crops',
     )
-    return {'excluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}
+    return {'excluded': len(ids) - n_errors, 'errors': n_errors}
 
 
 async def _occ_bulk_human_write(
@@ -594,22 +604,25 @@ async def batch_unexclude_crops(
     a fresh assignment on the next recluster. Crops that aren't excluded
     are left untouched.
     """
-    if not payload.crop_ids:
+    ids = await selected_crop_ids(opensearch, payload)
+    if payload.dry_run:
+        return {'dry_run': True, 'selected': len(ids)}
+    if not ids:
         return {'unexcluded': 0, 'errors': 0}
     from src.services.curation.exclusion import live_candidate_ids, unexclusion_update
 
     try:
-        live = await live_candidate_ids(opensearch, items_index(), payload.crop_ids)
+        live = await live_candidate_ids(opensearch, items_index(), ids)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     now = _now_iso()
     n_errors = await _occ_bulk_human_write(
         opensearch,
-        payload.crop_ids,
+        ids,
         lambda _id, cur: unexclusion_update(cur, now=now, live_candidate_ids=live),
         writer_id='human:batch_unexclude_crops',
     )
-    return {'unexcluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}
+    return {'unexcluded': len(ids) - n_errors, 'errors': n_errors}
 
 
 @router.post('/crops/{crop_id}/review_dismiss')

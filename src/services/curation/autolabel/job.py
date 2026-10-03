@@ -68,6 +68,7 @@ if TYPE_CHECKING:
 
 
 STAGES: tuple[str, ...] = (
+    'embed_missing',
     'cluster_id_normalize',
     'cluster_residuals',
     'auto_promote',

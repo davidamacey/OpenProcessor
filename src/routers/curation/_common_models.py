@@ -16,8 +16,10 @@ from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.routers.curation._region_vocabulary_models import RegionProfileSummary  # noqa: TC001
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
+from src.routers.curation._selection import SelectionTargets
 from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
 from src.services.curation.ingest_policy import IngestPolicy
+from src.services.curation.item_filter import ItemFilter  # noqa: TC001 - pydantic field type
 
 
 # =============================================================================
@@ -94,18 +96,16 @@ class CropLabelRequest(BaseModel):
     label_source: HumanLabelSource = 'human'
 
 
-class CropBatchLabelRequest(BaseModel):
-    crop_ids: list[str] = Field(..., max_length=5000)
+class CropBatchLabelRequest(SelectionTargets):
     class_id: int
     label_source: HumanLabelSource = 'human'
 
 
-class CropMoveRequest(BaseModel):
-    crop_ids: list[str] = Field(..., max_length=5000)
+class CropMoveRequest(SelectionTargets):
     cluster_id: int
 
 
-class CropExcludeRequest(BaseModel):
+class CropExcludeRequest(SelectionTargets):
     """Exclude crops from training + clustering (reversible).
 
     Blurry / unidentifiable / partial crops the human doesn't want in
@@ -115,14 +115,11 @@ class CropExcludeRequest(BaseModel):
     record why (e.g. a whole cluster of blurry items).
     """
 
-    crop_ids: list[str] = Field(..., max_length=5000)
     reason: str = 'ignore'
 
 
-class CropUnexcludeRequest(BaseModel):
+class CropUnexcludeRequest(SelectionTargets):
     """Reverse an exclusion (the labeler's Undo path for Ignore)."""
-
-    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class CropUndoBatchRequest(BaseModel):
@@ -266,6 +263,9 @@ class ExportYoloRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     export_dir: str | None = None
+    # Narrow the exported items with the shared item filter (class names,
+    # confidence band, box size, origin, ...); recorded in manifest.json.
+    item_filter: ItemFilter | None = None
     # Free-form version tag (e.g. 'v7.0a'). Recorded in manifest.json only.
     version_tag: str = ''
     # RNG seed for the stratified split. Recording it in the manifest is what
