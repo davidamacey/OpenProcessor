@@ -58,4 +58,14 @@ describe('/train dataset-export capability gate', () => {
   it('renders datasetExportSpec.blurb', () => {
     expect(src).toMatch(/datasetExportSpec\.blurb/);
   });
+
+  // v0.4.0 facts: the near-duplicate threshold is the served
+  // `dedup_threshold_default` of the export kind, never a literal here.
+  // A scan, since the page is too big to mount for one request body.
+  it('takes the dedup threshold from the served export entry, with no literal 0.98', () => {
+    expect(src).not.toMatch(/0\.98/);
+    expect(src).toMatch(/exportDedupDefault\(/);
+    expect(src).toMatch(/dedup_threshold: singleClassDedup \? singleClassDedupThreshold/);
+    expect(src).toMatch(/\{#if singleClassDedupThreshold != null\}/);
+  });
 });

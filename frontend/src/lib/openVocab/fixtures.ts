@@ -29,6 +29,7 @@ export const cleanReport = (): ValidationReport => ({
 export function issue(over: Partial<ValidationIssue> = {}): ValidationIssue {
   return {
     code: 'open_vocab_empty_prompt',
+    id: 'open_vocab_empty_prompt:targets[0].prompt',
     severity: 'error',
     field: 'targets[0].prompt',
     message: 'A target needs a prompt.',

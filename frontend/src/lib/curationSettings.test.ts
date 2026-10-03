@@ -28,16 +28,40 @@ describe('parseCurationSettings', () => {
       defaults: { cluster: 'ivf' },
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
+      monitoring_links: {
+        grafana: 'https://g.example',
+        prometheus: null,
+        opensearch_dashboards: 'http://os.example:5601',
+      },
     };
     expect(parseCurationSettings(raw)).toEqual({
       defaults: { cluster: 'ivf' },
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
+      monitoring_links: {
+        grafana: 'https://g.example',
+        prometheus: null,
+        opensearch_dashboards: 'http://os.example:5601',
+      },
     });
   });
 
+  it('reads an absent or malformed monitoring_links as all null, never a guessed URL', () => {
+    const none = { grafana: null, prometheus: null, opensearch_dashboards: null };
+    expect(parseCurationSettings({ defaults: {} }).monitoring_links).toEqual(none);
+    expect(
+      parseCurationSettings({ monitoring_links: { grafana: 5, prometheus: '' } })
+        .monitoring_links,
+    ).toEqual(none);
+  });
+
   it('treats the first-run body as normal, not an error', () => {
-    const raw = { defaults: {}, updated_at: null, updated_by: null };
+    const raw = {
+      defaults: {},
+      updated_at: null,
+      updated_by: null,
+      monitoring_links: { grafana: null, prometheus: null, opensearch_dashboards: null },
+    };
     expect(parseCurationSettings(raw)).toEqual(EMPTY_CURATION_SETTINGS);
   });
 

@@ -63,21 +63,6 @@ export function buildExportRows(
 }
 
 /**
- * DQ-M9 frontend half (docs/design/data-quality-pass-2026-09-24.md):
- * whether the served per-class rows add up to "nothing to export" — no
- * classes, or 0 `class_validated` items total. This is the same first
- * refusal `POST /export/yolo` itself makes; the adequacy tier is NOT part
- * of it (a project whose every class is below `block_below` is still
- * exportable — the server answers a 422 when it truly is not).
- */
-export function isNothingExportable(rows: ExportRow[]): boolean {
-  if (rows.length === 0) return true;
-  const totalValidated = rows.reduce((sum, r) => sum + r.validated, 0);
-  if (totalValidated === 0) return true;
-  return false;
-}
-
-/**
  * m15 (2026-09-24 interactive pass): the registry download buttons
  * (class_registry.json/data.yaml/manifest.json) only make sense for a
  * frozen multi-class (`yolo`) export — they used to gate on the shared

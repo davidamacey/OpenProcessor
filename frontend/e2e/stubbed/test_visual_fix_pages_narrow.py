@@ -142,7 +142,8 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/regions/clusters(\?|$)", {"clusters": [], "count": 0})
     stub.on("GET", r"/clusters(\?|$)", {"clusters": [], "count": 0})
-    stub.on("GET", r"/regions(\?|$)", {"items": items, "total": 4})
+    rows = [{**i, "row_key": f"{i['crop_id']}#item"} for i in items]
+    stub.on("GET", r"/regions(\?|$)", {"items": rows, "total": 4})
 
     page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
     page.locator('[data-testid="slot-text-value"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)

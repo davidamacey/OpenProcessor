@@ -23,6 +23,7 @@ const PREVIEW: IngestPolicyPreview = {
   truncated: false,
   would_embed: 40,
   would_not_embed: 60,
+  embedded_because_labeled: 0,
   estimated_vector_mb: 1.5,
   by_class: [{ name: 'widget', would_embed: 40, would_not_embed: 60 }],
 };

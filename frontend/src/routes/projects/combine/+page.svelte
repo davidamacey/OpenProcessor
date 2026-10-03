@@ -133,6 +133,7 @@
                   ...wizard.refusal.report.warnings,
                 ].map((i) => ({
                   code: i.code,
+                  id: i.id,
                   severity: i.severity === 'warning' ? 'warning' : 'error',
                   project: i.field,
                   message: i.message,
@@ -189,7 +190,9 @@
     <p data-testid="combine-confirm-body">
       Creates project <span class="font-mono text-zinc-100">{preview.target.slug}</span>
       from {wizard.sources.length} source{wizard.sources.length === 1 ? '' : 's'}:
-      {formatCount(preview.target.images)} images, {formatCount(preview.target.items)} items,
+      {formatCount(preview.target.projected_images)} images, {formatCount(
+        preview.target.projected_items,
+      )} items ({formatCount(preview.target.unclassed_items)} unclassed),
       {formatCount(preview.target.holdout_images)} test images,
       {(preview.target.classes ?? []).length} classes.
     </p>

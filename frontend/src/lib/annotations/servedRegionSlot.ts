@@ -240,12 +240,6 @@ export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
             default: 1280,
           },
           { key: 'max_positive_images', label: 'sample N positives', kind: 'number' },
-          {
-            key: 'dedup_threshold',
-            label: 'dedup near-dup frames',
-            kind: 'toggle',
-            onValue: 0.98,
-          },
         ],
       },
     },

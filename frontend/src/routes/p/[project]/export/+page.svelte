@@ -21,7 +21,6 @@
     gapCellTitle,
     TRAINABLE_COLUMN_TITLE,
     registryArtifactsAvailable,
-    isNothingExportable,
     splitExportClasses,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
@@ -135,18 +134,15 @@
   const emptyRows = $derived(rows.filter((r) => !(r.validated > 0 || r.test_count > 0)));
   let showEmptyClasses = $state(false);
 
-  // DQ-M9 frontend half (docs/design/data-quality-pass-2026-09-24.md): the
-  // Export button used to be enabled unconditionally — the audit's repro
-  // was every class at the served "block" adequacy tier (0
-  // class_validated dataset-wide) with Export still clickable, since
-  // `POST /export/yolo` itself has no readiness gate. `loading` guards the
-  // window before `stats` has ever arrived, where `rows` is legitimately
-  // `[]` — don't flash "nothing to export" before the served data is in.
   const exportClassSplit = $derived(
     splitExportClasses(exportState?.class_split_counts ?? []),
   );
 
-  const nothingExportable = $derived(!loading && isNothingExportable(rows));
+  // The served pre-scan of `POST /export/yolo`: only an explicit `false`
+  // blocks; `null` (the count failed) never does. Row-level refusals still
+  // arrive as the export's own 422 and are rendered by `runExport`.
+  const exportBlocked = $derived(exportState?.can_export === false);
+  const blockingReasons = $derived(exportState?.blocking_reasons ?? []);
 
   function setSort(k: SortKey): void {
     if (sortKey === k) {
@@ -627,10 +623,7 @@
         type="button"
         class="btn btn-primary"
         onclick={() => void runExport()}
-        disabled={exportRunning || nothingExportable}
-        title={nothingExportable
-          ? 'Nothing to export yet — no class has a validated crop.'
-          : undefined}
+        disabled={exportRunning || exportBlocked}
       >
         {exportRunning
           ? 'Exporting…'
@@ -680,6 +673,17 @@
         {/if}
       </div>
     </div>
+
+    {#if exportBlocked && blockingReasons.length > 0}
+      <ul
+        class="mt-2 list-inside list-disc text-xs text-amber-300"
+        data-testid="export-blocking-reasons"
+      >
+        {#each blockingReasons as reason, i (i)}
+          <li>{reason}</li>
+        {/each}
+      </ul>
+    {/if}
 
     <ExportItemFilter state={exportFilter} />
 

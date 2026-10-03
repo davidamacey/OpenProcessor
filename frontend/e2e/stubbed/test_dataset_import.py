@@ -102,6 +102,7 @@ FORMATS: dict[str, Any] = {
     "issues": [
         {
             "code": "label_file_missing",
+            "id": "label_file_missing",
             "severity": "warning",
             "blocking": False,
             "bypassable": False,
@@ -109,6 +110,7 @@ FORMATS: dict[str, Any] = {
         },
         {
             "code": "class_index_name_mismatch",
+            "id": "class_index_name_mismatch",
             "severity": "info",
             "blocking": False,
             "bypassable": False,
@@ -191,6 +193,7 @@ def preview_for(body: dict[str, Any]) -> dict[str, Any]:
         "issues": [
             {
                 "code": "label_file_missing",
+                "id": "label_file_missing",
                 "severity": "warning",
                 "blocking": False,
                 "bypassable": False,
@@ -200,6 +203,7 @@ def preview_for(body: dict[str, Any]) -> dict[str, Any]:
             },
             {
                 "code": "class_index_name_mismatch",
+                "id": "class_index_name_mismatch",
                 "severity": "info",
                 "blocking": False,
                 "bypassable": False,

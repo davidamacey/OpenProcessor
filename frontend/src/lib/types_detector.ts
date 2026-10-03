@@ -96,6 +96,9 @@ export interface IngestPolicyPreview {
   truncated: boolean;
   would_embed: number;
   would_not_embed: number;
+  /** Of `would_embed`, items that embed only because a human or validated
+   *  label always embeds (counted for items stored with a vector). */
+  embedded_because_labeled: number;
   estimated_vector_mb: number;
   by_class: PolicyPreviewClass[];
 }

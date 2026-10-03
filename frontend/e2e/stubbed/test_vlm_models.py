@@ -298,6 +298,7 @@ def test_create_an_endpoint_validate_and_test_connection(stub, page, app_url):
             issues = [
                 {
                     "code": "name_conflict",
+                    "id": "name_conflict",
                     "severity": "error",
                     "field": "name",
                     "message": "An endpoint named local_vlm already exists.",

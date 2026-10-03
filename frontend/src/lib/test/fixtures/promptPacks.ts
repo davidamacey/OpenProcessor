@@ -20,6 +20,7 @@ export const cleanReport = (): ValidationReport => ({
 export function issue(over: Partial<ValidationIssue> = {}): ValidationIssue {
   return {
     code: 'pack_placeholder_missing',
+    id: 'pack_placeholder_missing:class_user_template',
     severity: 'error',
     field: 'class_user_template',
     message: 'class_user_template must contain {class_names_csv}',
@@ -134,7 +135,7 @@ export function docFixture(over: Partial<PromptPackDoc> = {}): PromptPackDoc {
     created_at: '2026-09-26T10:00:00Z',
     updated_at: '2026-09-26T12:00:00Z',
     updated_by: null,
-    cloned_from: 'template:widget_tag@-',
+    cloned_from: 'template:widget_tag',
     active: true,
     active_revision: 1,
     validation: cleanReport(),
@@ -239,7 +240,7 @@ export function revisionsFixture(): ConfigRevisionList {
       {
         revision: 1,
         saved_at: '2026-09-26T10:00:00Z',
-        cloned_from: 'template:widget_tag@-',
+        cloned_from: 'template:widget_tag',
         description: 'First cut',
       },
     ],

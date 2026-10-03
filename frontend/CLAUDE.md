@@ -1053,6 +1053,62 @@ name (`runCohortQuery`).
   `test_item_filter.py`, `test_selection_actions.py`,
   `test_review_per_tab_filters.py`.
 
+## Served facts adopted from OpenProcessor 89eda327 (2026-10-03)
+
+Each item replaced a client guess with the served fact; none keeps a fallback
+constant (`docs/design/v040-adoption-brief-2026-10-03.md`).
+
+- **Review enum filters.** Every `filter_specs` entry serves `default` and
+  `allows_unset`. The enum `<select>` (`ServedFilterField`,
+  `enumFilterSelection` in `src/lib/review/enumFilter.ts`) shows the
+  operator's pick, else the served `default`, else `''`: an `allows_unset`
+  enum lists a served `{value: '', label: 'Any'}` option and choosing it omits
+  the param. The first option is never a stand-in.
+- **Issue lists.** Validation, combine and import issues serve a unique `id`
+  (`code[:subject]`, `#2` on a repeat); `ConfigIssueList`,
+  `CombineIssueList`, `DatasetIssueList` and the open-vocabulary cell issues
+  key on it. A combine issue always serves a `message`.
+- **Combine preview.** The target counts are `projected_images`,
+  `projected_items` and `unclassed_items` (after dedup, equal to the finished
+  target); `target.items` / `target.images` are gone.
+- **Ingest policy preview.** Shows the served `embedded_because_labeled`; a
+  class row's `name` is the class name. A `detector_not_servable` refusal
+  renders its short `message` and each distinct served `reason`.
+- **`/export`.** The Export button follows the served `can_export` of
+  `GET /export/status` (only `false` blocks; `null` never does) and lists the
+  served `blocking_reasons`. There is no client "nothing exportable" rule;
+  row-level 422s still render at export time.
+- **`/methods` bounds.** The `single_class` export entry serves
+  `dedup_threshold_default` (and `_min` / `_max`): `/train`'s dedup checkbox and
+  request use it, and the option is absent when none is served. The `diverse`
+  overlay serves `max_k` (`/crops?order=diverse`, passed by `/clusters/[id]`)
+  and `select_max_k` (`POST /select/diverse`, passed by `/review`) as the
+  StrategyBar `k` stepper's `diverseKMax`; with none served there is no
+  bound and no clamp.
+- **Monitoring links.** `MonitoringLinks` shows Grafana, Prometheus and
+  OpenSearch Dashboards only from the served `GET /settings`
+  `monitoring_links` (`curationSettingsStore`), http(s) URLs only via
+  `externalHref`. The hardcoded ports and the `PUBLIC_GRAFANA_URL` /
+  `PUBLIC_PROMETHEUS_URL` / `PUBLIC_OPENSEARCH_DASHBOARDS_URL` overrides are
+  gone; `PUBLIC_MLFLOW_URL` stays.
+- **Embedding plot reads.** `getVizProjection` treats only the 404
+  `projection_not_built` as "not built yet" (`built: false`); every other
+  failure rejects and `EmbeddingPlot` shows the served message
+  (`apiErrorText`). Rebuild failures show the served message too (a 422
+  `too_few_items` names the floor).
+- **Region rows.** `RegionBrowseItem.row_key` (`<crop_id>#<region_box_id>` or
+  `<crop_id>#item`) keys every region row list: `SlotGallery`, the gallery
+  pager (`slotGalleryController`) and `/train`'s cohort preview.
+- **Class names.** `$lib/classNameKey.ts` (`normalizeClassName`,
+  `findActiveClassByName`) implements the backend rule: case, spaces and
+  hyphens fold to `_`, an active class wins over a deprecated one, a
+  deprecated-only match is never returned. Exact class selection (a cluster
+  card click) uses `class_id`.
+- **Cut line.** On `/clusters/[id]` in the default (core-first) order the cut
+  is the first item served `cluster_is_core === false` (`computeCutLine`,
+  `$lib/clusters/cutLine.ts`); there is no null-share or order-consistency
+  heuristic, and no line in any other order.
+
 ## Curation-strategy selector bar (`StrategyBar.svelte`, 2026-09)
 
 `/clusters`, `/clusters/[id]`, and `/review` all render a `StrategyBar` —

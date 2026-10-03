@@ -1,6 +1,6 @@
 /**
- * `GET /regions` returns one ROW per box (OpenProcessor `RegionRow`: "key a
- * row by (crop_id, region_box_id)"), so one item with three boxes is three
+ * `GET /regions` returns one ROW per box (OpenProcessor `RegionRow`: key a
+ * row by its served `row_key`), so one item with three boxes is three
  * rows sharing a crop_id. Keying the grid by crop_id alone threw
  * each_key_duplicate and blanked the gallery. Mounts the real component.
  */
@@ -23,6 +23,7 @@ function row(cropId: string, boxId: string | null, thumb: string) {
     image_path: '/x.jpg',
     bbox_norm: [0, 0, 1, 1],
     region_box_id: boxId,
+    row_key: `${cropId}#${boxId ?? 'item'}`,
     thumbnail_url: thumb,
     updated_at: '2026-10-03T00:00:00Z',
   };

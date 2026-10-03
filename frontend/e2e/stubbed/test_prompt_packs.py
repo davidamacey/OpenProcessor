@@ -106,7 +106,7 @@ def doc(**over: Any) -> dict[str, Any]:
         "created_at": "2026-09-26T10:00:00Z",
         "updated_at": "2026-09-26T12:00:00Z",
         "updated_by": None,
-        "cloned_from": "template:widget_tag@-",
+        "cloned_from": "template:widget_tag",
         "active": True,
         "active_revision": 1,
         "validation": CLEAN,
@@ -181,7 +181,7 @@ REVISIONS = {
     "name": "widget_tag",
     "revisions": [
         {"revision": 2, "saved_at": "2026-09-26T12:00:00Z", "cloned_from": None, "description": "Tags on widgets"},
-        {"revision": 1, "saved_at": "2026-09-26T10:00:00Z", "cloned_from": "template:widget_tag@-", "description": "First cut"},
+        {"revision": 1, "saved_at": "2026-09-26T10:00:00Z", "cloned_from": "template:widget_tag", "description": "First cut"},
     ],
 }
 
@@ -218,6 +218,7 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
                 "errors": [
                     {
                         "code": "pack_placeholder_missing",
+                        "id": "pack_placeholder_missing",
                         "severity": "error",
                         "field": "class_user_template",
                         "message": "class_user_template must contain {class_names_csv}",
@@ -305,6 +306,7 @@ def test_activate_needs_force_only_when_the_server_allows_it(stub, page, app_url
                             "errors": [
                                 {
                                     "code": "pack_description_class_unknown",
+                                    "id": "pack_description_class_unknown",
                                     "severity": "error",
                                     "field": "class_descriptions.sprocket",
                                     "message": "sprocket is not a registry class",

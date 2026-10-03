@@ -71,7 +71,7 @@
   import { datasetExportForSlot } from '$lib/annotations/datasetExport';
   import { splitCohortGroups } from '$lib/trainCohortGroups';
   import { bestMapDisplay } from '$lib/trainRunsTable';
-  import { isDatasetExportAvailable } from '$lib/strategies';
+  import { exportDedupDefault, isDatasetExportAvailable } from '$lib/strategies';
   import { isTerminalTrainState } from '$lib/trainResults';
   import { strategiesStore } from '$stores/strategies.svelte';
   import type {
@@ -259,10 +259,14 @@
   let singleClassExportMessage = $state<string | null>(null);
   // Export options. whole_frame = full source frame (deployment distribution);
   // item_crop = parent item crop with the region re-projected. 640 for a
-  // fast pass, 1280 for the full run. dedup collapses >=0.98 near-dup frames.
+  // fast pass, 1280 for the full run. dedup collapses near-dup frames at the served threshold.
   let singleClassImageMode = $state<'whole_frame' | 'item_crop'>('whole_frame');
   let singleClassImgSize = $state<640 | 1280>(1280);
   let singleClassDedup = $state<boolean>(true);
+  // The served threshold of this export kind; none = no dedup option.
+  const singleClassDedupThreshold = $derived(
+    exportDedupDefault(strategiesStore.methods.dataset_exports, datasetExportSpec?.kind),
+  );
   // Optional N: sample at most this many positive (region-bearing) frames,
   // spread EVENLY across region clusters. Blank/0 == every positive. Lets us
   // build progressively larger dataset versions from the same labeled pool.
@@ -302,7 +306,7 @@
       const r = await exportSingleClass(spec, {
         image_mode: singleClassImageMode,
         img_max_side: singleClassImgSize,
-        dedup_threshold: singleClassDedup ? 0.98 : null,
+        dedup_threshold: singleClassDedup ? singleClassDedupThreshold : null,
         max_positive_images:
           singleClassMaxPositives && singleClassMaxPositives > 0
             ? singleClassMaxPositives
@@ -313,7 +317,7 @@
       void refreshDataset();
       const pos = r.positive_images ?? '?';
       const bg = r.background_images ?? '?';
-      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${bg} backgrounds), ${singleClassImageMode} @ ${singleClassImgSize}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${bg} backgrounds), ${singleClassImageMode} @ ${singleClassImgSize}px${singleClassDedup && singleClassDedupThreshold != null ? `, dedup ${singleClassDedupThreshold}` : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
         singleClassExportMessage +=
           ' Warning: zero positives — check labeling for this slot.';
@@ -1225,14 +1229,18 @@
             class="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           />
         </label>
-        <label class="flex items-center gap-2 pb-1.5">
-          <input
-            type="checkbox"
-            bind:checked={singleClassDedup}
-            disabled={singleClassExporting}
-          />
-          <span class="text-xs text-zinc-400">dedup near-dup frames (cos ≥ 0.98)</span>
-        </label>
+        {#if singleClassDedupThreshold != null}
+          <label class="flex items-center gap-2 pb-1.5">
+            <input
+              type="checkbox"
+              bind:checked={singleClassDedup}
+              disabled={singleClassExporting}
+            />
+            <span class="text-xs text-zinc-400"
+              >dedup near-dup frames (cos ≥ {singleClassDedupThreshold})</span
+            >
+          </label>
+        {/if}
       </div>
       <p class="mt-2 text-[11px] text-zinc-500">
         N samples positives spread <em>evenly across clusters</em> — build a small set first,
@@ -1528,7 +1536,7 @@
                 <div
                   class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
                 >
-                  {#each cohortPreview as item ('crop_id' in item ? `${item.crop_id}:${item.region_box_id ?? ''}` : item.id)}
+                  {#each cohortPreview as item ('row_key' in item ? item.row_key : item.id)}
                     {#if activeCohort.rowKind === 'slot'}
                       {@const cohortSlot = regionSlotForGroup(group)}
                       {#if cohortSlot}

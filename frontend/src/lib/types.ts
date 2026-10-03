@@ -192,6 +192,11 @@ export interface ExportStatus {
   /** Objects per class per split. `null` for an export written before
    *  this was recorded. */
   class_split_counts?: ExportClassSplitCounts[] | null;
+  /** Whether `POST /export/yolo` would run now (an unfiltered export);
+   *  `null` when the cohort count failed. Only `false` blocks. */
+  can_export?: boolean | null;
+  /** Why not, in the words the export 422 uses; empty when exportable. */
+  blocking_reasons?: string[];
   /** Whether images with an unlabeled object were left out. */
   require_fully_labeled_images?: boolean | null;
   /** Objects on exported images the export did not label (unreviewed, or

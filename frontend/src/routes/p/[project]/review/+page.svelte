@@ -263,7 +263,11 @@
   );
   const diverseMode = $derived(strategyBar.sort === 'diverse' && diverseAvailable);
   const DIVERSE_K_DEFAULT = 100;
-  const DIVERSE_K_MAX = 500;
+  // The pool selection job's own served cap (`select_max_k`); none = no clamp.
+  const diverseKMax = $derived(
+    strategiesStore.methods.overlays.find((o) => o.id === 'diverse')?.select_max_k ??
+      undefined,
+  );
   let diverseSelection = $state<DiverseSelection | null>(null);
   let diverseJobId = $state<string | null>(null);
   let diverseJobStatus = $state<string | null>(null);
@@ -1916,7 +1920,7 @@
       fallbackReason={sortFallbackReason}
       {pinnedSortId}
       diverseKDefault={DIVERSE_K_DEFAULT}
-      diverseKMax={DIVERSE_K_MAX}
+      {diverseKMax}
       diverseMeta={diverseSelection
         ? {
             method: diverseSelection.method,
@@ -2034,13 +2038,6 @@
       <ServedFilterField
         {spec}
         value={enumFilterValues[spec.param]}
-        servedDefault={(() => {
-          const d = reviewTabsVocabularyStore.filterDefault(
-            activeTabEndpointId,
-            spec.param,
-          );
-          return d == null ? null : String(d);
-        })()}
         onchange={setEnumFilter}
       />
     {/each}

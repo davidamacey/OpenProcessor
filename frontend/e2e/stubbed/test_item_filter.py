@@ -144,6 +144,8 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
                         "min": 1,
                         "max": 9,
                         "description": "Served help",
+                        "default": None,
+                        "allows_unset": True,
                     },
                     {
                         "param": "flagged",
@@ -153,6 +155,8 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
                         "min": None,
                         "max": None,
                         "description": "",
+                        "default": None,
+                        "allows_unset": True,
                     },
                 ],
             ),

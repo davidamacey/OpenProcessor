@@ -131,10 +131,16 @@ describe('CombineMappingTable', () => {
       errors: [
         {
           code: 'unmapped_class',
+          id: 'unmapped_class',
           project: 'widgets-b',
           message: 'class widget has no mapping',
         },
-        { code: 'unmapped_class', project: 'widgets-a', message: 'other source' },
+        {
+          code: 'unmapped_class',
+          id: 'unmapped_class',
+          project: 'widgets-a',
+          message: 'other source',
+        },
       ],
     };
     flushSync();

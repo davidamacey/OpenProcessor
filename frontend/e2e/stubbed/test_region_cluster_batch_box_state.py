@@ -87,8 +87,9 @@ ROW_1 = {
     "cluster_id": None,
     "updated_at": "2026-09-26T00:00:00Z",
     "region_box_id": "b1",
+    "row_key": "c1#b1",
 }
-ROW_2 = {**ROW_1, "crop_id": "c2", "id": "c2", "region_box_id": "b2"}
+ROW_2 = {**ROW_1, "crop_id": "c2", "id": "c2", "region_box_id": "b2", "row_key": "c2#b2"}
 
 
 def test_cluster_triage_uses_batch_box_state_with_per_box_targets(stub, page, app_url):

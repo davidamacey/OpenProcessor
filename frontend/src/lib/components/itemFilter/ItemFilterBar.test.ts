@@ -116,6 +116,8 @@ describe('ItemFilterBar', () => {
         min: 0.1,
         max: 0.9,
         description: 'Served help',
+        default: null,
+        allows_unset: true,
       },
     ];
     instance = mount(ItemFilterBar, {
@@ -191,7 +193,14 @@ describe('ItemFilterBar', () => {
 });
 
 describe('ServedFilterField kinds', () => {
-  const base = { options: [], min: null, max: null, description: '' };
+  const base = {
+    options: [],
+    min: null,
+    max: null,
+    description: '',
+    default: null,
+    allows_unset: true,
+  };
   function field(
     spec: Partial<ReviewFilterSpec> & Pick<ReviewFilterSpec, 'param' | 'kind'>,
     value: string | string[] = '',
@@ -219,6 +228,33 @@ describe('ServedFilterField kinds', () => {
     sel.value = 'b';
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     expect(onchange).toHaveBeenCalledWith('p', 'b');
+  });
+
+  it('enum: with nothing chosen it shows the served Any option, not the first real one', () => {
+    field({
+      param: 'p',
+      kind: 'enum',
+      allows_unset: true,
+      options: [
+        { value: '', label: 'Any' },
+        { value: 'a', label: 'Alpha' },
+      ],
+    });
+    expect(target.querySelector('select')!.value).toBe('');
+  });
+
+  it('enum: with nothing chosen it shows the served default', () => {
+    field({
+      param: 'p',
+      kind: 'enum',
+      default: 'b',
+      allows_unset: false,
+      options: [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Beta' },
+      ],
+    });
+    expect(target.querySelector('select')!.value).toBe('b');
   });
 
   it('multi_enum: toggles add and remove', () => {

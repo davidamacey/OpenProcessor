@@ -121,6 +121,8 @@ export interface DatasetIssueSample {
 
 export interface DatasetIssue {
   code: string;
+  /** Unique within the response (`code[:subject]`, `#2` on a repeat). */
+  id: string;
   severity: DatasetIssueSeverity;
   blocking: boolean;
   bypassable: boolean;

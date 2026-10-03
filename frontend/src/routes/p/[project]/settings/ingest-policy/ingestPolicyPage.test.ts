@@ -28,8 +28,9 @@ const PREVIEW = {
   truncated: true,
   would_embed: 40,
   would_not_embed: 60,
+  embedded_because_labeled: 7,
   estimated_vector_mb: 1.5,
-  by_class: [{ name: 'widget', would_embed: 40, would_not_embed: 60 }],
+  by_class: [{ name: 'blue widget', would_embed: 40, would_not_embed: 60 }],
 };
 
 let requests: { method: string; url: string; body: unknown }[];
@@ -114,6 +115,10 @@ describe('ingest policy page', () => {
     expect(q('policy-preview-truncated')?.textContent).toContain(
       'Estimated from 80 detections',
     );
+    expect(q('policy-preview-labeled')?.textContent).toContain(
+      '7 embed only because a human or validated label always embeds',
+    );
+    expect(q('policy-preview')?.textContent).toContain('blue widget');
     expect(target.textContent).toContain('already stored');
     expect(requests.filter((r) => r.url.endsWith('/ingest/policy/preview'))).toHaveLength(
       1,
@@ -198,16 +203,15 @@ describe('ingest policy page', () => {
       expect(q('policy-save-error')?.textContent).toContain('no labels file');
     });
   });
-  it('renders the backend-shaped 422 (message equals its only reason) once, without crashing', async () => {
-    // OpenProcessor raises detector_not_servable with message == '; '.join(reasons).
+  it('renders the backend-shaped 422 (short message, distinct reasons) as one line each', async () => {
     const problem = "'det_v2' is not loaded and ready on Triton";
     putResponse = () =>
       json(
         {
           detail: {
             error: 'detector_not_servable',
-            message: problem,
-            reasons: [problem],
+            message: 'This detector cannot be served.',
+            reasons: [problem, 'input size must be 640'],
           },
         },
         422,
@@ -223,7 +227,13 @@ describe('ingest policy page', () => {
       flushSync();
       expect(q('policy-save-error')).not.toBeNull();
     });
-    expect(q('policy-save-error')!.querySelectorAll('p').length).toBe(1);
-    expect(q('policy-save-error')!.textContent).toContain(problem);
+    const lines = [...q('policy-save-error')!.querySelectorAll('p')].map((p) =>
+      p.textContent?.trim(),
+    );
+    expect(lines).toEqual([
+      'This detector cannot be served.',
+      problem,
+      'input size must be 640',
+    ]);
   });
 });

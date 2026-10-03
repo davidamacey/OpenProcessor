@@ -12,6 +12,7 @@
  * half-apply a broken profile.
  */
 
+import { normalizeClassName } from '$lib/classNameKey';
 import type { SlotSpec, SlotKey } from './types';
 
 export interface SlotRegistry {
@@ -77,10 +78,13 @@ export function resolveSlotRegistry(opts: {
     byKey: (key) => byKey.get(key),
     queues,
     forClass(classId, classesById) {
-      const className = classesById.get(classId)?.toLowerCase();
+      const name = classesById.get(classId);
+      const className = name == null ? undefined : normalizeClassName(name);
       return all.filter((s) => {
         if (s.bind.classId != null) return s.bind.classId === classId;
-        if (s.bind.className != null) return s.bind.className.toLowerCase() === className;
+        if (s.bind.className != null) {
+          return normalizeClassName(s.bind.className) === className;
+        }
         return false;
       });
     },

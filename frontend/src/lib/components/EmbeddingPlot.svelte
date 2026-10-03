@@ -30,6 +30,7 @@
    */
 
   import {
+    apiErrorText,
     bulkLabel,
     cancelVizProjection,
     getThumbUrl,
@@ -98,6 +99,9 @@
   // resolves) shows "Loading…" rather than a flash of the pending state.
   let built = $state<boolean>(true);
   let loading = $state<boolean>(true);
+  // The served message of a failed read; only the 404 `projection_not_built`
+  // is "not built yet" (`built`).
+  let loadError = $state<string | null>(null);
 
   let selectedIds = $state<Set<string>>(new Set());
   let dragging = $state<boolean>(false);
@@ -120,17 +124,21 @@
 
   async function load(): Promise<void> {
     loading = true;
-    // getVizProjection() never rejects (except a caller abort, which this
-    // component never issues) — a 404/network failure degrades to the
-    // empty/pending fallback, so no try/catch is needed here.
-    const res = await getVizProjection({
-      cluster_id: clusterId ?? undefined,
-      class_id: classId ?? undefined,
-      max_points: maxPoints,
-    });
-    points = res.points;
-    built = res.built;
-    loading = false;
+    loadError = null;
+    try {
+      const res = await getVizProjection({
+        cluster_id: clusterId ?? undefined,
+        class_id: classId ?? undefined,
+        max_points: maxPoints,
+      });
+      points = res.points;
+      built = res.built;
+    } catch (e) {
+      points = [];
+      loadError = apiErrorText(e);
+    } finally {
+      loading = false;
+    }
   }
 
   $effect(() => {
@@ -365,7 +373,7 @@
       job = await rebuildVizProjection();
       startJobPoll();
     } catch (e) {
-      toastStore.error(`Rebuild failed: ${(e as Error).message}`);
+      toastStore.error(`Rebuild failed: ${apiErrorText(e)}`);
     } finally {
       rebuilding = false;
     }
@@ -488,6 +496,8 @@
     >
       {#if loading}
         <p class="p-4 text-sm text-zinc-500">Loading embedding projection…</p>
+      {:else if loadError}
+        <p class="p-4 text-sm text-red-400" role="alert">{loadError}</p>
       {:else if !built}
         <div
           class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"

@@ -128,6 +128,7 @@ const CASES: [string, string[]][] = [
     'DatasetIssueWire',
     keys({
       code: true,
+      id: true,
       severity: true,
       blocking: true,
       bypassable: true,

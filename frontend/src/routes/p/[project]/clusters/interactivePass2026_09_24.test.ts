@@ -61,13 +61,12 @@ describe('M4: the synthetic slot inventory card invents nothing and never hides 
 });
 
 describe('m22: a name-form ?class= deep link resolves against the loaded registry', () => {
-  it('classFilter falls back to a case-insensitive name lookup when the param is not numeric', () => {
+  it('classFilter falls back to the normalized active-class name lookup when the param is not numeric', () => {
     const fn = src.match(
       /const classFilter = \$derived\.by\(\(\) => \{[\s\S]*?\n {2}\}\);/,
     )?.[0];
     expect(fn).toBeDefined();
-    expect(fn).toMatch(/classesStore\.classes\.find\(/);
-    expect(fn).toMatch(/c\.name\.toLowerCase\(\) === v\.toLowerCase\(\)/);
+    expect(fn).toMatch(/findActiveClassByName\(classesStore\.classes, v\)/);
   });
 });
 

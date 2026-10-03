@@ -322,6 +322,7 @@ def test_edit_a_target_validate_save_and_resolve_a_conflict(stub, page, app_url)
                 "errors": [
                     {
                         "code": "open_vocab_empty_prompt",
+                        "id": "open_vocab_empty_prompt",
                         "severity": "error",
                         "field": "targets[1].prompt",
                         "message": "A target needs a prompt.",
@@ -407,6 +408,7 @@ def test_activation_refusal_offers_force_only_when_allowed(stub, page, app_url):
                             "errors": [
                                 {
                                     "code": "segmenter_unreachable",
+                                    "id": "segmenter_unreachable",
                                     "severity": "error",
                                     "field": None,
                                     "message": "The segmenter did not answer.",

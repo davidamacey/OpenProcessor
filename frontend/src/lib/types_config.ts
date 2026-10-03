@@ -15,6 +15,8 @@ export type ValidationSeverity = 'error' | 'warning' | 'info';
 /** §7.1 `ValidationIssue`. `field` is a dotted path; null = whole body. */
 export interface ValidationIssue {
   code: string;
+  /** Unique within the response (`code[:field]`, `#2` on a repeat). */
+  id: string;
   severity: ValidationSeverity;
   field: string | null;
   message: string;

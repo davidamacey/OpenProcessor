@@ -1032,22 +1032,7 @@ describe('getCluster k param', () => {
   });
 });
 
-/**
- * getVizProjection() — curation-strategy plan Phase 5
- * (docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Never rejects
- * (same contract as getMethods): `{API_PREFIX}/viz/projection` may not exist yet
- * (the OpenProcessor Phase 5 branch lands independently) and the UMAP
- * purity gate may mean the capability never ships at all — a fetch
- * failure here must degrade `EmbeddingPlot` to its pending/empty state,
- * never crash the page it replaced the grid on.
- *
- * The real wire shape (confirmed 2026-09-10 against
- * `embedding_viz.get_cached_projection`) is `{status: 'not_built'}` when
- * nothing has been fit, or `{points, projection_version, fitted_at,
- * stale}` otherwise — there is no `built`/`built_at`/`version` on the
- * wire; those were an earlier, wrong guess. `built` is this file's own
- * derived convenience field.
- */
+/** getVizProjection(): only the served 404 `projection_not_built` is "not built"; every other failure rejects. */
 describe('getVizProjection', () => {
   const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
     new Response(JSON.stringify(body), {
@@ -1130,10 +1115,20 @@ describe('getVizProjection', () => {
     expect(url).not.toContain('max_points');
   });
 
-  it("reports built:false when the server says status: 'not_built'", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ status: 'not_built' }));
+  it("reports built:false only for the served 404 'projection_not_built'", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { detail: { error: 'projection_not_built', message: 'Build one first.' } },
+          { status: 404 },
+        ),
+      );
     vi.stubGlobal('fetch', fetchMock);
-    expect((await getVizProjection()).built).toBe(false);
+    const res = await getVizProjection();
+    expect(res.built).toBe(false);
+    expect(res.points).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('reports stale:true when the server flags a partial-coverage projection', async () => {
@@ -1150,37 +1145,38 @@ describe('getVizProjection', () => {
     expect((await getVizProjection()).stale).toBe(true);
   });
 
-  it('resolves to the empty/pending fallback on a 404, without throwing or retrying', async () => {
+  it('rejects a 404 that is not the projection_not_built code (not a false "not built")', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
         new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
       );
     vi.stubGlobal('fetch', fetchMock);
-
-    const res = await getVizProjection();
-    expect(res).toEqual({
-      points: [],
-      total: 0,
-      built: false,
-      fitted_at: null,
-      projection_version: null,
-      stale: false,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(getVizProjection()).rejects.toMatchObject({ status: 404 });
   });
 
-  it('resolves to the empty/pending fallback on a network failure, after the retry budget', async () => {
+  it('rejects a 503 projection_unavailable with the served message', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        jsonResponse(
+          { detail: { error: 'projection_unavailable', message: 'Index is down.' } },
+          { status: 503 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const err = await getVizProjection().catch((e: unknown) => e);
+    expect(apiErrorText(err)).toBe('Index is down.');
+  }, 10_000);
+
+  it('rejects on a network failure after the retry budget', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
     vi.stubGlobal('fetch', fetchMock);
-
-    const res = await getVizProjection();
-    expect(res.built).toBe(false);
-    expect(res.points).toEqual([]);
+    await expect(getVizProjection()).rejects.toThrow('fetch failed');
     expect(fetchMock).toHaveBeenCalledTimes(4);
   }, 10_000);
 
-  it('resolves to the empty/pending fallback (not throws) on a malformed 200 body', async () => {
+  it('rejects a malformed 200 body', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('not json', {
         status: 200,
@@ -1188,10 +1184,7 @@ describe('getVizProjection', () => {
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
-
-    const res = await getVizProjection();
-    expect(res.points).toEqual([]);
-    expect(res.built).toBe(false);
+    await expect(getVizProjection()).rejects.toThrow();
   });
 
   it('propagates a caller-initiated abort instead of swallowing it into the fallback', async () => {
@@ -2320,6 +2313,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
         defaults: { cluster: 'ivf' },
         updated_at: '2026-09-20T23:04:39+00:00',
         updated_by: null,
+        monitoring_links: { grafana: 'https://g.example', prometheus: null },
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -2333,6 +2327,11 @@ describe('getCurationSettings / putCurationDefaults', () => {
       defaults: { cluster: 'ivf' },
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
+      monitoring_links: {
+        grafana: 'https://g.example',
+        prometheus: null,
+        opensearch_dashboards: null,
+      },
     });
   });
 

@@ -149,3 +149,27 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected in the export flow: {errors[:3]}"
+
+
+def test_export_is_blocked_by_the_served_can_export(stub, page, app_url):
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/stats/classes(\?|$)", STATS_CLASSES)
+    stub.on("GET", r"/stats/dataset(\?|$)", STATS_DATASET)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", HOLDOUT_STATS)
+    stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
+    stub.on(
+        "GET",
+        r"/export/status(\?|$)",
+        {
+            "status": "idle",
+            "last_run": None,
+            "can_export": False,
+            "blocking_reasons": ["nothing to export: 0 items are class_validated"],
+        },
+    )
+
+    page.goto(f"{app_url}/p/default/export")
+    reasons = page.get_by_test_id("export-blocking-reasons")
+    reasons.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert "nothing to export: 0 items are class_validated" in reasons.inner_text()
+    assert page.get_by_role("button", name="Export", exact=True).is_disabled()

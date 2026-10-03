@@ -93,11 +93,9 @@
     diverseKDefault?: number;
     /** `k` stepper bounds. Min 4: below that "diversity" over a handful of
      *  items isn't a meaningful selection criterion — a plain click-through
-     *  is just as fast. Max 500: matches `{API_PREFIX}/crops`'s own `page_size`
-     *  ceiling (`Query(..., le=500)`, crops.py) — the same number the
-     *  backend already treats as "a single request's worth," vs. the
-     *  thousands-scale pool selection the plan reserves for a backend job
-     *  (`OP_SELECT_MAX_N`, `POST {API_PREFIX}/select/diverse`), not a page control. */
+     *  is just as fast. Max: the served bound of the route's own call (the
+     *  `diverse` overlay's `max_k` for the crops list, `select_max_k` for the
+     *  pool selection job); omitted = no bound and no clamp. */
     diverseKMin?: number;
     diverseKMax?: number;
     /** Provenance for the current diverse-mode response, if the backend
@@ -138,7 +136,7 @@
     offerDiverse = false,
     diverseKDefault,
     diverseKMin = 4,
-    diverseKMax = 500,
+    diverseKMax,
     diverseMeta = null,
     appliedSort = null,
     fallbackReason = null,
@@ -447,10 +445,14 @@
           oninput={(e) => {
             const raw = Number((e.currentTarget as HTMLInputElement).value);
             if (!Number.isFinite(raw)) return;
-            bar.k = Math.min(diverseKMax, Math.max(diverseKMin, Math.round(raw)));
+            const k = Math.max(diverseKMin, Math.round(raw));
+            bar.k = diverseKMax == null ? k : Math.min(diverseKMax, k);
           }}
           class="input-sm w-16"
-          title="Pool-scale diverse selection (core-set / k-center-greedy). Capped {diverseKMin}-{diverseKMax} per request — larger cohorts are a backend job (POST select/diverse), not a page-size control."
+          title="Pool-scale diverse selection (core-set / k-center-greedy). At least {diverseKMin}{diverseKMax ==
+          null
+            ? ''
+            : `, at most ${diverseKMax}`}."
         />
       </label>
       {#if diverseMeta?.method || diverseMeta?.version || diverseMeta?.n_pool != null}
@@ -464,8 +466,8 @@
             .join(' · ') || undefined}
         >
           {#if diverseMeta?.n_pool != null}
-            (from {diverseMeta.n_pool.toLocaleString()} in scope{diverseMeta.n_pool >
-            diverseKMax
+            (from {diverseMeta.n_pool.toLocaleString()} in scope{diverseKMax != null &&
+            diverseMeta.n_pool > diverseKMax
               ? ', sampled'
               : ''})
           {/if}

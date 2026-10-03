@@ -82,7 +82,10 @@
       {/if}
     </p>
     <p class="text-zinc-400">
-      {formatCount(target.images)} images · {formatCount(target.items)} items ·
+      {formatCount(target.projected_images)} images · {formatCount(
+        target.projected_items,
+      )} items ·
+      {formatCount(target.unclassed_items)} unclassed ·
       {formatCount(target.holdout_images)} test images
     </p>
     {#if (target.classes ?? []).length > 0}

@@ -117,6 +117,10 @@ export interface OverlayInfo extends MethodInfoBase {
    * comfortably in the "ship plain" tier.
    */
   requires_banner?: boolean;
+  /** `diverse` only: the served cap on `k` of the crops list. */
+  max_k?: number | null;
+  /** `diverse` only: the served cap on `k` of the pool selection job. */
+  select_max_k?: number | null;
   /** The measured 2-d neighborhood-purity value backing `requires_banner`
    *  (see `docs/design/curation_scores.md` in OpenProcessor for the full
    *  measurement writeup). Informational — nothing in this file
@@ -155,6 +159,11 @@ export interface ScoreInfo extends MethodInfoBase {
 export interface DatasetExportInfo extends MethodInfoBase {
   /** True on the kind the backend treats as its primary export. */
   default?: boolean;
+  /** `yolo` / `single_class`: the served near-duplicate threshold default and
+   *  its bounds; absent when the kind serves none. */
+  dedup_threshold_default?: number | null;
+  dedup_threshold_min?: number | null;
+  dedup_threshold_max?: number | null;
 }
 
 /**
@@ -372,6 +381,8 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
       field_coverage_total: optNumber(e.field_coverage_total),
       requires_banner: optBool(e.requires_banner),
       purity: optNumber(e.purity),
+      max_k: optNumber(e.max_k),
+      select_max_k: optNumber(e.select_max_k),
     })),
     scores: normalizeAxis<ScoreInfo>(strategies, 'score', (base, e) => ({
       ...base,
@@ -386,6 +397,9 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
       (base, e) => ({
         ...base,
         default: optBool(e.default),
+        dedup_threshold_default: optNumber(e.dedup_threshold_default),
+        dedup_threshold_min: optNumber(e.dedup_threshold_min),
+        dedup_threshold_max: optNumber(e.dedup_threshold_max),
       }),
     ),
     detection_profiles: normalizeAxis<DetectionProfileInfo>(
@@ -524,6 +538,15 @@ export function isDatasetExportAvailable(
   return datasetExports.some(
     (e) => e.id === kind && (e.status === 'stable' || e.status === 'experimental'),
   );
+}
+
+/** The served near-duplicate threshold default of an export kind, or `null`
+ *  when the kind is absent or serves none (the option is then not offered). */
+export function exportDedupDefault(
+  datasetExports: DatasetExportInfo[],
+  kind: string | undefined,
+): number | null {
+  return datasetExports.find((e) => e.id === kind)?.dedup_threshold_default ?? null;
 }
 
 /**

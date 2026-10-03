@@ -3,6 +3,7 @@ import {
   EMPTY_METHODS,
   hasFieldCoverage,
   isDatasetExportAvailable,
+  exportDedupDefault,
   isDiverseOverlayAvailable,
   isEmbeddingVizAvailable,
   isEmbeddingVizBannerRequired,
@@ -438,6 +439,56 @@ describe('parseMethodsResponse', () => {
  * repo has no component-mount test harness to assert absence in the DOM
  * directly (see StrategyBar.test.ts's header comment).
  */
+describe('served bounds (v0.4.0 facts)', () => {
+  it('parses the diverse overlay caps and the export dedup threshold with bounds', () => {
+    const m = parseMethodsResponse({
+      strategies: [
+        {
+          id: 'diverse',
+          axis: 'overlay',
+          label: 'Diverse',
+          status: 'stable',
+          max_k: 10000,
+          select_max_k: 50000,
+        },
+        {
+          id: 'single_class',
+          axis: 'export',
+          label: 'Single class',
+          status: 'stable',
+          dedup_threshold_default: 0.98,
+          dedup_threshold_min: 0,
+          dedup_threshold_max: 1,
+        },
+        { id: 'yolo', axis: 'export', label: 'YOLO', status: 'stable' },
+      ],
+    });
+    expect(m.overlays[0]).toMatchObject({ max_k: 10000, select_max_k: 50000 });
+    expect(m.dataset_exports[0]).toMatchObject({
+      dedup_threshold_default: 0.98,
+      dedup_threshold_min: 0,
+      dedup_threshold_max: 1,
+    });
+    // Absent stays absent: nothing is filled in client-side.
+    expect(m.dataset_exports[1]!.dedup_threshold_default).toBeUndefined();
+  });
+});
+
+describe('exportDedupDefault', () => {
+  const exports = [
+    { id: 'single_class', label: 'S', status: 'stable', dedup_threshold_default: 0.9 },
+    { id: 'yolo', label: 'Y', status: 'stable' },
+  ] as DatasetExportInfo[];
+  it('is the served default of the kind', () => {
+    expect(exportDedupDefault(exports, 'single_class')).toBe(0.9);
+  });
+  it('is null for a kind that serves none, an unknown kind and no kind', () => {
+    expect(exportDedupDefault(exports, 'yolo')).toBeNull();
+    expect(exportDedupDefault(exports, 'nope')).toBeNull();
+    expect(exportDedupDefault(exports, undefined)).toBeNull();
+  });
+});
+
 describe('isDiverseOverlayAvailable', () => {
   it('is false when overlays is empty (pre-Phase-4 / Phase-0/3-only backend)', () => {
     expect(isDiverseOverlayAvailable([])).toBe(false);
