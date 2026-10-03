@@ -174,6 +174,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - Cloning a template no longer inherits its description, and `cloned_from` has no `@-` when the source has no revision.
 - Combine preview `target` serves `projected_images`/`projected_items`/`unclassed_items` (replacing `images`/`items`); unclassed items are copied, so they are now counted.
 - Promote warm-up covers batch 1 and `max_batch_size`, so `cold_start_expected_on_first_inference: false` holds for batched requests; single-class promotes write the project's class name into `labels.txt`.
+- `422 detector_not_servable` has a short `message` and distinct `reasons`; validation reports, combine previews and import previews serve a unique `id` per issue (`code[:subject]`, `#2` on a repeat); `GET /ingest/config` `detector.labels` skips id gaps, empty and repeated names; every structured error detail carries a `message`.
 - `GET /models/status` lists one row per Triton model name; typed error bodies omit fields their code does not carry.
 
 - Activating a config on any axis (prompt pack, region profile, open-vocabulary set, VLM)
