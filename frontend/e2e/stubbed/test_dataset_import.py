@@ -529,22 +529,23 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
 
     page.get_by_test_id("reprocess-open").click()
     dialog = page.get_by_role("dialog", name="Reprocess")
-    # The backend serves no reprocess vocabulary or lock-rule copy: the
-    # scopes are the contract's enums, labelled from their ids.
+    # Scope labels are the served reprocess vocabulary's.
     expect(dialog.get_by_test_id("reprocess-lock-rule")).to_have_count(0)
-    expect(dialog.locator("fieldset label")).to_have_text(["Detect", "Open vocab", "Region", "VLM", "Embed"])
-    dialog.get_by_label("Region", exact=True).check()
+    expect(dialog.locator("fieldset label")).to_have_text(
+        ["Find objects", "Find by description", "Region stage", "Vision model", "Compute vectors"]
+    )
+    dialog.get_by_label("Region stage", exact=True).check()
     dialog.get_by_role("combobox").select_option("redetect")
     with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Check what would run").click()
     # scope, selected, locked skipped, queued, failed, not found (omitted = em dash)
     expect(dialog.get_by_test_id("reprocess-dry-run").locator("tbody tr td")).to_have_text(
-        ["Region", "1", "0", "0", "\u2014", "\u2014"]
+        ["Region stage", "1", "0", "0", "\u2014", "\u2014"]
     )
     with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/reprocess")):
         dialog.get_by_role("button", name="Reprocess").click()
     expect(dialog.get_by_test_id("reprocess-result").locator("tbody tr td")).to_have_text(
-        ["Region", "1", "0", "1", "\u2014", "\u2014"]
+        ["Region stage", "1", "0", "1", "\u2014", "\u2014"]
     )
 
     selected = bodies[0]["targets"]["crop_ids"]

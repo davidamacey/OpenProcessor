@@ -234,6 +234,31 @@ def app_url() -> Any:
         _stop_group(proc)
 
 
+REPROCESS_VOCABULARY: dict = {
+    "scopes": [
+        {"id": i, "label": label, "description": f"{label}: served description"}
+        for i, label in [
+            ("detect", "Find objects"),
+            ("open_vocab", "Find by description"),
+            ("region", "Region stage"),
+            ("vlm", "Vision model"),
+            ("embed", "Compute vectors"),
+        ]
+    ],
+    "filter_fields": [],
+    "job_statuses": [],
+    "lock_reasons": [
+        {"id": i, "label": label, "description": f"{label}: served description"}
+        for i, label in [
+            ("human_label", "Human label"),
+            ("validated", "Validated"),
+            ("imported", "Imported"),
+            ("test_holdout", "Test holdout"),
+        ]
+    ],
+}
+
+
 class Stub:
     """Fail-closed router for `{api_prefix}/**`.
 
@@ -430,6 +455,10 @@ class Stub:
         # where every W10 surface is absent — so existing tests stay
         # green; test_dataset_import.py overrides it with served formats.
         self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
+        # The Reprocess dialog and the lock badge read the served
+        # `reprocess` block of `GET {prefix}/config/vocabulary` (only once
+        # W10 is served); tests that need the full vocabulary override it.
+        self.on("GET", r"/config/vocabulary(\?|$)", (200, {"reprocess": REPROCESS_VOCABULARY}))
         # W3 (prompt-pack CRUD): /settings and the pack pages probe
         # `GET {prefix}/prompt_packs` once per project. Defaults to a 404 —
         # a backend without W3, where every pack surface is absent — so

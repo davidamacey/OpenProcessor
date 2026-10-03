@@ -52,6 +52,7 @@ async function render(t: ReprocessTarget, props: Record<string, unknown> = {}) {
   document.body.appendChild(target);
   instance = mount(ReprocessControl, { target, props: { target: t, ...props } });
   await datasetsAvailability.init();
+  if (datasetsAvailability.available) await reprocessVocabularyStore.init();
   flushSync();
 }
 

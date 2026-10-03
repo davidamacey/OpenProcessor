@@ -47,14 +47,16 @@
     buttonLabel = 'Reprocess…',
   }: Props = $props();
 
+  const available = $derived(datasetsAvailability.available === true);
+
   $effect(() => {
     void datasetsAvailability.init();
-    void reprocessVocabularyStore.init();
+  });
+  $effect(() => {
+    if (available) void reprocessVocabularyStore.init();
   });
 
   const scopeLabel = (id: string): string => reprocessVocabularyStore.label('scopes', id);
-
-  const available = $derived(datasetsAvailability.available === true);
 
   let flow = $state<ReprocessFlow | null>(null);
 

@@ -34,10 +34,11 @@
   let { impact }: Props = $props();
 
   $effect(() => {
-    if (impact.suggested_reprocess) {
-      void datasetsAvailability.init();
+    if (impact.suggested_reprocess) void datasetsAvailability.init();
+  });
+  $effect(() => {
+    if (impact.suggested_reprocess && datasetsAvailability.available === true)
       void reprocessVocabularyStore.init();
-    }
   });
 
   const available = $derived(datasetsAvailability.available === true);

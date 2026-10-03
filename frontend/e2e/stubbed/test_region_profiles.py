@@ -24,7 +24,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from conftest import ACTION_TIMEOUT_MS, REPROCESS_VOCABULARY, expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}
@@ -130,6 +130,7 @@ VOCABULARY: dict[str, Any] = {
         {"class_id": 0, "class_name": "widget", "choice": {"id": "widget", "label": "widget"}}
     ],
     "prompt_pack_calls": [],
+    "reprocess": REPROCESS_VOCABULARY,
     "labels": {"scope": {}},
 }
 
@@ -525,7 +526,7 @@ def test_activate_force_then_impact_and_rerun(stub, page, app_url):
     with expect_handled(page, lambda r: r.url.endswith("/reprocess")):
         confirm.get_by_role("button", name="Re-run", exact=True).click()
     expect(impact.get_by_test_id("rerun-result").locator("tbody tr td")).to_have_text(
-        ["Region", "940", "12", "928", "\u2014", "\u2014"], timeout=ACTION_TIMEOUT_MS
+        ["Region stage", "940", "12", "928", "\u2014", "\u2014"], timeout=ACTION_TIMEOUT_MS
     )
     expect(impact.get_by_test_id("rerun-job")).to_contain_text("rp-1")
     assert reprocesses[1] == {**SUGGESTED, "dry_run": False}, reprocesses
