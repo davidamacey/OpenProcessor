@@ -7,7 +7,7 @@
  * A `config.changed` event on the resource's axis is a wake-up to re-read;
  * the served list stays the only source.
  */
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import type { CurationEvent } from '$lib/sse';
 import type {
   ConfigCloneRequest,
@@ -58,7 +58,7 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
           this.loadError = null;
         } catch (e) {
           if ((e as Error)?.name === 'AbortError') return;
-          this.loadError = configErrorText(e);
+          this.loadError = apiErrorText(e);
         }
       })(),
       this.active.load(),
@@ -93,7 +93,7 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
       await this.load();
       return true;
     } catch (e) {
-      this.deleteError = configErrorText(e);
+      this.deleteError = apiErrorText(e);
       if (configErrorDetail(e)?.error === 'revision_conflict') await this.load();
       return false;
     } finally {
@@ -124,7 +124,7 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
         description: description.trim() || null,
       });
     } catch (e) {
-      this.cloneError = configErrorText(e);
+      this.cloneError = apiErrorText(e);
       this.cloneReport = configErrorDetail(e)?.report ?? null;
       return null;
     } finally {

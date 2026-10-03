@@ -19,7 +19,7 @@
  * `local_vlm` re-reads the local status, and the project's
  * `config.changed axis=vlm` re-reads the active ref.
  */
-import { configErrorDetail, configErrorText, getConfigVocabulary } from '$lib/api';
+import { configErrorDetail, apiErrorText, getConfigVocabulary } from '$lib/api';
 import {
   clearLocalVlmSelection,
   cloneVlmEndpoint,
@@ -163,7 +163,7 @@ export class VlmModels extends ConfigList<
       this.loadError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
     }
   }
 
@@ -176,7 +176,7 @@ export class VlmModels extends ConfigList<
       this.#armPoll();
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.catalogError = configErrorText(e);
+      this.catalogError = apiErrorText(e);
     }
   }
 
@@ -190,7 +190,7 @@ export class VlmModels extends ConfigList<
       if (this.catalog && !local.restart_required) await this.loadCatalog();
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.catalogError = configErrorText(e);
+      this.catalogError = apiErrorText(e);
       // Keep following the last served `poll_after_s`.
       this.#armPoll();
     }
@@ -219,7 +219,7 @@ export class VlmModels extends ConfigList<
       this.modelChoicesError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.modelChoicesError = configErrorText(e);
+      this.modelChoicesError = apiErrorText(e);
     }
   }
 
@@ -242,7 +242,7 @@ export class VlmModels extends ConfigList<
       };
       await this.loadRegistry();
     } catch (e) {
-      this.probeErrors = { ...this.probeErrors, [name]: configErrorText(e) };
+      this.probeErrors = { ...this.probeErrors, [name]: apiErrorText(e) };
     } finally {
       this.probing = null;
     }
@@ -265,7 +265,7 @@ export class VlmModels extends ConfigList<
       await this.loadCatalog();
       return true;
     } catch (e) {
-      this.localError = configErrorText(e);
+      this.localError = apiErrorText(e);
       this.localErrorCode = configErrorDetail(e)?.error ?? null;
       return false;
     } finally {
@@ -286,7 +286,7 @@ export class VlmModels extends ConfigList<
       await this.loadCatalog();
       return true;
     } catch (e) {
-      this.localError = configErrorText(e);
+      this.localError = apiErrorText(e);
       this.localErrorCode = configErrorDetail(e)?.error ?? null;
       return false;
     } finally {

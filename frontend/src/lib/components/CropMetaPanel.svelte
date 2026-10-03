@@ -526,7 +526,7 @@
         {#if data?.provenance?.chain && data.provenance.chain.length > 0}
           <dt class="text-zinc-500">Cascade</dt>
           <dd class="flex flex-wrap items-center gap-1">
-            {#each data.provenance.chain as entry (entry)}
+            {#each data.provenance.chain as entry, i (i)}
               <ProvenanceChip raw={entry} size="sm" />
             {/each}
           </dd>

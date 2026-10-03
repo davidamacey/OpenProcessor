@@ -5,7 +5,7 @@
  * on screen. The "re-run gate-skipped" request is the served
  * `rerun_skipped`, handed to the reprocess dialog as served.
  */
-import { configErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api';
 import {
   getRegionStage,
   pauseRegionStage,
@@ -43,7 +43,7 @@ export class RegionStage {
       this.loadError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
     }
   }
 
@@ -69,7 +69,7 @@ export class RegionStage {
       this.confirming = null;
       return true;
     } catch (e) {
-      this.actionError = configErrorText(e);
+      this.actionError = apiErrorText(e);
       return false;
     } finally {
       this.busy = false;

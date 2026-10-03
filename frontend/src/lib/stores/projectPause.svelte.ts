@@ -13,7 +13,7 @@
  * keyed by slug and every value belongs to its project.
  */
 import { SvelteMap } from 'svelte/reactivity';
-import { getProjectPause, pauseProject, projectErrorText, resumeProject } from '$lib/api';
+import { getProjectPause, pauseProject, apiErrorText, resumeProject } from '$lib/api';
 import type { PipelinePauseState, ProjectSummary } from '$lib/types_projects';
 
 type PauseTarget = Pick<ProjectSummary, 'slug' | 'prefix'>;
@@ -62,7 +62,7 @@ class ProjectPauseStore {
       if (this.#seq.get(project.slug) === mine) this.#state.set(project.slug, res);
       return { ok: true, paused: res.paused };
     } catch (e) {
-      return { ok: false, message: projectErrorText(e) };
+      return { ok: false, message: apiErrorText(e) };
     }
   }
 

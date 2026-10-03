@@ -29,7 +29,7 @@
     const names = extra
       .split(',')
       .map((s) => s.trim())
-      .filter((s) => s !== '' && !value.includes(s));
+      .filter((s, i, all) => s !== '' && !value.includes(s) && all.indexOf(s) === i);
     if (names.length > 0) onchange([...value, ...names]);
     extra = '';
   }
@@ -39,7 +39,7 @@
   <p class="text-xs text-zinc-400">{label}</p>
   {#if options.length > 0}
     <div class="flex max-h-32 flex-wrap gap-x-3 gap-y-1 overflow-y-auto text-xs">
-      {#each options as name (name)}
+      {#each options as name, i (i)}
         <label class="flex items-center gap-1">
           <input
             type="checkbox"
@@ -53,7 +53,7 @@
   {/if}
   {#if extras.length > 0}
     <div class="flex flex-wrap gap-1">
-      {#each extras as name (name)}
+      {#each extras as name, i (i)}
         <button
           type="button"
           class="chip"

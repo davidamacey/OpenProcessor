@@ -8,7 +8,7 @@
  * report kept apart). New targets take the served rows' defaults; no
  * client rule checks a value.
  */
-import { configErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api';
 import {
   getOpenVocab,
   getOpenVocabRevision,
@@ -161,7 +161,7 @@ export class OpenVocabEditor extends ConfigEditor<
       );
       this.activationCheckError = null;
     } catch (e) {
-      this.activationCheckError = configErrorText(e);
+      this.activationCheckError = apiErrorText(e);
     } finally {
       this.activationChecking = false;
     }

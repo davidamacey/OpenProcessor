@@ -10,6 +10,7 @@ import {
   apiBase,
   API_PREFIX,
   ApiError,
+  apiErrorText,
   cancelScores,
   cancelSelect,
   computeScores,
@@ -72,10 +73,45 @@ describe('ApiError', () => {
     );
   });
 
+  it('shows the served message sentence of a structured detail, not its error code', () => {
+    const e = new ApiError(409, URL, {
+      detail: { error: 'revision_conflict', message: 'Someone else saved revision 4.' },
+    });
+    expect(e.detail).toBe('Someone else saved revision 4.');
+    expect(e.message).toBe(`API 409 ${URL} — Someone else saved revision 4.`);
+  });
+
+  it('control: a structured detail with no message still shows its code', () => {
+    const e = new ApiError(422, URL, { detail: { error: 'region_text_disabled' } });
+    expect(e.detail).toBe('region_text_disabled');
+  });
+
   it('honors an explicit message override', () => {
     const e = new ApiError(404, URL, { detail: 'nope' }, 'custom');
     expect(e.message).toBe('custom');
     expect(e.detail).toBe('nope');
+  });
+});
+
+describe('apiErrorText', () => {
+  it('prefers the structured message, then the detail, then the error message', () => {
+    expect(
+      apiErrorText(
+        new ApiError(409, URL, { detail: { error: 'x_code', message: 'The sentence.' } }),
+      ),
+    ).toBe('The sentence.');
+    expect(apiErrorText(new ApiError(503, URL, { detail: 'segmenter down' }))).toBe(
+      'segmenter down',
+    );
+    expect(
+      apiErrorText(
+        new ApiError(422, URL, {
+          detail: [{ loc: ['body', 'name'], msg: 'Field required' }],
+        }),
+      ),
+    ).toBe('name: Field required');
+    expect(apiErrorText(new Error('network down'))).toBe('network down');
+    expect(apiErrorText(new ApiError(500, URL, null))).toBe(`API 500 ${URL}`);
   });
 });
 
@@ -868,6 +904,54 @@ describe('getCluster order param', () => {
  * caller (gated by {API_PREFIX}/methods, see strategies.test.ts's
  * isDiverseOverlayAvailable coverage) decided to send.
  */
+describe('getCluster card lookup failure', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stub(clustersResponse: () => Response) {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url.startsWith(`${API_PREFIX}/crops`)
+              ? new Response(
+                  JSON.stringify({ total: 3, page: 1, page_size: 60, crops: [] }),
+                  { status: 200, headers: { 'content-type': 'application/json' } },
+                )
+              : clustersResponse(),
+          ),
+        ),
+    );
+  }
+
+  it('reports why the cluster card could not be read instead of hiding the failure', async () => {
+    stub(
+      () =>
+        new Response(JSON.stringify({ detail: 'aggregation unavailable' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    const res = await getCluster(42);
+    expect(res.cardError).toBe('aggregation unavailable');
+    expect(res.crops.total).toBe(3);
+  });
+
+  it('control: a served card reports no error', async () => {
+    stub(
+      () =>
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    expect((await getCluster(42)).cardError).toBeNull();
+  });
+});
+
 describe('getCluster k param', () => {
   const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {

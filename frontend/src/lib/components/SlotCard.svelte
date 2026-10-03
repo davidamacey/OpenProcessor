@@ -311,7 +311,7 @@
       </div>
       {#if !compact && slot.capabilities.provenance?.showChainOnCard && data.provenance?.chain && data.provenance.chain.length > 0}
         <div class="flex min-w-0 flex-wrap gap-0.5">
-          {#each data.provenance.chain as entry (entry)}
+          {#each data.provenance.chain as entry, i (i)}
             <ProvenanceChip raw={entry} size="sm" />
           {/each}
         </div>

@@ -14,7 +14,7 @@
  * would be a second, driftable copy of the real guard.
  */
 
-import { projectErrorText } from './api';
+import { apiErrorText } from './api';
 import type { ModelInfo } from './types';
 
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
@@ -88,5 +88,5 @@ export function unloadForceConfirmMessage(model: Pick<ModelInfo, 'name'>): strin
  * wrapper's "API 403 <url>" prefix.
  */
 export function unloadFailureMessage(e: unknown): string {
-  return `Unload failed: ${projectErrorText(e)}`;
+  return `Unload failed: ${apiErrorText(e)}`;
 }

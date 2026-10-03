@@ -28,6 +28,7 @@
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import MultiBoxCanvas from '$lib/components/MultiBoxCanvas.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
+  import RejectedBoxChips from '$lib/components/review/RejectedBoxChips.svelte';
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
@@ -2737,25 +2738,10 @@
                        compatibility). Show a needs-review/rejected chip
                        per rejected box, styled by the served kind, same
                        as before — worded per-box, not per-item. -->
-                  {#each multiBox.boxes.filter((b) => b.state === 'rejected') as b (b.boxId)}
-                    {@const kind = regionVocabularyStore.rejectionReasonKind(
-                      slotData?.subBoxes?.find((sb) => sb.boxId === b.boxId)
-                        ?.rejectionReason ?? null,
-                    )}
-                    <span
-                      class={`rounded border px-1.5 py-0.5 text-[10px] ${
-                        kind === 'needs_human'
-                          ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
-                          : kind === 'model_verdict'
-                            ? 'border-red-500/40 bg-red-500/15 text-red-200'
-                            : 'border-amber-500/40 bg-amber-500/15 text-amber-200'
-                      }`}
-                    >
-                      {kind === 'needs_human'
-                        ? 'candidate · needs review'
-                        : 'rejected · confirm to accept'}
-                    </span>
-                  {/each}
+                  <RejectedBoxChips
+                    boxes={multiBox.boxes}
+                    subBoxes={slotData?.subBoxes}
+                  />
                   {#if multiBox.boxes.length === 0 && !editMode}
                     <span
                       class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
@@ -2768,7 +2754,7 @@
               {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
                 <span class="text-zinc-500">Cascade</span>
                 <span class="flex flex-wrap items-center gap-1">
-                  {#each slotData.provenance.chain as entry (entry)}
+                  {#each slotData.provenance.chain as entry, i (i)}
                     <ProvenanceChip raw={entry} size="sm" />
                   {/each}
                 </span>

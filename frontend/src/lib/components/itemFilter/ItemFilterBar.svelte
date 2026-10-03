@@ -91,7 +91,7 @@
     </details>
   {/if}
 
-  {#each chips as chip (chip.label)}
+  {#each chips as chip, i (`${chip.param}:${i}`)}
     <button
       type="button"
       class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"

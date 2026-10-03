@@ -272,4 +272,15 @@ describe('ServedFilterField kinds', () => {
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     expect(onchange).toHaveBeenCalledWith('p', ['widget', 'gadget']);
   });
+
+  describe('ItemFilterBar chips', () => {
+    it('draws a chip per entry even when a class name is listed twice', () => {
+      const state = new ItemFilterState();
+      state.classNames = ['widget', 'widget'];
+      instance = mount(ItemFilterBar, { target, props: { state } });
+      flushSync();
+      expect(target.querySelectorAll('button.chip').length).toBeGreaterThanOrEqual(2);
+      expect(target.textContent).toContain('widget');
+    });
+  });
 });

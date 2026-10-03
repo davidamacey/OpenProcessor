@@ -10,7 +10,7 @@
  * served report; `force` is only ever sent by a caller that saw its
  * `force_allowed`.
  */
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import type {
   ActiveConfigResponse,
   ActiveRef,
@@ -67,7 +67,7 @@ export class ConfigActive<W extends ActiveConfigResponse = ActiveConfigResponse>
       this.loadError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
     }
   }
 
@@ -125,7 +125,7 @@ export class ConfigActive<W extends ActiveConfigResponse = ActiveConfigResponse>
       this.onchanged?.();
       return true;
     } catch (e) {
-      this.actionError = configErrorText(e);
+      this.actionError = apiErrorText(e);
       const d = configErrorDetail(e);
       this.errorDetail = d;
       if (d?.report) this.activateReport = d.report;

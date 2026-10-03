@@ -125,6 +125,17 @@ describe('detectorErrorLines', () => {
     ]);
   });
 
+  it('shows a reason that repeats the message once (the backend sends message == its only reason)', () => {
+    const e = new ApiError(422, 'u', {
+      detail: {
+        error: 'detector_not_servable',
+        message: 'det_v2 is not ready',
+        reasons: ['det_v2 is not ready'],
+      },
+    });
+    expect(detectorErrorLines(e)).toEqual(['det_v2 is not ready']);
+  });
+
   it('names the unknown detector labels of a seed refusal', () => {
     const e = new ApiError(422, 'u', {
       detail: {

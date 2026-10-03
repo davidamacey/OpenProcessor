@@ -10,7 +10,7 @@
  * `segmenter_error` is an error, never "no hits"; every refusal reads as
  * served. Nothing here draws or judges a hit.
  */
-import { ApiError, configErrorDetail, configErrorText, getCrop } from '$lib/api';
+import { ApiError, configErrorDetail, apiErrorText, getCrop } from '$lib/api';
 import { testOpenVocab } from '$lib/api_openVocab';
 import type {
   OpenVocabTargetBody,
@@ -91,7 +91,7 @@ export class OpenVocabTest {
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.result = null;
-      this.error = configErrorText(e);
+      this.error = apiErrorText(e);
       this.segmenterError = configErrorDetail(e)?.error === 'segmenter_error';
     } finally {
       if (this.#abort === ctl) {
@@ -117,7 +117,7 @@ export class OpenVocabTest {
       this.error =
         e instanceof ApiError && e.status === 404
           ? `Crop ${cropId} was not found.`
-          : configErrorText(e);
+          : apiErrorText(e);
       return null;
     }
   }

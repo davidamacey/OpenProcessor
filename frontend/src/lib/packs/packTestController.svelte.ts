@@ -12,7 +12,7 @@
  * reply.
  */
 import { untrack } from 'svelte';
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import { testPromptPack } from '$lib/api_configTest';
 import type { Crop } from '$lib/types';
 import type {
@@ -120,7 +120,7 @@ export class PackTest {
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.result = null;
-      this.error = configErrorText(e);
+      this.error = apiErrorText(e);
       const d = configErrorDetail(e);
       this.errorReport = d?.report ?? null;
       this.missingCropIds = d?.error === 'crop_not_found' ? (d.crop_ids ?? []) : [];

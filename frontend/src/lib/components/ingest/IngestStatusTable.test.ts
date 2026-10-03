@@ -48,4 +48,22 @@ describe('IngestStatusTable', () => {
       expect(target.textContent).toContain('opensearch outage');
     });
   });
+  it('reads the status once on mount, then once per 10 s tick', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getIngestStatus).mockResolvedValue({
+        total: 1,
+        by_source: [],
+        by_day: [],
+      });
+      instance = mount(IngestStatusTable, { target, props: {} });
+      flushSync();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getIngestStatus).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(getIngestStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

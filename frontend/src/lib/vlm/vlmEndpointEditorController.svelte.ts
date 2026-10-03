@@ -16,7 +16,7 @@
  * keeps the response's facts. The wake-up follows `vlm.changed`
  * (`registry`) and the project's `config.changed axis=vlm`.
  */
-import { configErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api';
 import {
   getVlmCatalog,
   getVlmEndpoint,
@@ -123,7 +123,7 @@ export class VlmEndpointEditor extends ConfigEditor<
     this.catalog = catalog.status === 'fulfilled' ? catalog.value : null;
     const failed = [list, catalog].find((r) => r.status === 'rejected');
     this.extrasError = failed
-      ? configErrorText((failed as PromiseRejectedResult).reason)
+      ? apiErrorText((failed as PromiseRejectedResult).reason)
       : null;
   }
 
@@ -158,7 +158,7 @@ export class VlmEndpointEditor extends ConfigEditor<
       );
       this.doc = await (this.#deps.getVlmEndpoint ?? getVlmEndpoint)(this.name);
     } catch (e) {
-      this.probeError = configErrorText(e);
+      this.probeError = apiErrorText(e);
     } finally {
       this.probing = false;
     }

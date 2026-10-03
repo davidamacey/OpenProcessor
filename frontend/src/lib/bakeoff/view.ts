@@ -69,10 +69,6 @@ export function metricUnit(key: string): string {
   return 'percent, higher is better';
 }
 
-export function formatCount(v: number | null | undefined): string {
-  return v == null ? MISSING : v.toLocaleString();
-}
-
 /** Export test splits first (served order), then external datasets grouped
  *  by their served `group`, groups in order of first appearance. */
 export function groupEvalDatasets(datasets: EvalDataset[]): {

@@ -34,6 +34,17 @@ describe('createPager', () => {
     expect(fetchPage).toHaveBeenNthCalledWith(2, 2);
   });
 
+  it('loadFirst and loadPage drop a key repeated within one served page (keyed grids throw on a duplicate)', async () => {
+    const pager = createPager<Row>({
+      fetchPage: async () => ({ items: rows('a', 'b', 'a'), total: 3 }),
+      keyOf: (r) => r.id,
+    });
+    await pager.loadFirst();
+    expect(pager.items.map((r) => r.id)).toEqual(['a', 'b']);
+    await pager.loadPage(2);
+    expect(pager.items.map((r) => r.id)).toEqual(['a', 'b']);
+  });
+
   it('loadMore is a no-op once everything is loaded', async () => {
     const fetchPage = vi.fn(async () => ({ items: rows('a'), total: 1 }));
     const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });

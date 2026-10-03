@@ -1528,7 +1528,7 @@
                 <div
                   class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
                 >
-                  {#each cohortPreview as item ('crop_id' in item ? item.crop_id : item.id)}
+                  {#each cohortPreview as item ('crop_id' in item ? `${item.crop_id}:${item.region_box_id ?? ''}` : item.id)}
                     {#if activeCohort.rowKind === 'slot'}
                       {@const cohortSlot = regionSlotForGroup(group)}
                       {#if cohortSlot}

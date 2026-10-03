@@ -9,7 +9,7 @@
  * Create posts `{name, description, body}`. A 409 `name_conflict` / 422
  * `validation_failed` shows the served message and report.
  */
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import {
   createVlmEndpoint,
   getVlmCatalog,
@@ -83,7 +83,7 @@ export class VlmEndpointCreator {
       this.loadError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
     }
   }
 
@@ -146,7 +146,7 @@ export class VlmEndpointCreator {
       this.validateError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.validateError = configErrorText(e);
+      this.validateError = apiErrorText(e);
     } finally {
       if (this.#abort === ctl) {
         this.validating = false;
@@ -175,7 +175,7 @@ export class VlmEndpointCreator {
         body: this.draftBody,
       });
     } catch (e) {
-      this.createError = configErrorText(e);
+      this.createError = apiErrorText(e);
       this.createReport = configErrorDetail(e)?.report ?? null;
       return null;
     } finally {

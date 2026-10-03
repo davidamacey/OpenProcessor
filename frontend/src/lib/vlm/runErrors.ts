@@ -3,10 +3,10 @@
  * `auto_label/start`): 422 `unknown_vlm` (axis / requested / valid ids),
  * 422 `vlm_external_not_acknowledged`, 409 `vlm_not_configured`, 409
  * `vlm_endpoint_unavailable` and a pairing 422 `validation_failed` (its
- * message and how many issues the served report lists). Anything else is
- * the error's own message.
+ * message and how many issues the served report lists). Anything else reads
+ * through `apiErrorText`.
  */
-import { configErrorDetail, unknownStrategyDetail } from '$lib/api';
+import { apiErrorText, configErrorDetail, unknownStrategyDetail } from '$lib/api';
 
 export function vlmRunErrorText(e: unknown): string {
   const unknown = unknownStrategyDetail(e);
@@ -20,5 +20,5 @@ export function vlmRunErrorText(e: unknown): string {
       ? `${d.message} (${n} issue${n === 1 ? '' : 's'})`
       : d.message;
   }
-  return (e as Error)?.message ?? String(e);
+  return apiErrorText(e);
 }

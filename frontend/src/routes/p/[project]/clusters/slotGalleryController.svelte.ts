@@ -14,6 +14,7 @@
  * convention (a plain object of `$state` fields + closures, not a class).
  */
 
+import { untrack } from 'svelte';
 import {
   batchRegionStatus,
   buildRegionFpCentroids,
@@ -81,7 +82,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       rowsTruncated = res.rows_truncated ?? false;
       return res;
     },
-    keyOf: (p) => p.crop_id,
+    keyOf: (p) => `${p.crop_id}:${p.region_box_id ?? ''}`,
   });
 
   // Region triage: multi-select for bulk actions + the inline bbox editor.
@@ -294,25 +295,91 @@ export function createSlotGalleryController(slot: SlotSpec) {
     }
   }
 
+  // Filter-driven reloads, called from one page $effect (so the state it
+  // reads is what the effect tracks). Discrete filters reload the browse
+  // at once; typed ones (text, min score) wait for a pause, since each
+  // reload is a request. The cluster grid depends only on the rank gate and
+  // the selected bucket, so a filter change never refetches it.
+  const TYPED_FILTER_DEBOUNCE_MS = 250;
+  let lastBrowseKey: string | null = null;
+  let lastTypedKey: string | null = null;
+  let lastClusterKey: string | null = null;
+  let typedDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  function reloadOnFilterChange(): void {
+    const browseKey = JSON.stringify([
+      detectorFilter,
+      verifiedOnly,
+      statusFilter,
+      boxStateFilter,
+      maxRank,
+      selectedCluster,
+    ]);
+    const typedKey = JSON.stringify([minScore, textQuery]);
+    const clusterKey = JSON.stringify([maxRank, selectedCluster]);
+    const clustersNeeded = selectedCluster == null && clusterKey !== lastClusterKey;
+    untrack(() => {
+      if (browseKey !== lastBrowseKey) {
+        if (typedDebounce) clearTimeout(typedDebounce);
+        typedDebounce = null;
+        void loadFirst();
+      } else if (typedKey !== lastTypedKey) {
+        if (typedDebounce) clearTimeout(typedDebounce);
+        typedDebounce = setTimeout(() => {
+          typedDebounce = null;
+          if (!disposed) void loadFirst();
+        }, TYPED_FILTER_DEBOUNCE_MS);
+      }
+      if (clustersNeeded) void loadClusters();
+    });
+    lastBrowseKey = browseKey;
+    lastTypedKey = typedKey;
+    lastClusterKey = clusterKey;
+  }
+
+  // Set by the owning page's teardown: the clustering polls below stop, and
+  // finish silently, once nobody is looking at this controller any more.
+  let disposed = false;
+  const JOB_POLL_MS = 3000;
+  const MAX_CONSECUTIVE_POLL_ERRORS = 3;
+
+  /** Poll `read` until the job stops running. Resolves `null` when disposed.
+   *  A failed read is transient (apiFetch already retried a 5xx) and only
+   *  ends the poll after several in a row. */
+  async function pollUntilDone<T extends { running: boolean }>(
+    read: () => Promise<T>,
+  ): Promise<T | null> {
+    let failures = 0;
+    while (true) {
+      await new Promise((r) => setTimeout(r, JOB_POLL_MS));
+      if (disposed) return null;
+      try {
+        const job = await read();
+        if (disposed) return null;
+        failures = 0;
+        if (!job.running) return job;
+      } catch (e) {
+        if (disposed) return null;
+        if (++failures >= MAX_CONSECUTIVE_POLL_ERRORS) throw e;
+      }
+    }
+  }
+
   async function runBuildFpCentroids(): Promise<void> {
     if (clusterBusy) return;
     clusterBusy = true;
     try {
       await buildRegionFpCentroids();
       toastStore.info('Building FP centroids… sub-typing the false-positive bucket.');
-      while (true) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const job = await getRegionFpCentroidStatus();
-        if (job.running) continue;
-        if (job.error) {
-          toastStore.error(`Build FP centroids failed: ${job.error}`);
-        } else if (job.result) {
-          toastStore.success(
-            `FP centroids built: ${job.result.n_members} members → ${job.result.k} sub-types.`,
-          );
-          await loadClusters();
-        }
-        break;
+      const job = await pollUntilDone(() => getRegionFpCentroidStatus());
+      if (job === null) return;
+      if (job.error) {
+        toastStore.error(`Build FP centroids failed: ${job.error}`);
+      } else if (job.result) {
+        toastStore.success(
+          `FP centroids built: ${job.result.n_members} members → ${job.result.k} sub-types.`,
+        );
+        await loadClusters();
       }
     } catch (e) {
       toastStore.error(`Build FP centroids failed: ${(e as Error).message}`);
@@ -332,27 +399,23 @@ export function createSlotGalleryController(slot: SlotSpec) {
       toastStore.info(
         `Clustering ${slot.label.plural}… rebuilding FP centroids, pulling FPs, re-bucketing.`,
       );
-      while (true) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const job = await getRegionClusterStatus();
-        if (job.running) continue;
-        if (job.error) {
-          toastStore.error(`Cluster ${slot.label.plural} failed: ${job.error}`);
-        } else if (job.result) {
-          const r = job.result;
-          const moved = r.auto_fp?.n_moved ?? 0;
-          if (r.status === 'skipped_repartition_ttl') {
-            toastStore.success(
-              `Auto-moved ${moved} crop(s) to false positives. Good-${slot.label.singular} re-partition skipped to preserve a refine from the last few minutes — re-run shortly to include it.`,
-            );
-          } else {
-            toastStore.success(
-              `Clustered ${r.n_regions ?? 0} ${slot.label.plural} into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
-            );
-          }
-          await loadClusters();
+      const job = await pollUntilDone(() => getRegionClusterStatus());
+      if (job === null) return;
+      if (job.error) {
+        toastStore.error(`Cluster ${slot.label.plural} failed: ${job.error}`);
+      } else if (job.result) {
+        const r = job.result;
+        const moved = r.auto_fp?.n_moved ?? 0;
+        if (r.status === 'skipped_repartition_ttl') {
+          toastStore.success(
+            `Auto-moved ${moved} crop(s) to false positives. Good-${slot.label.singular} re-partition skipped to preserve a refine from the last few minutes — re-run shortly to include it.`,
+          );
+        } else {
+          toastStore.success(
+            `Clustered ${r.n_regions ?? 0} ${slot.label.plural} into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
+          );
         }
-        break;
+        await loadClusters();
       }
     } catch (e) {
       toastStore.error(`Cluster ${slot.label.plural} failed: ${(e as Error).message}`);
@@ -774,6 +837,12 @@ export function createSlotGalleryController(slot: SlotSpec) {
     loadSuspectedFp,
     runBuildFpCentroids,
     runClustering,
+    reloadOnFilterChange,
+    dispose(): void {
+      disposed = true;
+      if (typedDebounce) clearTimeout(typedDebounce);
+      typedDebounce = null;
+    },
     runRefineCluster,
     openCluster,
     openAll,

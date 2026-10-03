@@ -128,4 +128,24 @@ describe('DetectionsSummaryPanel', () => {
     await render();
     expect(q('detections-error')!.textContent).toContain('index down');
   });
+
+  describe('DetectionsSummaryPanel labels', () => {
+    it('renders two rows with the same label name (the backend names a missing label "(no label)")', async () => {
+      const row = {
+        name: '(no label)',
+        count: 3,
+        embedding: { embedded: 3, not_embedded: 0, by_state: {} },
+      };
+      serve({
+        ...SUMMARY,
+        by_label: [row, { ...row, count: 4 }],
+        suggested_reprocess: null,
+      });
+      await render();
+      expect(
+        q('detections-by-label')!.querySelectorAll('tr').length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(q('detections-by-label')!.textContent).toContain('4');
+    });
+  });
 });

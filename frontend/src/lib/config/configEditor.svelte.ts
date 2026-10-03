@@ -13,7 +13,7 @@
  * re-reads the active ref, and the doc when it names this one and the
  * draft is clean (a dirty draft gets a notice instead).
  */
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import type { CurationEvent } from '$lib/sse';
 import type {
   ActiveConfigResponse,
@@ -179,7 +179,7 @@ export class ConfigEditor<
       await this.loadRevisions();
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
     }
   }
 
@@ -192,7 +192,7 @@ export class ConfigEditor<
       this.revisions = (await this.backend.getRevisions(this.name)).revisions;
       this.revisionError = null;
     } catch (e) {
-      this.revisionError = configErrorText(e);
+      this.revisionError = apiErrorText(e);
     }
   }
 
@@ -222,7 +222,7 @@ export class ConfigEditor<
       this.adopt(await this.backend.getDoc(this.name));
       await this.loadRevisions();
     } catch (e2) {
-      this.loadError = configErrorText(e2);
+      this.loadError = apiErrorText(e2);
     }
   }
 
@@ -262,7 +262,7 @@ export class ConfigEditor<
       this.validateError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.validateError = configErrorText(e);
+      this.validateError = apiErrorText(e);
     } finally {
       if (this.#validateAbort === ctl) {
         this.validating = false;
@@ -299,7 +299,7 @@ export class ConfigEditor<
           currentRevision: d.current_revision ?? null,
         };
       } else {
-        this.saveError = configErrorText(e);
+        this.saveError = apiErrorText(e);
         if (d?.report) this.report = d.report;
       }
       return false;
@@ -315,7 +315,7 @@ export class ConfigEditor<
       this.adopt(await this.backend.getDoc(this.name));
       await this.loadRevisions();
     } catch (e) {
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
     }
   }
 
@@ -331,7 +331,7 @@ export class ConfigEditor<
     try {
       this.viewing = await this.backend.getRevision(this.name, revision);
     } catch (e) {
-      this.revisionError = configErrorText(e);
+      this.revisionError = apiErrorText(e);
     }
   }
 

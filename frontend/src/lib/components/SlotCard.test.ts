@@ -252,4 +252,15 @@ describe('SlotCard — W10 image Reprocess', () => {
     flushSync();
     expect(entry(el2)).toBeNull();
   });
+
+  describe('SlotCard — provenance chain', () => {
+    it('renders every step of a chain that repeats an entry (a keyed list must not throw)', () => {
+      const el = renderCard(
+        fakeRegionItem({
+          region_detector_chain: ['tag_detector_v1:miss', 'tag_detector_v1:miss'],
+        }),
+      );
+      expect(el.textContent?.match(/miss/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

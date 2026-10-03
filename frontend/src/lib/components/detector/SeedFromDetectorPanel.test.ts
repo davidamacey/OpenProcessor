@@ -102,4 +102,31 @@ describe('SeedFromDetectorPanel', () => {
     expect(vi.mocked(deps.seed).mock.calls[1]![0]).toEqual({ dry_run: false });
     await vi.waitFor(() => expect(deps.onSeeded).toHaveBeenCalledTimes(1));
   });
+  it('mounts with a detector label list that repeats a name (id gaps are served as empty names)', async () => {
+    render({
+      getConfig: async () => ({
+        detector: {
+          model: 'm',
+          version: '1',
+          input_size: 640,
+          assigns_class: false,
+          confidence_floor_applies: false,
+          n_labels: 3,
+          labels: [
+            { class_id: 0, name: 'a', slug: 'a' },
+            { class_id: 1, name: '', slug: '' },
+            { class_id: 2, name: '', slug: '' },
+          ],
+        },
+      }),
+    });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('seed-panel')).not.toBeNull();
+    });
+    expect(
+      document.querySelectorAll('[data-testid="seed-panel"] input[type="checkbox"]')
+        .length,
+    ).toBe(3);
+  });
 });

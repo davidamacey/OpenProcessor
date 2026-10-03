@@ -10,7 +10,7 @@ import {
   cancelDatasetImport,
   cancelReprocessJob,
   datasetErrorDetail,
-  datasetErrorText,
+  apiErrorText,
   getDatasetFormats,
   getDatasetImport,
   getDatasetImportEntries,
@@ -199,7 +199,7 @@ describe('W10 wrappers hit the scoped routes', () => {
   });
 });
 
-describe('datasetErrorDetail / datasetErrorText', () => {
+describe('datasetErrorDetail / apiErrorText', () => {
   it('reads the structured detail and prefers its served message', async () => {
     vi.stubGlobal(
       'fetch',
@@ -226,13 +226,13 @@ describe('datasetErrorDetail / datasetErrorText', () => {
       error: 'class_mapping_incomplete',
       unmapped: ['sprocket', 'cog'],
     });
-    expect(datasetErrorText(err)).toBe('Two classes still need a mapping.');
+    expect(apiErrorText(err)).toBe('Two classes still need a mapping.');
   });
 
   it('falls back to the generic detail for an unstructured error', () => {
     const e = new ApiError(400, '/x', { detail: 'bad body' });
     expect(datasetErrorDetail(e)).toBeNull();
-    expect(datasetErrorText(e)).toBe('bad body');
-    expect(datasetErrorText(new Error('network down'))).toBe('network down');
+    expect(apiErrorText(e)).toBe('bad body');
+    expect(apiErrorText(new Error('network down'))).toBe('network down');
   });
 });

@@ -10,7 +10,7 @@
  * the server's own default applies.
  */
 import { getDatasetFormatsFor, previewCombine, startCombine } from '$lib/api_combine';
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import type {
   CombineDedupMode,
   CombineHoldoutMode,
@@ -363,7 +363,7 @@ export class CombineWizard {
       if (this.#applySuggestions(p)) this.#schedulePreview();
     } catch (e) {
       if ((e as Error)?.name === 'AbortError' || seq !== this.#seq) return;
-      this.previewError = configErrorText(e);
+      this.previewError = apiErrorText(e);
       this.preview = null;
       this.servedKey = null;
     } finally {
@@ -388,7 +388,7 @@ export class CombineWizard {
       const d = configErrorDetail(e);
       this.refusal = {
         code: d?.error ?? null,
-        message: configErrorText(e),
+        message: apiErrorText(e),
         report: d?.report ?? null,
         jobs: d?.jobs ?? [],
       };

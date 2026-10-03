@@ -129,7 +129,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         // A newer loadFirst() already started (and owns `loading`) — leave
         // its result alone rather than overwrite with our now-stale fetch.
         if (myEpoch !== epoch) return;
-        const fresh = (res?.items ?? []).filter((i) => opts.accept?.(i) ?? true);
+        const fresh = uniqueByKey(res?.items ?? [], opts);
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = 1;
@@ -186,7 +186,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       try {
         const res = await opts.fetchPage(page);
         if (myEpoch !== epoch) return;
-        const fresh = (res?.items ?? []).filter((i) => opts.accept?.(i) ?? true);
+        const fresh = uniqueByKey(res?.items ?? [], opts);
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = page;
@@ -200,4 +200,19 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       }
     },
   };
+}
+
+/** One served page, filtered by `accept` and reduced to the first item per key. */
+function uniqueByKey<T>(
+  items: T[],
+  opts: { keyOf: (i: T) => string; accept?: (i: T) => boolean },
+): T[] {
+  const keys: string[] = [];
+  return items.filter((i) => {
+    if (!(opts.accept?.(i) ?? true)) return false;
+    const k = opts.keyOf(i);
+    if (keys.includes(k)) return false;
+    keys.push(k);
+    return true;
+  });
 }

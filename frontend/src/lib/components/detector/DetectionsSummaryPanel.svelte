@@ -79,7 +79,7 @@
           </tr>
         </thead>
         <tbody class="font-mono">
-          {#each s.by_label as l (l.name)}
+          {#each s.by_label as l, i (i)}
             <tr class="border-t border-zinc-800">
               <td class="py-0.5 pr-3 font-sans text-zinc-200">{l.name}</td>
               <td class="py-0.5 pr-3 text-right">{fmt(l.count)}</td>

@@ -86,13 +86,24 @@
     jobPoll = null;
   }
 
+  // `destroyed` is set by the effect cleanup: an adopt read that resolves
+  // after unmount must not start a poll nothing would ever stop. `polling`
+  // keeps a read slower than the interval from overlapping the next one.
+  let destroyed = false;
+  let polling = false;
+
   async function pollJob(): Promise<void> {
+    if (polling) return;
+    polling = true;
     let st: ScoresJob;
     try {
       st = await getScoresStatus();
     } catch {
       return; // transient — keep polling
+    } finally {
+      polling = false;
     }
+    if (destroyed || jobPoll === null) return;
     const outcome = classifyScoresPoll(st.status);
     if (outcome === 'running') {
       job = st;
@@ -117,15 +128,20 @@
 
   function startJobPoll(): void {
     stopJobPoll();
+    if (destroyed) return;
     jobPoll = setInterval(() => void pollJob(), JOB_POLL_MS);
   }
 
   $effect(() => {
+    destroyed = false;
     void (async () => {
       await loadCoverage();
       if (loadError === null) await adoptInFlightJob();
     })();
-    return stopJobPoll;
+    return () => {
+      destroyed = true;
+      stopJobPoll();
+    };
   });
 
   function toggleScorer(id: string): void {

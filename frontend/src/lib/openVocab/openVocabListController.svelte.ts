@@ -12,7 +12,7 @@ import {
   getOpenVocabSchema,
   listOpenVocab,
 } from '$lib/api_openVocab';
-import { configErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
@@ -102,7 +102,7 @@ export class OpenVocabListState extends ConfigList<
     try {
       return await this.#create({ name: name.trim(), body: {} });
     } catch (e) {
-      this.createError = configErrorText(e);
+      this.createError = apiErrorText(e);
       return null;
     } finally {
       this.busy = false;

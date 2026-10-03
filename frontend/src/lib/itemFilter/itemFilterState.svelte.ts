@@ -119,8 +119,12 @@ export class ItemFilterState {
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     };
-    this.classNames = params.getAll('class_name');
-    this.excludeClassNames = params.getAll('exclude_class_name');
+    this.classNames = params
+      .getAll('class_name')
+      .filter((v, i, all) => all.indexOf(v) === i);
+    this.excludeClassNames = params
+      .getAll('exclude_class_name')
+      .filter((v, i, all) => all.indexOf(v) === i);
     this.confMin = num('conf_min');
     this.confMax = num('conf_max');
     this.minArea = num('min_area');

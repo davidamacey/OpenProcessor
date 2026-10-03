@@ -5,7 +5,7 @@
  * pinned to the contract in `contract/configTestContract.test.ts`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, ApiError, configErrorDetail, configErrorText } from './api';
+import { API_PREFIX, ApiError, configErrorDetail, apiErrorText } from './api';
 import { testPromptPack, testRegionProfile } from './api_configTest';
 import {
   packTestResponseFixture,
@@ -105,7 +105,7 @@ describe('testRegionProfile', () => {
     );
     const err = await testRegionProfile({ crop_id: 'c_x' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(configErrorText(err)).toBe('No crop with id c_x.');
+    expect(apiErrorText(err)).toBe('No crop with id c_x.');
     expect(configErrorDetail(err)?.crop_ids).toEqual(['c_x']);
   });
 });

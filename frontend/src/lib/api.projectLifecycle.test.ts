@@ -17,7 +17,7 @@ import {
   getProjects,
   patchProject,
   projectErrorDetail,
-  projectErrorText,
+  apiErrorText,
   scopeGeneration,
   setScopedPrefix,
   unarchiveProject,
@@ -124,7 +124,7 @@ describe('lifecycle wrappers hit the global /projects routes', () => {
   });
 });
 
-describe('projectErrorDetail / projectErrorText', () => {
+describe('projectErrorDetail / apiErrorText', () => {
   const conflict = {
     detail: {
       error: 'revision_conflict',
@@ -140,7 +140,7 @@ describe('projectErrorDetail / projectErrorText', () => {
       error: 'revision_conflict',
       current_revision: 6,
     });
-    expect(projectErrorText(e)).toBe('expected revision 4, current is 6');
+    expect(apiErrorText(e)).toBe('expected revision 4, current is 6');
   });
 
   it('falls back to the generic detail for a pydantic 422 list', () => {
@@ -148,12 +148,12 @@ describe('projectErrorDetail / projectErrorText', () => {
       detail: [{ loc: ['body', 'display_name'], msg: 'Field required', type: 'missing' }],
     });
     expect(projectErrorDetail(e)).toBeNull();
-    expect(projectErrorText(e)).toContain('display_name');
+    expect(apiErrorText(e)).toContain('display_name');
   });
 
   it('is null for a non-ApiError', () => {
     expect(projectErrorDetail(new Error('boom'))).toBeNull();
-    expect(projectErrorText(new Error('boom'))).toBe('boom');
+    expect(apiErrorText(new Error('boom'))).toBe('boom');
   });
 });
 

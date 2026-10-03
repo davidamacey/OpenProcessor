@@ -464,7 +464,7 @@
         </div>
       {/if}
       <div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-        {#each g.items as p (p.crop_id)}
+        {#each g.items as p (`${p.crop_id}:${p.region_box_id ?? ''}`)}
           <SlotCard
             crop={p}
             slot={gallery.slot}
