@@ -39,6 +39,7 @@ def client(registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch):
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     fake = AsyncMock()
+    fake.get.side_effect = RuntimeError('404 not_found')  # no settings document
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as c:
         yield c
@@ -126,7 +127,7 @@ def test_seeding_never_touches_items(
 
     fake = client.app.dependency_overrides[_raw_opensearch_dep]()
     client.post(URL, json={'dry_run': False})
-    assert fake.method_calls == []
+    assert [c for c in fake.method_calls if c[0] != 'get'] == []
 
 
 def test_detector_block_in_ingest_config(client: TestClient, labels_file: None) -> None:
@@ -135,17 +136,15 @@ def test_detector_block_in_ingest_config(client: TestClient, labels_file: None) 
     assert det['assigns_class'] is False
     assert det['confidence_floor_applies'] is False
     assert det['n_labels'] == 4
-    assert det['class_ids_filter'] is None
+    assert 'class_ids_filter' not in det
     assert det['labels'][2] == {'class_id': 2, 'name': 'traffic light', 'slug': 'traffic_light'}
 
 
-def test_detector_block_reports_env_class_filter(
+def test_detector_block_confidence_floor_follows_assigns_class(
     client: TestClient, labels_file: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv('OP_INGEST_PRIMARY_CLASS_IDS', '1,0')
     monkeypatch.setenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS', 'true')
     det = client.get(CONFIG_URL).json()['detector']
-    assert det['class_ids_filter'] == [0, 1]
     assert det['confidence_floor_applies'] is True
 
 

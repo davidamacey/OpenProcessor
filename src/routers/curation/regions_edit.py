@@ -32,6 +32,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
+from src.services.curation.region_box_refresh import refresh_box_embeddings
 from src.services.curation.region_boxes import RegionBoxWriteError
 from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
@@ -162,7 +163,13 @@ async def patch_crop_region_meta(
 
     rec = _Recorder(_build, 'human:patch_region_meta')
     await _write_one(opensearch, crop_id, rec, 'human:patch_region_meta')
-    return {'crop_id': crop_id, 'updated_fields': sorted(wire_fields), 'item': rec.item(crop_id)}
+    embedding = await refresh_box_embeddings(opensearch, [crop_id])
+    return {
+        'crop_id': crop_id,
+        'updated_fields': sorted(wire_fields),
+        'item': rec.item(crop_id),
+        'vector_refresh': embedding,
+    }
 
 
 async def _batch_write(
@@ -303,4 +310,10 @@ async def batch_set_region_status(
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         return {**base, **human_status_box_write(payload.region_status, current)}
 
-    return await _batch_write(opensearch, payload.crop_ids, _build, 'human:batch_set_region_status')
+    result = await _batch_write(
+        opensearch, payload.crop_ids, _build, 'human:batch_set_region_status'
+    )
+    embedding = await refresh_box_embeddings(
+        opensearch, [item['crop_id'] for item in result['items']]
+    )
+    return {**result, 'vector_refresh': embedding}

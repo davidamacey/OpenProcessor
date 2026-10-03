@@ -50,6 +50,19 @@ async def _imported_labels_exist(opensearch: Any) -> bool:
     return int(resp.get('count', 0)) > 0
 
 
+REGION_PROFILE_OFF_REASON = (
+    'the region profile is off for this project: activate one to review regions'
+)
+
+
+def region_queue_is_off(tab: str) -> bool:
+    """The ``regions`` tab has nothing to serve while no region profile is
+    active: rows written under an earlier profile are stale, not a queue."""
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    return tab == 'regions' and get_active_region_profile() is None
+
+
 async def compute_empty_reason(tab: str, filters: Any, opensearch: Any) -> str:
     """A real-state reason for a zero-result ``GET /review/{tab}``:
 
@@ -96,4 +109,9 @@ async def review_tabs_empty_state(opensearch: Any) -> dict[str, bool]:
     }
 
 
-__all__ = ['compute_empty_reason', 'review_tabs_empty_state']
+__all__ = [
+    'REGION_PROFILE_OFF_REASON',
+    'compute_empty_reason',
+    'region_queue_is_off',
+    'review_tabs_empty_state',
+]

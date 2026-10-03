@@ -13,22 +13,11 @@ TextQ = Annotated[
     str | None,
     Query(description='Regions tab only: case-insensitive substring search on any box text.'),
 ]
-MaxRankQ = Annotated[
-    int | None,
-    Query(
-        ge=1,
-        description=(
-            'Keep crop_rank_in_image <= this (every tab). Omitted: no limit, '
-            "except a tab's served filter_defaults (GET /review/tabs)."
-        ),
-    ),
-]
 BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
 MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]
 NearDupQ = Annotated[bool, Query(description='Hide non-representative near-duplicates.')]
 ClassIdQ = Annotated[int | None, Query(description='Only items of this class.')]
 SourceQ = Annotated[str | None, Query(description='Only items with this ingest source tag.')]
-ConfQ = Annotated[float | None, Query(ge=0.0, le=1.0, description='Inclusive confidence band.')]
 RegionStatusQ = Annotated[
     str | None,
     Query(
@@ -86,11 +75,9 @@ __all__ = [
     'BlurQ',
     'ClassIdQ',
     'CombineConflictQ',
-    'ConfQ',
     'DatasetSplitQ',
     'ImportIdQ',
     'IncludeTest',
-    'MaxRankQ',
     'MistakeQ',
     'NearDupQ',
     'OnNegativeFrameQ',

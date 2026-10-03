@@ -136,10 +136,6 @@ class DetectionProfile:
     text_reject_sequences: bool = False
     segmenter_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
-    # Item (ingest) detectors only: the model class ids whose detections
-    # become items. Empty = every class. Lets a generic proposer (e.g. an
-    # 80-class COCO model) be narrowed to the classes a deployment curates.
-    class_ids: frozenset[int] = field(default_factory=frozenset)
     # Region profiles only: the item class names (matched against an item's
     # ``class_name`` or ``proposal_name``, case-insensitively) that get the
     # region stage. Empty = every item.

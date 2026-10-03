@@ -12,11 +12,12 @@ same query — one ``count`` call regardless of queue depth.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
 from src.services.curation import review_queries, review_sorts
-from src.services.curation.crop_browse import confidence_band
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 
 
 TIEBREAK: dict[str, Any] = {'crop_id': {'order': 'asc'}}
@@ -32,8 +33,10 @@ class ReviewFilters:
     hide_near_duplicates: bool = False
     class_id: int | None = None
     source: str | None = None
-    conf_min: float | None = None
-    conf_max: float | None = None
+    # The shared item filter (class names, confidence band, size, origin,
+    # embedding state, review status), minus ``max_rank``, which a tab can
+    # default and so is read above.
+    item: ItemFilter = dataclasses.field(default_factory=ItemFilter)
     region_status: str | None = None
     combine_conflict: bool = False
     import_id: str | None = None
@@ -106,9 +109,7 @@ async def build_review_request(
         must.append({'term': {'import_ids': filters.import_id}})
     if filters.dataset_split and 'dataset_split' in honoured:
         must.append({'term': {'dataset_split': filters.dataset_split}})
-    band = confidence_band(filters.conf_min, filters.conf_max)
-    if band is not None:
-        must.append(band)
+    must.extend(item_filter_clauses(filters.item))
     clause, applied, fallback = await review_sorts.build_sort(
         sort_id, tab=tab, opensearch=opensearch
     )

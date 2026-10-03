@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from curation.dataset_import.harness import write_yolo
-from curation.query_fakes import QueryFakeOpenSearch
+from curation.query_fakes import SettingsFakeOpenSearch
 
 from integration.ingest_fakes import FakeTritonPool, curation_app
 
@@ -29,13 +29,13 @@ SAME = '0 0.3 0.3 0.4 0.4'
 
 
 @pytest.fixture
-def fake_os() -> QueryFakeOpenSearch:
-    return QueryFakeOpenSearch()
+def fake_os() -> SettingsFakeOpenSearch:
+    return SettingsFakeOpenSearch()
 
 
 @pytest.fixture
 def client(
-    fake_os: QueryFakeOpenSearch, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    fake_os: SettingsFakeOpenSearch, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
     from src.clients.curation_opensearch import ClassRegistry
 
@@ -79,7 +79,7 @@ def _wait(client: TestClient, import_id: str, *, until: set[str], timeout: float
 
 
 def test_preview_reports_counts_suggestions_and_writes_nothing(
-    client: TestClient, fake_os: QueryFakeOpenSearch, tmp_path: Path
+    client: TestClient, fake_os: SettingsFakeOpenSearch, tmp_path: Path
 ) -> None:
     root = _dataset(tmp_path)
     resp = client.post(f'{BASE}/preview', json={'source': {'path': str(root)}})
@@ -113,7 +113,7 @@ def test_preview_reports_counts_suggestions_and_writes_nothing(
 
 
 def test_start_runs_to_completion_and_is_idempotent(
-    client: TestClient, fake_os: QueryFakeOpenSearch, tmp_path: Path
+    client: TestClient, fake_os: SettingsFakeOpenSearch, tmp_path: Path
 ) -> None:
     root = _dataset(tmp_path)
     started = client.post(f'{BASE}/imports', json=_body(root))
@@ -192,7 +192,7 @@ def test_import_ids_are_never_paths(client: TestClient) -> None:
 
 
 def test_undo_dry_run_then_apply(
-    client: TestClient, fake_os: QueryFakeOpenSearch, tmp_path: Path
+    client: TestClient, fake_os: SettingsFakeOpenSearch, tmp_path: Path
 ) -> None:
     root = _dataset(tmp_path)
     import_id = client.post(f'{BASE}/imports', json=_body(root)).json()['import_id']

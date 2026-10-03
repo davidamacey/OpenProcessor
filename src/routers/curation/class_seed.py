@@ -12,14 +12,18 @@ from src.routers.curation._class_models import (
     SeedFromDetectorResponse,
     SeedSkipped,
 )
-from src.routers.curation._common import get_class_registry, logger, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
 from src.routers.curation.classes import create_registry_class
 from src.routers.curation.ingest import _get_detection_profile
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
+from src.services.curation.ingest_detector import effective_profile
+from src.services.curation.ingest_policy_store import get_ingest_policy
 
 
 @router.post('/classes/seed_from_detector', response_model=SeedFromDetectorResponse)
-async def seed_from_detector(payload: SeedFromDetectorRequest) -> SeedFromDetectorResponse:
+async def seed_from_detector(
+    payload: SeedFromDetectorRequest, opensearch: OpenSearchDep
+) -> SeedFromDetectorResponse:
     """Create registry classes from the ingest detector's labels, by name.
 
     Append-only and idempotent: a label whose slug (``traffic light`` ->
@@ -31,7 +35,9 @@ async def seed_from_detector(payload: SeedFromDetectorRequest) -> SeedFromDetect
     list) is configured.
     """
     try:
-        profile = _get_detection_profile()
+        profile = effective_profile(
+            _get_detection_profile(), (await get_ingest_policy(opensearch)).detector
+        )
         labels = detector_labels(profile) if profile.detector_model else []
     except (ValueError, OSError) as exc:
         raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc

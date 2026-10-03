@@ -18,6 +18,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
+# The regions queue exists only while a region profile is active (GH #51).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 def _client(fake: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 

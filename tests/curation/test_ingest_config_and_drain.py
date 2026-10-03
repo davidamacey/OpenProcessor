@@ -47,9 +47,11 @@ def test_ingest_config_is_typed_and_reflects_env(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     fake = AsyncMock()
+    fake.get.side_effect = RuntimeError('404 not_found')
     r = _client(fake).get('/curation/projects/default/ingest/config')
     assert r.status_code == 200, r.text
     body = r.json()
+    assert body['policy']['embedding']['mode'] == 'all'
     assert body['upload']['max_images_per_request'] == 7
     assert body['upload']['max_bytes_per_request'] == 1000
     assert body['upload']['accepted_extensions'] == ['.jpg', '.png']

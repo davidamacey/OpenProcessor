@@ -219,7 +219,8 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     filt = scroll_init_call['query']['bool']['filter']
     must_not = scroll_init_call['query']['bool']['must_not']
     assert {'term': {'cluster_id': 1}} in filt
-    assert {'terms': {'class_source': ['classifier_model']}} in filt
+    terms = next(f['terms']['class_source'] for f in filt if 'class_source' in f.get('terms', {}))
+    assert 'classifier_model' in terms
     assert {'term': {'class_name': 'class_b'}} in filt
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'test_holdout': True}} in must_not

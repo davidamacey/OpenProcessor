@@ -20,6 +20,10 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
 
+# The "profile" a project's own ingest detector is reported under.
+INGEST_DETECTOR_USER = 'ingest detector'
+
+
 async def read_each_project[T](read: Callable[[str], Awaitable[T]]) -> dict[str, T]:
     """``slug -> read(configs_index)`` for every project that exists and is
     not being deleted (``ProjectRegistry.existing_projects``), each call inside a
@@ -56,11 +60,36 @@ async def active_detector_users(client: Any, model_name: str) -> list[tuple[str,
             return None
         return name, str((doc['_source'].get('body') or {}).get('detector_model') or '')
 
-    return [
+    region_users = [
         (slug, found[0])
         for slug, found in (await read_each_project(active_detector)).items()
         if found is not None and found[1] == model_name
     ]
+    ingest_users = [
+        (slug, INGEST_DETECTOR_USER) for slug in await ingest_detector_users(client, model_name)
+    ]
+    return sorted([*region_users, *ingest_users])
 
 
-__all__ = ['active_detector_users', 'read_each_project']
+async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
+    """Slugs of the projects whose ingest policy names ``model_name`` as their
+    own ingest detector."""
+    from src.services.curation.ingest_policy_store import get_ingest_policy
+
+    async def own_detector(_index: str) -> str | None:
+        override = (await get_ingest_policy(client)).detector
+        return override.model if override is not None else None
+
+    return [
+        slug
+        for slug, model in (await read_each_project(own_detector)).items()
+        if model == model_name
+    ]
+
+
+__all__ = [
+    'INGEST_DETECTOR_USER',
+    'active_detector_users',
+    'ingest_detector_users',
+    'read_each_project',
+]

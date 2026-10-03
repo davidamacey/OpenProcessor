@@ -307,13 +307,10 @@ async def _apply_clone(
     empty" bug N3a fixed.
     """
     conflicts: list[dict[str, Any]] = []
-    from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
-
     if 'settings_defaults' in axes:
-        with bind_project(source, read_only=True):
-            source_settings = await get_curation_settings(client)
-        with bind_project(target_record):
-            await update_curation_settings(client, dict(source_settings.get('defaults', {})))
+        from src.services.projects.clone_settings import clone_settings_document
+
+        await clone_settings_document(client, source=source, target_record=target_record)
 
     if 'classes' in axes:
         src_path = source.resources.class_registry_path

@@ -30,10 +30,16 @@ from src.routers.curation.pipeline_params import (
 )
 from src.routers.curation.pipeline_vlm import job_endpoint, resolve_run_vlm
 from src.routers.curation.vlm import _get_vlm_labeler, _resolve_pack, _vlm_stamp
-from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query
+from src.services.curation.autolabel.embed_stage import run_embed_missing_stage
+from src.services.curation.autolabel.selection import (
+    scroll_unvalidated,
+    unvalidated_count_query,
+    vlm_selection_query,
+)
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.event_hub import publish_crop_classified
+from src.services.curation.item_filter import ItemFilter
 from src.services.labeling.vlm_factory import assert_may_connect
 
 
@@ -96,6 +102,9 @@ async def _run_auto_label(
     cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
+    # Internal (job trigger only): the item filter scoping the embed and VLM stages.
+    item_filter: dict[str, Any] | None = None,
+    embed_missing: bool = False,
     # Internal (never an HTTP param; the public route forces the defaults):
     # `/start` resolves `prompt_pack` once at request time and hands the
     # resolved pin here (R4-3). `prompt_pack_revision` is that pin.
@@ -216,6 +225,20 @@ async def _run_auto_label(
     # Snapshot counts at entry for a real before/after.
     summary['baseline'] = await pipeline_health_snapshot(opensearch)
 
+    scope_filter = ItemFilter(**(item_filter or {}))
+    if embed_missing:
+        # Lazy trigger: embed the in-scope items stored without a vector first.
+        if progress is not None:
+            progress.start_stage('embed_missing')
+            progress.raise_if_cancelled()
+        summary['stages']['embed_missing'] = await run_embed_missing_stage(
+            opensearch,
+            class_id=class_id,
+            cluster_id=cluster_id,
+            item_filter=item_filter,
+            progress=progress,
+        )
+
     # Pipeline order: classifier confident keeps its label; else -> VLM -> human.
     # force_cluster_id_equals_class_id keeps cluster_id==class_id for
     # labeled items; the residual clusterer handles the rest.
@@ -334,7 +357,11 @@ async def _run_auto_label(
             progress.start_stage('vlm', total=0)
             progress.start_stage('finalize')
         try:
-            body = {'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)}
+            body = {
+                'query': unvalidated_count_query(
+                    class_id=class_id, cluster_id=cluster_id, item_filter=scope_filter
+                )
+            }
             cnt = await opensearch.count(index=items_index(), body=body)
             summary['unvalidated_remaining'] = int(cnt.get('count', 0))
         except Exception:
@@ -345,50 +372,24 @@ async def _run_auto_label(
     # Selection (global sweep vs cluster scope) lives in
     # services/curation/autolabel/selection.py. Scroll the FULL scope:
     # max_vlm_crops == 0 processes everything, > 0 caps the run.
-    SCROLL_PAGE = 1000
-    SCROLL_TTL = '5m'
     unvalidated_query = vlm_selection_query(
         class_id=class_id,
         cluster_id=cluster_id,
         classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
+        item_filter=scope_filter,
     )
-    initial_body = {
-        'size': SCROLL_PAGE,
-        '_source': list(VLM_SWEEP_SOURCE_FIELDS),
-        'query': unvalidated_query,
-        'sort': [{'updated_at': 'asc'}],
-    }
-    cap = max_vlm_crops if max_vlm_crops > 0 else None
-    unvalidated_ids: list[str] = []
     guard = ClassWriteGuard('vlm_pipeline')
-    scroll_id: str | None = None
     try:
-        resp = await opensearch.search(index=items_index(), body=initial_body, scroll=SCROLL_TTL)
-        while True:
-            scroll_id = resp.get('_scroll_id')
-            hits = (resp.get('hits') or {}).get('hits') or []
-            if not hits:
-                break
-            for h in hits:
-                cid = (h.get('_source') or {}).get('crop_id') or h.get('_id')
-                if cid:
-                    unvalidated_ids.append(cid)
-                    guard.remember(cid, h.get('_source') or {})
-                    if cap is not None and len(unvalidated_ids) >= cap:
-                        break
-            if cap is not None and len(unvalidated_ids) >= cap:
-                break
-            if not scroll_id:
-                break
-            resp = await opensearch.scroll(scroll_id=scroll_id, scroll=SCROLL_TTL)
+        unvalidated_ids = await scroll_unvalidated(
+            opensearch,
+            index=items_index(),
+            query=unvalidated_query,
+            source_fields=list(VLM_SWEEP_SOURCE_FIELDS),
+            cap=max_vlm_crops if max_vlm_crops > 0 else None,
+            guard=guard,
+        )
     except Exception as exc:
         return {**summary, 'stages_error': f'fetch unvalidated failed: {exc}'}
-    finally:
-        if scroll_id:
-            try:
-                await opensearch.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
-                logger.debug('pipeline_clear_scroll_failed', error=str(exc))
 
     summary['stages']['unvalidated_after_promote'] = len(unvalidated_ids)
 
@@ -646,7 +647,11 @@ async def _run_auto_label(
     try:
         cnt_resp = await opensearch.count(
             index=items_index(),
-            body={'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)},
+            body={
+                'query': unvalidated_count_query(
+                    class_id=class_id, cluster_id=cluster_id, item_filter=scope_filter
+                )
+            },
         )
         remaining = int(cnt_resp.get('count', 0))
     except Exception:

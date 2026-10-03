@@ -26,6 +26,7 @@ from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.embedding_state import EMBEDDED, FAILED
 from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
+from src.services.curation.ingest_policy import select_for_embedding
 from src.services.curation.item_doc import (
     DetectedItem,
     build_image_doc,
@@ -94,6 +95,58 @@ def crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) ->
     return img.crop((x1i, y1i, x2i, y2i))
 
 
+def residual_placement(
+    store: IVFCentroidStore, embedding: Any, rank: int | None, blur_ratio: float | None
+) -> tuple[int, float | None] | None:
+    """Where an embedded item with no class goes: ``(cluster_id, distance)``,
+    the parked cluster when it fails the ingest clustering gate, or ``None``
+    when the store cannot place it. The one placement rule, shared by ingest
+    and the embed step so a later-embedded item lands where an ingest-embedded
+    one would have."""
+    if not ingest_passes_gate(rank, blur_ratio):
+        return PARKED_CLUSTER_ID, None
+    try:
+        centroid, distance = store.assign_one_with_distance(embedding)
+    except Exception as exc:
+        logger.debug('ingest_ivf_assign_failed', error=str(exc))
+        return None
+    return int(centroid) + RESIDUAL_CLUSTER_ID_OFFSET, distance
+
+
+async def embed_items(
+    service: CurationIngestService,
+    items: list[DetectedItem],
+    crops_pil: list[Image.Image],
+    width: int,
+    height: int,
+    image_path: str,
+) -> None:
+    """Give the items the project's embedding policy selects a vector and
+    stamp every item's ``embedding_state``: ``embedded``, ``failed`` (the
+    encoder raised) or the policy's skip state. Only selected crops reach the
+    encoder; a skipped item keeps no vector of any kind."""
+    states = select_for_embedding(items, service.policy.embedding, width, height)
+    wanted: list[int] = []
+    for i, state in enumerate(states):
+        if state == EMBEDDED:
+            wanted.append(i)
+        else:
+            items[i].embedding_state = state
+            items[i].pe_embedding = None
+            items[i].backbone_embedding = None
+    try:
+        if wanted:
+            embeddings = await service.pe_encoder.embed_crops(
+                [np.asarray(crops_pil[i]) for i in wanted], max_batch=service.profile.batch_limit
+            )
+            for i, emb in zip(wanted, embeddings, strict=False):
+                items[i].pe_embedding = emb
+    except Exception as exc:
+        logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
+    for i in wanted:
+        items[i].embedding_state = EMBEDDED if items[i].pe_embedding is not None else FAILED
+
+
 async def index_items(
     service: CurationIngestService,
     ctx: ImageContext,
@@ -113,18 +166,7 @@ async def index_items(
     full_w, full_h = ctx.width, ctx.height
     image_path = ctx.image_path
     crops_pil = [crop_pil(img, item.bbox_pixel) for item in items]
-    try:
-        if crops_pil:
-            crop_arrays = [np.asarray(c) for c in crops_pil]
-            embeddings = await service.pe_encoder.embed_crops(
-                crop_arrays, max_batch=service.profile.batch_limit
-            )
-            for item, emb in zip(items, embeddings, strict=False):
-                item.pe_embedding = emb
-    except Exception as exc:
-        logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
-    for item in items:
-        item.embedding_state = EMBEDDED if item.pe_embedding is not None else FAILED
+    await embed_items(service, items, crops_pil, full_w, full_h, image_path)
 
     now = datetime.now(UTC).isoformat()
     image_doc: dict[str, Any] | None = None
@@ -187,15 +229,9 @@ async def index_items(
         if item.class_id is not None:
             item.cluster_id = int(item.class_id)
         elif item.pe_embedding is not None and store is not None:
-            if not ingest_passes_gate(rank_by_idx[idx], ratio):
-                item.cluster_id = PARKED_CLUSTER_ID
-            else:
-                try:
-                    centroid, distance = store.assign_one_with_distance(item.pe_embedding)
-                    item.cluster_id = int(centroid) + RESIDUAL_CLUSTER_ID_OFFSET
-                    item.cluster_distance = distance
-                except Exception as exc:
-                    logger.debug('ingest_ivf_assign_failed', error=str(exc))
+            placed = residual_placement(store, item.pe_embedding, rank_by_idx[idx], ratio)
+            if placed is not None:
+                item.cluster_id, item.cluster_distance = placed
 
         doc = build_item_doc(
             crop_id=cid,
@@ -279,4 +315,5 @@ __all__ = [
     'crop_pil',
     'image_id_for',
     'index_items',
+    'residual_placement',
 ]

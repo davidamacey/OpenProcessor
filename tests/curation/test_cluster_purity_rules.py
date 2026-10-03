@@ -36,6 +36,7 @@ from src.services.curation.cluster_purity import (  # noqa: E402
     purity_tier,
 )
 from src.services.curation.clustering.auto_promote import auto_promote_clusters  # noqa: E402
+from src.services.curation.item_filter import ItemFilter  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -93,7 +94,7 @@ async def _cards(*buckets: dict[str, Any]) -> dict[str, Any]:
         kind='all',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
     )
