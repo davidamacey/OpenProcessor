@@ -66,6 +66,7 @@ describe('/clusters item-text search (W8)', () => {
       body.indexOf('e.status === 400'),
       body.indexOf('} else {'),
     );
+    expect(status400Branch).toMatch(/itemTextError\s*=/);
     expect(status400Branch).not.toMatch(/toastStore\.error/);
   });
 

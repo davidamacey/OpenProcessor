@@ -60,6 +60,7 @@ describe('review page: rank-scope + blur controls are tab-agnostic (no PRIMARY_T
     // A gate may sit between them now (each control has its own served-
     // filter check), but it must be the filterVisible one, not a
     // hardcoded tab-id list.
+    expect(between).toMatch(/<SubjectScopeToggle/);
     expect(between).not.toMatch(/PRIMARY_TABS/);
     expect(between).not.toMatch(/includes\(effectiveTab\)/);
 

@@ -18,6 +18,7 @@ describe('/classes layout', () => {
     expect(proposals).toBeGreaterThan(table);
     // A <details> without `open` starts collapsed.
     const tag = src.slice(src.lastIndexOf('<details', proposals), proposals);
+    expect(tag).toMatch(/<details/);
     expect(tag).not.toMatch(/\bopen\b/);
   });
 

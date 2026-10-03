@@ -50,6 +50,7 @@ describe('/settings deployment-defaults page', () => {
     expect(start).toBeGreaterThan(-1);
     const sectionCloseIdx = src.indexOf('{/if}', start);
     const slice = src.slice(start, sectionCloseIdx === -1 ? undefined : sectionCloseIdx);
+    expect(slice).toMatch(/Not settable on this backend/);
     expect(slice).not.toMatch(/<select/);
     expect(slice).not.toMatch(/>\s*Save\s*</);
   });
@@ -82,6 +83,7 @@ describe('/settings deployment-defaults page', () => {
     expect(start).toBeGreaterThan(-1);
     const sectionCloseIdx = src.indexOf('{/if}', start);
     const slice = src.slice(start, sectionCloseIdx === -1 ? undefined : sectionCloseIdx);
+    expect(slice).toMatch(/Not settable on this backend/);
     expect(slice).not.toMatch(/>\s*Clear\s*</);
   });
 

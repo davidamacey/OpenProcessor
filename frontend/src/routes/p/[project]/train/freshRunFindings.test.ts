@@ -15,6 +15,7 @@ describe('/train fresh-run findings', () => {
   it('F-63(b): TrainForm stays mounted during a run (not the else-branch of isActive)', () => {
     const form = src.indexOf('<TrainForm');
     const chain = src.slice(src.lastIndexOf('{#if', form), form);
+    expect(chain).toMatch(/\{#if/);
     expect(chain).not.toMatch(/isActive/);
     expect(src.slice(form, src.indexOf('/>', form))).toMatch(/disabled=\{isActive\}/);
   });
