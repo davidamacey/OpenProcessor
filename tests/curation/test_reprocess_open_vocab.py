@@ -8,15 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from curation.reprocess_fixtures import (
-    FakeTriton,
-    docs,
-    images_index,
-    jpeg_bytes,
-    make_fake,
-    make_service,
-    servable_root,
-)
+from curation.open_vocab_fixtures import FakeSegmenter, StatefulRegistry, cand, ingested_world
+from curation.reprocess_fixtures import docs, images_index
 from src.services.config_store.store import StoredConfig, get_config_store, reset_config_stores
 from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_models import (
@@ -25,8 +18,6 @@ from src.services.curation.reprocess_models import (
     ReprocessTargets,
 )
 from src.services.curation.reprocess_targets import ReprocessTargetsError
-from src.services.detection.cascade_detect import RegionCandidate
-from src.services.detection.segmenter_http import SegmenterCallError
 
 
 if TYPE_CHECKING:
@@ -35,32 +26,12 @@ if TYPE_CHECKING:
     from curation.query_fakes import QueryFakeOpenSearch
     from src.services.curation.ingest import CurationIngestService
 
-BOX = (0.1, 0.2, 0.3, 0.5)
-
-
-class _Entry:
-    def __init__(self, class_id: int, class_name: str) -> None:
-        self.class_id, self.class_name, self.deprecated = class_id, class_name, False
-
-
-class _Registry:
-    def __init__(self) -> None:
-        self.entries: list[_Entry] = []
-
-    def load(self) -> Any:
-        return type('F', (), {'classes': self.entries})()
-
-    def add_class(self, name: str, group: str = '', notes: str = '') -> int:  # noqa: ARG002
-        self.entries.append(_Entry(len(self.entries), name))
-        return len(self.entries) - 1
-
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch: pytest.MonkeyPatch) -> Any:
     reset_config_stores()
-    monkeypatch.setattr(
-        'src.services.curation.open_vocab_run.get_class_registry', lambda: _Registry()
-    )
+    registry = StatefulRegistry()
+    monkeypatch.setattr('src.services.curation.open_vocab_run.get_class_registry', lambda: registry)
     monkeypatch.delenv('OP_SEGMENTER_URL', raising=False)
     yield
     reset_config_stores()
@@ -78,31 +49,10 @@ def _activate(targets: list[dict[str, Any]], revision: int = 4) -> None:
     )
 
 
-class _Segmenter:
-    def __init__(self) -> None:
-        self.calls = 0
-        self.down = False
-
-    async def __call__(self, jpeg: bytes, prompt: str, **kw: Any) -> list[RegionCandidate]:  # noqa: ARG002
-        self.calls += 1
-        if self.down:
-            raise SegmenterCallError('segmenter call failed: down')
-        return [RegionCandidate(bbox_norm=BOX, score=0.9, source='sam3', mask_polygon=None)]
-
-
 async def _world(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, n_images: int = 2
 ) -> tuple[QueryFakeOpenSearch, CurationIngestService, list[str]]:
-    root = servable_root(tmp_path, monkeypatch)
-    fake = make_fake([])
-    service = make_service(fake, FakeTriton([]))
-    ids = []
-    for i in range(n_images):
-        path = root / f'{i}.jpg'
-        path.write_bytes(jpeg_bytes(seed=i))
-        res = await service.ingest_one(path.read_bytes(), str(path))
-        ids.append(res.image_id)
-    return fake, service, ids
+    return await ingested_world(tmp_path, monkeypatch, n=n_images)
 
 
 def _req(
@@ -182,7 +132,8 @@ async def test_a_run_writes_items_and_reports_counts(
 ) -> None:
     fake, service, ids = await _world(tmp_path, monkeypatch)
     _activate([{'prompt': 'traffic cone', 'class_name': 'cone'}])
-    seg = _Segmenter()
+    seg = FakeSegmenter()
+    seg.default = [cand()]
     monkeypatch.setattr('src.services.curation.reprocess_images.segment_image_http', seg)
 
     resp = await apply_reprocess(fake, _req(image_ids=ids), service_factory=_factory(service))
@@ -193,7 +144,7 @@ async def test_a_run_writes_items_and_reports_counts(
     assert res.detail['written'] == 2
     assert {d['image_id'] for d in docs(fake).values()} == set(ids)
     assert {d['open_vocab_revision'] for d in docs(fake).values()} == {4}
-    assert seg.calls == 2
+    assert len(seg.calls) == 2
 
 
 @pytest.mark.asyncio
@@ -202,7 +153,8 @@ async def test_the_segmenter_being_down_trips_after_three_images_and_writes_noth
 ) -> None:
     fake, service, ids = await _world(tmp_path, monkeypatch, n_images=5)
     _activate([{'prompt': 'traffic cone', 'class_name': 'cone'}])
-    seg = _Segmenter()
+    seg = FakeSegmenter()
+    seg.default = [cand()]
     seg.down = True
     monkeypatch.setattr('src.services.curation.reprocess_images.segment_image_http', seg)
 
@@ -213,7 +165,7 @@ async def test_the_segmenter_being_down_trips_after_three_images_and_writes_noth
     assert res.detail['failed_segmenter_unavailable'] == 3
     assert res.detail['not_attempted_segmenter_down'] == 2
     assert docs(fake) == {}
-    assert seg.calls == 3
+    assert len(seg.calls) == 3
 
 
 @pytest.mark.asyncio

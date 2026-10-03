@@ -10928,6 +10928,42 @@
         "title": "OpenVocabTemplateSummary",
         "type": "object"
       },
+      "OpenVocabTestGate": {
+        "description": "What the gate decided for the target: ``run`` true, or a skip with the\n``tier`` (1 registry rules, 2 vision-model pre-check) and ``reason``.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "run": {
+            "title": "Run",
+            "type": "boolean"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          }
+        },
+        "required": [
+          "run"
+        ],
+        "title": "OpenVocabTestGate",
+        "type": "object"
+      },
       "OpenVocabTestHit": {
         "description": "One raw segmenter candidate, with what selection did with it. Boxes and\noutlines are normalized to the image: the client draws them.",
         "properties": {
@@ -11009,6 +11045,9 @@
             "title": "Dedup Iou",
             "type": "number"
           },
+          "gating": {
+            "$ref": "#/components/schemas/OpenVocabGatingBody"
+          },
           "image_base64": {
             "anyOf": [
               {
@@ -11056,6 +11095,9 @@
             "title": "Elapsed Ms",
             "type": "number"
           },
+          "gate": {
+            "$ref": "#/components/schemas/OpenVocabTestGate"
+          },
           "hits": {
             "items": {
               "$ref": "#/components/schemas/OpenVocabTestHit"
@@ -11078,6 +11120,7 @@
           "image",
           "prompt",
           "class_name",
+          "gate",
           "hits",
           "elapsed_ms",
           "validation"
@@ -19480,6 +19523,7 @@
               "open_vocab_class_name_invalid",
               "open_vocab_detector_class",
               "open_vocab_class_new",
+              "open_vocab_vlm_not_configured",
               "unmapped_class",
               "mapping_target_invalid",
               "source_not_found",

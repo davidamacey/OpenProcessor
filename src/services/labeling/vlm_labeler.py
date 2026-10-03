@@ -1850,6 +1850,52 @@ class VlmLabeler:
             )
         return out
 
+    async def prompt_visible(self, jpeg: bytes, prompt: str) -> bool | None:
+        """Ask whether something described by ``prompt`` is visible in one
+        image (the segmenter gate's tier-2 pre-check).
+
+        ``True`` / ``False`` is the model's answer. ``None`` is NO answer (a
+        failed call, an unreadable or non-boolean reply): the caller must not
+        treat it as "not visible".
+        """
+        payload = {
+            'model': self.model,
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': 'You answer a yes/no question about an image with JSON only.',
+                },
+                {
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': (
+                                f'Is there a {prompt} visible in this image, even partly or '
+                                'small? Reply with {"visible": true} or {"visible": false}.'
+                            ),
+                        },
+                        {
+                            'type': 'image_url',
+                            'image_url': {'url': f'data:image/jpeg;base64,{_b64_jpeg(jpeg)}'},
+                        },
+                    ],
+                },
+            ],
+            'temperature': 0.0,
+            'max_tokens': 1024,
+            **self._json_mode_kwargs(),
+        }
+        try:
+            response = await self._post_chat(payload)
+            parsed = json.loads(_strip_markdown_fences(extract_message_content(response)))
+        except Exception as exc:
+            logger.warning(
+                'vlm_labeler.prompt_visible_failed', error=str(exc), error_type=type(exc).__name__
+            )
+            return None
+        return _coerce_bool(parsed.get('visible')) if isinstance(parsed, dict) else None
+
     async def region_visible_batch(
         self,
         crops: list[RegionCrop],

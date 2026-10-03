@@ -217,6 +217,7 @@ async def validate_open_vocab(
     segmenter_health: SegmenterHealthFn | None = None,
     class_names: frozenset[str] = frozenset(),
     detector_class_names: frozenset[str] = frozenset(),
+    vlm_configured: bool = True,
 ) -> ValidationReport:
     from src.routers.curation._config_common_models import ValidationReport
 
@@ -240,6 +241,16 @@ async def validate_open_vocab(
                     f'{len(enabled)} enabled targets exceed max_enabled_targets '
                     f'({ov.max_enabled_targets}); cost is linear in targets',
                     field='targets',
+                )
+            )
+        if ov.gating.tier2_vlm_precheck and not vlm_configured:
+            issues.append(
+                _issue(
+                    'open_vocab_vlm_not_configured',
+                    'warning',
+                    'tier2_vlm_precheck is on but no vision model is active: the pre-check '
+                    'cannot run and every call proceeds',
+                    field='gating.tier2_vlm_precheck',
                 )
             )
         if enabled:

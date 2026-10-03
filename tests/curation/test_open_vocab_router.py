@@ -286,3 +286,16 @@ def test_schema_describes_every_field_with_ranges(client: TestClient) -> None:
     assert rows[('tier3_hit_rate', 'enabled')]['default'] is False
     assert rows[('gating', 'tier2_vlm_precheck')]['default'] is False
     assert schema['max_enabled_targets_ceiling'] == 32
+
+
+def test_tier2_without_a_vision_model_warns(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gating = {'tier2_vlm_precheck': True}
+    monkeypatch.setattr('src.services.labeling.vlm_endpoints.vlm_configured', lambda: False)
+    r = client.post(f'{PREFIX}/validate', json={'name': 'gate-set', 'body': _body(gating=gating)})
+    assert r.json()['ok'] is True
+    assert 'open_vocab_vlm_not_configured' in [w['code'] for w in r.json()['warnings']]
+    monkeypatch.setattr('src.services.labeling.vlm_endpoints.vlm_configured', lambda: True)
+    r = client.post(f'{PREFIX}/validate', json={'name': 'gate-set', 'body': _body(gating=gating)})
+    assert 'open_vocab_vlm_not_configured' not in [w['code'] for w in r.json()['warnings']]

@@ -11,34 +11,21 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation.open_vocab_fixtures import BOX, FakeSegmenter, cand
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.reprocess_fixtures import images_index, items_index, jpeg_bytes, servable_root
-from src.services.detection.cascade_detect import RegionCandidate
-from src.services.detection.segmenter_http import SegmenterCallError
 
 
 URL = '/curation/projects/default/open_vocab/test'
-BOX = (0.1, 0.2, 0.3, 0.5)
 
 
-class _Seg:
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-        self.down = False
-
-    async def __call__(self, jpeg: bytes, prompt: str, **kw: Any) -> list[RegionCandidate]:  # noqa: ARG002
-        self.calls.append({'prompt': prompt, **kw})
-        if self.down:
-            raise SegmenterCallError('segmenter call failed: down')
-        return [
-            RegionCandidate(
-                bbox_norm=BOX,
-                score=0.9,
-                source='sam3',
-                mask_polygon=((0.1, 0.2), (0.3, 0.2), (0.3, 0.5)),
-            ),
-            RegionCandidate(bbox_norm=(0.5, 0.5, 0.6, 0.6), score=0.2, source='sam3'),
-        ]
+def _seg() -> FakeSegmenter:
+    seg = FakeSegmenter()
+    seg.default = [
+        cand(BOX, 0.9),
+        cand((0.5, 0.5, 0.6, 0.6), 0.2),
+    ]
+    return seg
 
 
 @pytest.fixture
@@ -62,7 +49,7 @@ def env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             images_index(): {'img-1': {'image_id': 'img-1', 'image_path': str(path)}},
         }
     )
-    seg = _Seg()
+    seg = _seg()
     monkeypatch.setattr('src.routers.curation.open_vocab_test.segment_image_http', seg)
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     monkeypatch.setattr(

@@ -32,6 +32,7 @@ from src.services.curation.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
 from src.services.curation.item_doc import DetectedItem
+from src.services.curation.open_vocab_gate import VlmVisibleFn  # noqa: TC001 - dataclass field type
 from src.services.curation.reprocess_detect import load_image_context
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_targets import items_by_terms
@@ -42,6 +43,7 @@ from src.services.detection.open_vocab_select import (
     OpenVocabSelection,
     select_open_vocab_hits,
 )
+from src.services.detection.segmenter_gate import GateDecision, GateSubject, HitRateTracker, decide
 
 
 if TYPE_CHECKING:
@@ -85,7 +87,10 @@ class OpenVocabImageResult:
     written: int = 0
     removed: int = 0
     locked_untouched: int = 0
+    sampled: int = 0
     dropped: Counter[str] = field(default_factory=Counter)
+    #: Targets the gate did not spend a call on, by ``tier<N>_<reason>``.
+    skipped: Counter[str] = field(default_factory=Counter)
 
     def as_counts(self) -> dict[str, int]:
         return {
@@ -94,7 +99,9 @@ class OpenVocabImageResult:
             'written': self.written,
             'removed': self.removed,
             'locked_untouched': self.locked_untouched,
+            'gate_sampled': self.sampled,
             **{f'dropped_{k}': v for k, v in sorted(self.dropped.items())},
+            **{f'skipped_gate_{k}': v for k, v in sorted(self.skipped.items())},
         }
 
 
@@ -192,14 +199,29 @@ async def _segment_targets(
 
 
 @dataclass
+class GateContext:
+    """What the segmenter gate may consult beyond the registry rules: the
+    vision model (tier 2) and the hit-rate windows (tier 3, updated in place).
+    Either may be absent: that tier then does not run."""
+
+    vlm_visible: VlmVisibleFn | None = None
+    tracker: HitRateTracker | None = None
+
+
+@dataclass
 class ImagePlan:
-    """The read-only half of a pass on one image: what the segmenter said and
-    what survives selection and dedup. Shared by the writing runner and the
-    per-image test route, so a test shows exactly what a run would keep."""
+    """The read-only half of a pass on one image: which targets the gate let
+    through, what the segmenter said and what survives selection and dedup.
+    Shared by the writing runner and the per-image test route, so a test shows
+    exactly what a run would keep."""
 
     selection: OpenVocabSelection
-    calls: int
-    own_ids: set[str]
+    ran: tuple[OpenVocabTarget, ...]
+    skipped: list[tuple[OpenVocabTarget, GateDecision]]
+    #: Targets that ran only as a tier-3 recovery sample.
+    sampled: int
+    #: Own items of this set already on the image: ``{crop_id: source_prompt}``.
+    own_ids: dict[str, str | None]
     existing_ids: dict[str, str | None]
     locked_untouched: int
 
@@ -212,11 +234,12 @@ async def plan_open_vocab_image(
     targets: tuple[OpenVocabTarget, ...],
     *,
     segment: SegmentImage,
+    gate: GateContext | None = None,
 ) -> ImagePlan:
-    """Segment ``pil`` for ``targets`` and select against the image's items.
-    Writes nothing. Raises ``SegmenterCallError`` on an outage."""
+    """Gate, segment and select for ``targets`` on ``pil`` against the image's
+    items. Writes nothing. Raises ``SegmenterCallError`` on an outage."""
+    gate = gate or GateContext()
     jpeg = await asyncio.to_thread(encode_for_segmenter, pil, ov.image_max_side)
-    candidates = await _segment_targets(segment, jpeg, targets)
     existing_docs = await items_by_terms(
         opensearch,
         'image_id',
@@ -225,29 +248,62 @@ async def plan_open_vocab_image(
         includes=_existing_includes(),
     )
     existing: list[ExistingBox] = []
-    own: set[str] = set()
+    own: dict[str, str | None] = {}
     existing_ids: dict[str, str | None] = {}
+    names: list[str | None] = []
     locked_count = 0
     for doc_id, src in existing_docs:
         box = src.get('bbox_norm')
         if not box or len(box) != 4:
             continue
+        name = src.get('class_name') or src.get('proposal_name')
+        names.append(name)
         locked = item_locked(src)
         if src.get('open_vocab_set') == ov.name and not locked:
-            own.add(doc_id)
+            own[doc_id] = src.get('source_prompt')
             continue
-        name = src.get('class_name') or src.get('proposal_name')
         existing_ids[doc_id] = name
         existing.append(
             ExistingBox(bbox_norm=(box[0], box[1], box[2], box[3]), class_name=name, locked=locked)
         )
         locked_count += int(locked)
+
+    subject = GateSubject(names=tuple(names))
+    precheck = ov.gating.tier2_vlm_precheck and gate.vlm_visible is not None
+    hit_cfg = ov.gating.tier3_hit_rate
+
+    async def decision_for(t: OpenVocabTarget) -> GateDecision:
+        ask = gate.vlm_visible
+        return await decide(
+            enabled=t.enabled,
+            parent_classes=t.parent_classes,
+            subject=subject,
+            vlm_visible=(lambda: ask(jpeg, t.prompt)) if precheck and ask is not None else None,
+            hit_rate=(gate.tracker, t.key, hit_cfg) if gate.tracker is not None else None,
+        )
+
+    decisions = await asyncio.gather(*(decision_for(t) for t in targets))
+    ran = tuple(t for t, d in zip(targets, decisions, strict=True) if d.run)
+    skipped = [(t, d) for t, d in zip(targets, decisions, strict=True) if not d.run]
+
+    candidates = await _segment_targets(segment, jpeg, ran)
+    if gate.tracker is not None:
+        for t, cands in zip(ran, candidates, strict=True):
+            gate.tracker.record(t.key, hit=bool(cands), window=hit_cfg.window)
     selection = select_open_vocab_hits(
-        [(t.rules(), c) for t, c in zip(targets, candidates, strict=True)],
+        [(t.rules(), c) for t, c in zip(ran, candidates, strict=True)],
         existing,
         dedup_iou=ov.dedup_iou,
     )
-    return ImagePlan(selection, len(targets), own, existing_ids, locked_count)
+    return ImagePlan(
+        selection,
+        ran,
+        skipped,
+        sum(1 for d in decisions if d.run and d.sampled),
+        own,
+        existing_ids,
+        locked_count,
+    )
 
 
 async def stamp_open_vocab_status(opensearch: AsyncOpenSearch, image_id: str, status: str) -> None:
@@ -276,6 +332,7 @@ async def run_open_vocab_image(
     revision: int | None,
     segment: SegmentImage,
     targets: tuple[OpenVocabTarget, ...] | None = None,
+    gate: GateContext | None = None,
 ) -> OpenVocabImageResult:
     """Run ``targets`` (default: every enabled one) of ``ov`` on one stored
     image and write the surviving hits. Raises ``ValueError`` for an
@@ -288,11 +345,18 @@ async def run_open_vocab_image(
     if not todo:
         return result
 
-    plan = await plan_open_vocab_image(opensearch, image_id, ctx.pil, ov, todo, segment=segment)
+    plan = await plan_open_vocab_image(
+        opensearch, image_id, ctx.pil, ov, todo, segment=segment, gate=gate
+    )
     selection, own, existing_ids = plan.selection, plan.own_ids, plan.existing_ids
-    result.calls = plan.calls
+    result.calls = len(plan.ran)
     result.locked_untouched = plan.locked_untouched
     result.dropped.update(reason for _hit, reason in selection.dropped)
+    result.skipped.update(d.label for _t, d in plan.skipped)
+    result.sampled = plan.sampled
+    if not plan.ran:
+        # Nothing was asked, so nothing is known: never write or remove.
+        return result
 
     # An item's id is its (image, box): a hit on exactly the box of another
     # item would overwrite that item, so it is dropped before any write.
@@ -335,7 +399,9 @@ async def run_open_vocab_image(
         new_ids = outcome.crop_ids
         result.written = len(new_ids)
 
-    stale = sorted(own - set(new_ids))
+    # A target the gate skipped was not looked at, so its earlier output stays.
+    protected = {t.prompt for t, _d in plan.skipped}
+    stale = sorted(i for i, prompt in own.items() if i not in new_ids and prompt not in protected)
     if stale:
 
         async def still_unlocked(_crop_id: str, doc: dict[str, Any]) -> bool:
@@ -359,6 +425,7 @@ __all__ = [
     'OPEN_VOCAB_CLASS_GROUP',
     'OPEN_VOCAB_DETECTOR',
     'OPEN_VOCAB_DETECTOR_VERSION',
+    'GateContext',
     'ImagePlan',
     'OpenVocabImageResult',
     'SegmentImage',

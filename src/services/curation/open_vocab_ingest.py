@@ -50,13 +50,16 @@ async def _drain(
         docs = await existing_images(
             opensearch, image_ids, index=get_curation_config().images_index
         )
-        run = OpenVocabPass(ov, revision, segment, ReprocessScopeResult(scope='open_vocab'))
+        run = await OpenVocabPass.start(
+            opensearch, ov, revision, segment, ReprocessScopeResult(scope='open_vocab')
+        )
         for image_id in image_ids:
             if run.tripped:
                 logger.warning('open_vocab_ingest_pass_stopped_segmenter_down')
-                return
+                break
             if image_id in docs:
                 await run.run_image(opensearch, service, image_id, docs[image_id])
+        await run.finish(opensearch)
 
 
 async def schedule_open_vocab_after_ingest(

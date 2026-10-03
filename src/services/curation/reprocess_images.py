@@ -79,7 +79,9 @@ async def process_images(
     ov_pass: OpenVocabPass | None = None
     if 'open_vocab' in scopes:
         ov, revision = await active_set_for_run(opensearch)
-        ov_pass = OpenVocabPass(ov, revision, segment or segment_image_http, results['open_vocab'])
+        ov_pass = await OpenVocabPass.start(
+            opensearch, ov, revision, segment or segment_image_http, results['open_vocab']
+        )
     done = failed_images = 0
     cancelled = False
     for start in range(0, len(image_ids), CHUNK):
@@ -134,6 +136,8 @@ async def process_images(
         failed_images = max(r.failed + r.not_found for r in results.values())
         if on_progress is not None:
             on_progress(done, failed_images)
+    if ov_pass is not None:
+        await ov_pass.finish(opensearch)
     return [results[s] for s in scopes], cancelled
 
 

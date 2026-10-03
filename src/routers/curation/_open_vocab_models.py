@@ -202,6 +202,9 @@ class OpenVocabTestRequest(BaseModel):
     target: OpenVocabTargetBody
     image_max_side: int = DEFAULT_IMAGE_MAX_SIDE
     dedup_iou: float = DEFAULT_DEDUP_IOU
+    gating: OpenVocabGatingBody = Field(default_factory=OpenVocabGatingBody)
+    """Which gate tiers to apply. Tier 3 (hit-rate history) is never applied
+    to a test: it has no history for an unsaved target."""
 
 
 class OpenVocabTestHit(BaseModel):
@@ -220,10 +223,20 @@ class OpenVocabTestImage(BaseModel):
     height: int
 
 
+class OpenVocabTestGate(BaseModel):
+    """What the gate decided for the target: ``run`` true, or a skip with the
+    ``tier`` (1 registry rules, 2 vision-model pre-check) and ``reason``."""
+
+    run: bool
+    tier: int | None = None
+    reason: str | None = None
+
+
 class OpenVocabTestResponse(BaseModel):
     image: OpenVocabTestImage
     prompt: str
     class_name: str
+    gate: OpenVocabTestGate
     hits: list[OpenVocabTestHit]
     elapsed_ms: float
     validation: ValidationReport

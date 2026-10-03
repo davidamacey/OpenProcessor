@@ -17,7 +17,9 @@ from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.config_store import get_config_store
 from src.services.config_store.open_vocab import active_open_vocab_set
+from src.services.curation.open_vocab_gate import active_vlm_visible, load_tracker, save_tracker
 from src.services.curation.open_vocab_run import (
+    GateContext,
     SegmentImage,
     run_open_vocab_image,
     stamp_open_vocab_status,
@@ -118,9 +120,38 @@ class OpenVocabPass:
         revision: int | None,
         segment: SegmentImage,
         result: ReprocessScopeResult,
+        gate: GateContext,
     ) -> None:
         self.ov, self.revision, self.segment, self.result = ov, revision, segment, result
+        self.gate = gate
         self._outages = 0
+
+    @classmethod
+    async def start(
+        cls,
+        opensearch: AsyncOpenSearch,
+        ov: OpenVocabSet,
+        revision: int | None,
+        segment: SegmentImage,
+        result: ReprocessScopeResult,
+    ) -> OpenVocabPass:
+        """A pass with the gate inputs the set asks for: the vision model when
+        ``tier2_vlm_precheck`` is on (without one, tier 2 does not run and
+        ``detail.vlm_precheck_unavailable`` says so), and the persisted hit-rate
+        windows when ``tier3_hit_rate`` is on."""
+        gate = GateContext()
+        if ov.gating.tier2_vlm_precheck:
+            gate.vlm_visible = await active_vlm_visible(opensearch)
+            if gate.vlm_visible is None:
+                result.detail['vlm_precheck_unavailable'] = 1
+        if ov.gating.tier3_hit_rate.enabled:
+            gate.tracker = await load_tracker(opensearch)
+        return cls(ov, revision, segment, result, gate)
+
+    async def finish(self, opensearch: AsyncOpenSearch) -> None:
+        """Persist what the pass learned (tier-3 windows)."""
+        if self.gate.tracker is not None:
+            await save_tracker(opensearch, self.gate.tracker)
 
     @property
     def tripped(self) -> bool:
@@ -140,7 +171,7 @@ class OpenVocabPass:
         image_doc: dict[str, Any],
     ) -> None:
         """Run one image and stamp its ``open_vocab_status``: ``done`` on
-        success, ``failed`` when the image itself could not be processed. A
+        success (``skipped_gate`` when the gate spent no call at all), ``failed`` when the image itself could not be processed. A
         segmenter outage stamps nothing: the image stays as it was (``pending``
         when it was queued by ingest) so a later run picks it up."""
         try:
@@ -152,6 +183,7 @@ class OpenVocabPass:
                 self.ov,
                 revision=self.revision,
                 segment=self.segment,
+                gate=self.gate,
             )
         except SegmenterCallError as exc:
             self._outages += 1
@@ -165,7 +197,10 @@ class OpenVocabPass:
             await stamp_open_vocab_status(opensearch, image_id, 'failed')
             return
         self._outages = 0
-        await stamp_open_vocab_status(opensearch, image_id, 'done')
+        skipped = sum(out.skipped.values())
+        await stamp_open_vocab_status(
+            opensearch, image_id, 'skipped_gate' if skipped and not out.calls else 'done'
+        )
         self.result.queued += 1
         self.result.locked_skipped += out.locked_untouched
         for key, value in out.as_counts().items():

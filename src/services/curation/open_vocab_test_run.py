@@ -21,13 +21,15 @@ from typing import TYPE_CHECKING, Any
 from PIL import Image, UnidentifiedImageError
 
 from src.services.curation.image_serving import is_servable_image_path
-from src.services.curation.open_vocab_run import plan_open_vocab_image
+from src.services.curation.open_vocab_run import GateContext, plan_open_vocab_image
 from src.services.detection.open_vocab_set import decode_open_vocab_set
+from src.services.detection.segmenter_gate import RUN, GateDecision
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
+    from src.services.curation.open_vocab_gate import VlmVisibleFn
     from src.services.curation.open_vocab_run import SegmentImage
 
 #: Largest uploaded image (decoded bytes) a test accepts.
@@ -51,6 +53,7 @@ class TrialHit:
 class TrialOutcome:
     width: int
     height: int
+    gate: GateDecision
     hits: list[TrialHit]
     elapsed_ms: float
 
@@ -94,7 +97,9 @@ async def run_open_vocab_test(
     target_body: dict[str, Any],
     image_max_side: int,
     dedup_iou: float,
+    gating: dict[str, Any],
     segment: SegmentImage,
+    vlm_visible: VlmVisibleFn | None = None,
 ) -> TrialOutcome:
     """Raises ``SegmenterCallError`` when the segmenter cannot answer."""
     ov = decode_open_vocab_set(
@@ -103,10 +108,20 @@ async def run_open_vocab_test(
             'targets': [{**target_body, 'enabled': True}],
             'image_max_side': image_max_side,
             'dedup_iou': dedup_iou,
+            'gating': gating,
         },
     )
     started = time.monotonic()
-    plan = await plan_open_vocab_image(opensearch, image_id, pil, ov, ov.targets, segment=segment)
+    plan = await plan_open_vocab_image(
+        opensearch,
+        image_id,
+        pil,
+        ov,
+        ov.targets,
+        segment=segment,
+        gate=GateContext(vlm_visible=vlm_visible),
+    )
+    gate = plan.skipped[0][1] if plan.skipped else RUN
     hits = [
         TrialHit(h.candidate.bbox_norm, h.candidate.score, h.candidate.mask_polygon, True, None)
         for h in plan.selection.kept
@@ -118,6 +133,7 @@ async def run_open_vocab_test(
     return TrialOutcome(
         width=pil.width,
         height=pil.height,
+        gate=gate,
         hits=hits,
         elapsed_ms=round((time.monotonic() - started) * 1000, 1),
     )

@@ -40,6 +40,11 @@ class OpenVocabTarget:
     enabled: bool = True
     mask: bool = True
 
+    @property
+    def key(self) -> str:
+        """Identity of the target across set revisions (hit-rate history)."""
+        return f'{self.class_name.strip().casefold()}|{self.prompt.strip().casefold()}'
+
     def rules(self) -> TargetRules:
         return TargetRules(
             prompt=self.prompt,

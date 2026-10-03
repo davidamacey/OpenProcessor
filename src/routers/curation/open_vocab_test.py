@@ -11,6 +11,7 @@ from __future__ import annotations
 from src.routers.curation._common import OpenSearchDep, images_index, router
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._open_vocab_models import (
+    OpenVocabTestGate,
     OpenVocabTestHit,
     OpenVocabTestImage,
     OpenVocabTestRequest,
@@ -18,6 +19,7 @@ from src.routers.curation._open_vocab_models import (
 )
 from src.routers.curation.open_vocab import validation_inputs
 from src.services.config_store.open_vocab_validation import validate_open_vocab
+from src.services.curation.open_vocab_gate import active_vlm_visible
 from src.services.curation.open_vocab_test_run import (
     TrialImageError,
     decode_upload,
@@ -41,6 +43,7 @@ async def test_open_vocab_target(
         'targets': [body.target.model_dump()],
         'image_max_side': body.image_max_side,
         'dedup_iou': body.dedup_iou,
+        'gating': body.gating.model_dump(),
     }
     report = await validate_open_vocab(None, draft, **validation_inputs())
     if not report.ok:
@@ -58,6 +61,7 @@ async def test_open_vocab_target(
             pil = decode_upload(body.image_base64)
     except TrialImageError as exc:
         raise api_error(422, 'validation_failed', str(exc)) from exc
+    vlm_visible = await active_vlm_visible(opensearch) if body.gating.tier2_vlm_precheck else None
     try:
         outcome = await run_open_vocab_test(
             opensearch,
@@ -66,7 +70,9 @@ async def test_open_vocab_target(
             target_body=body.target.model_dump(),
             image_max_side=body.image_max_side,
             dedup_iou=body.dedup_iou,
+            gating=body.gating.model_dump(),
             segment=segment_image_http,
+            vlm_visible=vlm_visible,
         )
     except SegmenterCallError as exc:
         raise api_error(502, 'segmenter_error', str(exc)) from exc
@@ -74,6 +80,9 @@ async def test_open_vocab_target(
         image=OpenVocabTestImage(width=outcome.width, height=outcome.height),
         prompt=body.target.prompt,
         class_name=body.target.class_name,
+        gate=OpenVocabTestGate(
+            run=outcome.gate.run, tier=outcome.gate.tier, reason=outcome.gate.reason
+        ),
         hits=[
             OpenVocabTestHit(
                 bbox_norm=list(h.bbox_norm),

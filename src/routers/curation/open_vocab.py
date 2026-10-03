@@ -55,6 +55,7 @@ def validation_inputs() -> dict[str, Any]:
     validate, clone and the activation gate cannot disagree."""
     from src.config.ingest_profiles import ingest_primary_profile
     from src.routers.curation.region_profiles import _segmenter_health_fn
+    from src.services.labeling.vlm_endpoints import vlm_configured
     from src.utils.class_names import get_class_names
 
     registry = get_class_registry().load()
@@ -65,6 +66,7 @@ def validation_inputs() -> dict[str, Any]:
         if detector
         else frozenset(),
         'segmenter_health': _segmenter_health_fn,
+        'vlm_configured': vlm_configured(),
     }
 
 

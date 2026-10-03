@@ -203,6 +203,7 @@ ValidationCode = Literal[
     'open_vocab_class_name_invalid',
     'open_vocab_detector_class',
     'open_vocab_class_new',
+    'open_vocab_vlm_not_configured',
     # P4: combine-projects preview / start validation.
     'unmapped_class',
     'mapping_target_invalid',
