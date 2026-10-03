@@ -45,6 +45,7 @@ from src.config.curation import (  # noqa: F401 - re-exported for the router mod
 )
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
+from src.routers.curation._config_common_models import api_error
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
 from src.services.curation.open_vocab_fields import ensure_open_vocab_fields
 
@@ -141,7 +142,7 @@ def _require_region_profile_dep() -> Any:
 
     profile = get_active_region_profile()
     if profile is None:
-        raise HTTPException(status_code=409, detail='no region profile is configured')
+        raise api_error(409, 'no_active_profile', 'no region profile is configured')
     return profile
 
 

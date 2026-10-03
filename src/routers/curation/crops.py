@@ -29,6 +29,12 @@ from src.routers.curation._common import (
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._selection import selected_crop_ids
+from src.routers.curation._selection_write_models import (
+    BatchExcludeResponse,
+    BatchRelabelResponse,
+    BatchUnexcludeResponse,
+    SelectionDryRunResponse,
+)
 from src.services.curation.class_label import (
     candidate_move_update,
     human_label_update,
@@ -117,7 +123,6 @@ async def list_crops(
             )
         ),
     ] = None,
-    class_id: int | None = None,
     cluster_id: int | None = None,
     label_source: str | None = None,
     class_source: str | None = None,
@@ -218,7 +223,6 @@ async def list_crops(
         sort_clause = parse_crop_sort(sort)
         # The route's own params join the shared filter; one builder reads them all.
         legacy = {
-            'class_id': class_id,
             'cluster_id': cluster_id,
             'label_source': label_source,
             'class_source': class_source,
@@ -282,6 +286,7 @@ async def list_crops(
         order=order,
         query_clause=query_clause,
         cluster_id=cluster_id,
+        item_filter=flt,
         page=page,
         page_size=page_size,
         k=k,
@@ -377,7 +382,11 @@ async def label_crop(
     return {'crop_id': crop_id, 'class_id': payload.class_id, 'class_name': class_name}
 
 
-@router.put('/crops/batch_label')
+@router.put(
+    '/crops/batch_label',
+    response_model=None,
+    responses={200: {'model': BatchRelabelResponse | SelectionDryRunResponse}},
+)
 async def batch_label_crops(
     payload: CropBatchLabelRequest,
     opensearch: OpenSearchDep,
@@ -421,7 +430,11 @@ async def batch_label_crops(
     )
 
 
-@router.post('/crops/move')
+@router.post(
+    '/crops/move',
+    response_model=None,
+    responses={200: {'model': BatchRelabelResponse | SelectionDryRunResponse}},
+)
 async def move_crops(
     payload: CropMoveRequest,
     opensearch: OpenSearchDep,
@@ -522,7 +535,11 @@ async def flag_new_class(
     return {'flagged': len(payload.crop_ids) - n_errors, 'errors': n_errors}
 
 
-@router.post('/crops/batch_exclude')
+@router.post(
+    '/crops/batch_exclude',
+    response_model=None,
+    responses={200: {'model': BatchExcludeResponse | SelectionDryRunResponse}},
+)
 async def batch_exclude_crops(
     payload: CropExcludeRequest,
     opensearch: OpenSearchDep,
@@ -547,18 +564,18 @@ async def batch_exclude_crops(
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
-        return {'excluded': 0, 'errors': 0}
+        return {'excluded': 0, 'updated_ids': [], 'errors': 0}
     from src.services.curation.exclusion import exclusion_update
 
     now = _now_iso()
     reason = payload.reason or 'ignore'
-    n_errors = await _occ_bulk_human_write(
+    updated_ids, n_errors = await _occ_bulk_human_write(
         opensearch,
         ids,
         lambda _id, cur: exclusion_update(cur, reason=reason, now=now),
         writer_id='human:batch_exclude_crops',
     )
-    return {'excluded': len(ids) - n_errors, 'errors': n_errors}
+    return {'excluded': len(updated_ids), 'updated_ids': updated_ids, 'errors': n_errors}
 
 
 async def _occ_bulk_human_write(
@@ -567,11 +584,13 @@ async def _occ_bulk_human_write(
     merger: Any,
     *,
     writer_id: str,
-) -> int:
-    """Read-modify-write ``crop_ids`` via OCC bulk; return the failure count.
+) -> tuple[list[str], int]:
+    """Read-modify-write ``crop_ids`` via OCC bulk; return ``(written ids,
+    failure count)``.
 
     A version conflict (a concurrent write landed between read and write)
-    counts as a failure the caller reports, never a silent success.
+    counts as a failure the caller reports, never a silent success; an item
+    the merger left unchanged is in neither.
     """
     from src.clients.occ import occ_skip_on_conflict_bulk
 
@@ -586,10 +605,15 @@ async def _occ_bulk_human_write(
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
-    return len(resp.get('errors') or []) + int(resp.get('skipped_due_to_conflict') or 0)
+    failures = len(resp.get('errors') or []) + int(resp.get('skipped_due_to_conflict') or 0)
+    return list(resp.get('updated_ids') or []), failures
 
 
-@router.post('/crops/batch_unexclude')
+@router.post(
+    '/crops/batch_unexclude',
+    response_model=None,
+    responses={200: {'model': BatchUnexcludeResponse | SelectionDryRunResponse}},
+)
 async def batch_unexclude_crops(
     payload: CropUnexcludeRequest,
     opensearch: OpenSearchDep,
@@ -608,7 +632,7 @@ async def batch_unexclude_crops(
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
-        return {'unexcluded': 0, 'errors': 0}
+        return {'unexcluded': 0, 'updated_ids': [], 'errors': 0}
     from src.services.curation.exclusion import live_candidate_ids, unexclusion_update
 
     try:
@@ -616,13 +640,13 @@ async def batch_unexclude_crops(
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     now = _now_iso()
-    n_errors = await _occ_bulk_human_write(
+    updated_ids, n_errors = await _occ_bulk_human_write(
         opensearch,
         ids,
         lambda _id, cur: unexclusion_update(cur, now=now, live_candidate_ids=live),
         writer_id='human:batch_unexclude_crops',
     )
-    return {'unexcluded': len(ids) - n_errors, 'errors': n_errors}
+    return {'unexcluded': len(updated_ids), 'updated_ids': updated_ids, 'errors': n_errors}
 
 
 @router.post('/crops/{crop_id}/review_dismiss')

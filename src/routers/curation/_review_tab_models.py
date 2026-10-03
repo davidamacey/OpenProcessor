@@ -11,6 +11,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from src.services.curation.reprocess_models import ReprocessRequest  # noqa: TC001 - pydantic
+
+
+ReviewFilterKind = Literal['enum', 'multi_enum', 'class_names', 'bool', 'number', 'integer', 'text']
+
 
 class ReviewFilterOption(BaseModel):
     value: str
@@ -19,9 +24,14 @@ class ReviewFilterOption(BaseModel):
 
 class ReviewFilterSpec(BaseModel):
     param: str = Field(description='Query parameter on GET /review/{tab} and its locate route.')
-    kind: Literal['enum']
+    kind: ReviewFilterKind
     label: str
-    options: list[ReviewFilterOption]
+    options: list[ReviewFilterOption] = Field(
+        description='The fixed values of an enum / multi_enum filter; empty for every other kind.'
+    )
+    min: float | None = Field(description='Lower bound of a number / integer filter.')
+    max: float | None = Field(description='Upper bound of a number / integer filter.')
+    description: str = Field(description='How to fill the filter; empty when the label says it.')
 
 
 class ReviewTab(BaseModel):
@@ -45,6 +55,15 @@ class ReviewEmptyState(BaseModel):
     has_probe_predictions: bool
     has_item_scores: bool
     has_imported_labels: bool
+    has_unembedded_items: bool = Field(
+        description='Some item in the project has no vector, so a queue that skips them can be empty.'
+    )
+    suggested_reprocess: ReprocessRequest | None = Field(
+        description=(
+            'The embed request to POST to /reprocess (dry run first) when '
+            'has_unembedded_items; null otherwise.'
+        )
+    )
 
 
 class ReviewTabsResponse(BaseModel):

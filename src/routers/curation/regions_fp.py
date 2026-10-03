@@ -35,6 +35,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
@@ -68,7 +69,7 @@ _suspected_fp_cache: dict[
 ] = {}
 
 
-@router.post('/regions/cluster')
+@router.post('/regions/cluster', responses=REGION_PROFILE_RESPONSES)
 async def cluster_regions(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
@@ -114,7 +115,7 @@ async def region_cluster_status() -> dict[str, Any]:
     return region_cluster_job_status()
 
 
-@router.post('/regions/clusters/refine/{cluster_id}')
+@router.post('/regions/clusters/refine/{cluster_id}', responses=REGION_PROFILE_RESPONSES)
 async def refine_region_cluster_endpoint(
     cluster_id: int,
     opensearch: OpenSearchDep,
@@ -139,7 +140,7 @@ async def refine_region_cluster_endpoint(
     return result
 
 
-@router.get('/regions/clusters')
+@router.get('/regions/clusters', responses=REGION_PROFILE_RESPONSES)
 async def list_region_clusters(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,
@@ -283,7 +284,7 @@ async def list_region_clusters(
     return {'clusters': clusters, 'count': len(clusters)}
 
 
-@router.post('/regions/fp_centroids/build')
+@router.post('/regions/fp_centroids/build', responses=REGION_PROFILE_RESPONSES)
 async def build_fp_centroids_endpoint(
     opensearch: OpenSearchDep, _profile: RegionProfileDep
 ) -> dict[str, Any]:
@@ -309,7 +310,7 @@ async def fp_centroids_status() -> dict[str, Any]:
 @router.get(
     '/regions/suspected_false_positives',
     response_model=None,
-    responses={200: {'model': RegionRowPage}},
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionRowPage}},
 )
 async def suspected_false_positives(
     opensearch: OpenSearchDep,

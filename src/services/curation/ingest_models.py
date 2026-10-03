@@ -39,10 +39,11 @@ class IngestSummary(BaseModel):
     # Count of images where the secondary call failed (ingest still
     # succeeds on the primary detector's output alone).
     secondary_detector_failures: int = 0
-    # Stored items with / without a vector (a failed encoder call is the only
-    # reason an ingest leaves one without; see embedding_state).
+    # Stored items with / without a vector; of the latter, n_embed_failed are the
+    # encoder failures (the rest were not embedded by policy: see embedding_state).
     n_embedded: int = 0
     n_not_embedded: int = 0
+    n_embed_failed: int = 0
     # Detections the project's detect filter dropped (never stored).
     n_filtered: int = 0
 
@@ -63,6 +64,9 @@ class IngestResult(BaseModel):
     # the item says why).
     n_embedded: int = 0
     n_not_embedded: int = 0
+    # Of n_not_embedded: the encoder raised (embedding_state 'failed'), as opposed
+    # to an ingest policy skipping the item.
+    n_embed_failed: int = 0
     # Detections the detect filter dropped before storing (not part of ``n_crops``).
     n_filtered: int = 0
     # Items this ingest seeded ``pending_detection`` for the region worker

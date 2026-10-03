@@ -16,7 +16,6 @@ TextQ = Annotated[
 BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
 MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]
 NearDupQ = Annotated[bool, Query(description='Hide non-representative near-duplicates.')]
-ClassIdQ = Annotated[int | None, Query(description='Only items of this class.')]
 SourceQ = Annotated[str | None, Query(description='Only items with this ingest source tag.')]
 RegionStatusQ = Annotated[
     str | None,
@@ -73,7 +72,6 @@ SortQ = Annotated[
 
 __all__ = [
     'BlurQ',
-    'ClassIdQ',
     'CombineConflictQ',
     'DatasetSplitQ',
     'ImportIdQ',

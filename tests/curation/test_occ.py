@@ -158,6 +158,7 @@ class TestEmptyInput:
         result = await occ_skip_on_conflict_bulk(client, doc_ids=[], merger=_noop_merger)
         assert result == {
             'updated': 0,
+            'updated_ids': [],
             'skipped_due_to_conflict': 0,
             'skipped_ids': [],
             'errors': [],

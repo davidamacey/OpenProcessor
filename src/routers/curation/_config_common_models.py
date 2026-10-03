@@ -101,6 +101,10 @@ ErrorCode = Literal[
     'archive_invalid',
     'reprocess_targets_invalid',
     'region_profile_required',
+    # Ingest detector: seed and the policy override.
+    'detector_unavailable',
+    'unknown_detector_names',
+    'detector_not_servable',
     # P4: combine projects.
     'combine_not_found',
     'combine_not_resumable',
@@ -355,6 +359,10 @@ class ConfigErrorDetail(BaseModel):
     requested: str | None = None
     endpoint: str | None = None
     activate_via: str | None = None
+    # 422 unknown_detector_names: the requested names the detector lacks.
+    unknown_names: list[str] | None = None
+    # 422 detector_not_servable: every problem found with the override.
+    reasons: list[str] | None = None
     # W5: 404 crop_not_found names every crop id the project does not have.
     crop_ids: list[str] | None = None
     # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
@@ -393,7 +401,15 @@ class ValidationIssue(BaseModel):
 
     code: ValidationCode
     severity: Literal['error', 'warning', 'info']
-    field: str | None = None
+    field: str | None = Field(
+        default=None,
+        description=(
+            'Dotted path from the body root, a list index in brackets: '
+            '`targets[2].prompt`, `gating.tier3_hit_rate.window`, `image_max_side`. '
+            'A whole-element issue names the element (`targets[2]`); null when the '
+            'issue is not about one field.'
+        ),
+    )
     message: str
     detail: dict[str, Any] = {}
     bypassable: bool = False

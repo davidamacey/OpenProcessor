@@ -638,8 +638,7 @@ async def class_crops(
         opensearch=opensearch,
         page=page,
         page_size=page_size,
-        item_filter=ItemFilter(),
-        class_id=class_id,
+        item_filter=ItemFilter(class_id=class_id),
         include_test=include_test,
     )
 

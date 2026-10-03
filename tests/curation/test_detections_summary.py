@@ -66,9 +66,15 @@ def test_counts_each_label_with_its_embedding_breakdown(client: TestClient) -> N
     assert by['person']['embedding'] == {
         'embedded': 1,
         'not_embedded': 2,
-        'by_state': {'embedded': 1, 'not_selected': 2},
+        'by_state': {'embedded': 1, 'not_selected': 2, 'deferred': 0, 'failed': 0, 'unknown': 0},
     }
-    assert by['car']['embedding']['by_state'] == {'embedded': 1, 'failed': 1}
+    assert by['car']['embedding']['by_state'] == {
+        'embedded': 1,
+        'not_selected': 0,
+        'deferred': 0,
+        'failed': 1,
+        'unknown': 0,
+    }
     assert by['(no label)']['count'] == 1
     assert body['labels_truncated'] is False
 

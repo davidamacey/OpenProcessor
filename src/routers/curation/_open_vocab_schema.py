@@ -13,8 +13,10 @@ from src.routers.curation._open_vocab_models import (
     FieldType,
     OpenVocabFieldSchema,
     OpenVocabSchema,
+    OpenVocabVocabulary,
 )
 from src.services.config_store.open_vocab_validation import OPEN_VOCAB_FIELD_RANGES
+from src.services.curation.open_vocab_vocabulary import open_vocab_vocabulary
 from src.services.detection.open_vocab_set import (
     MAX_ENABLED_TARGETS_CEILING,
     GatingConfig,
@@ -102,6 +104,7 @@ def build_open_vocab_schema() -> OpenVocabSchema:
             *_rows('tier3_hit_rate', HitRateGate, frozenset()),
         ],
         max_enabled_targets_ceiling=MAX_ENABLED_TARGETS_CEILING,
+        vocabulary=OpenVocabVocabulary(**open_vocab_vocabulary()),
     )
 
 

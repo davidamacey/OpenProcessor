@@ -27,6 +27,7 @@ async def test_encoder_failure_marks_items_failed_and_counts_them() -> None:
 
     assert result.status == 'success'
     assert (result.n_crops, result.n_embedded, result.n_not_embedded) == (1, 0, 1)
+    assert result.n_embed_failed == 1
     [doc] = list(os_fake.items.values())
     assert doc['embedding_state'] == 'failed'
     assert 'pe_embedding' not in doc
@@ -37,7 +38,7 @@ async def test_success_marks_items_embedded() -> None:
     svc, os_fake, _ = _make_service()
     result = await svc.ingest_one(_jpeg_bytes(), '/tmp/a.jpg')
 
-    assert (result.n_embedded, result.n_not_embedded) == (1, 0)
+    assert (result.n_embedded, result.n_not_embedded, result.n_embed_failed) == (1, 0, 0)
     [doc] = list(os_fake.items.values())
     assert doc['embedding_state'] == 'embedded'
     assert 'pe_embedding' in doc
@@ -52,6 +53,9 @@ async def test_batch_summary_and_wire_sum_the_counters() -> None:
     )
 
     assert (batch.summary.n_embedded, batch.summary.n_not_embedded) == (0, 2)
+    assert batch.summary.n_embed_failed == 2
     wire: Any = _batch_response(batch, [])
     assert (wire.summary.n_embedded, wire.summary.n_not_embedded) == (0, 2)
     assert [r.n_not_embedded for r in wire.results] == [1, 1]
+    assert wire.summary.n_embed_failed == 2
+    assert [r.n_embed_failed for r in wire.results] == [1, 1]

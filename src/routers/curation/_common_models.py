@@ -45,11 +45,12 @@ class IngestImageResponse(BaseModel):
     imohash: str = ''
     n_crops: int = 0
     n_regions: int = 0
-    # Of n_crops: items stored with / without a vector. A failed encoder call
-    # leaves items without one (embedding_state 'failed') and is a warning,
-    # not a success.
+    # Of n_crops: items stored with / without a vector. n_not_embedded mixes policy
+    # skips with encoder failures; n_embed_failed (embedding_state 'failed') counts
+    # only the failures, which are a warning, not a success.
     n_embedded: int = 0
     n_not_embedded: int = 0
+    n_embed_failed: int = 0
     # Detections the project's detect filter dropped (never stored; not in n_crops).
     n_filtered: int = 0
     error: str | None = None
@@ -81,6 +82,7 @@ class BatchIngestSummaryResponse(BaseModel):
     secondary_detector_failures: int = 0
     n_embedded: int = 0
     n_not_embedded: int = 0
+    n_embed_failed: int = 0
     n_filtered: int = 0
 
 

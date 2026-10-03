@@ -160,11 +160,10 @@ async def list_clusters(
     per_cluster: int = Query(4, ge=0, le=10, description='Representative crops per cluster'),
     max_clusters: int = Query(1000, ge=1, le=10000),
     kind: Literal['class', 'candidate', 'all'] = Query('all'),
-    class_id: int | None = Query(None, description='Filter to clusters containing this class'),
     cluster_id: int | None = Query(
         None,
         description=(
-            'Filter to exactly this cluster_id. Distinct from class_id: '
+            'Filter to exactly this cluster_id. Distinct from a class: '
             'cluster_id == class_id is only an invariant for "class" '
             'clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a "candidate" '
             'cluster (id >= that offset) has no matching class_id at all, '
@@ -225,8 +224,6 @@ async def list_clusters(
     _base_match: dict[str, Any]
     if cluster_id is not None:
         _base_match = {'term': {'cluster_id': cluster_id}}
-    elif class_id is not None:
-        _base_match = {'term': {'class_id': class_id}}
     else:
         _base_match = {'match_all': {}}
     # Primary-subject gate (filter context → cached, scopes every sub-agg).

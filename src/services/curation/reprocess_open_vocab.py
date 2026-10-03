@@ -163,7 +163,7 @@ class OpenVocabPass:
         return self._outages >= MAX_CONSECUTIVE_OUTAGES
 
     def _add(self, key: str, value: int) -> None:
-        self.result.detail[key] = self.result.detail.get(key, 0) + value
+        self.result.add_count(key, value)
 
     def skip(self) -> None:
         self._add('not_attempted_segmenter_down', 1)

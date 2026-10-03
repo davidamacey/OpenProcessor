@@ -98,7 +98,9 @@ def test_gated_route_409s_without_an_active_profile(
         else getattr(app_client, method)(path)
     )
     assert resp.status_code == 409, resp.text
-    assert 'no region profile is configured' in resp.json()['detail']
+    detail = resp.json()['detail']
+    assert detail['error'] == 'no_active_profile'
+    assert detail['message'] == 'no region profile is configured'
 
 
 @pytest.mark.parametrize(('method', 'path', 'body'), _GATED_ROUTES)

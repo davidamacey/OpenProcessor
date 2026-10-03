@@ -452,7 +452,13 @@ def test_batch_set_region_status_empty_crop_ids_is_a_noop(app_client: TestClient
         json={'crop_ids': [], 'region_status': 'detected'},
     )
     assert resp.status_code == 200
-    assert resp.json() == {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+    assert resp.json() == {
+        'updated': 0,
+        'conflicts': [],
+        'invalid': [],
+        'items': [],
+        'vector_refresh': {'embedded': 0, 'pending': 0},
+    }
 
 
 def test_batch_set_region_status_missing_crop_reports_conflict_not_500(

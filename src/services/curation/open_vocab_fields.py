@@ -9,7 +9,7 @@ created before the pass existed.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.core.logging import get_logger
 
@@ -28,7 +28,11 @@ OPEN_VOCAB_ITEM_MAPPING: dict[str, Any] = {
     'mask_polygon': {'type': 'object', 'enabled': False},
 }
 
-#: ``pending`` (queued by ingest, or the segmenter was down) | ``done`` | ``failed``.
+#: The image's pass state: ``pending`` (queued by ingest, or the segmenter was
+#: down), ``done``, ``skipped_gate`` (every target gated off: nothing was run) or
+#: ``failed``. Labels: :mod:`~src.services.curation.open_vocab_vocabulary`.
+OpenVocabStatus = Literal['pending', 'done', 'skipped_gate', 'failed']
+
 OPEN_VOCAB_IMAGE_MAPPING: dict[str, Any] = {
     'open_vocab_status': {'type': 'keyword'},
     # When the status was last stamped: the sweeper leaves a fresh ``pending``

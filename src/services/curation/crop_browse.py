@@ -114,6 +114,7 @@ def crops_page(
     version: str | None = None,
     n_pool: int | None = None,
     n_unembedded: int | None = None,
+    suggested_reprocess: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """``CropsPageResponse``-shaped envelope around serialized items."""
     return {
@@ -125,6 +126,7 @@ def crops_page(
         'version': version,
         'n_pool': n_pool,
         'n_unembedded': n_unembedded,
+        'suggested_reprocess': suggested_reprocess,
     }
 
 

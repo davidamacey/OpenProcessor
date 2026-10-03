@@ -290,6 +290,7 @@ async def index_items(
             n_crops=len(crop_docs),
             n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
             n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
+            n_embed_failed=sum(it.embedding_state == FAILED for it in items),
             crops_created=bulk_result.get('crops_created', 0),
             crops_updated=bulk_result.get('crops_updated', 0),
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),

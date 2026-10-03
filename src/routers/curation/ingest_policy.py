@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from collections import Counter
 
-from fastapi import HTTPException
-
 from src.config import get_curation_config
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, get_class_registry, router
+from src.routers.curation._config_common_models import ApiErrorResponse, api_error
+from src.routers.curation._error_models import (
+    DetectorNotServableResponse,
+    DetectorUnavailableResponse,
+)
 from src.routers.curation._ingest_policy_models import (
     IngestPolicyPreview,
     IngestPolicyPutResponse,
@@ -77,10 +80,15 @@ async def _require_servable(override: DetectorOverride) -> None:
     try:
         pool = get_async_triton_pool()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=f'triton unavailable: {exc}') from exc
+        raise api_error(503, 'detector_unavailable', f'triton unavailable: {exc}') from exc
     problems = await detector_problems(pool, override)
     if problems:
-        raise HTTPException(status_code=422, detail=problems)
+        raise api_error(
+            422,
+            'detector_not_servable',
+            '; '.join(problems),
+            reasons=list(problems),
+        )
 
 
 @router.get('/ingest/policy', response_model=IngestPolicy)
@@ -91,7 +99,15 @@ async def get_policy(opensearch: OpenSearchDep) -> IngestPolicy:
     return await get_ingest_policy(opensearch)
 
 
-@router.put('/ingest/policy', response_model=IngestPolicyPutResponse)
+@router.put(
+    '/ingest/policy',
+    response_model=IngestPolicyPutResponse,
+    responses={
+        409: {'model': ApiErrorResponse},
+        422: {'model': DetectorNotServableResponse},
+        503: {'model': DetectorUnavailableResponse},
+    },
+)
 async def put_policy(
     body: IngestPolicyUpdate, opensearch: OpenSearchDep
 ) -> IngestPolicyPutResponse:
@@ -109,7 +125,7 @@ async def put_policy(
             opensearch, policy_body, expected_revision=body.expected_revision
         )
     except PolicyConflictError as exc:
-        raise HTTPException(status_code=409, detail=f'ingest policy changed: {exc}') from exc
+        raise api_error(409, 'revision_conflict', f'ingest policy changed: {exc}') from exc
     return IngestPolicyPutResponse(
         **stored.model_dump(), unknown_names=unknown_names(policy_body, _known_slugs(policy_body))
     )

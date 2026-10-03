@@ -467,7 +467,13 @@ def test_batch_regions_empty_crop_ids_and_valid_payload_is_still_a_noop(
         json={'crop_ids': [], 'boxes': []},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+    assert resp.json() == {
+        'updated': 0,
+        'conflicts': [],
+        'invalid': [],
+        'items': [],
+        'vector_refresh': {'embedded': 0, 'pending': 0},
+    }
 
 
 def test_batch_box_state_empty_targets_still_validates_state(app_client: TestClient) -> None:
@@ -488,7 +494,13 @@ def test_batch_box_state_empty_targets_and_valid_state_is_still_a_noop(
         json={'targets': [], 'state': 'accepted'},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
+    assert resp.json() == {
+        'updated': 0,
+        'conflicts': [],
+        'invalid': [],
+        'items': [],
+        'vector_refresh': {'embedded': 0, 'pending': 0},
+    }
 
 
 # ---------------------------------------------------------------------------

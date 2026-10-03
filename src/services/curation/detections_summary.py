@@ -20,7 +20,11 @@ from src.services.curation.reprocess_models import (
     ReprocessRequest,
     ReprocessTargets,
 )
-from src.services.curation.stats_embedding import embedding_aggregations, embedding_summary
+from src.services.curation.stats_embedding import (
+    EmbeddingBreakdown,
+    embedding_aggregations,
+    embedding_summary,
+)
 
 
 if TYPE_CHECKING:
@@ -29,12 +33,6 @@ if TYPE_CHECKING:
 MAX_LABELS = 500
 NO_LABEL = '(no label)'
 _NAME_MISSING = '__none__'
-
-
-class EmbeddingBreakdown(BaseModel):
-    embedded: int
-    not_embedded: int
-    by_state: dict[str, int]
 
 
 class LabelSummary(BaseModel):
@@ -106,7 +104,6 @@ async def detections_summary(
 
 __all__ = [
     'DetectionsSummary',
-    'EmbeddingBreakdown',
     'LabelSummary',
     'detections_summary',
     'suggested_embed_request',

@@ -254,7 +254,7 @@ async def _plan_images(
         )
         result.locked_skipped = sum(1 for _, src in docs if item_locked(src))
     if scope == 'embed' and embed is not None and image_ids:
-        result.detail = await plan_embed_counts(opensearch, image_ids, embed)
+        result.detail = {**await plan_embed_counts(opensearch, image_ids, embed)}
     return result
 
 
