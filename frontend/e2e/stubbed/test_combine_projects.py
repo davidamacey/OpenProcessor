@@ -65,7 +65,19 @@ def preview(sha: str = "sha-1", **over: Any) -> dict[str, Any]:
                 "project": None,
                 "message": "1 boxes disagree between sources; the first source wins",
                 "detail": {"count": 1},
-            }
+            },
+            {
+                "code": "embedding_model_mismatch",
+                "severity": "warning",
+                "project": None,
+                "message": "widgets-a embeds with clip-b, widgets-b with pe-core",
+            },
+            {
+                "code": "region_profiles_differ",
+                "severity": "warning",
+                "project": None,
+                "message": "widgets-a uses tag_v1, widgets-b has no region profile",
+            },
         ],
         "preview_sha": sha,
         "suggested_mapping": {
@@ -199,6 +211,12 @@ def test_two_sources_preview_mapping_and_start(stub, page, app_url):
     # The served preview renders: counts, warning, target classes.
     page.get_by_test_id("combine-preview").wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id("combine-warnings")).to_contain_text("1 boxes disagree")
+    expect(page.get_by_test_id("combine-warnings")).to_contain_text(
+        "widgets-a embeds with clip-b, widgets-b with pe-core"
+    )
+    expect(page.get_by_test_id("combine-warnings")).to_contain_text(
+        "widgets-a uses tag_v1, widgets-b has no region profile"
+    )
     expect(page.get_by_test_id("combine-preview-target")).to_contain_text("18 images")
     # Served mapping-action labels (read from the first source's formats).
     expect(page.get_by_test_id("combine-mapping-widgets-a").locator("option", has_text="Skip this class").first).to_be_attached(

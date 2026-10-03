@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 <!-- track-C item-filter -->
 
-<!-- track-D projects+hardening -->
+- `/projects` shows an "Embedded" column (items with a vector), and its delete dialog lists the projects whose active profile uses a model the project shares, names them in a 409 "in use" refusal, and offers a Retry when the server cannot read every project. The shard-capacity block carries the served `limit_source` and `shards_after_create`.
 
 ### Changed
 

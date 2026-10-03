@@ -73,6 +73,33 @@ describe('CombinePreviewSummary', () => {
     expect(t('combine-slug-unavailable')).toContain('not available');
   });
 
+  it('renders the v0.4.0 embedding_model_mismatch and region_profiles_differ warnings verbatim', () => {
+    render(
+      combinePreview({
+        warnings: [
+          {
+            code: 'embedding_model_mismatch',
+            severity: 'warning',
+            message: 'widgets-a embeds with clip-b, widgets-b with pe-core',
+          },
+          {
+            code: 'region_profiles_differ',
+            severity: 'warning',
+            message: 'widgets-a uses tag_v1, widgets-b has no region profile',
+          },
+        ],
+      }),
+    );
+    const rows = [...target.querySelectorAll('[data-testid="combine-warnings"] li')];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.textContent).toContain(
+      'widgets-a embeds with clip-b, widgets-b with pe-core',
+    );
+    expect(rows[1]!.textContent).toContain(
+      'widgets-a uses tag_v1, widgets-b has no region profile',
+    );
+  });
+
   it('missing served numbers read as a dash, never a zero; an estimate prints when served', () => {
     render(
       combinePreview({

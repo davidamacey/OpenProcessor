@@ -229,6 +229,26 @@ describe('row actions follow served flags only', () => {
   });
 });
 
+describe('Embedded column (v0.4.0)', () => {
+  it('shows the served items_embedded per row, a dash when null', async () => {
+    listed = [
+      DEFAULT,
+      testProject({
+        slug: 'a1',
+        counts: { images: 1, items: 20, validated: 5, items_embedded: 7 },
+      }),
+      testProject({
+        slug: 'b1',
+        counts: { images: 1, items: 20, validated: null, items_embedded: null },
+      }),
+    ];
+    await render();
+    expect(document.querySelector('thead')!.textContent).toContain('Embedded');
+    expect(q('project-embedded-a1')!.textContent!.trim()).toBe('7');
+    expect(q('project-embedded-b1')!.textContent!.trim()).toBe('—');
+  });
+});
+
 describe('create', () => {
   it('renders a served refusal verbatim in the dialog', async () => {
     handler = () =>

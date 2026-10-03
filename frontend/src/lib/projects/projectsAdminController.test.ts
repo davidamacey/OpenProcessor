@@ -161,7 +161,12 @@ describe('create', () => {
         : undefined,
     );
     const res = await createProjectsAdmin().create({ slug: 'x', display_name: 'X' });
-    expect(res).toEqual({ ok: false, code, message });
+    expect(res).toEqual({
+      ok: false,
+      code,
+      message,
+      detail: { error: code, message },
+    });
   });
 });
 
@@ -202,6 +207,11 @@ describe('edit / archive / unarchive / clone', () => {
       ok: false,
       code: 'revision_conflict',
       message: 'expected revision 7, current is 9',
+      detail: {
+        error: 'revision_conflict',
+        message: 'expected revision 7, current is 9',
+        current_revision: 9,
+      },
     });
   });
 
@@ -227,6 +237,11 @@ describe('edit / archive / unarchive / clone', () => {
       ok: false,
       code: 'project_busy',
       message: "'alpha' has 1 running job(s)",
+      detail: {
+        error: 'project_busy',
+        message: "'alpha' has 1 running job(s)",
+        jobs: ['j1'],
+      },
     });
     expect((await admin.unarchive(ALPHA)).ok).toBe(true);
     expect(writes().map((c) => [c.url, c.body])).toEqual([
@@ -298,8 +313,44 @@ describe('delete', () => {
       ok: false,
       code: 'project_protected',
       message: 'The default project can be archived but not deleted.',
+      detail: {
+        error: 'project_protected',
+        message: 'The default project can be archived but not deleted.',
+        project: 'default',
+      },
     });
     expect(writes()[0]!.url).toBe(`${API_PREFIX}/projects/default?confirm=default`);
+  });
+
+  it('a 409 in_use carries the served projects and used_by on the failure', async () => {
+    const detail = {
+      error: 'in_use',
+      message: 'a shared model of this project is in use',
+      projects: ['beta'],
+      used_by: [{ project: 'beta', profile: 'tags_v2' }],
+    };
+    serve((url) => (url.includes('confirm=') ? json({ detail }, 409) : undefined));
+    const res = await createProjectsAdmin().remove(ALPHA, 'alpha');
+    expect(res).toEqual({
+      ok: false,
+      code: 'in_use',
+      message: detail.message,
+      detail,
+    });
+  });
+
+  it('a 503 config_store_unavailable on the dry run is a coded failure with its message', async () => {
+    const detail = {
+      error: 'config_store_unavailable',
+      message: 'the config store could not be read',
+    };
+    serve((url) => (url.includes('dry_run=true') ? json({ detail }, 503) : undefined));
+    const res = await createProjectsAdmin().dryRunDelete(ALPHA);
+    expect(res).toMatchObject({
+      ok: false,
+      code: 'config_store_unavailable',
+      message: detail.message,
+    });
   });
 
   it('a real delete sends what the operator typed as confirm', async () => {

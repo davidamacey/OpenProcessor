@@ -28,6 +28,7 @@ import type {
   DeleteDryRunResponse,
   KeymapCloneConflict,
   ProjectCapacity,
+  ProjectErrorDetail,
   ProjectLabels,
   ProjectLifecycleResponse,
   ProjectLimits,
@@ -43,11 +44,21 @@ import { toastStore } from '$stores/toast.svelte';
  *  to show, verbatim from the server when it sent one. */
 export type ActionResult =
   | { ok: true; project: ProjectSummary }
-  | { ok: false; code: string | null; message: string };
+  | {
+      ok: false;
+      code: string | null;
+      message: string;
+      detail: ProjectErrorDetail | null;
+    };
 
 export type DryRunResult =
   | { ok: true; report: DeleteDryRunResponse }
-  | { ok: false; code: string | null; message: string };
+  | {
+      ok: false;
+      code: string | null;
+      message: string;
+      detail: ProjectErrorDetail | null;
+    };
 
 /** The served warnings on a lifecycle envelope, each as its own toast. */
 export function toastWarnings(warnings: ProjectWarning[] | undefined): void {
@@ -71,11 +82,13 @@ export function toastKeymapConflicts(conflicts: KeymapCloneConflict[] | undefine
   toastStore.push({ kind: 'warn', text: keymapConflictText(conflicts), ttl_ms: 15000 });
 }
 
-function failure(e: unknown): { ok: false; code: string | null; message: string } {
+function failure(e: unknown): Extract<ActionResult, { ok: false }> {
+  const detail = projectErrorDetail(e);
   return {
     ok: false,
-    code: projectErrorDetail(e)?.error ?? null,
+    code: detail?.error ?? null,
     message: projectErrorText(e),
+    detail,
   };
 }
 

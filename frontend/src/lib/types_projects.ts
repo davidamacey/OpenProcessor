@@ -76,6 +76,12 @@ export interface ProjectCapacity {
   max_shards_per_node: number;
   data_nodes: number;
   projects_until_soft_limit: number;
+  /** `active_shards + per_project_shards`: the total if one more project
+   *  were created. */
+  shards_after_create: number;
+  /** Which limit `soft_limit` is: the heap-derived one, or the cluster's
+   *  own hard limit when that is lower. */
+  limit_source: 'heap' | 'cluster_max_shards_per_node';
   message: string;
   labels: Record<string, string>;
 }
@@ -173,17 +179,23 @@ export interface DeleteBlockingIssue {
   message: string;
 }
 
+/** One project whose active detection profile uses a model the deleted
+ *  project owns and shares (`referenced_by`). The served schema types the
+ *  rows as bare objects; `project` and `profile` are the keys served. */
+export interface DeleteReference {
+  project: string;
+  profile?: string | null;
+}
+
 /** `DELETE {globalApi()}/projects/{slug}?dry_run=true` — report only,
- *  writes nothing. Not declared as a response model in the served
- *  OpenAPI (the route's response is untyped there); shape from the
- *  backend's `DeleteDryRunResponse`. */
+ *  writes nothing. */
 export interface DeleteDryRunResponse {
   indexes: { name: string; docs: number; store_bytes?: number | null }[];
   dirs: { path: string; bytes: number }[];
   promoted_models: string[];
   mlflow_experiment: string;
   running_jobs: Record<string, unknown>[];
-  referenced_by: Record<string, unknown>[];
+  referenced_by: DeleteReference[];
   blocking: string[];
   blocking_detail?: DeleteBlockingIssue[];
 }
