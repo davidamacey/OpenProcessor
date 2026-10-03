@@ -46,6 +46,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Writes (POST/PUT/PATCH/DELETE) are no longer retried on a 5xx or a lost response: only GET/HEAD retry. A long export that hit a gateway timeout used to run up to four times, and a start-training or create-class could repeat.
+- Box editing: `[` and `]` (shrink / grow the right edge) work again on `/review` and in the box editor; they were listed as rebindable but handled by nothing.
+- Folder selection skips any path containing a `..` segment, the same rule the drag-and-drop walker applies.
+- `/export` no longer disables Export when every class is below the served `block` tier; the server decides and answers its own "nothing to export" refusal.
+- `/classes` merge cannot be confirmed without the served dry run; the confirmation always shows the served relabel count.
+- `/train` and the VLM catalog only link a served MLflow or license URL when it is http(s).
+- `/clusters`: the sort and unlabeled filter are remembered per project and an unknown stored sort is ignored; a slot-bound cluster card links by its served class id, and a name lookup resolves to the active class when a deprecated one shares the name.
+- The container entrypoint rejects a `PUBLIC_TRITON_API_URL` or `PUBLIC_API_PREFIX` containing characters that would break its substitution (an empty URL is still the default), with a clear message.
+- Removed the README row for the retired `PUBLIC_CROPWRIGHT_INGEST_UPLOAD`, and dead code (unused store accessors, API wrappers, types, test fixtures, the fabricated `ingestion` block in the stats summary).
 - `/models` no longer fails to load when the server lists the same model twice (a shared model after a re-share): each card is keyed by position as well as name, so both render instead of a Svelte `each_key_duplicate` error leaving the page on "Loading...".
 
 - A failed module-chunk load (flaky network, browser network-change abort, or

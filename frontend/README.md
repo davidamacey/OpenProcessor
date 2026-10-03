@@ -204,7 +204,6 @@ key a registered region slot's own keymap declares.
 | `CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
 | `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`                     | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
 | `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
-| `PUBLIC_CROPWRIGHT_INGEST_UPLOAD`      | _(unset)_                  | build time    | Set to `1` to hide the "uploads aren't browsable" banner against a backend too old to report whether it persists uploaded bytes.                                            |
 | `PUBLIC_MLFLOW_URL` and friends        | _(unset)_                  | build time    | `PUBLIC_MLFLOW_URL`, `PUBLIC_GRAFANA_URL`, `PUBLIC_PROMETHEUS_URL`, `PUBLIC_OPENSEARCH_DASHBOARDS_URL`: override the monitoring links when the backend doesn't serve them.  |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
