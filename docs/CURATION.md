@@ -690,11 +690,15 @@ Items without a vector are stored and browsable, but clustering, kNN search,
 the outlier and diverse orderings, the review queue's unclassed view and the VLM stage
 all skip them, so the API says so instead of returning a silent gap:
 
-- Ingest results and the batch summary carry `n_embedded` and `n_not_embedded`;
-  `ingest_walker.py` warns when any item was stored without one.
+- Ingest results and the batch summary carry `n_embedded` and `n_not_embedded`
+  (items stored without a vector, which includes policy skips) and `n_embed_failed`
+  (only the encoder failures: warn on this one); `ingest_walker.py` warns when any
+  item was stored without a vector.
 - `GET /curation/projects/{project}/search/text` returns `unembedded_in_scope`.
 - `GET /curation/projects/{project}/crops` with `order=outliers` or
-  `order=diverse` returns `n_unembedded` next to `n_pool`.
+  `order=diverse` (and `core_first`) returns `n_unembedded` next to `n_pool`, plus
+  `suggested_reprocess`: the dry-run embed request to POST for the items it could not rank.
+  An empty `GET /review/tabs` queue offers the same request in `empty_state`.
 - `GET /curation/projects/{project}/stats/dataset` returns an `embedding` block
   (`embedded`, `not_embedded`, `by_state`); the project counts return
   `items_embedded`; the auto-label `baseline`/`after` snapshots return
@@ -727,7 +731,7 @@ are the ways an item needs a vector after ingest, and what happens today.
    embed (encoder down, image unreadable) stays `pending`: the edit still
    succeeds and an `embed` run with `only_missing` picks the box up.
 3. **An embedding failed at ingest.** The item is stored with
-   `embedding_state: failed` and counted in `n_not_embedded`. Retry with
+   `embedding_state: failed` and counted in `n_not_embedded` and `n_embed_failed`. Retry with
    `POST /curation/projects/{project}/reprocess` and scope `embed` on the
    item or its image; the item becomes `embedded`.
 4. **An ingest policy skipped it** (`selected`, `lazy`, per-image caps). It is
