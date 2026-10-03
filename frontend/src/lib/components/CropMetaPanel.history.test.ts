@@ -28,6 +28,7 @@ vi.mock('$lib/api', () => ({
   })),
   getCropContext: vi.fn(async () => ({ image: null, items: [] })),
   getThumbUrl: (id: string) => `/thumb/${id}`,
+  apiErrorText: (e: unknown) => String(e),
 }));
 
 const { default: CropMetaPanel } = await import('./CropMetaPanel.svelte');
