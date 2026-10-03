@@ -5,6 +5,7 @@ run write into another project's autolabel_dir."""
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from datetime import UTC, datetime
@@ -203,3 +204,39 @@ def test_state_mtime_is_per_project(two_projects) -> None:
         assert job.state_mtime() > 0
     with bind_project(beta):
         assert job.state_mtime() == before
+
+
+async def _stage_error_pipeline(*, opensearch: Any, progress: Any, **kwargs: Any) -> dict[str, Any]:
+    return {'stages': {'embed_missing': {'status': 'error', 'error': 'boom'}, 'vlm': {}}}
+
+
+def test_run_with_a_failed_stage_ends_failed(two_projects) -> None:
+    alpha, _ = two_projects
+    trigger = auto_label_worker._claim_trigger_for(alpha)
+    assert trigger is not None
+    trigger['pipeline'] = f'{__name__}:_stage_error_pipeline'
+    asyncio.run(auto_label_worker._run_one(alpha, trigger, opensearch=None))
+    with bind_project(alpha):
+        state = json.loads((get_curation_config().autolabel_dir / 'state.json').read_text())
+    assert state['status'] == 'failed'
+    assert 'embed_missing' in state['error']
+    assert state['result']['stages']['embed_missing']['error'] == 'boom'
+
+
+def test_heartbeat_exists_before_the_running_state_is_visible(
+    two_projects, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alpha, _ = two_projects
+    trigger = auto_label_worker._claim_trigger_for(alpha)
+    assert trigger is not None
+    seen: list[bool] = []
+    real = auto_label_worker._atomic_write
+
+    def _spy(data: dict[str, Any]) -> None:
+        if data.get('status') == 'running' and not seen:
+            seen.append(auto_label_worker._heartbeat_file().exists())
+        real(data)
+
+    monkeypatch.setattr(auto_label_worker, '_atomic_write', _spy)
+    asyncio.run(auto_label_worker._run_one(alpha, trigger, opensearch=None))
+    assert seen == [True]

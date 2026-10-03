@@ -102,6 +102,11 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+
+- Auto-label `embed_missing` stage embedded nothing because its Triton pool was never initialized (#69); any stage reporting `status: error` now ends the job `failed` (naming the stages, result kept) instead of `completed`. The worker writes its heartbeat before the `running` state, so a fresh run is no longer briefly reported as `heartbeat missing`.
+- Stored region profiles carrying the retired empty `class_ids` field are read and validated again (dropped on read, one shared function); the pinned-body warning stops and a GET body POSTs into another project (#70). A non-empty `class_ids` is still rejected.
+- `GET /search/text` answers 400, not 503, for `conf_min` above `conf_max` (#71).
+- `env.template` documents that new projects inherit the env region profile and how to turn it off; `POST /export/yolo` takes no `dry_run` (design plan corrected).
 - **The combine job reports completed only after its target is active** (#47). The job
   used to write `completed`/`done` and only then move the target out of `building`, so
   the served next step (`POST /cluster/umap/rebuild`) could 409 `project_building`.

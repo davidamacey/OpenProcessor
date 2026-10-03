@@ -80,7 +80,7 @@ def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> D
     Underscore-prefixed keys (``_comment`` etc.) are ignored; any other
     unknown key is rejected, and ``name`` is required. Tuple fields
     (``letterbox_fill``, ``auto_confirm_aspect``, ``auto_confirm_area_frac``)
-    and frozenset fields (``secondary_shape_groups``, ``class_ids``,
+    and frozenset fields (``secondary_shape_groups``,
     ``parent_classes``, ``text_stopwords``, ``text_placeholders``) are given
     as JSON lists. ``source`` names the input in error messages. Raises on
     anything malformed -- a typo must fail loudly, not silently fall back
@@ -94,6 +94,11 @@ def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> D
         msg = f'region profile {source!r} must be a JSON object'
         raise ValueError(msg)
     values = {k: v for k, v in data.items() if not k.startswith('_')}
+    if values.get('class_ids') == []:
+        # Retired field (primary class ids moved to the project ingest
+        # policy): older stored docs still carry it empty. A non-empty value
+        # would have been a class filter, so it stays an unknown-field error.
+        del values['class_ids']
     if 'name' not in values:
         msg = f'region profile {source!r} is missing the required "name" field'
         raise ValueError(msg)

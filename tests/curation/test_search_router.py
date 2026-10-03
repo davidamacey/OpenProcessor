@@ -174,3 +174,12 @@ def test_search_text_no_hits_returns_empty(app_client: TestClient):
         'page_size': 30,
         'unembedded_in_scope': 0,
     }
+
+
+def test_search_text_inverted_confidence_band_is_400(app_client: TestClient):
+    resp = app_client.get(
+        '/curation/projects/default/search/text',
+        params={'q': 'truck', 'conf_min': 0.9, 'conf_max': 0.1},
+    )
+    assert resp.status_code == 400
+    assert 'conf_min' in resp.text
