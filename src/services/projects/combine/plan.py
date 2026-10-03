@@ -167,7 +167,12 @@ async def check_target(
         return errors, warnings
     try:
         warnings.extend(
-            CombineIssue(code='shard_budget_high', severity='warning', message=w.get('message', ''))
+            CombineIssue(
+                code='shard_budget_high',
+                severity='warning',
+                message=w.get('message', ''),
+                detail=w.get('detail') or {},
+            )
             for w in await lifecycle._capacity_error_or_warning(client)
         )
     except HTTPException as exc:

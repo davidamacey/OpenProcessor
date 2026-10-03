@@ -274,6 +274,7 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
                 "keymap action 'cluster.ignore' combo 'i' collides with class "
                 "'ice_cream_truck' (id 0) and was dropped from the clone"
             ),
+            'detail': {},
         }
     ]
 

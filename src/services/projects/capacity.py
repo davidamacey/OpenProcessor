@@ -44,6 +44,8 @@ class ProjectCapacity:
     max_shards_per_node: int
     data_nodes: int
     projects_until_soft_limit: int
+    shards_after_create: int
+    limit_source: Literal['heap', 'cluster_max_shards_per_node']
     message: str
     labels: dict[str, str]
 
@@ -58,6 +60,8 @@ class ProjectCapacity:
             'max_shards_per_node': self.max_shards_per_node,
             'data_nodes': self.data_nodes,
             'projects_until_soft_limit': self.projects_until_soft_limit,
+            'shards_after_create': self.shards_after_create,
+            'limit_source': self.limit_source,
             'message': self.message,
             'labels': self.labels,
         }
@@ -156,7 +160,9 @@ def _build_capacity(
         status = 'warn'
         message = (
             f'OpenSearch has a {_format_gb(heap_gb_total)} heap, which serves about {soft_limit} '
-            f'shards well; this project brings the total to {projected}. Searches may slow down. '
+            f'shards well; this project (about {shards} shards: one primary per index, no '
+            f'replicas) brings the total, which counts every index in the cluster, to {projected}. '
+            'Searches may slow down. '
             f'Raise OPENSEARCH_HEAP in .env (about 1 GB per {int(_shards_per_heap_gb())} shards) '
             'and restart opensearch.'
         )
@@ -176,6 +182,8 @@ def _build_capacity(
         max_shards_per_node=max_shards_per_node,
         data_nodes=data_nodes,
         projects_until_soft_limit=projects_until_soft_limit,
+        shards_after_create=projected,
+        limit_source='heap' if soft_limit < hard_limit else 'cluster_max_shards_per_node',
         message=message,
         labels=dict(_LABELS),
     )

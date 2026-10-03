@@ -277,7 +277,7 @@ def test_lifecycle_envelope_shape() -> None:
         'warnings',
         'keymap_clone_conflicts',
     }
-    assert set(ProjectWarning.model_fields) == {'code', 'message'}
+    assert set(ProjectWarning.model_fields) == {'code', 'message', 'detail'}
 
 
 def test_revision_conflict_is_an_error_code() -> None:

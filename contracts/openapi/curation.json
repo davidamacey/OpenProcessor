@@ -12264,6 +12264,15 @@
             "title": "Labels",
             "type": "object"
           },
+          "limit_source": {
+            "description": "Which limit soft_limit is: heap (heap GB x OP_SHARDS_PER_HEAP_GB) or the cluster hard limit when that is lower.",
+            "enum": [
+              "heap",
+              "cluster_max_shards_per_node"
+            ],
+            "title": "Limit Source",
+            "type": "string"
+          },
           "max_shards_per_node": {
             "title": "Max Shards Per Node",
             "type": "integer"
@@ -12278,6 +12287,11 @@
           },
           "projects_until_soft_limit": {
             "title": "Projects Until Soft Limit",
+            "type": "integer"
+          },
+          "shards_after_create": {
+            "description": "active_shards plus per_project_shards: the total if one more project is created.",
+            "title": "Shards After Create",
             "type": "integer"
           },
           "soft_limit": {
@@ -12304,6 +12318,8 @@
           "max_shards_per_node",
           "data_nodes",
           "projects_until_soft_limit",
+          "shards_after_create",
+          "limit_source",
           "message",
           "labels"
         ],
@@ -12813,6 +12829,12 @@
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "description": "Structured facts behind the note. For shard_budget_high: the same capacity block GET /curation/projects serves.",
+            "title": "Detail",
+            "type": "object"
           },
           "message": {
             "title": "Message",

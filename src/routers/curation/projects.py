@@ -178,7 +178,7 @@ async def get_project(
 
 async def _summary_response(
     record: Any,
-    warnings: list[dict[str, str]] | None = None,
+    warnings: list[dict[str, Any]] | None = None,
     keymap_clone_conflicts: list[dict[str, Any]] | None = None,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()

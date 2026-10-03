@@ -196,6 +196,10 @@ def test_create_project_capacity_warn_returns_warning() -> None:
     assert record.status == 'active'
     assert warnings
     assert warnings[0]['code'] == 'shard_budget_high'
+    detail = warnings[0]['detail']
+    assert detail['soft_limit'] == 40
+    assert detail['limit_source'] == 'heap'
+    assert detail['shards_after_create'] == detail['active_shards'] + detail['per_project_shards']
 
 
 def test_create_20_projects_on_roomy_cluster() -> None:

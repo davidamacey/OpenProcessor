@@ -164,6 +164,11 @@ class ProjectWarning(BaseModel):
 
     code: str
     message: str
+    detail: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Structured facts behind the note. For shard_budget_high: the same '
+        'capacity block GET /curation/projects serves.',
+    )
 
 
 class KeymapCloneConflictWire(BaseModel):
