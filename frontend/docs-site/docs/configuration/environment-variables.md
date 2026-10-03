@@ -13,13 +13,23 @@ From `.env.example`. Copy it to `.env` before `docker compose up`.
 | --- | --- | --- |
 | `PUBLIC_TRITON_API_URL` | Points the dev server's browser bundle directly at a reachable OpenProcessor API origin, bypassing the nginx proxy. Leave unset for `docker compose up` — Compose passes it through to the browser bundle, which would then call this origin directly instead of the proxy. | empty |
 
-## Read by both
+## Read by `npm run dev` and Docker Compose
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PUBLIC_API_PREFIX` | Path prefix the backend serves curation endpoints under. Must equal the backend's own `OP_API_PREFIX` — the API builds some URLs (region thumbnails) from its own prefix. | `/curation` |
+
+## Build time only (source builds)
+
+Vite inlines these into the bundle when the app is built, so they take
+effect in `npm run dev` or a host `npm run build`, **not** as a Docker
+Compose setting: the published image and the Compose stack never read them.
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `PUBLIC_APP_NAME` | Top-bar wordmark, for a white-label deployment | `Cropwright` |
 | `PUBLIC_APP_BADGE` | Top-bar badge letters | `CW` |
-| `PUBLIC_API_PREFIX` | Path prefix the backend serves curation endpoints under. Must equal the backend's own `OP_API_PREFIX` — the API builds some URLs (region thumbnails) from its own prefix. | `/curation` |
+| `PUBLIC_MLFLOW_URL`, `PUBLIC_GRAFANA_URL`, `PUBLIC_PROMETHEUS_URL`, `PUBLIC_OPENSEARCH_DASHBOARDS_URL` | Override the monitoring links shown on `/train` and `/bakeoff` | unset |
 
 ## Read by `docker-compose.yml` / `docker-entrypoint.sh` only
 
