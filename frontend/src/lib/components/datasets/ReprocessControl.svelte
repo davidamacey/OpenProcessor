@@ -23,6 +23,7 @@
     REPROCESS_SCOPES,
     reprocessLabel,
   } from '$lib/datasets/reprocessVocabulary';
+  import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import ReprocessCounts from './ReprocessCounts.svelte';
 
   interface Props {
@@ -48,7 +49,10 @@
 
   $effect(() => {
     void datasetsAvailability.init();
+    void reprocessVocabularyStore.init();
   });
+
+  const scopeLabel = (id: string): string => reprocessVocabularyStore.label('scopes', id);
 
   const available = $derived(datasetsAvailability.available === true);
 
@@ -118,7 +122,10 @@
 
       <fieldset class="space-y-1">
         {#each REPROCESS_SCOPES as id (id)}
-          <label class="flex items-start gap-2">
+          <label
+            class="flex items-start gap-2"
+            title={reprocessVocabularyStore.description('scopes', id) ?? undefined}
+          >
             <input
               type="checkbox"
               checked={f.scopes.includes(id)}
@@ -126,7 +133,7 @@
               onchange={(e) =>
                 f.toggleScope(id, (e.currentTarget as HTMLInputElement).checked)}
             />
-            <span class="text-zinc-200">{reprocessLabel(id)}</span>
+            <span class="text-zinc-200">{scopeLabel(id)}</span>
           </label>
         {/each}
       </fieldset>
@@ -187,12 +194,12 @@
 
       {#if f.dryRun && !f.result}
         <div class="space-y-1" data-testid="reprocess-dry-run">
-          <ReprocessCounts res={f.dryRun} scopeLabel={reprocessLabel} />
+          <ReprocessCounts res={f.dryRun} {scopeLabel} />
         </div>
       {/if}
       {#if f.result}
         <div class="space-y-1" data-testid="reprocess-result">
-          <ReprocessCounts res={f.result} scopeLabel={reprocessLabel} />
+          <ReprocessCounts res={f.result} {scopeLabel} />
           {#if f.job}
             <p class="text-xs text-zinc-300" data-testid="reprocess-job">
               Job <code class="font-mono">{f.job.job_id}</code>:

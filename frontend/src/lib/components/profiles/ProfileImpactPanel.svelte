@@ -23,7 +23,7 @@
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import ReprocessCounts from '$components/datasets/ReprocessCounts.svelte';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
-  import { reprocessLabel } from '$lib/datasets/reprocessVocabulary';
+  import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import { ReprocessFlow } from '$lib/datasets/reprocessController.svelte';
   import type { ActivationImpact } from '$lib/types_profiles';
 
@@ -34,11 +34,14 @@
   let { impact }: Props = $props();
 
   $effect(() => {
-    if (impact.suggested_reprocess) void datasetsAvailability.init();
+    if (impact.suggested_reprocess) {
+      void datasetsAvailability.init();
+      void reprocessVocabularyStore.init();
+    }
   });
 
   const available = $derived(datasetsAvailability.available === true);
-  const scopeLabel = reprocessLabel;
+  const scopeLabel = (id: string): string => reprocessVocabularyStore.label('scopes', id);
 
   let flow = $state<ReprocessFlow | null>(null);
   let confirming = $state(false);

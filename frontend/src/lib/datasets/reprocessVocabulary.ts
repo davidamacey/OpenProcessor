@@ -1,9 +1,9 @@
 /**
- * The Reprocess scope and region-mode ids. The backend serves no
- * vocabulary for these (`/datasets/formats` has no `reprocess` block), so
- * the ids are pinned to the vendored `ReprocessOneRequest` enums by
- * `contract/datasetsContract.test.ts` and labelled by `humanizeId`
- * (question C-1: replace with served labels when they exist).
+ * The Reprocess scope, region-mode and embed-part ids the client may SEND,
+ * pinned to the vendored request enums by `contract/datasetsContract.test.ts`.
+ * Scope labels come from the served `reprocess` vocabulary
+ * (`reprocessVocabularyStore`); region modes and embed parts have no served
+ * vocabulary, so those two still read through `humanizeId`.
  */
 import { humanizeId } from '$lib/humanizeId';
 import type {

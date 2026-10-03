@@ -256,6 +256,22 @@ export interface VocabRegistryClass {
   choice: Choice;
 }
 
+/** `VocabEntry`: one served id with its label and description. */
+export interface VocabEntry {
+  id: string;
+  label: string;
+  description: string;
+}
+
+/** `ReprocessVocabulary`: the words for Reprocess scopes, filter fields,
+ *  job statuses and the lock rule. */
+export interface ReprocessVocabulary {
+  scopes: VocabEntry[];
+  filter_fields: VocabEntry[];
+  job_statuses: VocabEntry[];
+  lock_reasons: VocabEntry[];
+}
+
 export interface ConfigVocabulary {
   detectors: VocabModel[];
   segmenters: VocabSegmenter[];
@@ -274,5 +290,6 @@ export interface ConfigVocabulary {
   text_reader_modes: VocabTextReaderMode[];
   registry_classes: VocabRegistryClass[];
   prompt_pack_calls?: Choice[];
+  reprocess: ReprocessVocabulary;
   labels?: Record<string, Record<string, string>>;
 }

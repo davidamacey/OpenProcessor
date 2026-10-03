@@ -6,6 +6,7 @@ import type { ActiveConfigResponse, ConfigRevisionList } from '$lib/types_config
 import type {
   ActivationImpact,
   ConfigVocabulary,
+  ReprocessVocabulary,
   ProfileActivateResponse,
   RegionProfileDoc,
   RegionProfileList,
@@ -462,6 +463,31 @@ export function profileRevisionsFixture(): ConfigRevisionList {
   };
 }
 
+export function reprocessVocabularyFixture(): ReprocessVocabulary {
+  const e = (id: string, label: string) => ({
+    id,
+    label,
+    description: `${label}: served description`,
+  });
+  return {
+    scopes: [
+      e('detect', 'Find objects'),
+      e('open_vocab', 'Find by description'),
+      e('region', 'Region stage'),
+      e('vlm', 'Vision model'),
+      e('embed', 'Compute vectors'),
+    ],
+    filter_fields: [e('all_images', 'Every image')],
+    job_statuses: [e('queued', 'Waiting')],
+    lock_reasons: [
+      e('human_label', 'Human label'),
+      e('validated', 'Validated'),
+      e('imported', 'Imported'),
+      e('test_holdout', 'Test holdout'),
+    ],
+  };
+}
+
 export function vocabularyFixture(): ConfigVocabulary {
   const model = (name: string, over: object = {}) => ({
     name,
@@ -541,6 +567,7 @@ export function vocabularyFixture(): ConfigVocabulary {
       { class_id: 2, class_name: 'gizmo', choice: { id: 'gizmo', label: 'gizmo' } },
     ],
     prompt_pack_calls: [{ id: 'combined', label: 'Classify + verify region' }],
+    reprocess: reprocessVocabularyFixture(),
     labels: { scope: { per_run: 'Per run', region_profile: 'In the region profile' } },
   };
 }

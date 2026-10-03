@@ -10,8 +10,12 @@ import { flushSync, mount, unmount } from 'svelte';
 import { API_PREFIX } from '$lib/api';
 import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
 import { formatsFixture, reprocessFixture } from '$lib/test/fixtures/datasetImport';
-import { impactFixture } from '$lib/test/fixtures/regionProfiles';
+import {
+  impactFixture,
+  reprocessVocabularyFixture,
+} from '$lib/test/fixtures/regionProfiles';
 import type { ActivationImpact } from '$lib/types_profiles';
+import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
 import ProfileImpactPanel from './ProfileImpactPanel.svelte';
 
 function json(body: unknown, status = 200): Response {
@@ -32,6 +36,8 @@ function serve(formats: () => Response) {
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const u = String(url);
       if (u === `${API_PREFIX}/datasets/formats`) return formats();
+      if (u === `${API_PREFIX}/config/vocabulary`)
+        return json({ reprocess: reprocessVocabularyFixture() });
       const body = init.body ? JSON.parse(String(init.body)) : undefined;
       posts.push({ url: u, body });
       if (u === `${API_PREFIX}/reprocess`) {
@@ -54,11 +60,15 @@ async function render(impact: ActivationImpact, probe = true) {
   document.body.appendChild(target);
   instance = mount(ProfileImpactPanel, { target, props: { impact } });
   if (probe) await datasetsAvailability.init();
+  if (probe) await reprocessVocabularyStore.init();
   flushSync();
 }
 
 const q = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
-beforeEach(() => datasetsAvailability.reset());
+beforeEach(() => {
+  datasetsAvailability.reset();
+  reprocessVocabularyStore.resetForProjectChange();
+});
 afterEach(() => {
   if (instance) unmount(instance);
   instance = undefined;
@@ -110,7 +120,7 @@ describe('ProfileImpactPanel', () => {
         body: { ...impact.suggested_reprocess, dry_run: true },
       },
     ]);
-    expect(q('rerun-dry-run')?.textContent).toContain('Region');
+    expect(q('rerun-dry-run')?.textContent).toContain('Region stage');
     expect(q('rerun-dry-run')?.textContent).toContain('12');
     q('rerun-apply')!.click();
     flushSync();
@@ -130,7 +140,7 @@ describe('ProfileImpactPanel', () => {
       [...q('rerun-result')!.querySelectorAll('tbody tr td')].map((c) =>
         c.textContent?.trim(),
       ),
-    ).toEqual(['Region', '12', '3', '9', '—', '—']);
+    ).toEqual(['Region stage', '12', '3', '9', '—', '—']);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

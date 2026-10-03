@@ -18,6 +18,7 @@
    * so this component stays presentation-only.
    */
   import { getThumbUrl } from '$lib/api';
+  import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import type { BBoxNormLike } from '$lib/annotations/types';
   import { normalize as normalizeKey } from '$stores/keyboard.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
@@ -71,6 +72,10 @@
     ondelete,
     onnext,
   }: Props = $props();
+
+  $effect(() => {
+    if (boxes.some((b) => b.locked)) void reprocessVocabularyStore.init();
+  });
 
   let canvasEl = $state<HTMLDivElement | null>(null);
 
@@ -283,7 +288,7 @@
         <span
           class="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-zinc-100"
           style="border:1px solid {ringColorFor(b.state)}"
-          title="Locked"
+          title={reprocessVocabularyStore.lockText()}
           data-testid="box-locked"
         >
           <svg

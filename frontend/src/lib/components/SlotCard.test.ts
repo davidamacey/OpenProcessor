@@ -5,6 +5,8 @@
  * asserted on the rendered DOM, not a source scan.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
+import { reprocessVocabularyFixture } from '$lib/test/fixtures/regionProfiles';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotCard from './SlotCard.svelte';
 import type { RegionBrowseItem } from '$lib/api';
@@ -177,12 +179,17 @@ describe('SlotCard — text-free region profile (OpenProcessor W1)', () => {
 });
 
 describe('SlotCard — W10 box lock glyph', () => {
+  afterEach(() => reprocessVocabularyStore.resetForProjectChange());
   it('shows the lock only when the served box locked is true', () => {
+    reprocessVocabularyStore.vocabulary = reprocessVocabularyFixture();
+    reprocessVocabularyStore.loaded = true;
     const locked = renderCard(fakeRegionItem({}, [wireBox({ locked: true })]));
     expect(locked.querySelector('[data-testid="box-locked"]')).not.toBeNull();
     expect(
       locked.querySelector('[data-testid="box-locked"]')?.getAttribute('title'),
-    ).toBe('Locked');
+    ).toBe(
+      'Locked. Locked when: Human label: Human label: served description; Validated: Validated: served description; Imported: Imported: served description; Test holdout: Test holdout: served description',
+    );
   });
 
   it('shows no lock for false or absent', () => {
