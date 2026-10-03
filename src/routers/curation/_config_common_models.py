@@ -71,6 +71,7 @@ ErrorCode = Literal[
     'export_outside_project',
     'empty_val_split',
     'model_not_found',
+    'project_owned_model',
     # W2b
     'class_hotkey_conflict',
     'hotkey_reserved',
@@ -322,6 +323,8 @@ class ConfigErrorDetail(BaseModel):
     error: ErrorCode
     message: str
     project: str | None = None
+    # 409 project_owned_model: the project whose route deletes the model.
+    owner_project: str | None = None
     # delta 11: 409 project_busy carries typed JobRef objects, not raw ids.
     jobs: list[JobRefWire] | None = None
     projects: list[str] | None = None

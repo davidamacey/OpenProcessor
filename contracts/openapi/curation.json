@@ -3687,6 +3687,7 @@
               "export_outside_project",
               "empty_val_split",
               "model_not_found",
+              "project_owned_model",
               "class_hotkey_conflict",
               "hotkey_reserved",
               "hotkey_taken",
@@ -3838,6 +3839,17 @@
               }
             ],
             "title": "Needed"
+          },
+          "owner_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Project"
           },
           "project": {
             "anyOf": [

@@ -113,3 +113,47 @@ def test_unload_of_a_core_model_needs_force(
     unload.assert_not_awaited()
     assert client.post(url, params={'force': 'true'}).status_code == 200
     unload.assert_awaited_once()
+
+
+def _promoted(tmp_path: Path, name: str, owner: str) -> None:
+    _dirs(tmp_path, name)
+    (tmp_path / 'models' / name / 'promote.json').write_text(f'{{"project": "{owner}"}}')
+
+
+def test_global_delete_of_a_project_promoted_model_is_a_typed_409_naming_the_owner(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """GH #86: a model /models/status lists READY (a project promote, whose name
+    has no export suffix) used to 404 here. It is owned by a project, whose own
+    route carries the in-use / sharing guards this one cannot, so it is refused
+    with the route to use."""
+    _promoted(tmp_path, 'alpha__wheels_v1', 'alpha')
+    resp = client.delete(f'{models_router.router.prefix}/alpha__wheels_v1')
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()['detail']
+    assert detail['error'] == 'project_owned_model'
+    assert detail['owner_project'] == 'alpha'
+    assert 'alpha' in detail['message']
+    assert _names(tmp_path) == ['alpha__wheels_v1']
+
+
+def test_global_delete_addresses_an_exact_directory_name(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Every name /models/status shows is addressable: the exact directory,
+    not only ``{name}`` + an export suffix."""
+    _dirs(tmp_path, 'm_trt_end2end', 'other_trt')
+    resp = client.delete(f'{models_router.router.prefix}/m_trt_end2end')
+    assert resp.status_code == 200, resp.text
+    assert _names(tmp_path) == ['other_trt']
+
+
+def test_global_load_resolves_the_same_names(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    load = AsyncMock(return_value=(True, 'ok'))
+    monkeypatch.setattr(_Triton, 'load_model', load, raising=False)
+    _promoted(tmp_path, 'alpha__wheels_v1', 'alpha')
+    _dirs(tmp_path, 'm_trt')
+    assert client.post(f'{models_router.router.prefix}/alpha__wheels_v1/load').status_code == 200
+    assert client.post(f'{models_router.router.prefix}/m/load').json()['model_name'] == 'm_trt'
