@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Resources menu and dashboards row render the served `resource_links`.**
+  `GET /settings` `monitoring_links` is replaced by `resource_links` (id,
+  label, url, kind, status, hint, reachable; contract 5f88e17f). The menu and
+  the `/train` / `/bakeoff` row show exactly that list in order behind the
+  client-owned Documentation entry: docs entries as same-origin relative
+  anchors, services as absolute http(s) anchors through a hardened href check,
+  an unconfigured entry as a muted row with the served hint, and a "not
+  running" note for `reachable: false`. The `/health` `mlflow_public_url`
+  reading, `MonitoringLinks` and the hardcoded same-origin list are removed.
+  nginx now forwards the original `Host` / `X-Forwarded-Host` (with port),
+  `X-Forwarded-Proto` and the client address on every API and docs location,
+  and proxies `/docs-assets/` and `/docs/oauth2-redirect` (not exercised
+  against a running nginx).
+
 - **License is now AGPL-3.0-only** (Copyright (c) 2026 example-org LLC), replacing
   MIT, so the code can be folded into OpenProcessor (AGPL-3.0) as one work.
   `LICENSE`, the `package.json` / `docs-site` license fields and lockfile roots,
@@ -23,8 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   status-to-action table is deleted); `ConfigErrorDetail` pins `owner_project`
   (no frontend caller issues the global model delete that returns
   `project_owned_model`, so nothing renders it).
-- The MLflow dashboard link is the served `GET /health` `mlflow_public_url`;
-  `PUBLIC_MLFLOW_URL` and the run-URL-origin guess are removed. The confusion
+- `PUBLIC_MLFLOW_URL` and the run-URL-origin guess are removed. The confusion
   matrix renders only from the served `confusion_matrix_url`; the server
   filesystem path is no longer shown.
 

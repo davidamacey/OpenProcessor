@@ -1108,14 +1108,14 @@ constant (`docs/design/v040-adoption-brief-2026-10-03.md`).
   and `select_max_k` (`POST /select/diverse`, passed by `/review`) as the
   StrategyBar `k` stepper's `diverseKMax`; with none served there is no
   bound and no clamp.
-- **Monitoring links.** `MonitoringLinks` shows Grafana, Prometheus and
-  OpenSearch Dashboards only from the served `GET /settings`
-  `monitoring_links` (`curationSettingsStore`), http(s) URLs only via
-  `externalHref`. The hardcoded ports and the `PUBLIC_GRAFANA_URL` /
-  `PUBLIC_PROMETHEUS_URL` / `PUBLIC_OPENSEARCH_DASHBOARDS_URL` overrides are
-  gone. MLflow is the served `GET /health` `mlflow_public_url` (http(s) only,
-  `MonitoringLinks`, `ResourcesMenu`); `PUBLIC_MLFLOW_URL` and the run-URL
-  origin guess (`mlflowBaseUrl`) are gone.
+- **Resource links.** The Resources menu and the "Dashboards:" row on
+  `/train` and `/bakeoff` render the served `GET /settings` `resource_links`
+  (`ResourceLink`: id, label, url, kind `service`|`docs`, status, hint,
+  reachable; `curationSettingsStore`), see "Resources and docs on the app
+  origin". It replaced `monitoring_links` and the `/health`
+  `mlflow_public_url` reading; the hardcoded ports, `PUBLIC_GRAFANA_URL` /
+  `PUBLIC_PROMETHEUS_URL` / `PUBLIC_OPENSEARCH_DASHBOARDS_URL`,
+  `PUBLIC_MLFLOW_URL` and the run-URL origin guess (`mlflowBaseUrl`) are gone.
 - **Embedding plot reads.** `getVizProjection` treats only the 404
   `projection_not_built` as "not built yet" (`built: false`); every other
   failure rejects and `EmbeddingPlot` shows the served message
@@ -2817,16 +2817,30 @@ Cropwright is the one front door: `docker-compose.yml` runs a `docs` service
 beside `cropwright`, and nginx proxies, from the app origin: `/cropwright/` to
 `DOCS_UPSTREAM` (default `http://docs:8080`, variable-form `proxy_pass` with the
 resolver, so a missing/restarted docs container only 502s that path), and the
-backend's own `/docs`, `/docs/oauth2-redirect`, `/redoc` and `/openapi.json`
+backend's own `/docs`, `/docs/oauth2-redirect`, `/redoc`, `/openapi.json`
 (exact-match locations at the API root, to `API_UPSTREAM`; no SPA route lives
-there). `nginx-security-headers.conf` sets no CSP, so Swagger UI's CDN assets
-load without an override. The top bar's `ResourcesMenu` lists those four
-same-origin paths (constants in `src/lib/resourceLinks.ts`) plus every served
-`GET /settings` `monitoring_links` URL and MLflow (the served `/health` `mlflow_public_url`); served
-links stay served-only (null = absent), `MonitoringLinks` on `/train` and
-`/bakeoff` shares the same `monitoringResourceLinks`. Tests:
-`resourceLinks.test.ts`, `components/ResourcesMenu.test.ts`, the DOCS_UPSTREAM
-cases in `entrypoint.test.ts`, e2e `test_resources_menu.py`.
+there) and the `^~ /docs-assets/` prefix. `nginx-security-headers.conf` sets no CSP, so Swagger UI's CDN assets
+load without an override. The top bar's `ResourcesMenu` (and `ResourceLinksRow`
+on `/train` and `/bakeoff`, service entries only, both through
+`ResourceLinkItem`) renders EXACTLY the served `GET /settings` `resource_links`
+in the served order (ids: swagger, redoc, openapi_json, grafana, prometheus,
+opensearch_dashboards, mlflow, triton_metrics, dcgm_metrics). The one
+client-owned entry is Documentation (`/cropwright/`, `DOCS_ENTRY` in
+`src/lib/resourceLinks.ts`), first, because the backend does not know the docs
+container. A `docs` entry's url is path-relative and resolves against our own
+origin; a `service` entry's is an absolute http(s) URL the backend built from
+the host the client used (so nginx forwards `Host` / `X-Forwarded-Host` as
+`$http_host`, with the port, on every API location including `/docs`,
+`/redoc`, `/openapi.json`, `/docs/oauth2-redirect` and `^~ /docs-assets/`).
+`safeHref` accepts only an absolute http(s) URL or a single-slash root-relative
+path (never `javascript:`, `data:` or `//host`). A null url is a muted
+"`<label>`: not configured" row with the served hint as its title;
+`reachable === false` adds a "not running" note (null shows nothing). An
+absent, empty or failed settings read leaves only Documentation (the store
+resets and re-reads on a project switch). Tests: `resourceLinks.test.ts`,
+`components/ResourcesMenu.test.ts`, `components/ResourceLinksRow.test.ts`,
+`contract/curationSettingsContract.test.ts`, the nginx cases in
+`entrypoint.test.ts`, e2e `test_resources_menu.py`.
 
 ### Projects — `/p/[project]` routes, switcher, `/projects` (2026-09-26)
 
