@@ -62,6 +62,7 @@ from src.services.curation.dataset_import.upload import (
 )
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.ingest import CurationIngestService
+from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy
 
 
@@ -142,7 +143,7 @@ def _import_service(
     if pe_encoder is None:
         raise api_error(503, 'config_store_unavailable', 'PE encoder not initialized')
     try:
-        profile = ingest_primary_profile()
+        profile = effective_profile(ingest_primary_profile(), policy.detector)
     except ValueError as exc:
         raise api_error(503, 'config_store_unavailable', f'ingest misconfigured: {exc}') from exc
     if need_detector and not profile.detector_model:

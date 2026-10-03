@@ -23,7 +23,9 @@ from src.routers.curation._ingest_policy_models import (
 from src.routers.curation.ingest import _get_detection_profile
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.embedding_state import EMBEDDED
+from src.services.curation.ingest_detector import detector_problems, effective_profile
 from src.services.curation.ingest_policy import (
+    DetectorOverride,
     IngestPolicy,
     IngestPolicyBody,
     candidate_from_doc,
@@ -54,16 +56,31 @@ _PREVIEW_FIELDS = [
 ]
 
 
-def _known_slugs() -> set[str]:
-    """Names a policy can sensibly mention: registry classes and the detector's labels."""
+def _known_slugs(policy: IngestPolicyBody) -> set[str]:
+    """Names a policy can sensibly mention: registry classes and the labels of the
+    detector the project will run."""
     known = {c.class_name for c in get_class_registry().load().classes}
     try:
-        profile = _get_detection_profile()
+        profile = effective_profile(_get_detection_profile(), policy.detector)
         if profile.detector_model:
             known |= {label.slug for label in detector_labels(profile)}
     except (ValueError, OSError):
         pass
     return known
+
+
+async def _require_servable(override: DetectorOverride) -> None:
+    """``422`` unless the project's own detector is loaded on Triton and serves
+    the end2end outputs ingest reads (``503`` when Triton cannot be asked)."""
+    from src.main import get_async_triton_pool
+
+    try:
+        pool = get_async_triton_pool()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=f'triton unavailable: {exc}') from exc
+    problems = await detector_problems(pool, override)
+    if problems:
+        raise HTTPException(status_code=422, detail=problems)
 
 
 @router.get('/ingest/policy', response_model=IngestPolicy)
@@ -82,7 +99,11 @@ async def put_policy(
     revision (re-read and retry). Affects future ingests and explicit embed
     runs only, never stored data."""
     await _ensure_indexes(opensearch)
-    policy_body = IngestPolicyBody(detect=body.detect, embedding=body.embedding)
+    policy_body = IngestPolicyBody(
+        detect=body.detect, embedding=body.embedding, detector=body.detector
+    )
+    if body.detector is not None:
+        await _require_servable(body.detector)
     try:
         stored = await put_ingest_policy(
             opensearch, policy_body, expected_revision=body.expected_revision
@@ -90,7 +111,7 @@ async def put_policy(
     except PolicyConflictError as exc:
         raise HTTPException(status_code=409, detail=f'ingest policy changed: {exc}') from exc
     return IngestPolicyPutResponse(
-        **stored.model_dump(), unknown_names=unknown_names(policy_body, _known_slugs())
+        **stored.model_dump(), unknown_names=unknown_names(policy_body, _known_slugs(policy_body))
     )
 
 

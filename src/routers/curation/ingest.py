@@ -54,6 +54,7 @@ from src.routers.curation._common import (
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
+from src.services.curation.ingest_detector import effective_profile, project_ingest_profile
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
 from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
@@ -96,10 +97,11 @@ async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestS
             detail='PE encoder not initialized; ingest is unavailable until app startup completes',
         )
     try:
-        profile = _get_detection_profile()
+        base_profile = _get_detection_profile()
         secondary = _get_secondary_profile()
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
+    profile, policy = await project_ingest_profile(opensearch, base_profile)
     if not profile.detector_model:
         raise HTTPException(
             status_code=503,
@@ -115,7 +117,7 @@ async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestS
         profile=profile,
         secondary_profile=secondary,
         pe_encoder=pe_encoder,
-        policy=await get_ingest_policy(opensearch),
+        policy=policy,
     )
 
 
@@ -369,8 +371,9 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
     )
 
     cfg = get_curation_config()
+    policy = await get_ingest_policy(opensearch)
     try:
-        detector = _detector_info(_get_detection_profile())
+        detector = _detector_info(effective_profile(_get_detection_profile(), policy.detector))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     return IngestConfigResponse(
@@ -389,7 +392,7 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
             stable_polls=region_drain_stable_polls(),
         ),
         detector=detector,
-        policy=await get_ingest_policy(opensearch),
+        policy=policy,
     )
 
 

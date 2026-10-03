@@ -90,7 +90,12 @@ from src.services.curation.ingest_models import (
     IngestResult,
     IngestSummary,
 )
-from src.services.curation.ingest_policy import IngestPolicy, apply_detect_filter
+from src.services.curation.ingest_policy import (
+    IngestPolicy,
+    apply_detect_filter,
+    assign_classes_by_name,
+    registry_name_index,
+)
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
 
@@ -480,6 +485,8 @@ class CurationIngestService:
                             'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
                         )
         items, n_filtered = apply_detect_filter(items, self.policy.detect, img.width, img.height)
+        if self.policy.detect.class_resolution == 'by_name':
+            assign_classes_by_name(items, registry_name_index(self.registry), self.profile.name)
         return DetectResult(items, secondary_detector_error, n_filtered)
 
     async def index_items(

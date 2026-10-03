@@ -24,10 +24,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.curation.embedding_state import DEFERRED, EMBEDDED, NOT_SELECTED
 from src.services.curation.name_match import name_matches, normalized_names
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from src.services.curation.item_doc import DetectedItem
 
@@ -41,10 +42,33 @@ class _Criteria(BaseModel):
 
 
 class DetectFilter(_Criteria):
-    """Which detector outputs are stored. Every field empty = store all."""
+    """Which detector outputs are stored. Every field empty = store all.
+
+    ``class_resolution`` ``by_name`` gives a detection the registry class whose
+    name equals the detector's own label (``traffic light`` -> ``traffic_light``),
+    written like a classifier's label so the VLM skips it; ``proposal`` (the
+    default) leaves every detection an unlabeled proposal.
+    """
 
     classes: list[str] | None = None
     exclude_classes: list[str] = Field(default_factory=list)
+    class_resolution: Literal['proposal', 'by_name'] = 'proposal'
+
+
+class DetectorOverride(BaseModel):
+    """A per-project ingest detector: replaces the deployment's primary model for
+    this project. It must serve the end2end four-tensor contract, and its class
+    ids are never read as registry ids (its detections are proposals, or are
+    resolved by name)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    model: str = Field(min_length=1)
+    version: str = '1'
+    input_size: int | None = Field(default=None, ge=32, le=4096)
+    # labels.txt-style file naming the model's classes; empty reads the one in
+    # the model's own directory.
+    labels_path: str = ''
 
 
 class EmbeddingPolicy(_Criteria):
@@ -69,6 +93,8 @@ class IngestPolicyBody(BaseModel):
 
     detect: DetectFilter = Field(default_factory=DetectFilter)
     embedding: EmbeddingPolicy = Field(default_factory=EmbeddingPolicy)
+    # null = the deployment's primary detector.
+    detector: DetectorOverride | None = None
 
 
 class IngestPolicy(IngestPolicyBody):
@@ -183,6 +209,38 @@ def select_for_embedding(
     return embedding_states([candidate_from_item(it, width, height) for it in items], policy)
 
 
+def assign_classes_by_name(
+    items: Sequence[DetectedItem], registry: Mapping[str, tuple[int, str]], detector_name: str
+) -> int:
+    """Give each unlabeled detection the registry class named like its proposal
+    (``registry`` maps normalized class name to ``(class_id, class_name)``).
+    Returns how many were resolved. The class is written with the detector's
+    classifier-style ``class_source`` (``{detector_name}_model``); the proposal
+    name is kept for lineage."""
+    resolved = 0
+    for item in items:
+        if item.class_id is not None or item.label is not None or not item.proposal_name:
+            continue
+        found = registry.get(normalize_class_name(item.proposal_name))
+        if found is None:
+            continue
+        item.class_id, item.class_name = found
+        item.class_source = f'{detector_name}_model'
+        resolved += 1
+    return resolved
+
+
+def registry_name_index(registry: Any) -> dict[str, tuple[int, str]]:
+    """``{normalized name: (class_id, class_name)}`` of the classes an item may be
+    given (active, and not the region class)."""
+    from src.services.curation.region_class import item_classes
+
+    return {
+        normalize_class_name(c.class_name): (c.class_id, c.class_name)
+        for c in item_classes(registry.load().classes)
+    }
+
+
 def unknown_names(policy: IngestPolicyBody, known_slugs: set[str]) -> list[str]:
     """Class names the policy mentions that match no known label or registry
     class. Accepted (a model switch or a later class can make them valid) and
@@ -200,14 +258,17 @@ def unknown_names(policy: IngestPolicyBody, known_slugs: set[str]) -> list[str]:
 __all__ = [
     'Candidate',
     'DetectFilter',
+    'DetectorOverride',
     'EmbeddingPolicy',
     'IngestPolicy',
     'IngestPolicyBody',
     'apply_detect_filter',
+    'assign_classes_by_name',
     'candidate_from_doc',
     'candidate_from_item',
     'detect_keep_mask',
     'embedding_states',
+    'registry_name_index',
     'select_for_embedding',
     'unknown_names',
 ]

@@ -22,6 +22,10 @@ from src.services.curation.ingest_class_sources import unlabeled_proposal_class_
 from src.services.curation.review_queries import KNOWN_TABS, review_tab_catalog, tab_filters
 
 
+# The regions queue exists only while a region profile is active (GH #51).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
 

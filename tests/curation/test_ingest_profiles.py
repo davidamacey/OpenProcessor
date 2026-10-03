@@ -237,12 +237,14 @@ def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> No
         'proposer_low_conf',
         'open_vocab_proposal',
     }
-    assert cs.classifier_class_sources() == frozenset()
-    assert cs.confident_class_sources() == ('external_label', 'human', 'vlm')
+    # The primary's ``_model`` source is reserved for classes it assigns, by id
+    # (assigns_class) or by name (the project's ingest policy).
+    assert cs.classifier_class_sources() == {'proposer_model'}
+    assert cs.confident_class_sources() == ('external_label', 'human', 'proposer_model', 'vlm')
 
     clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'clf')
     clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'clf')
-    assert cs.classifier_class_sources() == {'clf_model'}
+    assert cs.classifier_class_sources() == {'clf_model', 'proposer_model'}
     clean_env.setenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS', '1')
     assert cs.classifier_class_sources() == {'clf_model', 'proposer_model'}
     assert cs.confident_class_sources() == (
@@ -288,4 +290,4 @@ def test_confident_sources_resolved_from_env_at_import(clean_env: pytest.MonkeyP
         text=True,
         check=True,
     )
-    assert out.stdout.strip().splitlines()[-1] == 'clf_model,external_label,human,vlm'
+    assert out.stdout.strip().splitlines()[-1] == 'clf_model,external_label,human,item_model,vlm'

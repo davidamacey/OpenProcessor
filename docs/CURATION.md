@@ -613,6 +613,23 @@ policy changes nothing: every detection is stored and embedded.
   and is not placed in a residual cluster. An item with a human or imported
   label always gets a vector.
 
+- `detect.class_resolution`: `proposal` (default) leaves every detection an
+  unlabeled proposal; `by_name` gives a detection the registry class whose name
+  equals the detector's own label (`traffic light` becomes `traffic_light`,
+  active classes only, never the region class). The class is written like a
+  classifier's label (`class_source` `<detector>_model`, not validated), so the
+  VLM stage skips it, the item sits in its class cluster and the detector's own
+  label stays on the item as `proposal_name`.
+- `detector`: this project's own ingest detector (`model`, optional `version`,
+  `input_size`, `labels_path`), replacing the deployment's primary model for
+  this project only. `PUT` refuses it (422) unless the model is loaded on
+  Triton and serves the end2end outputs (`num_dets`, `det_boxes`, `det_scores`,
+  `det_classes`); its class ids are never read as registry ids. Ingest, the
+  `detector` block of `GET .../ingest/config`, `POST .../classes/seed_from_detector`
+  and a dataset import's propose mode all use it, and unsharing a model a
+  project runs this way is refused like any other use. Deleting the model is
+  not blocked: change the project's policy first.
+
 Class names match by name (case, spaces and hyphens are normalized, so
 `traffic light` and `traffic_light` are one name) against an item's class name
 or the detector's own label, never by model class id. Names the project does

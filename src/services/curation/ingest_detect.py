@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.clients.model_adapters import END2END_OUTPUTS
 from src.config.ingest_profiles import proposer_label
 from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
@@ -68,7 +69,6 @@ if TYPE_CHECKING:
 # confidence_floor since the two detectors are calibrated differently.
 SECONDARY_IOU_MATCH = 0.3
 
-_END2END_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
 _RAW_OUTPUT = 'output0'
 
 logger = get_logger(__name__)
@@ -130,7 +130,7 @@ class WholeImageDetector:
         )
         inp = InferInput('images', list(chw.shape), 'FP32')
         inp.set_data_from_numpy(chw)
-        outs = [InferRequestedOutput(name) for name in _END2END_OUTPUTS]
+        outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
         return self.decode_primary_row(
             result.as_numpy('num_dets')[0],
@@ -169,19 +169,19 @@ class WholeImageDetector:
             pads.append(pad)
         full_batch = np.stack(chws, axis=0)
 
-        outs = [InferRequestedOutput(name) for name in _END2END_OUTPUTS]
+        outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         # Per-chunk rows are collected individually rather than
         # concatenated: max_dets can differ between chunks (the end2end
         # export pads to the largest detection count in the request),
         # which would make np.concatenate raise.
-        rows: dict[str, list[np.ndarray]] = {name: [] for name in _END2END_OUTPUTS}
+        rows: dict[str, list[np.ndarray]] = {name: [] for name in END2END_OUTPUTS}
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
             inp = InferInput('images', list(chunk.shape), 'FP32')
             inp.set_data_from_numpy(chunk)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
-            for name in _END2END_OUTPUTS:
+            for name in END2END_OUTPUTS:
                 rows[name].extend(result.as_numpy(name))
 
         return [

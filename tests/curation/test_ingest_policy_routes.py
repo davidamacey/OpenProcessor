@@ -70,7 +70,9 @@ def test_get_returns_defaults_when_never_written(client: TestClient) -> None:
         'max_per_image': None,
         'classes': None,
         'exclude_classes': [],
+        'class_resolution': 'proposal',
     }
+    assert body['detector'] is None
 
 
 def test_put_round_trips_and_bumps_the_revision(

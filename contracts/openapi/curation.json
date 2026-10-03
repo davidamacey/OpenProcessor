@@ -5830,8 +5830,17 @@
       },
       "DetectFilter": {
         "additionalProperties": false,
-        "description": "Which detector outputs are stored. Every field empty = store all.",
+        "description": "Which detector outputs are stored. Every field empty = store all.\n\n``class_resolution`` ``by_name`` gives a detection the registry class whose\nname equals the detector's own label (``traffic light`` -> ``traffic_light``),\nwritten like a classifier's label so the VLM skips it; ``proposal`` (the\ndefault) leaves every detection an unlabeled proposal.",
         "properties": {
+          "class_resolution": {
+            "default": "proposal",
+            "enum": [
+              "proposal",
+              "by_name"
+            ],
+            "title": "Class Resolution",
+            "type": "string"
+          },
           "classes": {
             "anyOf": [
               {
@@ -6002,6 +6011,45 @@
           "source"
         ],
         "title": "DetectorEntry",
+        "type": "object"
+      },
+      "DetectorOverride": {
+        "additionalProperties": false,
+        "description": "A per-project ingest detector: replaces the deployment's primary model for\nthis project. It must serve the end2end four-tensor contract, and its class\nids are never read as registry ids (its detections are proposals, or are\nresolved by name).",
+        "properties": {
+          "input_size": {
+            "anyOf": [
+              {
+                "maximum": 4096.0,
+                "minimum": 32.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Size"
+          },
+          "labels_path": {
+            "default": "",
+            "title": "Labels Path",
+            "type": "string"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "version": {
+            "default": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "DetectorOverride",
         "type": "object"
       },
       "DisagreementsWire": {
@@ -7525,6 +7573,16 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
+          "detector": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetectorOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -7542,6 +7600,16 @@
         "properties": {
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
+          },
+          "detector": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetectorOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
@@ -7604,6 +7672,16 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
+          "detector": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetectorOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -7629,6 +7707,16 @@
         "properties": {
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
+          },
+          "detector": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetectorOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
