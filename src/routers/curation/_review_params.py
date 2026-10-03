@@ -6,6 +6,15 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import Query
+from pydantic import BeforeValidator
+
+
+def empty_as_unset(value: object) -> object:
+    """The ``Any`` option an enum/bool filter spec serves is ``""``: it means unset."""
+    return None if value == '' else value
+
+
+UnsetIfEmpty = BeforeValidator(empty_as_unset)
 
 
 IncludeTest = Annotated[bool, Query()]
@@ -43,6 +52,7 @@ ImportIdQ = Annotated[
 ]
 DatasetSplitQ = Annotated[
     str | None,
+    UnsetIfEmpty,
     Query(
         description=(
             'Imported tab only: the split the import filed the frame under '
@@ -52,6 +62,7 @@ DatasetSplitQ = Annotated[
 ]
 OnNegativeFrameQ = Annotated[
     bool | None,
+    UnsetIfEmpty,
     Query(
         description=(
             'true = only items on an imported reviewed-negative frame; false = hide them '
@@ -83,4 +94,5 @@ __all__ = [
     'SortQ',
     'SourceQ',
     'TextQ',
+    'UnsetIfEmpty',
 ]

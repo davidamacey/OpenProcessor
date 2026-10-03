@@ -28,6 +28,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._review_params import UnsetIfEmpty
 from src.routers.curation._selection import selected_crop_ids
 from src.routers.curation._selection_write_models import (
     BatchExcludeResponse,
@@ -132,10 +133,13 @@ async def list_crops(
         Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
     ] = None,
     dataset_split: Annotated[
-        str | None, Query(description='The split a dataset import filed the frame under.')
+        str | None,
+        UnsetIfEmpty,
+        Query(description='The split a dataset import filed the frame under.'),
     ] = None,
     on_negative_frame: Annotated[
         bool | None,
+        UnsetIfEmpty,
         Query(description='true = machine items on an imported reviewed-negative frame.'),
     ] = None,
     proposed_by_import: Annotated[

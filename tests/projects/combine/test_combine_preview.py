@@ -163,6 +163,9 @@ async def test_environment_errors(world: World) -> None:
         world.project(slug, ['car'])
     too = await _preview(world, world.request(many, {}))
     assert 'too_many_sources' in [e.code for e in too.errors]
+    for result in (gone, taken, bad, dup, self_, too):
+        assert result.errors
+        assert all(e.message for e in result.errors), [e.code for e in result.errors]
 
 
 @pytest.mark.asyncio
@@ -251,3 +254,18 @@ async def test_projected_items_count_unclassed_items_the_executor_copies(world: 
     assert result.target['unclassed_items'] == 2
     assert result.target['projected_items'] == 5  # 3 mapped + 2 unclassed; the bus is skipped
     assert sum(s['items'] for s in result.sources) - 1 == result.target['projected_items']
+
+
+@pytest.mark.asyncio
+async def test_unclassed_items_are_counted_after_dedup(world: World) -> None:
+    world.project('cars-a', ['car'])
+    world.project('cars-b', ['car'])
+    world.add_image('cars-a', seed=7, items=[{'bbox': BOX}, {'bbox': [0.6] * 2 + [0.9] * 2}])
+    world.add_image('cars-b', seed=7, items=[{'bbox': BOX}, {'bbox': [0.6] * 2 + [0.9] * 2}])
+    mapping = {
+        'cars-a': [{'dataset_class': 'car', 'action': 'create', 'new_class_name': 'car'}],
+        'cars-b': [{'dataset_class': 'car', 'action': 'map', 'new_class_name': 'car'}],
+    }
+    result = await _preview(world, world.request(['cars-a', 'cars-b'], mapping))
+    assert result.target['projected_items'] == 2
+    assert result.target['unclassed_items'] == 2

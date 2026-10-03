@@ -129,3 +129,28 @@ def test_the_review_catalog_advertises_the_shared_filters(app: FastAPI) -> None:
         ]
     for tab in tabs:
         assert SHARED_PARAMS - {'max_rank'} <= set(tab['filters']), tab['id']
+
+
+def test_every_served_any_option_is_accepted_like_omitting_it(
+    app: FastAPI, fake_os: _RecordingOS
+) -> None:
+    base = f'{_common.config.api_prefix}/projects/default'
+    with TestClient(app, raise_server_exceptions=False) as client:
+        tabs = client.get(f'{base}/review/tabs').json()['tabs']
+        unset = {
+            (tab['id'], s['param']): s['options'][0]['value']
+            for tab in tabs
+            for s in tab['filter_specs']
+            if s['kind'] == 'enum' and s['allows_unset']
+        }
+        assert {p for _, p in unset} >= {'on_negative_frame', 'dataset_split'}
+        for (tab_id, param), any_value in unset.items():
+            for path in ('/crops', f'/review/{tab_id}'):
+                client.get(f'{base}{path}')  # warm one-time caches so the bodies compare
+                fake_os.bodies.clear()
+                omitted = client.get(f'{base}{path}')
+                omitted_bodies = list(fake_os.bodies)
+                fake_os.bodies.clear()
+                served = client.get(f'{base}{path}', params={param: any_value})
+                assert served.status_code == omitted.status_code, (path, param, served.text)
+                assert fake_os.bodies == omitted_bodies, (path, param)

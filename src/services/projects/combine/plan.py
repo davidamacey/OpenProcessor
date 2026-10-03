@@ -111,15 +111,33 @@ async def resolve_sources(
     for source in request.sources:
         slug = source.project
         if slug in seen:
-            errors.append(CombineIssue(code='duplicate_source', project=slug))
+            errors.append(
+                CombineIssue(
+                    code='duplicate_source',
+                    project=slug,
+                    message=f"'{slug}' is listed more than once",
+                )
+            )
             continue
         seen.add(slug)
         if slug == request.target.slug:
-            errors.append(CombineIssue(code='target_is_source', project=slug))
+            errors.append(
+                CombineIssue(
+                    code='target_is_source',
+                    project=slug,
+                    message=f"'{slug}' is the target and cannot also be a source",
+                )
+            )
             continue
         record = registry.get(slug)
         if record is None or record.status == 'deleted':
-            errors.append(CombineIssue(code='source_not_found', project=slug))
+            errors.append(
+                CombineIssue(
+                    code='source_not_found',
+                    project=slug,
+                    message=f"source project '{slug}' was not found",
+                )
+            )
         elif record.status not in _SOURCE_STATUSES:
             errors.append(
                 CombineIssue(
@@ -440,9 +458,10 @@ def _target_wire(analysis: Analysis, slug_available: bool) -> dict[str, Any]:
     # A combine target is always new, so there is no "before": these are the
     # counts the finished target will have. An item with no class is copied
     # unclassed (class_target), so it counts even though no mapping names it.
-    unclassed = sum(st.items - sum(st.classes.values()) for st in analysis.stats)
+    unclassed_raw = sum(st.items - sum(st.classes.values()) for st in analysis.stats)
+    unclassed = unclassed_raw - analysis.merged_items
     images = sum(s.images for s in analysis.stats) - len(analysis.duplicates)
-    items = sum(counts.values()) + unclassed - analysis.merged_items - analysis.conflicts
+    items = sum(counts.values()) + unclassed - analysis.conflicts
     return {
         'slug': analysis.request.target.slug,
         'slug_available': slug_available,
