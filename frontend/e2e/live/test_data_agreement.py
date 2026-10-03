@@ -157,6 +157,20 @@ def test_region_tab_label_is_the_served_display_name(
     page = guarded_page.page
     page.goto(f"{live_url}{page_path(live_project, '/review')}", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    # The tab bar first shows its static labels and swaps to the served ones
+    # once the vocabulary loads, so read it only after every label is served.
+    served_labels = [t.get("label") for t in api_get(live_url, live_project, "/review/tabs")["tabs"]]
+    if live_region_profile is not None:
+        served_labels.append(live_region_profile["display_name"])
+    page.wait_for_function(
+        """(served) => {
+          const labels = [...document.querySelectorAll('[data-testid="review-tabs"] button')]
+            .map((b) => b.innerText.trim().replace(/\\s+[\\d,]+$/, ''));
+          return labels.length > 0 && labels.every((l) => served.includes(l));
+        }""",
+        arg=served_labels,
+        timeout=15_000,
+    )
     labels = [
         re.sub(r"\s+[\d,]+$", "", t.strip())
         for t in page.get_by_test_id("review-tabs").locator("button").all_inner_texts()

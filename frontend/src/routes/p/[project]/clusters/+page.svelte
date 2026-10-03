@@ -1321,7 +1321,7 @@
               onclick={() => open(c)}
             >
               <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
-                {#each c.representative_crop_ids?.slice(0, 4) ?? [] as cropId, i (cropId)}
+                {#each c.representative_crop_ids?.slice(0, 4) ?? [] as cropId, i (i)}
                   <img
                     src={c.representative_thumb_urls?.[i]
                       ? resolveApiUrl(c.representative_thumb_urls[i])

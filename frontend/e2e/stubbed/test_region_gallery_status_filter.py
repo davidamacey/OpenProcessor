@@ -100,3 +100,29 @@ def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected in the region status-filter flow: {errors[:3]}"
+
+
+def test_gallery_count_does_not_divide_boxes_by_items(stub, page, app_url):
+    """A multi-box item is several rows. `/regions` serves `total` in items and
+    `total_rows` in boxes; the count must not read 'rows listed / items total'
+    (it showed '141 / 135 listed' on a project with 135 items and 292 boxes)."""
+    from fixtures.wire import make_box, make_item
+
+    boxes = [make_box(f"b{n}") for n in (1, 2, 3)]
+    item = make_item(crop_id="multi-1", image_id="img-1", region_boxes=boxes)
+    rows = [
+        {**item, "region_box_id": b["box_id"], "row_key": f"multi-1#{b['box_id']}"} for b in boxes
+    ]
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/regions/statuses(\?|$)", STATUSES)
+    stub.on("GET", r"/regions/clusters(\?|$)", {"clusters": [], "count": 0})
+    stub.on("GET", r"/clusters(\?|$)", {"clusters": [], "count": 0})
+    stub.on("GET", r"/regions(\?|$)", {"items": rows, "total": 1, "total_rows": 3})
+
+    page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
+    count = page.get_by_test_id("slot-gallery-count")
+    count.wait_for(timeout=ACTION_TIMEOUT_MS)
+    text = " ".join(count.inner_text().split())
+    assert "3 / 3 boxes listed" in text, text
+    assert "1 item" in text, text
+    assert "3 / 1" not in text, text

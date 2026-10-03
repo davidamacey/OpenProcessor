@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The Wheels inventory card on `/clusters` crashed the page (`each_key_duplicate`)
+  once a project had a multi-box region class: its close-ups were keyed by crop
+  id, and boxes of one item share it. The region gallery count no longer divides
+  loaded boxes by the item total ("141 / 135 listed"); it reads boxes against
+  the served box total and names the item count. The live region-tab label test
+  waits for the served tab vocabulary.
 - `npm run test:mutation` measures again: Stryker's vitest runner runs no tests
   under vitest 5, so it now drives one command-runner pass per file
   (`scripts/mutation.mjs`, `vitest related <file>` per mutant). Refs #26.

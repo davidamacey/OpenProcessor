@@ -275,13 +275,16 @@
         title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
         data-testid="slot-gallery-count"
       >
-        {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
-        listed
         {#if gallery.totalRows != null && gallery.totalRows !== gallery.pager.total}
-          <!-- total_rows counts boxes, not items, on a box-selecting
-               request — shown alongside, never replacing, the item total
-               (total stays items so page math holds). -->
-          ({gallery.totalRows.toLocaleString()} boxes)
+          <!-- A multi-box item is several rows: the loaded rows are counted
+               against the served box total, never against the item total
+               (`total` stays items so page math holds). -->
+          {gallery.pager.items.length.toLocaleString()} / {gallery.totalRows.toLocaleString()}
+          boxes listed ({gallery.pager.total.toLocaleString()}
+          {gallery.pager.total === 1 ? 'item' : 'items'})
+        {:else}
+          {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
+          listed
         {/if}
         {#if gallery.rowsTruncated}
           <span

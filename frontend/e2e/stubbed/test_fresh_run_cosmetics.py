@@ -130,3 +130,29 @@ def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
     text = " ".join(chip.inner_text().split())
     assert "cohesion 3% · n=616" in text, text
     assert "purity" not in text
+
+
+def test_region_inventory_card_survives_boxes_of_one_item(stub, page, app_url):
+    """A multi-box item is several `/regions` rows with ONE crop id (`row_key`
+    tells them apart). The pinned inventory card keyed its close-ups by crop
+    id, so those rows threw `each_key_duplicate` and the card never rendered."""
+    from fixtures.wire import make_box, make_item
+    from test_visual_fix_pages_narrow import CLASSES as NARROW_CLASSES
+    from test_visual_fix_pages_narrow import CLUSTERS
+
+    boxes = [make_box(f"b{n}") for n in (1, 2, 3)]
+    item = make_item(crop_id="multi-1", image_id="img-1", region_boxes=boxes)
+    rows = [{**item, "region_box_id": b["box_id"], "row_key": f"multi-1#{b['box_id']}"} for b in boxes]
+    other = make_item(crop_id="solo-1", image_id="img-2", region_boxes=[make_box("b1")])
+    rows.append({**other, "region_box_id": "b1", "row_key": "solo-1#b1"})
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": NARROW_CLASSES})
+    stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
+    stub.on("GET", r"/regions(\?|$)", {"items": rows, "total": 2})
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+
+    page.goto(f"{app_url}/p/default/clusters")
+    page.get_by_test_id("slot-card-title").wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert not errors, errors
+    tiles = page.get_by_test_id("slot-card-title").locator("xpath=ancestor::button[1]").locator("img")
+    assert tiles.count() == 4, tiles.count()
