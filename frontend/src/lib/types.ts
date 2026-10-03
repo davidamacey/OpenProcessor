@@ -9,6 +9,7 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 import type { ModelClassMappingSummary } from './types_models';
+import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
  *  (curation_api_contract.md "class_source values"): `human*`, the fixed
@@ -920,7 +921,10 @@ export interface SelectJobStatus {
   error?: string | null;
 }
 
-export interface CropFilter {
+/** `GET {API_PREFIX}/crops` query: the shared item filter
+ *  (`ItemFilterQuery`: class names, confidence and area bands, `max_rank`,
+ *  origin, embedding and review state) plus this route's own keys. */
+export interface CropFilter extends ItemFilterQuery {
   class_id?: number | null;
   cluster_id?: number | null;
   label_source?: LabelSource;
@@ -931,14 +935,10 @@ export interface CropFilter {
   /** `GET {API_PREFIX}/crops?source=` — renamed off the removed `?hdd_source=` param
    *  by the OpenProcessor 1327181 naming sweep (F9). */
   source?: string;
-  conf_min?: number;
-  conf_max?: number;
   sort?: string;
   limit?: number;
   page?: number;
   // -- Primary-subject filters -------------------------------------------
-  /** Keep only crops with crop_rank_in_image <= max_rank (1 or 2). */
-  max_rank?: number | null;
   /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
   min_blur_ratio?: number | null;
   /** Mine the low-confidence pool: classifier_raw_confidence < this OR no v6 box. */
