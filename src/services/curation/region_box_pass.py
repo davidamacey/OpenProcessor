@@ -28,6 +28,7 @@ from src.services.curation.region_boxes import (
     is_human_owned,
     merge_boxes_for_write,
     read_boxes,
+    stale_verdict_ids,
 )
 
 
@@ -48,6 +49,11 @@ class BoxPassResult:
     finalized: list[RegionBox]
     #: ``{F.status, F.boxes, F.count, ...}``: the fields to write.
     update: dict[str, Any]
+    #: Pass boxes whose verdict was dropped because a human changed that box
+    #: after the pass read it. A caller writing item-level fields derived from
+    #: the verdicts (verified, verifier, embeddings, events) must not write
+    #: them when this is non-empty.
+    dropped: frozenset[str] = frozenset()
 
 
 def box_pass_update(
@@ -83,7 +89,9 @@ def box_pass_update(
         raise ValueError(msg)
     F = F or get_region_fields()
     stored_now = read_boxes(current, F)
+    dropped: frozenset[str] = frozenset()
     if reverify:
+        dropped = stale_verdict_ids(stored_now, pending, baseline)
         merged = merge_boxes_for_write(stored_now, pending, baseline=baseline)
     elif merge_machine_boxes:
         keep = [b for b in stored_now if is_human_owned(b)]
@@ -98,7 +106,7 @@ def box_pass_update(
     )
     update: dict[str, Any] = {F.status: resolved_status}
     update.update(boxes_write_fields(finalized, current_src=current, F=F))
-    return BoxPassResult(merged=merged, finalized=finalized, update=update)
+    return BoxPassResult(merged=merged, finalized=finalized, update=update, dropped=dropped)
 
 
 def worker_stamps(

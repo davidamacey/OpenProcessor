@@ -27,7 +27,12 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.cascade import _crop_region_jpeg, _expand_bbox
-from scripts.curation.worker.verify import item_verification_fields
+from scripts.curation.worker.verify import (
+    candidate_actor,
+    candidate_box,
+    chain_entry,
+    item_verification_fields,
+)
 from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_source import (
@@ -39,7 +44,7 @@ from src.config.region_source import (
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.item_text import item_text_update
-from src.services.curation.region_boxes import RegionBox, new_box_placeholder
+from src.services.curation.region_boxes import has_human_text, new_box_placeholder
 from src.services.detection.cascade_detect import is_plausible_region_bbox
 from src.services.detection.region_text import (
     TEXT_CHOICE_OCR_ONLY,
@@ -59,6 +64,7 @@ from src.services.detection.region_text_rules import RegionTextRules, region_tex
 if TYPE_CHECKING:
     from scripts.curation.worker.state import _ItemTask
     from src.config import DetectionProfile
+    from src.services.curation.region_boxes import RegionBox
     from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
 
 
@@ -223,6 +229,8 @@ def _box_with_resolved_text(box: RegionBox, doc: dict[str, Any]) -> RegionBox:
     provisionally set on the box from the raw VLM verdict, rather than
     leaving it in place.
     """
+    if has_human_text(box):
+        return box
     updates: dict[str, Any] = dict.fromkeys(_TEXT_BOX_ATTRS)
     updates.update({attr: doc[attr] for attr in _TEXT_BOX_ATTRS if attr in doc})
     return dataclasses.replace(box, **updates)
@@ -247,6 +255,8 @@ def resolve_rejected_box_text(
     passes the same :func:`~src.services.detection.region_text_rules
     .region_text_rules` an accepted box's VLM reading is held to.
     """
+    if has_human_text(box):
+        return box
     if not profile.reads_text:
         return _box_with_resolved_text(box, {})
     if box.text is None:
@@ -264,98 +274,71 @@ async def accept_without_vlm(
     profile: DetectionProfile,
     rules: RegionTextRules | None = None,
 ) -> None:
-    """No VLM configured: write the task's best candidate region unverified.
+    """No VLM configured: write every candidate region unverified.
 
-    W8: writes the box-list shape. With no VLM to adjudicate between
-    candidates, only ``t.candidates[0]`` (the best -- already floor/NMS/
-    cap-selected) is auto-accepted; any other selected candidates for
-    this item are dropped, not written as rejected (there is no verifier
-    verdict to reject them with). The box passes the same geometry gate
-    the verified path uses; the region lands ``detected`` with the box
-    ``state='accepted'`` (verifier/verified fields stay unset -- still
-    reviewable in the human region queue) and its text comes from OCR
-    (none on a text-free profile).
+    W8: writes the box-list shape. With no VLM to adjudicate, each candidate
+    (a re-verified stored ``proposed`` box keeps its id, so none stays
+    ``proposed`` forever) is accepted if it passes the same geometry gate the
+    verified path uses, else rejected with the sanity reason. The item lands
+    ``detected`` when any box is accepted, ``detection_failed`` when none
+    is. Accepted text comes from OCR (none on a text-free profile); a human's
+    typed text is kept. The verifier/verified fields stay unset: the region
+    is still reviewable in the human region queue.
     """
     if not t.candidates or t.crop_jpeg is None:
         msg = f'accept_without_vlm needs at least one candidate and crop bytes (crop {t.crop_id})'
         raise ValueError(msg)
     F = get_region_fields()
-    cand = t.candidates[0]
-    actor, version = cand.detector, cand.detector_version
-    if f'{actor}:hit' not in t.detection_trace:
-        t.detection_trace.append(f'{actor}:hit')
-    # W8 B1 + M1 fix: this pass's own box (fresh id -- a placeholder,
-    # finalized against the CURRENT stored box_seq at write time) is
-    # stashed for the writer to merge with any concurrently-stored
-    # siblings and derive the final status from, never computed here
-    # against this task's own (possibly stale) fetch-time snapshot -- see
-    # ``_ItemTask.pending_boxes`` / ``bulk_writer._merge``.
-    gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_in_crop, t.item_bbox_norm)
-    if not gate_ok:
-        t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
-        box = RegionBox(
-            # R-M2 fix (2026-09-27 re-review): reuse the STORED box's own
-            # id when this candidate came from a stored `proposed` box
-            # (Path 1 re-verify, ``cand.box_id`` set by
-            # ``_task_box_from_stored``) -- minting a fresh placeholder
-            # unconditionally left the human's stored box `proposed`
-            # forever (merge never touches an id it doesn't recognize)
-            # while ALSO writing a brand-new sibling box for the same
-            # geometry. Only a genuinely fresh candidate (no stored
-            # counterpart) gets a new placeholder.
-            box_id=cand.box_id or new_box_placeholder(0),
-            bbox_norm=cand.bbox_in_source,
-            state='rejected',
-            score=cand.score,
-            detector=actor,
-            detector_version=version,
-            source=cand.source,
-            rejection_reason=f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}',
-        )
-        t.pending_boxes = [box]
+    boxes: list[RegionBox] = []
+    for i, cand in enumerate(t.candidates):
+        actor = candidate_actor(cand)
+        for entry in chain_entry(actor, 'hit'):
+            if entry not in t.detection_trace:
+                t.detection_trace.append(entry)
+        gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_in_crop, t.item_bbox_norm)
+        if not gate_ok:
+            t.detection_trace.extend(chain_entry(actor, f'sanity_reject:{gate_reason}'))
+            boxes.append(
+                candidate_box(
+                    cand,
+                    fallback_id=new_box_placeholder(i),
+                    state='rejected',
+                    rejection_reason=f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}',
+                )
+            )
+            continue
+        box = candidate_box(cand, fallback_id=new_box_placeholder(i), state='accepted')
+        if not has_human_text(box):
+            text_doc: dict[str, Any] = {}
+            await apply_region_text(
+                text_doc,
+                ocr=ocr,
+                crop_jpeg=t.crop_jpeg,
+                region_in_crop=cand.bbox_in_crop,
+                profile=profile,
+                crop_id=t.crop_id,
+                vlm_text=None,
+                vlm_confidence=None,
+                vlm_available=False,
+                vlm_model=None,
+                rules=rules,
+            )
+            box = _box_with_resolved_text(box, text_doc)
+        boxes.append(box)
+    if any(b.state == 'accepted' for b in boxes):
+        t.detection_trace.extend(chain_entry(candidate_actor(t.candidates[0]), ACCEPTED_UNVERIFIED))
+        status = RegionStatus.DETECTED
+        t.pending_empty_status = RegionStatus.DETECTED
+    else:
+        status = RegionStatus.DETECTION_FAILED
         t.pending_status = RegionStatus.DETECTION_FAILED
-        t.update_doc = {
-            F.status: RegionStatus.DETECTION_FAILED,
-            F.detector_chain: list(t.detection_trace),
-            **item_verification_fields(verified=False, verifier=None),
-        }
-        return
-    t.detection_trace.append(f'{actor}:{ACCEPTED_UNVERIFIED}')
-    box = RegionBox(
-        # R-M2 fix: see the sanity-reject branch above -- same reuse rule.
-        box_id=cand.box_id or new_box_placeholder(0),
-        bbox_norm=cand.bbox_in_source,
-        state='accepted',
-        score=cand.score,
-        detector=actor,
-        detector_version=version,
-        source=cand.source,
-    )
-    text_doc: dict[str, Any] = {}
-    await apply_region_text(
-        text_doc,
-        ocr=ocr,
-        crop_jpeg=t.crop_jpeg,
-        region_in_crop=cand.bbox_in_crop,
-        profile=profile,
-        crop_id=t.crop_id,
-        vlm_text=None,
-        vlm_confidence=None,
-        vlm_available=False,
-        vlm_model=None,
-        rules=rules,
-    )
-    box = _box_with_resolved_text(box, text_doc)
-    t.pending_boxes = [box]
-    t.pending_empty_status = RegionStatus.DETECTED
+    # The box list and its real status are finished at write time against
+    # the live doc (``bulk_writer._merge``); ``status`` here is the
+    # provisional value ``region_embed_stage`` / ``_publish_region_events``
+    # read from ``update_doc`` before that merge (see ``runner._box_list_doc``).
+    t.pending_boxes = boxes
     t.update_doc = {
-        # R-M1 fix: provisional status for region_embed_stage /
-        # _publish_region_events, which read ``t.update_doc`` before the
-        # write-time merge resolves the real one -- see
-        # ``runner._box_list_doc``'s docstring for why this is always
-        # safe here (this box is `accepted`, so the merged status is
-        # guaranteed `detected` regardless of any stored sibling).
-        F.status: RegionStatus.DETECTED,
+        F.status: status,
         F.detector_chain: list(t.detection_trace),
         **item_verification_fields(verified=False, verifier=None),
     }

@@ -153,3 +153,13 @@ def test_confirm_same_status_sets_verified_when_unverified() -> None:
     assert doc[F.verified] is True
     (box,) = doc[F.boxes]
     assert box['cluster_id'] == 7
+
+
+def test_a_whole_set_reject_by_an_automated_source_does_not_take_the_human_lock() -> None:
+    from src.services.curation.region_boxes import is_human_owned, read_boxes
+
+    current = _item('x', RegionStatus.DETECTED, _accepted_box(), verified=True)
+    machine = human_status_box_write('verify_rejected', current, label_source='vlm_relabel')
+    human = human_status_box_write('verify_rejected', current, label_source='human')
+    assert not any(is_human_owned(b) for b in read_boxes(machine, F))
+    assert all(is_human_owned(b) for b in read_boxes(human, F))

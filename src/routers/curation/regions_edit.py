@@ -36,6 +36,7 @@ from src.services.curation.region_boxes import RegionBoxWriteError
 from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
     human_status_box_write,
+    label_source_is_human,
     post_write_item,
     reason_only_box_write,
 )
@@ -135,7 +136,7 @@ async def patch_crop_region_meta(
     # Operator-initiated edits are terminal — keep the row out of the
     # /review/regions queue. AI-source patches (auto-relabel jobs) skip
     # this so they remain reviewable. Region signal only.
-    if (payload.region_label_source or '').lower().startswith('human'):
+    if label_source_is_human(payload.region_label_source):
         base[F.validated] = True
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
@@ -148,6 +149,7 @@ async def patch_crop_region_meta(
                     rejection_reason=payload.region_rejection_reason
                     if 'region_rejection_reason' in fields_set
                     else None,
+                    label_source=payload.region_label_source,
                 )
             )
         elif 'region_rejection_reason' in fields_set:
@@ -297,10 +299,15 @@ async def batch_set_region_status(
         F.label_source: payload.region_label_source,
         'updated_at': _now_iso(),
     }
-    if (payload.region_label_source or '').lower().startswith('human'):
+    if label_source_is_human(payload.region_label_source):
         base[F.validated] = True
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
-        return {**base, **human_status_box_write(payload.region_status, current)}
+        return {
+            **base,
+            **human_status_box_write(
+                payload.region_status, current, label_source=payload.region_label_source
+            ),
+        }
 
     return await _batch_write(opensearch, payload.crop_ids, _build, 'human:batch_set_region_status')
