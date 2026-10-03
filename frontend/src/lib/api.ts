@@ -2409,6 +2409,10 @@ export async function getCluster(
     method?: unknown;
     version?: unknown;
     n_pool?: unknown;
+    /** v0.4.0 ordered views: matching items with no vector, and the
+     *  request that would embed them (set only when the count is > 0). */
+    n_unembedded?: number | null;
+    suggested_reprocess?: ReprocessRequest | null;
   };
   const cropQuery: Record<string, unknown> = {
     cluster_id: id,
@@ -2471,6 +2475,8 @@ export async function getCluster(
       order_method: typeof cropPage.method === 'string' ? cropPage.method : null,
       order_version: typeof cropPage.version === 'string' ? cropPage.version : null,
       n_pool: typeof cropPage.n_pool === 'number' ? cropPage.n_pool : null,
+      n_unembedded: cropPage.n_unembedded ?? null,
+      suggested_reprocess: cropPage.suggested_reprocess ?? null,
     },
   };
 }
@@ -2485,6 +2491,7 @@ export async function getCrops(
     page_size: number;
     crops: RawCrop[];
     n_unembedded?: number | null;
+    suggested_reprocess?: ReprocessRequest | null;
   };
   const raw = await apiFetch<Raw>(`${scoped()}/crops${qs({ ...filter })}`, {}, signal);
   return {
@@ -2493,6 +2500,7 @@ export async function getCrops(
     page: raw.page,
     page_size: raw.page_size,
     n_unembedded: raw.n_unembedded ?? null,
+    suggested_reprocess: raw.suggested_reprocess ?? null,
   };
 }
 

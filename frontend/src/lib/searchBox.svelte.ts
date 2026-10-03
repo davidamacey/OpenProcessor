@@ -21,6 +21,8 @@ import type { SearchCrop } from './types';
 export interface SemanticSearchResult {
   items: SearchCrop[];
   total: number;
+  /** v0.4.0: items in scope without a vector, which cannot match. */
+  unembedded_in_scope?: number | null;
 }
 
 export interface SemanticSearchOptions {

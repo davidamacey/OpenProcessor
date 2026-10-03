@@ -21,6 +21,7 @@
   import { createSemanticSearchBox } from '$lib/searchBox.svelte';
   import type { SemanticSearchResult } from '$lib/searchBox.svelte';
   import { onMount } from 'svelte';
+  import UnembeddedBanner from '$components/embedding/UnembeddedBanner.svelte';
 
   interface Props {
     /** Extra query params threaded to `GET {API_PREFIX}/search/text` — e.g.
@@ -60,6 +61,7 @@
   let lastShown = $state(0);
   let lastTotal = $state(0);
   let lastQuery = $state('');
+  let lastUnembedded = $state<number | null>(null);
 
   const box = createSemanticSearchBox({
     debounceMs: 300,
@@ -68,6 +70,7 @@
       lastShown = res.items.length;
       lastTotal = res.total;
       lastQuery = box.query.trim();
+      lastUnembedded = res.unembedded_in_scope ?? null;
       onResults?.(res);
     },
     onClear: () => onClear?.(),
@@ -146,5 +149,6 @@
     <span class="text-zinc-400">
       Showing {lastShown} of {lastTotal} result{lastTotal === 1 ? '' : 's'} for “{lastQuery}”
     </span>
+    <UnembeddedBanner count={lastUnembedded} context="search" />
   {/if}
 </div>

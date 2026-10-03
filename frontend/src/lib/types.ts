@@ -10,6 +10,7 @@
 import type { SlotKey, SlotData } from './annotations/types';
 import type { ModelClassMappingSummary } from './types_models';
 import type { IngestDetectorInfo, IngestPolicy } from '$lib/types_detector';
+import type { ReprocessRequest } from '$lib/types_import';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
@@ -888,6 +889,9 @@ export interface PaginatedResponse<T> {
   /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
    *  when the route did not compute it). Absent on every other endpoint. */
   n_unembedded?: number | null;
+  /** v0.4.0 ordered `GET /crops` views: the request that would embed the
+   *  unembedded items, sent only when `n_unembedded` is > 0. */
+  suggested_reprocess?: ReprocessRequest | null;
   /** v0.4.0 `GET {API_PREFIX}/search/text`: items in the search scope a
    *  semantic search cannot reach because they have no vector. */
   unembedded_in_scope?: number | null;
