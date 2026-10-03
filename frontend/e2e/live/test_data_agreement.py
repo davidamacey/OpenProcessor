@@ -179,7 +179,11 @@ def test_regions_filter_spec_select_matches_served_options(
     regions_tab = next((t for t in tabs if t["id"] == "regions"), None)
     if regions_tab is None or not regions_tab.get("filter_specs"):
         pytest.skip("backend serves no filter_specs for the regions tab right now")
-    specs = regions_tab["filter_specs"]
+    # Only `enum` specs carry options; bool/number/text/class_names/multi_enum
+    # render other controls (checked by their own stubbed tests).
+    specs = [s for s in regions_tab["filter_specs"] if s.get("kind", "enum") == "enum"]
+    if not specs:
+        pytest.skip("backend serves no enum filter_specs for the regions tab right now")
 
     page = guarded_page.page
     page.goto(

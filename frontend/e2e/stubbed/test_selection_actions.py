@@ -13,6 +13,34 @@ from conftest import ACTION_TIMEOUT_MS
 from fixtures.wire import make_item
 from test_item_filter import CLASSES, CLUSTERS
 
+
+class _Handled:
+    """Context manager whose `.value` is the matched *request*, resolved only
+    once the stub has answered it."""
+
+    def __init__(self, manager):
+        self._manager = manager
+        self._info = None
+
+    def __enter__(self):
+        self._info = self._manager.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        return self._manager.__exit__(*exc)
+
+    @property
+    def value(self):
+        return self._info.value.request
+
+
+def expect_handled(page, predicate, timeout):
+    """Wait for the stub to have answered a matching request, not just for the
+    browser to send it: the handlers record bodies, and on a slow runner the
+    recording can trail the send."""
+    return _Handled(page.expect_response(lambda resp: predicate(resp.request), timeout=timeout))
+
+
 FILTER = {"class_names": ["widget"]}
 
 
@@ -52,7 +80,7 @@ def test_ignore_all_matching_dry_runs_first_then_applies_and_z_restores(stub, pa
     stub.on("POST", r"/crops/batch_unexclude$", unexclude_handler)
     _setup(stub, page, app_url)
 
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "POST" and r.url.endswith("/crops/batch_exclude"),
         timeout=ACTION_TIMEOUT_MS,
     ):
@@ -66,7 +94,7 @@ def test_ignore_all_matching_dry_runs_first_then_applies_and_z_restores(stub, pa
     assert bodies == [{"selection": {"filter": FILTER}, "reason": "ignore", "dry_run": True}]
 
     # Changing the limit re-runs the dry run with it.
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "POST" and "limit" in (r.post_data or ""),
         timeout=ACTION_TIMEOUT_MS,
     ):
@@ -76,7 +104,7 @@ def test_ignore_all_matching_dry_runs_first_then_applies_and_z_restores(stub, pa
     assert bodies[-1]["selection"] == {"filter": FILTER, "limit": 5}
     assert bodies[-1]["dry_run"] is True
 
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "POST"
         and r.url.endswith("/crops/batch_exclude")
         and '"dry_run":false' in (r.post_data or "").replace(" ", ""),
@@ -91,7 +119,7 @@ def test_ignore_all_matching_dry_runs_first_then_applies_and_z_restores(stub, pa
 
     # The served ids reached the undo stack: Z un-ignores exactly them.
     page.get_by_role("button", name="Apply").wait_for(state="detached", timeout=ACTION_TIMEOUT_MS)
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "POST" and r.url.endswith("/crops/batch_unexclude"),
         timeout=ACTION_TIMEOUT_MS,
     ) as undo:
@@ -128,7 +156,7 @@ def test_label_all_matching_needs_a_class_and_z_undoes_through_label_undo(stub, 
     assert bodies == []
     assert page.get_by_role("button", name="Apply").is_disabled()
 
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "PUT" and r.url.endswith("/crops/batch_label"),
         timeout=ACTION_TIMEOUT_MS,
     ):
@@ -143,7 +171,7 @@ def test_label_all_matching_needs_a_class_and_z_undoes_through_label_undo(stub, 
         "() => !document.querySelector('[role=dialog] button.btn-primary')?.disabled",
         timeout=ACTION_TIMEOUT_MS,
     )
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "PUT"
         and '"dry_run":false' in (r.post_data or "").replace(" ", ""),
         timeout=ACTION_TIMEOUT_MS,
@@ -151,7 +179,7 @@ def test_label_all_matching_needs_a_class_and_z_undoes_through_label_undo(stub, 
         page.get_by_role("button", name="Apply").click()
     page.get_by_role("button", name="Apply").wait_for(state="detached", timeout=ACTION_TIMEOUT_MS)
 
-    with page.expect_request(
+    with expect_handled(page,
         lambda r: r.method == "POST" and r.url.endswith("/crops/label/undo_batch"),
         timeout=ACTION_TIMEOUT_MS,
     ) as undo:
