@@ -81,4 +81,4 @@ that is recorded.
 
 <Screenshot name="vlm-endpoint-editor-1600.png" alt="VLM endpoint editor showing a key reference and no key value" caption="Endpoint editor — a secret reference, never the key itself" />
 
-<Screenshot name="vlm-run-picker-1600.png" alt="Per-run VLM picker with the external-images acknowledgement" caption="Per-run VLM picker — the external-images acknowledgement" />
+<Screenshot name="vlm-run-picker-1600.png" alt="Per-run VLM picker on the dashboard assist bar" caption="Per-run VLM picker — project default, served endpoints and off" />
