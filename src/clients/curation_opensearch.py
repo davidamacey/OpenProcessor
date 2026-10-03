@@ -58,6 +58,10 @@ from src.config import (
 )
 from src.core.logging import get_logger
 from src.services.curation.item_text import ITEM_TEXT_MAPPING
+from src.services.curation.open_vocab_fields import (
+    OPEN_VOCAB_IMAGE_MAPPING,
+    OPEN_VOCAB_ITEM_MAPPING,
+)
 from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 
 
@@ -247,6 +251,7 @@ def _images_body() -> dict[str, Any]:
                 # needs a reindex.
                 'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
                 **_IMAGES_IMPORT_MAPPING,
+                **OPEN_VOCAB_IMAGE_MAPPING,
             }
         },
     }
@@ -566,6 +571,7 @@ def _items_body() -> dict[str, Any]:
                 # pre-exclusion validation/cluster placement un-exclude
                 # restores (src/services/curation/exclusion.py).
                 **_EXCLUSION_MAPPING,
+                **OPEN_VOCAB_ITEM_MAPPING,
             }
         },
     }

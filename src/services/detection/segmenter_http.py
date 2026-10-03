@@ -19,6 +19,8 @@ from typing import Any
 
 import httpx
 
+from src.services.detection.cascade_detect import RegionCandidate
+
 
 #: How many candidates the worker asks the segmenter for per crop (its client
 #: default); a test run asks for the same, so it shows what the worker sees.
@@ -73,6 +75,7 @@ async def segment_once(
     *,
     max_candidates: int,
     return_masks: bool,
+    min_score: float | None = None,
     timeout_s: float = DEFAULT_TIMEOUT_S,
     client: httpx.AsyncClient | None = None,
 ) -> list[SegmentCandidateData]:
@@ -87,6 +90,8 @@ async def segment_once(
         'max_candidates': max_candidates,
         'return_masks': return_masks,
     }
+    if min_score is not None:
+        payload['min_score'] = min_score
     owned = client is None
     http = client or httpx.AsyncClient(timeout=timeout_s, follow_redirects=False)
     try:
@@ -110,11 +115,48 @@ async def segment_once(
     return [c for c in parsed if c is not None]
 
 
+async def segment_image_http(
+    jpeg: bytes,
+    prompt: str,
+    *,
+    min_score: float | None,
+    max_candidates: int,
+    return_masks: bool,
+) -> list[RegionCandidate]:
+    """One whole-image call to the first configured segmenter, as
+    :class:`RegionCandidate` (``bbox_norm`` / ``mask_polygon`` in the
+    submitted image's frame). Raises :class:`SegmenterCallError` when no
+    segmenter is configured or it cannot answer: an outage is never "no hit"."""
+    url = first_segmenter_url()
+    if url is None:
+        msg = 'segmenter call failed: OP_SEGMENTER_URL is not configured'
+        raise SegmenterCallError(msg)
+    found = await segment_once(
+        url,
+        jpeg,
+        prompt,
+        max_candidates=max_candidates,
+        return_masks=return_masks,
+        min_score=min_score,
+    )
+    return [
+        RegionCandidate(
+            bbox_norm=c.bbox_norm,
+            score=c.score,
+            source='sam3',
+            rectangularity=c.mask_iou,
+            mask_polygon=tuple(c.mask_polygon) if c.mask_polygon else None,
+        )
+        for c in found
+    ]
+
+
 __all__ = [
     'DEFAULT_MAX_CANDIDATES',
     'DEFAULT_TIMEOUT_S',
     'SegmentCandidateData',
     'SegmenterCallError',
     'first_segmenter_url',
+    'segment_image_http',
     'segment_once',
 ]

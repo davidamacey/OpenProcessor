@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.clients.curation_opensearch import get_class_registry
+from src.services.curation.class_ensure import ensure_class_by_name
 from src.services.detection.profile_registry import get_active_region_profile
 
 
@@ -27,12 +28,11 @@ def ensure_region_class() -> int | None:
     name = (profile.region_class_name if profile else '').strip()
     if not name:
         return None
-    registry = get_class_registry()
-    for entry in registry.load().classes:
-        if not entry.deprecated and entry.class_name.lower() == name.lower():
-            return entry.class_id
-    return registry.add_class(
-        name, group=REGION_CLASS_GROUP, notes='seeded from the active region profile'
+    return ensure_class_by_name(
+        get_class_registry(),
+        name,
+        group=REGION_CLASS_GROUP,
+        notes='seeded from the active region profile',
     )
 
 
