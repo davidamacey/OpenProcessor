@@ -4,9 +4,8 @@
  * against its interface (`satisfies Record<keyof T, true>` rejects a
  * missing or an extra key), and the test pins it to the schema's
  * property set, so a served rename fails here instead of rendering
- * blank. Not pinned, because the served OpenAPI leaves them untyped:
- * `capacity` (a bare `dict`) and the `DELETE /projects/{project}`
- * response (dry-run report / 202 envelope) — see `types_projects.ts`.
+ * blank. Not pinned, because the served OpenAPI leaves it untyped:
+ * `DeleteDryRunResponse.referenced_by` rows (served as bare objects).
  */
 import { describe, expect, it } from 'vitest';
 import spec from '../../../contracts/openprocessor/openapi/curation.json';
@@ -66,6 +65,37 @@ const CASES: [string, string[]][] = [
       labels: true,
       include_archived: true,
     } satisfies Record<keyof T.ProjectsResponse, true>),
+  ],
+  [
+    'ProjectCapacityWire',
+    keys({
+      status: true,
+      active_shards: true,
+      per_project_shards: true,
+      soft_limit: true,
+      hard_limit: true,
+      heap_max_bytes: true,
+      max_shards_per_node: true,
+      data_nodes: true,
+      projects_until_soft_limit: true,
+      shards_after_create: true,
+      limit_source: true,
+      message: true,
+      labels: true,
+    } satisfies Record<keyof T.ProjectCapacity, true>),
+  ],
+  [
+    'DeleteDryRunResponse',
+    keys({
+      indexes: true,
+      dirs: true,
+      promoted_models: true,
+      mlflow_experiment: true,
+      running_jobs: true,
+      referenced_by: true,
+      blocking: true,
+      blocking_detail: true,
+    } satisfies Record<keyof T.DeleteDryRunResponse, true>),
   ],
   [
     'ProjectLimits',
@@ -145,6 +175,17 @@ describe('types_projects.ts matches the vendored OpenAPI', () => {
     const schema = schemas[name];
     expect(schema, `${name} missing from the vendored OpenAPI`).toBeDefined();
     expect(ours).toEqual(Object.keys(schema!.properties ?? {}).sort());
+  });
+
+  it('capacity limit_source values equal the served enum', () => {
+    const limitSource = (
+      schemas.ProjectCapacityWire!.properties as Record<string, { enum: string[] }>
+    ).limit_source!.enum;
+    const ours: T.ProjectCapacity['limit_source'][] = [
+      'heap',
+      'cluster_max_shards_per_node',
+    ];
+    expect([...ours].sort()).toEqual([...limitSource].sort());
   });
 
   it('every request field the server requires is required in our type', () => {

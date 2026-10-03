@@ -69,6 +69,8 @@ export function testCapacity(status: ProjectCapacity['status'] = 'ok'): ProjectC
     max_shards_per_node: 1000,
     data_nodes: 1,
     projects_until_soft_limit: status === 'ok' ? 4 : 0,
+    shards_after_create: status === 'blocked' ? 1006 : 18,
+    limit_source: 'heap',
     message: `capacity is ${status}: served message`,
     labels: {
       ok: 'Room for more projects',
