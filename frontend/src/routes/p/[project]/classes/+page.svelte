@@ -18,6 +18,7 @@
     type NewClassProposalTerm,
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
+  import SeedFromDetectorPanel from '$lib/components/detector/SeedFromDetectorPanel.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { proposalRows, termRulesText } from '$lib/classes/proposalRows';
   import { formatDateOnly } from '$lib/formatDate';
@@ -795,6 +796,8 @@
       {/if}
     </section>
   {/if}
+
+  <SeedFromDetectorPanel />
 
   <!-- New-class proposals (2026-09-24 logic-moves W5) — aggregate view of
        the same cohort /review's "New Class Proposals" tab pages one crop
