@@ -201,3 +201,23 @@ def test_legacy_items_with_a_vector_count_as_embedded_in_by_state() -> None:
     assert summary['embedded'] == summary['by_state']['embedded'] == 2740
     assert summary['by_state']['unknown'] == 0
     assert sum(summary['by_state'].values()) == 2740
+
+
+def test_by_state_end_to_end_over_mixed_legacy_and_stated_items() -> None:
+    from tests.curation.query_fakes import _aggregate
+
+    docs: list[dict[str, Any]] = [
+        {'pe_embedding': [1.0], 'embedding_state': 'embedded'},
+        {'pe_embedding': [1.0]},
+        {'embedding_state': 'failed'},
+        {'embedding_state': 'some_future_state'},
+        {},
+    ]
+    summary = embedding_summary(_aggregate(docs, embedding_aggregations()), len(docs))
+    assert summary['by_state'] == {
+        'embedded': 2,
+        'not_selected': 0,
+        'deferred': 0,
+        'failed': 1,
+        'unknown': 2,
+    }

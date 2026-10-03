@@ -151,18 +151,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     # /regions, /regions/statuses, stats/dataset). Here we only mark
     # ``kind='region'`` so item-count consumers can exclude it; item
     # counts stay the real (usually zero) class-aggregation numbers.
-    from src.services.detection.profile_registry import get_active_region_profile
-
-    region_kind_class_ids: set[int] = set()
-    try:
-        active_profile = get_active_region_profile()
-        region_class_name = (active_profile.region_class_name if active_profile else '').lower()
-        if region_class_name:
-            for c in reg.classes:
-                if (c.class_name or '').lower() == region_class_name:
-                    region_kind_class_ids.add(c.class_id)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+    from src.services.curation.region_class import is_region_class
 
     thresholds = dataset_thresholds()
     hard_min = int(thresholds.get('block_below', 0))
@@ -184,7 +173,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
                 adequacy=adequacy(validated.get(c.class_id, c.validated_count)),
                 added_at=getattr(c, 'added_at', None),
-                kind='region' if c.class_id in region_kind_class_ids else 'item',
+                kind='region' if is_region_class(c) else 'item',
                 trainable=_trainable(c.class_id, validated.get(c.class_id, c.validated_count)),
                 trainable_gap=max(
                     0,
