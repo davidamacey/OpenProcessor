@@ -171,7 +171,7 @@ async def test_promote_result_flags_cold_start(
 
 
 @pytest.mark.asyncio
-async def test_promote_warm_up_runs_one_inference_after_the_load_and_clears_the_cold_flag(
+async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_clears_the_cold_flag(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -181,9 +181,14 @@ async def test_promote_warm_up_runs_one_inference_after_the_load_and_clears_the_
     from src.services.training import triton_promote
 
     calls: list[str] = []
+    batches: list[int] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request.url.path)
+        if request.url.path.endswith('/infer'):
+            import json
+
+            batches.append(json.loads(request.content)['inputs'][0]['shape'][0])
         return httpx.Response(200, json={})
 
     real = httpx.AsyncClient
@@ -199,7 +204,9 @@ async def test_promote_warm_up_runs_one_inference_after_the_load_and_clears_the_
     assert calls == [
         '/v2/repository/models/op_warm_up_ok/load',
         '/v2/models/op_warm_up_ok/infer',
+        '/v2/models/op_warm_up_ok/infer',
     ]
+    assert batches == [1, 8]  # batch 1 AND the config's max_batch_size
     assert result.cold_start_expected_on_first_inference is False
 
 

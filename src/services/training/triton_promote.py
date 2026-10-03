@@ -231,8 +231,10 @@ class PromoteResult:
     # the model's first inference, synchronously (~85s on a toy
     # single-class model, final E2E run 2026-09-26). promote() issues that
     # first inference itself once the model is loaded, so a real request
-    # after it is warm. True only when the warm-up did not happen (Triton
-    # unreachable, load refused, or the warm-up request failed).
+    # after it is warm. The warm-up covers batch 1 and max_batch_size (the
+    # accelerator rebuilds for a batch outside the range it has seen). True only
+    # when it did not fully happen (Triton unreachable, load refused, or a
+    # warm-up request failed).
     cold_start_expected_on_first_inference: bool = True
 
 
@@ -480,7 +482,7 @@ class TritonPromoter:
         # Trigger Triton load, then pay the first-inference engine build here
         # rather than on the first real request.
         loaded = await self._trigger_load(triton_name)
-        warmed = loaded and await self._warm_up(triton_name, input_size)
+        warmed = loaded and await self._warm_up(triton_name, input_size, max_batch_size)
 
         # F-42 (fresh-start E2E findings 2026-09-25, round 2): drop any
         # cached class-name mapping for this model name so the very next
@@ -554,38 +556,47 @@ class TritonPromoter:
             raise CheckpointNotFoundError(status.job_id, onnx_path)
         return onnx_path
 
-    async def _warm_up(self, triton_name: str, input_size: int) -> bool:
-        """One throwaway inference (a blank image) so the TensorRT engine is
-        built now, not on the first real request. Best-effort: ``False`` when
-        it could not be done; the promote itself is already complete."""
-        body = {
-            'inputs': [
-                {
-                    'name': 'images',
-                    'shape': [1, 3, input_size, input_size],
-                    'datatype': 'FP32',
-                    'data': [0.0] * (3 * input_size * input_size),
-                }
-            ]
-        }
+    async def _warm_up(self, triton_name: str, input_size: int, max_batch_size: int) -> bool:
+        """Throwaway inferences (blank images) so the TensorRT engine exists
+        before the first real request. The accelerator builds for the shapes it
+        has seen and rebuilds (~90 s) when a request arrives outside that range,
+        so batch 1 alone leaves the first dynamically-batched request cold:
+        warm batch 1 AND ``max_batch_size``. Best-effort: ``False`` unless every
+        warm-up succeeded; the promote itself is already complete."""
         url = f'{self.triton_http_url}/v2/models/{triton_name}/infer'
-        try:
-            async with httpx.AsyncClient(timeout=self.http_timeout) as client:
-                resp = await client.post(url, json=body)
-        except httpx.HTTPError as exc:
-            logger.warning(
-                'train_promote_warm_up_unreachable', triton_name=triton_name, error=str(exc)
-            )
-            return False
-        if resp.status_code == 200:
-            return True
-        logger.warning(
-            'train_promote_warm_up_failed',
-            triton_name=triton_name,
-            status=resp.status_code,
-            body=resp.text[:300],
-        )
-        return False
+        for batch in sorted({1, max_batch_size}):
+            body = {
+                'inputs': [
+                    {
+                        'name': 'images',
+                        'shape': [batch, 3, input_size, input_size],
+                        'datatype': 'FP32',
+                        # ints keep the JSON body ~2.5x smaller than 0.0
+                        'data': [0] * (batch * 3 * input_size * input_size),
+                    }
+                ]
+            }
+            try:
+                async with httpx.AsyncClient(timeout=self.http_timeout) as client:
+                    resp = await client.post(url, json=body)
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    'train_promote_warm_up_unreachable',
+                    triton_name=triton_name,
+                    batch=batch,
+                    error=str(exc),
+                )
+                return False
+            if resp.status_code != 200:
+                logger.warning(
+                    'train_promote_warm_up_failed',
+                    triton_name=triton_name,
+                    batch=batch,
+                    status=resp.status_code,
+                    body=resp.text[:300],
+                )
+                return False
+        return True
 
     async def _trigger_load(self, triton_name: str) -> bool:
         """POST ``/v2/repository/models/<name>/load`` to Triton.
