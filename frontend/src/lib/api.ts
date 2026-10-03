@@ -1769,7 +1769,7 @@ export interface DatasetStats {
     method: string | null;
   };
   /** v0.4.0: items with and without a vector, and the served per-state
-   *  breakdown (legacy items report under `unknown`). Untyped on the wire. */
+   *  breakdown (legacy items report under `unknown`). Required on the wire. */
   embedding: {
     embedded: number;
     not_embedded: number;

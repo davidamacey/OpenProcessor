@@ -46,6 +46,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Pages no longer blank on repeated served data: the region gallery keys rows by crop and box (a multi-box item is several rows), the pager drops a repeated key within one served page, and the ingest-policy 422 (message equals its only reason), dataset-import issues sharing a code, two rejected unsaved boxes on `/review`, `foo, foo` in the class picker, repeated detector labels, a duplicated batch path, a repeated `class_name` in a URL, repeated provenance steps, applied-runtime rows and detection labels all render instead of throwing `each_key_duplicate`.
+- Error toasts and banners show the served message sentence of a structured error (for example "Someone else saved revision 4.") instead of its code (`revision_conflict`); the region-profile 409 is still recognised by its code. One `apiErrorText` replaces the project, dataset and config variants, and the VLM run error no longer prints `API 503 /curation/...`.
+- Scores, probe and embedding-plot job polls stop when the component unmounts and no longer overlap a slow status read (no double completion toast); a closed Reprocess dialog stops following its job; the region-gallery clustering polls stop on leaving `/clusters` and survive one failed status read.
+- The region gallery text and min-score filters debounce, and typing no longer refetches the cluster cards; `/clusters/[id]` shows why the cluster card could not be read; `/ingest` reads its status once on mount.
+- Dataset archive uploads leave room for the multipart envelope under the nginx body cap.
 - `/models` no longer fails to load when the server lists the same model twice (a shared model after a re-share): each card is keyed by position as well as name, so both render instead of a Svelte `each_key_duplicate` error leaving the page on "Loading...".
 
 - A failed module-chunk load (flaky network, browser network-change abort, or

@@ -20,8 +20,6 @@ import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 export type LabelSource =
   'human' | 'human_confirmed' | 'vlm' | 'vlm_human_confirmed' | (string & {});
 
-export type ClassSource = 'registry' | 'derived' | 'imported';
-
 export interface RegistryClass {
   id: number;
   name: string;

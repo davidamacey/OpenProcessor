@@ -22,6 +22,7 @@
   import { trapFocus } from '$lib/actions/trapFocus';
   import type { ProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import { usedByText } from '$lib/modelSharing';
+  import { formatBytes } from '$lib/combine/combineText';
   import type {
     DeleteDryRunResponse,
     ProjectErrorDetail,
@@ -94,19 +95,6 @@
     return report.blocking.map((code) => ({ code, message: code }));
   });
   const blocked = $derived(blocking.length > 0 || dryRunError !== null);
-
-  function fmtBytes(n: number | null | undefined): string {
-    if (n == null) return '—';
-    if (n < 1024) return `${n} B`;
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    let v = n;
-    let i = -1;
-    while (v >= 1024 && i < units.length - 1) {
-      v /= 1024;
-      i += 1;
-    }
-    return `${v.toFixed(1)} ${units[i]}`;
-  }
 
   async function submit(): Promise<void> {
     if (!project) return;
@@ -183,7 +171,7 @@
             {/each}
             {#each report.dirs as d (d.path)}
               <li>
-                directory <span class="font-mono">{d.path}</span> · {fmtBytes(d.bytes)}
+                directory <span class="font-mono">{d.path}</span> · {formatBytes(d.bytes)}
               </li>
             {/each}
             {#each report.promoted_models as m (m)}

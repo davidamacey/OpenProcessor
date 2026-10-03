@@ -4,6 +4,7 @@
    * Open MLflow run + Cancel buttons live here too.
    */
   import type { TrainJobStatus } from '$lib/types_train';
+  import { formatMetric } from '$lib/trainResults';
 
   interface Props {
     status: TrainJobStatus;
@@ -30,11 +31,6 @@
     const h = Math.floor(m / 60);
     const r = m % 60;
     return r === 0 ? `${h}h` : `${h}h ${r}m`;
-  }
-
-  function fmtMetric(v: number | null | undefined): string {
-    if (v == null) return '—';
-    return v.toFixed(3);
   }
 
   // Live progress has no finished eval pass yet — the last completed
@@ -118,13 +114,13 @@
           <span class="normal-case text-zinc-600"> (ep {lastEpoch.epoch})</span>
         {/if}
       </dt>
-      <dd class="font-mono text-zinc-100">{fmtMetric(lastEpoch?.map50)}</dd>
+      <dd class="font-mono text-zinc-100">{formatMetric(lastEpoch?.map50)}</dd>
     </div>
     <div>
       <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
         Last epoch mAP50-95
       </dt>
-      <dd class="font-mono text-zinc-100">{fmtMetric(lastEpoch?.map50_95)}</dd>
+      <dd class="font-mono text-zinc-100">{formatMetric(lastEpoch?.map50_95)}</dd>
     </div>
   </div>
 

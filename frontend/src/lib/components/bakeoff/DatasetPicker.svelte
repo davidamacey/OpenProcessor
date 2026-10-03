@@ -5,7 +5,8 @@
    * served `group`. Counts and flags are served values.
    */
   import type { EvalDataset } from '$lib/types_bakeoff';
-  import { formatCount, groupEvalDatasets } from '$lib/bakeoff/view';
+  import { formatCount } from '$lib/formatCount';
+  import { groupEvalDatasets } from '$lib/bakeoff/view';
 
   interface Props {
     datasets: EvalDataset[];

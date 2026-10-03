@@ -18,7 +18,7 @@ import {
   moveSelectionToCluster,
   unexcludeCrops,
 } from './api';
-import type { ItemSelection } from '$lib/types_itemFilter';
+import type { ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 
 function ok(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -128,6 +128,29 @@ describe('class identity is by name on the list routes', () => {
     expect(url.searchParams.getAll('origin')).toEqual(['sam3']);
     expect(url.searchParams.get('conf_min')).toBe('0.5');
     expect(url.searchParams.has('class_id')).toBe(false);
+  });
+
+  it('getClusters forwards every shared item-filter key (a new key must be listed there too)', async () => {
+    // `satisfies` makes this fail to compile when ItemFilterQuery gains a key
+    // that ClusterFilter inherits (open_vocab_set and source_prompt are not clusters params), until the key is added here and to getClusters.
+    const every = {
+      class_name: ['a'],
+      exclude_class_name: ['b'],
+      conf_min: 0.1,
+      conf_max: 0.9,
+      min_area: 0.2,
+      max_area: 0.8,
+      max_rank: 2,
+      origin: ['sam3'],
+      embedding_state: ['failed'],
+      review_status: ['pending'],
+    } satisfies Required<Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>>;
+    const f = stub({ items: [], total: 0 });
+    await getClusters(every);
+    const url = new URL(String(f.mock.calls[0][0]), 'http://x');
+    for (const key of Object.keys(every)) {
+      expect(url.searchParams.has(key), key).toBe(true);
+    }
   });
 
   it('getRegions sends the shared filter beside its own keys', async () => {
