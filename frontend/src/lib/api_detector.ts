@@ -110,7 +110,7 @@ export function detectorErrorLines(e: unknown): string[] {
   if (d) {
     return [
       d.message,
-      ...(d.reasons ?? []).filter((r) => r !== d.message),
+      ...(d.reasons ?? []),
       ...(d.unknown_names?.length ? [`Unknown: ${d.unknown_names.join(', ')}`] : []),
     ];
   }

@@ -1120,15 +1120,7 @@ export interface VizProjectionResponse {
    *  in this file — the server doesn't send a separate total, there's no
    *  pagination here (`max_points` is a hard cap, not a page size). */
   total: number;
-  /**
-   * CONFIRMED (2026-09-10) against the real `GET {API_PREFIX}/viz/projection`
-   * (`embedding_viz.get_cached_projection`): the server returns
-   * `{status: 'not_built'}` when nothing has been fit yet, or
-   * `{points, projection_version, fitted_at, stale}` otherwise — there is
-   * no `built`/`not_built` boolean on the wire. `built` here is this
-   * file's own derived convenience (`status !== 'not_built'`), kept so
-   * `EmbeddingPlot` doesn't need to know the raw sentinel shape.
-   */
+  /** Not on the wire: `false` only for the served 404 `projection_not_built`. */
   built: boolean;
   fitted_at: string | null;
   projection_version: string | null;
@@ -1172,18 +1164,11 @@ function parseVizPoint(raw: unknown): VizPoint | null {
 }
 
 /**
- * Fetch the cached 2-d projection. **Never rejects** (mirrors
- * `getMethods`'s contract) — `{API_PREFIX}/viz/projection` may not exist yet (the
- * backend Phase 5 lands independently of this frontend branch) or may
- * 404/5xx for any other reason, and a fetch failure here should degrade
- * `EmbeddingPlot` to its pending/empty state rather than crash the page
- * it replaced the grid on. A caller-initiated abort still propagates —
- * that's a cancellation, not a backend failure.
- *
- * The real payload is `{status: 'not_built'}` (nothing fit yet) or
- * `{points, projection_version, fitted_at, stale}` (confirmed 2026-09-10
- * against `embedding_viz.get_cached_projection`) — normalized here into
- * this file's own `built`/`fitted_at`/`projection_version`/`stale` shape.
+ * Fetch the cached 2-d projection (`ProjectionResponse`). Only the served
+ * 404 `projection_not_built` means "nothing fit yet" (`built: false`); every
+ * other failure, including a 404 without that code, a 503
+ * `projection_unavailable` and a network error, rejects so the caller shows
+ * the served message (`apiErrorText`) instead of a false "not built yet".
  */
 export async function getVizProjection(
   params: {
@@ -1193,8 +1178,9 @@ export async function getVizProjection(
   } = {},
   signal?: AbortSignal,
 ): Promise<VizProjectionResponse> {
+  let raw: unknown;
   try {
-    const raw = await apiFetch<unknown>(
+    raw = await apiFetch<unknown>(
       `${scoped()}/viz/projection${qs({
         cluster_id: params.cluster_id ?? undefined,
         class_id: params.class_id ?? undefined,
@@ -1203,23 +1189,25 @@ export async function getVizProjection(
       {},
       signal,
     );
-    if (!isPlainObject(raw)) return EMPTY_VIZ_PROJECTION;
-    if (raw.status === 'not_built') return EMPTY_VIZ_PROJECTION;
-    const rawPoints = Array.isArray(raw.points) ? raw.points : [];
-    const points = rawPoints.map(parseVizPoint).filter((p): p is VizPoint => p != null);
-    return {
-      points,
-      total: points.length,
-      built: true,
-      fitted_at: typeof raw.fitted_at === 'string' ? raw.fitted_at : null,
-      projection_version:
-        typeof raw.projection_version === 'string' ? raw.projection_version : null,
-      stale: raw.stale === true,
-    };
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    return EMPTY_VIZ_PROJECTION;
+    if (e instanceof ApiError && e.status === 404) {
+      const d = structuredDetail<{ error: string; message: string }>(e);
+      if (d?.error === 'projection_not_built') return EMPTY_VIZ_PROJECTION;
+    }
+    throw e;
   }
+  if (!isPlainObject(raw)) throw new Error('The projection response was not an object.');
+  const rawPoints = Array.isArray(raw.points) ? raw.points : [];
+  const points = rawPoints.map(parseVizPoint).filter((p): p is VizPoint => p != null);
+  return {
+    points,
+    total: points.length,
+    built: true,
+    fitted_at: typeof raw.fitted_at === 'string' ? raw.fitted_at : null,
+    projection_version:
+      typeof raw.projection_version === 'string' ? raw.projection_version : null,
+    stale: raw.stale === true,
+  };
 }
 
 /**

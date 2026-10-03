@@ -278,6 +278,25 @@ describe('actions', () => {
   });
 });
 
+describe('too_few_items', () => {
+  it('shows the served message of the recluster refusal, never the code', async () => {
+    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const { job, runCombineNextStep } = setup([combineJob({ status: 'completed' })]);
+    runCombineNextStep.mockRejectedValueOnce(
+      new ApiError(422, '/x', {
+        detail: {
+          error: 'too_few_items',
+          message: 'Only 3 items; at least 32 are needed to project.',
+          min_items: 32,
+        },
+      }),
+    );
+    await job.load();
+    expect(await job.runNextStep(step)).toBe(false);
+    expect(job.actionError).toBe('Only 3 items; at least 32 are needed to project.');
+  });
+});
+
 describe('target readiness gate', () => {
   const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
   const done = () => combineJob({ status: 'completed', phase: 'done' });
