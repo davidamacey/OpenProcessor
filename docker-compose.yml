@@ -128,6 +128,10 @@ services:
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
       - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
+      # Project delete soft-deletes the project's MLflow experiment over
+      # REST (the API image has no mlflow package); unset = reported as
+      # mlflow_cleanup: skipped_not_configured.
+      - MLFLOW_TRACKING_URI=http://curation-mlflow:5000
       # Curation/labeling API prefix (CurationConfig.api_prefix, generic
       # default /curation — see env.template). Every curation router
       # builds its prefix at *module import*, so this must be set before

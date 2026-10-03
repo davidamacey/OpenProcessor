@@ -277,6 +277,17 @@ def _refuse_unknown_augmentation_preset(augmentation: AugmentationSpec | None) -
         )
 
 
+def _refuse_empty_val_split(report: PreflightReport) -> None:
+    """422 ``empty_val_split`` even with ``force``: the trainer cannot
+    validate on an empty val folder, so this is a hard failure, not a
+    warning ``force`` may bypass (balance/size warnings still can)."""
+    row = next((c for c in report.checks if c.name == 'export_splits_nonempty'), None)
+    if row is None or row.severity != 'block':
+        return
+    if 'val' in ((row.detail or {}).get('empty_splits') or []):
+        raise api_error(422, 'empty_val_split', row.message)
+
+
 def _free_gb(path: str) -> float | None:
     """Free disk space on ``path``'s filesystem, in GB.
 
@@ -1208,12 +1219,13 @@ async def start_train(
     """Validate, run preflight, and write ``job.json``.
 
     Returns 422 with the full preflight report if any check is blocking
-    and ``force=False``, and 422 for an unknown augmentation preset even
-    with ``force`` (before the GPU claim). The trainer picks up the file
+    and ``force=False``; 422 for an unknown augmentation preset and 422
+    ``empty_val_split`` (empty validation split) even with ``force``. The trainer picks up the file
     out-of-band.
     """
     _refuse_unknown_augmentation_preset(spec.augmentation)
     report = await _run_preflight(spec, opensearch)
+    _refuse_empty_val_split(report)
     # Active run gets 409 specifically (precedes the generic 422). Without
     # ``force``, active-run is non-overridable: the trainer only handles
     # one run at a time.
@@ -1298,6 +1310,7 @@ async def start_campaign(
         augmentation=campaign.augmentation,
     )
     report = await _run_preflight(probe_spec, opensearch)
+    _refuse_empty_val_split(report)
     if report.blocked and not force:
         raise HTTPException(
             status_code=422,

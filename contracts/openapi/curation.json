@@ -3685,6 +3685,7 @@
               "name_conflict",
               "invalid_transition",
               "export_outside_project",
+              "empty_val_split",
               "model_not_found",
               "class_hotkey_conflict",
               "hotkey_reserved",
@@ -44929,7 +44930,7 @@
     },
     "/curation/projects/{project}/train/start": {
       "post": {
-        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``, and 422 for an unknown augmentation preset even\nwith ``force`` (before the GPU claim). The trainer picks up the file\nout-of-band.",
+        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``; 422 for an unknown augmentation preset and 422\n``empty_val_split`` (empty validation split) even with ``force``. The trainer picks up the file\nout-of-band.",
         "operationId": "start_train_curation_projects__project__train_start_post",
         "parameters": [
           {

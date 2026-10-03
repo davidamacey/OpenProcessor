@@ -59,3 +59,55 @@ def test_project_stats_counts_and_disk() -> None:
     assert 'disk' in stats
     assert stats['jobs']['running'] == []
     assert any(entry['name'] for entry in stats['indexes'])
+
+
+class _TermAwareClient(FakeLifecycleOpenSearch):
+    """count() honours a ``term`` query over the seeded item docs."""
+
+    async def count(self, *, index: str, body=None):  # type: ignore[override]
+        docs = self.indexes.get(index, [])
+        term = ((body or {}).get('query') or {}).get('term')
+        if term:
+            ((field, value),) = term.items()
+            docs = [d for d in docs if d.get(field) == value]
+        return {'count': len(docs)}
+
+
+def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, monkeypatch) -> None:
+    from src.clients.curation_opensearch import ClassRegistry
+    from src.config.curation import items_index
+
+    models = tmp_path / 'models'
+    for name, owner in (
+        ('cars__det_v1', 'cars'),
+        ('dogs__det_v1', 'dogs'),
+        ('cars__det_v2', 'cars'),
+    ):
+        (models / name).mkdir(parents=True)
+        (models / name / 'promote.json').write_text(f'{{"project": "{owner}"}}')
+    monkeypatch.setattr(
+        'src.services.training.triton_promote.resolve_triton_models_dir', lambda: models
+    )
+
+    client = _TermAwareClient()
+    registry = ProjectRegistry(lambda: client)
+    set_project_registry(registry)
+    asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars'))
+    asyncio.run(registry.ensure_fresh())
+    record = registry.get('cars')
+    assert record is not None
+    reg = ClassRegistry(path=record.resources.class_registry_path)
+    for name in ('car', 'truck', 'van'):
+        reg.add_class(name)
+
+    with bind_project(record):
+        client.indexes[items_index()] = [
+            {'item_id': '1', 'test_holdout': True},
+            {'item_id': '2', 'test_holdout': True},
+            {'item_id': '3'},
+        ]
+        counts = asyncio.run(project_stats(client))['counts']
+
+    assert counts['holdout_items'] == 2
+    assert counts['promoted_models'] == 2
+    assert counts['classes'] == 3

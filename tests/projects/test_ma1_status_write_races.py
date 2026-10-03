@@ -96,7 +96,7 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
 
         deleting = await lifecycle.delete_project(client, slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
-        tombstoned = await lifecycle.delete_project_finish(client, slug='gamma')
+        tombstoned = (await lifecycle.delete_project_finish(client, slug='gamma')).record
         assert tombstoned.status == 'deleted'
 
         release_create.set()
@@ -307,7 +307,7 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
 
         deleting = await lifecycle.delete_project(client, slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
-        tombstoned = await lifecycle.delete_project_finish(client, slug='gamma')
+        tombstoned = (await lifecycle.delete_project_finish(client, slug='gamma')).record
         assert tombstoned.status == 'deleted'
 
         release_create.set()

@@ -760,7 +760,24 @@ def _stored_open_vocab(env: Any, slug: str) -> None:
     meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
 
 
+def _export_with_val_split(env: Any, slug: str) -> None:
+    """/train/start refuses an empty val split even with force; the seeded
+    export has val=0, so give its manifest a val image."""
+    import json
+
+    export_root = env.records[slug].resources.export_root
+    for manifest in export_root.glob('*/manifest.json'):
+        data = json.loads(manifest.read_text())
+        counts = data.get('split_counts')
+        if isinstance(counts, dict):
+            counts['val'] = max(int(counts.get('val') or 0), 1)
+            manifest.write_text(json.dumps(data))
+
+
 PREPARE: dict[tuple[str, str], Any] = {
+    **dict.fromkeys(
+        [('POST', '/train/start'), ('POST', '/train/start_campaign')], _export_with_val_split
+    ),
     **dict.fromkeys(_VLM_KEYS, _prepare_vlm),
     ('POST', '/reprocess'): _region_failed_item,
     ('POST', '/crops/{crop_id}/reprocess'): _region_failed_item,
