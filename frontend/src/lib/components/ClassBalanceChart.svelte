@@ -10,7 +10,7 @@
   import type { ClassThresholds, TestHoldoutStats } from '$lib/types';
 
   interface Props {
-    rows: Array<ClassBalanceRow & { adequacy?: string }>;
+    rows: Array<ClassBalanceRow & { adequacy: string }>;
     holdout: TestHoldoutStats | null;
     thresholds?: ClassThresholds | null;
     limit?: number;
