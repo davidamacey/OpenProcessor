@@ -127,6 +127,7 @@ describe('MappingTable', () => {
     const p = previewFixture();
     p.issues.push({
       code: 'class_index_name_mismatch',
+      id: 'class_index_name_mismatch',
       severity: 'info',
       blocking: false,
       bypassable: false,

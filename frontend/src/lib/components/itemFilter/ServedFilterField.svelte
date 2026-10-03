@@ -16,19 +16,17 @@
 
   type Spec = Pick<
     ReviewFilterSpec,
-    'param' | 'kind' | 'label' | 'options' | 'min' | 'max' | 'description'
+    'param' | 'kind' | 'label' | 'options' | 'min' | 'max' | 'description' | 'default'
   >;
 
   interface Props {
     spec: Spec;
     value: string | string[] | undefined;
     onchange: (param: string, value: string | string[]) => void;
-    /** An `enum` value to show when nothing is picked (the tab's served default). */
-    servedDefault?: string | null;
     disabled?: boolean;
   }
 
-  let { spec, value, onchange, servedDefault = null, disabled = false }: Props = $props();
+  let { spec, value, onchange, disabled = false }: Props = $props();
 
   const list = $derived(Array.isArray(value) ? value : value ? [value] : []);
   const text = $derived(Array.isArray(value) ? '' : (value ?? ''));
@@ -36,7 +34,7 @@
     classesStore.classes.filter((c) => !c.deprecated).map((c) => c.name),
   );
   const addable = $derived(classNames.filter((n) => !list.includes(n)));
-  const enumValue = $derived(enumFilterSelection(spec, text, servedDefault));
+  const enumValue = $derived(enumFilterSelection(spec, text));
 
   function toggle(v: string): void {
     onchange(spec.param, list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);

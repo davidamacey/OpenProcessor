@@ -17,6 +17,8 @@ const base = {
   min: null,
   max: null,
   description: '',
+  default: null,
+  allows_unset: true,
 };
 
 export const ITEM_FILTER_CONTROLS: ReviewFilterSpec[] = [

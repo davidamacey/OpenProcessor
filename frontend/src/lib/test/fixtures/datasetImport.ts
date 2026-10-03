@@ -141,6 +141,7 @@ export function previewFixture(over: Partial<DatasetPreview> = {}): DatasetPrevi
     issues: [
       {
         code: 'label_file_missing',
+        id: 'label_file_missing',
         severity: 'warning',
         blocking: false,
         bypassable: false,

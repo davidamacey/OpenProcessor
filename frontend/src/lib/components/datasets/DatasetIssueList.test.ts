@@ -31,6 +31,7 @@ afterEach(() => {
 
 const blocking: DatasetIssue = {
   code: 'test_split_changed',
+  id: 'test_split_changed',
   severity: 'error',
   blocking: true,
   bypassable: true,
@@ -40,6 +41,7 @@ const blocking: DatasetIssue = {
 };
 const warning: DatasetIssue = {
   code: 'label_file_missing',
+  id: 'label_file_missing',
   severity: 'warning',
   blocking: false,
   bypassable: false,
@@ -73,6 +75,7 @@ describe('DatasetIssueList', () => {
   it('renders two served issues that share a code (a Map row with no target plus an unmapped class)', () => {
     const unmapped: DatasetIssue = {
       code: 'class_unmapped',
+      id: 'class_unmapped',
       severity: 'error',
       blocking: true,
       bypassable: false,

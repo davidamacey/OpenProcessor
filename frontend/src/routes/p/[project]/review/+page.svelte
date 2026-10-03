@@ -2034,13 +2034,6 @@
       <ServedFilterField
         {spec}
         value={enumFilterValues[spec.param]}
-        servedDefault={(() => {
-          const d = reviewTabsVocabularyStore.filterDefault(
-            activeTabEndpointId,
-            spec.param,
-          );
-          return d == null ? null : String(d);
-        })()}
         onchange={setEnumFilter}
       />
     {/each}

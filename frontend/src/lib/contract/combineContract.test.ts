@@ -65,6 +65,7 @@ const CASES: [string, string[]][] = [
     'CombineIssue',
     keys({
       code: true,
+      id: true,
       severity: true,
       project: true,
       message: true,

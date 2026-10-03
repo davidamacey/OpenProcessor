@@ -112,6 +112,7 @@ const CASES: [string, string[]][] = [
       truncated: true,
       would_embed: true,
       would_not_embed: true,
+      embedded_because_labeled: true,
       estimated_vector_mb: true,
       by_class: true,
     }),

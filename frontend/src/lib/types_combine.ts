@@ -60,6 +60,8 @@ export interface CombineStartResponse {
 
 export interface CombineIssue {
   code: string;
+  /** Unique within the response (`code[:project[:class]]`, `#2` on a repeat). */
+  id?: string;
   severity?: 'error' | 'warning';
   project?: string | null;
   message?: string;

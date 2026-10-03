@@ -3237,6 +3237,12 @@ export interface ReviewFilterSpec {
   max: number | null;
   /** How to fill the filter; empty when the label says it. */
   description: string;
+  /** Value applied when the param is omitted: `null` = no filter, `[]` = none
+   *  selected, `false` = off. */
+  default: unknown;
+  /** True when `default` is null; an enum then lists an explicit
+   *  `{value: '', label: 'Any'}` option, and choosing it omits the param. */
+  allows_unset: boolean;
 }
 
 /** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served

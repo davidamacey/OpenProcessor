@@ -16,6 +16,7 @@ import {
   SELECTION_SAMPLES,
 } from '$lib/types_itemFilter';
 import type * as T from '$lib/types_itemFilter';
+import type { ReviewFilterSpec } from '$lib/api';
 
 type Prop = { enum?: string[]; items?: Prop; anyOf?: Prop[] };
 type Schema = { properties?: Record<string, Prop> };
@@ -206,15 +207,18 @@ describe('ReviewFilterSpec', () => {
     const s = S.components.schemas['ReviewFilterSpec'] as unknown as {
       properties: Record<string, Prop>;
     };
-    expect(Object.keys(s.properties).sort()).toEqual([
-      'description',
-      'kind',
-      'label',
-      'max',
-      'min',
-      'options',
-      'param',
-    ]);
+    const wireKeys = {
+      allows_unset: true,
+      default: true,
+      description: true,
+      kind: true,
+      label: true,
+      max: true,
+      min: true,
+      options: true,
+      param: true,
+    } satisfies Record<keyof ReviewFilterSpec, true>;
+    expect(Object.keys(s.properties).sort()).toEqual(Object.keys(wireKeys).sort());
     expect([...REVIEW_FILTER_KINDS].sort()).toEqual(
       [...(s.properties.kind.enum ?? [])].sort(),
     );
