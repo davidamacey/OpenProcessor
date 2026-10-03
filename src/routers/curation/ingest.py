@@ -54,7 +54,9 @@ from src.routers.curation._common import (
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
+from src.services.curation.ingest_detector import effective_profile, project_ingest_profile
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
+from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
 
 
@@ -95,10 +97,11 @@ async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestS
             detail='PE encoder not initialized; ingest is unavailable until app startup completes',
         )
     try:
-        profile = _get_detection_profile()
+        base_profile = _get_detection_profile()
         secondary = _get_secondary_profile()
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
+    profile, policy = await project_ingest_profile(opensearch, base_profile)
     if not profile.detector_model:
         raise HTTPException(
             status_code=503,
@@ -114,6 +117,7 @@ async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestS
         profile=profile,
         secondary_profile=secondary,
         pe_encoder=pe_encoder,
+        policy=policy,
     )
 
 
@@ -144,6 +148,9 @@ async def curation_ingest_image(
         imohash=result.imohash,
         n_crops=result.n_crops,
         n_regions=result.n_region_queued,
+        n_embedded=result.n_embedded,
+        n_not_embedded=result.n_not_embedded,
+        n_filtered=result.n_filtered,
         error=result.error,
         error_kind=result.error_kind,
         source_identifier=result.source_identifier,
@@ -245,6 +252,7 @@ def _batch_response(
                 n_regions=r.n_region_queued,
                 n_embedded=r.n_embedded,
                 n_not_embedded=r.n_not_embedded,
+                n_filtered=r.n_filtered,
                 error=r.error,
                 error_kind=r.error_kind,
                 source_identifier=r.source_identifier,
@@ -259,6 +267,7 @@ def _batch_response(
         summary.secondary_detector_failures += batch_result.summary.secondary_detector_failures
         summary.n_embedded += batch_result.summary.n_embedded
         summary.n_not_embedded += batch_result.summary.n_not_embedded
+        summary.n_filtered += batch_result.summary.n_filtered
 
     if summary.failed == 0:
         status: Any = 'success'
@@ -336,7 +345,6 @@ def _detector_info(profile: DetectionProfile) -> IngestDetectorInfo | None:
         version=profile.detector_version,
         input_size=profile.input_size,
         assigns_class=profile.assigns_class,
-        class_ids_filter=sorted(profile.class_ids) or None,
         confidence_floor_applies=profile.assigns_class,
         n_labels=len(labels),
         labels=[IngestDetectorLabel(class_id=x.class_id, name=x.name, slug=x.slug) for x in labels],
@@ -344,7 +352,7 @@ def _detector_info(profile: DetectionProfile) -> IngestDetectorInfo | None:
 
 
 @router.get('/ingest/config', response_model=IngestConfigResponse)
-async def ingest_config() -> IngestConfigResponse:
+async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
     """Typed ingest capability + limits.
 
     ``upload``/``batch``/``region_drain`` are all real config, not
@@ -363,8 +371,9 @@ async def ingest_config() -> IngestConfigResponse:
     )
 
     cfg = get_curation_config()
+    policy = await get_ingest_policy(opensearch)
     try:
-        detector = _detector_info(_get_detection_profile())
+        detector = _detector_info(effective_profile(_get_detection_profile(), policy.detector))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     return IngestConfigResponse(
@@ -383,6 +392,7 @@ async def ingest_config() -> IngestConfigResponse:
             stable_polls=region_drain_stable_polls(),
         ),
         detector=detector,
+        policy=policy,
     )
 
 

@@ -26,7 +26,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-_END2END_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
+END2END_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
 
 
 class DetectionAdapter(Protocol):
@@ -42,7 +42,7 @@ class DetectionAdapter(Protocol):
 class End2EndNMSAdapter:
     """EfficientNMS_TRT contract: num_dets/det_boxes/det_scores/det_classes."""
 
-    requested_outputs: tuple[str, ...] = _END2END_OUTPUTS
+    requested_outputs: tuple[str, ...] = END2END_OUTPUTS
 
     def parse(self, response: Any, batch_size: int) -> list[dict[str, Any]]:
         num_dets_batch = response.as_numpy('num_dets')
@@ -108,7 +108,7 @@ def resolve_adapter(metadata: Any) -> DetectionAdapter:
     outputs = list(metadata.outputs)
     names = {o.name for o in outputs}
 
-    if set(_END2END_OUTPUTS) <= names:
+    if set(END2END_OUTPUTS) <= names:
         logger.info('Detection adapter: End2EndNMS (%s)', sorted(names))
         return End2EndNMSAdapter()
 
@@ -123,6 +123,6 @@ def resolve_adapter(metadata: Any) -> DetectionAdapter:
 
     raise ValueError(
         f'Model outputs {sorted(names)} match neither the end2end NMS contract '
-        f'{_END2END_OUTPUTS} nor the fused single-tensor (…, 6) contract. '
+        f'{END2END_OUTPUTS} nor the fused single-tensor (…, 6) contract. '
         'Is this a detection model?'
     )

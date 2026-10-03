@@ -11,6 +11,7 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query
 
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation.pipeline_params import (
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
@@ -34,9 +35,17 @@ from src.routers.curation.vlm import _resolve_pack
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 
 
+_EMBED_MISSING_DESC = (
+    'Embed the in-scope items that were stored without a vector (not_selected, deferred or '
+    'failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, '
+    'cluster_id and the item filter.'
+)
+
+
 @router.post('/pipeline/auto_label/start')
 async def pipeline_auto_label_start(
     opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
     train_clusters: Annotated[bool, Query()] = True,
     promote_min_purity: Annotated[float, Query(ge=0.5, le=1.0)] = PROMOTE_MIN_PURITY,
     promote_min_members: Annotated[int, Query(ge=2, le=1000)] = PROMOTE_MIN_MEMBERS,
@@ -59,6 +68,7 @@ async def pipeline_auto_label_start(
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
     vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
     acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
+    embed_missing: Annotated[bool, Query(description=_EMBED_MISSING_DESC)] = False,
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -130,6 +140,8 @@ async def pipeline_auto_label_start(
                 'n_clusters': n_clusters,
                 'class_id': class_id,
                 'cluster_id': cluster_id,
+                'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),
+                'embed_missing': embed_missing,
                 'prompt_pack': prompt_pack,
                 'prompt_pack_revision': prompt_pack_revision,
                 # R5-2 fix: always set, even for the omitted-pack default

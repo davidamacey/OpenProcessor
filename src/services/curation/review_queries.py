@@ -96,6 +96,13 @@ COMMON_FILTERS: tuple[str, ...] = (
     'source',
     'conf_min',
     'conf_max',
+    'class_name',
+    'exclude_class_name',
+    'min_area',
+    'max_area',
+    'origin',
+    'embedding_state',
+    'review_status',
     'combine_conflict',
     'on_negative_frame',
 )

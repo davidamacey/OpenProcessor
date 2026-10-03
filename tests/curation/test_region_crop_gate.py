@@ -93,9 +93,16 @@ async def test_a_human_owned_class_is_never_skipped(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('fetch_sees_pause', [True, False])
 async def test_a_paused_region_stage_runs_nothing_and_loses_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fetch_sees_pause: bool
 ) -> None:
+    # False: the producer still fetches the project (as for an item already
+    # queued when the pause lands), so only the consumer-side guard holds it.
+    if not fetch_sees_pause:
+        monkeypatch.setattr(
+            'scripts.curation.worker.fairness.is_region_stage_paused', lambda _record: False
+        )
     import src.config.curation as curation_config
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))

@@ -24,12 +24,14 @@ import src.routers.curation.config_vocabulary
 import src.routers.curation.crop_context
 import src.routers.curation.crops
 import src.routers.curation.datasets
+import src.routers.curation.detections
 import src.routers.curation.edit_undo
 import src.routers.curation.events
 import src.routers.curation.export
 import src.routers.curation.export_single_class
 import src.routers.curation.health
 import src.routers.curation.ingest
+import src.routers.curation.ingest_policy
 import src.routers.curation.ingest_upload
 import src.routers.curation.keymap
 import src.routers.curation.label_undo

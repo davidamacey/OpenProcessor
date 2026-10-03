@@ -52,15 +52,16 @@ def unlabeled_proposal_class_sources() -> frozenset[str]:
 
 
 def classifier_class_sources() -> frozenset[str]:
-    """Sources written by a configured classifier at ingest: the secondary
-    (when configured) and the primary (only when it assigns classes)."""
+    """Sources written by a classifier at ingest: the secondary (when
+    configured) and the primary's ``_model`` source."""
     sources: set[str] = set()
     secondary = ingest_secondary_profile()
     if secondary is not None:
         sources.add(f'{secondary.name}{CLASSIFIER_SOURCE_SUFFIX}')
-    primary = ingest_primary_profile()
-    if primary.assigns_class:
-        sources.add(f'{primary.name}{CLASSIFIER_SOURCE_SUFFIX}')
+    # The primary writes ``_model`` when it assigns classes, and also for a
+    # project whose ingest policy resolves classes by name; the suffix is
+    # reserved for that, so the source is always a classifier one.
+    sources.add(f'{ingest_primary_profile().name}{CLASSIFIER_SOURCE_SUFFIX}')
     return frozenset(sources)
 
 

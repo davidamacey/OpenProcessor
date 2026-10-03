@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.config.region_fields import RegionFields, get_region_fields
+from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_requeue import NONE_BUCKET, box_value_filter
 from src.services.curation.reprocess_models import MAX_TARGET_IDS, ReprocessFilter, ReprocessTargets
 
@@ -57,12 +58,27 @@ def validate_targets(targets: ReprocessTargets) -> str:
             raise ReprocessTargetsError(f'{kind} has {len(ids)} ids; the limit is {MAX_TARGET_IDS}')
     elif targets.filter is not None and targets.filter.is_empty():
         raise ReprocessTargetsError('the filter selects nothing specific; set at least one field')
+    if kind != 'filter' and (targets.limit is not None or targets.sample is not None):
+        raise ReprocessTargetsError('limit and sample apply to a filter, not to explicit ids')
+    if targets.sample is not None and targets.limit is None:
+        raise ReprocessTargetsError('sample needs a limit')
+    if (
+        targets.limit is not None
+        and targets.filter is not None
+        and has_image_selector(targets.filter)
+    ):
+        raise ReprocessTargetsError('limit applies to item filters, not to image-level selectors')
+    if targets.filter is not None:
+        try:
+            item_filter_clauses(targets.filter)
+        except ValueError as exc:
+            raise ReprocessTargetsError(str(exc)) from exc
     return kind
 
 
 def selector_clauses(f: ReprocessFilter, F: RegionFields | None = None) -> list[dict[str, Any]]:
-    """Clauses for the filter's provenance selectors (profile stamp, import,
-    source, class, split): the part every scope shares."""
+    """Clauses every scope shares: the profile stamp selectors plus the item
+    filter."""
     F = F or get_region_fields()
     out: list[dict[str, Any]] = []
     if f.profile_not is not None and f.profile_revision_below is not None:
@@ -92,17 +108,7 @@ def selector_clauses(f: ReprocessFilter, F: RegionFields | None = None) -> list[
         out.append({'bool': {'must_not': [{'term': {F.profile: f.profile_not}}]}})
     elif f.profile_revision_below is not None:
         out.append({'range': {F.profile_revision: {'lt': f.profile_revision_below}}})
-    if f.import_id is not None:
-        out.append({'term': {'import_ids': f.import_id}})
-    if f.source is not None:
-        out.append({'term': {'source': f.source}})
-    if f.class_id is not None:
-        out.append({'term': {'class_id': f.class_id}})
-    if f.dataset_split is not None:
-        out.append({'term': {'dataset_split': f.dataset_split}})
-    if f.region_gate_skipped:
-        out.append({'exists': {'field': F.gate_skip}})
-    return out
+    return [*out, *item_filter_clauses(f)]
 
 
 def has_image_selector(f: ReprocessFilter) -> bool:

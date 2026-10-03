@@ -26,6 +26,10 @@ from src.config import get_region_fields
 from src.config.curation import base_curation_config
 
 
+# The regions queue exists only while a region profile is active (GH #51).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
 

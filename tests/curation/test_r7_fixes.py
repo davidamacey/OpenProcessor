@@ -35,6 +35,7 @@ from curation.test_auto_label_selection import (  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
 from curation.test_r4_probes import _body
 from curation.test_r5_probes import PREFIX, _reset_caches, app_client  # noqa: F401 - fixtures
+from src.services.curation.item_filter import ItemFilter
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / 'scripts' / 'curation'
@@ -202,7 +203,7 @@ async def test_r7_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_o
         'src.clients.curation_opensearch.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    await pipeline_start.pipeline_auto_label_start(opensearch=object())
+    await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())
     assert captured['prompt_pack'] == 'pallet_v1'
     assert captured['prompt_pack_omitted'] is False
 

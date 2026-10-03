@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.routers.curation.clusters import list_clusters
+from src.services.curation.item_filter import ItemFilter
 
 
 def _bucket(cid: int, size: int = 5) -> dict[str, Any]:
@@ -49,7 +50,7 @@ async def _call(
         kind='all',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
         offset=offset,

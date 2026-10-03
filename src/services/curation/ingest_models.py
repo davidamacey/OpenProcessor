@@ -43,6 +43,8 @@ class IngestSummary(BaseModel):
     # reason an ingest leaves one without; see embedding_state).
     n_embedded: int = 0
     n_not_embedded: int = 0
+    # Detections the project's detect filter dropped (never stored).
+    n_filtered: int = 0
 
 
 class IngestResult(BaseModel):
@@ -61,6 +63,8 @@ class IngestResult(BaseModel):
     # the item says why).
     n_embedded: int = 0
     n_not_embedded: int = 0
+    # Detections the detect filter dropped before storing (not part of ``n_crops``).
+    n_filtered: int = 0
     # Items this ingest seeded ``pending_detection`` for the region worker
     # (0 when no region profile is active).
     n_region_queued: int = 0

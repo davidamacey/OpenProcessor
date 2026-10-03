@@ -9,6 +9,7 @@ import pytest
 
 from src.routers.curation.clusters import list_clusters
 from src.services.curation.clustering.orchestrator import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.item_filter import ItemFilter
 
 
 CANDIDATE = RESIDUAL_CLUSTER_ID_OFFSET
@@ -40,7 +41,7 @@ async def _cards(*buckets: dict[str, Any]) -> dict[int, dict[str, Any]]:
         kind='all',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
     )
@@ -110,7 +111,7 @@ async def test_kind_class_pushes_a_cluster_id_range_filter_into_the_query() -> N
         kind='class',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
     )
@@ -131,7 +132,7 @@ async def test_kind_candidate_pushes_a_cluster_id_range_filter_into_the_query() 
         kind='candidate',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
     )
@@ -164,7 +165,7 @@ async def test_kind_class_returns_every_class_bucket_even_with_far_more_candidat
         kind='class',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
     )

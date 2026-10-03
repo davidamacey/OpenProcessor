@@ -70,12 +70,12 @@ def test_readme_sample_walker_root_is_under_the_source_mount() -> None:
     assert '--root data/samples/coco_va_readme/images' not in section
 
 
-def test_readme_mentions_narrowing_ingest_class_ids() -> None:
+def test_readme_mentions_narrowing_with_the_ingest_policy() -> None:
     section = README[README.index('Try it with a public sample') :][:1500]
-    assert 'OP_INGEST_PRIMARY_CLASS_IDS' in section, (
-        "README's sample-walker instructions must mention "
-        'OP_INGEST_PRIMARY_CLASS_IDS -- otherwise a stock detector proposes '
-        f'items for its entire label space (all 80 COCO classes):\n{section}'
+    assert '/ingest/policy' in section, (
+        "README's sample-walker instructions must mention the per-project ingest "
+        'policy -- otherwise a stock detector proposes items for its entire label '
+        f'space (all 80 COCO classes) with no pointer to narrowing it:\n{section}'
     )
 
 

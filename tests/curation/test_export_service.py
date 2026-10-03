@@ -469,6 +469,7 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
         'frozen_holdout_sha',
         'dedup',
         'max_images',
+        'item_filter',
         'sampling_mode',
         'image_copy',
         'skipped_items',
@@ -754,3 +755,43 @@ async def test_manifest_dataset_sha_equals_shared_label_content_sha(tmp_path):
     assert manifest['dataset_sha'] == label_content_sha(
         Path(result.export_dir), names, truncate=None
     )
+
+
+@pytest.mark.asyncio
+async def test_export_item_filter_narrows_the_cohort_query_and_is_recorded(tmp_path):
+    from src.services.curation.item_filter import ItemFilter
+
+    docs = [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+        },
+    ]
+    service = _service(tmp_path, docs, ['car'])
+    queries: list[dict[str, Any]] = []
+    scroll = service._scroll_items
+
+    async def spy(query: dict[str, Any]) -> list[dict[str, Any]]:
+        queries.append(query)
+        return await scroll(query)
+
+    service._scroll_items = spy  # type: ignore[method-assign]
+    flt = ItemFilter(class_names=['car'], conf_min=0.5, min_area=0.01)
+
+    result = await service.export_dataset(version_tag='f1', copy_images=False, item_filter=flt)
+
+    clauses = queries[0]['bool']['filter']
+    assert {'term': {'class_validated': True}} in clauses
+    assert any('case_insensitive' in str(c) for c in clauses)  # the class-name clause
+    assert any('crop_area_norm' in str(c) for c in clauses)
+    manifest = json.loads((Path(result.export_dir) / 'manifest.json').read_text())
+    assert manifest['item_filter'] == {'class_names': ['car'], 'conf_min': 0.5, 'min_area': 0.01}
+
+    plain = await _service(tmp_path / 'p', docs, ['car']).export_dataset(
+        version_tag='f2', copy_images=False
+    )
+    assert json.loads((Path(plain.export_dir) / 'manifest.json').read_text())['item_filter'] is None

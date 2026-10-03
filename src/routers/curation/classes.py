@@ -33,6 +33,7 @@ from src.routers.curation.crops import list_crops
 from src.services.curation.class_sources import class_source_catalog
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
+from src.services.curation.item_filter import ItemFilter
 
 
 @router.get('/class_sources')
@@ -637,6 +638,7 @@ async def class_crops(
         opensearch=opensearch,
         page=page,
         page_size=page_size,
+        item_filter=ItemFilter(),
         class_id=class_id,
         include_test=include_test,
     )

@@ -653,6 +653,8 @@ def _settings_body() -> dict[str, Any]:
         'mappings': {
             'properties': {
                 'defaults': {'type': 'object', 'enabled': False},
+                # The per-project ingest policy (services/curation/ingest_policy_store.py).
+                'ingest_policy': {'type': 'object', 'enabled': False},
                 'updated_at': {'type': 'date'},
                 'updated_by': {'type': 'keyword'},
             }
@@ -746,6 +748,7 @@ def _configs_body() -> dict[str, Any]:
                 'applied_at': {'type': 'date'},
                 # -- folded SETTINGS (op_curation_settings doc `default`) --
                 'defaults': {'type': 'object', 'enabled': False},
+                'ingest_policy': {'type': 'object', 'enabled': False},
                 # -- folded UMAP_VIZ_STATE (doc `current`) --
                 'state_id': {'type': 'keyword'},
                 'projection_version': {'type': 'keyword'},

@@ -37,8 +37,10 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.services.curation.dataset_import.limits import reprocess_sync_max
+from src.services.curation.item_selection import resolve_ids
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import reembed_items
+from src.services.curation.reprocess_embed_spec import EmbedSpec, plan_embed_counts
 from src.services.curation.reprocess_images import IMAGE_SCOPES, process_images
 from src.services.curation.reprocess_job import read_job, start_job
 from src.services.curation.reprocess_locks import class_locked, class_locked_clause, item_locked
@@ -89,6 +91,8 @@ class ReprocessPlan:
     image_ids: list[str] = field(default_factory=list)
     """Resolved images for the image-unit scopes (empty if none requested)."""
     not_found_crops: int = 0
+    embed: EmbedSpec | None = None
+    """What the ``embed`` scope covers; set when that scope was requested."""
 
 
 def _ordered(scopes: list[ReprocessScope]) -> list[ReprocessScope]:
@@ -110,17 +114,18 @@ async def _crop_docs(
 
 async def resolve_image_ids(
     opensearch: AsyncOpenSearch, request: ReprocessRequest, kind: str
-) -> tuple[list[str], int]:
+) -> tuple[list[str], int, list[str] | None]:
     """The images the image-unit scopes run on, deduplicated in a stable
-    order, and how many requested crop ids named no item."""
+    order, how many requested crop ids named no item, and the item ids the
+    targets name (``None`` when the targets were whole images)."""
     targets = request.targets
     if kind == 'image_ids':
-        return list(dict.fromkeys(targets.image_ids or [])), 0
+        return list(dict.fromkeys(targets.image_ids or [])), 0, None
     if kind == 'crop_ids':
         wanted = list(dict.fromkeys(targets.crop_ids or []))
         docs = await _crop_docs(opensearch, wanted, ['image_id'])
         images = [src['image_id'] for _, src in docs if src.get('image_id')]
-        return list(dict.fromkeys(images)), len(wanted) - len(docs)
+        return list(dict.fromkeys(images)), len(wanted) - len(docs), [cid for cid, _ in docs]
     assert targets.filter is not None
     if has_image_selector(targets.filter):
         images = await scan_items(
@@ -130,14 +135,22 @@ async def resolve_image_ids(
             includes=['image_id'],
             id_field='image_id',
         )
-        return [image_id for image_id, _ in images], 0
-    hits = await scan_items(
-        opensearch,
-        item_filter_query(targets.filter),
-        index=_cfg_indexes()[0],
-        includes=['image_id'],
-    )
-    return sorted({src['image_id'] for _, src in hits if src.get('image_id')}), 0
+        return [image_id for image_id, _ in images], 0, None
+    query = item_filter_query(targets.filter)
+    if targets.limit is not None:
+        capped = await resolve_ids(
+            opensearch,
+            query,
+            index=_cfg_indexes()[0],
+            limit=targets.limit,
+            sample=targets.sample,
+            seed=targets.seed,
+        )
+        docs = await _crop_docs(opensearch, capped, ['image_id'])
+    else:
+        docs = await scan_items(opensearch, query, index=_cfg_indexes()[0], includes=['image_id'])
+    images = sorted({src['image_id'] for _, src in docs if src.get('image_id')})
+    return images, 0, [cid for cid, _ in docs]
 
 
 async def _plan_region(
@@ -217,7 +230,12 @@ async def _plan_vlm(
 
 
 async def _plan_images(
-    opensearch: AsyncOpenSearch, scope: ReprocessScope, image_ids: list[str], kind: str, nf: int
+    opensearch: AsyncOpenSearch,
+    scope: ReprocessScope,
+    image_ids: list[str],
+    kind: str,
+    nf: int,
+    embed: EmbedSpec | None,
 ) -> ReprocessScopeResult:
     items_index, images_index = _cfg_indexes()
     result = ReprocessScopeResult(scope=scope, selected=len(image_ids), not_found=nf)
@@ -235,6 +253,8 @@ async def _plan_images(
             includes=_lock_includes(),
         )
         result.locked_skipped = sum(1 for _, src in docs if item_locked(src))
+    if scope == 'embed' and embed is not None and image_ids:
+        result.detail = await plan_embed_counts(opensearch, image_ids, embed)
     return result
 
 
@@ -264,7 +284,11 @@ async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest)
             )
     plan = ReprocessPlan(kind=kind, results=[])
     if any(s in IMAGE_SCOPES for s in scopes):
-        plan.image_ids, plan.not_found_crops = await resolve_image_ids(opensearch, request, kind)
+        plan.image_ids, plan.not_found_crops, item_ids = await resolve_image_ids(
+            opensearch, request, kind
+        )
+        if 'embed' in scopes:
+            plan.embed = EmbedSpec.build(request.embed, item_ids)
         if (
             'detect' in scopes
             and len(plan.image_ids) > reprocess_sync_max()
@@ -284,7 +308,9 @@ async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest)
             plan.results.append((await _plan_vlm(opensearch, request, kind))[0])
         else:
             plan.results.append(
-                await _plan_images(opensearch, scope, plan.image_ids, kind, plan.not_found_crops)
+                await _plan_images(
+                    opensearch, scope, plan.image_ids, kind, plan.not_found_crops, plan.embed
+                )
             )
     return plan
 
@@ -324,11 +350,16 @@ async def apply_reprocess(
                 request=request.model_dump(),
                 scopes=image_scopes,
                 image_ids=plan.image_ids,
+                embed=plan.embed,
             )
             job_info = read_job(job_id)
         else:
             done, _ = await process_images(
-                opensearch, service, scopes=image_scopes, image_ids=plan.image_ids
+                opensearch,
+                service,
+                scopes=image_scopes,
+                image_ids=plan.image_ids,
+                embed=plan.embed,
             )
             for res in done:
                 by_scope[res.scope].queued = res.queued

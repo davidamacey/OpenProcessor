@@ -126,7 +126,6 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'TEXT_REJECT_SEQUENCES': 'true',
         'SEGMENTER_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
-        'CLASS_IDS': '2, 3,7',
         'PARENT_CLASSES': 'car, Bus',
         'GATE_HIT_RATE': 'true',
         'GATE_HIT_WINDOW': '30',
@@ -203,7 +202,6 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.text_reject_sequences is True
     assert profile.segmenter_text_prompt == 'env prompt'
     assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
-    assert profile.class_ids == frozenset({2, 3, 7})
     assert profile.assigns_class is True
     assert profile.labels_path == '/models/proposer/labels.txt'
     assert profile.region_class_name == 'env_region_class'

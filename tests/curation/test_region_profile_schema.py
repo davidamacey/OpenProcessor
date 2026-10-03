@@ -27,7 +27,6 @@ def test_types_come_from_the_field_annotations() -> None:
     assert rows['letterbox_fill'].type == 'rgb'
     assert rows['auto_confirm_aspect'].type == 'float_pair'
     assert rows['parent_classes'].type == 'string_list'
-    assert rows['class_ids'].type == 'int_list'
     assert rows['detector_model'].type == 'string'
 
 
