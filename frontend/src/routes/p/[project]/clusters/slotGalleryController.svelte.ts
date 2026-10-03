@@ -500,14 +500,14 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // the loaded region ids on each click.
   function toggleSelect(p: RegionBrowseItem, e?: MouseEvent): void {
     sel.click(
-      p.crop_id,
+      p.row_key,
       e,
-      pager.items.map((x) => x.crop_id),
+      pager.items.map((x) => x.row_key),
     );
   }
 
   function selectAll(): void {
-    sel.selectAll(pager.items.map((p) => p.crop_id));
+    sel.selectAll(pager.items.map((p) => p.row_key));
   }
 
   async function openEditor(p: RegionBrowseItem): Promise<void> {
@@ -518,6 +518,15 @@ export function createSlotGalleryController(slot: SlotSpec) {
         `Could not load ${slot.label.singular}: ${(err as Error).message}`,
       );
     }
+  }
+
+  /** The distinct item ids behind a set of selected rows (the selection is
+   *  per row; an item-level status write is per item). */
+  function cropIdsOfRows(rowKeys: string[]): string[] {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously
+    const keySet = new Set(rowKeys);
+    const ids = pager.items.filter((p) => keySet.has(p.row_key)).map((p) => p.crop_id);
+    return ids.filter((id, i) => ids.indexOf(id) === i);
   }
 
   async function applyStatus(
@@ -587,14 +596,14 @@ export function createSlotGalleryController(slot: SlotSpec) {
    * (`RegionBrowseItem`, W8.10) — a pre-W8 row without one is skipped
    * rather than silently flipping a whole item.
    */
-  async function applyBoxState(cropIds: string[], state: string): Promise<void> {
-    if (cropIds.length === 0 || busy) return;
+  async function applyBoxState(rowKeys: string[], state: string): Promise<void> {
+    if (rowKeys.length === 0 || busy) return;
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-    const idSet = new Set(cropIds);
+    const keySet = new Set(rowKeys);
     const targets = pager.items
-      .filter((p) => idSet.has(p.crop_id) && p.region_box_id != null)
+      .filter((p) => keySet.has(p.row_key) && p.region_box_id != null)
       .map((p) => ({ cropId: p.crop_id, boxId: p.region_box_id! }));
-    const skipped = cropIds.length - targets.length;
+    const skipped = rowKeys.length - targets.length;
     if (targets.length === 0) {
       toastStore.error(
         `Cannot triage by box: this row has no served box id (pre-W8 backend?).`,
@@ -852,6 +861,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     selectAll,
     openEditor,
     applyStatus,
+    cropIdsOfRows,
     applyBoxState,
     saveBox,
     undoLastAction,

@@ -32,11 +32,11 @@ describe('createSlotGalleryController: applyBoxState (per-box cluster triage)', 
     } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
     gallery.pager.items = [
-      { crop_id: 'w1', region_box_id: 'b1' } as never,
-      { crop_id: 'w2', region_box_id: 'b2' } as never,
+      { crop_id: 'w1', region_box_id: 'b1', row_key: 'w1#b1' } as never,
+      { crop_id: 'w2', region_box_id: 'b2', row_key: 'w2#b2' } as never,
     ];
 
-    await gallery.applyBoxState(['w1', 'w2'], 'accepted');
+    await gallery.applyBoxState(['w1#b1', 'w2#b2'], 'accepted');
 
     expect(postBatchBoxState).toHaveBeenCalledTimes(1);
     expect(vi.mocked(postBatchBoxState).mock.calls[0][0]).toEqual([
@@ -55,11 +55,11 @@ describe('createSlotGalleryController: applyBoxState (per-box cluster triage)', 
     } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
     gallery.pager.items = [
-      { crop_id: 'w1', region_box_id: 'b1' } as never,
-      { crop_id: 'w2', region_box_id: null } as never,
+      { crop_id: 'w1', region_box_id: 'b1', row_key: 'w1#b1' } as never,
+      { crop_id: 'w2', region_box_id: null, row_key: 'w2#item' } as never,
     ];
 
-    await gallery.applyBoxState(['w1', 'w2'], 'rejected');
+    await gallery.applyBoxState(['w1#b1', 'w2#item'], 'rejected');
 
     expect(vi.mocked(postBatchBoxState).mock.calls[0][0]).toEqual([
       { cropId: 'w1', boxId: 'b1' },
@@ -68,9 +68,11 @@ describe('createSlotGalleryController: applyBoxState (per-box cluster triage)', 
 
   it('never calls postBatchBoxState when no selected row has a box id (pre-W8 backend)', async () => {
     const gallery = createSlotGalleryController(widgetTagSlot);
-    gallery.pager.items = [{ crop_id: 'w1', region_box_id: null } as never];
+    gallery.pager.items = [
+      { crop_id: 'w1', region_box_id: null, row_key: 'w1#item' } as never,
+    ];
 
-    await gallery.applyBoxState(['w1'], 'false_positive');
+    await gallery.applyBoxState(['w1#item'], 'false_positive');
 
     expect(postBatchBoxState).not.toHaveBeenCalled();
   });
@@ -83,12 +85,36 @@ describe('createSlotGalleryController: applyBoxState (per-box cluster triage)', 
       items: [{ id: 'w1' }],
     } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
-    gallery.pager.items = [{ crop_id: 'w1', region_box_id: 'b1' } as never];
+    gallery.pager.items = [
+      { crop_id: 'w1', region_box_id: 'b1', row_key: 'w1#b1' } as never,
+    ];
     const spy = vi.spyOn(undoStore, 'recordRegionWrites');
 
-    await gallery.applyBoxState(['w1'], 'accepted');
+    await gallery.applyBoxState(['w1#b1'], 'accepted');
 
     expect(spy).toHaveBeenCalledWith(['w1']);
     spy.mockRestore();
+  });
+
+  it('selecting one box row of a multi-box item targets only that box, never its siblings', async () => {
+    vi.mocked(postBatchBoxState).mockResolvedValue({
+      updated: 1,
+      invalid: [],
+      conflicts: [],
+      items: [{ id: 'w1' }],
+    } as never);
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    gallery.pager.items = [
+      { crop_id: 'w1', region_box_id: 'b1', row_key: 'w1#b1' } as never,
+      { crop_id: 'w1', region_box_id: 'b2', row_key: 'w1#b2' } as never,
+    ];
+
+    gallery.toggleSelect(gallery.pager.items[1]!);
+    expect(gallery.sel.has('w1#b1')).toBe(false);
+    await gallery.applyBoxState([...gallery.sel.ids], 'accepted');
+
+    expect(vi.mocked(postBatchBoxState).mock.calls[0][0]).toEqual([
+      { cropId: 'w1', boxId: 'b2' },
+    ]);
   });
 });

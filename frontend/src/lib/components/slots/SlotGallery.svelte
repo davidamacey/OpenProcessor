@@ -318,7 +318,10 @@
                   [...gallery.sel.ids],
                   gallery.falsePositiveBoxState(),
                 )
-              : gallery.applyStatus([...gallery.sel.ids], gallery.falsePositiveState())}
+              : gallery.applyStatus(
+                  gallery.cropIdsOfRows([...gallery.sel.ids]),
+                  gallery.falsePositiveState(),
+                )}
         >
           ✗ Mark false positive
         </button>
@@ -329,7 +332,10 @@
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState([...gallery.sel.ids], gallery.rejectBoxState())
-              : gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
+              : gallery.applyStatus(
+                  gallery.cropIdsOfRows([...gallery.sel.ids]),
+                  gallery.rejectState(),
+                )}
         >
           No {label.singular}
         </button>
@@ -340,7 +346,10 @@
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState([...gallery.sel.ids], gallery.confirmBoxState())
-              : gallery.applyStatus([...gallery.sel.ids], gallery.confirmState())}
+              : gallery.applyStatus(
+                  gallery.cropIdsOfRows([...gallery.sel.ids]),
+                  gallery.confirmState(),
+                )}
         >
           ✓ Verify
         </button>
@@ -468,13 +477,13 @@
           <SlotCard
             crop={p}
             slot={gallery.slot}
-            selected={gallery.sel.has(p.crop_id)}
+            selected={gallery.sel.has(p.row_key)}
             onclick={gallery.toggleSelect}
             onedit={gallery.openEditor}
             onreprocessed={(items) => void gallery.adoptReprocessed(items)}
             onmarkfp={(c) =>
               gallery.selectedCluster != null
-                ? gallery.applyBoxState([c.crop_id], gallery.falsePositiveBoxState())
+                ? gallery.applyBoxState([c.row_key], gallery.falsePositiveBoxState())
                 : gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
           />
         {/each}
