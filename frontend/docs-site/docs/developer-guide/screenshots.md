@@ -24,22 +24,59 @@ their owners' Creative Commons licenses; Open Images images are listed by
 their authors as CC BY 2.0. Annotations and boxes shown are produced by
 Cropwright and OpenProcessor, not by either dataset.
 
+The state screenshots (projects, combine, prompt packs, reprocess, models)
+show only photographs from COCO: T.-Y. Lin et al., "Microsoft COCO: Common
+Objects in Context", ECCV 2014 (https://cocodataset.org). COCO annotations
+are CC BY 4.0; each image remains under its Flickr owner's Creative Commons
+license (per-image license and author are in the COCO annotation files).
+
 ## Capture script
 
 `scripts/capture_docs_screenshots.py` (repo root) drives a real browser
 against a running Cropwright instance and writes full-page PNGs at 1600px
 and 800px wide into `docs-site/static/img/screenshots/`. Only the 1600px
 images are committed; the 800px ones are for checking the narrow layout.
-The capture is read-only: every request other than GET/HEAD (and the
-side-effect-free `/train/preflight` report) is aborted.
+The capture is read-only: every request other than GET/HEAD is aborted,
+except the small explicit allow-list below.
 
 ```bash
 # once, to provision the Playwright venv used by the e2e suite
 npm run test:e2e
 
 e2e/.venv/bin/python scripts/capture_docs_screenshots.py \
-  --base-url http://localhost:<port-of-your-public-data-instance>
+  --base-url http://localhost:<port-of-your-public-data-instance> \
+  --project <public-sample-project-slug>
 ```
+
+`--project` prefixes the per-project routes with `/p/<slug>` (the bare paths
+would otherwise open the default, empty, project). `--only <name>...` captures
+just those routes or states; the scripted states (a dialog opened, a crop
+selected, a pack test run) live in the script's `STATES` and are captured at
+1600px only. A state only opens and looks: nothing is saved or confirmed.
+
+### Allow-listed side-effect-free calls
+
+Besides GET/HEAD the guard (`READ_ONLY_CALLS` in the script) lets through
+exactly these calls, each of which writes nothing server-side:
+
+| Call | Why |
+| --- | --- |
+| `POST .../train/preflight` | preflight report |
+| `DELETE /projects/<slug>?dry_run=true` (never with `confirm`) | the delete dialog's dry-run report |
+| `POST /projects/combine/preview` | combine preview report |
+| `POST .../reprocess` with `dry_run: true` | Reprocess "Check what would run" |
+| `POST .../prompt_packs/validate` | live pack validation |
+| `POST .../prompt_packs/test` | "Test on a crop" (runs the VLM, "Nothing is written") |
+| `POST .../region_profiles/validate`, `.../keymap/validate`, `.../vlm/endpoints/validate` | validation reports |
+
+### Fixtures that need a write
+
+A few slots show a state that only exists after a write (a paused project, a
+combine job, an editable prompt pack or region profile, a running job that
+blocks a delete). `scripts/docs_screenshot_fixtures.py setup|teardown` creates
+and removes throwaway projects whose slug starts with `cwlife-`; every write
+asserts that prefix first, and `teardown` waits for the asynchronous delete.
+The browser stays read-only throughout.
 
 The exact list of routes/states to capture is **not hardcoded in the
 script** — it reads `docs-site/src/data/screenshot_routes.json`. Add a route there
@@ -60,9 +97,9 @@ Run the script, review each PNG for anything that leaked (hostnames,
 paths, unexpected text), then commit them under
 `docs-site/static/img/screenshots/`.
 
-## Pending slots for the project, import, configuration and VLM pages
+## Slots for the project, import, configuration and VLM pages
 
-These `<Screenshot>` slots are in the docs but have no image yet, so they
+Captured slots have their image; the slots still listed under "Still pending" below
 render as "pending". Capture them against a backend holding public sample
 data (never from a real deployment). Rows marked **route** are in
 `screenshot_routes.json` and the script captures them as-is. Rows marked
@@ -98,3 +135,17 @@ The routes in `screenshot_routes.json` use bare paths, which redirect to the
 default project; the script follows the redirect. Check each capture for
 anything private: project slugs, host names, secret reference names and file
 paths must be sample-data values.
+
+### Still pending (cannot be captured from public sample data alone)
+
+| Slot | Why |
+| --- | --- |
+| `import-wizard`, `import-job`, `review-imported` | the backend has no labeled dataset layout on a server path and no import has run, so there is no preview, job or Imported tab to show |
+| `review-regions-multibox`, `box-editor` | the sample project's region profile is off, so there is no region tab or multi-box item |
+| `region-profile-test` | needs a crop in a project with an active region profile |
+| `vlm-run-picker` | the acknowledgement only shows for an endpoint outside the deployment; only the built-in in-stack endpoint exists |
+| `models-sharing`, `models-unshare-force` | need a model another project has shared |
+
+`vlm-endpoint-editor` shows the built-in endpoint's key reference with no key
+value; the "host has it" state needs a key file on the host, which the sample
+stack does not have.
