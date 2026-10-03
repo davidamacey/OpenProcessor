@@ -7,7 +7,7 @@
    * region-profile test panels. Nothing is written. `extraShapes` adds
    * overlay shapes (profile-test candidates) in the source-image frame.
    */
-  import { getCropContext, configErrorText } from '$lib/api';
+  import { getCropContext, apiErrorText } from '$lib/api';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import type { Crop, CropContextResponse } from '$lib/types';
@@ -37,7 +37,7 @@
       })
       .catch((e) => {
         if ((e as Error)?.name === 'AbortError') return;
-        error = configErrorText(e);
+        error = apiErrorText(e);
       });
     return () => ctl.abort();
   });

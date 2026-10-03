@@ -8,7 +8,7 @@
  */
 import {
   cloneRegionProfile,
-  configErrorText,
+  apiErrorText,
   deleteRegionProfile,
   getConfigVocabulary,
   getRegionProfileImpact,
@@ -102,7 +102,7 @@ export class ProfileList extends ConfigList<
       this.vocabularyError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.vocabularyError = configErrorText(e);
+      this.vocabularyError = apiErrorText(e);
     } finally {
       this.vocabularyLoading = false;
     }
@@ -116,7 +116,7 @@ export class ProfileList extends ConfigList<
       this.impactError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.impactError = configErrorText(e);
+      this.impactError = apiErrorText(e);
     } finally {
       this.impactLoading = false;
     }

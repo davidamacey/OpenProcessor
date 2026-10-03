@@ -3,7 +3,7 @@
  * v0.4.0): list, schema, validate, test, active/rollback/deactivate, CRUD,
  * activate, clone and revisions. Every route is project-scoped. Import from
  * `$lib/api_openVocab` directly; never re-exported from `api.ts` (that would
- * make the two modules circular). Callers render `configErrorText`.
+ * make the two modules circular). Callers render `apiErrorText`.
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import type {

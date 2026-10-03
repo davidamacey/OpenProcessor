@@ -11,7 +11,7 @@
  */
 import {
   datasetErrorDetail,
-  datasetErrorText,
+  apiErrorText,
   previewDataset,
   resumeDatasetImport,
   startDatasetImport,
@@ -235,7 +235,7 @@ export class ImportWizard {
       this.stale = false;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError' || seq !== this.#seq) return;
-      this.previewError = datasetErrorText(e);
+      this.previewError = apiErrorText(e);
       this.preview = null;
       this.stale = false;
     } finally {
@@ -286,7 +286,7 @@ export class ImportWizard {
       const d = datasetErrorDetail(e);
       this.refusal = {
         code: d?.error ?? null,
-        message: datasetErrorText(e),
+        message: apiErrorText(e),
         importId: d?.import_id ?? null,
         issues: d?.issues ?? [],
       };
@@ -307,7 +307,7 @@ export class ImportWizard {
       const d = datasetErrorDetail(e);
       this.refusal = {
         code: d?.error ?? null,
-        message: datasetErrorText(e),
+        message: apiErrorText(e),
         importId: d?.import_id ?? importId,
         issues: d?.issues ?? [],
       };
@@ -334,7 +334,7 @@ export class ImportWizard {
       this.setSource(res.dataset_path);
       await this.runPreview();
     } catch (e) {
-      this.uploadError = datasetErrorText(e);
+      this.uploadError = apiErrorText(e);
     } finally {
       this.uploading = false;
     }

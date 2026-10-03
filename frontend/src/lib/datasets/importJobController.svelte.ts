@@ -10,7 +10,7 @@
  */
 import {
   cancelDatasetImport,
-  datasetErrorText,
+  apiErrorText,
   getDatasetImport,
   getDatasetImportEntries,
   getDatasetImportIssues,
@@ -163,7 +163,7 @@ export class ImportJob {
       this.#adopt(job);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.loadError = datasetErrorText(e);
+      this.loadError = apiErrorText(e);
       // A transient failure keeps following a running job.
       if (!this.#stopped && this.job?.poll_after_s != null) {
         this.#clearTimer();
@@ -181,7 +181,7 @@ export class ImportJob {
       if (job) this.#adopt(job);
       return true;
     } catch (e) {
-      this.actionError = datasetErrorText(e);
+      this.actionError = apiErrorText(e);
       return false;
     } finally {
       this.busy = false;
@@ -210,7 +210,7 @@ export class ImportJob {
       this.undoReport = report;
       return report;
     } catch (e) {
-      this.actionError = datasetErrorText(e);
+      this.actionError = apiErrorText(e);
       return null;
     } finally {
       this.busy = false;
@@ -245,7 +245,7 @@ export class ImportJob {
       this.issuesPage = page;
       this.tablesError = null;
     } catch (e) {
-      this.tablesError = datasetErrorText(e);
+      this.tablesError = apiErrorText(e);
     }
   }
 
@@ -262,7 +262,7 @@ export class ImportJob {
       this.entriesPage = page;
       this.tablesError = null;
     } catch (e) {
-      this.tablesError = datasetErrorText(e);
+      this.tablesError = apiErrorText(e);
     }
   }
 }

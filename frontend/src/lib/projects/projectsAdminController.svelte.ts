@@ -20,7 +20,7 @@ import {
   getProjects,
   patchProject,
   projectErrorDetail,
-  projectErrorText,
+  apiErrorText,
   unarchiveProject,
 } from '$lib/api';
 import type {
@@ -87,7 +87,7 @@ function failure(e: unknown): Extract<ActionResult, { ok: false }> {
   return {
     ok: false,
     code: detail?.error ?? null,
-    message: projectErrorText(e),
+    message: apiErrorText(e),
     detail,
   };
 }
@@ -139,7 +139,7 @@ export function createProjectsAdmin() {
       loadError = null;
     } catch (e) {
       if (mine !== seq) return;
-      loadError = projectErrorText(e);
+      loadError = apiErrorText(e);
     } finally {
       if (mine === seq) {
         loading = false;

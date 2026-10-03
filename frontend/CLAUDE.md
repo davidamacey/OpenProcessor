@@ -343,7 +343,7 @@ Built against the frozen W10 spec before the backend ships it.
   refusals: `reused` → link, `import_resumable` → Resume, `dataset_changed`
   → re-preview, `class_mapping_incomplete` → the served `unmapped` rows
   highlighted, `import_blocked`/`class_mapping_invalid` → the served issues.
-  Every message is the served `detail.message` (`datasetErrorText`,
+  Every message is the served `detail.message` (`apiErrorText`,
   `api.ts`).
 - **Job view** (`ImportJob`, `importJobController.svelte.ts`): re-reads the
   job after the served `poll_after_s` (null = terminal, stops); a
@@ -492,7 +492,7 @@ before the backend ships it.
   models live in `src/lib/types_config.ts`); routes
   resolve for real in `endpointCatalog.test.ts`; `ActiveConfigResponse`'s
   `source`/`activated_at`/`applied[]` are required (served since W2) and
-  `AppliedRuntime.vlm` is required-nullable (OpenProcessor d00e8957): `null` renders "not reported" (the worker never reported a VLM axis), a null name renders the axis's `appliedNoneText` ("no VLM"). Refusals render `configErrorText` (the served `message`).
+  `AppliedRuntime.vlm` is required-nullable (OpenProcessor d00e8957): `null` renders "not reported" (the worker never reported a VLM axis), a null name renders the axis's `appliedNoneText` ("no VLM"). Refusals render `apiErrorText` (the served `message`).
 - **Shared with the region-profile editor** (W4, below): the pack
   modules are thin bindings of `src/lib/config/` (`ConfigActive`,
   `ConfigEditor`, `ConfigList`, `ConfigAvailability`, `validationIssues`)

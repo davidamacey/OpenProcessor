@@ -61,4 +61,13 @@ describe('vlmRunErrorText', () => {
   it('anything else is the error message', () => {
     expect(vlmRunErrorText(new Error('boom'))).toBe('boom');
   });
+  it('a plain-string detail is shown as served, without the "API 503 <url>" prefix', () => {
+    expect(vlmRunErrorText(err(503, 'segmenter down'))).toBe('segmenter down');
+  });
+
+  it('a pydantic validation list is joined, without the URL prefix', () => {
+    expect(
+      vlmRunErrorText(err(422, [{ loc: ['body', 'name'], msg: 'Field required' }])),
+    ).toBe('name: Field required');
+  });
 });

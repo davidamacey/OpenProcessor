@@ -12,7 +12,7 @@
  * too many items) are the server's own message.
  */
 import {
-  ApiError,
+  apiErrorText,
   batchExcludeSelection,
   batchUnexcludeSelection,
   bulkLabelSelection,
@@ -91,21 +91,6 @@ export function createSelectionActionController(filter: () => ItemFilter) {
     }
   }
 
-  /** A structured refusal (`{detail: {error, message}}`) is worded by its
-   *  served `message`; a plain one by its `detail`. */
-  function refusal(e: unknown): string {
-    if (e instanceof ApiError) {
-      const detail = (e.body as { detail?: unknown } | null)?.detail;
-      const message =
-        detail && typeof detail === 'object'
-          ? (detail as { message?: unknown }).message
-          : null;
-      if (typeof message === 'string' && message) return message;
-      return e.detail ?? e.message;
-    }
-    return (e as Error).message;
-  }
-
   async function refresh(): Promise<void> {
     if (action == null) return;
     inflight?.abort();
@@ -121,7 +106,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
       selected = isDryRun(res) ? res.selected : null;
     } catch (e) {
       if (ctrl.signal.aborted || (e as Error).name === 'AbortError') return;
-      error = refusal(e);
+      error = apiErrorText(e);
     } finally {
       if (inflight === ctrl) {
         loading = false;
@@ -177,7 +162,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
       result = { summary: summarize(body) };
       toastStore.success(`${result.summary}.`);
     } catch (e) {
-      error = refusal(e);
+      error = apiErrorText(e);
     } finally {
       if (inflight === ctrl) inflight = null;
       loading = false;

@@ -16,7 +16,7 @@
  * `status` (`GET /projects/{target}`, same interval) until it leaves
  * `building`; `canRunNextStep` is true only once it is `active`.
  */
-import { configErrorText, getProject } from '$lib/api';
+import { apiErrorText, getProject } from '$lib/api';
 import {
   cancelCombine,
   getCombineJob,
@@ -186,10 +186,10 @@ export class CombineJob {
     } catch (e) {
       if ((e as Error)?.name === 'AbortError' || seq !== this.#seq) return;
       if (isCombineNotFound(e)) {
-        this.notFound = configErrorText(e);
+        this.notFound = apiErrorText(e);
         return;
       }
-      this.loadError = configErrorText(e);
+      this.loadError = apiErrorText(e);
       // A transient failure keeps following a running job.
       if (!this.#stopped && this.job && ACTIVE.has(this.job.status)) {
         this.#clearTimer();
@@ -207,7 +207,7 @@ export class CombineJob {
       if (job) this.#adopt(job);
       return true;
     } catch (e) {
-      this.actionError = configErrorText(e);
+      this.actionError = apiErrorText(e);
       // A `project_building` refusal means the target is not ready yet;
       // keep the button usable and follow the served status again.
       if (this.completed) void this.loadTarget();

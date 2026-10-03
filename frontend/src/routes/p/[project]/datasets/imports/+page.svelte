@@ -6,7 +6,7 @@
    */
   import { resolve } from '$app/paths';
   import DatasetsGate from '$components/datasets/DatasetsGate.svelte';
-  import { datasetErrorText, listDatasetImports } from '$lib/api';
+  import { apiErrorText, listDatasetImports } from '$lib/api';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
   import type { DatasetImportList } from '$lib/types_import';
@@ -28,7 +28,7 @@
       error = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      error = datasetErrorText(e);
+      error = apiErrorText(e);
     }
   }
 

@@ -6,7 +6,7 @@
  * `probe` is shown as is; a 429 `probe_busy` is the served message).
  * Nothing here judges a result.
  */
-import { configErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api';
 import { validateVlmEndpoint } from '$lib/api_vlm';
 import type {
   VlmEndpointBody,
@@ -58,7 +58,7 @@ export class VlmDraftChecks {
       this.probe = res.probe ?? null;
       return res.validation;
     } catch (e) {
-      this.testError = configErrorText(e);
+      this.testError = apiErrorText(e);
       return null;
     } finally {
       this.testing = false;

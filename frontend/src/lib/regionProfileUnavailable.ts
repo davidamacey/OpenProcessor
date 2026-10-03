@@ -17,8 +17,8 @@ export const NO_ACTIVE_PROFILE_ERROR = 'no_active_profile';
 export const REGION_PROFILE_UNAVAILABLE_MESSAGE =
   'Region features are unavailable: the backend has no region profile configured';
 
-/** `detail` is `apiFetch`'s extracted error text, which for a structured
- *  `{detail: {error, ...}}` body is the `error` code. */
+/** `detail` is the structured body's `detail.error` code (`apiFetch` reads it
+ *  from the body itself; `ApiError.detail` carries the served message). */
 export function isNoRegionProfileDetail(detail: string | null | undefined): boolean {
   return detail === NO_ACTIVE_PROFILE_ERROR;
 }

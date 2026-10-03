@@ -11,7 +11,7 @@
  *   its served report kept apart from the live one.
  */
 import {
-  configErrorText,
+  apiErrorText,
   getConfigVocabulary,
   getRegionProfile,
   getRegionProfileRevision,
@@ -98,7 +98,7 @@ export class ProfileEditor extends ConfigEditor<
       this.vocabularyError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.vocabularyError = configErrorText(e);
+      this.vocabularyError = apiErrorText(e);
     }
   }
 
@@ -118,7 +118,7 @@ export class ProfileEditor extends ConfigEditor<
       )({ name: null, body: this.draftBody }, true);
       this.activationCheckError = null;
     } catch (e) {
-      this.activationCheckError = configErrorText(e);
+      this.activationCheckError = apiErrorText(e);
     } finally {
       this.activationChecking = false;
     }

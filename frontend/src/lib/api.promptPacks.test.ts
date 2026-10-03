@@ -17,7 +17,7 @@ import {
   getPromptPackSchema,
   listPromptPacks,
   configErrorDetail,
-  configErrorText,
+  apiErrorText,
   rollbackPromptPack,
   updatePromptPack,
   validatePromptPack,
@@ -151,7 +151,7 @@ describe('W3 wrappers hit the scoped routes', () => {
   });
 });
 
-describe('configErrorDetail / configErrorText', () => {
+describe('configErrorDetail / apiErrorText', () => {
   const err = (status: number, body: unknown) => new ApiError(status, `${P}/x`, body);
 
   it('reads a structured refusal and shows its served message', () => {
@@ -166,16 +166,16 @@ describe('configErrorDetail / configErrorText', () => {
       error: 'revision_conflict',
       current_revision: 3,
     });
-    expect(configErrorText(e)).toBe('Someone saved revision 3 first.');
+    expect(apiErrorText(e)).toBe('Someone saved revision 3 first.');
   });
 
   it('falls back to the generic detail for a plain or pydantic error', () => {
     const plain = err(400, { detail: 'bad' });
     expect(configErrorDetail(plain)).toBeNull();
-    expect(configErrorText(plain)).toBe('bad');
+    expect(apiErrorText(plain)).toBe('bad');
     const list = err(422, { detail: [{ loc: ['body', 'call'], msg: 'Field required' }] });
     expect(configErrorDetail(list)).toBeNull();
-    expect(configErrorText(list)).toBe('call: Field required');
-    expect(configErrorText(new Error('network down'))).toBe('network down');
+    expect(apiErrorText(list)).toBe('call: Field required');
+    expect(apiErrorText(new Error('network down'))).toBe('network down');
   });
 });

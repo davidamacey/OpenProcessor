@@ -342,6 +342,14 @@ export function formatValidationEntry(entry: unknown): string | null {
   return field ? `${field}: ${msg}` : msg;
 }
 
+/** The `detail.error` code of a structured `{detail: {error, ...}}` body. */
+function structuredErrorCode(body: unknown): string | null {
+  const d = (body as { detail?: unknown } | null)?.detail;
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return null;
+  const code = (d as Record<string, unknown>).error;
+  return typeof code === 'string' ? code : null;
+}
+
 function errorDetail(body: unknown): string | null {
   let raw: unknown = null;
   if (typeof body === 'string') {
@@ -365,10 +373,15 @@ function errorDetail(body: unknown): string | null {
         .filter((m): m is string => !!m);
       raw = msgs.length ? msgs.join('; ') : null;
     }
-    // Structured FastAPI details (`{detail: {error, ...}}`) carry their
-    // human-readable text under `error`.
+    // Structured FastAPI details (`{detail: {error, message, ...}}`): the
+    // served `message` is the sentence to show; `error` is the machine code
+    // and only stands in when no message was served.
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      raw = (raw as Record<string, unknown>).error ?? null;
+      const rec2 = raw as Record<string, unknown>;
+      raw =
+        typeof rec2.message === 'string' && rec2.message
+          ? rec2.message
+          : (rec2.error ?? null);
     }
   }
   if (typeof raw !== 'string') return null;
@@ -557,7 +570,7 @@ export async function apiFetch<T>(
           /* ignore */
         }
       }
-      if (res.status === 409 && isNoRegionProfileDetail(errorDetail(body))) {
+      if (res.status === 409 && isNoRegionProfileDetail(structuredErrorCode(body))) {
         notifyRegionProfileUnavailable();
         throw new RegionProfileUnavailableError(url, body);
       }
@@ -737,32 +750,42 @@ export function deleteProject(
 }
 
 /**
+ * A structured `{detail: {error, message, ...}}` refusal, or `null` when the
+ * error is not one (a network failure, a plain-string detail, a pydantic
+ * validation list). The UI renders `message` verbatim and branches only on
+ * the served `error` code.
+ */
+export function structuredDetail<T extends { error: string; message: string }>(
+  e: unknown,
+): T | null {
+  if (!(e instanceof ApiError)) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
+  return d as unknown as T;
+}
+
+/** The text to show for a failed call: the served structured `message`, else
+ *  the generic `ApiError.detail` (a plain string or a joined validation
+ *  list), else the error's own message. Never the machine code of a
+ *  structured detail that carries a message. */
+export function apiErrorText(e: unknown): string {
+  const d = structuredDetail<{ error: string; message: string }>(e);
+  if (d) return d.message;
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return (e as Error)?.message ?? String(e);
+}
+
+/**
  * The structured `{detail: {error, message, ...}}` body every project
  * route answers an error with (`ConfigErrorDetail`), or `null` when the
  * error isn't one (a network failure, a plain-string detail, a pydantic
  * validation list). The UI renders `message` verbatim and branches only
  * on the served `error` code.
  */
-export function projectErrorDetail(e: unknown): ProjectErrorDetail | null {
-  if (!(e instanceof ApiError)) return null;
-  const body = e.body;
-  if (!body || typeof body !== 'object') return null;
-  const detail = (body as { detail?: unknown }).detail;
-  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
-  const d = detail as Record<string, unknown>;
-  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
-  return d as unknown as ProjectErrorDetail;
-}
-
-/** The text to show for a failed project action: the served `message`
- *  when the error is structured, else the generic `ApiError.detail`
- *  (e.g. a joined pydantic validation list), else the error's message. */
-export function projectErrorText(e: unknown): string {
-  const d = projectErrorDetail(e);
-  if (d) return d.message;
-  if (e instanceof ApiError && e.detail) return e.detail;
-  return (e as Error)?.message ?? String(e);
-}
+export const projectErrorDetail = (e: unknown): ProjectErrorDetail | null =>
+  structuredDetail<ProjectErrorDetail>(e);
 
 /**
  * Capability discovery for the curation-strategy registries: which
@@ -5412,24 +5435,8 @@ export function cancelReprocessJob(
  * optional `issues`/`unmapped`/`import_id`), or `null` when the error
  * isn't one. The UI shows `message` and branches only on `error`.
  */
-export function datasetErrorDetail(e: unknown): DatasetErrorDetail | null {
-  if (!(e instanceof ApiError)) return null;
-  const body = e.body;
-  if (!body || typeof body !== 'object') return null;
-  const detail = (body as { detail?: unknown }).detail;
-  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
-  const d = detail as Record<string, unknown>;
-  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
-  return d as unknown as DatasetErrorDetail;
-}
-
-/** The served `message` of a W10 refusal, else the generic detail. */
-export function datasetErrorText(e: unknown): string {
-  const d = datasetErrorDetail(e);
-  if (d) return d.message;
-  if (e instanceof ApiError && e.detail) return e.detail;
-  return (e as Error)?.message ?? String(e);
-}
+export const datasetErrorDetail = (e: unknown): DatasetErrorDetail | null =>
+  structuredDetail<DatasetErrorDetail>(e);
 
 // -- Prompt packs (OpenProcessor W3; test-on-crop W5) --------------------
 // any_domain_plan.md §3, §5.1, §7.2, §7.5;
@@ -5727,21 +5734,5 @@ export function getConfigVocabulary(
 /** The structured config-store refusal (`{detail: ConfigErrorDetail}`,
  *  §7.1) of a prompt-pack or region-profile route, or `null` when the
  *  error isn't one. The UI shows `message`, branches on `error`. */
-export function configErrorDetail(e: unknown): ConfigErrorDetail | null {
-  if (!(e instanceof ApiError)) return null;
-  const body = e.body;
-  if (!body || typeof body !== 'object') return null;
-  const detail = (body as { detail?: unknown }).detail;
-  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
-  const d = detail as Record<string, unknown>;
-  if (typeof d.error !== 'string' || typeof d.message !== 'string') return null;
-  return d as unknown as ConfigErrorDetail;
-}
-
-/** The served `message` of a config-store refusal, else the generic detail. */
-export function configErrorText(e: unknown): string {
-  const d = configErrorDetail(e);
-  if (d) return d.message;
-  if (e instanceof ApiError && e.detail) return e.detail;
-  return (e as Error)?.message ?? String(e);
-}
+export const configErrorDetail = (e: unknown): ConfigErrorDetail | null =>
+  structuredDetail<ConfigErrorDetail>(e);

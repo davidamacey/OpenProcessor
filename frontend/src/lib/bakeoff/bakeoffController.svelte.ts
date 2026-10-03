@@ -9,6 +9,7 @@
  */
 import {
   ApiError,
+  apiErrorText,
   bakeoffBaselineModels,
   bakeoffEvalDatasets,
   bakeoffMatrix,
@@ -60,10 +61,9 @@ export const defaultBakeoffApi: BakeoffApi = {
 
 export const TRAINED_MODELS_LIMIT = 100;
 
-/** The served error text: `detail` when the server sent one. */
+/** The served error text: `apiErrorText`. */
 export function errorText(e: unknown): string {
-  if (e instanceof ApiError) return e.detail ?? e.message;
-  return e instanceof Error ? e.message : String(e);
+  return apiErrorText(e);
 }
 
 export function createBakeoffController(

@@ -21,7 +21,7 @@
  */
 import {
   cancelReprocessJob,
-  datasetErrorText,
+  apiErrorText,
   getReprocessJob,
   reprocessBatch,
   reprocessCrop,
@@ -179,7 +179,7 @@ export class ReprocessFlow {
     try {
       this.dryRun = await this.#deps.reprocessBatch(body);
     } catch (e) {
-      this.error = datasetErrorText(e);
+      this.error = apiErrorText(e);
     } finally {
       this.busy = false;
     }
@@ -214,7 +214,7 @@ export class ReprocessFlow {
       if (res.job) this.#follow(res.job);
       return [];
     } catch (e) {
-      this.error = datasetErrorText(e);
+      this.error = apiErrorText(e);
       return [];
     } finally {
       this.busy = false;
@@ -230,7 +230,7 @@ export class ReprocessFlow {
       try {
         this.#follow(await this.#deps.getReprocessJob(job.job_id));
       } catch (e) {
-        this.error = datasetErrorText(e);
+        this.error = apiErrorText(e);
       }
     }, job.poll_after_s * 1000);
   }
@@ -240,7 +240,7 @@ export class ReprocessFlow {
     try {
       this.#follow(await this.#deps.cancelReprocessJob(this.job.job_id));
     } catch (e) {
-      this.error = datasetErrorText(e);
+      this.error = apiErrorText(e);
     }
   }
 

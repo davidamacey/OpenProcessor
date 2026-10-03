@@ -10,7 +10,7 @@
  * box or judges a candidate.
  */
 import { untrack } from 'svelte';
-import { configErrorDetail, configErrorText } from '$lib/api';
+import { configErrorDetail, apiErrorText } from '$lib/api';
 import { testRegionProfile } from '$lib/api_configTest';
 import type { ValidationReport } from '$lib/types_config';
 import type { RegionProfileBody } from '$lib/types_profiles';
@@ -105,7 +105,7 @@ export class ProfileTest {
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.result = null;
-      this.error = configErrorText(e);
+      this.error = apiErrorText(e);
       const d = configErrorDetail(e);
       this.errorReport = d?.report ?? null;
       this.missingCropIds = d?.error === 'crop_not_found' ? (d.crop_ids ?? []) : [];

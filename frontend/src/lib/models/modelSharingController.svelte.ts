@@ -13,7 +13,7 @@
 import {
   getModelClassMapping,
   projectErrorDetail,
-  projectErrorText,
+  apiErrorText,
   setModelSharing,
 } from '$lib/api';
 import type { ModelInfo } from '$lib/types';
@@ -79,7 +79,7 @@ export function createModelSharing(opts: { reload: () => Promise<void> }) {
         return {
           ok: false,
           code: detail?.error ?? null,
-          message: projectErrorText(e),
+          message: apiErrorText(e),
           usedBy: detail?.used_by ?? [],
         };
       } finally {
@@ -98,7 +98,7 @@ export function createModelSharing(opts: { reload: () => Promise<void> }) {
           delete mappings[name];
           return;
         }
-        mappings[name] = { status: 'error', message: projectErrorText(e) };
+        mappings[name] = { status: 'error', message: apiErrorText(e) };
       }
     },
   };
