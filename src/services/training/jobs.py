@@ -193,6 +193,18 @@ class AugmentationSpec(BaseModel):
     per_class_multiplier: dict[str, int] = Field(default_factory=dict)
 
 
+def _reject_spec_fields_in_hyperparameters(
+    value: dict[str, Any], spec_fields: set[str]
+) -> dict[str, Any]:
+    """``hyperparameters`` carries trainer arguments only; a top-level spec
+    field placed inside it (``include_classes``) would be silently ignored."""
+    misplaced = sorted(set(value) & spec_fields)
+    if misplaced:
+        msg = f'{misplaced} belong at the top level of the spec, not inside hyperparameters'
+        raise ValueError(msg)
+    return value
+
+
 class TrainJobSpec(BaseModel):
     """Payload accepted by ``POST /curation/train/start``.
 
@@ -296,6 +308,13 @@ class TrainJobSpec(BaseModel):
     project_export_root: str | None = None
     mlflow_experiment: str | None = None
 
+    @field_validator('hyperparameters')
+    @classmethod
+    def _hyperparameters_exclude_spec_fields(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return _reject_spec_fields_in_hyperparameters(
+            v, set(cls.model_fields) - {'hyperparameters'}
+        )
+
     @field_validator('include_classes')
     @classmethod
     def _validate_include_classes(cls, v: list[int] | None) -> list[int] | None:
@@ -397,6 +416,13 @@ class CampaignRunSpec(BaseModel):
     profile: str
     model_size: Literal['n', 's', 'm', 'l', 'x'] | None = None
     hyperparameters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator('hyperparameters')
+    @classmethod
+    def _hyperparameters_exclude_spec_fields(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return _reject_spec_fields_in_hyperparameters(
+            v, set(TrainJobSpec.model_fields) - {'hyperparameters'}
+        )
 
 
 class TrainCampaignSpec(BaseModel):
