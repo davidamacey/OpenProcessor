@@ -26,6 +26,7 @@
   import { type DatasetStats } from '$lib/api';
   import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
+  import { embeddingStateChips } from '$components/embedding/embeddingCopy';
   import { resolveStatsUpdate, summarizeStatsError } from '$lib/datasetStats';
 
   // The slot whose `stats` capability titles this panel (its stats key,
@@ -104,6 +105,7 @@
     subscription = null;
   });
 
+  const stateChips = $derived(embeddingStateChips(stats?.embedding.by_state));
   const labeledTotal = $derived.by(() => {
     const l = stats?.labeled;
     if (!l) return 0;
@@ -363,6 +365,30 @@
               </li>
             {/each}
           </ul>
+        {/if}
+      </div>
+
+      <!-- Embedding (v0.4.0): items with and without a vector, as served. -->
+      <div class="surface p-4 lg:col-span-1" data-testid="dataset-embedding">
+        <h3 class="mb-3 text-sm font-semibold text-zinc-300">Embedding</h3>
+        <dl class="space-y-1.5 text-xs">
+          <div class="flex justify-between">
+            <dt class="text-zinc-400">Embedded</dt>
+            <dd class="font-mono">{fmt(stats.embedding.embedded)}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-zinc-400">Not embedded</dt>
+            <dd class="font-mono">{fmt(stats.embedding.not_embedded)}</dd>
+          </div>
+        </dl>
+        {#if stateChips.length > 0}
+          <div class="mt-2 flex flex-wrap gap-1" data-testid="embedding-by-state">
+            {#each stateChips as chip (chip.state)}
+              <span class="chip text-[10px]" title={chip.title}
+                >{chip.label} {fmt(chip.count)}</span
+              >
+            {/each}
+          </div>
         {/if}
       </div>
 
