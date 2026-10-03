@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- OpenProcessor 5441975e served facts replace client guesses: the profile test
+  panel shows `testable: false` with its served `reason` (the `item_eligible`
+  reading is gone); Reprocess scope labels and the lock-badge tooltip come from
+  the served `reprocess` vocabulary of `GET /config/vocabulary` (an unlisted id
+  prints as served); the import job's Cancel / Resume / Undo follow the served
+  `actions.*.allowed` and list the served `reason` for a refused one (the
+  status-to-action table is deleted); `ConfigErrorDetail` pins `owner_project`
+  (no frontend caller issues the global model delete that returns
+  `project_owned_model`, so nothing renders it).
+- The MLflow dashboard link is the served `GET /health` `mlflow_public_url`;
+  `PUBLIC_MLFLOW_URL` and the run-URL-origin guess are removed. The confusion
+  matrix renders only from the served `confusion_matrix_url`; the server
+  filesystem path is no longer shown.
+
 ### Fixed
 
 - `npm run test:mutation` measures again: Stryker's vitest runner runs no tests
@@ -14,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Clone a prompt pack, region profile or open-vocabulary set from another
+  project (`from_project`, sent only when chosen), and a "Check segmenter
+  prompt" action in the region-profile editor that shows the served text-only
+  validation report verbatim.
 - Cropwright is now the front door: `docker-compose.yml` runs the docs site as a
   `docs` service (no published port), nginx proxies `/cropwright/` to it
   (`DOCS_UPSTREAM`) and the API's `/docs`, `/redoc`, `/openapi.json` at the app

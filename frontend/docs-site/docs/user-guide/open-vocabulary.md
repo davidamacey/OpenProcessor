@@ -23,7 +23,8 @@ before the segmenter is ready, so the editor is never disabled by it.
 the backend ships.
 
 - **Create** starts a new set; the backend fills in the defaults.
-- **Clone** copies a set or template into a new editable set.
+- **Clone** copies a set or template into a new editable set, or the set of
+  the same name from another project ("Copy from another project").
 - **Delete** removes a set (confirmed).
 - The **active set** panel offers **Rollback** and **Turn off**, both
   confirmed.

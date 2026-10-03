@@ -25,7 +25,9 @@ Submit a training job against the current export.
 ## Past runs
 
 - **Results** — test-split evaluation (labelled by its actual split, "val"
-  vs "test"), per-class table, MLflow link, and full lineage (export
+  vs "test"), per-class table, the confusion matrix image (only when the backend serves its
+  URL), an MLflow link (only when the backend serves a public MLflow URL), and
+  full lineage (export
   identity, class remap, code versions), fetched lazily on first open.
 - **Promote ↑** — to the Triton model registry, with the served gate report
   and, when the backend allows it, a "promote anyway" override.
