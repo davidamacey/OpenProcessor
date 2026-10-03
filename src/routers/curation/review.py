@@ -59,6 +59,7 @@ from src.services.curation.raw_label_clusters import (
     RAW_LABEL_FIELD,
     UNMATCHED_CLASS_SOURCE,
 )
+from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.curation.review_request import (
     ReviewFilters,
     UnlocatableSortError,
@@ -317,7 +318,7 @@ async def review_queue(
     hide_near_duplicates: NearDupQ = False,
     source: SourceQ = None,
     sort: SortQ = None,
-    region_status: RegionStatusQ = None,
+    region_status: RegionStatusQ = REGION_STATUS_DEFAULT,
     combine_conflict: CombineConflictQ = False,
     import_id: ImportIdQ = None,
     dataset_split: DatasetSplitQ = None,
@@ -439,7 +440,7 @@ async def review_locate(
     hide_near_duplicates: NearDupQ = False,
     source: SourceQ = None,
     sort: SortQ = None,
-    region_status: RegionStatusQ = None,
+    region_status: RegionStatusQ = REGION_STATUS_DEFAULT,
     combine_conflict: CombineConflictQ = False,
     import_id: ImportIdQ = None,
     dataset_split: DatasetSplitQ = None,

@@ -53,6 +53,7 @@ from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.id_normalize import run_update_by_query_polled
+from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
 
 # Class clusters occupy cluster_id 0..OFFSET-1; candidate clusters produced
 # by ``cluster_residuals`` get the offset added so the namespaces never collide.
@@ -562,9 +563,6 @@ async def assign_cluster_to_crop(
 # ============================================================================
 # Residual-pool clustering — dispatches via ClusterMethod registry.
 # ============================================================================
-
-# Minimum residual count below which clustering is a no-op.
-MIN_RESIDUALS_FOR_CLUSTERING = 32
 
 # Auto-retrain policy. Industry practice for IVF / k-means partition
 # indexes (FAISS, Milvus, Pinecone): train centroids ONCE on a

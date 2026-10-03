@@ -11,6 +11,7 @@ from src.routers.curation._config_common_models import api_error
 from src.routers.curation._open_vocab_models import OpenVocabCloneRequest, OpenVocabDoc
 from src.services.config_store import RevisionConflictError
 from src.services.config_store.clone_shared import (
+    cloned_description,
     cloned_from_tag,
     read_source_record,
     reject_invalid_clone_name,
@@ -80,7 +81,7 @@ async def clone_open_vocab(
             name=body.new_name,
             body=dict(source.body),
             expected_revision=None,
-            description=body.description if body.description is not None else source.description,
+            description=cloned_description(body.description, source.description),
             cloned_from=cloned_from_tag(
                 source_project=body.from_project or target_slug,
                 name=name,

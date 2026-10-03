@@ -202,6 +202,9 @@ async def _read_revision(client: Any) -> int:
 
 _REFRESH_PAGE_SIZE = 500
 
+# Statuses that end on their own; a snapshot saying one is re-read at the doc.
+_TRANSITIONAL_STATUSES = frozenset({'building', 'deleting'})
+
 # After a failed refresh, request-path callers skip OpenSearch for this
 # long instead of paying a connection error on every bind.
 _REFRESH_FAILURE_BACKOFF_SECONDS = 5.0
@@ -305,6 +308,36 @@ class ProjectRegistry:
         except Exception as exc:
             self._failed_at = time.monotonic()
             logger.warning('project_registry_refresh_failed', error=str(exc))
+
+    async def lookup(self, slug: str) -> ProjectRecord | None:
+        """The one status read for a slug: every route guard and
+        ``GET /projects/{slug}`` call this, so they cannot disagree.
+
+        The snapshot is refreshed by revision, and the revision counter is
+        bumped after the doc is written -- in that window (or while another
+        worker's refresh is backing off) a snapshot can still say
+        ``building`` for a project that already finished. A transitional
+        status is therefore confirmed against the doc itself (a realtime
+        get) before a caller acts on it."""
+        await self.ensure_fresh()
+        record = self._by_slug.get(slug)
+        if record is None or record.status not in _TRANSITIONAL_STATUSES:
+            return record
+        try:
+            client = self._client_factory()
+            if asyncio.iscoroutine(client):
+                client = await client
+            doc = await client.get(index=projects_index(), id=_project_doc_id(slug))
+        except Exception as exc:
+            logger.warning('project_registry_confirm_failed', slug=slug, error=str(exc))
+            return record
+        source = doc.get('_source') if isinstance(doc, dict) else None
+        if not source:
+            return record
+        confirmed = doc_to_record(source)
+        if confirmed.status != record.status:
+            self._by_slug = {**self._by_slug, slug: confirmed}
+        return confirmed
 
     async def refresh_strict(self) -> None:
         """Reload every project doc now, raising on any failure. For

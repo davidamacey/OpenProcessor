@@ -18,6 +18,7 @@ from typing import Any
 
 from src.services.curation import review_queries, review_sorts
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 
 
 TIEBREAK: dict[str, Any] = {'crop_id': {'order': 'asc'}}
@@ -36,7 +37,7 @@ class ReviewFilters:
     # embedding state, review status), minus ``max_rank``, which a tab can
     # default and so is read above.
     item: ItemFilter = dataclasses.field(default_factory=ItemFilter)
-    region_status: str | None = None
+    region_status: str | None = REGION_STATUS_DEFAULT
     combine_conflict: bool = False
     import_id: str | None = None
     dataset_split: str | None = None

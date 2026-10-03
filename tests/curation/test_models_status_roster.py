@@ -97,3 +97,15 @@ def test_core_models_roles_do_not_leak_code_identifiers(
     for name, _friendly, role, _mtype in entries:
         for leaky in _LEAKY_SUBSTRINGS:
             assert leaky not in role, f'{name!r} role leaks a code identifier: {role!r}'
+
+
+def test_dedupe_triton_rows_keeps_the_first_row_per_name_and_every_non_triton_row() -> None:
+    from src.routers.curation._models_class_mapping import dedupe_triton_rows
+
+    rows = [
+        {'kind': 'triton', 'name': 'm', 'project': 'a'},
+        {'kind': 'triton', 'name': 'm', 'project': 'b'},
+        {'kind': 'triton', 'name': 'n'},
+        {'kind': 'vlm', 'name': 'm'},
+    ]
+    assert dedupe_triton_rows(rows) == [rows[0], rows[2], rows[3]]

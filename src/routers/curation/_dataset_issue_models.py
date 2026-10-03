@@ -12,9 +12,12 @@ from pydantic import BaseModel, Field
 from src.services.curation.dataset_import.issues import (
     DatasetIssueCode,  # noqa: TC001 - pydantic field type, resolved at runtime
 )
+from src.services.issue_ids import stamp_issue_ids
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from src.services.curation.dataset_import.issues import DatasetIssue
 
 
@@ -25,6 +28,10 @@ class DatasetIssueSampleWire(BaseModel):
 
 
 class DatasetIssueWire(BaseModel):
+    id: str = Field(
+        default='',
+        description='Unique within the response (`code[:subject]`, `#2` on a repeat).',
+    )
     code: DatasetIssueCode
     severity: Literal['error', 'warning', 'info']
     blocking: bool
@@ -34,7 +41,7 @@ class DatasetIssueWire(BaseModel):
     samples: list[DatasetIssueSampleWire] = Field(default_factory=list)
 
 
-def issue_to_wire(issue: DatasetIssue) -> DatasetIssueWire:
+def _issue_to_wire(issue: DatasetIssue) -> DatasetIssueWire:
     return DatasetIssueWire(
         code=issue.code,  # type: ignore[arg-type]
         severity=issue.severity,
@@ -49,4 +56,18 @@ def issue_to_wire(issue: DatasetIssue) -> DatasetIssueWire:
     )
 
 
-__all__ = ['DatasetIssueSampleWire', 'DatasetIssueWire', 'issue_to_wire']
+def _subject(issue: DatasetIssueWire) -> str | None:
+    first = issue.samples[0] if issue.samples else None
+    if first is None:
+        return None
+    return str(first.detail.get('class') or first.file or '') or None
+
+
+def issues_to_wire(issues: Iterable[DatasetIssue]) -> list[DatasetIssueWire]:
+    """The wire list for one response, every issue carrying a unique ``id``."""
+    wired = [_issue_to_wire(i) for i in issues]
+    stamp_issue_ids(wired, _subject)
+    return wired
+
+
+__all__ = ['DatasetIssueSampleWire', 'DatasetIssueWire', 'issues_to_wire']

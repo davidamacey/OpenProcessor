@@ -91,5 +91,9 @@ def test_the_catalog_serves_the_spec_on_every_tab_that_honours_it(client: TestCl
     for tab in tabs:
         assert 'on_negative_frame' in tab['filters']
         spec = next(s for s in tab['filter_specs'] if s['param'] == 'on_negative_frame')
-        assert [o['value'] for o in spec['options']] == ['true', 'false']
+        assert [o['value'] for o in spec['options']] == [
+            '',
+            'true',
+            'false',
+        ]  # '' = Any: omit the param
     assert 'on_negative_frame' in review_queries.COMMON_FILTERS

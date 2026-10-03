@@ -32,7 +32,7 @@ from src.routers.curation._dataset_import_models import (
     DatasetUploadResponse,
 )
 from src.routers.curation._dataset_import_views import job_wire, preview_wire
-from src.routers.curation._dataset_issue_models import issue_to_wire
+from src.routers.curation._dataset_issue_models import issues_to_wire
 from src.services.curation.dataset_import import runner
 from src.services.curation.dataset_import.context import ImportContext
 from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest
@@ -325,7 +325,7 @@ def _refuse_unmapped_or_blocked(prepared: PreparedImport, body: DatasetImportReq
             422,
             'class_mapping_invalid',
             '; '.join(e.describe() for e in errors)[:300],
-            issues=[issue_to_wire(i) for i in prepared.issues if i.blocking],
+            issues=issues_to_wire(i for i in prepared.issues if i.blocking),
             project=_slug(),
         )
     if prepared.blocking and not (body.options.force and prepared.force_allowed()):
@@ -333,7 +333,7 @@ def _refuse_unmapped_or_blocked(prepared: PreparedImport, body: DatasetImportReq
             422,
             'import_blocked',
             'the dataset has blocking issues',
-            issues=[issue_to_wire(i) for i in prepared.issues if i.blocking],
+            issues=issues_to_wire(i for i in prepared.issues if i.blocking),
             project=_slug(),
         )
 

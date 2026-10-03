@@ -13,14 +13,15 @@ bare string ``detail`` -- gives Cropwright one stable shape
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.routers.curation._dataset_issue_models import (
     DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
 )
+from src.services.issue_ids import stamp_issue_ids
 
 
 # P1 seeded the project-related codes it raises. W2 adds the codes its
@@ -125,6 +126,7 @@ ErrorCode = Literal[
     'no_box_to_verify',
     'no_class_names',
     'too_many_crops',
+    'too_few_items',
     'too_many_crop_ids',
     'pack_invalid',
     'profile_invalid',
@@ -354,6 +356,8 @@ class ConfigErrorDetail(BaseModel):
     unmapped: list[str] | None = None
     import_id: str | None = None
     limit: int | None = None
+    # 422 too_few_items: the smallest pool the clustering route accepts.
+    min_items: int | None = None
     # W9: unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None
@@ -376,9 +380,13 @@ class ApiErrorResponse(BaseModel):
 
 
 def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:
-    """Build ``HTTPException(status, {"detail": ConfigErrorDetail})``."""
+    """Build ``HTTPException(status, {"detail": ConfigErrorDetail})`` with only the
+    top-level fields the code carries."""
     detail = ConfigErrorDetail(error=code, message=message, **fields)
-    return HTTPException(status_code=status, detail=detail.model_dump(exclude_none=False))
+    # Only the fields this code carries: a null top-level field is dropped, but a
+    # nested object keeps its own (nullable) keys.
+    body = {k: v for k, v in detail.model_dump(exclude_none=False).items() if v is not None}
+    return HTTPException(status_code=status, detail=body)
 
 
 def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPException:
@@ -399,6 +407,13 @@ def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPExce
 class ValidationIssue(BaseModel):
     """One error/warning/info from a config validator (§3.3/§4.3)."""
 
+    id: str = Field(
+        default='',
+        description=(
+            'Unique within the response (`code[:field]`, `#2` on a repeat): key rows on it, '
+            'not on `code`, which two issues can share.'
+        ),
+    )
     code: ValidationCode
     severity: Literal['error', 'warning', 'info']
     field: str | None = Field(
@@ -425,6 +440,11 @@ class ValidationReport(BaseModel):
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
     force_allowed: bool = False
+
+    @model_validator(mode='after')
+    def _stamp_ids(self) -> Self:
+        stamp_issue_ids([*self.errors, *self.warnings], lambda i: i.field)
+        return self
 
 
 class ActiveRef(BaseModel):

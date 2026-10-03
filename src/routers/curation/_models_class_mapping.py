@@ -153,6 +153,20 @@ def discover_foreign_shared_models(models_dir: Path | None = None) -> list[dict[
     return out
 
 
+def dedupe_triton_rows(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per Triton model name, first wins (own and core rows are listed
+    before other projects' shared ones, so a shared copy never shadows them)."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in models:
+        if row.get('kind') == 'triton':
+            if row['name'] in seen:
+                continue
+            seen.add(row['name'])
+        out.append(row)
+    return out
+
+
 @router.get('/models/{model_name}/class_mapping', response_model=ModelClassMappingResponse)
 async def get_model_class_mapping(model_name: str) -> ModelClassMappingResponse:
     """How ``model_name``'s classes map by name onto this project's

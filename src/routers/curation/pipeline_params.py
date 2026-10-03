@@ -57,6 +57,11 @@ CLUSTER_SCOPED_SKIP: dict[str, object] = {
 # E7 (any_domain_plan.md §1): reworded off OP_REGION_PROFILE (W2/W4 made
 # the active profile a config-store activation, not just an env var) to
 # name the real source of truth and how to change it.
+_UNRESOLVABLE_REVISION = (
+    'revision {revision} of prompt_pack {resolved!r} is not resolvable '
+    'in this process (only the current saved revision or the '
+    'currently-activated revision can be pinned per run)'
+)
 DETECTION_PROFILE_REJECTED = (
     'detection_profile is not a per-run auto_label option: no auto_label stage '
     'runs region detection, and region detection runs in the detection worker '
@@ -77,7 +82,11 @@ def reject_detection_profile(detection_profile: Any) -> None:
     if isinstance(detection_profile, str):
         raise HTTPException(
             status_code=422,
-            detail={'error': DETECTION_PROFILE_REJECTED, 'param': 'detection_profile'},
+            detail={
+                'error': DETECTION_PROFILE_REJECTED,
+                'message': DETECTION_PROFILE_REJECTED,
+                'param': 'detection_profile',
+            },
         )
 
 
@@ -107,7 +116,11 @@ async def resolve_run_prompt_pack(
         except ValueError:
             raise HTTPException(
                 status_code=422,
-                detail={'error': f'invalid revision in {requested!r}', 'axis': 'prompt_pack'},
+                detail={
+                    'error': f'invalid revision in {requested!r}',
+                    'message': f'invalid revision in {requested!r}',
+                    'axis': 'prompt_pack',
+                },
             ) from None
     try:
         resolved = await resolve_strategy_selection('prompt_pack', name_only, opensearch)
@@ -116,6 +129,7 @@ async def resolve_run_prompt_pack(
             status_code=422,
             detail={
                 'error': str(exc),
+                'message': str(exc),
                 'axis': exc.axis,
                 'requested': exc.requested,
                 'valid_ids': exc.valid,
@@ -155,11 +169,8 @@ async def resolve_run_prompt_pack(
             raise HTTPException(
                 status_code=422,
                 detail={
-                    'error': (
-                        f'revision {revision} of prompt_pack {resolved!r} is not resolvable '
-                        'in this process (only the current saved revision or the '
-                        'currently-activated revision can be pinned per run)'
-                    ),
+                    'error': _UNRESOLVABLE_REVISION.format(revision=revision, resolved=resolved),
+                    'message': _UNRESOLVABLE_REVISION.format(revision=revision, resolved=resolved),
                     'axis': 'prompt_pack',
                     'requested': requested,
                 },

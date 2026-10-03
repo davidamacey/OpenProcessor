@@ -8,6 +8,7 @@ over the items already stored, without writing anything.
 
 from __future__ import annotations
 
+import dataclasses
 from collections import Counter
 
 from src.config import get_curation_config
@@ -81,13 +82,13 @@ async def _require_servable(override: DetectorOverride) -> None:
         pool = get_async_triton_pool()
     except RuntimeError as exc:
         raise api_error(503, 'detector_unavailable', f'triton unavailable: {exc}') from exc
-    problems = await detector_problems(pool, override)
-    if problems:
+    reasons = list(dict.fromkeys(p for p in await detector_problems(pool, override) if p))
+    if reasons:
         raise api_error(
             422,
             'detector_not_servable',
-            '; '.join(problems),
-            reasons=list(problems),
+            f'detector {override.model!r} cannot serve ingest ({len(reasons)} problem(s); see reasons)',
+            reasons=reasons,
         )
 
 
@@ -150,11 +151,21 @@ async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> I
         by_image.setdefault(src.get('image_id') or '', []).append(src)
     embed: Counter[str] = Counter()
     skip: Counter[str] = Counter()
+    display: dict[str, str] = {}
+    n_labeled = 0
     for sources in by_image.values():
-        states = embedding_states([candidate_from_doc(s) for s in sources], body.embedding)
-        for src, state in zip(sources, states, strict=True):
-            name = normalize_class_name(src.get('class_name') or src.get('proposal_name') or '')
-            (embed if state == EMBEDDED else skip)[name or 'unnamed'] += 1
+        cands = [candidate_from_doc(s) for s in sources]
+        states = embedding_states(cands, body.embedding)
+        unlabeled = embedding_states(
+            [dataclasses.replace(c, labeled=False) for c in cands], body.embedding
+        )
+        for src, state, bare in zip(sources, states, unlabeled, strict=True):
+            # Class identity is the NAME (the detector label as stored), never the slug.
+            raw = src.get('class_name') or src.get('proposal_name') or ''
+            key = normalize_class_name(raw) or 'unnamed'
+            name = display.setdefault(key, raw or 'unnamed')
+            (embed if state == EMBEDDED else skip)[name] += 1
+            n_labeled += state == EMBEDDED and bare != EMBEDDED
     n_embed, n_skip = sum(embed.values()), sum(skip.values())
     names = sorted(set(embed) | set(skip), key=lambda n: -(embed[n] + skip[n]))
     return IngestPolicyPreview(
@@ -163,6 +174,7 @@ async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> I
         truncated=len(docs) >= PREVIEW_MAX_ITEMS and int(total) > len(docs),
         would_embed=n_embed,
         would_not_embed=n_skip,
+        embedded_because_labeled=n_labeled,
         estimated_vector_mb=round(n_embed * cfg.encoder_embedding_dim * 4 / 1_000_000, 2),
         by_class=[
             PolicyPreviewClass(name=n, would_embed=embed[n], would_not_embed=skip[n]) for n in names

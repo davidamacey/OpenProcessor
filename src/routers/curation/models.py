@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from src.routers.curation._common import logger, router
 from src.routers.curation._models_class_mapping import (
     bound_registry,
+    dedupe_triton_rows,
     discover_foreign_shared_models,
     listing_fields,
 )
@@ -256,6 +257,7 @@ async def models_status(
             for shared in discover_foreign_shared_models()
         )
 
+    models = dedupe_triton_rows(models)
     models.extend(await vlm_status_rows())
 
     # External services (segmenter, VLM) belong to no project and have no

@@ -60,7 +60,16 @@ def test_labels_fall_back_to_the_models_own_labels_file(monkeypatch: pytest.Monk
         lambda model: {0: 'a b', 2: 'c'} if model == 'm' else {},
     )
     got = detector_labels(DetectionProfile(name='item', detector_model='m'))
-    assert [(g.class_id, g.slug) for g in got] == [(0, 'a_b'), (1, ''), (2, 'c')]
+    assert [(g.class_id, g.slug) for g in got] == [(0, 'a_b'), (2, 'c')]  # the id gap is skipped
+
+
+def test_empty_and_repeated_names_are_not_served(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        'src.services.curation.detector_vocabulary.get_class_names',
+        lambda _model: {0: 'car', 1: '  ', 2: 'Car', 3: 'bus'},
+    )
+    got = detector_labels(DetectionProfile(name='item', detector_model='m'))
+    assert [(g.class_id, g.name) for g in got] == [(0, 'car'), (3, 'bus')]
 
 
 def test_no_labels_is_empty() -> None:

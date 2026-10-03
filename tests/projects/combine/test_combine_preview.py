@@ -75,8 +75,8 @@ async def test_a_full_mapping_is_ok_and_maps_by_name(world: World) -> None:
         ('cars-a', 'car'),
         ('cars-b', 'Car'),
     }
-    assert result.target['images'] == 2
-    assert result.target['items'] == 3  # a: car + truck, b: Car; the bus is skipped
+    assert result.target['projected_images'] == 2
+    assert result.target['projected_items'] == 3  # a: car + truck, b: Car; the bus is skipped
 
 
 def test_a_to_or_drop_body_is_not_a_class_mapping_entry() -> None:
@@ -241,3 +241,13 @@ async def test_preview_writes_nothing(world: World, tmp_path) -> None:
     } == registry_before
     assert sorted(str(p) for p in tmp_path.rglob('*')) == files_before
     assert 'combined' not in world.records
+
+
+@pytest.mark.asyncio
+async def test_projected_items_count_unclassed_items_the_executor_copies(world: World) -> None:
+    _two_sources(world)
+    world.add_image('cars-a', items=[{'bbox': BOX}, {'bbox': [0.6] * 2 + [0.9] * 2}])
+    result = await _preview(world, world.request(['cars-a', 'cars-b'], FULL_MAPPING))
+    assert result.target['unclassed_items'] == 2
+    assert result.target['projected_items'] == 5  # 3 mapped + 2 unclassed; the bus is skipped
+    assert sum(s['items'] for s in result.sources) - 1 == result.target['projected_items']

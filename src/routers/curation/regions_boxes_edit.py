@@ -141,7 +141,13 @@ def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: An
     if profile.reads_text:
         return
     if any(getattr(e, 'text', None) is not None for e in elements):
-        raise HTTPException(status_code=422, detail={'error': 'region_text_disabled'})
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'error': 'region_text_disabled',
+                'message': 'the active region profile does not read text; omit `text`',
+            },
+        )
 
 
 def _check_box_states(route: str, elements: list[Any]) -> None:
@@ -160,7 +166,12 @@ def _too_many_boxes_check(n_boxes: int) -> None:
     if n_boxes > limit:
         raise HTTPException(
             status_code=422,
-            detail={'error': 'too_many_boxes', 'limit': limit, 'requested': n_boxes},
+            detail={
+                'error': 'too_many_boxes',
+                'message': f'{n_boxes} boxes in one write; the limit is {limit}',
+                'limit': limit,
+                'requested': n_boxes,
+            },
         )
 
 

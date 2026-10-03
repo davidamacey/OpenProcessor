@@ -25,7 +25,10 @@ class EmbeddingByState(BaseModel):
     failed: int = 0
     unknown: int = Field(
         default=0,
-        description='Items written before embedding_state existed (no recorded state; not a value of the filter).',
+        description=(
+            'Items written before embedding_state existed that have no vector (no recorded '
+            'state; not a value of the filter). A legacy item with a vector counts as embedded.'
+        ),
     )
 
 
@@ -41,6 +44,16 @@ def embedding_aggregations() -> dict[str, Any]:
             'terms': {'field': 'embedding_state', 'size': 16, 'missing': UNKNOWN_STATE_BUCKET}
         },
         'embedded_items': {'filter': embedded_clause()},
+        # An item written before embedding_state existed that has its vector is
+        # embedded; it must not read as "unknown" beside embedded=N.
+        'legacy_embedded_items': {
+            'filter': {
+                'bool': {
+                    'must': [embedded_clause()],
+                    'must_not': [{'exists': {'field': 'embedding_state'}}],
+                }
+            }
+        },
     }
 
 
@@ -54,6 +67,9 @@ def embedding_summary(aggs: dict[str, Any], total: int) -> dict[str, Any]:
         if key == UNKNOWN_STATE_BUCKET or key not in EmbeddingByState.model_fields:
             key = 'unknown'
         counts[key] = counts.get(key, 0) + int(b['doc_count'])
+    legacy = int((aggs.get('legacy_embedded_items') or {}).get('doc_count', 0))
+    counts['embedded'] = counts.get('embedded', 0) + legacy
+    counts['unknown'] = max(0, counts.get('unknown', 0) - legacy)
     by_state = EmbeddingByState(**counts)
     return {
         'embedded': embedded,
