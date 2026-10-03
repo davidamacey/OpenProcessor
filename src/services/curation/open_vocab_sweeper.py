@@ -4,7 +4,7 @@ Ingest stamps new images ``open_vocab_status: pending`` and drains them in a
 background task of the API process (:mod:`~src.services.curation.open_vocab_ingest`);
 a restart, or a segmenter outage that ended the drain, leaves them pending.
 :func:`sweep_pending_open_vocab` picks up the ones nobody is working on (a
-``pending`` stamp older than :data:`STALE_AFTER_S`, or without a stamp) and runs
+``pending`` stamp older than :func:`open_vocab_stale_after_s`, or without a stamp) and runs
 them through the same drain, so a pending image finishes without an operator.
 One sweeper per project runs at a time across API workers (a non-blocking file
 lock held for the sweep); a pass over an image is idempotent, so the one race
@@ -20,7 +20,10 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
-from src.services.curation.dataset_import.limits import open_vocab_sweep_interval_s
+from src.services.curation.dataset_import.limits import (
+    open_vocab_stale_after_s,
+    open_vocab_sweep_interval_s,
+)
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.curation.open_vocab_ingest import drain
 from src.services.curation.reprocess_open_vocab import current_active_set
@@ -39,8 +42,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-#: A ``pending`` stamp younger than this belongs to a live drain.
-STALE_AFTER_S = 600
 #: Images one sweep takes on; the next tick takes the next batch.
 SWEEP_BATCH = 500
 
@@ -63,7 +64,7 @@ async def sweep_pending_open_vocab(
     active = await current_active_set(opensearch)
     if active is None or not active[0].run_on_ingest:
         return 0
-    cutoff = (now or datetime.now(UTC)) - timedelta(seconds=STALE_AFTER_S)
+    cutoff = (now or datetime.now(UTC)) - timedelta(seconds=open_vocab_stale_after_s())
     pending = await scan_items(
         opensearch,
         {'term': {'open_vocab_status': 'pending'}},
@@ -134,7 +135,6 @@ async def stop_open_vocab_sweeper(task: asyncio.Task[None] | None) -> None:
 
 
 __all__ = [
-    'STALE_AFTER_S',
     'default_service',
     'start_open_vocab_sweeper',
     'stop_open_vocab_sweeper',

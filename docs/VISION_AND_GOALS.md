@@ -104,29 +104,18 @@ release.
   touching data integrity, isolation, or security — an independent review
   before it lands, not batched into one release-day merge.
 
-## What's explicitly out of scope for v0.4.0, and why
+## What's explicitly not in v0.4.0, and why
 
 These are real, tracked commitments, not abandoned ideas — they are
 sequenced deliberately rather than included now:
 
-- **Full-image, open-vocabulary SAM3 detection**
-  ([issue #30](https://github.com/davidamacey/OpenProcessor/issues/30)).
-  Today, the region stage runs SAM3 *inside* an already-detected item's
-  crop, so it can only find sub-regions of something the primary detector
-  already flagged. Because SAM3 is open-vocabulary, running it directly on
-  the full image would let it discover and label entirely new object
-  categories that have no trained detection class yet (e.g. finding "all
-  the legos" in a photo with zero prior lego training data). This needs
-  its own design pass — data model, storage shape, and a full-image vs.
-  crop-region trigger — before implementation, so it's deliberately queued
-  after the v0.4.0 release.
 - **Deep GPU / Triton inference optimization** (issue #40). Batching
   strategy, GPU utilization, and a zero-copy pipeline (decode once, keep
   data resident on the GPU across models) are real, planned work — but
-  they should be tuned against the *final* workload shape. Since
-  full-image SAM3 (above) would materially change SAM3's call pattern,
-  optimization work is sequenced to follow that design decision, not
-  precede it, so it doesn't need to be redone.
+  they should be tuned against the *final* workload shape. Full-image
+  SAM3 detection has shipped in v0.4.0, so the call pattern is now known and
+  optimization work (plan: `docs/design/triton_pipeline_optimization_plan.md`)
+  follows the release.
 - Benchmarks, a technical white paper, and additional domain showcases
   beyond the car→wheel example are explicitly post-release deliverables.
 

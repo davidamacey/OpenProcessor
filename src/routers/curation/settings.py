@@ -412,26 +412,21 @@ async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any
 
 
 async def _apply_vlm(plan: Any, opensearch: Any) -> None:
-    from src.routers.curation._config_common_models import api_error
+    from src.routers.curation._config_common_models import active_conflict_error
     from src.services.config_store import ActiveConflictError
     from src.services.config_store.vlm_activation import apply_default_vlm
 
     try:
         await apply_default_vlm(opensearch, plan)
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            'the VLM was activated by another writer since this request started',
-            current=exc.current,
-        ) from exc
+        raise active_conflict_error('the active VLM', exc.current) from exc
 
 
 async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -> None:
     """Write side of a resolved axis activation (see
     :func:`_resolve_config_store_axis`). Only called once every axis in
     the request has cleared resolve+gate."""
-    from src.routers.curation._config_common_models import api_error
+    from src.routers.curation._config_common_models import active_conflict_error
     from src.services.config_store import ActiveConflictError, get_config_store
     from src.services.config_store.store import activate_axis
 
@@ -446,12 +441,7 @@ async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -
             expected_active=plan.expected_active,
         )
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            f'axis {plan.axis!r} was activated by another writer since this request started',
-            current=exc.current,
-        ) from exc
+        raise active_conflict_error(f'the active {plan.axis} config', exc.current) from exc
 
 
 _NO_PENDING_OVERRIDE: Any = object()

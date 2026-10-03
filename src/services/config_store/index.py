@@ -245,6 +245,13 @@ async def get_activation(client: Any, index: str, axis: ConfigAxis) -> dict[str,
     return doc['_source']
 
 
+def _nothing_active(ref: dict[str, Any] | None) -> bool:
+    """Never activated (no doc) and explicitly off (``name`` null) are the same
+    state for compare-and-set, so a caller that presents no ``expected_active``
+    can activate when nothing is active."""
+    return ref is None or ref.get('name') is None
+
+
 async def activate(
     client: Any,
     index: str,
@@ -257,8 +264,8 @@ async def activate(
 ) -> dict[str, Any]:
     """Write ``activation:<axis>`` plus an ``activation_event`` and bump
     the global revision. ``name=None`` deactivates the axis.
-    ``expected_active`` (``{"name": ..., "revision": ...}`` or ``None``
-    for "currently off") must equal the current activation, else
+    ``expected_active`` (``{"name": ..., "revision": ...}``; ``None`` or a
+    null-name ref when nothing is active) must equal the current activation, else
     :class:`ActiveConflictError`. ``doc_fields`` is merged into the activation
     doc (the VLM axis's external-images acknowledgement, W9.9); a callable
     receives the CURRENT activation doc's ``_source`` (``None`` when there
@@ -281,7 +288,9 @@ async def activate(
     except NotFoundError:
         previous = None
 
-    if expected_active != previous:
+    if not (_nothing_active(expected_active) and _nothing_active(previous)) and (
+        expected_active != previous
+    ):
         raise ActiveConflictError(previous)
 
     now = _now_iso()

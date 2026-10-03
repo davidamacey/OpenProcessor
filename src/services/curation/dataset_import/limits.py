@@ -65,6 +65,21 @@ def open_vocab_sweep_interval_s() -> int:
         return 120
 
 
+def open_vocab_stale_after_s() -> int:
+    """Age of an ``open_vocab_status: pending`` stamp after which the sweeper
+    treats the drain as orphaned (an API restart) and reclaims it. Default 240 s
+    = two sweep ticks: a live drain of a 64-image ingest batch (a few seconds per
+    image at the default concurrency) finishes well inside it, and recovery after
+    a restart takes 4 to 6 minutes instead of 10 to 12. Floor 30 s."""
+    raw = os.environ.get('OP_OPEN_VOCAB_STALE_S')
+    if raw is None or not raw.strip():
+        return 240
+    try:
+        return max(30, int(raw))
+    except ValueError:
+        return 240
+
+
 def open_vocab_concurrency() -> int:
     """Images of the full-image SAM 3 pass in flight at once (each fans out
     one segmenter call per target, so calls in flight <= this x targets)."""

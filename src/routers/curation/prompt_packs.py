@@ -14,6 +14,7 @@ from src.routers.curation._config_common_models import (
     ActivateResponse,
     ActiveConfigResponse,
     ActiveRef,
+    active_conflict_error,
     api_error,
 )
 from src.routers.curation._prompt_pack_models import (
@@ -240,12 +241,7 @@ async def rollback_active_prompt_pack(
             409, 'no_previous', 'there is no previous activation to roll back to'
         ) from exc
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            'the active pack changed since you loaded it',
-            current=ActiveRef(**exc.current) if exc.current else None,
-        ) from exc
+        raise active_conflict_error('the active pack', exc.current) from exc
     return await build_active_config_response(opensearch, axis='prompt_pack')
 
 
@@ -573,12 +569,7 @@ async def activate_prompt_pack_route(
             opensearch, name=name, revision=record.revision, expected_active=expected_active
         )
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            'the active pack changed since you loaded it',
-            current=ActiveRef(**exc.current) if exc.current else None,
-        ) from exc
+        raise active_conflict_error('the active pack', exc.current) from exc
 
     response = await build_active_config_response(opensearch, axis='prompt_pack')
     return ActivateResponse(**response.model_dump(), validation=report)

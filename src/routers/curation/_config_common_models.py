@@ -373,6 +373,21 @@ def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTP
     return HTTPException(status_code=status, detail=detail.model_dump(exclude_none=False))
 
 
+def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPException:
+    """The 409 for every activation compare-and-set miss. The message spells out
+    the ``expected_active`` shape so a caller that omitted it (or sent the wrong
+    shape) can fix the request without reading the schema; ``current`` is what
+    to echo back."""
+    return api_error(
+        409,
+        'active_conflict',
+        f'{what} does not match expected_active; send expected_active as '
+        '{"name": <string or null>, "revision": <integer or null>} equal to `current` '
+        '(omit it, or send null name, only when nothing is active)',
+        current=ActiveRef(**current) if current else None,
+    )
+
+
 class ValidationIssue(BaseModel):
     """One error/warning/info from a config validator (§3.3/§4.3)."""
 

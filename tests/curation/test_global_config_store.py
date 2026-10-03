@@ -158,3 +158,34 @@ def test_global_index_name_equal_to_the_registry_is_refused(monkeypatch) -> None
     monkeypatch.setenv('OP_GLOBAL_CONFIGS_INDEX', 'op_registry')
     with pytest.raises(ValueError, match='project registry'):
         global_configs_index()
+
+
+@pytest.mark.asyncio
+async def test_activate_treats_nothing_active_as_one_state_for_compare_and_set() -> None:
+    """Never activated and explicitly off both mean "nothing active": a missing
+    or null-ref ``expected_active`` is accepted for either; it still conflicts
+    when something IS active."""
+    from src.services.config_store.index import ActiveConflictError
+
+    client = FakeConfigOpenSearch()
+    index = global_configs_index()
+    off = {'name': None, 'revision': None}
+
+    # never activated: both spellings of "nothing" pass
+    await activate(client, index, axis='open_vocab', name='a', revision=1, expected_active=off)
+    await activate(
+        client,
+        index,
+        axis='open_vocab',
+        name=None,
+        revision=None,
+        expected_active={'name': 'a', 'revision': 1},
+    )
+    # explicitly off now: a missing expected_active is still "nothing"
+    await activate(client, index, axis='open_vocab', name='a', revision=1, expected_active=None)
+    # something active: a missing or different expected_active conflicts
+    for stale in (None, off, {'name': 'b', 'revision': 1}):
+        with pytest.raises(ActiveConflictError):
+            await activate(
+                client, index, axis='open_vocab', name='a', revision=1, expected_active=stale
+            )

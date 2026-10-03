@@ -910,6 +910,7 @@ both.
 | Operation | Route |
 |---|---|
 | Sets: list, create, read, save, delete, clone | `GET /curation/projects/{project}/open_vocab`, `POST /curation/projects/{project}/open_vocab`, `GET /curation/projects/{project}/open_vocab/{name}`, `PUT /curation/projects/{project}/open_vocab/{name}`, `DELETE /curation/projects/{project}/open_vocab/{name}`, `POST /curation/projects/{project}/open_vocab/{name}/clone` |
+| List with the shipped example sets | `GET /curation/projects/{project}/open_vocab?include_templates=true` (templates are omitted unless you pass it) |
 | Validate, form schema | `POST /curation/projects/{project}/open_vocab/validate`, `GET /curation/projects/{project}/open_vocab/schema` |
 | Activate, deactivate, roll back | `POST /curation/projects/{project}/open_vocab/{name}/activate`, `POST /curation/projects/{project}/open_vocab/deactivate`, `POST /curation/projects/{project}/open_vocab/active/rollback`, `GET /curation/projects/{project}/open_vocab/active` |
 | Try one unsaved target on one image | `POST /curation/projects/{project}/open_vocab/test` |
@@ -933,8 +934,8 @@ both.
 - `run_on_ingest` (off by default) queues newly ingested images in a background
   task and stamps them `open_vocab_status: pending` until done. A sweeper in the
   API (every `OP_OPEN_VOCAB_SWEEP_S` seconds, default 120, 0 = off) finishes
-  images a restart or a segmenter outage left `pending` for longer than ten
-  minutes, while the active set has `run_on_ingest` on.
+  images a restart or a segmenter outage left `pending` for longer than
+  `OP_OPEN_VOCAB_STALE_S` seconds (default 240, two sweep ticks, floor 30), while the active set has `run_on_ingest` on.
 - Throughput: up to `OP_OPEN_VOCAB_CONCURRENCY` images (default 4) are in
   flight at once, each fanning out one segmenter call per target. The dry run's
   `estimated_minutes` uses the measured per-call latency (a moving average of
@@ -1342,7 +1343,7 @@ the config store and change at runtime.
 | Region limits | `OP_REGION_MAX_BOXES_PER_WRITE` |
 | Ingest and upload | `OP_MAX_INGEST_CONCURRENCY`, `OP_UPLOAD_MAX_IMAGES_PER_REQUEST`, `OP_UPLOAD_MAX_BYTES_PER_REQUEST`, `OP_UPLOAD_ACCEPTED_EXTENSIONS` |
 | Dataset import | `OP_DATASET_IMPORTS_DIR`, `OP_DATASET_IMPORT_CHUNK`, `OP_DATASET_IMPORT_MAX_PENDING`, `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` |
-| Reprocess | `OP_REPROCESS_JOBS_DIR`, `OP_REPROCESS_SYNC_MAX`, `OP_OPEN_VOCAB_CONCURRENCY`, `OP_OPEN_VOCAB_SWEEP_S` |
+| Reprocess | `OP_REPROCESS_JOBS_DIR`, `OP_REPROCESS_SYNC_MAX`, `OP_OPEN_VOCAB_CONCURRENCY`, `OP_OPEN_VOCAB_SWEEP_S`, `OP_OPEN_VOCAB_STALE_S` |
 | Combine | `OP_COMBINE_JOBS_DIR`, `OP_COMBINE_PAGE_SIZE` |
 | PE text encoder | `OP_PE_TEXT_BACKEND`, `OP_PE_TEXT_ONNX_PATH`, `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |
