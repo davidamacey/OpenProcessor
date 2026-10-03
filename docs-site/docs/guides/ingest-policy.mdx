@@ -1,0 +1,36 @@
+---
+sidebar_position: 12
+title: Ingest policy, filter and select
+---
+
+# Ingest policy, filter and select
+
+Each project has an ingest policy that decides what is kept and what gets a
+vector when images are ingested. Read and change it with
+`GET/PUT /curation/projects/{project}/ingest/policy`; try a change first with
+`POST .../ingest/policy/preview`, which counts what would be embedded and
+estimates the storage.
+
+- **Detect filter**: keep detections by class name, confidence, box area, or the
+  N largest per image. Off by default.
+- **Embedding mode**: `all` (default), `selected` (only items that pass the
+  embedding criteria) or `lazy` (none until you run the embed action).
+- **Class resolution**: `proposal` (default, detections stay unlabeled
+  proposals) or `by_name` (a detector label that matches a registry class name
+  assigns that class as a machine label).
+- **Detector**: an optional per-project detector model, checked against Triton
+  when you save.
+
+Anything left without a vector can be embedded later with the `embed` scope of
+[Reprocess](./reprocess.mdx), or by the `embed_missing` stage of auto-label.
+
+## Filter, select, act
+
+The same filter parameters work on the crop list, review queues, search, stats,
+clusters, regions and `GET .../detections/summary`. Bulk actions (exclude,
+label, move, reprocess, export) accept either explicit ids or a `selection`
+(the filter, plus `limit`, `sample` and `seed`), and every one supports
+`dry_run` so you see the count before you confirm.
+
+The retired `OP_INGEST_PRIMARY_CLASS_IDS` setting is ignored; use the detect
+filter instead.

@@ -155,7 +155,7 @@ One document per crop. Field groups:
 | Class | `class_id`, `class_name`, `class_source`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeler`, `class_labeled_at`, `confidence`, `proposal_name`, `label_source`, `class_id_history` (stored, not indexed) |
 | VLM | `vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`, `vlm_confidence`, `vlm_raw_class`, `vlm_proposed_class`, `needs_new_class`, `vlm_raw_label*`, label-cluster fields |
 | Clusters | `cluster_id`, `cluster_subid`, `cluster_distance`, `cluster_nearest_id`, `cluster_auto_suggest` |
-| Embeddings | `pe_embedding` (1024-d), `backbone_embedding` (1024-d) |
+| Embeddings | `pe_embedding` (1024-d), `backbone_embedding` (1024-d), `embedding_state` (keyword: `embedded`, `not_selected`, `deferred`, `failed`; absent on older items, so "has a vector" is always the `exists` test on the vector field) |
 | Region summary | `region_status`, `region_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verifier`, `region_verifier_version`, `region_verified_at`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify`, `region_rejection_reason` |
 | Region boxes | `region_boxes` (nested), `region_box_embeddings` (nested), `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision`, `region_box_seq` |
 | Item text | OCR lines read on the crop and their search tokens (`item_text_lines`) |
@@ -245,7 +245,7 @@ The config store, one document per row, discriminated by `doc_type`
 `kind` (`prompt_pack`, `region_profile`, ...), `name`, `revision`, `body`
 (stored, not indexed), `description`, `created_at`, `updated_at`, `updated_by`,
 `cloned_from`, `axis`, `previous`, `config_revision`, `process`, `applied_at`.
-The project's settings document (`defaults`, addressed by id `default`) and the
+The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `detector` parts and a revision counter, addressed by id `default`) and the
 UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
 `fitted_at`, ...) are stored in this same index, by fixed id and never searched,
 so a project needs six indexes rather than eight.

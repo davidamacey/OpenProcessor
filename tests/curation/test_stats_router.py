@@ -13,18 +13,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation.stats import (
-    _build_dataset_query_body,
-    _rollup_class_sources,
-    stats_dataset,
-)
+from src.routers.curation.stats import _rollup_class_sources, stats_dataset
+from src.services.curation.stats_dataset_query import build_dataset_query_body
 
 
 def test_missing_class_source_bucket_key_lands_in_other() -> None:
     """A doc with no class_source.keyword value must not be dropped.
 
     The terms aggregation is configured with missing='__none__' (see
-    ``_build_dataset_query_body``'s 'class_sources' agg body) precisely
+    ``build_dataset_query_body``'s 'class_sources' agg body) precisely
     so a doc with no class_source still gets a bucket. This asserts the
     rollup function correctly routes that sentinel key to 'other' rather
     than matching it against a real-provenance prefix by accident.
@@ -52,14 +49,14 @@ def test_class_sources_agg_configures_a_missing_bucket() -> None:
 
     from src.config.region_fields import get_region_fields
 
-    src = inspect.getsource(_build_dataset_query_body)
+    src = inspect.getsource(build_dataset_query_body)
     assert "'missing': '__none__'" in src, (
         "the 'class_sources' terms aggregation must set missing='__none__' "
         'so docs with no class_source.keyword value still get a bucket'
     )
     # Also prove the body actually built from the source carries it —
     # not just present in a comment.
-    body = _build_dataset_query_body(get_region_fields())
+    body = build_dataset_query_body(get_region_fields())
     assert body['aggs']['class_sources']['terms']['missing'] == '__none__'
 
 
@@ -72,7 +69,7 @@ def test_dataset_query_body_scopes_class_source_rollup_to_docs_with_class_id() -
     """
     from src.config.region_fields import get_region_fields
 
-    body = _build_dataset_query_body(get_region_fields())
+    body = build_dataset_query_body(get_region_fields())
     assert body['aggs']['class_sources_with_class']['filter'] == {'exists': {'field': 'class_id'}}
     assert (
         body['aggs']['class_sources_with_class']['aggs']['by_source']['terms']['field']

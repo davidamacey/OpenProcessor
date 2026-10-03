@@ -34,6 +34,7 @@ from src.config.project_context import (
 from src.core.logging import get_logger
 from src.services.curation.file_job import FileJob, heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
+from src.services.curation.reprocess_embed_spec import EmbedSpec
 from src.services.curation.reprocess_images import process_images
 from src.services.curation.reprocess_models import ReprocessJobInfo, ReprocessScope
 
@@ -122,7 +123,11 @@ def read_job(job_id: str) -> ReprocessJobInfo | None:
 
 
 def create_job(
-    *, request: dict[str, Any], scopes: list[ReprocessScope], image_ids: list[str]
+    *,
+    request: dict[str, Any],
+    scopes: list[ReprocessScope],
+    image_ids: list[str],
+    embed: EmbedSpec | None = None,
 ) -> FileJob:
     """Claim the per-project singleton and persist ``request.json`` plus a
     ``queued`` state. Raises :class:`ReprocessBusyError` when a job is
@@ -142,6 +147,7 @@ def create_job(
                     'request': request,
                     'scopes': scopes,
                     'image_ids': image_ids,
+                    'embed': embed.model_dump() if embed is not None else None,
                     'project': current_project().record.slug,
                     'items_index': cfg.items_index,
                     'images_index': cfg.images_index,
@@ -172,9 +178,10 @@ def start_job(
     request: dict[str, Any],
     scopes: list[ReprocessScope],
     image_ids: list[str],
+    embed: EmbedSpec | None = None,
 ) -> str:
     """:func:`create_job`, then schedule :func:`run_job` in this process."""
-    job = create_job(request=request, scopes=scopes, image_ids=image_ids)
+    job = create_job(request=request, scopes=scopes, image_ids=image_ids, embed=embed)
     _tasks[job.directory.name] = asyncio.create_task(run_job(job, opensearch, service))
     return job.directory.name
 
@@ -219,6 +226,7 @@ async def run_job(
             service,
             scopes=payload['scopes'],
             image_ids=payload['image_ids'],
+            embed=EmbedSpec(**payload['embed']) if payload.get('embed') else None,
             should_cancel=job.cancel_requested,
             on_progress=_progress,
         )

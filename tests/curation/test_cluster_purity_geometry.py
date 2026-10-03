@@ -27,6 +27,7 @@ from src.services.curation.clustering.cluster_geometry import (
     NEAREST_FIELD,
     write_cluster_geometry,
 )
+from src.services.curation.item_filter import ItemFilter
 from src.services.curation.wire import serialize_item
 
 
@@ -115,7 +116,7 @@ async def _cards(*buckets: dict[str, Any]) -> tuple[dict[int, dict[str, Any]], d
         kind='all',
         class_id=None,
         cluster_id=None,
-        max_rank=None,
+        item_filter=ItemFilter(),
         min_blur_ratio=None,
         class_source=None,
     )

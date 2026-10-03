@@ -4,8 +4,10 @@ Embeddings are derived data, not labels, so locked items are included. Per
 item: the PE crop embedding (``pe_embedding``) and one region embedding per
 embeddable box (accepted and false-positive; ``region_box_embeddings``,
 written through ``write_box_embeddings`` so the box list is never touched);
-per image: the whole-frame PE embedding on the images doc. Only those
-vector fields are written.
+per image: the whole-frame PE embedding on the images doc. Written: the
+vectors, ``embedding_state`` and, for an item that had neither a class nor a
+cluster (stored without a vector), the cluster placement ingest would have
+given it. Class fields are never written.
 
 ``reembed_items`` is the one function behind the ``embed`` reprocess scope
 and ``scripts/curation/backfill_region_embeddings.py``.
@@ -23,9 +25,10 @@ from PIL import Image, ImageOps
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store
 from src.services.curation.embedding_state import EMBEDDED
 from src.services.curation.image_serving import is_servable_image_path
-from src.services.curation.ingest_index import crop_pil
+from src.services.curation.ingest_index import crop_pil, residual_placement
 from src.services.curation.region_box_embeddings import (
     embeddable,
     entry_for,
@@ -57,8 +60,12 @@ class EmbedTarget:
     image_path: str
     items: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     """``(crop_id, _source)``; the source needs ``bbox_norm`` for the crop
-    part and the region boxes (and, for ``only_missing``, the stored box
-    embeddings' ids and geometry) for the region part."""
+    part, the region boxes (and, for ``only_missing``, the stored box
+    embeddings' ids and geometry) for the region part, and ``class_id`` /
+    ``cluster_id`` / ``crop_rank_in_image`` / ``blur_lap_ratio`` for the
+    cluster placement of an item that had no vector."""
+    skip_crop: frozenset[str] = frozenset()
+    """Crop ids that already have a vector and keep it (``only_missing``)."""
 
 
 def _load_image(path: str) -> Image.Image | None:
@@ -102,6 +109,24 @@ async def _bulk_update(
             raise RuntimeError(f'embedding bulk update failed: {str(resp.get("items"))[:300]}')
 
 
+def _placement(store: Any, src: dict[str, Any], vector: Any) -> dict[str, Any]:
+    """Cluster fields for an item that has neither a class nor a cluster yet (it
+    was stored without a vector), placed by the rule ingest uses. Anything
+    already clustered or classed is left where it is."""
+    if store is None or src.get('class_id') is not None or src.get('cluster_id') is not None:
+        return {}
+    placed = residual_placement(
+        store, vector, src.get('crop_rank_in_image'), src.get('blur_lap_ratio')
+    )
+    if placed is None:
+        return {}
+    cluster_id, distance = placed
+    out: dict[str, Any] = {'cluster_id': cluster_id, 'cluster_distance': distance}
+    if distance is not None:
+        out['cluster_distance_cluster_id'] = cluster_id
+    return out
+
+
 async def reembed_items(
     opensearch: AsyncOpenSearch,
     pe: PEEncoder | Any,
@@ -127,6 +152,7 @@ async def reembed_items(
         'missing_image': 0,
         'decode_failed': 0,
     }
+    ivf_store = get_ivf_ingest_store() if 'crop' in parts else None
     item_updates: dict[str, dict[str, Any]] = {}
     image_updates: list[tuple[str, dict[str, Any]]] = []
     box_entries: dict[str, list[dict[str, Any]]] = {}
@@ -144,16 +170,20 @@ async def reembed_items(
                 image_updates.append((target.image_id, {'pe_embedding': [float(v) for v in frame]}))
                 counts['frame_written'] += 1
         if 'crop' in parts:
-            boxed = [(cid, s) for cid, s in target.items if s.get('bbox_norm')]
+            boxed = [
+                (cid, s)
+                for cid, s in target.items
+                if s.get('bbox_norm') and cid not in target.skip_crop
+            ]
             crops = [
                 np.asarray(crop_pil(img, _pixel_box(s['bbox_norm'], *img.size))) for _, s in boxed
             ]
             if crops:
                 vectors = await pe.embed_crops(crops, max_batch=_BATCH)
-                for (cid, _), vec in zip(boxed, vectors, strict=True):
-                    item_updates.setdefault(cid, {}).update(
-                        pe_embedding=[float(v) for v in vec], embedding_state=EMBEDDED
-                    )
+                for (cid, src), vec in zip(boxed, vectors, strict=True):
+                    update = item_updates.setdefault(cid, {})
+                    update.update(pe_embedding=[float(v) for v in vec], embedding_state=EMBEDDED)
+                    update.update(_placement(ivf_store, src, vec))
                     counts['crop_written'] += 1
         if 'region' in parts:
             work = [

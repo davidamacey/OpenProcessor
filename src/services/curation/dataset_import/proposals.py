@@ -34,8 +34,7 @@ if TYPE_CHECKING:
 async def run_detector(ctx: ImportContext, pil: Image.Image, image_path: str) -> list[DetectedItem]:
     """The ingest detectors' boxes for one image (primary, plus the optional
     secondary's class override), exactly as ingest runs them."""
-    items, _secondary_error = await ctx.service.detect_items(pil, image_path=image_path)
-    return items
+    return (await ctx.service.detect_items(pil, image_path=image_path)).items
 
 
 def detection_bbox_norm(item: DetectedItem, width: int, height: int) -> tuple[float, ...]:

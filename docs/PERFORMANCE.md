@@ -345,7 +345,14 @@ Reading: keeping every detection costs about 3.6x the storage and 5x the crop
 encoder and VLM calls of the narrow detector when each one gets a vector. Keeping
 them without a vector costs about the same storage as the narrow setup, so
 storage is the small number and encoder and VLM time is the real cost. The
-detector itself runs once per image whatever the number of classes. Reproduce
+detector itself runs once per image whatever the number of classes. Policy modes map onto those rows (computed from the same per-item sizes, not
+measured): `all` is the "every item embedded" row for your vocabulary; `selected`
+is the "only the narrow classes embedded" row; `lazy` is the "no item embedded"
+row until you run the embed action, then it converges to `all` for the items you
+chose. The ingest policy preview (`POST .../ingest/policy/preview`) gives the
+same estimate for your stored data.
+
+Reproduce
 the table with your own per-image figures:
 
 ```bash

@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 
 from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
 from src.config.curation import CurationConfig
+from src.services.curation.item_filter import ItemFilter
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
 
 
@@ -152,7 +153,7 @@ async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
         'src.clients.curation_opensearch.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    await pipeline_start.pipeline_auto_label_start(opensearch=object())
+    await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())
     assert captured['prompt_pack'] == 'pallet_v1'
 
 

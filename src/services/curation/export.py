@@ -103,6 +103,7 @@ from src.services.curation.export_support import (
     source_frozen_test_sha,
 )
 from src.services.curation.holdout import compute_holdout_sha
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 
 
 logger = get_logger(__name__)
@@ -301,6 +302,7 @@ class GenericYoloExportService:
         max_image_workers: int = 4,
         split_mode: SplitMode = 'keep_imported',
         include_negative_frames: bool = True,
+        item_filter: ItemFilter | None = None,
     ) -> ExportResult:
         """Export every validated, non-excluded, non-dismissed item as a
         multi-class YOLO detection dataset, one image + one label file per
@@ -332,6 +334,9 @@ class GenericYoloExportService:
         in ``unlabeled_items_on_exported_images`` /
         ``images_with_unlabeled_items``.
 
+        ``item_filter`` (the shared item filter) narrows the validated items that
+        are exported; the manifest records it.
+
         ``dedup_threshold`` (if given) collapses whole-frame near-duplicate
         images (cosine >= threshold on the images index's secondary
         embedding) to one representative image, which keeps all its
@@ -360,7 +365,10 @@ class GenericYoloExportService:
         generation = await items_index_generation(self.opensearch, self.config.items_index)
         query = {
             'bool': {
-                'filter': [{'term': {'class_validated': True}}],
+                'filter': [
+                    {'term': {'class_validated': True}},
+                    *item_filter_clauses(item_filter or ItemFilter()),
+                ],
                 'must_not': [
                     {'exists': {'field': 'review_dismissed_at'}},
                     {'term': {'class_excluded': True}},
@@ -603,6 +611,7 @@ class GenericYoloExportService:
             else None,
             'dedup': selection['dedup'],
             'max_images': max_images,
+            'item_filter': item_filter.model_dump(exclude_defaults=True) if item_filter else None,
             'sampling_mode': selection['sampling_mode'],
             'image_copy': image_copy_stats,
             'resize_mode': resize_mode,

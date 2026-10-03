@@ -175,9 +175,9 @@ Things that trip people up:
 - **The detector stores everything it sees.** A stock detector's whole label
   space (all 80 COCO classes) becomes unlabeled item proposals, each carrying
   the detector's own label (person, dog, pizza and so on, not only vehicles).
-  Do not set `OP_INGEST_PRIMARY_CLASS_IDS` to narrow it: that is an optional
-  hard drop by model class id, applied before anything is stored and shared by
-  every project. Filter and choose what to keep after ingest instead.
+  To store or embed less, set the per-project ingest policy
+  (`PUT /curation/projects/{project}/ingest/policy`) before a big ingest; the
+  old `OP_INGEST_PRIMARY_CLASS_IDS` env var is retired and ignored.
 - **Cost of the full vocabulary.** Each stored detection also gets an
   embedding by default, so the full COCO vocabulary stores about 3.6x the
   data of a vehicle-only run (the "Ingest cost per image" section of

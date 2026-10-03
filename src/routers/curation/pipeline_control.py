@@ -68,9 +68,11 @@ async def vlm_label_cluster(
     ``409`` while another auto-label job runs.
     """
     from src.routers.curation.pipeline_start import pipeline_auto_label_start
+    from src.services.curation.item_filter import ItemFilter
 
     return await pipeline_auto_label_start(
         opensearch,
+        item_filter=ItemFilter(),
         train_clusters=False,
         run_vlm=True,
         run_auto_promote=False,

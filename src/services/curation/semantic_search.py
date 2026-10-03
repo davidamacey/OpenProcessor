@@ -28,6 +28,7 @@ from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation import review_queries
 from src.services.curation.embedding_state import not_embedded_clause
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
@@ -65,6 +66,7 @@ def _build_filter(
     min_blur_ratio: float | None,
     hide_near_duplicates: bool,
     include_test: bool,
+    item_filter: ItemFilter | None = None,
 ) -> list[dict[str, Any]]:
     """Compose the kNN query's ``filter`` clause.
 
@@ -95,6 +97,7 @@ def _build_filter(
         if max_rank is not None:
             filters.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
 
+    filters.extend(item_filter_clauses(item_filter or ItemFilter()))
     if class_id is not None:
         filters.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
@@ -193,6 +196,7 @@ async def semantic_text_search(
     hide_near_duplicates: bool = False,
     min_score: float | None = None,
     include_test: bool = False,
+    item_filter: ItemFilter | None = None,
     config: CurationConfig | None = None,
     fields: RegionFields | None = None,
 ) -> dict[str, Any]:
@@ -221,13 +225,15 @@ async def semantic_text_search(
     vectors = await run_in_executor_bound(loop, executor, pe_encoder.encode_text, [query])
     vector = vectors[0].tolist()
 
+    item_filter = item_filter or ItemFilter()
     filter_clause = _build_filter(
+        item_filter=item_filter.model_copy(update={'max_rank': None}),
         tab=tab,
         class_id=class_id,
         cluster_id=cluster_id,
         date_from=date_from,
         date_to=date_to,
-        max_rank=max_rank,
+        max_rank=max_rank if max_rank is not None else item_filter.max_rank,
         min_blur_ratio=min_blur_ratio,
         hide_near_duplicates=hide_near_duplicates,
         include_test=include_test,

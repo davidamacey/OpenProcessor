@@ -17,6 +17,10 @@ from fastapi.testclient import TestClient
 from src.services.curation.review_request import TIEBREAK
 
 
+# The regions queue exists only while a region profile is active (GH #51).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 ALL_TABS = (
     'all',
     'mismatches',

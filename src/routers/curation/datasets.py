@@ -62,11 +62,14 @@ from src.services.curation.dataset_import.upload import (
 )
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.ingest import CurationIngestService
+from src.services.curation.ingest_detector import effective_profile
+from src.services.curation.ingest_policy_store import get_ingest_policy
 
 
 if TYPE_CHECKING:
     from src.clients.curation_opensearch import ClassRegistry
     from src.services.curation.dataset_import.store import ImportStore
+    from src.services.curation.ingest_policy import IngestPolicy
 
 
 def _slug() -> str:
@@ -133,7 +136,7 @@ async def _already_indexed(opensearch: Any, prepared: PreparedImport) -> int:
 
 
 def _import_service(
-    opensearch: Any, registry: Any, *, need_detector: bool
+    opensearch: Any, registry: Any, *, need_detector: bool, policy: IngestPolicy
 ) -> CurationIngestService:
     from src.main import app, get_async_triton_pool
 
@@ -141,7 +144,7 @@ def _import_service(
     if pe_encoder is None:
         raise api_error(503, 'config_store_unavailable', 'PE encoder not initialized')
     try:
-        profile = ingest_primary_profile()
+        profile = effective_profile(ingest_primary_profile(), policy.detector)
     except ValueError as exc:
         raise api_error(503, 'config_store_unavailable', f'ingest misconfigured: {exc}') from exc
     if need_detector and not profile.detector_model:
@@ -154,10 +157,11 @@ def _import_service(
         registry=registry,
         profile=profile,
         pe_encoder=pe_encoder,
+        policy=policy,
     )
 
 
-def _context(
+async def _context(
     store: ImportStore,
     request: DatasetImportRequest,
     prepared_like: Any,
@@ -170,7 +174,12 @@ def _context(
     state = store.job.read()
     has_region = any(t.kind == 'region' for t in resolved.targets.values())
     need_detector = request.options.processing == 'propose' or (has_region and parents == 'detect')
-    service = _import_service(opensearch, registry, need_detector=need_detector)
+    service = _import_service(
+        opensearch,
+        registry,
+        need_detector=need_detector,
+        policy=await get_ingest_policy(opensearch),
+    )
     return ImportContext(
         import_id=store.import_id,
         options=request.options,
@@ -289,7 +298,7 @@ async def start_dataset_import(
     runner.persist_scan_summary(store, prepared)
     freeze = runner.freeze_default(prepared, body)
     store.job.update(freeze_test=freeze)
-    ctx = _context(
+    ctx = await _context(
         store,
         body,
         (prepared.resolved, prepared.view.profile, prepared.parents),
@@ -457,7 +466,7 @@ async def resume_dataset_import(
         except (DatasetPathNotAllowedError, FormatUndetectedError) as exc:
             raise api_error(422, 'dataset_path_not_allowed', str(exc), project=_slug()) from None
         runner.prepare_resume(store, registry)
-        ctx = _context(store, request, runner.load_pinned(store), opensearch, registry)
+        ctx = await _context(store, request, runner.load_pinned(store), opensearch, registry)
     except BaseException:
         runner.release_resume(store, prior)
         raise

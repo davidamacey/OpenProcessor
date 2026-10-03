@@ -275,9 +275,9 @@ def test_cluster_count_query_excludes_noise_ids() -> None:
     """Negative cluster ids are noise, not clusters: the current-total agg
     counts distinct ids >= 0 only."""
     from src.config import get_region_fields
-    from src.routers.curation.stats import _build_dataset_query_body
+    from src.services.curation.stats_dataset_query import build_dataset_query_body
 
-    agg = _build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
+    agg = build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
     assert agg['filter'] == {'range': {'cluster_id': {'gte': 0}}}
     assert agg['aggs']['n']['cardinality']['field'] == 'cluster_id'
 
