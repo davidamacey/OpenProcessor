@@ -45,6 +45,7 @@ from src.services.model_export import (
     validate_pytorch_model,
 )
 from src.services.model_unload_guard import UnloadRefusedError, check_unload
+from src.services.training.triton_promote import set_explicitly_unloaded
 from src.services.triton_control import TritonControlService
 
 
@@ -400,29 +401,24 @@ async def load_model(model_name: str):
     - `{name}_trt` for standard TRT
     - `{name}_trt_end2end` for End2End TRT
     """
-    # Check if model directory exists
+    # The name as given, else with the End2End / plain TRT suffix.
+    for candidate in (model_name, f'{model_name}_trt_end2end', f'{model_name}_trt'):
+        if (TRITON_MODELS_DIR / candidate).exists():
+            model_name = candidate
+            break
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Model {model_name} not found in Triton repository',
+        )
     model_dir = TRITON_MODELS_DIR / model_name
-    if not model_dir.exists():
-        # Try with _trt_end2end suffix
-        model_dir = TRITON_MODELS_DIR / f'{model_name}_trt_end2end'
-        if model_dir.exists():
-            model_name = f'{model_name}_trt_end2end'
-        else:
-            # Try with _trt suffix
-            model_dir = TRITON_MODELS_DIR / f'{model_name}_trt'
-            if model_dir.exists():
-                model_name = f'{model_name}_trt'
-            else:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f'Model {model_name} not found in Triton repository',
-                )
 
     triton = TritonControlService()
     success, message = await triton.load_model(model_name)
 
     if not success:
         raise HTTPException(status_code=500, detail=message)
+    set_explicitly_unloaded(model_dir, False)
 
     return ModelLoadResponse(model_name=model_name, action='load', success=True, message=message)
 
@@ -447,6 +443,7 @@ async def unload_model(
 
     if not success:
         raise HTTPException(status_code=500, detail=message)
+    set_explicitly_unloaded(TRITON_MODELS_DIR / model_name, True)
 
     return ModelLoadResponse(model_name=model_name, action='unload', success=True, message=message)
 

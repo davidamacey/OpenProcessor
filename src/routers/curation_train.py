@@ -2201,7 +2201,7 @@ async def reload_promoted() -> ReloadPromotedResponse:
     """
     from src.services.training.triton_promote import reload_promoted_models
 
-    result = await reload_promoted_models()
+    result = await reload_promoted_models(honor_unloaded=False)
     return ReloadPromotedResponse(
         status=result.get('status', 'ok'),
         reloaded=result.get('reloaded', []),

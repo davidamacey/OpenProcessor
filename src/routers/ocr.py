@@ -17,7 +17,7 @@ from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.schemas.detection import ImageMetadata
-from src.services.ocr_service import OcrService
+from src.services.ocr_service import OcrService, ocr_error_http
 from src.utils.retry import RetryExhaustedError
 
 
@@ -56,7 +56,9 @@ class TextRegion(BaseModel):
 class OcrPredictResponse(BaseModel):
     """Response for single image OCR."""
 
-    status: str = Field(..., description="'success' or 'error'")
+    status: str = Field(
+        ..., description="Always 'success': a failure is an HTTP error (422 or 502), not a body"
+    )
 
     # OCR results
     texts: list[str] = Field(default_factory=list, description='All detected text strings')
@@ -71,9 +73,6 @@ class OcrPredictResponse(BaseModel):
 
     # Timing
     total_time_ms: float | None = Field(default=None, description='Processing time in ms')
-
-    # Error info
-    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class BatchOcrResult(BaseModel):
@@ -163,11 +162,8 @@ def ocr_predict(
 
         result = service.extract_text(image_bytes, filter_by_score=filter_by_score)
 
-        if result.get('status') == 'error':
-            return OcrPredictResponse(
-                status='error',
-                error=result.get('error', 'OCR extraction failed'),
-            )
+        if (failure := ocr_error_http(result)) is not None:
+            raise failure
 
         # Build response
         texts = result.get('texts', [])
