@@ -1449,6 +1449,11 @@
             "title": "N Embedded",
             "type": "integer"
           },
+          "n_filtered": {
+            "default": 0,
+            "title": "N Filtered",
+            "type": "integer"
+          },
           "n_not_embedded": {
             "default": 0,
             "title": "N Not Embedded",
@@ -5741,6 +5746,73 @@
         "title": "DeleteDryRunResponse",
         "type": "object"
       },
+      "DetectFilter": {
+        "additionalProperties": false,
+        "description": "Which detector outputs are stored. Every field empty = store all.",
+        "properties": {
+          "classes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classes"
+          },
+          "exclude_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclude Classes",
+            "type": "array"
+          },
+          "max_per_image": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Per Image"
+          },
+          "min_box_area_frac": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Box Area Frac"
+          },
+          "min_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Confidence"
+          }
+        },
+        "title": "DetectFilter",
+        "type": "object"
+      },
       "DetectorEntry": {
         "additionalProperties": true,
         "properties": {
@@ -5881,6 +5953,68 @@
           "name"
         ],
         "title": "DryRunIndexReport",
+        "type": "object"
+      },
+      "EmbeddingPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Classes",
+            "type": "array"
+          },
+          "max_per_image": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Per Image"
+          },
+          "min_box_area_frac": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Box Area Frac"
+          },
+          "min_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Confidence"
+          },
+          "mode": {
+            "default": "all",
+            "enum": [
+              "all",
+              "selected",
+              "lazy"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "EmbeddingPolicy",
         "type": "object"
       },
       "EvalClassGt": {
@@ -6983,6 +7117,9 @@
               }
             ]
           },
+          "policy": {
+            "$ref": "#/components/schemas/IngestPolicy"
+          },
           "region_drain": {
             "$ref": "#/components/schemas/IngestRegionDrainConfig"
           },
@@ -7004,20 +7141,6 @@
           "assigns_class": {
             "title": "Assigns Class",
             "type": "boolean"
-          },
-          "class_ids_filter": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Class Ids Filter"
           },
           "confidence_floor_applies": {
             "title": "Confidence Floor Applies",
@@ -7052,7 +7175,6 @@
           "version",
           "input_size",
           "assigns_class",
-          "class_ids_filter",
           "confidence_floor_applies",
           "n_labels",
           "labels"
@@ -7152,6 +7274,11 @@
             "title": "N Embedded",
             "type": "integer"
           },
+          "n_filtered": {
+            "default": 0,
+            "title": "N Filtered",
+            "type": "integer"
+          },
           "n_not_embedded": {
             "default": 0,
             "title": "N Not Embedded",
@@ -7199,6 +7326,132 @@
           "image_path"
         ],
         "title": "IngestImageResponse",
+        "type": "object"
+      },
+      "IngestPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "detect": {
+            "$ref": "#/components/schemas/DetectFilter"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingPolicy"
+          },
+          "revision": {
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "title": "IngestPolicy",
+        "type": "object"
+      },
+      "IngestPolicyBody": {
+        "additionalProperties": false,
+        "properties": {
+          "detect": {
+            "$ref": "#/components/schemas/DetectFilter"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingPolicy"
+          }
+        },
+        "title": "IngestPolicyBody",
+        "type": "object"
+      },
+      "IngestPolicyPreview": {
+        "additionalProperties": false,
+        "description": "What a candidate policy would embed, over the items already stored.",
+        "properties": {
+          "by_class": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyPreviewClass"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "estimated_vector_mb": {
+            "title": "Estimated Vector Mb",
+            "type": "number"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "total_items": {
+            "title": "Total Items",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "would_embed": {
+            "title": "Would Embed",
+            "type": "integer"
+          },
+          "would_not_embed": {
+            "title": "Would Not Embed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_items",
+          "scanned",
+          "truncated",
+          "would_embed",
+          "would_not_embed",
+          "estimated_vector_mb",
+          "by_class"
+        ],
+        "title": "IngestPolicyPreview",
+        "type": "object"
+      },
+      "IngestPolicyPutResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "detect": {
+            "$ref": "#/components/schemas/DetectFilter"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingPolicy"
+          },
+          "revision": {
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "unknown_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unknown Names",
+            "type": "array"
+          }
+        },
+        "title": "IngestPolicyPutResponse",
+        "type": "object"
+      },
+      "IngestPolicyUpdate": {
+        "additionalProperties": false,
+        "description": "``PUT`` body: the policy plus the revision the caller read.",
+        "properties": {
+          "detect": {
+            "$ref": "#/components/schemas/DetectFilter"
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingPolicy"
+          },
+          "expected_revision": {
+            "minimum": 0.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "IngestPolicyUpdate",
         "type": "object"
       },
       "IngestRegionDrainConfig": {
@@ -10806,6 +11059,29 @@
         "title": "PipelinePauseState",
         "type": "object"
       },
+      "PolicyPreviewClass": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "would_embed": {
+            "title": "Would Embed",
+            "type": "integer"
+          },
+          "would_not_embed": {
+            "title": "Would Not Embed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "would_embed",
+          "would_not_embed"
+        ],
+        "title": "PolicyPreviewClass",
+        "type": "object"
+      },
       "PreflightCheck": {
         "description": "Single row in the preflight report.",
         "properties": {
@@ -12997,13 +13273,6 @@
             "default": 16,
             "title": "Batch Limit",
             "type": "integer"
-          },
-          "class_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Class Ids",
-            "type": "array"
           },
           "confidence_floor": {
             "default": 0.4,
@@ -27687,6 +27956,153 @@
           }
         },
         "summary": "Bulk-check which image paths are already indexed.",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/policy": {
+      "get": {
+        "description": "The project's ingest policy; the defaults (store and embed everything)\nwhen none was ever written.",
+        "operationId": "get_policy_curation_projects__project__ingest_policy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Policy",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "description": "Replace the policy. ``409`` when ``expected_revision`` is not the stored\nrevision (re-read and retry). Affects future ingests and explicit embed\nruns only, never stored data.",
+        "operationId": "put_policy_curation_projects__project__ingest_policy_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestPolicyPutResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Policy",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/policy/preview": {
+      "post": {
+        "description": "What ``body.embedding`` would embed over the stored items (one image's\nitems at a time, the same function ingest runs). Read-only.",
+        "operationId": "preview_policy_curation_projects__project__ingest_policy_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestPolicyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestPolicyPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Policy",
         "tags": [
           "Curation"
         ]

@@ -87,7 +87,6 @@ class RegionProfileBody(BaseModel):
     text_reject_sequences: bool = False
     segmenter_text_prompt: str = ''
     secondary_shape_groups: list[str] = Field(default_factory=list)
-    class_ids: list[int] = Field(default_factory=list)
     parent_classes: list[str] = Field(default_factory=list)
     assigns_class: bool = False
     labels_path: str = ''

@@ -60,6 +60,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -89,6 +90,7 @@ from src.services.curation.ingest_models import (
     IngestResult,
     IngestSummary,
 )
+from src.services.curation.ingest_policy import IngestPolicy, apply_detect_filter
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
 
@@ -161,6 +163,17 @@ def _crop_id(image_id: str, bbox_norm: list[float]) -> str:
 # =============================================================================
 
 
+@dataclass
+class DetectResult:
+    """``detect_items``' output: the items to store, a secondary failure (not
+    raised; the primary's items stand) and how many detections the project's
+    detect filter dropped."""
+
+    items: list[DetectedItem]
+    secondary_detector_error: str | None = None
+    n_filtered: int = 0
+
+
 class CurationIngestService:
     """Generic per-image ingest orchestrator.
 
@@ -182,6 +195,7 @@ class CurationIngestService:
         pe_encoder: PEEncoder | Any,
         secondary_profile: DetectionProfile | None = None,
         config: CurationConfig | None = None,
+        policy: IngestPolicy | None = None,
     ) -> None:
         # Accept either a wrapper exposing `.client` or a raw AsyncOpenSearch.
         self.opensearch = getattr(opensearch, 'client', opensearch)
@@ -199,6 +213,8 @@ class CurationIngestService:
             backbone_embedding_dim=self.config.backbone_embedding_dim,
         )
         self.region_seed_status = region_seed_status()
+        # The project's detect filter and embedding policy; defaults = today's behaviour.
+        self.policy = policy or IngestPolicy()
 
     # ------------------------------------------------------------------
     # Dedup
@@ -414,11 +430,12 @@ class CurationIngestService:
         image_path: str = '',
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
-    ) -> tuple[list[DetectedItem], str | None]:
+    ) -> DetectResult:
         """The ingest detectors on one decoded image: the primary, then the
-        optional secondary's class override and backbone embeddings.
+        optional secondary's class override and backbone embeddings, then the
+        project's detect filter.
 
-        Returns ``(items, secondary_detector_error)``. A primary failure
+        Returns a :class:`DetectResult`. A primary failure
         raises (the caller decides whether that fails the image); a
         secondary failure is returned, not raised, and the primary's items
         stand. ``ingest_one``, a dataset import's ``propose`` mode and the
@@ -462,7 +479,8 @@ class CurationIngestService:
                         logger.warning(
                             'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
                         )
-        return items, secondary_detector_error
+        items, n_filtered = apply_detect_filter(items, self.policy.detect, img.width, img.height)
+        return DetectResult(items, secondary_detector_error, n_filtered)
 
     async def index_items(
         self,
@@ -530,7 +548,7 @@ class CurationIngestService:
         img = ctx.pil
 
         try:
-            items, secondary_detector_error = await self.detect_items(
+            detected = await self.detect_items(
                 img,
                 image_path=image_path,
                 prefilled_items=prefilled_items,
@@ -547,8 +565,12 @@ class CurationIngestService:
             )
 
         outcome = await index_items(
-            self, ctx, items, secondary_detector_error=secondary_detector_error
+            self,
+            ctx,
+            detected.items,
+            secondary_detector_error=detected.secondary_detector_error,
         )
+        outcome.result.n_filtered = detected.n_filtered
         return outcome.result
 
     @staticmethod
@@ -614,6 +636,7 @@ __all__ = [
     'SECONDARY_IOU_MATCH',
     'BatchIngestResult',
     'CurationIngestService',
+    'DetectResult',
     'IngestResult',
     'IngestSummary',
 ]

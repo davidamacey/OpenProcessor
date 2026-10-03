@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
+import structlog.testing
 
 from src.config import DetectionProfile
 from src.routers.curation import ingest as ingest_router
@@ -39,12 +40,10 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
 def test_primary_profile_reads_ingest_primary_namespace(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer')
     clean_env.setenv('OP_INGEST_PRIMARY_INPUT_SIZE', '640')
-    clean_env.setenv('OP_INGEST_PRIMARY_CLASS_IDS', '2,3,5,7')
     profile = ingest_router._get_detection_profile()
     assert profile.name == 'item'
     assert profile.detector_model == 'item_proposer'
     assert profile.input_size == 640
-    assert profile.class_ids == frozenset({2, 3, 5, 7})
 
 
 def test_secondary_profile_off_unless_model_set(clean_env: pytest.MonkeyPatch) -> None:
@@ -84,6 +83,13 @@ def test_retired_detection_prefix_fails_loudly(clean_env: pytest.MonkeyPatch) ->
         profile_registry.region_profile_from_env()
 
 
+class _NoSettingsDoc:
+    """An OpenSearch client whose project has no settings document yet."""
+
+    async def get(self, **_: Any) -> Any:
+        raise RuntimeError('404 not_found')
+
+
 @pytest.mark.asyncio
 async def test_ingest_service_receives_the_secondary_profile(
     clean_env: pytest.MonkeyPatch,
@@ -95,7 +101,7 @@ async def test_ingest_service_receives_the_secondary_profile(
     clean_env.setattr(main_module, 'get_async_triton_pool', lambda: object())
     clean_env.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
 
-    service = await ingest_router._get_ingest_service(object(), object())
+    service = await ingest_router._get_ingest_service(_NoSettingsDoc(), object())
     assert service.profile.detector_model == 'item_proposer'
     assert service.secondary_profile is not None
     assert service.secondary_profile.detector_model == 'ensemble_classifier'
@@ -135,15 +141,21 @@ def _decode(profile: DetectionProfile, classes: list[int]) -> list[Any]:
     )
 
 
-def test_primary_class_ids_filter_which_detections_become_items() -> None:
-    narrowed = DetectionProfile(name='item', assigns_class=True, class_ids=frozenset({2, 7}))
-    items = _decode(narrowed, [0, 2, 7, 15])
-    assert sorted(item.class_id for item in items) == [2, 7]
-
-
-def test_primary_without_class_ids_keeps_every_class() -> None:
+def test_primary_decodes_every_class_the_model_emits() -> None:
     items = _decode(DetectionProfile(name='item'), [0, 2, 7, 15])
     assert len(items) == 4
+
+
+def test_retired_class_ids_env_is_ignored_and_warned(
+    clean_env: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer')
+    clean_env.setenv('OP_INGEST_PRIMARY_CLASS_IDS', '2,3')
+    with structlog.testing.capture_logs() as logs:
+        profile = ingest_router._get_detection_profile()
+    assert not hasattr(profile, 'class_ids')
+    assert any(entry['event'] == 'retired_env_ignored' for entry in logs)
+    assert len(_decode(profile, [0, 2, 7, 15])) == 4
 
 
 # =============================================================================

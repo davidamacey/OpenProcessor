@@ -646,6 +646,8 @@ def _settings_body() -> dict[str, Any]:
         'mappings': {
             'properties': {
                 'defaults': {'type': 'object', 'enabled': False},
+                # The per-project ingest policy (services/curation/ingest_policy_store.py).
+                'ingest_policy': {'type': 'object', 'enabled': False},
                 'updated_at': {'type': 'date'},
                 'updated_by': {'type': 'keyword'},
             }

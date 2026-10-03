@@ -91,7 +91,7 @@ whose defaults are in `src/config/detection_profile.py`.
 | Group | Fields |
 |---|---|
 | Identity and scope | `display_name`, `display_name_singular`, `region_class_name`, `parent_classes` |
-| Detector leg | `detector_model` (empty = none), `detector_version`, `input_size` (640), `confidence_floor` (0.4), `batch_limit` (16), `letterbox_fill`, `class_ids` |
+| Detector leg | `detector_model` (empty = none), `detector_version`, `input_size` (640), `confidence_floor` (0.4), `batch_limit` (16), `letterbox_fill` |
 | Segmenter leg | `segmenter_name` (`sam3`), `segmenter_version`, `segmenter_text_prompt` (empty = off) |
 | Selection | `max_regions_per_item` (1), `region_nms_iou` (0.5), `aspect_min`, `aspect_max`, `auto_confirm_aspect`, `auto_confirm_area_frac` |
 | Text reading | `text_reader` (`vlm_then_ocr`), `text_pattern`, `text_format`, `text_charset`, `text_uppercase`, `text_join`, `text_len_min`, `text_len_max`, `text_stopwords`, `text_min_confidence`, `text_placeholders`, `text_reject_sequences`, `text_crop_margin`, `text_crop_min_height`, `text_min_height_ratio`, `text_border_margin` |

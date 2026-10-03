@@ -20,20 +20,35 @@ Lives in config (not the router) so services and workers can derive the
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from src.config.detection_profile import DetectionProfile, reject_legacy_detection_env
+from src.core.logging import get_logger
 from src.utils.class_names import get_class_names
+
+
+logger = get_logger(__name__)
 
 
 INGEST_PRIMARY_ENV_PREFIX = 'OP_INGEST_PRIMARY_'
 INGEST_SECONDARY_ENV_PREFIX = 'OP_INGEST_SECONDARY_'
+# A deployment-wide hard drop by model class id. Retired: it dropped detections
+# for every project before anything was stored; the per-project ingest policy
+# replaces it.
+RETIRED_CLASS_IDS_ENV = 'OP_INGEST_PRIMARY_CLASS_IDS'
 
 
 def ingest_primary_profile() -> DetectionProfile:
     """The primary item-proposer profile (``OP_INGEST_PRIMARY_*``)."""
     reject_legacy_detection_env()
+    if RETIRED_CLASS_IDS_ENV in os.environ:
+        logger.warning(
+            'retired_env_ignored',
+            name=RETIRED_CLASS_IDS_ENV,
+            use='the per-project ingest policy (detect.classes / detect.exclude_classes)',
+        )
     return DetectionProfile.from_env(INGEST_PRIMARY_ENV_PREFIX, name='item')
 
 

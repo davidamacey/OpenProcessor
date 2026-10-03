@@ -549,3 +549,43 @@ class _Indices:
         if value is not None:
             self.parent.max_inner_result_window = int(value)
         return {'acknowledged': True}
+
+
+class SettingsFakeOpenSearch(QueryFakeOpenSearch):
+    """``QueryFakeOpenSearch`` plus what the ingest-policy store needs: a 404 for a
+    missing document and an OCC-guarded ``index`` (create / ``if_seq_no``)."""
+
+    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+        if id not in self.docs(index):
+            raise RuntimeError('404 not_found')
+        return await super().get(index=index, id=id, **kw)
+
+    async def index(
+        self,
+        *,
+        index: str,
+        id: str,  # noqa: A002
+        body: dict[str, Any],
+        op_type: str | None = None,
+        if_seq_no: int | None = None,
+        **_: Any,
+    ) -> None:
+        if (op_type == 'create' and id in self.docs(index)) or (
+            if_seq_no is not None and if_seq_no != self.seq.get((index, id), 1)
+        ):
+            raise RuntimeError('409 version_conflict')
+        self.docs(index)[id] = body
+        self._bump(index, id)
+        self.write_calls += 1
+
+    async def update(
+        self,
+        *,
+        index: str,
+        id: str,  # noqa: A002
+        body: dict[str, Any],
+        **kw: Any,
+    ) -> dict[str, Any]:
+        if id not in self.docs(index) and body.get('doc_as_upsert'):
+            self.docs(index)[id] = {}
+        return await super().update(index=index, id=id, body=body, **kw)

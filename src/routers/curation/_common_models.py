@@ -17,6 +17,7 @@ from src.routers.curation._region_vocabulary_models import RegionProfileSummary 
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
 from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
+from src.services.curation.ingest_policy import IngestPolicy
 
 
 # =============================================================================
@@ -47,6 +48,8 @@ class IngestImageResponse(BaseModel):
     # not a success.
     n_embedded: int = 0
     n_not_embedded: int = 0
+    # Detections the project's detect filter dropped (never stored; not in n_crops).
+    n_filtered: int = 0
     error: str | None = None
     # A stable machine code alongside the message, e.g.
     # 'unservable_path', 'unsupported_type', 'decode_failed', 'too_large',
@@ -76,6 +79,7 @@ class BatchIngestSummaryResponse(BaseModel):
     secondary_detector_failures: int = 0
     n_embedded: int = 0
     n_not_embedded: int = 0
+    n_filtered: int = 0
 
 
 class BatchIngestResponse(BaseModel):
@@ -402,9 +406,6 @@ class IngestDetectorInfo(BaseModel):
     version: str
     input_size: int
     assigns_class: bool
-    # The deployment-level hard drop by model class id (sorted), or null when
-    # every class is stored (the default).
-    class_ids_filter: list[int] | None
     # The confidence floor only applies when the detector assigns classes; a
     # proposer stores every detection the engine emits.
     confidence_floor_applies: bool
@@ -418,6 +419,8 @@ class IngestConfigResponse(BaseModel):
     region_drain: IngestRegionDrainConfig
     # Null when no ingest detector is configured (ingest answers 503).
     detector: IngestDetectorInfo | None = None
+    # The project's detect filter and embedding policy (defaults when never set).
+    policy: IngestPolicy = Field(default_factory=IngestPolicy)
 
 
 class RegionDependencyStatusResponse(BaseModel):

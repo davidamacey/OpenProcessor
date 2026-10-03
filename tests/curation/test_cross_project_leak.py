@@ -183,6 +183,13 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/ingest/image'): {'json': {'path': img}},
         ('POST', '/ingest/batch'): {'json': {'items': [{'path': f'{source}/{slug}-new-0002.jpg'}]}},
         ('POST', '/ingest/path_lookup'): {'json': {'image_paths': [img]}},
+        ('PUT', '/ingest/policy'): {
+            'json': {
+                'expected_revision': 0,
+                'embedding': {'mode': 'selected', 'classes': [f'{slug}_policy_class']},
+            }
+        },
+        ('POST', '/ingest/policy/preview'): {'json': {'embedding': {'mode': 'lazy'}}},
         ('POST', '/ingest/upload'): {
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
@@ -328,6 +335,10 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/datasets/imports/{import_id}/undo'): 'a dry run reads the ledger; writes nothing',
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
+    (
+        'POST',
+        '/ingest/policy/preview',
+    ): 'counts what a candidate policy would embed; writes nothing',
     ('POST', '/train/preflight'): 'read-only validation under POST',
     ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
     ('POST', '/reprocess/jobs/{job_id}/cancel'): (
@@ -2006,6 +2017,35 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
 # W2b review (w2b_review_2026-09-27.md): B1/B2/B3 + isolation gaps, through
 # the real leak_env guard.
 # --------------------------------------------------------------------------
+
+
+def test_ingest_policy_alpha_invisible_to_beta(leak_env: LeakEnv) -> None:
+    """Alpha's ingest policy is never read from beta, and a beta write does not
+    advance alpha's revision."""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    alpha = f'{SCOPED.format(project="alpha")}/ingest/policy'
+    beta = f'{SCOPED.format(project="beta")}/ingest/policy'
+
+    put = client.put(
+        alpha,
+        json={
+            'expected_revision': 0,
+            'detect': {'exclude_classes': ['person']},
+            'embedding': {'mode': 'lazy'},
+        },
+    )
+    assert put.status_code == 200, put.text
+
+    beta_get = client.get(beta).json()
+    assert beta_get['revision'] == 0
+    assert beta_get['embedding']['mode'] == 'all'
+    assert beta_get['detect']['exclude_classes'] == []
+    assert client.get(alpha).json()['embedding']['mode'] == 'lazy'
+
+    stale = client.put(alpha, json={'expected_revision': 0, 'embedding': {'mode': 'all'}})
+    assert stale.status_code == 409
+    assert client.put(beta, json={'expected_revision': 0}).status_code == 200
+    assert client.get(alpha).json()['revision'] == 1
 
 
 def test_keymap_alpha_invisible_to_beta(leak_env: LeakEnv) -> None:

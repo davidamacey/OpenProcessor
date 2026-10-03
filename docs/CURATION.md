@@ -583,6 +583,8 @@ collides with a class hotkey is reported with the class; pass
 | Bytes upload | `POST /curation/projects/{project}/ingest/upload` |
 | Which paths are already known | `POST /curation/projects/{project}/ingest/path_lookup` |
 | Limits and source roots | `GET /curation/projects/{project}/ingest/config` |
+| Read or replace the ingest policy | `GET`, `PUT /curation/projects/{project}/ingest/policy` |
+| What a policy would embed | `POST /curation/projects/{project}/ingest/policy/preview` |
 | Status, region queue | `GET /curation/projects/{project}/ingest/status`, `GET /curation/projects/{project}/ingest/region_drain` |
 
 Ingest does duplicate detection, a quality gate, crop-cache population, PE
@@ -592,12 +594,41 @@ enters the region worker's queue. An existing region status is never
 overwritten on re-ingest. Items that exist before you activate a profile are
 picked up with [`POST /reprocess`](#reprocess).
 
+### Ingest policy
+
+Each project has an ingest policy with two independent parts. An absent
+policy changes nothing: every detection is stored and embedded.
+
+- `detect`: a filter on the detector output (`classes` allow-list,
+  `exclude_classes`, `min_confidence`, `min_box_area_frac`, `max_per_image`).
+  Filtered detections are not stored; ingest results and the batch summary
+  report them as `n_filtered`. A `reprocess` with scope `detect` applies the
+  same filter, so it also removes stored, unlocked items the filter now
+  excludes.
+- `embedding.mode`: `all` (default), `selected` (embed only detections
+  matching `classes`, `min_confidence`, `min_box_area_frac`, `max_per_image`;
+  at least one criterion is required) or `lazy` (embed none at ingest). A
+  detection that is stored without a vector gets `embedding_state`
+  `not_selected` or `deferred`, keeps its class cluster when it has a class,
+  and is not placed in a residual cluster. An item with a human or imported
+  label always gets a vector.
+
+Class names match by name (case, spaces and hyphens are normalized, so
+`traffic light` and `traffic_light` are one name) against an item's class name
+or the detector's own label, never by model class id. Names the project does
+not know yet are accepted and returned as `unknown_names`. `PUT` takes the
+`expected_revision` you read (409 when stale) and affects future ingests and
+embed runs only, never stored data. `POST .../ingest/policy/preview` counts
+what a candidate policy would embed over the items already stored, with an
+estimated vector size, and writes nothing. The policy is cloned with a
+project's settings and is not merged by a combine.
+
 ### Items without an embedding
 
 Every item carries `embedding_state`: `embedded` (it has a vector), `failed`
 (the encoder raised at ingest; the item is still stored), `deferred` (a vector
 was dropped because the target project could not use it, as in a combine) or
-`not_selected` (reserved for selective embedding). `null` means the item was
+`not_selected` (the ingest policy's `selected` mode skipped it). `null` means the item was
 written before the field existed. Whether an item has a vector is always the
 `exists` test on its embedding; the state only says why not.
 
@@ -639,10 +670,9 @@ are the ways an item needs a vector after ingest, and what happens today.
    `embedding_state: failed` and counted in `n_not_embedded`. Retry with
    `POST /curation/projects/{project}/reprocess` and scope `embed` on the
    item or its image; the item becomes `embedded`.
-4. **An ingest policy skipped it** (`selected`, `lazy`, per-image caps). Not
-   available yet: ingest embeds everything. `embedding_state` already has
-   `not_selected` and `deferred` for it, and the same `embed` scope will be
-   the embed-missing action.
+4. **An ingest policy skipped it** (`selected`, `lazy`, per-image caps). It is
+   stored with `embedding_state` `not_selected` or `deferred`; the same
+   `embed` scope will be the embed-missing action.
 5. **An imported dataset** (YOLO, COCO or your own export). Import embeds each
    item through the ingest path, so imported items are `embedded` (or
    `failed` and retried as in 3). A project import that excludes vectors, and
@@ -933,9 +963,10 @@ compose up -d --force-recreate yolo-api`, then re-run the export.
   [`../export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
 - **An item detector for ingest**: an end2end Triton model named by
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus other `OP_INGEST_PRIMARY_<FIELD>`).
-  `OP_INGEST_PRIMARY_CLASS_IDS` is an optional hard drop by model class id
-  (unset, the default, stores every class; a stock COCO checkpoint proposes all
-  80, and leaving it unset is recommended). To switch detectors set
+  A stock COCO checkpoint proposes all 80 classes and ingest stores them all;
+  narrowing is the per-project ingest policy (see "Ingest policy" below), not
+  an env var (`OP_INGEST_PRIMARY_CLASS_IDS` is retired and ignored with a
+  warning). To switch detectors set
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and `OP_INGEST_PRIMARY_LABELS_PATH` when
   the model directory has no `labels.txt`) and recreate `yolo-api`; the model
   must serve the end2end four-tensor output. The choice is deployment-wide.

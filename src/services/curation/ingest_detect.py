@@ -218,7 +218,6 @@ class WholeImageDetector:
         """
         num_dets = int(num_dets_row[0])
         floor = self.profile.confidence_floor
-        allowed = self.profile.class_ids
 
         out: list[DetectedItem] = []
         for box, score, cls in zip(
@@ -227,8 +226,6 @@ class WholeImageDetector:
             classes_row[:num_dets],
             strict=False,
         ):
-            if allowed and int(cls) not in allowed:
-                continue
             full = undo_letterbox(
                 (
                     float(box[0]) * net_size,

@@ -252,10 +252,11 @@ Government Work"; never NonCommercial or NoDerivs). Then:
 
 ```bash
 # 1. Create classes in your project (see docs/CURATION.md).
-# 2. Leave OP_INGEST_PRIMARY_CLASS_IDS unset: the stock detector then stores
-#    every detection of its whole label space (all 80 COCO classes) as an
-#    unlabeled proposal, and you choose what to keep later. (Setting it is an
-#    optional hard drop by model class id; not recommended.)
+# 2. The stock detector stores every detection of its whole label space (all
+#    80 COCO classes) as an unlabeled proposal, and you choose what to keep
+#    later. To store or embed less, set the per-project ingest policy
+#    (PUT /curation/projects/{project}/ingest/policy); the old
+#    OP_INGEST_PRIMARY_CLASS_IDS env var is retired and ignored.
 #    OP_INGEST_PRIMARY_DETECTOR_MODEL picks the detector; to use another
 #    model set it in .env and recreate yolo-api (see docs/CURATION.md).
 # 3. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount

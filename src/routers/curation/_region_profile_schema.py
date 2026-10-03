@@ -59,7 +59,7 @@ _CHOICES: dict[str, tuple[ChoicesFrom, RegionProfileChoice | None]] = {
 }
 
 _IDENTITY = ('display_name', 'display_name_singular', 'region_class_name', 'labels_path')
-_ITEMS = ('class_ids', 'parent_classes', 'assigns_class')
+_ITEMS = ('parent_classes', 'assigns_class')
 _VERIFY = ('auto_confirm_aspect', 'auto_confirm_area_frac', 'aspect_min', 'aspect_max')
 
 #: The fields most profiles set; everything else is tuning.

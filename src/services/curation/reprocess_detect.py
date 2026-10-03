@@ -190,7 +190,7 @@ async def redetect_image(
                 locked=item_locked(src),
             )
         )
-    items, _secondary_error = await service.detect_items(ctx.pil, image_path=ctx.image_path)
+    items = (await service.detect_items(ctx.pil, image_path=ctx.image_path)).items
     proposals = [_proposal(it, ctx.width, ctx.height) for it in items]
     by_proposal = dict(zip(proposals, items, strict=True))
     plan = merge_item_proposals(existing, proposals, remove_stale=True)
