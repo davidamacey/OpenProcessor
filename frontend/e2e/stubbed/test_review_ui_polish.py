@@ -19,9 +19,15 @@ TABS = review_tabs(
                 "kind": "enum",
                 "label": "Negative frames",
                 "options": [
+                    {"value": "", "label": "Any"},
                     {"value": "include", "label": "Include negative frames"},
                     {"value": "only", "label": "Only negative frames"},
                 ],
+                "min": None,
+                "max": None,
+                "description": "",
+                "default": None,
+                "allows_unset": True,
             }
         ],
     }
@@ -52,13 +58,13 @@ def _shot(page, name):
         page.screenshot(path=f"{out}/{name}.png", full_page=True)
 
 
-def test_negative_frames_select_shows_a_served_label_by_default(stub, page, app_url):
+def test_negative_frames_select_shows_the_served_any_option_by_default(stub, page, app_url):
     _setup(stub)
     page.goto(f"{app_url}/p/default/review?tab=all")
     select = page.locator('label:has-text("Negative frames") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = select.evaluate("el => el.selectedOptions[0]?.textContent?.trim() ?? ''")
-    assert shown == "Include negative frames", shown
+    assert shown == "Any", shown
 
 
 def test_reason_row_is_a_label_value_row_at_800px(stub, page, app_url):

@@ -43,6 +43,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `{detail: {error, message}}` body) instead of the old plain sentence.
 - Vendored OpenProcessor v0.4.0 (fce17771); item cards carry embedding and open-vocabulary fields; repeatable query parameters are sent as repeats.
 - Docs screenshots: the capture script gained import, multi-box review, box editor, region-profile test and Imported-tab states (read-only allow-list extended for `/region_profiles/test` and `/datasets/preview`); the matching docs slots now render real captures.
+- Adopted the OpenProcessor 89eda327 served facts, each replacing a client guess:
+  - A review enum filter shows the served `default`, or the served "Any" option when it allows no filter; it no longer stands in the first option, and "Any" omits the parameter.
+  - Validation, combine and import issue lists are keyed by the served unique `id`; combine issues always show a message.
+  - The combine preview and its start confirmation show `projected_images`, `projected_items` and `unclassed_items`.
+  - The ingest-policy preview shows `embedded_because_labeled`; a "detector cannot be served" refusal lists each served reason once.
+  - Export is blocked only by the served `can_export` and lists the served `blocking_reasons`; the client "nothing to export" rule is gone.
+  - The single-class dedup threshold and the diverse `k` caps come from `/methods` (no fallback constant, so the stepper is unbounded when none is served).
+  - Grafana, Prometheus and OpenSearch Dashboards links come only from the served `/settings` `monitoring_links`; the hardcoded ports and `PUBLIC_GRAFANA_URL` / `PUBLIC_PROMETHEUS_URL` / `PUBLIC_OPENSEARCH_DASHBOARDS_URL` are removed.
+  - The embedding plot says "not built yet" only for the served `projection_not_built` 404 and shows the served message for any other failure.
+  - Region rows are keyed by the served `row_key`.
+  - Class-name lookups follow the backend rule (case, spaces and hyphens fold to `_`; an active class wins over a deprecated one).
+  - The `/clusters/[id]` cut line is the first item served `cluster_is_core === false` in core-first order; the null-share heuristic is gone.
 
 ### Fixed
 

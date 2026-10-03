@@ -359,3 +359,21 @@ def test_bakeoff_run_rejection_shows_served_detail(stub, page, app_url):
     err.wait_for(timeout=5000)
     assert detail in err.inner_text()
     assert page.get_by_test_id("run-status").count() == 0
+
+
+def test_monitoring_links_are_only_the_served_urls(stub, page, app_url):
+    register_discovery(stub)
+    stub.on("GET", r"/settings(\?|$)", {
+        "defaults": {}, "updated_at": None, "updated_by": None,
+        "monitoring_links": {
+            "grafana": "https://grafana.example/d/abc",
+            "prometheus": None,
+            "opensearch_dashboards": None,
+        },
+    })
+    page.goto(f"{app_url}/p/default/bakeoff")
+    link = page.get_by_test_id("monitoring-link")
+    link.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert link.count() == 1
+    assert link.get_attribute("href") == "https://grafana.example/d/abc"
+    assert "Prometheus" not in page.content()

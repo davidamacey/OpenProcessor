@@ -272,7 +272,7 @@ class Stub:
         # (`r"/settings(\?|$)"`), which is deliberately looser than most
         # patterns here to also match that bare path under `{api_prefix}`.
         # `test_curation_settings.py` overrides this per-test.
-        self.on("GET", r"/settings(\?|$)", {"defaults": {}, "updated_at": None, "updated_by": None})
+        self.on("GET", r"/settings(\?|$)", {"defaults": {}, "updated_at": None, "updated_by": None, "monitoring_links": {"grafana": None, "prometheus": None, "opensearch_dashboards": None}})
         self.on("GET", r"/class_sources(\?|$)", {"class_sources": []})
         self.on(
             "GET",
