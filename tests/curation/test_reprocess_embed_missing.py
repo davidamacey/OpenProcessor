@@ -78,11 +78,12 @@ def _world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, FakePE
 
 def _req(filt: ReprocessFilter | None = None, *, crops: list[str] | None = None, **kw: Any) -> Any:
     only_missing = kw.pop('only_missing', True)
+    dry_run = kw.pop('dry_run', False)
     return ReprocessRequest(
         targets=ReprocessTargets(filter=filt, crop_ids=crops, **kw),
         scopes=['embed'],
         embed=EmbedOptions(only_missing=only_missing),
-        dry_run=kw.pop('dry_run', False),
+        dry_run=dry_run,
     )
 
 
@@ -256,3 +257,18 @@ def test_limit_and_sample_apply_to_a_filter_only() -> None:
         validate_targets(ReprocessTargets(filter=ReprocessFilter(source='s'), sample='random'))
     with pytest.raises(ReprocessTargetsError):
         validate_targets(ReprocessTargets(filter=ReprocessFilter(conf_min=0.9, conf_max=0.1)))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('crops', [['have'], ['car', 'have'], ['bad', 'dog', 'human']])
+async def test_dry_run_image_count_equals_the_applied_queued(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, crops: list[str]
+) -> None:
+    fake, _, service = _world(tmp_path, monkeypatch)
+    dry = await apply_reprocess(
+        fake, _req(crops=crops, dry_run=True), service_factory=_factory(service)
+    )
+    planned = dry.scopes[0].detail
+    applied = await apply_reprocess(fake, _req(crops=crops), service_factory=_factory(service))
+    assert applied.scopes[0].queued == planned['images_to_embed']
+    assert applied.scopes[0].detail['crop_written'] == planned['to_embed']
