@@ -40,8 +40,9 @@ class ReviewFilterSpec(BaseModel):
     )
     allows_unset: bool = Field(
         description=(
-            'True when the default is null: omit the parameter for "no filter" '
-            '(an enum then needs a client-side "Any" choice; never send an empty string).'
+            'True when the default is null (no filter). An enum then lists an explicit '
+            '`{value: "", label: "Any"}` option: when it is selected, omit the parameter '
+            '(never send an empty string).'
         )
     )
 

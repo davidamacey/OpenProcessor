@@ -280,3 +280,31 @@ def test_api_error_serves_only_the_fields_the_code_carries() -> None:
         used_by=[ModelSharingUser(project='b', profile='p')],
     )
     assert set(exc.detail) == {'error', 'message', 'projects', 'used_by'}
+
+
+def _wire_default(param: dict[str, Any]) -> Any:
+    """What the route applies when the parameter is omitted, as FastAPI declares it."""
+    schema = param.get('schema', {})
+    if 'default' in schema:
+        return schema['default']
+    return None
+
+
+def test_every_spec_default_is_what_the_route_does_when_the_param_is_omitted() -> None:
+    operation = _contract()['paths'][f'{PROJECT}/review/{{tab}}']['get']
+    declared = {p['name']: _wire_default(p) for p in operation['parameters'] if p['in'] == 'query'}
+    for param, spec in FILTER_SPECS.items():
+        assert param in declared, f'{param} is not a query parameter of GET /review/{{tab}}'
+        served = spec['default'] or None if isinstance(spec['default'], list) else spec['default']
+        assert declared[param] == served, param
+
+
+def test_a_null_default_enum_offers_an_explicit_any_option() -> None:
+    for param, spec in FILTER_SPECS.items():
+        values = [o['value'] for o in spec['options']]
+        if spec['kind'] == 'enum' and spec['default'] is None:
+            assert values[0] == '', param  # Any, first, so it is the shown default
+        else:
+            assert '' not in values, param
+        if spec['kind'] == 'enum' and spec['default'] is not None:
+            assert spec['default'] in values, param

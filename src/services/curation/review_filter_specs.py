@@ -53,6 +53,9 @@ ON_NEGATIVE_FRAME_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
     {'value': 'false', 'label': 'Hide items on a reviewed-negative frame'},
 )
 
+# Selecting it means: omit the parameter (the filter is off).
+UNSET_OPTION: dict[str, str] = {'value': '', 'label': 'Any'}
+
 EMBEDDING_STATE_LABELS: dict[str, str] = {
     'embedded': 'Embedded',
     'not_selected': 'Not selected by the ingest policy',
@@ -116,6 +119,10 @@ def _spec(
     max_: float | None = None,
     description: str = '',
 ) -> dict[str, Any]:
+    default = _model_default(param)
+    if kind == 'enum' and default is None:
+        # The unset state is a visible choice, never an implied first option.
+        options = (UNSET_OPTION, *options)
     return {
         'param': param,
         'kind': kind,
@@ -124,7 +131,7 @@ def _spec(
         'min': min_,
         'max': max_,
         'description': description,
-        'default': (default := _model_default(param)),
+        'default': default,
         'allows_unset': default is None,
     }
 
@@ -175,4 +182,5 @@ __all__ = [
     'REGION_STATUS_DEFAULT',
     'REGION_STATUS_FILTER_OPTIONS',
     'REGION_STATUS_FILTER_VALUES',
+    'UNSET_OPTION',
 ]
