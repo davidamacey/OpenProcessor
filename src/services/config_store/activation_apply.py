@@ -22,6 +22,16 @@ if TYPE_CHECKING:
     from src.services.config_store.store import AxisRef, ConfigStore
 
 
+#: Per axis: the stored kind, the snapshot field holding the stored configs,
+#: and the snapshot field holding the activation (``<field>_body`` is the
+#: pinned activated body). The one table every activate/rollback path reads.
+AXIS_STORAGE: dict[str, tuple[ConfigKind, str, str]] = {
+    'prompt_pack': ('prompt_pack', 'packs', 'active_pack'),
+    'detection_profile': ('region_profile', 'profiles', 'active_profile'),
+    'open_vocab': ('open_vocab_set', 'open_vocab_sets', 'active_open_vocab'),
+}
+
+
 async def activate_and_apply(
     store: ConfigStore,
     client: Any,
@@ -38,8 +48,8 @@ async def activate_and_apply(
     from src.services.config_store.store import _resolve_active_body
 
     ref: AxisRef = (name, revision) if name else 'off'
-    kind: ConfigKind = 'prompt_pack' if axis == 'prompt_pack' else 'region_profile'
-    current_map = store.current.packs if axis == 'prompt_pack' else store.current.profiles
+    kind, stored_field, active_field = AXIS_STORAGE[axis]
+    current_map = getattr(store.current, stored_field)
     body_ref = await _resolve_active_body(
         client, store.index, kind=kind, ref=ref, current=current_map
     )
@@ -51,14 +61,10 @@ async def activate_and_apply(
         revision=revision,
         expected_active=expected_active,
     )
-    patch: dict[str, Any] = {'config_revision': result['config_revision']}
-    if axis == 'prompt_pack':
-        patch['active_pack'] = ref
-        patch['active_pack_body'] = body_ref
-    else:
-        patch['active_profile'] = ref
-        patch['active_profile_body'] = body_ref
-    store.apply_local(**patch)
+    store.apply_local(
+        config_revision=result['config_revision'],
+        **{active_field: ref, f'{active_field}_body': body_ref},
+    )
     return result
 
 
@@ -113,7 +119,7 @@ async def rollback_axis(
         # ids never carry a revision, M6); if it is no longer in the
         # store's current names, it was deleted since, and rollback must
         # refuse, not resurrect it.
-        stored_names = store.current.packs if axis == 'prompt_pack' else store.current.profiles
+        stored_names = getattr(store.current, AXIS_STORAGE[axis][1])
         if previous_revision is not None and previous_name not in stored_names:
             msg = 'previous_deleted'
             raise LookupError(msg)
@@ -134,4 +140,4 @@ async def rollback_axis(
     )
 
 
-__all__ = ['activate_and_apply', 'rollback_axis']
+__all__ = ['AXIS_STORAGE', 'activate_and_apply', 'rollback_axis']

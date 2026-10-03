@@ -268,6 +268,12 @@ async def _validate_clone(
                 source_active_refs=source_active_refs,
                 activation_axes=activation_axes,
             )
+    if 'open_vocab' in resolved_axes:
+        from src.services.projects.clone_open_vocab import validate_open_vocab_clone
+
+        target_activations['open_vocab'] = await validate_open_vocab_clone(
+            client, target_record=target_record
+        )
     if 'vlm_activation' in resolved_axes:
         from src.services.projects.clone_vlm import validate_vlm_activation_clone
 
@@ -405,8 +411,14 @@ async def _apply_clone(
 
     written_packs: dict[str, Any] = {}
     if 'prompt_packs' in axes:
-        written_packs = await _clone_prompt_packs(
-            client, target_record=target_record, source=source
+        from src.services.projects.clone_stored import copy_stored_configs
+
+        written_packs = await copy_stored_configs(
+            client,
+            target_record=target_record,
+            source=source,
+            kind='prompt_pack',
+            stored_field='packs',
         )
 
     if 'activations' in axes:
@@ -416,6 +428,16 @@ async def _apply_clone(
             source=source,
             written_packs=written_packs,
             target_activations=target_activations or {},
+        )
+
+    if 'open_vocab' in axes:
+        from src.services.projects.clone_open_vocab import apply_open_vocab_clone
+
+        await apply_open_vocab_clone(
+            client,
+            source=source,
+            target_record=target_record,
+            expected_active=(target_activations or {}).get('open_vocab'),
         )
 
     if 'vlm_activation' in axes:
@@ -430,57 +452,6 @@ async def _apply_clone(
         )
 
     return conflicts
-
-
-async def _clone_prompt_packs(
-    client: Any, *, target_record: ProjectRecord, source: ProjectRecord
-) -> dict[str, Any]:
-    """W3: copy every source-project STORED prompt pack (current revision
-    only -- revision history is not carried over) into the target. A
-    no-op when the source has none. ``activations`` (if also cloned)
-    still owns copying which pack is active.
-
-    Returns ``{name: StoredConfig}`` for exactly what was written here, so
-    :func:`_clone_activations` can tell (without re-reading the target
-    store's cache -- see the B2 fix note there) whether the pack it needs
-    to activate was already written by this axis, and with what body."""
-    from src.services.config_store.index import save_config
-    from src.services.config_store.store import StoredConfig
-
-    with bind_project(source, read_only=True):
-        from src.services.config_store import get_config_store
-
-        source_store = get_config_store()
-        await source_store.ensure_fresh(client)
-        packs = dict(source_store.current.packs)
-
-    if not packs:
-        return {}
-
-    written: dict[str, StoredConfig] = {}
-    with bind_project(target_record):
-        from src.config import get_curation_config as _get_cfg
-
-        target_index = _get_cfg().configs_index
-        for name, stored in packs.items():
-            doc = await save_config(
-                client,
-                target_index,
-                kind='prompt_pack',
-                name=name,
-                body=stored.body,
-                expected_revision=None,
-                description=stored.description,
-                cloned_from=f'{source.slug}:{name}@{stored.revision}',
-            )
-            written[name] = StoredConfig(
-                kind='prompt_pack',
-                name=name,
-                revision=int(doc['revision']),
-                body=stored.body,
-                description=stored.description,
-            )
-    return written
 
 
 async def _clone_activations(
@@ -570,7 +541,7 @@ async def _clone_activations(
             # first: the body actually made ACTIVE in the target is always
             # the source's ACTIVATED body (`body`, fetched above from the
             # immutable `<kind>:<name>@<rev>` copy) -- never the source's
-            # merely-current one. When `_clone_prompt_packs` already wrote
+            # merely-current one. When the `prompt_packs` axis already wrote
             # that exact same body (the common case: the source's current
             # doc is byte-identical to what's active), reuse its revision
             # instead of a redundant write. When the source has since

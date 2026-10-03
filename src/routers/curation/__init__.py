@@ -34,6 +34,7 @@ import src.routers.curation.keymap
 import src.routers.curation.label_undo
 import src.routers.curation.methods
 import src.routers.curation.models
+import src.routers.curation.open_vocab
 import src.routers.curation.pipeline
 import src.routers.curation.pipeline_control
 import src.routers.curation.pipeline_events

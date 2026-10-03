@@ -45,6 +45,7 @@ CLONEABLE_AXES: tuple[str, ...] = (
     'activations',
     'keymap',
     'prompt_packs',
+    'open_vocab',
     'vlm_activation',
 )
 

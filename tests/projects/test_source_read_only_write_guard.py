@@ -10,7 +10,7 @@ test_clone_source_stays_byte_identical``) only prove that the CURRENT
 they never plant a write, so removing ``read_only=True`` from any of the
 five source binds (``clone_shared.py``'s ``read_source_record`` plus the
 four in ``clone.py``: ``settings_defaults``, ``keymap``,
-``_clone_prompt_packs``, ``_clone_activations``) leaves the whole suite
+``copy_stored_configs``, ``_clone_activations``) leaves the whole suite
 green (confirmed by the round-2 reviewer). These tests close that gap by
 making a read step *inside* each bind also attempt a real write via the
 guard's own ``check_request`` -- mirroring exactly what
@@ -141,7 +141,7 @@ def test_keymap_source_bind_blocks_planted_write(monkeypatch) -> None:
 
 
 def test_clone_prompt_packs_source_bind_blocks_planted_write(monkeypatch) -> None:
-    """``clone.py:293`` (``_clone_prompt_packs``) -- ``bind_project(source,
+    """``clone.py:293`` (``copy_stored_configs``) -- ``bind_project(source,
     read_only=True)`` around the source config store's ``ensure_fresh``."""
     client = FakeLifecycleOpenSearch()
     _source, target = asyncio.run(_seed(client))

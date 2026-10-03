@@ -1,0 +1,12 @@
+{
+  "_comment": "Public-vocabulary example: objects a general detector often misses. Clone it, then edit.",
+  "display_name": "Street objects",
+  "targets": [
+    {"prompt": "traffic cone", "class_name": "traffic cone", "min_score": 0.5},
+    {"prompt": "traffic light", "class_name": "traffic light", "min_score": 0.5},
+    {"prompt": "cup", "class_name": "cup", "min_score": 0.5, "enabled": false}
+  ],
+  "image_max_side": 1024,
+  "dedup_iou": 0.5,
+  "run_on_ingest": false
+}
