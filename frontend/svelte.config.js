@@ -11,6 +11,9 @@ const config = {
       precompress: false,
       strict: true,
     }),
+    // Poll _app/version.json so the `updated` store flips after a deploy;
+    // SvelteKit then does a full-page load on the next failed navigation.
+    version: { pollInterval: 60_000 },
     alias: {
       $lib: 'src/lib',
       $components: 'src/lib/components',

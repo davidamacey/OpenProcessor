@@ -7,6 +7,7 @@
    * `p/[project]/+layout.svelte`; `/projects` renders its own header.
    */
   import '../app.css';
+  import { updated } from '$app/state';
   import type { Snippet } from 'svelte';
   import Toast from '$components/Toast.svelte';
   import { subscribeGlobalEvents } from '$lib/sse';
@@ -54,5 +55,21 @@
   </div>
 {:else}
   {@render children?.()}
+  {#if updated.current}
+    <div
+      class="fixed right-3 bottom-3 z-50 flex items-center gap-3 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+      role="status"
+      data-testid="new-version-banner"
+    >
+      <span>A new version is available.</span>
+      <button
+        type="button"
+        class="rounded border border-zinc-600 px-2 py-0.5 hover:border-zinc-400"
+        onclick={() => window.location.reload()}
+      >
+        Reload
+      </button>
+    </div>
+  {/if}
   <Toast />
 {/if}
