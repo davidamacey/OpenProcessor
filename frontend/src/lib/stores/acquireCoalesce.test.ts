@@ -61,11 +61,13 @@ describe('healthStore.acquire/release coalescing', () => {
     release();
     await new Promise((r) => setTimeout(r, 10));
 
-    fetchMock.mockClear();
-    // Advance past the 15s poll interval — nothing should fire, since
-    // the store actually stopped.
-    await new Promise((r) => setTimeout(r, 20));
-    expect(fetchMock).not.toHaveBeenCalled();
+    // The poll interval is 15 s, far longer than any real wait here, so
+    // assert the teardown itself: a lasting release clears the interval.
+    const cleared = vi.spyOn(globalThis, 'clearInterval');
+    const release2 = healthStore.acquire();
+    release2();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(cleared).toHaveBeenCalled();
   });
 });
 

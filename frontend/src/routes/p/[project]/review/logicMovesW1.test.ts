@@ -18,13 +18,13 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 describe("W1: un-dismiss panel reverses discard()'s reviewDismissCrop", () => {
   it('toggleDismissedPanel loads {API_PREFIX}/crops?review_dismissed=true', () => {
     const fn = src.match(/async function toggleDismissedPanel\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/getCrops\(\{\s*review_dismissed: true/);
   });
 
   it('undismiss calls reviewUndismissCrop and drops the item from the local list', () => {
     const fn = src.match(/async function undismiss\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/await reviewUndismissCrop\(crop\.id\)/);
   });
 });

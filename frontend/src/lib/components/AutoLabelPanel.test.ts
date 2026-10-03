@@ -40,7 +40,8 @@ describe('AutoLabelPanel.svelte', () => {
       'gate_min_blur_ratio:',
       'n_clusters:',
     ]) {
-      expect(src).toContain(key);
+      // Word boundary: `n_clusters:` is also a substring of `train_clusters:`.
+      expect(src).toMatch(new RegExp(`(?<![\\w])${key}`));
     }
   });
 

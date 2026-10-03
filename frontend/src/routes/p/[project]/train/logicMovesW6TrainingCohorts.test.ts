@@ -23,7 +23,7 @@ describe('W6: /train cohort definitions come from GET /training_cohorts?class_id
 
   it('loadGroupCohorts calls getTrainingCohorts(group.classId) and maps served cohorts, not cohortsForClass alone', () => {
     const fn = src.match(/async function loadGroupCohorts\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/getTrainingCohorts\(group\.classId\)/);
     expect(fn).toMatch(/servedCohorts/);
   });
@@ -39,14 +39,14 @@ describe('W6: /train cohort definitions come from GET /training_cohorts?class_id
     const groupsBlock = src.match(
       /const cohortGroups = \$derived\.by<CohortGroup\[\]>\(([\s\S]*?)\n {2}\);/,
     )?.[0];
-    expect(groupsBlock).toBeDefined();
+    expect(groupsBlock).not.toBeUndefined();
     expect(groupsBlock).not.toMatch(/cohortsForClass\(/);
     expect(groupsBlock).toMatch(/classCohorts\[c\.id\]/);
   });
 
   it('runCohortQuery forwards params.classifier_conf_lt/label_validated verbatim rather than a client constant', () => {
     const fn = src.match(/async function runCohortQuery\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/params\.classifier_conf_lt/);
     expect(fn).toMatch(/params\.label_validated/);
   });

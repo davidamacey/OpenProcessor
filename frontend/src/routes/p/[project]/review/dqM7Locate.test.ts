@@ -26,7 +26,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 
 function fn(name: string): string {
   const m = src.match(new RegExp(`async function ${name}\\([\\s\\S]*?\\n {2}\\}`));
-  expect(m, `function ${name} not found`).toBeDefined();
+  expect(m, `function ${name} not found`).not.toBeNull();
   return m![0];
 }
 
@@ -41,7 +41,7 @@ describe('DQ-M7: jumpToPendingCrop fetches only the located page', () => {
 
   it('clears awaitingDeepLink on every exit path (finally)', () => {
     const finallyBlock = body.match(/finally\s*\{[\s\S]*?\}\s*$/)?.[0];
-    expect(finallyBlock).toBeDefined();
+    expect(finallyBlock).not.toBeUndefined();
     expect(finallyBlock).toMatch(/awaitingDeepLink = false;/);
   });
 
@@ -49,7 +49,7 @@ describe('DQ-M7: jumpToPendingCrop fetches only the located page', () => {
     const earlyReturn = body.match(
       /if \(diverseMode \|\| searchModeActive\) \{[\s\S]*?\n {4}\}/,
     )?.[0];
-    expect(earlyReturn).toBeDefined();
+    expect(earlyReturn).not.toBeUndefined();
     expect(earlyReturn).toMatch(/awaitingDeepLink = false;/);
   });
 });

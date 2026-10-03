@@ -19,7 +19,7 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 describe('W5: /review?crop_id= deep link calls locateInReviewQueue, not a paging scan', () => {
   it('jumpToPendingCrop calls locateInReviewQueue with the effective tab, page size and current filters', () => {
     const fn = src.match(/async function jumpToPendingCrop\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(
       /await locateInReviewQueue\(\s*endpointForTab\(effectiveTab\),\s*cropId,\s*pageSize,\s*_filter\(\),\s*\)/,
     );
@@ -41,7 +41,7 @@ describe('W5: /review?crop_id= deep link calls locateInReviewQueue, not a paging
 describe('W5: "Accept model\'s class" assigns probe_pred_class_id directly', () => {
   it('acceptModelClass assigns current.probe_pred_class_id with no name lookup', () => {
     const fn = src.match(/async function acceptModelClass\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/await assign\(current\.probe_pred_class_id\)/);
   });
 

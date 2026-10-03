@@ -95,6 +95,7 @@ afterEach(() => {
     instance = undefined;
   }
   target?.remove();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -221,6 +222,7 @@ describe('ScoresCard: polling to done, cancel, error detail', () => {
     );
     const el = renderCard();
     await flushAsync();
+    vi.useFakeTimers();
 
     const computeAllBtn = [...el.querySelectorAll('button')].find(
       (b) => b.textContent?.trim() === 'Compute all',
@@ -242,16 +244,8 @@ describe('ScoresCard: polling to done, cancel, error detail', () => {
       uniqueness: coverageEntry({ n_scored: 7961, total: 7961, pct: 100 }),
     });
 
-    // Simulate the poll tick directly rather than racing a real timer.
-    await vi.waitFor(() => {
-      expect(getScoresStatus).toHaveBeenCalled();
-    });
-    // Drive the interval manually: call whatever pollJob wired via
-    // setInterval by advancing fake behavior is avoided here — instead
-    // assert the coverage reload occurred once status flips by polling
-    // getScoresStatus again through the component's own interval. Use
-    // vi.useFakeTimers-free approach: wait for the DOM to reflect it.
-    await new Promise((r) => setTimeout(r, 3100));
+    // Drive the card's own 3 s poll interval on fake timers.
+    await vi.advanceTimersByTimeAsync(3100);
     await flushAsync(5);
 
     expect(el.textContent).toMatch(/100%/);
@@ -325,6 +319,7 @@ describe('ScoresCard: polling to done, cancel, error detail', () => {
     );
     const el = renderCard();
     await flushAsync();
+    vi.useFakeTimers();
 
     const computeAllBtn = [...el.querySelectorAll('button')].find(
       (b) => b.textContent?.trim() === 'Compute all',
@@ -340,7 +335,7 @@ describe('ScoresCard: polling to done, cancel, error detail', () => {
     getScoresStatus.mockResolvedValue(
       idleJob({ status: 'failed', error: 'embedding fetch timed out after 90s' }),
     );
-    await new Promise((r) => setTimeout(r, 3100));
+    await vi.advanceTimersByTimeAsync(3100);
     await flushAsync(5);
 
     expect(el.textContent).toMatch(/embedding fetch timed out after 90s/);

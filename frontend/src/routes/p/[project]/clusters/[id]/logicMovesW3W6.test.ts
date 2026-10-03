@@ -21,7 +21,7 @@ describe('W3: runVlm uses POST /vlm/label_cluster/{id} + status polling, not the
 
   it('runVlm calls runVlmOnCluster then polls via pollAutoLabelJob, never fetching a crop page itself', () => {
     const fn = src.match(/async function runVlm\(\)[\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
+    expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/await runVlmOnCluster\(clusterId,/);
     expect(fn).toMatch(/await pollAutoLabelJob\(/);
     // The old implementation fetched {API_PREFIX}/crops itself before
@@ -40,7 +40,7 @@ describe('W3: runVlm uses POST /vlm/label_cluster/{id} + status polling, not the
 describe('W6: class-for-cluster lookup uses the served cluster_kind, not an id-equality guess', () => {
   it('clsForCluster reads cluster.cluster_kind and cluster.dominant_class_id', () => {
     const clsBlock = src.match(/const clsForCluster = \$derived\(([\s\S]*?)\);/)?.[0];
-    expect(clsBlock).toBeDefined();
+    expect(clsBlock).not.toBeUndefined();
     expect(clsBlock).toMatch(/cluster\?\.cluster_kind === 'class'/);
     expect(clsBlock).toMatch(/cluster\.dominant_class_id/);
     // The old implementation assumed cluster_id === class_id and matched

@@ -24,7 +24,7 @@ describe('M14: the cohort preview renders inline under the class group whose chi
     const groupsBlock = src.match(
       /\{#each visibleCohortGroups as group \(group\.classId\)\}[\s\S]*?\n {4}\{\/each\}/,
     )?.[0];
-    expect(groupsBlock).toBeDefined();
+    expect(groupsBlock).not.toBeUndefined();
     expect(groupsBlock).toMatch(/\{#if selectedCohortKey\}/);
     expect(groupsBlock).toMatch(/cohortPreviewError/);
   });
