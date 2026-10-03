@@ -150,9 +150,10 @@ curl -s -X POST "$API/curation/projects/cars/keymap/reset" \
 
 ## Cloning
 
-`clone_settings` with the `keymap` axis copies the overrides. A combo that
-collides with a class hotkey in the target is dropped from the copy and
-reported in `keymap_clone_conflicts`. See
+`clone_settings` with the `keymap` axis copies the overrides. If any combo
+collides with a class hotkey in the target, the whole keymap is skipped (the
+target's keymap stays as it was) and each colliding action is reported in
+`keymap_clone_conflicts`. See
 [Settings and configuration](./settings-and-config.mdx).
 
 ## Cropwright

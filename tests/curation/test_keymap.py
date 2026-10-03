@@ -484,3 +484,37 @@ def test_config_changed_event_published_once_on_put(
 
     asyncio.run(_run())
     event_hub._HUB = None
+
+
+def test_keymap_save_failure_is_a_500_and_the_class_hotkey_survives(
+    registry: ClassRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unbind runs before the save; a non-conflict failure of the save
+    must roll the unbind back instead of leaving the hotkey cleared."""
+    class_id = registry.load().classes[0].class_id
+    registry.load().classes[0].hotkey_letter = 'i'
+    registry._atomic_write(registry.load())
+
+    async def _boom(*_a: Any, **_kw: Any) -> None:
+        raise ConnectionError('opensearch down')
+
+    monkeypatch.setattr('src.routers.curation.keymap.save_keymap_doc', _boom)
+    monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
+
+    app = FastAPI()
+    mount_curation_routers(app, curation_router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    with TestClient(app, raise_server_exceptions=False) as c:
+        response = c.put(
+            f'{PREFIX}/keymap',
+            json={
+                'expected_revision': 0,
+                'overrides': {'cluster.ignore': ['i']},
+                'unbind_conflicting_class_hotkeys': True,
+            },
+        )
+    assert response.status_code == 500
+    entry = registry.get(class_id)
+    assert entry is not None
+    assert entry.hotkey_letter == 'i'

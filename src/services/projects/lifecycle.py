@@ -389,7 +389,7 @@ async def create_project(
                                 f"keymap action '{conflict['action_id']}' combo "
                                 f"'{conflict['combo']}' collides with class "
                                 f"'{conflict['class_name']}' (id {conflict['class_id']}) "
-                                'and was dropped from the clone'
+                                'so the keymap was not cloned'
                             ),
                         }
                     )

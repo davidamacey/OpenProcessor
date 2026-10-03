@@ -143,3 +143,18 @@ async def test_ensure_global_configs_index_is_idempotent() -> None:
     # A second call (every process restart) must not raise or re-create.
     await ensure_global_configs_index(client)
     assert await client.indices.exists(index=global_configs_index())
+
+
+def test_global_index_name_inside_the_project_namespace_is_refused(monkeypatch) -> None:
+    from src.config.projects import project_index_prefix
+
+    monkeypatch.setenv('OP_GLOBAL_CONFIGS_INDEX', f'{project_index_prefix()}shared__configs')
+    with pytest.raises(ValueError, match='project index prefix'):
+        global_configs_index()
+
+
+def test_global_index_name_equal_to_the_registry_is_refused(monkeypatch) -> None:
+    monkeypatch.setenv('OP_PROJECTS_INDEX', 'op_registry')
+    monkeypatch.setenv('OP_GLOBAL_CONFIGS_INDEX', 'op_registry')
+    with pytest.raises(ValueError, match='project registry'):
+        global_configs_index()

@@ -2327,7 +2327,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   `warnings` empty (`ProjectLifecycleResponse.keymap_clone_conflicts` is
   the standalone `POST clone_settings` route's field, always `[]` on
   create). `create_project` now appends one `ProjectWarning` (code
-  `keymap_clone_conflict`) per dropped conflict to the `(record,
+  `keymap_clone_conflict`) per conflicting action to the `(record,
   warnings)` pair every caller already unpacks. Red-then-green:
   `test_create_project_surfaces_keymap_clone_conflicts_as_warnings`
   (new) failed with an empty `warnings` list before this change.

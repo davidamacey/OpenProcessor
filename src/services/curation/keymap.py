@@ -224,10 +224,6 @@ async def get_keymap_doc(client: Any, index: str) -> KeymapDoc:
         doc = await client.get(index=index, id=KEYMAP_DOC_ID)
     except NotFoundError:
         return KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
-    # Some lightweight test doubles answer a miss with ``{"found": False}``
-    # instead of raising (real OpenSearch clients always raise).
-    if isinstance(doc, dict) and doc.get('found') is False:
-        return KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
     src = doc['_source']
     overrides = src.get('overrides') or {}
     return KeymapDoc(
@@ -235,6 +231,26 @@ async def get_keymap_doc(client: Any, index: str) -> KeymapDoc:
         revision=int(src.get('revision', 0)),
         updated_at=src.get('updated_at'),
         is_default=not overrides,
+    )
+
+
+async def publish_keymap_changed(doc: KeymapDoc, configs_index: str, client: Any) -> None:
+    """The ``config.changed`` event of a keymap write, carrying both the
+    keymap doc's own revision and the deployment-wide ``config_revision`` the
+    write bumped (CW-K section 4.4)."""
+    from src.services.config_store.index import get_config_revision
+    from src.services.curation.event_hub import get_event_hub
+
+    config_revision = await get_config_revision(client, configs_index)
+    get_event_hub().publish(
+        {
+            'type': 'config.changed',
+            'topic': 'config',
+            'axis': 'keymap',
+            'name': None,
+            'config_revision': config_revision,
+            'keymap_revision': doc.revision,
+        }
     )
 
 
@@ -255,10 +271,9 @@ async def save_keymap_doc(
     current_revision = 0
     try:
         current = await client.get(index=index, id=doc_id)
-        if not (isinstance(current, dict) and current.get('found') is False):
-            current_revision = int(current['_source'].get('revision', 0))
-            seq_no = current.get('_seq_no')
-            primary_term = current.get('_primary_term')
+        current_revision = int(current['_source'].get('revision', 0))
+        seq_no = current.get('_seq_no')
+        primary_term = current.get('_primary_term')
     except NotFoundError:
         pass
 

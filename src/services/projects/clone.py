@@ -338,7 +338,11 @@ async def _apply_clone(
 
     if 'keymap' in axes:
         from src.config import get_curation_config
-        from src.services.curation.keymap import get_keymap_doc, save_keymap_doc
+        from src.services.curation.keymap import (
+            get_keymap_doc,
+            publish_keymap_changed,
+            save_keymap_doc,
+        )
         from src.services.curation.keymap_validator import validate_keymap
 
         with bind_project(source, read_only=True):
@@ -396,18 +400,8 @@ async def _apply_clone(
                     overrides=source_keymap.overrides,
                     expected_revision=target_keymap.revision,
                 )
-                # Minor: tabs already open on the target should refresh.
-                from src.services.curation.event_hub import get_event_hub
-
-                get_event_hub().publish(
-                    {
-                        'type': 'config.changed',
-                        'topic': 'config',
-                        'axis': 'keymap',
-                        'name': None,
-                        'keymap_revision': new_target_doc.revision,
-                    }
-                )
+                # Tabs already open on the target should refresh.
+                await publish_keymap_changed(new_target_doc, target_cfg.configs_index, client)
 
     written_packs: dict[str, Any] = {}
     if 'prompt_packs' in axes:

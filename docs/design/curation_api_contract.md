@@ -195,8 +195,9 @@ combine target) and `paused`. A client enables buttons from the boolean flags
 and does not recompute them from `status`.
 
 Lifecycle responses carry `warnings[]` (for example `shard_budget_high`) and
-`keymap_clone_conflicts[]` (keymap actions that a `keymap` clone dropped
-because their combo collides with a class hotkey of the target).
+`keymap_clone_conflicts[]` (keymap actions whose combo collides with a class
+hotkey of the target; any conflict makes a `keymap` clone skip the whole keymap
+axis and leave the target's keymap unchanged).
 
 ### Create and clone
 
@@ -226,7 +227,11 @@ background. Follow the `project.deleted` event on `/curation/events`, or poll
 
 A delete is refused while the project has running jobs (`project_busy`), is
 the last active project, or has promoted models shared with other projects
-(`in_use`; `force=true` bypasses only this check). Repeating a `DELETE` for a
+(`in_use`; `force=true` bypasses only this check). The `in_use` body names the
+shared models in `message`, the projects whose active detection profile uses them
+in `projects[]` and `used_by[]` (`{project, profile}`); the dry run lists the
+same rows in `referenced_by[]`. A project that cannot be read makes the real
+delete `503 config_store_unavailable` (`force=true` bypasses). Repeating a `DELETE` for a
 project that is already `deleting` retries the background work.
 
 ### Pause

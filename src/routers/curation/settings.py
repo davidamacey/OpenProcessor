@@ -192,6 +192,12 @@ async def update_curation_settings_route(
     and each id must be currently advertised for that axis on
     ``GET /methods``. ``updated_by`` is always ``None`` — no user-account
     system exists yet.
+
+    Atomicity: every axis is resolved and gated before any is written, so a
+    422 never leaves one axis activated. The writes themselves are
+    sequential, not transactional: a ``409 active_conflict`` on a later axis
+    leaves the earlier axes applied, and two concurrent single-axis
+    activations each validate against the other's old state.
     """
     from src.clients.curation_opensearch import update_curation_settings
 

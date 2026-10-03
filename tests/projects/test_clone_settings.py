@@ -277,3 +277,83 @@ def test_clone_keymap_axis_copies_overrides_when_no_conflicts(
 
     assert saved['target'] == {'cluster.ignore': ['i'], 'review.skip': ['j']}
     assert conflicts == []
+
+
+def _clone_keymap(
+    monkeypatch: pytest.MonkeyPatch, source_overrides: dict[str, list[str]]
+) -> tuple[
+    list[dict[str, list[str]]], list[dict[str, Any]], list[tuple[str, dict[str, Any]]], list
+]:
+    """Clone only the keymap axis with the keymap read/write stubbed.
+    Returns ``(saves, published events, warning log calls, conflicts)``."""
+    from src.config.project_context import try_current_project
+    from src.services.curation import event_hub
+    from src.services.curation.keymap import KeymapDoc
+    from src.services.projects import clone as clone_mod
+
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='source', display_name='Source'))
+    asyncio.run(lifecycle.create_project(client, slug='target', display_name='Target'))
+    asyncio.run(registry.ensure_fresh())
+    target = registry.get('target')
+    assert target is not None
+
+    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+        current = try_current_project()
+        if current and current.record.slug == 'source':
+            return KeymapDoc(
+                overrides=source_overrides, revision=1, updated_at=None, is_default=False
+            )
+        return KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
+
+    saves: list[dict[str, list[str]]] = []
+
+    async def _fake_save(
+        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
+    ) -> KeymapDoc:
+        saves.append(overrides)
+        return KeymapDoc(
+            overrides=overrides, revision=expected_revision + 1, updated_at=None, is_default=False
+        )
+
+    events: list[dict[str, Any]] = []
+
+    class _Hub:
+        def publish(self, event: dict[str, Any]) -> None:
+            events.append(event)
+
+    warnings: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
+    monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
+    monkeypatch.setattr(event_hub, 'get_event_hub', lambda: _Hub())
+    monkeypatch.setattr(
+        clone_mod.logger, 'warning', lambda event, **kw: warnings.append((event, kw))
+    )
+    conflicts = asyncio.run(
+        lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
+    )
+    return saves, events, warnings, conflicts
+
+
+def test_clone_keymap_event_carries_both_revisions(monkeypatch: pytest.MonkeyPatch) -> None:
+    saves, events, _warnings, conflicts = _clone_keymap(monkeypatch, {'cluster.ignore': ['i']})
+    assert saves == [{'cluster.ignore': ['i']}]
+    assert conflicts == []
+    (event,) = [e for e in events if e.get('axis') == 'keymap']
+    assert event['keymap_revision'] == 1
+    assert 'config_revision' in event
+
+
+def test_clone_keymap_with_an_invalid_source_keymap_writes_nothing_and_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``not report.ok`` half of the gate: no class conflict, but the
+    source keymap does not validate in the target."""
+    saves, events, warnings, conflicts = _clone_keymap(monkeypatch, {'no.such.action': ['i']})
+    assert saves == []
+    assert conflicts == []
+    assert not [e for e in events if e.get('axis') == 'keymap']
+    ((event, fields),) = warnings
+    assert event == 'keymap_clone_conflicts_left_unchanged'
+    assert fields['errors'], 'the refusal must name the validation errors'

@@ -137,8 +137,9 @@ curl -s -X POST "$API/curation/projects/cars/clone_settings" \
 `axes` is optional. Valid axes are `settings_defaults`, `classes`,
 `activations`, `keymap`, `prompt_packs` and `vlm_activation`. Omitted or
 empty means all of them. The response is the project lifecycle envelope.
-If a copied keymap action collides with a class hotkey in the target, that
-action is dropped from the copy and listed in `keymap_clone_conflicts`
+If a copied keymap action collides with a class hotkey in the target, the
+whole keymap is skipped (the target's keymap is left unchanged) and each
+colliding action is listed in `keymap_clone_conflicts`
 (`action_id`, `combo`, `class_id`, `class_name`). Nothing is unbound
 silently. The same options exist at create time through
 `clone_settings_from` and `clone_axes`; see [Projects](./projects.mdx).
