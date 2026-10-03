@@ -155,13 +155,34 @@ def test_endpoint(name: str, method: str, url: str, **kwargs) -> dict[str, Any] 
 
 
 def clear_opensearch_data() -> bool:
-    """Clear all OpenSearch visual_search indexes for fresh testing."""
+    """Delete the OpenSearch indexes under ``OP_TEST_INDEX_PREFIX`` (default
+    ``visual_search_``) for a fresh run.
+
+    Destructive, so it never runs unless ``OP_TEST_ALLOW_INDEX_DELETE=1`` is
+    set: this suite points at whatever OpenSearch the environment names, which
+    may hold real data. Without the opt-in no DELETE is sent and the run
+    continues against the existing indexes.
+    """
     print_header('CLEARING OPENSEARCH DATA')
 
+    prefix = os.environ.get('OP_TEST_INDEX_PREFIX', 'visual_search_')
+    if os.environ.get('OP_TEST_ALLOW_INDEX_DELETE') != '1':
+        print_test(
+            'Clear OpenSearch Indexes',
+            'SKIP',
+            f'not deleting {prefix}*; set OP_TEST_ALLOW_INDEX_DELETE=1 to allow it',
+        )
+        return True
+    # Never a wildcard, and never the application's own `op_*` namespace (the
+    # project registry and every project's indexes).
+    if not prefix.endswith('_') or '*' in prefix or prefix.startswith('op_'):
+        print_test('Clear OpenSearch Indexes', 'FAIL', f'unsafe OP_TEST_INDEX_PREFIX {prefix!r}')
+        return False
+
     try:
-        response = requests.delete(f'{OPENSEARCH_BASE}/visual_search_*', timeout=10)
+        response = requests.delete(f'{OPENSEARCH_BASE}/{prefix}*', timeout=10)
         if response.status_code in [200, 404]:
-            print_test('Clear OpenSearch Indexes', 'PASS', 'All visual_search_* indexes cleared')
+            print_test('Clear OpenSearch Indexes', 'PASS', f'All {prefix}* indexes cleared')
             return True
         print_test('Clear OpenSearch Indexes', 'FAIL', f'Status {response.status_code}')
         return False

@@ -37,7 +37,7 @@ from projects.conftest import fake_ensure_indexes
 
 from integration.ingest_fakes import FakeTritonPool, curation_app
 from integration.wheel_worker import run_region_worker
-from integration.wheel_world import RoutedOpenSearch
+from integration.wheel_world import WRITE_OPS, RoutedOpenSearch
 from scripts.datasets import build_import_fixture as fx
 from src.config.curation import IndexRole, base_curation_config
 from src.config.projects import new_project_record
@@ -87,11 +87,10 @@ class World:
         self.mark = len(cluster.audit)
 
     def default_traffic(self, *, since: int, writes_only: bool) -> list[tuple[str, str]]:
-        write_ops = {'index', 'update', 'delete', 'create', 'bulk', 'delete_index'}
         return [
             (op, index)
             for op, index in self.cluster.audit[since:]
-            if index in self.default_indexes and (not writes_only or op in write_ops)
+            if index in self.default_indexes and (not writes_only or op in WRITE_OPS)
         ]
 
 
