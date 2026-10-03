@@ -174,7 +174,7 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
         {
             'bool': {
                 'filter': [
-                    {'term': {'class_source': OPEN_VOCAB_TARGET_CLASS_SOURCE}},
+                    {'terms': {'class_source': [OPEN_VOCAB_TARGET_CLASS_SOURCE]}},
                     {'exists': {'field': VLM_CLASS_ATTEMPTED_AT_FIELD}},
                 ],
             },

@@ -100,7 +100,7 @@ def test_the_worker_asks_a_target_item_once() -> None:
     clause = next(
         c
         for c in must_not
-        if 'bool' in c and {'term': {'class_source': 'open_vocab_target'}} in c['bool']['filter']
+        if 'bool' in c and {'terms': {'class_source': ['open_vocab_target']}} in c['bool']['filter']
     )
     assert {'exists': {'field': 'vlm_class_attempted_at'}} in clause['bool']['filter']
 
