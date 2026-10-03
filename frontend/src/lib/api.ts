@@ -4728,6 +4728,9 @@ export interface AutoLabelStartParams {
    *  ones. Default false — only fresh / class-bucketed items are
    *  re-clustered. */
   recluster_unvalidated?: boolean;
+  /** v0.4.0: embed the items that have no vector as the run's first stage.
+   *  Sent only when ticked. */
+  embed_missing?: boolean;
   // -- Cluster scope (primary-subject gate) ------------------------------
   /** Train + assign only crops with crop_rank_in_image <= this (1 = largest,
    *  2 = largest + 2nd). Smaller crops are parked. Needs full rank/blur
