@@ -279,7 +279,7 @@
       // are unaffected — just clear the selection, no reload needed.
       clearSelection();
     } catch (e) {
-      toastStore.error(`Label failed: ${(e as Error).message}`);
+      toastStore.error(`Label failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }
@@ -299,7 +299,7 @@
       // the moved points render with their new color/bucket.
       await load();
     } catch (e) {
-      toastStore.error(`Move failed: ${(e as Error).message}`);
+      toastStore.error(`Move failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }
@@ -384,7 +384,7 @@
       await cancelVizProjection();
       toastStore.info('Projection rebuild cancelled.');
     } catch (e) {
-      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
     } finally {
       job = null;
       stopJobPoll();

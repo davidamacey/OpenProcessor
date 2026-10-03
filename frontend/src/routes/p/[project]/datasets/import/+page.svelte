@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * `/datasets/import` — import a labeled dataset into the current project
    * (any_domain_plan.md §7.12 item 1; docs/design/
@@ -62,7 +63,7 @@
     try {
       wizard.prefillFromJob(await getDatasetImport(importId));
     } catch (e) {
-      prefillError = (e as Error)?.message ?? String(e);
+      prefillError = apiErrorText(e);
     }
   }
 

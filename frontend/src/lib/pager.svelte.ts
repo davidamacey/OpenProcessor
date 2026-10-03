@@ -1,3 +1,4 @@
+import { apiErrorText } from '$lib/api';
 /**
  * Accumulating page-1..N loader shared by the infinite-scroll grids.
  *
@@ -136,7 +137,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         firstPage = 1;
       } catch (e) {
         if (myEpoch !== epoch) return;
-        error = (e as Error).message;
+        error = apiErrorText(e);
         opts.onLoadFirstError?.();
       } finally {
         if (myEpoch === epoch) loading = false;
@@ -166,7 +167,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         total = res?.total ?? total;
         loadedPages = next;
       } catch (e) {
-        if (myEpoch === epoch) error = (e as Error).message;
+        if (myEpoch === epoch) error = apiErrorText(e);
       } finally {
         // Always clear the busy flag, even if superseded — otherwise a
         // discarded stale loadMore() would leave loadingMore stuck `true`
@@ -193,7 +194,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         firstPage = page;
       } catch (e) {
         if (myEpoch !== epoch) return;
-        error = (e as Error).message;
+        error = apiErrorText(e);
         opts.onLoadFirstError?.();
       } finally {
         if (myEpoch === epoch) loading = false;

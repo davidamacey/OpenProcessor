@@ -30,7 +30,7 @@ describe('/classes Proposals section', () => {
     const fn = src.match(/async function loadProposals\([\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/proposalsSummary = await getNewClassProposalsSummary\(\)/);
-    expect(fn).toMatch(/catch \(e\) \{[\s\S]*proposalsError = \(e as Error\)\.message;/);
+    expect(fn).toMatch(/catch \(e\) \{[\s\S]*proposalsError = apiErrorText\(e\);/);
   });
 
   it('createClassAndAssign dry-runs the resolve with a create payload, confirms the served matched count, then resolves for real', () => {

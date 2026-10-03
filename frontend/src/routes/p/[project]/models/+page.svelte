@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { onMount, onDestroy } from 'svelte';
   import { getModelsStatus, unloadModel } from '$lib/api';
   import {
@@ -56,7 +57,7 @@
       error = null;
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
-      error = (e as Error).message;
+      error = apiErrorText(e);
     } finally {
       loading = false;
     }

@@ -29,6 +29,7 @@ import {
   refineRegionCluster,
   type RegionBrowseItem,
   type SuspectedFpItem,
+  apiErrorText,
 } from '$lib/api';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
@@ -262,9 +263,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       // them, but a stale response shouldn't surface a 0-size card).
       clusters = (res.clusters ?? []).filter((c) => c.size > 0);
     } catch (e) {
-      toastStore.error(
-        `Load ${slot.label.singular} clusters failed: ${(e as Error).message}`,
-      );
+      toastStore.error(`Load ${slot.label.singular} clusters failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -289,7 +288,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         );
       }
     } catch (e) {
-      toastStore.error(`Load suspected FPs failed: ${(e as Error).message}`);
+      toastStore.error(`Load suspected FPs failed: ${apiErrorText(e)}`);
     } finally {
       clusterBusy = false;
     }
@@ -382,7 +381,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         await loadClusters();
       }
     } catch (e) {
-      toastStore.error(`Build FP centroids failed: ${(e as Error).message}`);
+      toastStore.error(`Build FP centroids failed: ${apiErrorText(e)}`);
     } finally {
       clusterBusy = false;
     }
@@ -418,7 +417,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         await loadClusters();
       }
     } catch (e) {
-      toastStore.error(`Cluster ${slot.label.plural} failed: ${(e as Error).message}`);
+      toastStore.error(`Cluster ${slot.label.plural} failed: ${apiErrorText(e)}`);
     } finally {
       clusterBusy = false;
     }
@@ -445,8 +444,8 @@ export function createSlotGalleryController(slot: SlotSpec) {
       subTab = null;
       await loadFirst();
     } catch (e) {
-      refineMsg = `Refine failed: ${(e as Error).message}`;
-      toastStore.error(`Refine failed: ${(e as Error).message}`);
+      refineMsg = `Refine failed: ${apiErrorText(e)}`;
+      toastStore.error(`Refine failed: ${apiErrorText(e)}`);
     } finally {
       clusterBusy = false;
     }
@@ -514,9 +513,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     try {
       editCrop = await getCrop(p.crop_id);
     } catch (err) {
-      toastStore.error(
-        `Could not load ${slot.label.singular}: ${(err as Error).message}`,
-      );
+      toastStore.error(`Could not load ${slot.label.singular}: ${apiErrorText(err)}`);
     }
   }
 
@@ -578,7 +575,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         );
       }
     } catch (err) {
-      toastStore.error(`Bulk update failed: ${(err as Error).message}`);
+      toastStore.error(`Bulk update failed: ${apiErrorText(err)}`);
     } finally {
       busy = false;
     }
@@ -644,7 +641,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       }
       await pager.loadPage(pager.firstPage);
     } catch (err) {
-      toastStore.error(`Bulk box triage failed: ${(err as Error).message}`);
+      toastStore.error(`Bulk box triage failed: ${apiErrorText(err)}`);
     } finally {
       busy = false;
     }

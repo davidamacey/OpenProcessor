@@ -30,7 +30,7 @@ describe('M1: Dismissed panel sends a sort the backend accepts and reports failu
 
   it('a failed load sets dismissedError instead of silently emptying the list', () => {
     const fn = src.match(/async function toggleDismissedPanel\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toMatch(/dismissedError = \(e as Error\)\.message;/);
+    expect(fn).toMatch(/dismissedError = apiErrorText\(e\);/);
     expect(fn).toMatch(/dismissedItems = \[\];/);
   });
 

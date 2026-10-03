@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Training form. Decomposed sub-pieces (`ClassSubsetPicker`,
    * `AugmentationPanel`) own their own UI; this component owns:
@@ -99,7 +100,7 @@
         if (!cudaDevices) cudaDevices = defaultGpuValue(res);
       })
       .catch((e: unknown) => {
-        if ((e as Error).name !== 'AbortError') gpuError = (e as Error).message;
+        if ((e as Error).name !== 'AbortError') gpuError = apiErrorText(e);
       });
     return () => ctrl.abort();
   });

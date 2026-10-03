@@ -12,7 +12,7 @@
  * successful poll restores it.
  */
 
-import { getGlobalHealth, getHealth } from '$lib/api';
+import { getGlobalHealth, getHealth, apiErrorText } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import type { ApiHealth, GlobalHealth } from '$lib/types';
 import { regionProfileStore } from '$stores/regionProfile.svelte';
@@ -102,7 +102,7 @@ class HealthStore {
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.ok = false;
-      this.error = (e as Error).message;
+      this.error = apiErrorText(e);
     } finally {
       this.lastChecked = Date.now();
     }

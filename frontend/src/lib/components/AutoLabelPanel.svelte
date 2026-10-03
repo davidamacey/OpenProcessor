@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /*
    * Recluster / auto-label control panel.
    *
@@ -220,7 +221,7 @@
       );
       schedule();
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = apiErrorText(e);
       const refusal = configErrorDetail(e);
       if (unknownStrategyDetail(e)) {
         const d = unknownStrategyDetail(e)!;
@@ -249,7 +250,7 @@
       job = await cancelAutoLabel();
       toastStore.info('Cancel requested. Pipeline will stop at the next checkpoint.');
     } catch (e) {
-      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }

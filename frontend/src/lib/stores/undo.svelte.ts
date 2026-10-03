@@ -36,6 +36,7 @@ import {
   undoVlmDismiss,
   excludeCrops,
   unexcludeCrops,
+  apiErrorText,
 } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import { toastStore } from '$stores/toast.svelte';
@@ -220,7 +221,7 @@ class UndoStore {
       if (e instanceof ApiError && e.status === 409) {
         toastStore.info('Nothing left to undo.');
       } else {
-        toastStore.error(`Undo failed: ${(e as Error).message}`);
+        toastStore.error(`Undo failed: ${apiErrorText(e)}`);
         this.push(entry);
       }
       return [];

@@ -15,7 +15,7 @@
  *  2. No polling. See the plan's §4.3.
  */
 
-import { getCurationSettings, putCurationDefaults } from '$lib/api';
+import { getCurationSettings, putCurationDefaults, apiErrorText } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import {
   EMPTY_CURATION_SETTINGS,
@@ -51,7 +51,7 @@ class CurationSettingsStore {
         if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
         this.settings = EMPTY_CURATION_SETTINGS;
-        this.error = (e as Error)?.message ?? 'failed to load settings';
+        this.error = apiErrorText(e) ?? 'failed to load settings';
       } finally {
         if (gen === this.#gen) {
           this.loading = false;
@@ -106,7 +106,7 @@ class CurationSettingsStore {
       this.error = null;
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
-        this.error = (e as Error)?.message ?? 'failed to save settings';
+        this.error = apiErrorText(e) ?? 'failed to save settings';
       }
       throw e;
     } finally {
@@ -130,7 +130,7 @@ class CurationSettingsStore {
       this.error = null;
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
-        this.error = (e as Error)?.message ?? 'failed to clear setting';
+        this.error = apiErrorText(e) ?? 'failed to clear setting';
       }
       throw e;
     } finally {

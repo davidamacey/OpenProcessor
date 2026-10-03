@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import ItemFilterBar from '$lib/components/itemFilter/ItemFilterBar.svelte';
   import ServedFilterField from '$lib/components/itemFilter/ServedFilterField.svelte';
   import {
@@ -356,7 +357,7 @@
           resolve(null);
         } catch (e) {
           stopDiversePolling();
-          diverseError = `Diverse selection failed: ${(e as Error).message}`;
+          diverseError = `Diverse selection failed: ${apiErrorText(e)}`;
           diverseJobId = null;
           diverseJobStatus = null;
           resolve(null);
@@ -747,7 +748,7 @@
       cursor =
         idx >= 0 ? idx : Math.max(0, Math.min(loc.rank ?? 0, queue.items.length - 1));
     } catch (e) {
-      toastStore.error(`Locate failed: ${(e as Error).message}`);
+      toastStore.error(`Locate failed: ${apiErrorText(e)}`);
     } finally {
       jumpingToCrop = false;
       pendingCropId = null;
@@ -1213,7 +1214,7 @@
       // dismissed crops" — that empty state used to render even when the
       // request itself failed, making a real 400 look like there was
       // simply nothing to restore.
-      dismissedError = (e as Error).message;
+      dismissedError = apiErrorText(e);
       dismissedItems = [];
     } finally {
       dismissedLoading = false;
@@ -1226,7 +1227,7 @@
       dismissedItems = dismissedItems.filter((c) => c.id !== crop.id);
       toastStore.success('Restored to review.');
     } catch (e) {
-      toastStore.error(`Restore failed: ${(e as Error).message}`);
+      toastStore.error(`Restore failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -1385,9 +1386,7 @@
       // store fields (including the freshly re-mapped .slots) on top.
       fresh = { ...last.item, ...c } as ReviewItem;
     } catch (e) {
-      toastStore.warn(
-        `Re-fetch failed; restoring local snapshot: ${(e as Error).message}`,
-      );
+      toastStore.warn(`Re-fetch failed; restoring local snapshot: ${apiErrorText(e)}`);
       fresh = last.item;
     }
     const insertAt = Math.min(last.insertAt, queue.items.length);
@@ -1494,7 +1493,7 @@
         editedSlotStatus = seedData?.lifecycle?.status ?? '';
         editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
       }
-      toastStore.error(`Save failed: ${(e as Error).message}`);
+      toastStore.error(`Save failed: ${apiErrorText(e)}`);
     } finally {
       slotMetaAborts.finish(id, ac);
     }
@@ -1563,7 +1562,7 @@
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
-      toastStore.error(`Confirm failed: ${(e as Error).message}`);
+      toastStore.error(`Confirm failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -1623,7 +1622,7 @@
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
-      toastStore.error(`Reject failed: ${(e as Error).message}`);
+      toastStore.error(`Reject failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -1649,7 +1648,7 @@
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
-      toastStore.error(`Mark FP failed: ${(e as Error).message}`);
+      toastStore.error(`Mark FP failed: ${apiErrorText(e)}`);
     }
   }
 

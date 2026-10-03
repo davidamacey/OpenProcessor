@@ -17,7 +17,7 @@
  * a page-level and a controller-level copy that can drift apart.
  */
 
-import { putCropLabel, reviewDismissCrop } from '$lib/api';
+import { putCropLabel, reviewDismissCrop, apiErrorText } from '$lib/api';
 import type { Pager } from '$lib/pager.svelte';
 import type { ReviewItem } from '$lib/types';
 import { classesStore } from '$stores/classes.svelte';
@@ -84,7 +84,7 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
       toastStore.success(`Labeled "${cls?.name ?? classId}".`);
     } catch (e) {
       restore();
-      toastStore.error(`Label failed: ${(e as Error).message}`);
+      toastStore.error(`Label failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -104,7 +104,7 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
       toastStore.success('Dismissed from review (permanent).');
     } catch (e) {
       restore();
-      toastStore.error(`Discard failed: ${(e as Error).message}`);
+      toastStore.error(`Discard failed: ${apiErrorText(e)}`);
     }
   }
 

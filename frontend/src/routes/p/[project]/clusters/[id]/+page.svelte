@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { page } from '$app/state';
@@ -443,7 +444,7 @@
       );
       sel.ids = new Set();
     } catch (e) {
-      toastStore.error(`Flag failed: ${(e as Error).message}`);
+      toastStore.error(`Flag failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -533,7 +534,7 @@
       toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
       await loadFirst();
     } catch (e) {
-      toastStore.error(`Refine failed: ${(e as Error).message}`);
+      toastStore.error(`Refine failed: ${apiErrorText(e)}`);
     } finally {
       refining = false;
     }

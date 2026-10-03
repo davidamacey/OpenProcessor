@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import type {
     Crop,
     CropContextResponse,
@@ -127,7 +128,7 @@
       })
       .catch((e: unknown) => {
         if ((e as Error)?.name === 'AbortError') return;
-        historyError = (e as Error).message;
+        historyError = apiErrorText(e);
       })
       .finally(() => {
         historyLoading = false;
@@ -151,7 +152,7 @@
       })
       .catch((e: unknown) => {
         if ((e as Error)?.name === 'AbortError') return;
-        imageError = (e as Error).message;
+        imageError = apiErrorText(e);
       })
       .finally(() => {
         imageLoading = false;

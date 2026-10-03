@@ -1,3 +1,4 @@
+import { apiErrorText } from '$lib/api';
 /**
  * Tier-2 deployment profile loading (contract §2 tier 2, §9 step 1).
  *
@@ -107,7 +108,7 @@ export async function fetchDeploymentProfiles(
   } catch (e) {
     return {
       slots: [],
-      warnings: [`deployment profile is not valid JSON: ${(e as Error).message}`],
+      warnings: [`deployment profile is not valid JSON: ${apiErrorText(e)}`],
     };
   }
 

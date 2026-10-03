@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * The `by_source` ingest status table plus `total` and `by_day`
    * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2).
@@ -7,7 +8,7 @@
    * each completed chunk).
    */
   import { onDestroy, onMount } from 'svelte';
-  import { ApiError, getIngestStatus } from '$lib/api';
+  import { getIngestStatus } from '$lib/api';
   import type { IngestStatus } from '$lib/types';
 
   interface Props {
@@ -25,7 +26,7 @@
       status = await getIngestStatus();
       error = null;
     } catch (e) {
-      error = e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+      error = apiErrorText(e);
     }
   }
 

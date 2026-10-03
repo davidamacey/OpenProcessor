@@ -40,7 +40,13 @@ import {
   confirmProposedBoxes,
   type EditableBox,
 } from '$lib/annotations/multiBox';
-import { putRegionBoxes, patchRegionBox, regionConflictDetail, ApiError } from '$lib/api';
+import {
+  putRegionBoxes,
+  patchRegionBox,
+  regionConflictDetail,
+  ApiError,
+  apiErrorText,
+} from '$lib/api';
 import { slotOf } from '$lib/annotations/cropSlots';
 import type { SlotSpec, BBoxNormLike } from '$lib/annotations/types';
 import type { Crop } from '$lib/types';
@@ -209,7 +215,7 @@ export function createMultiBoxRegionController(
       undoStore.recordRegionWrites([cropId]);
     } catch (e) {
       if (adoptConflict(e)) return;
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      const msg = e instanceof ApiError ? e.message : apiErrorText(e);
       toastStore.error(
         `Box ${state === 'accepted' ? 'accept' : 'reject'} failed: ${msg}`,
       );
@@ -245,7 +251,7 @@ export function createMultiBoxRegionController(
     } catch (e) {
       const adopted = adoptConflict(e);
       if (adopted) return { ok: false, item: adopted };
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      const msg = e instanceof ApiError ? e.message : apiErrorText(e);
       toastStore.error(`Confirm failed: ${msg}`);
       return { ok: false, item: null };
     } finally {
@@ -268,7 +274,7 @@ export function createMultiBoxRegionController(
     } catch (e) {
       const adopted = adoptConflict(e);
       if (adopted) return { ok: false, item: adopted };
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      const msg = e instanceof ApiError ? e.message : apiErrorText(e);
       toastStore.error(`Save failed: ${msg}`);
       return { ok: false, item: null };
     } finally {
@@ -294,7 +300,7 @@ export function createMultiBoxRegionController(
       undoStore.recordRegionWrites([cropId]);
     } catch (e) {
       if (adoptConflict(e)) return;
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
+      const msg = e instanceof ApiError ? e.message : apiErrorText(e);
       toastStore.error(`Text save failed: ${msg}`);
     } finally {
       busy = false;

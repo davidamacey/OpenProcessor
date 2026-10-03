@@ -5,7 +5,12 @@
  * verbatim copies of this validation.
  */
 
-import { ApiError, hotkeyReservedDetail, hotkeyTakenDetail, renameClass } from '$lib/api';
+import {
+  hotkeyReservedDetail,
+  hotkeyTakenDetail,
+  renameClass,
+  apiErrorText,
+} from '$lib/api';
 import { isPickerHiddenClass } from '$lib/classVisibility';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotRegistry } from '$lib/annotations/registry';
@@ -119,7 +124,7 @@ export async function setClassHotkey(cls: RegistryClass, raw: string): Promise<v
     // sent one — the client-side checks above cover the common cases,
     // but a race or a rule the client doesn't know about yet still needs
     // the server's own words.
-    const detail = e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+    const detail = apiErrorText(e);
     toastStore.error(`Hotkey set failed: ${detail}`);
   }
 }

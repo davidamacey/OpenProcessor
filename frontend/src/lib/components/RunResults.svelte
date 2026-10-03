@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Finished-run results — evaluation (labelled by its own `eval.split`)
    * + lineage for a terminal `/train` run. Collapsed by default; the
@@ -59,7 +60,7 @@
     try {
       manifest = await getTrainManifest(status.job_id);
     } catch (e) {
-      manifestError = (e as Error).message;
+      manifestError = apiErrorText(e);
     } finally {
       manifestLoading = false;
     }

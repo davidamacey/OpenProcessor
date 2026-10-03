@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * "Curation scores" card — `/settings` (docs/design/
    * frontend-coverage-audit-2026-09-24.md §G10). Per-scorer coverage
@@ -16,7 +17,6 @@
    */
 
   import {
-    ApiError,
     cancelScores,
     computeScores,
     getScoresCoverage,
@@ -61,7 +61,7 @@
       loadError = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      loadError = (e as Error)?.message ?? 'failed to load curation-score coverage';
+      loadError = apiErrorText(e) ?? 'failed to load curation-score coverage';
     } finally {
       loading = false;
     }
@@ -175,10 +175,7 @@
           : `Computing ${scorers.join(', ')}…`,
       );
     } catch (e) {
-      const detail =
-        e instanceof ApiError
-          ? (e.detail ?? e.message)
-          : ((e as Error)?.message ?? 'failed');
+      const detail = apiErrorText(e);
       computeError = detail;
       toastStore.error(`Compute failed: ${detail}`);
     } finally {
@@ -194,7 +191,7 @@
       await cancelScores();
       toastStore.info('Curation-score compute cancelled.');
     } catch (e) {
-      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
     } finally {
       job = null;
       stopJobPoll();

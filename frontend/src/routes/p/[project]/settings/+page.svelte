@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Deployment defaults — admin page for the shared curation-strategy
    * defaults (`GET,PUT {API_PREFIX}/settings`). See
@@ -166,7 +167,7 @@
         ? `Unknown ${unknown.axis.replace('_', ' ')} "${unknown.requested}" — valid: ${unknown.valid_ids.join(', ') || 'none'}.`
         : refusal
           ? refusal.message
-          : ((e as Error)?.message ??
+          : (apiErrorText(e) ??
             (mode === 'clear' ? 'failed to clear setting' : 'failed to save settings'));
       saveErrors = { ...saveErrors, [spec.axis]: message };
       // A refused save is shown under its control; the store's load-error

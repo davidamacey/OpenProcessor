@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { addClass } from '$lib/api';
@@ -72,7 +73,7 @@
       oncreated?.({ name: slug, group });
       onclose();
     } catch (e) {
-      errorText = (e as Error).message;
+      errorText = apiErrorText(e);
     } finally {
       busy = false;
     }

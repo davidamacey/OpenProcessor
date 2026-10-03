@@ -1,3 +1,4 @@
+import { apiErrorText } from '$lib/api';
 /**
  * State/logic for `<SemanticSearchBox>` (P2-14 — free-text search over
  * crops, `GET {API_PREFIX}/search/text`). Same "logic extracted from the
@@ -89,7 +90,7 @@ export function createSemanticSearchBox(opts: SemanticSearchOptions): SemanticSe
     } catch (e) {
       if (myController.signal.aborted) return;
       if (e instanceof DOMException && e.name === 'AbortError') return;
-      error = (e as Error).message || 'Search failed';
+      error = apiErrorText(e) || 'Search failed';
     } finally {
       if (controller === myController) loading = false;
     }

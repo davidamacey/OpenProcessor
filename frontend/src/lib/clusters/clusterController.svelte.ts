@@ -35,6 +35,7 @@ import {
   unexcludeCrops,
   vlmDismissCrop,
   type ExcludeReason,
+  apiErrorText,
 } from '$lib/api';
 import type { Pager } from '$lib/pager.svelte';
 import type { Selection } from '$lib/selection.svelte';
@@ -168,7 +169,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       // of trying to derive the new count client-side.
       void classesStore.refresh();
     } catch (e) {
-      toastStore.error(`Label failed: ${(e as Error).message}`);
+      toastStore.error(`Label failed: ${apiErrorText(e)}`);
       for (const prior of priors) revertLocalLabel(prior);
     }
   }
@@ -245,7 +246,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       exclusionGuard.release(ids);
       cropPager.items = snap;
       cropPager.total = snapTotal;
-      toastStore.error(`Label failed: ${(e as Error).message}`);
+      toastStore.error(`Label failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -272,7 +273,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         undoStore.recordWrites([crop.id]);
         void classesStore.refresh();
       } catch (e) {
-        toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
+        toastStore.error(`Accept VLM suggestion failed: ${apiErrorText(e)}`);
         exclusionGuard.release([crop.id]);
         cropPager.items = snap;
         cropPager.total = snapTotal;
@@ -285,7 +286,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       undoStore.recordWrites([crop.id]);
       void classesStore.refresh();
     } catch (e) {
-      toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
+      toastStore.error(`Accept VLM suggestion failed: ${apiErrorText(e)}`);
       revertLocalLabel(crop);
     }
   }
@@ -307,7 +308,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         toastStore.info('No VLM suggestion to reject.');
         return;
       }
-      toastStore.error(`Reject VLM suggestion failed: ${(e as Error).message}`);
+      toastStore.error(`Reject VLM suggestion failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -364,7 +365,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         undoStore.recordWrites(res.updated_ids);
         ok += ids.length;
       } catch (e) {
-        lastError = (e as Error).message;
+        lastError = apiErrorText(e);
         failedIds.push(...ids);
       }
     }
@@ -414,7 +415,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         failedCount = ids.length - succeededIds.length;
       }
     } catch (e) {
-      lastError = (e as Error).message;
+      lastError = apiErrorText(e);
       failedCount = ids.length;
     }
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local lookup, built and consumed synchronously within this function, never stored in reactive state
@@ -475,7 +476,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         `Ignored ${res.excluded}${tag}. Press ${keymapStore.glyph('cluster.unignore')} to undo.`,
       );
     } catch (e) {
-      toastStore.error(`Ignore failed: ${(e as Error).message}`);
+      toastStore.error(`Ignore failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -491,7 +492,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       lastExcludedIds = [];
       toastStore.success(`Restored ${res.unexcluded}. Re-cluster to re-sort them.`);
     } catch (e) {
-      toastStore.error(`Un-ignore failed: ${(e as Error).message}`);
+      toastStore.error(`Un-ignore failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -545,7 +546,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     } catch (e) {
       exclusionGuard.release(ids);
       cropPager.items = snap;
-      toastStore.error(`Move failed: ${(e as Error).message}`);
+      toastStore.error(`Move failed: ${apiErrorText(e)}`);
     }
   }
 

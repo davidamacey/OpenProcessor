@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import {
     ApiError,
     classStillReferencedDetail,
@@ -138,7 +139,7 @@
       cancelEdit();
       await classesStore.clearAndRefetch();
     } catch (e) {
-      toastStore.error(`Rename failed: ${(e as Error).message}`);
+      toastStore.error(`Rename failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }
@@ -152,7 +153,7 @@
       toastStore.success(`${cls.name} → group ${newG}`);
       await classesStore.clearAndRefetch();
     } catch (e) {
-      toastStore.error(`Group change failed: ${(e as Error).message}`);
+      toastStore.error(`Group change failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }
@@ -194,7 +195,7 @@
         );
         if (goMerge) openMergeWithSource(cls.id);
       } else {
-        toastStore.error(`Deprecate failed: ${(e as Error).message}`);
+        toastStore.error(`Deprecate failed: ${apiErrorText(e)}`);
       }
     } finally {
       busy = false;
@@ -221,7 +222,7 @@
       } else if (e instanceof ApiError && e.status === 409 && e.detail) {
         toastStore.error(e.detail);
       } else {
-        toastStore.error(`Restore failed: ${(e as Error).message}`);
+        toastStore.error(`Restore failed: ${apiErrorText(e)}`);
       }
     } finally {
       busy = false;
@@ -281,7 +282,7 @@
       })
       .catch((e: unknown) => {
         if ((e as Error)?.name === 'AbortError') return;
-        mergePreviewError = (e as Error).message;
+        mergePreviewError = apiErrorText(e);
       })
       .finally(() => {
         mergePreviewBusy = false;
@@ -319,7 +320,7 @@
       mergeOpen = false;
       await classesStore.clearAndRefetch();
     } catch (e) {
-      toastStore.error(`Merge failed: ${(e as Error).message}`);
+      toastStore.error(`Merge failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }
@@ -332,7 +333,7 @@
       const upserted = res.upserted ?? 0;
       toastStore.success(`Synced ${upserted} classes to OpenSearch.`);
     } catch (e) {
-      toastStore.error(`Sync failed: ${(e as Error).message}`);
+      toastStore.error(`Sync failed: ${apiErrorText(e)}`);
     } finally {
       busy = false;
     }
@@ -369,7 +370,7 @@
       // Observed live: this aggregate can 500 on an opensearch outage even
       // while the rest of /classes works fine — degrade to an inline error
       // rather than breaking the page.
-      proposalsError = (e as Error).message;
+      proposalsError = apiErrorText(e);
     } finally {
       proposalsLoading = false;
     }
@@ -446,7 +447,7 @@
       dismissProposalTerm(term.label);
       await Promise.all([loadProposals(), classesStore.clearAndRefetch()]);
     } catch (e) {
-      toastStore.error(`Create & assign failed: ${(e as Error).message}`);
+      toastStore.error(`Create & assign failed: ${apiErrorText(e)}`);
     } finally {
       proposalBusyTerm = null;
     }
@@ -472,7 +473,7 @@
       dismissProposalTerm(term.label);
       await loadProposals();
     } catch (e) {
-      toastStore.error(`Assign failed: ${(e as Error).message}`);
+      toastStore.error(`Assign failed: ${apiErrorText(e)}`);
     } finally {
       proposalBusyTerm = null;
     }
@@ -510,7 +511,7 @@
       reportResolve(res, `Assigned to "${cls?.name ?? res.class_name}"`);
       await loadProposals();
     } catch (e) {
-      toastStore.error(`Assign failed: ${(e as Error).message}`);
+      toastStore.error(`Assign failed: ${apiErrorText(e)}`);
     } finally {
       proposalBusyTerm = null;
     }

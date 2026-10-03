@@ -75,9 +75,7 @@ describe('/classes: Deprecate action per live class row', () => {
 
   it('a non-structured failure still falls back to a generic error toast', () => {
     const f = fn('deprecateClassAction', 'async function restoreClassAction');
-    expect(f).toMatch(
-      /toastStore\.error\(`Deprecate failed: \$\{\(e as Error\)\.message\}`\)/,
-    );
+    expect(f).toMatch(/toastStore\.error\(`Deprecate failed: \$\{apiErrorText\(e\)\}`\)/);
   });
 
   it('openMergeWithSource resets the merge dialog then pins mergeSourceId', () => {

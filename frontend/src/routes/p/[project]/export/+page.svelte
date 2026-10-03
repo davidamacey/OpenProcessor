@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import {
@@ -198,7 +199,7 @@
           }
         }
       } catch (e) {
-        toastStore.warn(`Status poll failed: ${(e as Error).message}`);
+        toastStore.warn(`Status poll failed: ${apiErrorText(e)}`);
       }
     }, 5000);
   }
@@ -262,7 +263,7 @@
       exportRunning = false;
       // 422 "nothing to export: <reason>" (e.g. require_fully_labeled_images
       // dropped every candidate image) surfaces via ApiError's detail text.
-      toastStore.error(`Export failed: ${(e as Error).message}`);
+      toastStore.error(`Export failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -319,7 +320,7 @@
       freezeOpen = false;
       await loadAll();
     } catch (e) {
-      toastStore.error(`Freeze failed: ${(e as Error).message}`);
+      toastStore.error(`Freeze failed: ${apiErrorText(e)}`);
     } finally {
       freezeBusy = false;
     }
@@ -366,7 +367,7 @@
         hddSourcesError = null;
         if (Array.isArray(json.by_source)) hddSources = json.by_source;
       } catch (e) {
-        hddSourcesError = `Dataset totals unavailable: ${(e as Error).message}`;
+        hddSourcesError = `Dataset totals unavailable: ${apiErrorText(e)}`;
       }
     })();
   });

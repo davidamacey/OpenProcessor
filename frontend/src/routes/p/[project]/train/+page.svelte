@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   /**
@@ -230,7 +231,7 @@
           'No frozen export available — run /export first to produce a dataset.';
       }
     } catch (e) {
-      datasetMessage = `Export status fetch failed: ${(e as Error).message}`;
+      datasetMessage = `Export status fetch failed: ${apiErrorText(e)}`;
     } finally {
       refreshing = false;
     }
@@ -324,7 +325,7 @@
       }
       toastStore.success(`${spec.label} complete`);
     } catch (e) {
-      singleClassExportMessage = `${spec.label} failed: ${(e as Error).message}`;
+      singleClassExportMessage = `${spec.label} failed: ${apiErrorText(e)}`;
       toastStore.error(`${spec.label} failed`);
     } finally {
       singleClassExporting = false;
@@ -415,7 +416,7 @@
       runs = res.items ?? [];
       runsTotal = res.total ?? runs.length;
     } catch (e) {
-      runsError = (e as Error).message;
+      runsError = apiErrorText(e);
     } finally {
       runsLoading = false;
     }
@@ -431,7 +432,7 @@
       runs = [...runs, ...fresh];
       runsTotal = res.total ?? runsTotal;
     } catch (e) {
-      runsError = (e as Error).message;
+      runsError = apiErrorText(e);
     } finally {
       runsLoadingMore = false;
     }
@@ -496,7 +497,7 @@
       }
       toastStore.error(`Start failed: ${msg}`);
     } else {
-      toastStore.error(`Start failed: ${(err as Error).message}`);
+      toastStore.error(`Start failed: ${apiErrorText(err)}`);
     }
   }
 
@@ -539,7 +540,7 @@
       toastStore.info(`Cancel sentinel dropped for ${jobId}`);
       await pullStatus();
     } catch (e) {
-      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
     } finally {
       cancellingRun = false;
     }
@@ -554,7 +555,7 @@
       await pullStatus();
       await refreshRuns();
     } catch (e) {
-      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
     } finally {
       cancellingCampaign = false;
     }
@@ -606,7 +607,7 @@
       toastStore.success(`Reproduced as ${res.job_id}`);
       await refreshRuns();
     } catch (e) {
-      toastStore.error(`Reproduce failed: ${(e as Error).message}`);
+      toastStore.error(`Reproduce failed: ${apiErrorText(e)}`);
     } finally {
       reproducingId = null;
     }
@@ -620,7 +621,7 @@
           const p = await getTrainProfiles();
           profiles = p.profiles ?? [];
         } catch (e) {
-          toastStore.error(`Profiles fetch failed: ${(e as Error).message}`);
+          toastStore.error(`Profiles fetch failed: ${apiErrorText(e)}`);
         }
       })(),
       (async () => {
@@ -628,7 +629,7 @@
           const p = await getTrainPresets();
           presets = p.class_subset_presets ?? [];
         } catch (e) {
-          toastStore.error(`Presets fetch failed: ${(e as Error).message}`);
+          toastStore.error(`Presets fetch failed: ${apiErrorText(e)}`);
         }
       })(),
       refreshDataset(),
@@ -930,7 +931,7 @@
       const res = await runCohortQuery(cohort, 24, group.className);
       cohortPreview = res.items;
     } catch (e) {
-      cohortPreviewError = (e as Error).message;
+      cohortPreviewError = apiErrorText(e);
     } finally {
       cohortPreviewLoading = false;
     }

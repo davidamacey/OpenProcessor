@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * `/ingest` — bring images into the pool
    * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A). The
@@ -48,7 +49,7 @@
     void getIngestConfig()
       .then((c) => (servedConfig = c))
       .catch((e: unknown) => {
-        configError = (e as Error)?.message ?? 'failed to load the ingest config';
+        configError = apiErrorText(e) ?? 'failed to load the ingest config';
       });
   });
 

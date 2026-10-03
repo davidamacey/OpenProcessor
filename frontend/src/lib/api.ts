@@ -1821,8 +1821,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   const cls: RawClasses =
     clsResult.status === 'fulfilled' ? clsResult.value : { classes: [] };
   return {
-    dataset_error:
-      dsResult.status === 'rejected' ? (dsResult.reason as Error).message : null,
+    dataset_error: dsResult.status === 'rejected' ? apiErrorText(dsResult.reason) : null,
     total_crops: ds.total_crops ?? 0,
     validated_crops: ds.validated ?? 0,
     test_holdout_crops: ds.test_holdout ?? 0,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { goto } from '$app/navigation';
@@ -290,7 +291,7 @@
       ignoredItems = res.items;
       ignoredTotal = res.total;
     } catch (e) {
-      toastStore.error(`Could not load ignored crops: ${(e as Error).message}`);
+      toastStore.error(`Could not load ignored crops: ${apiErrorText(e)}`);
     } finally {
       ignoredLoading = false;
     }
@@ -316,7 +317,7 @@
       ignoredSel.clear();
       toastStore.success(`Restored ${res.unexcluded}.`);
     } catch (e) {
-      toastStore.error(`Restore failed: ${(e as Error).message}`);
+      toastStore.error(`Restore failed: ${apiErrorText(e)}`);
     }
   }
 
@@ -351,7 +352,7 @@
         itemTextItems = [];
         itemTextTotal = 0;
       } else {
-        toastStore.error(`Item-text search failed: ${(e as Error).message}`);
+        toastStore.error(`Item-text search failed: ${apiErrorText(e)}`);
       }
     } finally {
       itemTextLoading = false;
@@ -386,7 +387,7 @@
       const res = await getClusters({ representatives_limit: 0 });
       for (const c of res.items) clusterMetaMap.set(c.id, c);
     } catch (e) {
-      toastStore.warn(`Could not load cluster info for badges: ${(e as Error).message}`);
+      toastStore.warn(`Could not load cluster info for badges: ${apiErrorText(e)}`);
     }
   }
 
@@ -467,7 +468,7 @@
             toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
           }
         } catch (e) {
-          toastStore.error(`Label failed: ${(e as Error).message}`);
+          toastStore.error(`Label failed: ${apiErrorText(e)}`);
           for (const prior of priors) replaceSearchCrop(prior);
         }
       },
@@ -495,7 +496,7 @@
         searchSel.clear();
         toastStore.success(`Ignored ${res.excluded}.`);
       } catch (e) {
-        toastStore.error(`Ignore failed: ${(e as Error).message}`);
+        toastStore.error(`Ignore failed: ${apiErrorText(e)}`);
       }
     });
     reg('clusters_search.undo', async () => {

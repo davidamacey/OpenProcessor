@@ -16,7 +16,7 @@
  * Probed lazily (the surfaces that need it call `init()`), at most once
  * per project; reset on a project switch.
  */
-import { getDatasetFormats, type ApiError } from '$lib/api';
+import { apiErrorText, getDatasetFormats, type ApiError } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import type { DatasetFormatsResponse } from '$lib/types_import';
 
@@ -50,7 +50,7 @@ class DatasetsAvailabilityStore {
           this.#loaded = true;
           return;
         }
-        this.error = err?.detail ?? err?.message ?? String(e);
+        this.error = apiErrorText(e);
       } finally {
         if (gen === this.#generation) this.#inflight = null;
       }

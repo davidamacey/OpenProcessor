@@ -17,7 +17,7 @@
  * Probed lazily (the editor surfaces call `init()`), at most once per
  * project; each instance's module registers its reset on project change.
  */
-import type { ApiError } from '$lib/api';
+import { apiErrorText, type ApiError } from '$lib/api';
 
 export class ConfigAvailability {
   /** `null` until the probe answers. */
@@ -52,7 +52,7 @@ export class ConfigAvailability {
           this.#loaded = true;
           return;
         }
-        this.error = err?.detail ?? err?.message ?? String(e);
+        this.error = apiErrorText(e);
       } finally {
         if (gen === this.#generation) this.#inflight = null;
       }

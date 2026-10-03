@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Piece 11 (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
    * §A.6) — server-path ingest for images already reachable inside the
@@ -13,7 +14,7 @@
    * per-file byte cost to the browser and the backend itself already
    * batches the detector inference internally.
    */
-  import { ApiError, ingestBatch } from '$lib/api';
+  import { ingestBatch } from '$lib/api';
   import type { BatchIngestResponse } from '$lib/types';
   import type { ResolvedIngestConfig } from '$lib/ingest/ingestConfig';
   import { toastStore } from '$stores/toast.svelte';
@@ -79,8 +80,7 @@
           `${result.summary.duplicates} duplicate, ${result.summary.failed} failed`,
       );
     } catch (e) {
-      submitError =
-        e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+      submitError = apiErrorText(e);
       toastStore.error(`Batch ingest failed: ${submitError}`);
     } finally {
       submitting = false;

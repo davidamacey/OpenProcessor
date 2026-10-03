@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Auto-scrolling log tail viewer.
    *
@@ -43,7 +44,7 @@
       if (stickyBottom) queueMicrotask(scrollToBottom);
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
-      error = (e as Error).message;
+      error = apiErrorText(e);
     }
   }
 

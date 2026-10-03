@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * "Keyboard shortcuts" card — `/settings#keyboard` (K2 + K2b,
    * docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §5.4).
@@ -31,7 +32,6 @@
    */
 
   import {
-    ApiError,
     keymapClassConflictDetail,
     keymapRevisionConflictDetail,
     keymapValidationFailedDetail,
@@ -369,8 +369,7 @@
         toastStore.error(validationFailed.message);
         return;
       }
-      const detail =
-        e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+      const detail = apiErrorText(e);
       toastStore.error(`Save failed: ${detail}`);
     } finally {
       saving = false;
@@ -398,8 +397,7 @@
       resetAllOpen = false;
       toastStore.success('Keyboard shortcuts reset to defaults.');
     } catch (e) {
-      const detail =
-        e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+      const detail = apiErrorText(e);
       toastStore.error(`Reset failed: ${detail}`);
     } finally {
       saving = false;

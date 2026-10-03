@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Augmentation config panel (design §13).
    *
@@ -35,7 +36,7 @@
       })
       .catch((e: unknown) => {
         if ((e as Error).name === 'AbortError') return;
-        presetsError = (e as Error)?.message ?? 'failed to load presets';
+        presetsError = apiErrorText(e) ?? 'failed to load presets';
       });
     return () => ctrl.abort();
   });

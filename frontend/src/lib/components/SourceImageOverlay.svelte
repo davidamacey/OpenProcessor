@@ -1,4 +1,5 @@
 <script module lang="ts">
+  import { apiErrorText } from '$lib/api';
   import type { CropContextResponse } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
   import { onProjectChange } from '$lib/projectChange';
@@ -112,7 +113,7 @@
       .catch((e: unknown) => {
         contextCache.delete(key);
         if ((e as Error)?.name === 'AbortError') return;
-        error = (e as Error).message;
+        error = apiErrorText(e);
       })
       .finally(() => {
         loading = false;

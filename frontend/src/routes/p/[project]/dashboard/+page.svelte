@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /*
    * Pipeline dashboard route — the app's single home page.
    *
@@ -187,7 +188,7 @@
         `Export complete: ${exportResult.export_dir ?? exportResult.status}`,
       );
     } catch (e) {
-      exportError = (e as Error).message;
+      exportError = apiErrorText(e);
       toastStore.error(`Export failed: ${exportError}`);
     } finally {
       exportRunning = false;

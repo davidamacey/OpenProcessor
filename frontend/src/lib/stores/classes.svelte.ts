@@ -7,7 +7,7 @@
  *   the server doesn't provide an authoritative answer.
  */
 
-import { getClasses } from '$lib/api';
+import { getClasses, apiErrorText } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import type { ClassThresholds, RegistryClass } from '$lib/types';
 
@@ -90,7 +90,7 @@ class ClassesStore {
       this.error = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
-      this.error = (e as Error).message;
+      this.error = apiErrorText(e);
     } finally {
       this.loading = false;
     }

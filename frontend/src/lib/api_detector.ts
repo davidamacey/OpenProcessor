@@ -5,7 +5,7 @@
  * `api.ts` (that would make the two modules circular). Types live in
  * `$lib/types_detector`.
  */
-import { ApiError, apiFetch, qs, scoped } from '$lib/api';
+import { ApiError, apiFetch, qs, scoped, apiErrorText } from '$lib/api';
 import type {
   DetectionsSummary,
   IngestPolicy,
@@ -115,5 +115,5 @@ export function detectorErrorLines(e: unknown): string[] {
     ];
   }
   if (e instanceof ApiError && e.detail) return [e.detail];
-  return [(e as Error)?.message ?? String(e)];
+  return [apiErrorText(e)];
 }

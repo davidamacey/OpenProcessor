@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   /**
    * Promote-to-Triton modal. Phase 4 wiring; the labeler-side knob set
@@ -74,7 +75,7 @@
         if (!served.force_allowed) force = false;
       } else {
         gate = null;
-        error = (e as Error).message;
+        error = apiErrorText(e);
       }
     } finally {
       busy = false;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Shows `pending_detection`/`pending_verification`/`total_unfinished`
    * plus the BA-3 `drained` stability verdict and "last checked"
@@ -13,7 +14,7 @@
    * a second fetch.
    */
   import { onDestroy, onMount } from 'svelte';
-  import { ApiError, getRegionDrain } from '$lib/api';
+  import { getRegionDrain } from '$lib/api';
   import type { RegionDrain } from '$lib/types';
 
   interface Props {
@@ -34,7 +35,7 @@
       lastChecked = Date.now();
       onUpdate?.(drain, lastChecked);
     } catch (e) {
-      error = e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+      error = apiErrorText(e);
       onUpdate?.(null, Date.now());
     }
   }

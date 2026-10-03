@@ -17,7 +17,7 @@
  * a data cache, not a UI concern.
  */
 
-import { getMethods } from '$lib/api';
+import { getMethods, apiErrorText } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
 import { EMPTY_METHODS, type MethodsResponse } from '$lib/strategies';
 
@@ -62,8 +62,7 @@ class StrategiesStore {
         if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
         this.methods = EMPTY_METHODS;
-        this.error =
-          (e as Error)?.message ?? 'failed to load the /methods capability list';
+        this.error = apiErrorText(e) ?? 'failed to load the /methods capability list';
       } finally {
         if (gen === this.#gen) {
           this.loading = false;

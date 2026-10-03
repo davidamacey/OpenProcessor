@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * "Run probe predictions" control — `/train`, embedded in `RunResults`
    * for a finished run (OpenProcessor #36 item 8). Populates
@@ -16,7 +17,6 @@
    * as-is for anything else).
    */
   import {
-    ApiError,
     cancelProbe,
     getProbeStatus,
     runProbe,
@@ -158,10 +158,7 @@
       startJobPoll();
       toastStore.info('Probe started…');
     } catch (e) {
-      const detail =
-        e instanceof ApiError
-          ? (e.detail ?? e.message)
-          : ((e as Error)?.message ?? 'failed');
+      const detail = apiErrorText(e);
       lastResult = { status: 'failed', error: String(detail) };
       toastStore.error(`Probe failed to start: ${detail}`);
     } finally {
@@ -176,7 +173,7 @@
       await cancelProbe();
       toastStore.info('Probe cancelled.');
     } catch (e) {
-      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
     } finally {
       job = null;
       stopJobPoll();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorText } from '$lib/api';
   /**
    * Contender picker for `/bakeoff`: finished training runs (with the
    * served per-dataset facts for every selected dataset), the profile's
@@ -66,7 +67,7 @@
     try {
       classMap = parseClassMap(cClassMap);
     } catch (e) {
-      customError = e instanceof Error ? e.message : String(e);
+      customError = apiErrorText(e);
       return;
     }
     const ref: CustomModelRef = {

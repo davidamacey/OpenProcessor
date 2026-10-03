@@ -17,11 +17,11 @@ const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
  * path is generic, not that it silently swallows the detail.
  */
 describe('dq-queues: the 422 "nothing to export" detail surfaces through the generic catch', () => {
-  it('the export catch block renders (e as Error).message, not a generic fallback string', () => {
+  it('the export catch block renders apiErrorText(e), not a generic fallback string', () => {
     const idx = src.indexOf('async function runExport');
     expect(idx).toBeGreaterThan(-1);
     const fn = src.slice(idx, src.indexOf('\n  }\n', idx));
     expect(fn).toMatch(/catch \(e\)/);
-    expect(fn).toMatch(/\(e as Error\)\.message/);
+    expect(fn).toMatch(/apiErrorText\(e\)/);
   });
 });
