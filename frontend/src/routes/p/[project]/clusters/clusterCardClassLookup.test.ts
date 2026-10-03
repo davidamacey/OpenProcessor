@@ -19,11 +19,9 @@ describe('/clusters class lookups', () => {
     expect(fn).not.toMatch(/toLowerCase/);
   });
 
-  it('every name-to-class lookup skips deprecated classes', () => {
-    const lookups = src.match(
-      /classesStore\.classes\.find\(\s*\([a-z]+\) =>[^;]*?toLowerCase\(\)[^;]*?\)/g,
-    );
-    expect(lookups).not.toBeNull();
-    for (const l of lookups!) expect(l).toMatch(/!\w+\.deprecated/);
+  it('every name-to-class lookup goes through the active-first normalized lookup', () => {
+    expect(src).toMatch(/findActiveClassByName\(classesStore\.classes, v\)/);
+    expect(src).toMatch(/findActiveClassByName\(classesStore\.classes, className\)/);
+    expect(src).not.toMatch(/c\.name\.toLowerCase\(\)/);
   });
 });

@@ -29,6 +29,7 @@
 
 import { resolveSlotRegistry, type SlotRegistry } from './registry';
 import { regionSlotFromServedProfile } from './servedRegionSlot';
+import { normalizeClassName } from '$lib/classNameKey';
 import type { SlotSpec } from './types';
 import type { ServedRegionProfile } from '$lib/types';
 
@@ -201,7 +202,9 @@ export function resetDeploymentSlots(): void {
 export function slotForClassName(
   className: string | null | undefined,
 ): SlotSpec | undefined {
-  const target = (className ?? '').toLowerCase();
+  const target = normalizeClassName(className ?? '');
   if (!target) return undefined;
-  return registeredSlots.find((s) => (s.bind.className ?? '').toLowerCase() === target);
+  return registeredSlots.find(
+    (s) => normalizeClassName(s.bind.className ?? '') === target,
+  );
 }

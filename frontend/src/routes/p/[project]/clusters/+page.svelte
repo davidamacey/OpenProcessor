@@ -32,6 +32,7 @@
     isEmbeddingVizBannerRequired,
     isSemanticSearchAvailable,
   } from '$lib/strategies';
+  import { findActiveClassByName } from '$lib/classNameKey';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import ClusterBadge from '$lib/components/ClusterBadge.svelte';
   import CropDetailModal from '$lib/components/CropDetailModal.svelte';
@@ -168,10 +169,7 @@
     // the slot gallery. Resolve the name against
     // the loaded registry, same lookup `open()` already does in the
     // opposite direction (cluster -> class name -> id -> slot route).
-    const byName = classesStore.classes.find(
-      (c) => !c.deprecated && c.name.toLowerCase() === v.toLowerCase(),
-    );
-    return byName?.id ?? null;
+    return findActiveClassByName(classesStore.classes, v)?.id ?? null;
   });
 
   // The shared item filter (class by name, confidence / area band, origin,
@@ -602,11 +600,9 @@
 
   async function buildSlotInventoryCard(slot: SlotSpec): Promise<Cluster | null> {
     const browsePath = slot.capabilities.queue?.browsePath;
-    const className = slot.bind.className?.toLowerCase();
+    const className = slot.bind.className;
     if (!browsePath || !className) return null;
-    const cls = classesStore.classes.find(
-      (c) => !c.deprecated && c.name.toLowerCase() === className,
-    );
+    const cls = findActiveClassByName(classesStore.classes, className);
     if (!cls) return null;
     try {
       // Pull a slightly larger window than 4 so we can drop items
