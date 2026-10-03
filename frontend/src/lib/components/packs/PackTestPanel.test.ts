@@ -143,7 +143,7 @@ describe('PackTestPanel', () => {
     expect(q('test-pack-ref')?.textContent).toBe('draft');
     expect(q('test-vlm-ref')?.textContent).toContain('env@abc123');
     expect(q('test-vlm-ref')?.textContent).toContain('example/vision-model');
-    expect(q('test-latency')?.textContent).toBe('812.4 ms');
+    expect(q('test-latency')?.textContent).toBe('812 ms');
     expect(q('test-parsed')?.textContent).toContain('"class_name": "widget"');
     // The preview item goes through the shared overlay path.
     await vi.waitFor(() => expect(q('test-preview-item')).not.toBeNull());
