@@ -112,6 +112,7 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
     from: CloneSource,
     newName: string,
     description: string,
+    fromProject: string | null = null,
   ): Promise<D | null> {
     if (this.busy) return null;
     this.busy = true;
@@ -122,6 +123,7 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
         revision: null,
         source: from.source,
         description: description.trim() || null,
+        ...(fromProject ? { from_project: fromProject } : {}),
       });
     } catch (e) {
       this.cloneError = apiErrorText(e);
