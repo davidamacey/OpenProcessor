@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.services.config_store import get_config_store
 from src.services.config_store.index import (
+    TEMPLATE_DESCRIPTION,
     ActiveConflictError,
     RevisionConflictError,
     config_doc_id,
@@ -127,7 +128,7 @@ def build_record(name: str, *, revision: int | None = None) -> OpenVocabRecord |
             read_only=True,
             revision=None,
             etag=f'open_vocab:{name}:{digest}',
-            description='Template (clone to use)',
+            description=TEMPLATE_DESCRIPTION,
             body=body,
         )
     return None

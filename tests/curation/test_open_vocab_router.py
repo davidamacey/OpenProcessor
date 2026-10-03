@@ -262,7 +262,9 @@ def test_template_is_read_only_and_clonable(client: TestClient) -> None:
     assert client.post(f'{PREFIX}/street_objects/activate', json={}).status_code == 403
     r = client.post(f'{PREFIX}/street_objects/clone', json={'new_name': 'mine'})
     assert r.status_code == 201, r.text
-    assert r.json()['cloned_from'].endswith(':street_objects@-')
+    assert r.json()['cloned_from'].endswith(':street_objects')
+    assert '@' not in r.json()['cloned_from']
+    assert r.json()['description'] == ''
     assert r.json()['body']['targets'][0]['prompt'] == 'traffic cone'
     assert (
         client.post(f'{PREFIX}/street_objects/clone', json={'new_name': 'mine'}).status_code == 409
@@ -302,3 +304,14 @@ def test_tier2_without_a_vision_model_warns(
     monkeypatch.setattr('src.services.labeling.vlm_endpoints.vlm_configured', lambda: True)
     r = client.post(f'{PREFIX}/validate', json={'name': 'gate-set', 'body': _body(gating=gating)})
     assert 'open_vocab_vlm_not_configured' not in [w['code'] for w in r.json()['warnings']]
+
+
+def test_clone_helpers_tag_and_describe_by_source() -> None:
+    from src.services.config_store.clone_shared import cloned_description, cloned_from_tag
+    from src.services.config_store.index import TEMPLATE_DESCRIPTION
+
+    assert cloned_from_tag(source_project='p', name='n', revision=3) == 'p:n@3'
+    assert cloned_from_tag(source_project='p', name='n', revision=None) == 'p:n'
+    assert cloned_description(None, TEMPLATE_DESCRIPTION) == ''
+    assert cloned_description(None, 'mine') == 'mine'
+    assert cloned_description('given', TEMPLATE_DESCRIPTION) == 'given'

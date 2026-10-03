@@ -31,6 +31,9 @@ from src.core.logging import get_logger
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+# What a shipped template's own description says; a clone must not inherit it.
+TEMPLATE_DESCRIPTION = 'Template (clone to use)'
+
 logger = get_logger(__name__)
 
 ConfigKind = Literal['prompt_pack', 'region_profile', 'vlm_endpoint', 'open_vocab_set']

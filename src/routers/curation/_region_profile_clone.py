@@ -12,6 +12,7 @@ from src.routers.curation._config_common_models import api_error
 from src.routers.curation._region_profile_models import RegionProfileCloneRequest, RegionProfileDoc
 from src.services.config_store import RevisionConflictError
 from src.services.config_store.clone_shared import (
+    cloned_description,
     cloned_from_tag,
     read_source_record,
     reject_invalid_clone_name,
@@ -111,7 +112,7 @@ async def clone_region_profile(
             name=body.new_name,
             body=new_body,
             expected_revision=None,
-            description=body.description if body.description is not None else source.description,
+            description=cloned_description(body.description, source.description),
             cloned_from=cloned_from,
         )
     except RevisionConflictError as exc:

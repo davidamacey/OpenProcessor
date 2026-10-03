@@ -109,9 +109,25 @@ async def read_source_record(
 
 
 def cloned_from_tag(*, source_project: str, name: str, revision: int | None) -> str:
-    """``'<project>:<name>@<revision|->'`` provenance tag both clone
+    """``'<project>:<name>[@<revision>]'`` provenance tag (no ``@`` part for a
+    template, which has no revision) both clone
     routes stamp on the new record's ``cloned_from``."""
-    return f'{source_project}:{name}@{revision if revision is not None else "-"}'
+    return f'{source_project}:{name}' + (f'@{revision}' if revision is not None else '')
 
 
-__all__ = ['cloned_from_tag', 'read_source_record', 'resolve_clone_source_project']
+def cloned_description(requested: str | None, source_description: str) -> str:
+    """A clone's description: the request's, else the source's, except that a
+    shipped template's own description is not inherited."""
+    if requested is not None:
+        return requested
+    from src.services.config_store.index import TEMPLATE_DESCRIPTION
+
+    return '' if source_description == TEMPLATE_DESCRIPTION else source_description
+
+
+__all__ = [
+    'cloned_description',
+    'cloned_from_tag',
+    'read_source_record',
+    'resolve_clone_source_project',
+]
