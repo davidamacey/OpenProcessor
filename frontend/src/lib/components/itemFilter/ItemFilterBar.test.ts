@@ -195,11 +195,12 @@ describe('ServedFilterField kinds', () => {
   function field(
     spec: Partial<ReviewFilterSpec> & Pick<ReviewFilterSpec, 'param' | 'kind'>,
     value: string | string[] = '',
+    servedDefault: string | null = null,
   ) {
     const onchange = vi.fn();
     instance = mount(ServedFilterField, {
       target,
-      props: { spec: { ...base, label: 'L', ...spec }, value, onchange },
+      props: { spec: { ...base, label: 'L', ...spec }, value, onchange, servedDefault },
     });
     flushSync();
     return onchange;
@@ -215,10 +216,61 @@ describe('ServedFilterField kinds', () => {
       ],
     });
     const sel = target.querySelector('select')!;
-    expect([...sel.options].map((o) => o.textContent?.trim())).toEqual(['Alpha', 'Beta']);
+    // No served default: the backend applies no filter, so the select reads
+    // "any" rather than showing a value that is not sent.
+    expect([...sel.options].map((o) => o.textContent?.trim())).toEqual([
+      'any',
+      'Alpha',
+      'Beta',
+    ]);
+    expect(sel.value).toBe('');
     sel.value = 'b';
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     expect(onchange).toHaveBeenCalledWith('p', 'b');
+  });
+
+  const NEG = {
+    param: 'on_negative_frame',
+    kind: 'enum' as const,
+    options: [
+      { value: 'true', label: 'Only items on a reviewed-negative frame' },
+      { value: 'false', label: 'No items on a negative frame' },
+    ],
+  };
+
+  it('enum with no served default shows "any", not the first option, and can pick the first option', () => {
+    const onchange = field(NEG);
+    const sel = target.querySelector('select')!;
+    expect(sel.selectedOptions[0].textContent?.trim()).toBe('any');
+    sel.value = 'true';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(onchange).toHaveBeenCalledWith('on_negative_frame', 'true');
+  });
+
+  it('enum with a tab-served default shows that default and offers no "any"', () => {
+    field(NEG, '', 'false');
+    const sel = target.querySelector('select')!;
+    expect(sel.value).toBe('false');
+    expect([...sel.options].map((o) => o.value)).toEqual(['true', 'false']);
+  });
+
+  it('enum prefers a default served on the spec; a served null default is the "any" state', () => {
+    field({ ...NEG, default: 'false' });
+    expect(target.querySelector('select')!.value).toBe('false');
+    unmount(instance!);
+    instance = null;
+    target.innerHTML = '';
+    field({ ...NEG, default: null });
+    const sel = target.querySelector('select')!;
+    expect(sel.value).toBe('');
+    expect(sel.options[0].textContent?.trim()).toBe('any');
+  });
+
+  it('enum keeps "any" offered after a value is picked, so the filter can be unset', () => {
+    field(NEG, 'true');
+    const sel = target.querySelector('select')!;
+    expect(sel.value).toBe('true');
+    expect(sel.options[0].value).toBe('');
   });
 
   it('multi_enum: toggles add and remove', () => {

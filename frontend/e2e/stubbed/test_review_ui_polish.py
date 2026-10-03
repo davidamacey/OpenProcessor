@@ -1,12 +1,13 @@
-"""Issue #24 polish: a served enum filter never renders a blank default
-option, and the review panel's Reason row stays a label/value row at 800px.
+"""Issue #24 polish: a served enum filter with no served default reads "any"
+(never a value the queue request does not send, never a blank), and the
+review panel's Reason row stays a label/value row at 800px.
 """
 
 from __future__ import annotations
 
 import os
 
-from conftest import ACTION_TIMEOUT_MS
+from conftest import ACTION_TIMEOUT_MS, expect_handled
 
 from fixtures.wire import make_item, review_tab, review_tabs
 
@@ -19,8 +20,8 @@ TABS = review_tabs(
                 "kind": "enum",
                 "label": "Negative frames",
                 "options": [
-                    {"value": "include", "label": "Include negative frames"},
-                    {"value": "only", "label": "Only negative frames"},
+                    {"value": "true", "label": "Only items on a reviewed-negative frame"},
+                    {"value": "false", "label": "No items on a negative frame"},
                 ],
             }
         ],
@@ -52,13 +53,26 @@ def _shot(page, name):
         page.screenshot(path=f"{out}/{name}.png", full_page=True)
 
 
-def test_negative_frames_select_shows_a_served_label_by_default(stub, page, app_url):
+def test_negative_frames_select_reads_any_and_sends_nothing_until_picked(stub, page, app_url):
     _setup(stub)
+    queue_urls: list[str] = []
+    page.on("request", lambda r: queue_urls.append(r.url) if "/review/all" in r.url else None)
     page.goto(f"{app_url}/p/default/review?tab=all")
     select = page.locator('label:has-text("Negative frames") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.locator('dt:text-is("Reason")').wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = select.evaluate("el => el.selectedOptions[0]?.textContent?.trim() ?? ''")
-    assert shown == "Include negative frames", shown
+    assert shown == "any", shown
+    assert queue_urls and all("on_negative_frame" not in u for u in queue_urls), queue_urls
+
+    with expect_handled(
+        page,
+        lambda r: "/review/all" in r.url and "on_negative_frame=true" in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        select.select_option("true")
+    shown = select.evaluate("el => el.selectedOptions[0]?.textContent?.trim() ?? ''")
+    assert shown == "Only items on a reviewed-negative frame", shown
 
 
 def test_reason_row_is_a_label_value_row_at_800px(stub, page, app_url):

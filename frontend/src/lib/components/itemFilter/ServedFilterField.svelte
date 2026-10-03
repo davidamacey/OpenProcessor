@@ -10,7 +10,7 @@
    * Values are strings (a list for `multi_enum` / `class_names`); `''` and
    * `[]` mean "not set", and the owner decides what to send for them.
    */
-  import { enumFilterSelection } from '$lib/review/enumFilter';
+  import { enumFilterSelection, enumServedDefault } from '$lib/review/enumFilter';
   import { classesStore } from '$stores/classes.svelte';
   import type { ReviewFilterSpec } from '$lib/api';
 
@@ -37,6 +37,9 @@
   );
   const addable = $derived(classNames.filter((n) => !list.includes(n)));
   const enumValue = $derived(enumFilterSelection(spec, text, servedDefault));
+  // With no served default the backend applies no filter, so "any" is a real
+  // state; without this option the select would show a value that is not sent.
+  const enumHasAny = $derived(enumServedDefault(spec, servedDefault) == null);
 
   function toggle(v: string): void {
     onchange(spec.param, list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -59,6 +62,9 @@
       onchange={(e) => onchange(spec.param, e.currentTarget.value)}
       class="select-sm"
     >
+      {#if enumHasAny}
+        <option value="">any</option>
+      {/if}
       {#each spec.options as opt (opt.value)}
         <option value={opt.value}>{opt.label}</option>
       {/each}

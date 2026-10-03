@@ -3211,6 +3211,10 @@ export interface ReviewFilterSpec {
   max: number | null;
   /** How to fill the filter; empty when the label says it. */
   description: string;
+  /** The option the backend applies when the param is omitted. Absent (or
+   *  `null`) when it applies none: the select then reads "any" and sends
+   *  nothing. Not in the vendored contract yet; read when served. */
+  default?: string | null;
 }
 
 /** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served

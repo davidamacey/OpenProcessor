@@ -197,6 +197,20 @@ def test_regions_filter_spec_select_matches_served_options(
         select.wait_for(timeout=15_000)
         rendered_labels = select.locator("option").all_inner_texts()
         served_labels = [opt["label"] for opt in spec["options"]]
+        # Mirrors `enumServedDefault` (src/lib/review/enumFilter.ts): with no
+        # served default naming one of the options the backend applies no
+        # filter, so the select leads with an "any" placeholder.
+        option_values = {opt["value"] for opt in spec["options"]}
+        served_default = next(
+            (
+                str(d)
+                for d in (spec.get("default"), regions_tab.get("filter_defaults", {}).get(spec["param"]))
+                if d is not None and str(d) in option_values
+            ),
+            None,
+        )
+        if served_default is None:
+            served_labels = ["any", *served_labels]
         assert rendered_labels == served_labels, (
             f"filter_specs[{spec['param']}]: rendered options {rendered_labels} != "
             f"served options {served_labels}"
