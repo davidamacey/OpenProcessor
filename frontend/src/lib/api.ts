@@ -582,10 +582,17 @@ export async function apiFetch<T>(
 
 // -- query string helpers ------------------------------------------------
 
-function qs(params: Record<string, unknown>): string {
+/** Builds `?k=v&...`, skipping null/undefined. An array value is sent as
+ *  one `k=v` per element (FastAPI list query params read repeated keys, not
+ *  a comma-joined string); an empty array is omitted. Exported for tests. */
+export function qs(params: Record<string, unknown>): string {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) {
+      for (const x of v) u.append(k, String(x));
+      continue;
+    }
     u.set(k, String(v));
   }
   const s = u.toString();
