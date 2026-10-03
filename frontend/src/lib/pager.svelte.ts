@@ -129,7 +129,15 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         // A newer loadFirst() already started (and owns `loading`) — leave
         // its result alone rather than overwrite with our now-stale fetch.
         if (myEpoch !== epoch) return;
-        const fresh = (res?.items ?? []).filter((i) => opts.accept?.(i) ?? true);
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this call, never stored in reactive state
+        const seenKeys = new Set<string>();
+        const fresh = (res?.items ?? []).filter((i) => {
+          if (!(opts.accept?.(i) ?? true)) return false;
+          const k = opts.keyOf(i);
+          if (seenKeys.has(k)) return false;
+          seenKeys.add(k);
+          return true;
+        });
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = 1;
@@ -186,7 +194,15 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       try {
         const res = await opts.fetchPage(page);
         if (myEpoch !== epoch) return;
-        const fresh = (res?.items ?? []).filter((i) => opts.accept?.(i) ?? true);
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this call, never stored in reactive state
+        const seenKeys = new Set<string>();
+        const fresh = (res?.items ?? []).filter((i) => {
+          if (!(opts.accept?.(i) ?? true)) return false;
+          const k = opts.keyOf(i);
+          if (seenKeys.has(k)) return false;
+          seenKeys.add(k);
+          return true;
+        });
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = page;

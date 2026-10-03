@@ -81,7 +81,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       rowsTruncated = res.rows_truncated ?? false;
       return res;
     },
-    keyOf: (p) => p.crop_id,
+    keyOf: (p) => `${p.crop_id}:${p.region_box_id ?? ''}`,
   });
 
   // Region triage: multi-select for bulk actions + the inline bbox editor.
