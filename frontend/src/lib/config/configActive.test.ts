@@ -150,4 +150,21 @@ describe('ConfigActive', () => {
     await ctl.activate('cloud_vlm', 1, false);
     expect(ctl.errorDetail).toBeNull();
   });
+
+  it('with nothing active, activate sends the nameless ref as expected_active', async () => {
+    const { ctl, backend } = setup();
+    backend.getActive.mockResolvedValue(
+      profileActiveFixture({
+        active: { name: null, revision: null },
+        source: 'env',
+      }),
+    );
+    await ctl.load();
+    await ctl.activate('widgets', 3, false);
+    expect(backend.activate).toHaveBeenCalledWith('widgets', {
+      revision: 3,
+      expected_active: { name: null, revision: null },
+      force: false,
+    });
+  });
 });

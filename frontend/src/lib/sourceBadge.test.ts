@@ -29,6 +29,19 @@ describe('sourceBadge', () => {
     expect(sourceBadge('human_move', true, 'human', 'Human move').text).toBe('human');
   });
 
+  it('gives the open_vocab role its own sky tone, labelled by the catalog', () => {
+    const b = sourceBadge(
+      'open_vocab_target',
+      false,
+      'open_vocab',
+      'Open-vocabulary target',
+    );
+    expect(b.text).toBe('Open-vocabulary target');
+    expect(b.cls).toContain('sky');
+    expect(b.cls).not.toBe(sourceBadge('x', false, 'proposal', 'x').cls);
+    expect(b.unvalidated).toBe(false);
+  });
+
   it('renders an id outside the catalog verbatim and neutral, inferring nothing', () => {
     const b = sourceBadge('vlm_unmatched', false, null, '');
     expect(b.text).toBe('vlm_unmatched');

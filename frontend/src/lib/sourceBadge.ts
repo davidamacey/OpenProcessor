@@ -13,6 +13,7 @@ const TONE = {
   cluster: 'bg-purple-500/20 text-purple-200 border-purple-500/40',
   proposal: 'bg-zinc-700/40 text-zinc-300 border-zinc-600',
   model: 'bg-blue-500/20 text-blue-200 border-blue-500/40',
+  openVocab: 'bg-sky-500/20 text-sky-200 border-sky-500/40',
 } as const;
 
 export interface SourceBadge {
@@ -51,5 +52,6 @@ export function sourceBadge(
   if (r === 'proposal' || r === 'low_conf')
     return { text, cls: TONE.proposal, unvalidated: false };
   if (r === 'model') return { text, cls: TONE.model, unvalidated: false };
+  if (r === 'open_vocab') return { text, cls: TONE.openVocab, unvalidated: false };
   return { text, cls: TONE.proposal, unvalidated: false };
 }
