@@ -18,3 +18,9 @@ Every count is the server's own — a field the backend hasn't started
 recording yet renders as "—", never a misleading 0.
 
 <Screenshot name="export-1600.png" alt="Cropwright Export page" caption="Export — holdout freeze, YOLO export and split counts" />
+
+## Limiting the export to a filter
+
+A collapsed **Only items matching a filter** restricts the export to the
+items a filter matches, and shows the backend's own count. See
+[Item filter and Matching items](./item-filter.md).

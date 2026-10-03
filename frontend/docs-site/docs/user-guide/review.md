@@ -23,6 +23,10 @@ advertises (e.g. a region-status filter on the region tab) resolve
 server-side. `?crop_id=` deep links jump straight to the item's real
 position in the queue, or show the backend's reason it isn't there.
 
+The shared item filter (class, area, origin, embedding and review state) and
+the backend's per-tab filters are described in
+[Item filter and Matching items](./item-filter.md).
+
 ## Empty queues
 
 An empty queue shows the served reason (e.g. "no probe predictions — run a

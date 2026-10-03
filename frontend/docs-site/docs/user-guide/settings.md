@@ -39,7 +39,9 @@ entirely when the backend hasn't enabled scores.
 ## Related cards
 
 When the backend serves them, **Settings** also links to the Prompt packs,
-Region profiles and Models pages described above.
+Region profiles and Models pages described above, plus the
+[Open-vocabulary sets](./open-vocabulary.md) editor and the
+[Ingest policy](./ingest-policy.md) page.
 
 ## Keyboard shortcuts card
 

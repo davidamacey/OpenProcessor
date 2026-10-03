@@ -99,8 +99,7 @@ paths, unexpected text), then commit them under
 
 ## Slots for the project, import, configuration and VLM pages
 
-The import, multi-box and region-profile-test slots come from the `sample-coco-import` and `sample-coco-vehicles` projects (`IMPORT_PREVIEW_PATH` names a server path under an allowed source root, e.g. the project's uploaded archive). The region-profile test reads "not eligible" because the sample items carry no vehicle parent class; the candidates are still drawn. Captured slots have their image; the slots still listed under "Still pending" below
-render as "pending". Capture them against a backend holding public sample
+The import, multi-box and region-profile-test slots come from the `sample-coco-import` and `sample-coco-vehicles` projects (`IMPORT_PREVIEW_PATH` names a server path under an allowed source root, e.g. the project's uploaded archive). The region-profile test reads "not eligible" because the sample items carry no vehicle parent class; the candidates are still drawn. Every slot has its image; a slot added later renders as "pending" until it is captured. Capture them against a backend holding public sample
 data (never from a real deployment). Rows marked **route** are in
 `screenshot_routes.json` and the script captures them as-is. Rows marked
 **state** need the page put into a particular state first (a dialog open, an

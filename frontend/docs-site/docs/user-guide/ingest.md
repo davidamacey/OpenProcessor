@@ -44,6 +44,13 @@ When the backend supports it, a link on this page opens the
 [dataset import wizard](./dataset-import.md), for images that already come
 with labels.
 
+## Detector and ingest policy
+
+When the backend reports a detector, the page shows a card for it, and a
+policy decides what an ingest keeps and which detections get a vector. See
+[Detector and ingest policy](./ingest-policy.md). The run and batch panels
+also show how many detections were embedded, not embedded or filtered out.
+
 ## Ingest status and region drain
 
 A status table by source, and — with a served region profile — a
