@@ -15,8 +15,13 @@ from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import ALL_PARTS, EmbedTarget, reembed_items
+from src.services.curation.reprocess_embed_spec import (
+    EmbedSpec,
+    embed_scope_items,
+    ids_without_vector,
+)
 from src.services.curation.reprocess_models import ReprocessScope, ReprocessScopeResult
-from src.services.curation.reprocess_targets import existing_images, items_by_terms
+from src.services.curation.reprocess_targets import existing_images
 
 
 if TYPE_CHECKING:
@@ -33,16 +38,28 @@ IMAGE_SCOPES: tuple[ReprocessScope, ...] = ('detect', 'embed')
 
 
 async def _embed_targets(
-    opensearch: AsyncOpenSearch, docs: dict[str, dict[str, Any]]
+    opensearch: AsyncOpenSearch, docs: dict[str, dict[str, Any]], spec: EmbedSpec
 ) -> list[EmbedTarget]:
     F = get_region_fields()
-    items = await items_by_terms(
+    items = await embed_scope_items(
         opensearch,
-        'image_id',
         list(docs),
-        index=get_curation_config().items_index,
-        includes=['image_id', 'bbox_norm', F.boxes],
+        spec,
+        [
+            'image_id',
+            'bbox_norm',
+            F.boxes,
+            F.box_embeddings,
+            'class_id',
+            'cluster_id',
+            'crop_rank_in_image',
+            'blur_lap_ratio',
+        ],
     )
+    skip: frozenset[str] = frozenset()
+    if spec.only_missing and items:
+        ids = [cid for cid, _ in items]
+        skip = frozenset(ids) - await ids_without_vector(opensearch, ids)
     by_image: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for crop_id, src in items:
         by_image.setdefault(src.get('image_id') or '', []).append((crop_id, src))
@@ -51,6 +68,7 @@ async def _embed_targets(
             image_id=image_id,
             image_path=doc.get('image_path') or '',
             items=by_image.get(image_id, []),
+            skip_crop=skip,
         )
         for image_id, doc in docs.items()
     ]
@@ -64,13 +82,18 @@ async def process_images(
     image_ids: list[str],
     should_cancel: Callable[[], bool] = lambda: False,
     on_progress: Callable[[int, int], None] | None = None,
+    embed: EmbedSpec | None = None,
 ) -> tuple[list[ReprocessScopeResult], bool]:
     """Run ``scopes`` (a subset of :data:`IMAGE_SCOPES`) over ``image_ids``.
+
+    ``embed`` says which items and parts the ``embed`` scope covers (default:
+    every item on the images, every part, rewritten).
 
     Returns ``(per-scope results, cancelled)``. An image that does not exist
     counts ``not_found``; one whose path is unservable or that raises counts
     ``failed`` for that scope; the rest continue.
     """
+    embed_spec = embed or EmbedSpec(parts=sorted(ALL_PARTS))
     results = {s: ReprocessScopeResult(scope=s, selected=len(image_ids)) for s in scopes}
     done = failed_images = 0
     cancelled = False
@@ -101,8 +124,9 @@ async def process_images(
                 counts = await reembed_items(
                     opensearch,
                     service.pe_encoder,
-                    await _embed_targets(opensearch, docs),
-                    parts=ALL_PARTS,
+                    await _embed_targets(opensearch, docs, embed_spec),
+                    parts=embed_spec.part_set,
+                    only_missing=embed_spec.only_missing,
                 )
             except Exception as exc:
                 logger.warning('reprocess_embed_failed', error=str(exc))

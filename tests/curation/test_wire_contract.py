@@ -322,7 +322,7 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
             json={'boxes': [{'box_id': None, 'bbox_norm': [0.1, 0.1, 0.2, 0.2]}]},
         )
     assert r.status_code == 200, r.text
-    assert set(r.json()) == {'crop_id', 'item'}
+    assert set(r.json()) == {'crop_id', 'item', 'region_embedding'}
     # The post-write item is the shared wire item under the storage override.
     item = r.json()['item']
     assert set(item) == ITEM_WIRE_KEYS

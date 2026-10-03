@@ -5955,6 +5955,38 @@
         "title": "DryRunIndexReport",
         "type": "object"
       },
+      "EmbedOptions": {
+        "additionalProperties": false,
+        "description": "How the ``embed`` scope runs. ``only_missing`` skips crop vectors an item\nalready has (and, with the default parts, leaves the frame vector alone);\nwithout it every selected vector is rewritten, which is how an embedding\nmodel change is re-embedded. ``parts`` defaults to crop and region when\n``only_missing`` and to all three otherwise.",
+        "properties": {
+          "only_missing": {
+            "default": false,
+            "title": "Only Missing",
+            "type": "boolean"
+          },
+          "parts": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "crop",
+                    "frame",
+                    "region"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parts"
+          }
+        },
+        "title": "EmbedOptions",
+        "type": "object"
+      },
       "EmbeddingPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -16243,7 +16275,7 @@
       },
       "ReprocessFilter": {
         "additionalProperties": false,
-        "description": "The W4 requeue selection, moved here, plus provenance selectors.\n\n``profile_not`` / ``profile_revision_below`` select items not produced\nby the profile@revision named (both given: not produced by that exact\nprofile@revision); ``include_detected`` widens a region selection to\n``detected`` items and is only valid together with a profile selector.",
+        "description": "The item filter every list route takes, plus the requeue and provenance\nselectors only a reprocess needs.\n\n``profile_not`` / ``profile_revision_below`` select items not produced\nby the profile@revision named (both given: not produced by that exact\nprofile@revision); ``include_detected`` widens a region selection to\n``detected`` items and is only valid together with a profile selector.",
         "properties": {
           "class_id": {
             "anyOf": [
@@ -16255,6 +16287,74 @@
               }
             ],
             "title": "Class Id"
+          },
+          "class_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Class Names",
+            "type": "array"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Source"
+          },
+          "classifier_conf_lt": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classifier Conf Lt"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "conf_max": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conf Max"
+          },
+          "conf_min": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conf Min"
           },
           "dataset_split": {
             "anyOf": [
@@ -16274,6 +16374,26 @@
             "title": "Detector",
             "type": "array"
           },
+          "embedding_state": {
+            "items": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding State",
+            "type": "array"
+          },
+          "exclude_class_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclude Class Names",
+            "type": "array"
+          },
           "import_id": {
             "anyOf": [
               {
@@ -16290,6 +16410,90 @@
             "title": "Include Detected",
             "type": "boolean"
           },
+          "item_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Text"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Source"
+          },
+          "label_validated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Validated"
+          },
+          "max_area": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Area"
+          },
+          "max_rank": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Rank"
+          },
+          "min_area": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Area"
+          },
+          "min_blur_ratio": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Blur Ratio"
+          },
           "missing_provenance": {
             "default": false,
             "title": "Missing Provenance",
@@ -16299,6 +16503,41 @@
             "default": false,
             "title": "Missing Status",
             "type": "boolean"
+          },
+          "needs_new_class": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class"
+          },
+          "on_negative_frame": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Negative Frame"
+          },
+          "origin": {
+            "items": {
+              "enum": [
+                "detector",
+                "sam3",
+                "human",
+                "import"
+              ],
+              "type": "string"
+            },
+            "title": "Origin",
+            "type": "array"
           },
           "profile_not": {
             "anyOf": [
@@ -16323,6 +16562,17 @@
             ],
             "title": "Profile Revision Below"
           },
+          "proposed_by_import": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Import"
+          },
           "reason": {
             "items": {
               "type": "string"
@@ -16335,6 +16585,30 @@
               "type": "string"
             },
             "title": "Region Status",
+            "type": "array"
+          },
+          "review_dismissed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed"
+          },
+          "review_status": {
+            "items": {
+              "enum": [
+                "pending",
+                "validated",
+                "dismissed",
+                "excluded"
+              ],
+              "type": "string"
+            },
+            "title": "Review Status",
             "type": "array"
           },
           "source": {
@@ -16507,6 +16781,9 @@
             "title": "Dry Run",
             "type": "boolean"
           },
+          "embed": {
+            "$ref": "#/components/schemas/EmbedOptions"
+          },
           "region_mode": {
             "default": "redetect",
             "enum": [
@@ -16548,6 +16825,9 @@
             "default": true,
             "title": "Dry Run",
             "type": "boolean"
+          },
+          "embed": {
+            "$ref": "#/components/schemas/EmbedOptions"
           },
           "region_mode": {
             "default": "redetect",
@@ -16643,7 +16923,7 @@
       },
       "ReprocessTargets": {
         "additionalProperties": false,
-        "description": "Exactly one of ``image_ids`` / ``crop_ids`` / ``filter``.",
+        "description": "Exactly one of ``image_ids`` / ``crop_ids`` / ``filter``.\n\n``limit`` / ``sample`` / ``seed`` cap a ``filter`` selection to its\n``limit`` largest boxes or a seeded random draw of that size (see\n:mod:`~src.services.curation.item_selection`).",
         "properties": {
           "crop_ids": {
             "anyOf": [
@@ -16682,6 +16962,38 @@
               }
             ],
             "title": "Image Ids"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "sample": {
+            "anyOf": [
+              {
+                "enum": [
+                  "random",
+                  "largest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
           }
         },
         "title": "ReprocessTargets",

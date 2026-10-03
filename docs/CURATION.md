@@ -659,20 +659,28 @@ are the ways an item needs a vector after ingest, and what happens today.
 1. **A new object or box.** An item is created only by ingest (detector) or a
    dataset import; both embed it through the same code. A region box that the
    region worker writes (SAM 3 or a region profile) gets its box vector in the
-   same pass. A box a person draws is stored without a vector until an embed
-   run covers it.
+   same pass. A box a person draws is embedded in the edit request itself
+   (see 2).
 2. **A moved or resized box.** An item's own box is never edited. A region box
    a person moves or deletes has its stored vector pruned at once (a vector
    records the geometry it was computed from, so a moved box counts as having
-   none), and the box is embedded again by the next embed run. Nothing
-   re-embeds it automatically yet.
+   none). Every human box-edit route (`PUT .../crops/{crop_id}/regions`,
+   `PUT .../crops/batch_regions`, `PATCH .../crops/{crop_id}/regions/{box_id}`,
+   `POST .../regions/batch_box_state`, `PATCH .../crops/{crop_id}/region_meta`
+   and `POST .../regions/batch_status`) prunes what the edit invalidated and
+   then embeds the accepted and false-positive boxes that have no valid vector,
+   and returns `region_embedding: {embedded, pending}`. A box it could not
+   embed (encoder down, image unreadable) stays `pending`: the edit still
+   succeeds and an `embed` run with `only_missing` picks the box up.
 3. **An embedding failed at ingest.** The item is stored with
    `embedding_state: failed` and counted in `n_not_embedded`. Retry with
    `POST /curation/projects/{project}/reprocess` and scope `embed` on the
    item or its image; the item becomes `embedded`.
 4. **An ingest policy skipped it** (`selected`, `lazy`, per-image caps). It is
-   stored with `embedding_state` `not_selected` or `deferred`; the same
-   `embed` scope will be the embed-missing action.
+   stored with `embedding_state` `not_selected` or `deferred`. Embed them with
+   the `embed` scope and `only_missing: true`, selecting by `filter` (for
+   example `embedding_state: [not_selected]` and `class_names`), by ids, with
+   a `limit`, or all at once.
 5. **An imported dataset** (YOLO, COCO or your own export). Import embeds each
    item through the ingest path, so imported items are `embedded` (or
    `failed` and retried as in 3). A project import that excludes vectors, and
@@ -680,7 +688,7 @@ are the ways an item needs a vector after ingest, and what happens today.
    without one (`deferred` for a dropped vector); embed them with the `embed`
    scope.
 6. **The embedding model changed.** A full re-embed, not embed-missing: run the
-   `embed` scope over every image. It rewrites every crop, frame and box
+   `embed` scope over every image without `only_missing`. It rewrites every crop, frame and box
    vector and keeps labels and locks untouched. The index mapping fixes the
    vector dimension, so a model with a different dimension needs a new
    project (re-ingest or combine), not an in-place re-embed.
@@ -783,9 +791,21 @@ curl -s -X POST $API/reprocess -H 'content-type: application/json' -d '{
 ```
 
 - `scopes`: any of `detect`, `region`, `vlm`, `embed`.
-- `targets`: `crop_ids`, `image_ids` or a `filter` (`class_id`, `source`,
-  `import_id`, `dataset_split`, `region_status`, `missing_status`,
-  `profile_not`, `profile_revision_below`, ...).
+- `targets`: `crop_ids`, `image_ids` or a `filter`. The filter is the item
+  filter every list route takes (`class_names`, `exclude_class_names`,
+  `conf_min`, `conf_max`, `min_area`, `max_area`, `max_rank`, `origin`,
+  `embedding_state`, `review_status`, `source`, `import_id`, ...) plus the
+  reprocess-only selectors (`region_status`, `missing_status`, `profile_not`,
+  `profile_revision_below`, ...). A filter can be capped with `limit` and
+  `sample` (`largest` boxes or a seeded `random` draw, with `seed`).
+- `embed`: the options of the `embed` scope. `only_missing: true` embeds only
+  the items that have no vector (crop and region boxes, frame vector left
+  alone) and skips the rest; without it every selected vector is rewritten.
+  A crop-id or filter target embeds exactly the items it names, not the whole
+  image. A newly embedded item with no class gets the residual cluster ingest
+  would have given it; class fields are never written. The dry run reports
+  `to_embed`, `without_vector`, `region_boxes_to_embed` and
+  `estimated_vector_kb` in `detail`.
 - `region_mode`: `redetect` (clear and re-run the cascade) or `reverify`
   (re-run VLM verification on existing boxes).
 - Detect and embed over many images return a job; poll

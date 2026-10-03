@@ -17,6 +17,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.services.curation.item_filter import ItemFilter
+from src.services.curation.item_selection import Sample  # noqa: TC001 - pydantic resolves it
+
 
 ReprocessScope = Literal['detect', 'region', 'vlm', 'embed']
 RegionMode = Literal['redetect', 'reverify']
@@ -24,16 +27,15 @@ RegionMode = Literal['redetect', 'reverify']
 MAX_TARGET_IDS = 5000
 
 
-class ReprocessFilter(BaseModel):
-    """The W4 requeue selection, moved here, plus provenance selectors.
+class ReprocessFilter(ItemFilter):
+    """The item filter every list route takes, plus the requeue and provenance
+    selectors only a reprocess needs.
 
     ``profile_not`` / ``profile_revision_below`` select items not produced
     by the profile@revision named (both given: not produced by that exact
     profile@revision); ``include_detected`` widens a region selection to
     ``detected`` items and is only valid together with a profile selector.
     """
-
-    model_config = ConfigDict(extra='forbid')
 
     region_status: list[str] = Field(default_factory=list)
     detector: list[str] = Field(default_factory=list)
@@ -43,23 +45,40 @@ class ReprocessFilter(BaseModel):
     include_detected: bool = False
     missing_status: bool = False
     missing_provenance: bool = False
-    import_id: str | None = None
-    source: str | None = None
-    class_id: int | None = None
-    dataset_split: str | None = None
-
-    def is_empty(self) -> bool:
-        return self == ReprocessFilter()
 
 
 class ReprocessTargets(BaseModel):
-    """Exactly one of ``image_ids`` / ``crop_ids`` / ``filter``."""
+    """Exactly one of ``image_ids`` / ``crop_ids`` / ``filter``.
+
+    ``limit`` / ``sample`` / ``seed`` cap a ``filter`` selection to its
+    ``limit`` largest boxes or a seeded random draw of that size (see
+    :mod:`~src.services.curation.item_selection`).
+    """
 
     model_config = ConfigDict(extra='forbid')
 
     image_ids: list[str] | None = None
     crop_ids: list[str] | None = None
     filter: ReprocessFilter | None = None
+    limit: int | None = Field(default=None, ge=1)
+    sample: Sample | None = None
+    seed: int = 0
+
+
+EmbedPart = Literal['crop', 'frame', 'region']
+
+
+class EmbedOptions(BaseModel):
+    """How the ``embed`` scope runs. ``only_missing`` skips crop vectors an item
+    already has (and, with the default parts, leaves the frame vector alone);
+    without it every selected vector is rewritten, which is how an embedding
+    model change is re-embedded. ``parts`` defaults to crop and region when
+    ``only_missing`` and to all three otherwise."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    only_missing: bool = False
+    parts: list[EmbedPart] | None = None
 
 
 class ReprocessRequest(BaseModel):
@@ -68,6 +87,7 @@ class ReprocessRequest(BaseModel):
     targets: ReprocessTargets
     scopes: list[ReprocessScope] = Field(min_length=1)
     region_mode: RegionMode = 'redetect'
+    embed: EmbedOptions = Field(default_factory=EmbedOptions)
     dry_run: bool = True
 
 
@@ -125,6 +145,8 @@ class ReprocessResponse(BaseModel):
 __all__ = [
     'MAX_TARGET_IDS',
     'BreakdownRow',
+    'EmbedOptions',
+    'EmbedPart',
     'RegionMode',
     'ReprocessFilter',
     'ReprocessJobInfo',
