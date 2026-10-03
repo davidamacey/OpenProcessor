@@ -59,6 +59,10 @@ async def _embed_targets(
     ]
 
 
+def _failed_images(results: dict[ReprocessScope, ReprocessScopeResult]) -> int:
+    return max(r.failed + r.not_found for r in results.values())
+
+
 async def process_images(
     opensearch: AsyncOpenSearch,
     service: CurationIngestService,
@@ -107,14 +111,17 @@ async def process_images(
                 for key in ('merged', 'refreshed', 'replaced', 'created', 'removed'):
                     res.detail[key] = res.detail.get(key, 0) + counts[key]
         if ov_pass is not None:
-            for image_id, doc in docs.items():
-                if should_cancel():
-                    cancelled = True
-                    break
-                if ov_pass.tripped:
-                    ov_pass.skip()
-                    continue
-                await ov_pass.run_image(opensearch, service, image_id, doc)
+            finished = 0
+
+            def _image_done(base: int = done) -> None:
+                nonlocal finished
+                finished += 1
+                if on_progress is not None:
+                    on_progress(base + finished, _failed_images(results))
+
+            cancelled |= await ov_pass.run_images(
+                opensearch, service, docs, should_cancel=should_cancel, on_image=_image_done
+            )
         if 'embed' in scopes and docs:
             try:
                 counts = await reembed_items(
@@ -133,7 +140,7 @@ async def process_images(
                 for key in ('items', 'crop_written', 'frame_written', 'region_written'):
                     res.detail[key] = res.detail.get(key, 0) + counts[key]
         done += len(chunk)
-        failed_images = max(r.failed + r.not_found for r in results.values())
+        failed_images = _failed_images(results)
         if on_progress is not None:
             on_progress(done, failed_images)
     if ov_pass is not None:

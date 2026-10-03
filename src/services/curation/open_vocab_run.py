@@ -43,6 +43,7 @@ from src.services.curation.open_vocab_gate import VlmVisibleFn  # noqa: TC001 - 
 from src.services.curation.reprocess_detect import load_image_context
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_targets import items_by_terms
+from src.services.detection import segmenter_latency
 from src.services.detection.geometry import crop_id, stored_bbox_norm
 from src.services.detection.open_vocab_select import (
     ExistingBox,
@@ -202,7 +203,10 @@ async def _segment_target(
         )
         outcome = 'hit' if found else 'miss'
     finally:
-        OP_OPEN_VOCAB_CALL_SECONDS.labels(outcome=outcome).observe(time.monotonic() - started)
+        elapsed = time.monotonic() - started
+        OP_OPEN_VOCAB_CALL_SECONDS.labels(outcome=outcome).observe(elapsed)
+        if outcome != 'error':
+            segmenter_latency.observe(elapsed)
     return found
 
 

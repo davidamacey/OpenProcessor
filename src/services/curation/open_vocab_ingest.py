@@ -53,12 +53,9 @@ async def _drain(
         run = await OpenVocabPass.start(
             opensearch, ov, revision, segment, ReprocessScopeResult(scope='open_vocab')
         )
-        for image_id in image_ids:
-            if run.tripped:
-                logger.warning('open_vocab_ingest_pass_stopped_segmenter_down')
-                break
-            if image_id in docs:
-                await run.run_image(opensearch, service, image_id, docs[image_id])
+        await run.run_images(opensearch, service, {i: docs[i] for i in image_ids if i in docs})
+        if run.tripped:
+            logger.warning('open_vocab_ingest_pass_stopped_segmenter_down')
         await run.finish(opensearch)
 
 

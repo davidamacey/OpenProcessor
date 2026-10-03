@@ -53,6 +53,12 @@ def reprocess_sync_max() -> int:
     return _positive_int(os.environ.get('OP_REPROCESS_SYNC_MAX'), 20)
 
 
+def open_vocab_concurrency() -> int:
+    """Images of the full-image SAM 3 pass in flight at once (each fans out
+    one segmenter call per target, so calls in flight <= this x targets)."""
+    return _positive_int(os.environ.get('OP_OPEN_VOCAB_CONCURRENCY'), 4)
+
+
 # Per-file read caps for the small text files a dataset is described by. A
 # label file, a ``data.yaml`` or an annotation JSON larger than these is
 # refused, not parsed: the scan holds one in memory.
