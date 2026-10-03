@@ -1203,6 +1203,8 @@
       allowedIds={allowedOrderIds}
       showFilters={false}
       diverseKDefault={pageSize}
+      diverseKMax={strategiesStore.methods.overlays.find((o) => o.id === 'diverse')
+        ?.max_k ?? undefined}
       diverseMeta={orderMeta}
     />
 
