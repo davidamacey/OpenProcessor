@@ -13,14 +13,15 @@ bare string ``detail`` -- gives Cropwright one stable shape
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.routers.curation._dataset_issue_models import (
     DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
 )
+from src.services.issue_ids import stamp_issue_ids
 
 
 # P1 seeded the project-related codes it raises. W2 adds the codes its
@@ -406,6 +407,13 @@ def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPExce
 class ValidationIssue(BaseModel):
     """One error/warning/info from a config validator (§3.3/§4.3)."""
 
+    id: str = Field(
+        default='',
+        description=(
+            'Unique within the response (`code[:field]`, `#2` on a repeat): key rows on it, '
+            'not on `code`, which two issues can share.'
+        ),
+    )
     code: ValidationCode
     severity: Literal['error', 'warning', 'info']
     field: str | None = Field(
@@ -432,6 +440,11 @@ class ValidationReport(BaseModel):
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
     force_allowed: bool = False
+
+    @model_validator(mode='after')
+    def _stamp_ids(self) -> Self:
+        stamp_issue_ids([*self.errors, *self.warnings], lambda i: i.field)
+        return self
 
 
 class ActiveRef(BaseModel):

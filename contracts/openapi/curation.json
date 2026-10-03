@@ -2721,6 +2721,12 @@
             "title": "Detail",
             "type": "object"
           },
+          "id": {
+            "default": "",
+            "description": "Unique within the response (`code[:project[:class]]`, `#2` on a repeat).",
+            "title": "Id",
+            "type": "string"
+          },
           "message": {
             "default": "",
             "title": "Message",
@@ -5828,6 +5834,12 @@
           "count": {
             "title": "Count",
             "type": "integer"
+          },
+          "id": {
+            "default": "",
+            "description": "Unique within the response (`code[:subject]`, `#2` on a repeat).",
+            "title": "Id",
+            "type": "string"
           },
           "message": {
             "title": "Message",
@@ -25159,6 +25171,12 @@
             ],
             "description": "Dotted path from the body root, a list index in brackets: `targets[2].prompt`, `gating.tier3_hit_rate.window`, `image_max_side`. A whole-element issue names the element (`targets[2]`); null when the issue is not about one field.",
             "title": "Field"
+          },
+          "id": {
+            "default": "",
+            "description": "Unique within the response (`code[:field]`, `#2` on a repeat): key rows on it, not on `code`, which two issues can share.",
+            "title": "Id",
+            "type": "string"
           },
           "message": {
             "title": "Message",

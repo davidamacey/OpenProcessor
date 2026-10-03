@@ -82,13 +82,13 @@ async def _require_servable(override: DetectorOverride) -> None:
         pool = get_async_triton_pool()
     except RuntimeError as exc:
         raise api_error(503, 'detector_unavailable', f'triton unavailable: {exc}') from exc
-    problems = await detector_problems(pool, override)
-    if problems:
+    reasons = list(dict.fromkeys(p for p in await detector_problems(pool, override) if p))
+    if reasons:
         raise api_error(
             422,
             'detector_not_servable',
-            '; '.join(problems),
-            reasons=list(problems),
+            f'detector {override.model!r} cannot serve ingest ({len(reasons)} problem(s); see reasons)',
+            reasons=reasons,
         )
 
 

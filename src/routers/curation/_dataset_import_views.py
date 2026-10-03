@@ -24,7 +24,7 @@ from src.routers.curation._dataset_import_models import (
     NextStep,
     ResolvedMapTarget,
 )
-from src.routers.curation._dataset_issue_models import issue_to_wire
+from src.routers.curation._dataset_issue_models import issues_to_wire
 from src.services.curation.dataset_import.options import DatasetImportOptions
 from src.services.curation.dataset_import.prepare import mapping_from_dict
 from src.services.curation.dataset_import.store import ACTIVE_STATUSES
@@ -148,7 +148,7 @@ def preview_wire(prepared: PreparedImport, *, already_indexed: int) -> DatasetPr
         ),
         classes=_classes(prepared),
         region=region,
-        issues=[issue_to_wire(i) for i in prepared.issues],
+        issues=issues_to_wire(prepared.issues),
         blocking=prepared.blocking,
         force_allowed=prepared.force_allowed(),
         estimate=DatasetEstimate(

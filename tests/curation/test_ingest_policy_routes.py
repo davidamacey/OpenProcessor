@@ -162,7 +162,9 @@ def test_an_unservable_detector_override_is_a_typed_422_with_every_reason(
     detail = r.json()['detail']
     assert detail['error'] == 'detector_not_servable'
     assert detail['reasons'] == ["'ghost' is not loaded and ready on Triton"]
-    assert detail['message'] == detail['reasons'][0]
+    assert detail['message'] == "detector 'ghost' cannot serve ingest (1 problem(s); see reasons)"
+    assert detail['reasons'][0] not in detail['message']
+    assert len(set(detail['reasons'])) == len(detail['reasons'])
 
 
 def test_no_triton_pool_is_a_typed_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
