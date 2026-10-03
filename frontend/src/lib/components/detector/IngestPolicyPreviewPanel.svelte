@@ -14,6 +14,11 @@
       ? `${p.would_embed} of ${p.total_items} stored detections would be embedded, about ${p.estimated_vector_mb} MB`
       : '',
   );
+  const labeledText = $derived(
+    p
+      ? `Of those, ${p.embedded_because_labeled} embed only because a human or validated label always embeds.`
+      : '',
+  );
 </script>
 
 <section class="surface space-y-2 p-4" data-testid="policy-preview">
@@ -28,6 +33,9 @@
   {:else if p}
     <p class="text-sm text-zinc-200" data-testid="policy-preview-summary">
       {summary}
+    </p>
+    <p class="text-xs text-zinc-400" data-testid="policy-preview-labeled">
+      {labeledText}
     </p>
     {#if p.truncated}
       <p class="text-xs text-zinc-400" data-testid="policy-preview-truncated">
