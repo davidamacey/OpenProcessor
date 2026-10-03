@@ -217,6 +217,8 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ### Fixed
 
+- `resource_links` no longer lists `triton_metrics` and `dcgm_metrics` (and `OP_TRITON_METRICS_*` / `OP_DCGM_*` are gone): they are Prometheus scrape endpoints bound to localhost, not browser UIs; Grafana and Prometheus show their data.
+- API `/metrics` now aggregates every uvicorn worker: compose sets `PROMETHEUS_MULTIPROC_DIR` to a tmpfs on `yolo-api`, so the `op_*` and request metrics behind the ingest and API dashboards reflect the whole API instead of one worker.
 - Items written before `embedding_state` existed now have `embedded` recorded at startup when they hold a vector, so the item wire, the stats breakdown and the filter agree (`unknown` stays only for truly unknown items).
 - `stats/dataset` (and the detections summary) no longer 400 on projects whose `embedding_state` is a dynamic text field: `by_state` is one filtered count per state through the shared state clause, which the `embedding_state` item filter also uses, and `unknown` is the remainder (#88).
 - The startup embedded-state backfill and region-class repair run once per project (a non-blocking per-project lock across uvicorn workers), count first, throttle the `update_by_query` (single slice, rate limited) and retry 429 with backoff; one `legacy_project_repair` log line per project (#89).

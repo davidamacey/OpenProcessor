@@ -85,12 +85,12 @@ the `openprocessor` tag. Every dashboard has a data-source variable, a
 | **GPUs** (`gpu-metrics-dashboard.json`) | Per-card utilization, VRAM, power, temperature, clocks, codecs, XID errors (`gpu` variable) | `DCGM_FI_DEV_*`, `nv_gpu_*` |
 | **Logs** (`logs.json`) | Log volume, error and warning counts, recent errors, search (Loki; `job`, `container`, search variables) | Loki streams from Alloy |
 
-:::note[Aggregating API metrics across workers]
-The API's `op_*` and request metrics are per-process counters. With more
-than one API worker, set `PROMETHEUS_MULTIPROC_DIR` so the workers share one
-view; the shipped compose file does not set it yet, so each scrape may show a
-single worker's counts. The ingest dashboard also stays flat until images are
-ingested.
+:::note[API metrics are aggregated across workers]
+The compose file sets `PROMETHEUS_MULTIPROC_DIR` on the API to a tmpfs, so
+`/metrics` sums the `op_*` and request metrics of every worker and Prometheus
+scrapes it once. The directory is empty on each container start. Counters of
+a recycled worker (`--limit-max-requests`) stay included, so totals never
+drop. The ingest dashboard stays flat until images are ingested.
 :::
 
 :::note[Panels without data]
@@ -162,18 +162,16 @@ reachable}`.
   no web fonts), so they work offline. A proxy in front of the API must
   forward `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect` and
   `/docs-assets/` at the root, because the pages request them by absolute path.
-- `kind: service` (`grafana`, `prometheus`, `opensearch_dashboards`, `mlflow`,
-  `triton_metrics`, `dcgm_metrics`): the URL rule, in order:
-  1. `OP_GRAFANA_URL`, `OP_PROMETHEUS_URL`, `OP_DASHBOARDS_URL`,
-     `OP_MLFLOW_PUBLIC_URL`, `OP_TRITON_METRICS_URL` or `OP_DCGM_URL`, served
+- `kind: service` (`grafana`, `prometheus`, `opensearch_dashboards`, `mlflow`): the URL rule, in order:
+  1. `OP_GRAFANA_URL`, `OP_PROMETHEUS_URL`, `OP_DASHBOARDS_URL`
+     or `OP_MLFLOW_PUBLIC_URL`, served
      verbatim. Use these behind a reverse proxy or a DNS name.
   2. Otherwise `<scheme>://<host the client used>:<service port>`. The host
      comes from `X-Forwarded-Host` (first value) or `Host`, the scheme from
      `X-Forwarded-Proto` or the connection. A LAN client opening
      `http://10.10.10.20:5184` gets `http://10.10.10.20:<port>`, never
      `localhost`. The ports are `OP_GRAFANA_PORT` (4605), `OP_PROMETHEUS_PORT`
-     (4604), `OP_DASHBOARDS_PORT` (4608), `OP_MLFLOW_PORT` (4609),
-     `OP_TRITON_METRICS_PORT` (4602) and `OP_DCGM_PORT` (4610); `0` disables.
+     (4604), `OP_DASHBOARDS_PORT` (4608), and `OP_MLFLOW_PORT` (4609); `0` disables.
      `make dev-up` passes the stack's own `*_PORT` values.
   3. No request context, or port `0`: `url: null`, `status: not_configured`.
 - The MLflow run link (`mlflow_run_url` on train status and manifest, and

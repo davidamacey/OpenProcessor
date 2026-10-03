@@ -47,7 +47,6 @@ class _Service(NamedTuple):
     name: str  # CurationConfig attribute stem: <name>_url / <name>_port
     env: str  # OP_<env>_URL / OP_<env>_PORT
     probe_url: str  # compose-internal address
-    path: str = ''
 
 
 _DOCS = (
@@ -70,22 +69,6 @@ _SERVICES = (
         'http://opensearch-dashboards:5601/api/status',
     ),
     _Service('mlflow', 'MLflow', 'mlflow', 'MLFLOW', 'http://curation-mlflow:5000/health'),
-    _Service(
-        'triton_metrics',
-        'Triton metrics',
-        'triton_metrics',
-        'TRITON_METRICS',
-        'http://triton-server:8002/metrics',
-        '/metrics',
-    ),
-    _Service(
-        'dcgm_metrics',
-        'GPU metrics (DCGM)',
-        'dcgm',
-        'DCGM',
-        'http://dcgm-exporter:9400/metrics',
-        '/metrics',
-    ),
 )
 
 
@@ -136,7 +119,7 @@ def service_url(service_id: str) -> str | None:
     origin = current_origin()
     if not port or origin is None:
         return None
-    return f'{origin.scheme}://{origin.host}:{port}{spec.path}'
+    return f'{origin.scheme}://{origin.host}:{port}'
 
 
 def _enabled(spec: _Service) -> bool:
