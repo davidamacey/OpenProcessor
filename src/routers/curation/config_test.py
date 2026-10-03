@@ -65,6 +65,7 @@ from src.services.curation.pack_test_run import (
     run_pack_test,
 )
 from src.services.curation.region_class import item_classes
+from src.services.curation.region_scope import out_of_scope_reason
 from src.services.curation.region_test_run import Leg, VerifyContext, run_region_test
 from src.services.curation.wire import item_source_excludes
 from src.services.detection.segmenter_http import first_segmenter_url
@@ -490,13 +491,19 @@ async def test_region_profile(
             parse_ok=run.probe.parse_ok,
             parse_error=run.probe.parse_error,
         )
-    parents = profile.parent_classes
+    reason = out_of_scope_reason(
+        profile.parent_classes,
+        class_name=str(crop.source.get('class_name') or '') or None,
+        proposal_name=str(crop.source.get('proposal_name') or '') or None,
+    )
     return RegionTestResponse(
         crop_id=crop.crop_id,
         profile=RegionTestProfileRef(
             name=stamp_name, revision=revision, draft=body.draft is not None
         ),
-        item_eligible=not parents or str(crop.source.get('class_name') or '') in parents,
+        item_eligible=reason is None,
+        testable=reason is None,
+        reason=reason,
         legs=[_leg_wire(leg) for leg in run.legs],
         verify=verify_block,
         preview_basis=run.basis,  # type: ignore[arg-type]

@@ -20,6 +20,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.services.curation.reprocess_vocabulary import (
+    VocabEntry,
+    filter_field_vocabulary,
+    job_status_vocabulary,
+    lock_reason_vocabulary,
+    scope_vocabulary,
+)
 
 
 class Choice(BaseModel):
@@ -151,6 +158,13 @@ class VocabularyLabels(BaseModel):
     )
 
 
+class ReprocessVocabulary(BaseModel):
+    scopes: list[VocabEntry]
+    filter_fields: list[VocabEntry]
+    job_statuses: list[VocabEntry]
+    lock_reasons: list[VocabEntry]
+
+
 class ConfigVocabularyResponse(BaseModel):
     detectors: list[DetectorEntry]
     segmenters: list[SegmenterEntry]
@@ -161,6 +175,7 @@ class ConfigVocabularyResponse(BaseModel):
     registry_classes: list[RegistryClassEntry]
     prompt_pack_calls: list[PromptPackCallEntry]
     labels: VocabularyLabels = Field(default_factory=VocabularyLabels)
+    reprocess: ReprocessVocabulary
 
 
 _TEXT_READER_LABELS: dict[str, str] = {
@@ -421,4 +436,10 @@ async def get_config_vocabulary(
         text_reader_modes=_build_text_reader_modes(),
         registry_classes=_build_registry_classes(),
         prompt_pack_calls=_build_prompt_pack_calls(),
+        reprocess=ReprocessVocabulary(
+            scopes=scope_vocabulary(),
+            filter_fields=filter_field_vocabulary(),
+            job_statuses=job_status_vocabulary(),
+            lock_reasons=lock_reason_vocabulary(),
+        ),
     )

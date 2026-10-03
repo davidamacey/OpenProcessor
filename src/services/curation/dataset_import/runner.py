@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.project_context import ensure_marked_dir
 from src.core.logging import get_logger
 from src.services.curation.dataset_import import limits
+from src.services.curation.dataset_import.actions import resume_blocker, undo_blocker
 from src.services.curation.dataset_import.chunk import import_chunk
 from src.services.curation.dataset_import.holdout_record import mark_freeze_undone
 from src.services.curation.dataset_import.prepare import (
@@ -36,7 +37,6 @@ from src.services.curation.dataset_import.store import (
     ACTIVE_STATUSES,
     COMPLETED_STATUSES,
     RESUMABLE_STATUSES,
-    UNDOABLE_STATUSES,
     ImportStore,
     active_import,
     imports_root,
@@ -338,7 +338,7 @@ async def finalize(ctx: ImportContext, store: ImportStore, report: ImportReport)
 def check_undoable(store: ImportStore) -> None:
     """An import that finished (or was cut off) can be undone; one a live
     worker is still running cannot."""
-    if store.repaired_state().get('status') not in UNDOABLE_STATUSES:
+    if undo_blocker(store.repaired_state()):
         raise ImportNotUndoableError(store.import_id)
 
 
@@ -440,7 +440,7 @@ def rescan_for_resume(
 
 def check_resumable(store: ImportStore) -> None:
     state = store.repaired_state()
-    if state.get('mode') == 'undo' or state.get('status') not in RESUMABLE_STATUSES:
+    if resume_blocker(state):
         raise ImportNotResumableError(store.import_id)
     live = active_import()
     if live is not None:

@@ -37,6 +37,23 @@ def in_parent_classes(
     )
 
 
+def out_of_scope_reason(
+    parent_classes: Iterable[str], *, class_name: str | None, proposal_name: str | None
+) -> str | None:
+    """Why the region stage skips an item, or ``None`` when it applies.
+
+    The sentence served to the config-test UI; the verdict itself is
+    :func:`in_parent_classes`, the worker's predicate.
+    """
+    if in_parent_classes(parent_classes, class_name=class_name, proposal_name=proposal_name):
+        return None
+    wanted = ', '.join(_normalized(parent_classes))
+    return (
+        f"item class {class_name or '(none)'!r} is not one of the profile's "
+        f'parent classes ({wanted}); the worker skips it'
+    )
+
+
 def parent_classes_clause(parent_classes: Iterable[str]) -> dict[str, Any] | None:
     """OpenSearch filter clause matching in-scope items, or ``None`` (no
     filter) when every item is in scope.
@@ -60,4 +77,9 @@ def parent_classes_clause(parent_classes: Iterable[str]) -> dict[str, Any] | Non
     }
 
 
-__all__ = ['PARENT_CLASS_FIELDS', 'in_parent_classes', 'parent_classes_clause']
+__all__ = [
+    'PARENT_CLASS_FIELDS',
+    'in_parent_classes',
+    'out_of_scope_reason',
+    'parent_classes_clause',
+]

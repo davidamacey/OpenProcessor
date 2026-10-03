@@ -11,6 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.routers.curation._dataset_issue_models import (
     DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
 )
+from src.services.curation.dataset_import.actions import (  # noqa: TC001 - pydantic field type
+    ImportActions,
+)
 from src.services.curation.dataset_import.options import (  # noqa: TC001 - runtime for pydantic
     DatasetImportOptions,
 )
@@ -194,6 +197,7 @@ class DatasetImportJob(BaseModel):
     source: DatasetImportSource
     issues_summary: list[dict[str, Any]] = Field(default_factory=list)
     undo: DatasetUndoReportWire | None = None
+    actions: ImportActions
     next_steps: list[NextStep] = Field(default_factory=list)
     error: str | None = None
     started_at: str | None = None

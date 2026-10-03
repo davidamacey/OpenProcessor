@@ -4048,6 +4048,9 @@
             "title": "Registry Classes",
             "type": "array"
           },
+          "reprocess": {
+            "$ref": "#/components/schemas/ReprocessVocabulary"
+          },
           "segmenters": {
             "items": {
               "$ref": "#/components/schemas/SegmenterEntry"
@@ -4073,7 +4076,8 @@
           "ocr",
           "text_reader_modes",
           "registry_classes",
-          "prompt_pack_calls"
+          "prompt_pack_calls",
+          "reprocess"
         ],
         "title": "ConfigVocabularyResponse",
         "type": "object"
@@ -5173,6 +5177,9 @@
       },
       "DatasetImportJob": {
         "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/ImportActions"
+          },
           "error": {
             "anyOf": [
               {
@@ -5340,7 +5347,8 @@
           "progress",
           "report",
           "options",
-          "source"
+          "source",
+          "actions"
         ],
         "title": "DatasetImportJob",
         "type": "object"
@@ -8053,6 +8061,50 @@
           "region_profile"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "ImportAction": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "allowed"
+        ],
+        "title": "ImportAction",
+        "type": "object"
+      },
+      "ImportActions": {
+        "properties": {
+          "can_cancel": {
+            "$ref": "#/components/schemas/ImportAction"
+          },
+          "can_resume": {
+            "$ref": "#/components/schemas/ImportAction"
+          },
+          "can_undo": {
+            "$ref": "#/components/schemas/ImportAction"
+          }
+        },
+        "required": [
+          "can_cancel",
+          "can_resume",
+          "can_undo"
+        ],
+        "title": "ImportActions",
         "type": "object"
       },
       "InProgressStats": {
@@ -19376,6 +19428,21 @@
           "profile": {
             "$ref": "#/components/schemas/RegionTestProfileRef"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "testable": {
+            "title": "Testable",
+            "type": "boolean"
+          },
           "validation": {
             "$ref": "#/components/schemas/ValidationReport"
           },
@@ -19394,6 +19461,7 @@
           "crop_id",
           "profile",
           "item_eligible",
+          "testable",
           "legs",
           "preview_basis",
           "preview_item",
@@ -20417,6 +20485,46 @@
           }
         },
         "title": "ReprocessTargets",
+        "type": "object"
+      },
+      "ReprocessVocabulary": {
+        "properties": {
+          "filter_fields": {
+            "items": {
+              "$ref": "#/components/schemas/VocabEntry"
+            },
+            "title": "Filter Fields",
+            "type": "array"
+          },
+          "job_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/VocabEntry"
+            },
+            "title": "Job Statuses",
+            "type": "array"
+          },
+          "lock_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/VocabEntry"
+            },
+            "title": "Lock Reasons",
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/VocabEntry"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scopes",
+          "filter_fields",
+          "job_statuses",
+          "lock_reasons"
+        ],
+        "title": "ReprocessVocabulary",
         "type": "object"
       },
       "ReprocessWireResponse": {
@@ -27403,6 +27511,29 @@
           "crop_ids"
         ],
         "title": "VlmVerifyRegionsRequest",
+        "type": "object"
+      },
+      "VocabEntry": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description"
+        ],
+        "title": "VocabEntry",
         "type": "object"
       },
       "VocabularyDetector": {

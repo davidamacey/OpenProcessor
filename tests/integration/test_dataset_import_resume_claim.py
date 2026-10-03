@@ -165,3 +165,28 @@ def test_the_claim_stays_live_through_a_rescan_longer_than_the_stale_window(
     release.set()
     thread.join(10)
     assert first[0].status_code == 202
+
+
+def test_the_served_actions_match_what_the_routes_accept(
+    client: TestClient, tmp_path: Path
+) -> None:
+    import_id = _interrupted_import(client, tmp_path)
+
+    actions = client.get(f'{BASE}/imports/{import_id}').json()['actions']
+
+    assert actions['can_resume'] == {'allowed': True, 'reason': None}
+    assert actions['can_undo']['allowed'] is True
+    assert actions['can_cancel']['allowed'] is False
+    assert actions['can_cancel']['reason']
+
+
+def test_a_completed_import_cannot_resume_and_says_why(client: TestClient, tmp_path: Path) -> None:
+    started = client.post(f'{BASE}/imports', json=_body(_dataset(tmp_path)))
+    import_id = started.json()['import_id']
+    _wait(client, import_id, until={'completed'})
+
+    actions = client.get(f'{BASE}/imports/{import_id}').json()['actions']
+
+    assert actions['can_resume']['allowed'] is False
+    assert 'interrupted' in actions['can_resume']['reason']
+    assert client.post(f'{BASE}/imports/{import_id}/resume').status_code == 409
