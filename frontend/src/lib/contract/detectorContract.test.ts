@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import spec from '../../../contracts/openprocessor/openapi/curation.json';
 import type * as T from '$lib/types_detector';
+import { EMBED_PARTS } from '$lib/datasets/reprocessVocabulary';
 import {
   CLASS_RESOLUTIONS,
   EMBEDDING_MODES,
@@ -14,7 +15,10 @@ import {
 } from '$lib/types_detector';
 
 type Schema = {
-  properties?: Record<string, { enum?: string[] }>;
+  properties?: Record<
+    string,
+    { enum?: string[]; anyOf?: { items?: { enum?: string[] } }[] }
+  >;
 };
 const schemas = (spec as unknown as { components: { schemas: Record<string, Schema> } })
   .components.schemas;
@@ -206,5 +210,12 @@ describe('detector wire types vs the vendored contract', () => {
     expect([...SEED_CONFLICT_REASONS]).toEqual(
       schemas['SeedConflict']!.properties!['reason']!.enum,
     );
+  });
+
+  it('the embed parts equal the served EmbedOptions.parts enum', () => {
+    const served = schemas['EmbedOptions']!.properties!['parts']!.anyOf!.find(
+      (a) => a.items,
+    )!.items!.enum;
+    expect([...EMBED_PARTS]).toEqual(served);
   });
 });

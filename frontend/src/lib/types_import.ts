@@ -475,7 +475,7 @@ export interface ReprocessScopeResult {
   breakdown?: BreakdownRow[];
   /** Per-scope served facts; the open-vocabulary dry run serves a boolean
    *  (`segmenter_reachable`) and floats beside the counts. */
-  detail?: Record<string, number | boolean>;
+  detail?: Record<string, number | boolean | string>;
 }
 
 /** `ReprocessJobInfo`. */

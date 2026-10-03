@@ -287,4 +287,71 @@ describe('ReprocessControl', () => {
     expect(job.textContent).toContain('1 failed');
     click(buttonNamed('Close'));
   });
+
+  it('batch: embed options appear with the embed scope, and are sent only once touched', async () => {
+    serve({
+      formats: () => json(formatsFixture()),
+      '/reprocess': () => json(reprocessFixture()),
+    });
+    await render({ kind: 'crops', cropIds: ['a', 'b'] });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    expect(document.querySelector('[data-testid="reprocess-embed-options"]')).toBeNull();
+    check('Embed');
+    expect(
+      document.querySelector('[data-testid="reprocess-embed-options"]'),
+    ).not.toBeNull();
+    click(buttonNamed('Check what would run'));
+    await flush();
+    expect(posts.at(-1)!.body).not.toHaveProperty('embed');
+
+    check('Only items without a vector');
+    check('Frame');
+    click(buttonNamed('Check what would run'));
+    await flush();
+    expect(posts.at(-1)!.body).toMatchObject({
+      embed: { only_missing: true, parts: ['frame'] },
+    });
+  });
+
+  it('one crop: the embed scope offers no embed options (the body has none)', async () => {
+    serve({ formats: () => json(formatsFixture()) });
+    await render({ kind: 'crop', cropId: 'c1' });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    check('Embed');
+    expect(document.querySelector('[data-testid="reprocess-embed-options"]')).toBeNull();
+  });
+
+  it('shows the served per-scope detail, booleans as yes/no', async () => {
+    serve({
+      formats: () => json(formatsFixture()),
+      '/reprocess': () =>
+        json(
+          reprocessFixture({
+            scopes: [
+              {
+                scope: 'embed',
+                selected: 5,
+                detail: {
+                  to_embed: 4,
+                  estimated_vector_kb: 12.5,
+                  segmenter_reachable: false,
+                },
+              },
+            ],
+          }),
+        ),
+    });
+    await render({ kind: 'crops', cropIds: ['a'] });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    check('Embed');
+    click(buttonNamed('Check what would run'));
+    await flush();
+    flushSync();
+    const detail = document.querySelector('[data-testid="reprocess-detail"]')!;
+    expect(detail.textContent).toContain('To embed');
+    expect(detail.textContent).toContain('4');
+    expect(detail.textContent).toContain('Estimated vector op');
+    expect(detail.textContent).toContain('12.5');
+    expect(detail.textContent).toMatch(/Segmenter reachable\s*no/);
+  });
 });

@@ -29,12 +29,15 @@ import {
 } from '$lib/api';
 import type { Crop } from '$lib/types';
 import type {
+  EmbedOptions,
   ReprocessJob,
   ReprocessRegionMode,
   ReprocessRequest,
   ReprocessResponse,
   ReprocessScope,
 } from '$lib/types_import';
+
+export type EmbedPart = NonNullable<EmbedOptions['parts']>[number];
 
 export type ReprocessTarget =
   | { kind: 'crop'; cropId: string }
@@ -64,6 +67,10 @@ export class ReprocessFlow {
   scopes = $state<ReprocessScope[]>([]);
   /** '' = the server's default region mode. */
   regionMode = $state<ReprocessRegionMode | ''>('');
+  /** Embed options: null = untouched, so the server's default applies and
+   *  the key is not sent. */
+  embedOnlyMissing = $state<boolean | null>(null);
+  embedParts = $state<EmbedPart[] | null>(null);
   /** The batch dry run for the current choices; null when stale. */
   dryRun = $state<ReprocessResponse | null>(null);
   result = $state<ReprocessResponse | null>(null);
@@ -106,6 +113,37 @@ export class ReprocessFlow {
     this.#invalidate();
   }
 
+  /** Embed options can only be set on the batch routes (the one-crop and
+   *  one-image bodies have no `embed`), and only for the crops the operator
+   *  chose; a served request keeps its own. */
+  get embedOptionsEditable(): boolean {
+    return this.target.kind === 'crops' && this.scopes.includes('embed');
+  }
+
+  setEmbedOnlyMissing(on: boolean): void {
+    if (this.target.kind === 'request') return;
+    this.embedOnlyMissing = on;
+    this.#invalidate();
+  }
+
+  toggleEmbedPart(part: EmbedPart, on: boolean): void {
+    if (this.target.kind === 'request') return;
+    const cur = this.embedParts ?? [];
+    const next = on
+      ? [...cur.filter((p) => p !== part), part]
+      : cur.filter((p) => p !== part);
+    this.embedParts = next.length > 0 ? next : null;
+    this.#invalidate();
+  }
+
+  #embedOptions(): { embed?: EmbedOptions } {
+    if (!this.scopes.includes('embed')) return {};
+    const embed: EmbedOptions = {};
+    if (this.embedOnlyMissing !== null) embed.only_missing = this.embedOnlyMissing;
+    if (this.embedParts !== null) embed.parts = this.embedParts;
+    return Object.keys(embed).length > 0 ? { embed } : {};
+  }
+
   #invalidate(): void {
     this.dryRun = null;
     this.result = null;
@@ -127,6 +165,7 @@ export class ReprocessFlow {
       targets: { crop_ids: this.target.cropIds },
       scopes: this.scopes,
       ...this.#regionMode(),
+      ...this.#embedOptions(),
       dry_run: dryRun,
     };
   }
