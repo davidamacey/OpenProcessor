@@ -2313,6 +2313,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
         defaults: { cluster: 'ivf' },
         updated_at: '2026-09-20T23:04:39+00:00',
         updated_by: null,
+        monitoring_links: { grafana: 'https://g.example', prometheus: null },
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -2326,6 +2327,11 @@ describe('getCurationSettings / putCurationDefaults', () => {
       defaults: { cluster: 'ivf' },
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
+      monitoring_links: {
+        grafana: 'https://g.example',
+        prometheus: null,
+        opensearch_dashboards: null,
+      },
     });
   });
 

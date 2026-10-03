@@ -1283,6 +1283,10 @@ const REGION_BASE = '/regions';
  *  `region_box_id`. */
 export interface RegionBrowseItem {
   crop_id: string;
+  /** Non-empty and unique across the pages of one query
+   *  (`<crop_id>#<region_box_id>`, or `<crop_id>#item` for an item-level
+   *  row): key every list of these rows on it. */
+  row_key: string;
   id: string;
   image_path: string;
   /** The source image's id; targets an image Reprocess. */

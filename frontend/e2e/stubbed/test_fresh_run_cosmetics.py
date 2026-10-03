@@ -118,7 +118,8 @@ def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
     items = [make_item(crop_id=f"r-{i}", image_id=f"img-{i}") for i in range(4)]
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": NARROW_CLASSES})
     stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
-    stub.on("GET", r"/regions(\?|$)", {"items": items, "total": 4})
+    rows = [{**i, "row_key": f"{i['crop_id']}#item"} for i in items]
+    stub.on("GET", r"/regions(\?|$)", {"items": rows, "total": 4})
 
     page.goto(f"{app_url}/p/default/clusters")
     title = page.get_by_test_id("slot-card-title")
