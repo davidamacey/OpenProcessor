@@ -202,6 +202,10 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ### Fixed
 
 - Items written before `embedding_state` existed now have `embedded` recorded at startup when they hold a vector, so the item wire, the stats breakdown and the filter agree (`unknown` stays only for truly unknown items).
+- `stats/dataset` (and the detections summary) no longer 400 on projects whose `embedding_state` is a dynamic text field: `by_state` is one filtered count per state through the shared state clause, which the `embedding_state` item filter also uses, and `unknown` is the remainder (#88).
+- The startup embedded-state backfill and region-class repair run once per project (a non-blocking per-project lock across uvicorn workers), count first, throttle the `update_by_query` (single slice, rate limited) and retry 429 with backoff; one `legacy_project_repair` log line per project (#89).
+- A project whose active profile predates region-class registration gets its class on the next start (the config snapshot is loaded before the profile is read), and a region class's `kind` no longer flips with the process answering: it follows the stored `region` group or the active profile name (#90).
+- The region test `reason` names the item's proposal name when the item has no class instead of `(none)` (#91).
 - Activating a region profile, or the worker applying a stored or env profile, registers the profile's region class (kind region, group region) in the project registry; re-activation is a no-op and deactivation never deletes a class.
 - `stats/dataset` and the combine preview read their own writes after ingest: each ingest call (single or batch) refreshes the images and items indexes once at its end, never per item.
 - The reprocess embed dry run reports `images_to_embed` from the same targets and work test the applied run uses, so it equals the applied `queued`; images with nothing to write are no longer read or counted as queued.
