@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { issue } from '$lib/test/fixtures/promptPacks';
 import {
+  gatingSchemaFixture,
   profileSchemaFixture,
   vocabularyFixture,
 } from '$lib/test/fixtures/regionProfiles';
@@ -62,6 +63,35 @@ function fire(el: Element, value: string, event = 'input') {
 }
 
 const q = <T extends Element = HTMLElement>(sel: string) => target.querySelector<T>(sel);
+
+describe('ProfileFieldEditor on the v0.4.0 gating rows', () => {
+  const gate = (id: string) => gatingSchemaFixture().fields.find((f) => f.field === id)!;
+
+  it('renders a bool, an int and a float gate row from the served schema alone', () => {
+    const onchange = render({ field: gate('gate_hit_rate'), value: false });
+    expect(target.textContent).toContain('Gate on hit rate');
+    expect(target.textContent).toContain('Stop running a prompt that keeps missing.');
+    const box = q<HTMLInputElement>('input[type="checkbox"]')!;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(onchange).toHaveBeenLastCalledWith(true);
+    unmount(instance!);
+    target.remove();
+
+    const onWindow = render({ field: gate('gate_hit_window'), value: 20 });
+    fire(q<HTMLInputElement>('input[type="number"]')!, '30');
+    expect(onWindow).toHaveBeenLastCalledWith(30);
+    unmount(instance!);
+    target.remove();
+
+    const onFloor = render({ field: gate('gate_hit_sample_floor'), value: 0.1 });
+    expect(q('[data-testid="field-facts"]')!.textContent).toMatch(
+      /default: 0\.1\s*· 0 to 1/,
+    );
+    fire(q<HTMLInputElement>('input[type="number"]')!, '0.25');
+    expect(onFloor).toHaveBeenLastCalledWith(0.25);
+  });
+});
 
 describe('ProfileFieldEditor', () => {
   it('renders the served label, help, default and range', () => {

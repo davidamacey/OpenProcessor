@@ -31,6 +31,47 @@ export const PROFILE_BODY = {
   ocr_det_model: '',
 };
 
+/** The v0.4.0 `gating` group: the four `gate_hit_*` rows (OpenProcessor
+ *  fce17771), shaped as a served schema carries them. Kept apart from
+ *  `profileSchemaFixture` so the older group-order assertions stay as they were. */
+export function gatingSchemaFixture(): RegionProfileSchema {
+  const row = (
+    field: string,
+    label: string,
+    type: 'bool' | 'int' | 'float',
+    def: boolean | number,
+    over: Record<string, unknown> = {},
+  ) => ({
+    field,
+    label,
+    group: 'gating',
+    type,
+    default: def,
+    min: null,
+    max: null,
+    enum: null,
+    advanced: true,
+    applies_when: null,
+    choices_from: null,
+    empty_choice: null,
+    help: '',
+    ...over,
+  });
+  return {
+    groups: [{ id: 'gating', label: 'Gating' }],
+    fields: [
+      row('gate_hit_rate', 'Gate on hit rate', 'bool', false, {
+        help: 'Stop running a prompt that keeps missing.',
+      }),
+      row('gate_hit_window', 'Hit-rate window', 'int', 20, { min: 1 }),
+      row('gate_hit_miss_threshold', 'Misses before the gate closes', 'int', 15, {
+        min: 1,
+      }),
+      row('gate_hit_sample_floor', 'Sample floor', 'float', 0.1, { min: 0, max: 1 }),
+    ],
+  };
+}
+
 export function profileSchemaFixture(): RegionProfileSchema {
   return {
     groups: [

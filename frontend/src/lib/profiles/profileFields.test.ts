@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  gatingSchemaFixture,
   profileSchemaFixture,
   vocabularyFixture,
 } from '$lib/test/fixtures/regionProfiles';
@@ -98,6 +99,20 @@ describe('appliesInSaved', () => {
     expect(appliesInSaved(null, eff)).toBeNull();
     expect(appliesInSaved('someday', eff)).toBeNull();
     expect(appliesInSaved('detector', null)).toBeNull();
+  });
+});
+
+describe('the v0.4.0 gating group', () => {
+  it('is a served group like any other: the four gate_hit_* rows in served order', () => {
+    const g = groupFields(gatingSchemaFixture());
+    expect(g.map((x) => x.id)).toEqual(['gating']);
+    expect(g[0]!.label).toBe('Gating');
+    expect(g[0]!.fields.map((f) => f.field)).toEqual([
+      'gate_hit_rate',
+      'gate_hit_window',
+      'gate_hit_miss_threshold',
+      'gate_hit_sample_floor',
+    ]);
   });
 });
 

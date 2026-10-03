@@ -382,6 +382,9 @@ export interface DatasetErrorDetail {
 
 /** The ids the contract enumerates (`ReprocessOneRequest.scopes`), in
  *  served order. */
+/** An image's `open_vocab_status` (the reprocess filter's enum). */
+export type OpenVocabStatus = 'pending' | 'done' | 'skipped_gate' | 'failed';
+
 export type ReprocessScope = 'detect' | 'open_vocab' | 'region' | 'vlm' | 'embed';
 export type ReprocessRegionMode = 'redetect' | 'reverify';
 
@@ -414,7 +417,7 @@ export interface ReprocessFilter {
   needs_new_class?: boolean | null;
   on_negative_frame?: boolean | null;
   open_vocab_set?: string | null;
-  open_vocab_status?: string[];
+  open_vocab_status?: OpenVocabStatus[];
   origin?: ItemOrigin[];
   profile_not?: string | null;
   profile_revision_below?: number | null;
@@ -473,9 +476,10 @@ export interface ReprocessScopeResult {
   failed?: number;
   not_found?: number;
   breakdown?: BreakdownRow[];
-  /** Per-scope served facts; the open-vocabulary dry run serves a boolean
-   *  (`segmenter_reachable`) and floats beside the counts. */
-  detail?: Record<string, number | boolean>;
+  /** Per-scope served facts (int, float, bool or str); the open-vocabulary
+   *  dry run serves a boolean (`segmenter_reachable`) and floats beside the
+   *  counts. */
+  detail?: Record<string, number | boolean | string>;
 }
 
 /** `ReprocessJobInfo`. */

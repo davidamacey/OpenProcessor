@@ -14,6 +14,7 @@
   import EmbeddingRows from './provenance/EmbeddingRows.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
+  import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotIsPresent } from '$lib/annotations/types';
@@ -94,6 +95,25 @@
   let contextRes = $state<CropContextResponse | null>(null);
 
   let showTextBoxes = $state(false);
+
+  // v0.4.0: the served mask outline (already image-normalised), drawn as
+  // served. Only a crop read singly carries it; a list-served one is null.
+  const maskShapes = $derived<OverlayShape[]>(
+    crop.mask_polygon != null && crop.mask_polygon.length >= 3
+      ? [
+          {
+            key: 'mask',
+            kind: 'polygon',
+            dimmed: false,
+            label: 'mask',
+            title: 'mask',
+            points: crop.mask_polygon
+              .filter((p) => p.length >= 2)
+              .map((p) => [p[0]!, p[1]!] as [number, number]),
+          },
+        ]
+      : [],
+  );
 
   $effect(() => {
     const id = crop.id;
@@ -659,7 +679,11 @@
   {:else if imageMeta}
     {#if contextRes}
       <div class="mb-2 h-40 w-full overflow-hidden rounded bg-zinc-950">
-        <SourceImageOverlay cropId={crop.id} context={contextRes} />
+        <SourceImageOverlay
+          cropId={crop.id}
+          context={contextRes}
+          extraShapes={maskShapes}
+        />
       </div>
     {/if}
     <dl class="grid grid-cols-2 gap-y-1 text-[11px] text-zinc-400">
