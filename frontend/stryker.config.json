@@ -47,6 +47,7 @@
   "tempDirName": ".stryker-tmp",
   "coverageAnalysis": "perTest",
   "timeoutMS": 30000,
+  "dryRunTimeoutMinutes": 30,
   "thresholds": {
     "high": 90,
     "low": 70,
