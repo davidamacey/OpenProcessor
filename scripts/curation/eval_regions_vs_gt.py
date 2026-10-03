@@ -193,11 +193,17 @@ def cohort_from_import(
     """Frames of an import: ground truth from the dataset's label file at each
     entry's ``rel_path``; the index join from the entry's own ``image_id`` /
     ``image_path`` (so a frame the import reused from another path still
-    resolves). Entries without an ``image_id`` are skipped."""
+    resolves). Entries without an ``image_id`` are skipped. An entry whose
+    ``rel_path`` leaves ``dataset_root`` (``..``, an absolute path) is an error:
+    the label file is read from disk."""
+    root = dataset_root.resolve()
     cohort = []
     for e in entries:
         if not e.get('image_id'):
             continue
+        image = (dataset_root / e['rel_path']).resolve()
+        if not image.is_relative_to(root):
+            raise DatasetError(f'entry rel_path {e["rel_path"]!r} is outside the dataset {root}')
         cohort.append(
             _entry(
                 dataset_root / e['rel_path'],

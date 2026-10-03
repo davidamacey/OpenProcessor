@@ -142,11 +142,9 @@ async def run_activation_gate(
             class_names=_registry_class_names(),
         )
     else:
-        from src.routers.curation.region_profiles import (
-            _project_slug,
-            _registry_class_names,
-            _segmenter_health_fn,
-        )
+        from src.routers.curation._common import bound_project_slug
+        from src.routers.curation._models_segmenter import configured_segmenter_health
+        from src.routers.curation.region_profiles import _registry_class_names
         from src.services.config_store.profile_validation import BYPASSABLE_CODES, validate_profile
         from src.services.config_store.profiles import (
             build_record as build_profile_record,
@@ -172,10 +170,10 @@ async def run_activation_gate(
             None,
             profile_body,
             for_activation=True,
-            segmenter_health=_segmenter_health_fn,
+            segmenter_health=configured_segmenter_health,
             active_pack=active_pack,
             class_names=_registry_class_names(),
-            project_slug=_project_slug(),
+            project_slug=bound_project_slug(),
         )
 
     # W9.5: a change to one side of the pack <-> profile <-> VLM triple is

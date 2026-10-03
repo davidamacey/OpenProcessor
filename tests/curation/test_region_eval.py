@@ -619,6 +619,17 @@ def test_import_cohort_scores_exactly_the_imported_frames(
     assert t['recall'] == 1.0
 
 
+@pytest.mark.parametrize('rel_path', ['../outside/frame.jpg', '/etc/passwd'])
+def test_an_import_entry_outside_the_dataset_root_is_refused(tmp_path: Path, rel_path: str) -> None:
+    mod = _cli()
+    data = _dataset(tmp_path / 'ds')
+    entry = {'status': 'written', 'split': 'test', 'image_id': 'x', 'rel_path': rel_path}
+    with pytest.raises(mod.DatasetError, match='outside the dataset'):
+        mod.cohort_from_import(
+            [entry], data.parent if data.is_file() else data, path_map=None, class_ids=None
+        )
+
+
 def test_import_cohort_with_nothing_written_is_a_clear_error(monkeypatch, tmp_path: Path) -> None:
     mod = _cli()
     data = _dataset(tmp_path / 'ds')

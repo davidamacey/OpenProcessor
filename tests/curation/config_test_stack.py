@@ -49,6 +49,9 @@ class Upstream:
         self.segments: list[dict[str, Any]] = []
         self.segment_requests: list[dict[str, Any]] = []
         self.segmenter_up = True
+        #: A non-200 status the segmenter / the VLM answer with (an upstream 5xx).
+        self.segmenter_status = 200
+        self.vlm_status = 200
         #: Hosts besides ``*.vlm.test`` that answer chat completions.
         self.extra_vlm_hosts: set[str] = set()
 
@@ -61,6 +64,8 @@ class Upstream:
                 return httpx.Response(200, json={'status': 'healthy', 'loaded': True})
             payload = json.loads(request.content)
             self.segment_requests.append(payload)
+            if self.segmenter_status != 200:
+                return httpx.Response(self.segmenter_status, json={'detail': 'boom'})
             return httpx.Response(
                 200,
                 json={
@@ -77,6 +82,8 @@ class Upstream:
             self.vlm_requests.append(payload)
             if self.vlm_delay is not None:
                 await self.vlm_delay()
+            if self.vlm_status != 200:
+                return httpx.Response(self.vlm_status, json={'error': 'boom'})
             message: dict[str, Any] = {'content': self.vlm_content}
             if self.vlm_reasoning is not None:
                 message['reasoning_content'] = self.vlm_reasoning

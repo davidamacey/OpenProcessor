@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 
 from src.services.detection.cascade_detect import RegionCandidate
+from src.utils.upstream_errors import describe_upstream_error
 
 
 #: How many candidates the worker asks the segmenter for per crop (its client
@@ -99,7 +100,7 @@ async def segment_once(
         resp.raise_for_status()
         body = resp.json()
     except (httpx.HTTPError, ValueError) as exc:
-        msg = f'segmenter call failed: {type(exc).__name__}: {exc}'
+        msg = f'segmenter call failed: {describe_upstream_error(exc)}'
         raise SegmenterCallError(msg) from exc
     finally:
         if owned:

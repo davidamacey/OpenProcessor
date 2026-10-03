@@ -33,7 +33,9 @@ def segmenter(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return state['status'], None if state['status'] == 'ready' else 'down'
 
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter.invalid:8000')
-    monkeypatch.setattr('src.routers.curation.region_profiles._segmenter_health_fn', _health)
+    monkeypatch.setattr(
+        'src.routers.curation._models_segmenter.configured_segmenter_health', _health
+    )
     return state
 
 

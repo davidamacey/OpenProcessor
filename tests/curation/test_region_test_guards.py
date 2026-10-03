@@ -180,6 +180,27 @@ def test_a_vlm_outage_on_a_verify_run_is_a_502_not_an_empty_preview(
     assert (active_runs('segmenter'), active_runs('vlm')) == (0, 0)
 
 
+def test_an_upstream_5xx_never_puts_the_internal_url_in_the_error(stack, crop, monkeypatch) -> None:
+    monkeypatch.setattr(vlm_client, 'RETRY_WAIT_MIN_S', 0.0)
+    stack.upstream.segmenter_status = 503
+
+    segmenter = stack.post(URL, crop_id='car1', draft=profile_body())
+
+    assert segmenter.status_code == 502, segmenter.text
+    assert segmenter.json()['detail']['error'] == 'segmenter_error'
+    assert 'seg.test' not in segmenter.text
+    assert 'HTTP 503' in segmenter.text
+
+    stack.upstream.segmenter_status = 200
+    stack.upstream.vlm_status = 500
+
+    vlm = stack.post(URL, crop_id='car1', draft=profile_body(), verify=True)
+
+    assert vlm.status_code == 502, vlm.text
+    assert vlm.json()['detail']['error'] == 'vlm_transport_error'
+    assert 'vlm.test' not in vlm.text
+
+
 def test_a_malformed_segmenter_reply_is_a_segmenter_error_not_a_500(stack, crop) -> None:
     for bad in (
         {'bbox_norm': [0.1, 0.1, 0.3, 0.3], 'score': 0.9, 'mask_polygon': [[1], [2]]},

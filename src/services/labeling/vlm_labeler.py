@@ -85,6 +85,7 @@ from src.services.labeling.vlm_client import (
     record_chat_exchange,
 )
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
+from src.utils.upstream_errors import describe_upstream_error
 
 
 if TYPE_CHECKING:
@@ -812,7 +813,7 @@ class VlmLabeler:
                 self._client, url, self._headers, payload, self._bucket
             )
         except Exception as exc:
-            record_chat_exchange(payload, None, f'{type(exc).__name__}: {exc}')
+            record_chat_exchange(payload, None, describe_upstream_error(exc))
             raise
         record_chat_exchange(payload, response)
         return response
@@ -845,7 +846,7 @@ class VlmLabeler:
                 error_type=type(exc).__name__,
             )
             return VlmHealth(
-                reachable=False, model=self.model, last_error=f'{type(exc).__name__}: {exc}'
+                reachable=False, model=self.model, last_error=describe_upstream_error(exc)
             )
 
     async def label_item_batch(
@@ -1228,7 +1229,7 @@ class VlmLabeler:
                 error_type=type(exc).__name__,
             )
             if raise_on_transport:
-                msg = f'http error: {exc}'
+                msg = f'http error: {describe_upstream_error(exc)}'
                 raise VlmTransportError(msg) from exc
             return None
 
@@ -1444,7 +1445,7 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            raise CombinedTransportError(f'http error: {exc}') from exc
+            raise CombinedTransportError(f'http error: {describe_upstream_error(exc)}') from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))
         if not raw:
@@ -1631,7 +1632,7 @@ class VlmLabeler:
             )
             # No reply at all: raise, so the caller can tell an outage
             # (keep retrying) from a reply that gave no verdict.
-            msg = f'http error: {exc}'
+            msg = f'http error: {describe_upstream_error(exc)}'
             raise CombinedTransportError(msg) from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))

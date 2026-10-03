@@ -32633,7 +32633,7 @@
     },
     "/curation/projects/{project}/region_profiles/test": {
       "post": {
-        "description": "Run a profile's detector and segmenter legs over one stored crop, show\nevery raw candidate with what the worker's selection does with it, and the\nitem as the worker would leave it (optionally with the combined VLM call).\n\nA leg that fails is reported on that leg (200); only when no leg ran at all\nis it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;\n409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429\n``test_busy``. Writes nothing.",
+        "description": "Run a profile's detector and segmenter legs over one stored crop, show\nevery raw candidate with what the worker's selection does with it, and the\nitem as the worker would leave it (optionally with the combined VLM call).\n\nA leg that fails is reported on that leg (200); only when no leg ran at all\nis it 502 ``detector_error`` / ``segmenter_error``. 404 ``crop_not_found``;\n409 ``no_active_profile``; 422 ``profile_invalid`` (+ report); 429\n``test_busy``. Writes nothing. Not modeled: the worker's VLM\n``region_visible`` pre-filter, which may mark a crop ``no_region_visible``\nbefore any detection runs; the preview always runs the legs.",
         "operationId": "test_region_profile_curation_projects__project__region_profiles_test_post",
         "parameters": [
           {

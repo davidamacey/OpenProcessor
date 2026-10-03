@@ -12,8 +12,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.routers.curation._common import (
+    OpenSearchDep,
+    bound_project_slug,
+    get_class_registry,
+    router,
+)
 from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
+from src.routers.curation._models_segmenter import configured_segmenter_health
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
     RegionProfileActivateResponse,
@@ -54,16 +60,6 @@ from src.services.curation.region_impact import ActivationImpact, compute_activa
 def _registry_class_names() -> frozenset[str]:
     reg = get_class_registry().load()
     return frozenset(c.class_name for c in reg.classes if not c.deprecated)
-
-
-async def _segmenter_health_fn() -> tuple[str, str | None]:
-    from src.routers.curation._models_segmenter import _segmenter_health
-    from src.services.detection.segmenter_http import first_segmenter_url
-
-    url = first_segmenter_url()
-    if url is None:
-        return 'unavailable', 'OP_SEGMENTER_URL is not configured'
-    return await _segmenter_health(url)
 
 
 def _effective(profile: Any) -> RegionProfileEffective:
@@ -170,9 +166,9 @@ async def validate_region_profile_route(
         body.body.model_dump(),
         existing_names=all_known_names(),
         for_activation=for_activation,
-        segmenter_health=_segmenter_health_fn,
+        segmenter_health=configured_segmenter_health,
         class_names=_registry_class_names(),
-        project_slug=_project_slug(),
+        project_slug=bound_project_slug(),
     )
     return report.model_dump()
 
@@ -188,15 +184,6 @@ async def validate_segmenter_prompt_route(body: SegmenterPromptValidateRequest) 
     return ValidationReport(
         ok=not errors, errors=errors, warnings=warnings, force_allowed=False
     ).model_dump()
-
-
-def _project_slug() -> str | None:
-    from src.config import get_curation_config
-
-    try:
-        return get_curation_config().project_slug
-    except Exception:  # pragma: no cover - defensive; always bound in routes
-        return None
 
 
 # =============================================================================
@@ -313,9 +300,9 @@ async def create_region_profile(
         body.name,
         body.body.model_dump(),
         existing_names=existing - {body.name},
-        segmenter_health=_segmenter_health_fn,
+        segmenter_health=configured_segmenter_health,
         class_names=_registry_class_names(),
-        project_slug=_project_slug(),
+        project_slug=bound_project_slug(),
     )
     name_issues = [
         e for e in report.errors if e.code in ('profile_name_invalid', 'profile_name_reserved')
@@ -415,9 +402,9 @@ async def save_region_profile(
     report = await validate_profile(
         name,
         body.body.model_dump(),
-        segmenter_health=_segmenter_health_fn,
+        segmenter_health=configured_segmenter_health,
         class_names=_registry_class_names(),
-        project_slug=_project_slug(),
+        project_slug=bound_project_slug(),
     )
     if not report.ok:
         raise api_error(
