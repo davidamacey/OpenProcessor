@@ -129,6 +129,10 @@ dev-up: ensure-host-bind-mount-dirs ## Single canonical dev deployment: dev over
 dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
 	$(DEV_COMPOSE) down
 
+.PHONY: dev-restart
+dev-restart: ## Restart the code-mounting containers (api + workers) after pulling/merging code; does not recreate or re-read .env
+	$(DEV_COMPOSE) restart yolo-api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh
+
 .PHONY: dev-ps
 dev-ps: ## Show the dev deployment's containers
 	$(DEV_COMPOSE) ps
@@ -1108,6 +1112,10 @@ info: ## Show service URLs and ports
 	@echo "  Analyze:                   POST /analyze"
 	@echo ""
 
+.PHONY: docs-build
+docs-build: ## Build docs-site (npm ci + docusaurus build; broken links and anchors fail the build)
+	cd docs-site && npm ci && npm run build
+
 .PHONY: docs
 docs: info ## Alias for info
 
@@ -1245,7 +1253,7 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         check-all \
         clean clean-all clean-logs clean-bench clean-exports \
         opensearch-reset opensearch-status opensearch-indices \
-        info docs \
+        info docs docs-build \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
-        dev-up dev-down dev-ps curation-up curation-down curation-logs curation-status curation-seed \
+        dev-up dev-down dev-restart dev-ps curation-up curation-down curation-logs curation-status curation-seed \
         sample-coco sample-coco-readme sample-coco-cars sample-coco-import sample-plates sample-clean

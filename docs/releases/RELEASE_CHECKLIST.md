@@ -17,6 +17,28 @@ not 64-hex digests) and must all be filled; the installer refuses them.
 
 `make release` rewrites `images.lock` entirely; do not hand-edit digests.
 
+## Release decisions (#44, #63)
+
+Recommendations only; the owner decides before step 4. Tick a box when decided.
+
+- `:latest` tag policy. Recommend: push `latest` only for stable releases, never for
+  pre-releases; the installer pins digests so `latest` is for convenience pulls only.
+  Rationale: pinned digests keep installs reproducible. [ ] owner decision
+- Control-plane-only mode (API without GPU services). Recommend: do not ship in 0.4.0,
+  document as unsupported. Rationale: it is untested and every curation route assumes
+  Triton is present. [ ] owner decision
+- VLM catalog entries not verified locally. Recommend: ship only the verified entries as
+  defaults and mark the rest "unverified" in the docs. Rationale: an untested model
+  that fails to load looks like a product bug. [ ] owner decision
+- Default OpenSearch heap versus the shard budget. Each project costs 6 shards and the
+  default heap gives a 40-shard soft limit (about 6 projects). Recommend: keep the
+  default, document the limit and `OP_SHARDS_PER_HEAP_GB` in the install guide. Rationale:
+  a larger default heap breaks small hosts; the `capacity` warning already tells operators
+  when to raise it. [ ] owner decision
+- docs-site hosting. Recommend: GitHub Pages via the existing `docs.yml` workflow once
+  Pages is enabled. Rationale: zero extra infrastructure and the build already runs in CI.
+  [ ] owner decision
+
 ## Steps
 
 1. Pre-flight. Confirm `VERSION` is `0.4.0`, the `CHANGELOG.md` `[0.4.0]` date is the
