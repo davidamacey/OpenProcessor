@@ -28,8 +28,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { registeredSlots } from '$lib/annotations/registeredSlots';
+import { afterEach, describe, expect, it } from 'vitest';
+import { registeredSlots, resetDeploymentSlots } from '$lib/annotations/registeredSlots';
+import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import { reservedHotkeyLetters } from '$lib/classHotkey';
 import { REVIEW_TABS, tabFromUrlId } from '$lib/reviewTabs';
 import { classesStore } from '$lib/stores/classes.svelte';
@@ -40,7 +41,7 @@ const clustersPageSrc = readFileSync(
   path.resolve(here, '..', 'clusters', '+page.svelte'),
   'utf-8',
 );
-const queueSlots = registeredSlots.filter((s) => s.capabilities.queue);
+afterEach(() => resetDeploymentSlots());
 
 describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () => {
   it('registers exactly the documented scan-mode keymap on a slot tab', () => {
@@ -78,7 +79,7 @@ describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () =>
       // (classesStore.reservedHotkeys). Simulate the pre-fetch/offline state
       // (empty) to prove the registry union alone still protects a class
       // hotkey from colliding with a slot's own keymap.
-      const slotLetters = queueSlots.flatMap((s) =>
+      const slotLetters = installedQueueSlots().flatMap((s) =>
         Object.values(s.capabilities.queue!.keymap)
           .flat()
           .filter((c): c is string => typeof c === 'string' && c.length === 1),
@@ -140,8 +141,10 @@ describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', (
 
 describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, urlId keeps the bookmark contract', () => {
   it('each queue slot tab is slot:<key> internally, with its own urlId preserved', async () => {
+    // REVIEW_TABS is a live binding: read it after the profile is installed.
+    const slots = installedQueueSlots();
     const ids = REVIEW_TABS.map((t: { id: string }) => t.id);
-    for (const slot of queueSlots) {
+    for (const slot of slots) {
       const urlId = slot.capabilities.queue!.urlId;
       expect(ids).toContain(`slot:${slot.key}`);
       expect(ids).not.toContain(urlId);
