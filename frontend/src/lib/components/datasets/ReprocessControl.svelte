@@ -108,6 +108,8 @@
       <h3 class="text-base font-semibold text-zinc-100">
         {#if f.target.kind === 'image'}
           Reprocess image
+        {:else if f.target.kind === 'request'}
+          Reprocess
         {:else}
           Reprocess {f.count.toLocaleString()}
           {f.count === 1 ? 'item' : 'items'}

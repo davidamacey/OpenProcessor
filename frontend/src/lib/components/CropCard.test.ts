@@ -265,7 +265,9 @@ describe('CropCard — v0.4.0 embedding state badge', () => {
 
   it('shows the badge for a served failed state only', () => {
     const el = renderCard({ crop: baseCrop({ embedding_state: 'failed' }) });
-    expect(badge(el)?.textContent).toBe('No vector: encoder failed');
+    // The card chip is the compact form; the full wording is its tooltip.
+    expect(badge(el)?.textContent).toBe('Embed failed');
+    expect(badge(el)?.getAttribute('title')).toContain('No vector: encoder failed');
     unmount(instance as never);
     instance = undefined;
     target.remove();

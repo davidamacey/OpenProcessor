@@ -23,7 +23,7 @@ import type {
 
 export interface IngestPolicyDeps {
   getPolicy: (signal?: AbortSignal) => Promise<IngestPolicy>;
-  getConfig: (signal?: AbortSignal) => Promise<{ detector: IngestDetectorInfo | null }>;
+  getConfig: (signal?: AbortSignal) => Promise<{ detector?: IngestDetectorInfo | null }>;
   putPolicy: (
     req: IngestPolicyUpdate,
     signal?: AbortSignal,
@@ -101,7 +101,7 @@ export class IngestPolicyEditor {
         this.#deps.getConfig(signal),
       ]);
       this.#adopt(policy);
-      this.detector = config.detector;
+      this.detector = config.detector ?? null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.loadError = detectorErrorLines(e).join(' ');

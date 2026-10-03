@@ -399,3 +399,92 @@ def test_duplicate_only_reupload_reports_already_indexed(stub, page, app_url):
     page.get_by_role("button", name="Start", exact=True).click()
     expect(page.get_by_test_id("ingest-all-skipped")).to_contain_text("3 already indexed")
     expect(page.get_by_text("Skipped (3)")).to_be_visible()
+
+
+def test_detector_card_and_per_file_embedding_counts(stub, page, app_url):
+    """v0.4.0: the served detector and policy summary on /ingest, and the
+    served per-file and total embedding counts of an upload run."""
+    _base_ingest_stubs(stub)
+    config = {
+        "upload": {
+            "enabled": True,
+            "max_images_per_request": 128,
+            "max_bytes_per_request": 268435456,
+            "accepted_extensions": [".jpg", ".jpeg", ".png"],
+            "persists_bytes": True,
+        },
+        "batch": {"enabled": True, "max_items": 256, "source_roots": []},
+        "region_drain": {"poll_interval_s": 10, "stable_polls": 3},
+        "detector": {
+            "model": "widget_detector_v1",
+            "version": "2",
+            "input_size": 640,
+            "assigns_class": False,
+            "confidence_floor_applies": False,
+            "n_labels": 1,
+            "labels": [{"class_id": 0, "name": "widget", "slug": "widget"}],
+        },
+        "policy": {
+            "detect": {"class_resolution": "proposal", "classes": None, "exclude_classes": []},
+            "embedding": {"mode": "lazy", "classes": []},
+            "detector": None,
+            "revision": 2,
+        },
+    }
+    stub.on("GET", r"/ingest/config(\?|$)", config)
+    stub.on("POST", r"/ingest/path_lookup", {"known_paths": {}})
+
+    def upload_handler(request, _match):
+        parsed = parse_multipart(request.post_data)
+        results = [
+            {
+                "status": "success",
+                "image_id": f"img-{i}",
+                "image_path": f"/data/uploads/{i}.jpg",
+                "imohash": f"h{i}",
+                "n_crops": 3,
+                "n_regions": 0,
+                "n_embedded": 1,
+                "n_not_embedded": 2,
+                "n_embed_failed": 1,
+                "n_filtered": 0,
+                "error": None,
+                "error_kind": None,
+                "source_identifier": p,
+            }
+            for i, p in enumerate(parsed.image_paths)
+        ]
+        n = len(results)
+        return {
+            "status": "success",
+            "summary": {
+                "successful": n,
+                "duplicates": 0,
+                "failed": 0,
+                "crops_indexed": 3 * n,
+                "n_embedded": n,
+                "n_not_embedded": 2 * n,
+                "n_embed_failed": n,
+                "n_filtered": 0,
+            },
+            "results": results,
+        }
+
+    stub.on("POST", r"/ingest/upload", upload_handler)
+
+    page.goto(f"{app_url}/p/default/ingest")
+    card = page.get_by_test_id("ingest-detector-card")
+    card.wait_for(timeout=ACTION_TIMEOUT_MS)
+    expect(card).to_contain_text("widget_detector_v1")
+    expect(page.get_by_test_id("detector-policy-summary")).to_contain_text("Embedding: lazy")
+
+    page.locator("input[type=file]").nth(1).set_input_files(str(FIXTURES))
+    page.wait_for_selector("text=3 files selected")
+    page.get_by_role("button", name="Start", exact=True).click()
+    totals = page.get_by_test_id("ingest-embedding-totals")
+    expect(totals).to_contain_text("embedded 3", timeout=ACTION_TIMEOUT_MS)
+    expect(totals).to_contain_text("not embedded 6")
+    expect(totals).to_contain_text("encoder failed 3")
+    page.get_by_role("button", name="Ingested (3)", exact=True).click()
+    expect(page.get_by_test_id("ingest-not-embedded-chip")).to_contain_text("not embedded (3)")
+    assert "embedded 1 / not embedded 2" in page.locator("body").inner_text()

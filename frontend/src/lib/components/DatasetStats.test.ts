@@ -384,4 +384,19 @@ describe('DatasetStats', () => {
       'unknown 25',
     ]);
   });
+
+  it('renders no Embedding card (and no error) when the served stats carry none', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    const stats = goodStats() as unknown as Record<string, unknown>;
+    delete stats.embedding;
+    capturedOpts?.onSnapshot?.({}, stats);
+    flushSync();
+
+    expect(target.querySelector('[data-testid="dataset-embedding"]')).toBeNull();
+    expect(target.textContent).toContain('Clusters (total now)');
+  });
 });

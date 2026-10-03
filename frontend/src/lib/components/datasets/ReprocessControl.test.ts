@@ -354,4 +354,14 @@ describe('ReprocessControl', () => {
     expect(detail.textContent).toContain('12.5');
     expect(detail.textContent).toMatch(/Segmenter reachable\s*no/);
   });
+
+  it('a served request is titled "Reprocess", never "0 items"', async () => {
+    serve({ formats: () => json(formatsFixture()) });
+    await render({
+      kind: 'request',
+      request: { targets: { crop_ids: ['a'] }, scopes: ['embed'], dry_run: true },
+    });
+    click(target.querySelector('[data-testid="reprocess-open"]'));
+    expect(document.querySelector('h3')?.textContent?.trim()).toBe('Reprocess');
+  });
 });

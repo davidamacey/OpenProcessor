@@ -15,7 +15,7 @@ import type {
 import { classesStore } from '$stores/classes.svelte';
 
 export interface SeedDeps {
-  getConfig: (signal?: AbortSignal) => Promise<{ detector: IngestDetectorInfo | null }>;
+  getConfig: (signal?: AbortSignal) => Promise<{ detector?: IngestDetectorInfo | null }>;
   seed: (
     req: SeedFromDetectorRequest & { dry_run: boolean },
   ) => Promise<SeedFromDetectorResponse>;
@@ -59,7 +59,7 @@ export class SeedFromDetector {
 
   async load(signal?: AbortSignal): Promise<void> {
     try {
-      this.detector = (await this.#deps.getConfig(signal)).detector;
+      this.detector = (await this.#deps.getConfig(signal)).detector ?? null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.errorLines = detectorErrorLines(e);

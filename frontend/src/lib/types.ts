@@ -1419,7 +1419,7 @@ export interface IngestConfig {
   batch: { enabled: boolean; max_items: number; source_roots: string[] };
   region_drain: { poll_interval_s: number; stable_polls: number };
   /** v0.4.0: the deployment detector, `null` when none is reported. */
-  detector: IngestDetectorInfo | null;
+  detector?: IngestDetectorInfo | null;
   /** v0.4.0: the project ingest policy echo. */
   policy?: IngestPolicy;
 }

@@ -23,8 +23,8 @@
       : 'text-xs'} {copy.warning
       ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
       : 'border-zinc-600 bg-zinc-800 text-zinc-300'}"
-    title={copy.tooltip}
+    title={`${copy.label}. ${copy.tooltip}`}
     data-testid="embedding-state-badge"
-    data-embedding-state={embeddingState}>{copy.label}</span
+    data-embedding-state={embeddingState}>{compact ? copy.compactLabel : copy.label}</span
   >
 {/if}

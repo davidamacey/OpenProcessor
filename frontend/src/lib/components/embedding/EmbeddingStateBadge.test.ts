@@ -31,6 +31,15 @@ describe('EmbeddingStateBadge', () => {
     expect(el.className).toContain('amber');
   });
 
+  it('has a short compact form for card chips, the full wording in the tooltip', () => {
+    const el = badge('failed', true)!;
+    expect(el.textContent).toBe('Embed failed');
+    expect(el.getAttribute('title')).toContain('No vector: encoder failed');
+    target.remove();
+    unmount(instance!);
+    expect(badge('deferred', true)!.textContent).toBe('No vector');
+  });
+
   it('names a deferred item', () => {
     expect(badge('deferred')!.textContent).toBe('No vector yet');
   });

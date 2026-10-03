@@ -10,7 +10,7 @@
 
   let { config }: { config: IngestConfig } = $props();
 
-  const detector = $derived(config.detector);
+  const detector = $derived(config.detector ?? null);
   const policy = $derived(config.policy ?? null);
 
   const detectFacts = $derived.by(() => {

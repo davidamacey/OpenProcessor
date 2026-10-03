@@ -43,6 +43,11 @@ describe('IngestDetectorCard', () => {
     expect(target.querySelector('table')).toBeNull();
   });
 
+  it('reads "No detector reported." when the key is absent', () => {
+    render({ detector: undefined });
+    expect(target.textContent).toContain('No detector reported.');
+  });
+
   it('shows the served model, version, input size, class assignment and label count', () => {
     render({ detector: DETECTOR });
     const text = target.textContent!;

@@ -10,20 +10,23 @@ export type NoVectorState = Exclude<EmbeddingState, 'embedded'>;
 
 export const EMBEDDING_STATE_COPY: Record<
   NoVectorState,
-  { label: string; tooltip: string; warning: boolean }
+  { label: string; compactLabel: string; tooltip: string; warning: boolean }
 > = {
   failed: {
     label: 'No vector: encoder failed',
+    compactLabel: 'Embed failed',
     tooltip: 'The encoder failed for this item at ingest; run Embed to retry.',
     warning: true,
   },
   deferred: {
     label: 'No vector yet',
+    compactLabel: 'No vector',
     tooltip: 'Embedding was deferred (lazy policy or a combine that dropped the vector).',
     warning: false,
   },
   not_selected: {
     label: 'Not embedded',
+    compactLabel: 'Not embedded',
     tooltip: 'The ingest policy did not select this item for a vector.',
     warning: false,
   },
