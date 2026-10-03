@@ -12,13 +12,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import Query
+
 from src.routers.curation._common import (
     OpenSearchDep,
     bound_project_slug,
     get_class_registry,
     router,
 )
-from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
+from src.routers.curation._config_common_models import (
+    ActiveConfigResponse,
+    ActiveRef,
+    active_conflict_error,
+    api_error,
+)
 from src.routers.curation._models_segmenter import configured_segmenter_health
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
@@ -224,12 +231,7 @@ async def rollback_active_region_profile(
             409, 'no_previous', 'there is no previous activation to roll back to'
         ) from exc
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            'the active profile changed since you loaded it',
-            current=ActiveRef(**exc.current) if exc.current else None,
-        ) from exc
+        raise active_conflict_error('the active profile', exc.current) from exc
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
@@ -241,12 +243,7 @@ async def deactivate_region_profile(
     try:
         await activate_profile(opensearch, name=None, revision=None, expected_active=expected)
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            'the active profile changed since you loaded it',
-            current=ActiveRef(**exc.current) if exc.current else None,
-        ) from exc
+        raise active_conflict_error('the active profile', exc.current) from exc
     return await build_active_config_response(opensearch, axis='detection_profile')
 
 
@@ -257,7 +254,11 @@ async def deactivate_region_profile(
 
 @router.get('/region_profiles', response_model=RegionProfileList)
 async def list_region_profiles(
-    opensearch: OpenSearchDep, include_templates: bool = False
+    opensearch: OpenSearchDep,
+    include_templates: bool = Query(
+        default=False,
+        description='Also return the shipped example templates in `templates`; they are omitted by default.',
+    ),
 ) -> RegionProfileList:
     store = get_config_store()
     await store.refresh(opensearch)
@@ -493,12 +494,7 @@ async def activate_region_profile_route(
             opensearch, name=name, revision=record.revision, expected_active=expected_active
         )
     except ActiveConflictError as exc:
-        raise api_error(
-            409,
-            'active_conflict',
-            'the active profile changed since you loaded it',
-            current=ActiveRef(**exc.current) if exc.current else None,
-        ) from exc
+        raise active_conflict_error('the active profile', exc.current) from exc
 
     from src.services.detection.profile_registry import get_active_region_profile
 

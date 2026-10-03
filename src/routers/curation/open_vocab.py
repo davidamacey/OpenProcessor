@@ -11,8 +11,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import Query
+
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import ActiveConfigResponse, ActiveRef, api_error
+from src.routers.curation._config_common_models import (
+    ActiveConfigResponse,
+    ActiveRef,
+    active_conflict_error,
+    api_error,
+)
 from src.routers.curation._open_vocab_models import (
     OpenVocabActivateRequest,
     OpenVocabActivateResponse,
@@ -107,12 +114,7 @@ def _to_summary(record: OpenVocabRecord) -> OpenVocabSummary:
 
 
 def _active_conflict(exc: ActiveConflictError) -> Any:
-    return api_error(
-        409,
-        'active_conflict',
-        'the active open-vocabulary set changed since you loaded it',
-        current=ActiveRef(**exc.current) if exc.current else None,
-    )
+    return active_conflict_error('the active open-vocabulary set', exc.current)
 
 
 def _revision_conflict(name: str, exc: RevisionConflictError) -> Any:
@@ -183,7 +185,11 @@ async def deactivate_open_vocab(
 
 @router.get('/open_vocab', response_model=OpenVocabList)
 async def list_open_vocab(
-    opensearch: OpenSearchDep, include_templates: bool = False
+    opensearch: OpenSearchDep,
+    include_templates: bool = Query(
+        default=False,
+        description='Also return the shipped example templates in `templates`; they are omitted by default.',
+    ),
 ) -> OpenVocabList:
     store = get_config_store()
     await store.refresh(opensearch)

@@ -10,8 +10,8 @@ import pytest
 from curation.open_vocab_fixtures import FakeSegmenter, StatefulRegistry, cand, ingested_world
 from curation.reprocess_fixtures import docs, images_index
 from src.services.config_store.store import StoredConfig, get_config_store, reset_config_stores
+from src.services.curation.dataset_import.limits import open_vocab_stale_after_s
 from src.services.curation.open_vocab_sweeper import (
-    STALE_AFTER_S,
     start_open_vocab_sweeper,
     sweep_pending_open_vocab,
 )
@@ -68,7 +68,7 @@ async def test_stale_and_unstamped_pending_images_are_finished_and_fresh_ones_ar
 ) -> None:
     fake, factory, (old, unstamped, fresh), seg = await _setup(tmp_path, monkeypatch)
     _activate()
-    _stamp(fake, old, STALE_AFTER_S + 60)
+    _stamp(fake, old, open_vocab_stale_after_s() + 60)
     _stamp(fake, unstamped, None)
     _stamp(fake, fresh, 5)
 
@@ -119,3 +119,31 @@ async def test_the_interval_setting_can_turn_the_sweeper_off(
     task = start_open_vocab_sweeper()
     assert task is not None
     task.cancel()
+
+
+def test_stale_window_default_is_short_and_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_OPEN_VOCAB_STALE_S', raising=False)
+    assert open_vocab_stale_after_s() == 240
+    monkeypatch.setenv('OP_OPEN_VOCAB_STALE_S', '90')
+    assert open_vocab_stale_after_s() == 90
+    monkeypatch.setenv('OP_OPEN_VOCAB_STALE_S', '1')
+    assert open_vocab_stale_after_s() == 30  # floor: never reclaim a live drain's stamp
+    monkeypatch.setenv('OP_OPEN_VOCAB_STALE_S', 'x')
+    assert open_vocab_stale_after_s() == 240
+
+
+@pytest.mark.asyncio
+async def test_a_restart_orphan_is_reclaimed_after_the_short_window_on_a_fake_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake, factory, ids, _seg = await _setup(tmp_path, monkeypatch)
+    _activate()
+    _stamp(fake, ids[0], 0)
+    stamped = datetime.fromisoformat(fake.docs(images_index())[ids[0]]['open_vocab_status_at'])
+    window = open_vocab_stale_after_s()
+
+    just_before = stamped + timedelta(seconds=window - 5)
+    assert await sweep_pending_open_vocab(fake, factory, now=just_before) == 0
+    after = stamped + timedelta(seconds=window + 5)
+    assert await sweep_pending_open_vocab(fake, factory, now=after) == 1
+    assert window < 600

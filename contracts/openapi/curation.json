@@ -31876,11 +31876,13 @@
             }
           },
           {
+            "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
             "in": "query",
             "name": "include_templates",
             "required": false,
             "schema": {
               "default": false,
+              "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
               "title": "Include Templates",
               "type": "boolean"
             }
@@ -34723,11 +34725,13 @@
             }
           },
           {
+            "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
             "in": "query",
             "name": "include_templates",
             "required": false,
             "schema": {
               "default": false,
+              "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
               "title": "Include Templates",
               "type": "boolean"
             }

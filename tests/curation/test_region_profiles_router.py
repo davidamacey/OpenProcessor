@@ -321,3 +321,20 @@ def test_a_profile_created_through_another_worker_can_be_activated_at_once(
     )
 
     assert r.status_code == 200, r.text
+
+
+def test_deactivate_conflict_message_spells_out_the_expected_active_shape(
+    app_client: TestClient,
+) -> None:
+    r = app_client.post(f'{PREFIX}', json={'name': 'p1', 'description': '', 'body': _body()})
+    assert r.status_code in (200, 201), r.text
+    r = app_client.post(f'{PREFIX}/p1/activate', json={'expected_active': None, 'force': False})
+    assert r.status_code == 200, r.text
+
+    r = app_client.post(f'{PREFIX}/deactivate', json={})
+    assert r.status_code == 409, r.text
+    detail = r.json()['detail']
+    assert detail['error'] == 'active_conflict'
+    assert 'expected_active' in detail['message']
+    assert '"name"' in detail['message']
+    assert detail['current']['name'] == 'p1'

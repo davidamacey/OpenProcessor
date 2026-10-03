@@ -12,7 +12,12 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._config_common_models import ActiveRef, AppliedRuntime, api_error
+from src.routers.curation._config_common_models import (
+    ActiveRef,
+    AppliedRuntime,
+    active_conflict_error,
+    api_error,
+)
 from src.routers.curation._vlm_endpoint_models import (
     VlmActivateRequest,
     VlmActiveResponse,
@@ -29,12 +34,7 @@ _PREFIX = '/vlm/endpoints'
 
 
 def _conflict(exc: ActiveConflictError) -> Any:
-    return api_error(
-        409,
-        'active_conflict',
-        'the VLM was activated by another writer since this request started',
-        current=exc.current,
-    )
+    return active_conflict_error('the active VLM', exc.current)
 
 
 def _dump(ref: ActiveRef | None) -> dict[str, Any] | None:

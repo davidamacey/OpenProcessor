@@ -74,7 +74,10 @@ def test_deactivate_turns_the_vlm_off(vlm_api) -> None:
     body = response.json()
     assert body['active'] == {'name': None, 'revision': None}
     assert body['source'] == 'off'
-    # off is remembered: a stale caller cannot assume "never activated"
+    # explicit off means nothing is active: no expected_active is accepted
+    again = vlm_api.activate('alpha', expected_active=None)
+    assert again.status_code == 200
+    # ... but with something active, omitting it is a conflict
     stale = vlm_api.activate('alpha', expected_active=None)
     assert stale.status_code == 409
     assert _err(stale)['error'] == 'active_conflict'
