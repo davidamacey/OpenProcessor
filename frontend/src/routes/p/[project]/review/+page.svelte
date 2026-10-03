@@ -1991,6 +1991,7 @@
           step="0.05"
           bind:value={confMin}
           disabled={diverseMode}
+          aria-label="Minimum confidence"
           class="input-sm w-16"
         />
         <span class="text-zinc-500">..</span>
@@ -2001,6 +2002,7 @@
           step="0.05"
           bind:value={confMax}
           disabled={diverseMode}
+          aria-label="Maximum confidence"
           class="input-sm w-16"
         />
       </label>
