@@ -1,6 +1,6 @@
 # Generic detector, store-everything ingest and selective embedding: design and implementation plan
 
-Status: plan only (nothing implemented). Issues: #52 (default detector, store
+Status: implemented (waves W0 to W9). Default embedding policy stays `all` (flip decision: keep). Deferred: arbitrary-filter clustering, a `DELETE /models` guard for a project's own detector, the optional `backfill_embedding_state.py`. Issues: #52 (default detector, store
 every detection, embedding policy), #45 (public COCO baseline set, used for the
 before/after numbers). Sibling plan: `docs/design/sam3_full_image_detection_plan.md`
 (#30; its section 12 assumes this plan: a hit is always stored, whether it is
@@ -730,51 +730,94 @@ state counts -> embed-missing -> counts), `test_live_seed_from_detector.py`.
 Visual check per convention: full-page screenshots, desktop and narrow,
 opened and inspected, for the frontend surfaces in section 9.
 
-## 9. Frontend deltas for Cropwright (numbered)
+## 9. Frontend deltas for Cropwright (numbered, as built)
 
-Wire changes the frontend needs, ready to append to the frontend deltas doc:
+All paths are project-relative (under `/curation/projects/{project}`). The
+generated contracts (`contracts/openapi/curation.json`, `contracts/ts/*.ts`,
+`contracts/json/*.json`) carry every shape; re-vendor them first.
 
-1. `ItemWire.embedding_state`: `'embedded' | 'not_selected' | 'deferred' | 'failed' | null`
-   (null = legacy, treat as embedded if the cluster is present). Render a small
-   badge on cards for the three non-embedded states, with tooltip text by state.
-2. `GET /curation/projects/{project}/ingest/config`: new `detector` block
-   (model, label list with raw name and slug, `assigns_class`, env class filter
-   if any) and `policy` echo. Use it for the first-run screen ("this detector
-   finds 80 kinds of objects") instead of hardcoding vocabulary.
-3. Ingest settings page (new): read/edit the embedding policy (mode radio
-   `all|selected|lazy`, class multi-select by name from the detector labels and
-   registry, min size and min confidence sliders, max per image) and the
-   optional detect filter (collapsed, "off" by default) via get/put
-   `/ingest/policy`; show `unknown_names` warnings; 409 -> reload prompt.
-4. Policy cost preview: call post `/ingest/policy/preview` on each edit and
-   show "N of M stored detections would be embedded, about X MB of vectors".
-5. Ingest results: show `n_embedded`, `n_not_embedded`, `n_filtered` per batch
-   and in the ingest summary; a failed state (`failed`) is a warning, not
-   success.
-6. First-run: after project creation offer "Create classes from the detector"
-   (post `/classes/seed_from_detector`, dry run first, show created/skipped).
-7. Class page: show embedded vs not-embedded counts for the class; when
-   not-embedded items exist show "Embed N detections" which posts the
-   `suggested_reprocess` body to `POST /curation/projects/{project}/reprocess`
-   (dry run first, then the job UI the app already has).
-8. Ordered/semantic views: read `n_unembedded` / `unembedded_in_scope` and show
-   a banner "N detections are not included (not embedded)" with the embed
-   action; never assume zero results means no matches.
-9. Crop list filters: `embedding_state`, `proposal_name` (detector class),
-   `min_area`; a "Detected as" facet driven by get `/detections/summary`.
-10. Bulk hide: "Hide all detections of class X" using bulk exclude by filter
-    (dry run count, confirm, undo toast via the existing undo).
-11. Stats dashboard: `embedding_states` breakdown in curation stats and
-    `items_embedded` in project counts; "unlabeled" must not be presented as
-    "clusterable".
-12. Review empty state: render the new reason text for unembedded detections.
-13. Reprocess dialog: the `embed` scope gains selectors and an only-missing
-    toggle; dry-run shows `to_embed`, `already_embedded`, estimated MB.
-14. Pipeline start dialog (W7): optional "embed missing first" with scope.
-15. Contract refresh: re-vendor `contracts/ts/itemWire.ts`,
-    `contracts/json/item_wire.json`, `contracts/openapi/curation.json`.
-16. Visual check: desktop and narrow full-page screenshots of the ingest
-    settings page, the class page banner and the card badges.
+1. `ItemWire.embedding_state`: `'embedded' | 'not_selected' | 'deferred' |
+   'failed' | null` (null = written before the field). Badge for the three
+   non-embedded states with a tooltip per state.
+2. `GET /ingest/config`: `detector` block (model, version, input size,
+   `assigns_class`, `n_labels`, `labels[{class_id, name, slug}]`,
+   `confidence_floor_applies`; there is no env class-id filter any more) and a
+   `policy` echo. Use it for the first-run screen instead of hardcoded
+   vocabulary.
+3. Ingest settings page over `GET/PUT /ingest/policy`. Shape: `{revision,
+   detect: {classes|null, exclude_classes, min_confidence, min_box_area_frac,
+   max_per_image, class_resolution: 'proposal'|'by_name'}, embedding: {mode:
+   'all'|'selected'|'lazy', classes, min_confidence, min_box_area_frac,
+   max_per_image}, detector: {model, version, input_size, labels_path}|null}`.
+   `PUT` adds `expected_revision` (409 on stale: reload) and answers the policy
+   plus `unknown_names` (warn, never block). 422: `selected` with no criterion;
+   a `detector` that is not loaded on Triton or lacks the end2end outputs (a
+   list of reasons); 503 when Triton cannot be asked. The detect filter and the
+   detector override are collapsed "advanced" sections, off by default.
+4. Cost preview: `POST /ingest/policy/preview` with the candidate policy body
+   returns `{total_items, scanned, truncated, would_embed, would_not_embed,
+   estimated_vector_mb, by_class[{name, would_embed, would_not_embed}]}`. Show
+   "N of M stored detections would be embedded, about X MB".
+5. Ingest results and batch summary: `n_embedded`, `n_not_embedded`,
+   `n_filtered` (single-image response too). `failed` is a warning, not success.
+6. First run: "Create classes from the detector" (`POST /classes/seed_from_detector`,
+   dry run first).
+7. One filter on every list: query parameters `class_name`, `exclude_class_name`
+   (repeatable, by name), `conf_min`, `conf_max`, `min_area`, `max_area`,
+   `max_rank` (N largest per image), `origin` (`detector|sam3|human|import`),
+   `embedding_state`, `review_status` (`pending|validated|dismissed|excluded`)
+   on `GET /crops`, `/review/{tab}` (+ `/locate`), `/search/text`,
+   `/stats/classes`, `/stats/dataset`, `/clusters`, `/regions`,
+   `/detections/summary`. `GET /review/tabs` lists them in every tab's `filters`.
+   `GET /crops` also takes `open_vocab_set` and `source_prompt`. 400 on a
+   malformed band.
+8. `GET /detections/summary` (same filter): `{total, embedding{embedded,
+   not_embedded, by_state}, by_label[{name, count, embedding}], labels_truncated,
+   suggested_reprocess}`. Drives the "Detected as" facet and the class page
+   "Embed N detections" action: POST `suggested_reprocess` to `/reprocess`
+   (dry run first).
+9. Filter, select, act: `POST /crops/batch_exclude`, `/crops/batch_unexclude`,
+   `PUT /crops/batch_label`, `POST /crops/move` take `crop_ids` OR
+   `selection: {filter, limit, sample: 'random'|'largest', seed, include_test,
+   include_excluded}` and `dry_run`. A dry run answers `{dry_run: true,
+   selected}`. 422 for both/neither forms, an empty filter without a limit, or
+   more than 20000 items. Flow: show the count, confirm, run, undo toast.
+10. `POST /reprocess`: `embed: {only_missing, parts}` and `targets.limit/sample/seed`
+    (filter targets only); `ReprocessFilter` is the shared filter plus the
+    reprocess selectors. Scope `embed` dry-run `detail`: `items`,
+    `without_vector`, `to_embed`, `region_boxes_to_embed`, `estimated_vector_kb`.
+11. Region box edits (`PUT /crops/{id}/regions`, `PUT /crops/batch_regions`,
+    `PATCH /crops/{id}/regions/{box_id}`, `POST /regions/batch_box_state`,
+    `PATCH /crops/{id}/region_meta`, `POST /regions/batch_status`) answer an
+    extra `vector_refresh: {embedded, pending}`; `pending > 0` means a box has no
+    vector yet (encoder down): offer the embed action.
+12. `POST /pipeline/auto_label/start`: `embed_missing=true` and the shared filter
+    as query parameters scope the embed and VLM stages; the job stage list gains
+    `embed_missing` (first); `result.stages.embed_missing` is `{images,
+    images_failed, embedded}` or `{skipped, reason}` or `{status: 'error'}`.
+13. `POST /export/yolo`: optional `item_filter` (the filter as an object),
+    recorded in the manifest as `item_filter`.
+14. `GET /review/regions` with the region profile off answers an empty queue with
+    `empty_reason`; `/review/regions/locate` answers reason `region_profile_off`.
+    Show the reason, not a blank grid.
+15. Stats and empty states: `embedding_states` breakdown in curation stats,
+    `items_embedded` in project counts, the review empty reason for unembedded
+    detections; "unlabeled" is not "clusterable".
+16. Ordered and semantic views: read `n_unembedded` / `unembedded_in_scope` and
+    show a banner with the embed action.
+17. `class_source` `<detector>_model` now also marks a by-name resolved class
+    (`detect.class_resolution: by_name`): a machine label, not validated.
+18. Contract refresh, then visual check: desktop and narrow full-page
+    screenshots of the ingest settings page, the filter bar, the class page
+    banner and the card badges.
+
+Merged in from the SAM 3 full-image plan (its section 9, items 1 to 8, in
+`docs/design/sam3_full_image_detection_plan.md`): the `/open_vocab` settings
+page and target editor, the "test on an image" panel, the `open_vocab` reprocess
+scope with `all_images` / `open_vocab_status`, item provenance fields, the
+"skipped by gate" image state and the no-segmenter empty state. Items 7 and 8
+above add `origin: sam3` (an item that carries an `open_vocab_set`) and the
+embedding policy to those items.
 
 ## 10. Config, contracts and registration checklist (per wave)
 
