@@ -251,7 +251,7 @@ collect_ignore = [
 
 
 @pytest.fixture
-def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def reference_region_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     """Activate the example ``license_plate`` region profile
     (``examples/region_profiles/license_plate.json``).
 
@@ -262,9 +262,12 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     The example runs segmenter-only (empty ``detector_model``); the fixture
     names a detector the way a deployment that exported its own would, so
-    the cascade tests exercise every leg.
+    the cascade tests exercise every leg. ``parent_classes`` is emptied (every
+    item in scope) because these tests drive the cascade over arbitrary class
+    names; the example's own vehicle scope is pinned by
+    ``tests/test_example_region_profiles.py``.
     """
-    from pathlib import Path
+    import json
 
     from _region_profile_fixture import REFERENCE_REGION_DETECTOR_MODEL
 
@@ -273,7 +276,12 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     example_path = (
         Path(__file__).resolve().parents[1] / 'examples' / 'region_profiles' / 'license_plate.json'
     )
-    monkeypatch.setenv('OP_REGION_PROFILE_PATH', str(example_path))
+    scope_free = tmp_path / 'reference_region_profile.json'
+    scope_free.write_text(
+        json.dumps({**json.loads(example_path.read_text()), 'parent_classes': []}),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', str(scope_free))
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', REFERENCE_REGION_DETECTOR_MODEL)
     profile_registry._reset_registry_for_tests()
     yield

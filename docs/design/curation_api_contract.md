@@ -1,6 +1,6 @@
 # OpenProcessor `/curation` API contract
 
-Reference for the `/curation` HTTP API as shipped in v0.1.0. The generated
+Reference for the `/curation` HTTP API as shipped in v0.4.0. The generated
 OpenAPI document `contracts/openapi/curation.json` is the source of truth for
 routes and schemas. The JSON/TypeScript helpers in `contracts/json/` and
 `contracts/ts/` are generated from the same code. This document adds the
@@ -2111,7 +2111,7 @@ OpenSearch, Triton, segmenter and VLM boundaries):
 
 ## Breaking wire changes
 
-v0.1.0 is a fresh wire. Deployments re-ingest; there is no data migration.
+v0.4.0 is a fresh wire. Deployments re-ingest; there is no data migration.
 The table lists renamed or restructured wire surfaces.
 
 | Surface | Now |

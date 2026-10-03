@@ -1,6 +1,6 @@
 # Curation and Active Learning
 
-> **Status: experimental for v0.1.0.** This is a working, tested subsystem,
+> **Status: experimental for v0.4.0.** This is a working, tested subsystem,
 > but it is new and its API can still change between releases. It ships
 > opt-in, behind Docker Compose profiles, and is off by default.
 
@@ -364,7 +364,9 @@ Notes:
   without activating.
 - A profile changes only items processed after activation. Re-run older
   items with [`POST /reprocess`](#reprocess).
-- `parent_classes` restricts the stage to items of those class names.
+- `parent_classes` restricts the stage to items of those class names. Empty means every
+  item gets the stage (and the segmenter call), so set it; the `license_plate` example
+  names `car`, `truck`, `bus` and `motorcycle`.
   `max_regions_per_item` caps the boxes kept per item.
 - `text_reader: "none"` makes a text-free profile: no OCR, no text fields.
   `text_hint_enabled` adds an optional OCR text hint to locate text.
@@ -1044,7 +1046,7 @@ deployment with existing data under other field names builds its own
 Retired environment-variable prefixes are rejected at startup by
 `src/config/retired_env.py`.
 
-Item wire fields that were renamed or replaced in v0.1.0:
+Item wire fields that were renamed or replaced in v0.4.0:
 
 | Old | Now |
 |---|---|

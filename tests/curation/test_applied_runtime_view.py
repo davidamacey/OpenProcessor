@@ -47,6 +47,7 @@ async def test_a_worker_written_runtime_doc_reads_back() -> None:
     assert runtime.applied_at
     assert (runtime.profile.name, runtime.profile.revision) == ('wheel_profile', 2)
     assert (runtime.pack.name, runtime.pack.revision) == ('generic_item_v1', None)
+    assert runtime.vlm is not None
     assert runtime.vlm.name == 'env'
     assert runtime.lagging is True
 

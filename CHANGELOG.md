@@ -5,16 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The entries headed `Pre-release` (0.3.0, 0.2.x and the earliest 0.1.0) are the private
-history of this codebase before it was published. Their numbers belong to that history
-only: the first public release is `[0.1.0] - 2026-10-02` and restarts public versioning.
+Releases 0.2.0, 0.2.1 and 0.3.0 are published on GitHub; their entries below are
+the content of those tags. The entry headed `Pre-release 0.1.0` is the earliest private
+history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-02
+## [0.4.0] - 2026-10-02
 
 ### Documentation
-- Full v0.1.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
+- Full v0.4.0 documentation pass, accurate to the code: `README.md`, `CLAUDE.md`,
   `INSTALLATION.md`, `docs/CURATION.md`, `docs/ARCHITECTURE.md`,
   `docs/opensearch_schema_design.md`, `docs/design/curation_api_contract.md` (every
   path in `contracts/openapi/curation.json`) and `docs/design/curation_design_rationale.md`.
@@ -42,6 +42,15 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- **The combine job reports completed only after its target is active** (#47). The job
+  used to write `completed`/`done` and only then move the target out of `building`, so
+  the served next step (`POST /cluster/umap/rebuild`) could 409 `project_building`.
+  `run_combine` now awaits one `settle` callback (`lifecycle.finish_building`) before the
+  terminal status; a failed settle fails the job.
+- `examples/region_profiles/license_plate.json` sets `parent_classes` (`car`, `truck`,
+  `bus`, `motorcycle`); empty meant every item (people, food) went to the segmenter
+  (#48). `tests/test_example_region_profiles.py` checks every example profile selects
+  by class name. The shipped default stays region-off.
 - `GET /region_profiles/active` and `/prompt_packs/active` with `source: env` now name
   the env/file default the worker applies (`active.name`, no revision) instead of a
   nameless "off"; only an explicit deactivation, or no env default at all, is nameless.
@@ -116,14 +125,15 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
   always `[]`. Unsharing a model another project runs on is `409 in_use` (naming the
   projects) unless `force`; if a project cannot be read it is `503 config_store_unavailable`
   unless `force` (#39).
-- **Release version is 0.1.0 everywhere** (#39): `VERSION`, `pyproject.toml`,
+- **Release version is 0.4.0 everywhere** (#39, #50): `VERSION`, `pyproject.toml`,
   `docs-site/package.json` (and its lockfile), the compose default image tag, the roadmap
-  and the installer test double all say 0.1.0 (they said 0.3.0 while the docs and the
-  release said v0.1.0). `tests/test_version_consistency.py` pins them together.
+  and the installer test double all say 0.4.0. Public releases v0.2.0, v0.2.1 and v0.3.0
+  already exist, so the first-generic release is v0.4.0 (the prep had used 0.1.0).
+  `tests/test_version_consistency.py` pins them together.
 - `make opensearch-reset-indexes` is removed: it called `DELETE /index` and
   `POST /index/create`, which have never been routes. `tests/test_makefile_routes.py`
   checks that every API route a Makefile target calls exists.
-- The 0.1.0 changelog entry for the removed item keys now says 106 item keys remain
+- The changelog entry for the removed item keys now says 106 item keys remain
   (`contracts/json/item_wire.json`), not 88.
 - **W9 follow-ups** (#38).
   - A malformed `OP_VLM_URL` port (`http://h:abc`) means "no env endpoint" instead of a
@@ -3846,7 +3856,7 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
 - `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`
   (`quantize.coreml` returns 400).
 
-## [Pre-release 0.3.0] - 2026-09-21
+## [0.3.0] - 2026-09-21
 
 ### Added
 - **Curation subsystem (EXPERIMENTAL)**: a generic active-learning
@@ -3956,7 +3966,7 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
   detection/clustering leaves, measured `scripts/` for coverage, and
   enforced a coverage floor.
 
-## [Pre-release 0.2.1] - 2026-07-04
+## [0.2.1] - 2026-07-04
 
 ### Fixed
 - Fresh-install path (`scripts/setup.sh`) on Triton 26.06: trtexec moved
@@ -3971,7 +3981,7 @@ only: the first public release is `[0.1.0] - 2026-10-02` and restarts public ver
 - Endpoint suite: dual-family checks skip gracefully when the optional
   YOLO26 engine is not exported.
 
-## [Pre-release 0.2.0] - 2026-07-04
+## [0.2.0] - 2026-07-04
 
 ### Added
 - **YOLO26 support served alongside YOLO11** in the same Triton + API

@@ -1,8 +1,10 @@
 """The combine job body (projects plan section 6): registry, images and items
 page by page with a durable per-chunk mark, the holdout record, then a
 terminal status. The target project's own status (``building`` -> ``active``
-or ``failed``) is the caller's: :func:`~src.services.projects.lifecycle.
-finish_building`.
+or ``failed``) is the caller's (:func:`~src.services.projects.lifecycle.
+finish_building`), handed in as ``settle`` and awaited BEFORE the job's
+terminal status is written, so a job never reads done while its target is
+still ``building``.
 
 Resume re-reads the persisted plan (``request.json`` + ``mapping.json``), never
 the sources' current classes, so a resumed run copies what the preview showed.
@@ -35,6 +37,8 @@ from src.services.projects.combine.plan import Analysis, duplicates_from_wire, d
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from src.config.projects import ProjectRecord
     from src.services.curation.dataset_import.store import ImportStore
     from src.services.curation.file_job import FileJob
@@ -185,8 +189,11 @@ async def run_combine(
     sources: list[ProjectRecord],
     target: ProjectRecord,
     embedding_dim: int,
+    settle: Callable[[bool], Awaitable[None]],
 ) -> bool:
-    """Run (or resume) one combine to a terminal job status. Never raises:
+    """Run (or resume) one combine to a terminal job status. ``settle(ok)``
+    moves the target out of ``building`` and runs before that status is
+    written (a cancelled or fenced run never settles). Never raises:
     a failure is recorded as ``failed`` with its error. ``False`` when another
     worker claimed the job meanwhile (:class:`FencedError`): this one wrote
     nothing after that and its caller must not settle the target."""
@@ -220,7 +227,7 @@ async def run_combine(
             originals=plan.originals,
         )
         if not await _copy_all(ctx, store, plan, done, claim):
-            await _finish(ctx, store, claim)
+            await _finish(ctx, store, claim, settle)
     except FencedError:
         logger.warning('combine_worker_fenced', job_id=job_id, claim=claim)
         return False
@@ -230,7 +237,14 @@ async def run_combine(
             ensure_owner(job, claim)
         except FencedError:
             return False
-        job.update(status='failed', error=str(exc)[:300], finished_at=now_iso())
+        error = str(exc)[:300]
+        if not isinstance(exc, SettleError):
+            try:
+                await settle(False)
+            except Exception as settle_exc:
+                logger.error('combine_settle_failed', job_id=job_id, error=str(settle_exc))
+                error = f'{error}; could not fail the target: {settle_exc}'[:300]
+        job.update(status='failed', error=error, finished_at=now_iso())
     finally:
         ticker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -277,7 +291,13 @@ async def _copy_all(
     return False
 
 
-async def _finish(ctx: CopyContext, store: ImportStore, claim: str) -> None:
+class SettleError(Exception):
+    """The target could not leave ``building`` after a complete copy."""
+
+
+async def _finish(
+    ctx: CopyContext, store: ImportStore, claim: str, settle: Callable[[bool], Awaitable[None]]
+) -> None:
     job = store.job
     ensure_owner(job, claim)
     job.update(phase='holdout')
@@ -292,6 +312,10 @@ async def _finish(ctx: CopyContext, store: ImportStore, claim: str) -> None:
     report = {**_sum_reports(store.chunks_done()), **extra}
     next_steps = [recluster_items()]
     ensure_owner(job, claim)  # the holdout step is long; a takeover may have landed in it
+    try:
+        await settle(True)
+    except Exception as exc:
+        raise SettleError(f'could not finish the target: {exc}') from exc
     job.update(
         status='completed',
         phase='done',
@@ -304,6 +328,7 @@ async def _finish(ctx: CopyContext, store: ImportStore, claim: str) -> None:
 __all__ = [
     'FencedError',
     'Plan',
+    'SettleError',
     'build_target_registry',
     'ensure_owner',
     'load_plan',
