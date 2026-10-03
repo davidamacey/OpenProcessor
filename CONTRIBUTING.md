@@ -81,6 +81,15 @@ make contracts-check    # fail if anything is stale
 Pre-commit rejects a commit that leaves a contract stale. See
 [`contracts/README.md`](contracts/README.md).
 
+## After pulling or merging code
+
+The api and the workers bind-mount the source. Python modules already imported by a
+running container go stale, which shows up as transient 500 `ImportError`s. After a pull
+or merge run `make dev-restart` (restarts `yolo-api` and the detection, VLM, auto-label
+and cluster-refresh workers without recreating them). Restart does not re-read `.env`:
+after editing it run `make dev-up` instead (plain `docker restart` or `make dev-restart`
+keep the old values).
+
 ## Documentation checks
 
 Docs are checked against the code. A route written in a doc must exist, an
@@ -92,6 +101,10 @@ resolve:
 .venv/bin/python scripts/docs/check_docs_vs_code.py --only README.md # some files
 .venv/bin/python -m pytest tests/test_doc_links.py -q --no-cov
 ```
+
+The docs site builds with `make docs-build` (npm only; `onBrokenLinks` and
+`onBrokenAnchors` are set to `throw`, and CI runs the same build on every PR touching
+`docs-site/`).
 
 Write each route in full on its own mention (`GET /curation/projects/{project}/stats`,
 not a brace-expanded shorthand). Public data only in docs and fixtures (COCO,
