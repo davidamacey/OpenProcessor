@@ -1030,8 +1030,13 @@ def build_class_id_to_name(
     if remap.source == 'none':
         return dict(full_registry)
     if remap.single_cls:
-        single_name = remap.names[0] if remap.names else 'object'
-        return {0: single_name}
+        # One source class: serve its own registry name, not the trainer's
+        # generic collapsed name. Several collapsed into one keep the trainer's.
+        if len(remap.mapping) == 1:
+            registry_name = full_registry.get(next(iter(remap.mapping)))
+            if registry_name:
+                return {0: registry_name}
+        return {0: remap.names[0] if remap.names else 'object'}
     out: dict[int, str] = {}
     for orig_id, new_id in remap.mapping.items():
         registry_name = full_registry.get(orig_id)
