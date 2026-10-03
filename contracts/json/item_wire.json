@@ -102,6 +102,7 @@
     "region_label_source",
     "region_pairing",
     "region_skip_verify",
+    "region_gate_skip",
     "region_boxes",
     "region_count",
     "region_rejected_count",
@@ -967,6 +968,18 @@
         "default": null,
         "title": "Region Detector Chain"
       },
+      "region_gate_skip": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Gate Skip"
+      },
       "region_label_source": {
         "anyOf": [
           {
@@ -1357,7 +1370,8 @@
     "region_class_id",
     "region_label_source",
     "region_pairing",
-    "region_skip_verify"
+    "region_skip_verify",
+    "region_gate_skip"
   ],
   "source": {
     "model": "src/routers/curation/_item_models.py:ItemDoc",

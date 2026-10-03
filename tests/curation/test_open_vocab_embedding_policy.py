@@ -89,7 +89,7 @@ async def test_a_lazy_project_stores_the_item_without_a_vector_then_embeds_it_on
     assert resp.scopes[0].detail['crop_written'] == 1
     (after,) = docs(fake).values()
     assert after['embedding_state'] == 'embedded'
-    assert after['class_source'] == 'open_vocab_proposal'  # embedding never touches the class
+    assert after['class_source'] == 'open_vocab_target'  # embedding never touches the class
 
 
 def test_origin_sam3_means_the_item_carries_a_prompt_set() -> None:

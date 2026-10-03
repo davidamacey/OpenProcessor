@@ -223,6 +223,7 @@ def detection_fields(fields: RegionFields | None = None) -> tuple[str, ...]:
         F.detector_chain,
         F.detected_at,
         F.skip_verify,
+        F.gate_skip,
     )
 
 

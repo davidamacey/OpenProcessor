@@ -23,13 +23,17 @@ import io
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from src.clients.curation_opensearch import get_class_registry
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.class_ensure import ResolvedClass, ensure_class_by_name
-from src.services.curation.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE
+from src.services.curation.ingest_class_sources import (
+    OPEN_VOCAB_CLASS_SOURCE,
+    OPEN_VOCAB_TARGET_CLASS_SOURCE,
+)
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
 from src.services.curation.item_doc import DetectedItem
@@ -43,6 +47,7 @@ from src.services.curation.open_vocab_gate import VlmVisibleFn  # noqa: TC001 - 
 from src.services.curation.reprocess_detect import load_image_context
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_targets import items_by_terms
+from src.services.detection import segmenter_latency
 from src.services.detection.geometry import crop_id, stored_bbox_norm
 from src.services.detection.open_vocab_select import (
     ExistingBox,
@@ -178,7 +183,7 @@ def _detected(
         score=hit.candidate.score,
         class_id=registry_class.class_id if registry_class else None,
         class_name=registry_class.class_name if registry_class else None,
-        class_source=OPEN_VOCAB_CLASS_SOURCE,
+        class_source=OPEN_VOCAB_TARGET_CLASS_SOURCE if registry_class else OPEN_VOCAB_CLASS_SOURCE,
         # Discovery mode: no class yet, the prompt names the proposal.
         proposal_name=None if hit.class_name else hit.prompt,
         class_detector=OPEN_VOCAB_DETECTOR,
@@ -202,7 +207,10 @@ async def _segment_target(
         )
         outcome = 'hit' if found else 'miss'
     finally:
-        OP_OPEN_VOCAB_CALL_SECONDS.labels(outcome=outcome).observe(time.monotonic() - started)
+        elapsed = time.monotonic() - started
+        OP_OPEN_VOCAB_CALL_SECONDS.labels(outcome=outcome).observe(elapsed)
+        if outcome != 'error':
+            segmenter_latency.observe(elapsed)
     return found
 
 
@@ -340,7 +348,12 @@ async def stamp_open_vocab_status(opensearch: AsyncOpenSearch, image_id: str, st
         await opensearch.update(
             index=get_curation_config().images_index,
             id=image_id,
-            body={'doc': {'open_vocab_status': status}},
+            body={
+                'doc': {
+                    'open_vocab_status': status,
+                    'open_vocab_status_at': datetime.now(UTC).isoformat(),
+                }
+            },
         )
     except Exception as exc:
         logger.warning(

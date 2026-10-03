@@ -11,9 +11,14 @@ class name, then the dedup against boxes already on the image:
 * a LOCKED existing item (human or imported, see the lock rule) overlapping
   a hit at IoU >= :data:`LOCKED_OVERLAP_IOU`, whatever its class, makes the
   hit ``skipped_locked``: never written, the locked item never edited;
-* an existing item of the SAME class name at IoU >= ``dedup_iou`` wins
-  (``agree_existing``): no duplicate is created;
-* any other overlap (a different class name on a machine item) keeps both.
+* an existing item of the SAME label at IoU >= ``dedup_iou`` wins
+  (``agree_existing``): no duplicate is created. A hit's label is its
+  target's class name, or its prompt in discovery mode (no class name); an
+  existing item's label is its class name or, for an unlabeled detector
+  proposal, the detector's own label (the caller passes it as ``class_name``);
+* any other overlap keeps both: a different label, or an existing box with no
+  label at all (nothing to agree WITH: two unnamed things are not the same
+  thing), so a hit is never lost to a box of a different object.
 
 Pure: no I/O, deterministic for equal inputs. Class identity is by NAME
 (:func:`~src.utils.class_names.normalize_class_name`, the one name-equality
@@ -91,6 +96,11 @@ def _norm(name: str | None) -> str:
     return normalize_class_name(name or '')
 
 
+def hit_label(h: Hit) -> str:
+    """The one name a hit is deduplicated under: its class name, or its prompt."""
+    return _norm(h.class_name or h.prompt)
+
+
 def _area(box: tuple[float, float, float, float]) -> float:
     return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
 
@@ -135,10 +145,9 @@ def select_open_vocab_hits(
     pooled.sort(key=lambda h: (-h.candidate.score, *h.candidate.bbox_norm[:2], h.prompt))
     survivors: list[Hit] = []
     for h in pooled:
-        key = _norm(h.class_name)
+        key = hit_label(h)
         if any(
-            _norm(k.class_name) == key
-            and iou(h.candidate.bbox_norm, k.candidate.bbox_norm) > dedup_iou
+            hit_label(k) == key and iou(h.candidate.bbox_norm, k.candidate.bbox_norm) > dedup_iou
             for k in survivors
         ):
             dropped.append((h, 'cross_target_nms'))
@@ -148,11 +157,12 @@ def select_open_vocab_hits(
     kept_hits: list[Hit] = []
     for h in survivors:
         box = h.candidate.bbox_norm
-        key = _norm(h.class_name)
+        key = hit_label(h)
         if any(e.locked and iou(box, e.bbox_norm) >= LOCKED_OVERLAP_IOU for e in existing):
             dropped.append((h, 'skipped_locked'))
         elif any(
-            _norm(e.class_name) == key and iou(box, e.bbox_norm) >= dedup_iou for e in existing
+            e.class_name and _norm(e.class_name) == key and iou(box, e.bbox_norm) >= dedup_iou
+            for e in existing
         ):
             dropped.append((h, 'agree_existing'))
         else:
@@ -167,5 +177,6 @@ __all__ = [
     'Hit',
     'OpenVocabSelection',
     'TargetRules',
+    'hit_label',
     'select_open_vocab_hits',
 ]

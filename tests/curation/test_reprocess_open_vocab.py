@@ -18,6 +18,7 @@ from src.services.curation.reprocess_models import (
     ReprocessTargets,
 )
 from src.services.curation.reprocess_targets import ReprocessTargetsError
+from src.services.detection import segmenter_latency
 
 
 if TYPE_CHECKING:
@@ -33,7 +34,9 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> Any:
     registry = StatefulRegistry()
     monkeypatch.setattr('src.services.curation.open_vocab_run.get_class_registry', lambda: registry)
     monkeypatch.delenv('OP_SEGMENTER_URL', raising=False)
+    segmenter_latency.reset()
     yield
+    segmenter_latency.reset()
     reset_config_stores()
 
 
@@ -94,7 +97,7 @@ async def test_a_dry_run_estimates_calls_and_minutes_and_writes_nothing(
     assert res.detail['enabled_targets'] == 2
     assert res.detail['estimated_calls'] == 4
     assert res.detail['segmenter_reachable'] == 0
-    assert res.detail['estimated_minutes'] == 1  # 4 calls x 3 s on one instance, rounded up
+    assert res.detail['estimated_minutes'] == 1  # 4 calls x 0.36 s, one instance, rounded up
     assert docs(fake) == before
 
 
@@ -110,11 +113,34 @@ async def test_the_estimate_divides_by_the_segmenters_instances(
         return 2
 
     monkeypatch.setattr('src.services.curation.reprocess_open_vocab.segmenter_instances', instances)
+    segmenter_latency.observe(3.0)
     many = [f'img-{i}' for i in range(200)]  # 200 calls x 3 s / 2 instances = 300 s = 5 min
     resp = await apply_reprocess(fake, _req(image_ids=many, dry_run=True))
     detail = resp.scopes[0].detail
     assert (detail['segmenter_instances'], detail['segmenter_reachable']) == (2, 1)
     assert detail['estimated_minutes'] == 5
+
+
+@pytest.mark.asyncio
+async def test_the_estimate_uses_measured_latency_and_the_concurrency_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake, _service, _ids = await _world(tmp_path, monkeypatch, n_images=2)
+    _activate([{'prompt': 'a', 'class_name': 'a'}])
+    monkeypatch.setenv('OP_SEGMENTER_URL', 'http://seg.invalid:8000')
+
+    async def instances(_url: str) -> int:
+        return 8
+
+    monkeypatch.setattr('src.services.curation.reprocess_open_vocab.segmenter_instances', instances)
+    segmenter_latency.observe(0.6)
+    many = [f'img-{i}' for i in range(1000)]  # 1000 calls x 0.6 s
+    monkeypatch.setenv('OP_OPEN_VOCAB_CONCURRENCY', '2')  # 1 target x 2 images = 2 in flight
+    capped = (await apply_reprocess(fake, _req(image_ids=many, dry_run=True))).scopes[0].detail
+    monkeypatch.setenv('OP_OPEN_VOCAB_CONCURRENCY', '16')  # the 8 instances cap it
+    wide = (await apply_reprocess(fake, _req(image_ids=many, dry_run=True))).scopes[0].detail
+    assert capped['estimated_minutes'] == 5  # 600 s / 2
+    assert wide['estimated_minutes'] == 2  # 600 s / 8 = 75 s
 
 
 @pytest.mark.asyncio
@@ -152,6 +178,7 @@ async def test_the_segmenter_being_down_trips_after_three_images_and_writes_noth
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake, service, ids = await _world(tmp_path, monkeypatch, n_images=5)
+    monkeypatch.setenv('OP_OPEN_VOCAB_CONCURRENCY', '1')  # the trip point is exact when serial
     _activate([{'prompt': 'traffic cone', 'class_name': 'cone'}])
     seg = FakeSegmenter()
     seg.default = [cand()]

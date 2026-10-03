@@ -144,9 +144,12 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     'HUMAN_CLASS_SOURCE': 'human',
     # The full-image open-vocabulary pass.
     'OPEN_VOCAB_CLASS_SOURCE': 'open_vocab_proposal',
+    'OPEN_VOCAB_TARGET_CLASS_SOURCE': 'open_vocab_target',
     # Label import: caller-chosen, default 'external_label'.
     'label_source': 'external_label',
     'item.class_source': None,
+    # The crop gate's lock check builds a read-only doc from the task.
+    't.class_source': None,
     'class_source': None,
     "doc.get('class_source', '')": None,
     "src.get('class_source', '')": None,

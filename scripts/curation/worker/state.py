@@ -103,6 +103,8 @@ class _ItemTask:
     item_bbox_norm: tuple[float, float, float, float]
     region_status: str | None
     class_name: str
+    # The ingest detector's own label when the item has no class yet.
+    proposal_name: str = ''
     # Dead field -- nothing writes or maps a ``group`` item field, so
     # this was always empty in production. Kept (default '', never read by
     # _is_secondary_shape) purely for source/test-fixture back-compat;

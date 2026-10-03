@@ -71,6 +71,7 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
         label_source='roi_label_source',
         pairing='roi_pairing',
         skip_verify='roi_skip_vlm_verify',
+        gate_skip='roi_gate_skip',
         status_legacy='roi_status_legacy',
         profile='roi_profile',
         profile_revision='roi_profile_revision',

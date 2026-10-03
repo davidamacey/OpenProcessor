@@ -140,6 +140,16 @@ class DetectionProfile:
     # ``class_name`` or ``proposal_name``, case-insensitively) that get the
     # region stage. Empty = every item.
     parent_classes: frozenset[str] = field(default_factory=frozenset)
+    # Region profiles only: learned per-class hit-rate gate on the segmenter
+    # (tier 3 of ``segmenter_gate.decide``; off by default). After
+    # ``gate_hit_miss_threshold`` misses in an item class's last
+    # ``gate_hit_window`` segmenter calls the class is only SAMPLED at
+    # ``gate_hit_sample_floor`` so it can recover; every skip is stamped on
+    # the item. Never applies to an item whose class a human owns or validated.
+    gate_hit_rate: bool = False
+    gate_hit_window: int = 20
+    gate_hit_miss_threshold: int = 15
+    gate_hit_sample_floor: float = 0.1
     # Ingest primary only: does this model's class space *be* the class
     # registry? False (the default) = it is a generic proposer (e.g. COCO)
     # whose class ids mean nothing in the registry, so its detections are

@@ -215,6 +215,42 @@ with fakes at the OpenSearch, Triton, segmenter and VLM boundaries:
 > Screenshot pending: Cropwright (the wheel project's review grid with
 > numbered wheel boxes on a car).
 
+### Cost control for the region stage
+
+A segmenter call that finds nothing costs as much as one that does, so the
+stage has three cheap checks before it:
+
+1. `parent_classes` (free): only items of the named classes get the stage.
+2. The batched vision-model visibility check, when a VLM is active: "is a
+   region visible at all?" decides before the segmenter runs.
+3. An optional learned hit rate per item class, off by default. With
+   `gate_hit_rate` on in the region profile, a class whose last
+   `gate_hit_window` segmenter calls had `gate_hit_miss_threshold` misses is only
+   sampled at `gate_hit_sample_floor` so it can recover. A skipped item is not
+   lost: it is written as `no_region_box` with `region_gate_skip` set (wire field
+   of the same name, `tier3_hit_rate`) and `gate:tier3_hit_rate` in its detector
+   chain. An item whose class a human owns or validated is never skipped. The
+   windows live in the worker's memory, one per project.
+
+Re-run the skipped items with `POST /curation/projects/{project}/reprocess`,
+scope `region`, filter `{"region_status": ["no_region_box"],
+"region_gate_skipped": true}`; the `rerun_skipped` field of
+`GET /curation/projects/{project}/region_stage` is that request (dry run).
+
+`POST /curation/projects/{project}/region_stage/pause` stops the region stage
+for this project only: the worker fetches nothing for it and hands back items
+it holds before their segmenter call, so they all stay `pending_detection`;
+items already past the segmenter finish, and other stages keep running.
+`POST /curation/projects/{project}/region_stage/resume` undoes it. The state
+(`paused`, `paused_since`, `pipeline_paused`, `counts` of pending and
+gate-skipped items) comes from `GET /curation/projects/{project}/region_stage`.
+Like the other region routes these answer 409 until a region profile is active.
+
+Metrics (worker): `op_region_segmenter_calls_total` and
+`op_region_segmenter_seconds_total` by `profile`, `class_name` and `outcome`
+(`hit` or `miss`; the `miss` seconds are the time spent on calls that found
+nothing), and `op_segmenter_gate_decisions_total` with `scope="crop"`.
+
 ## Projects
 
 A project owns its indexes (`<OP_PROJECT_INDEX_PREFIX><slug>__<role>`), its
@@ -230,6 +266,7 @@ project that can be archived but never deleted.
 | Archive, restore | `POST /curation/projects/{project}/archive`, `POST /curation/projects/{project}/unarchive` |
 | Delete | `DELETE /curation/projects/{project}` |
 | Pause the workers for one project | `POST /curation/projects/{project}/pause`, `POST /curation/projects/{project}/resume` |
+| Pause only the region stage | `GET /curation/projects/{project}/region_stage`, `POST /curation/projects/{project}/region_stage/pause`, `POST /curation/projects/{project}/region_stage/resume` |
 
 Rules:
 
@@ -839,11 +876,16 @@ curl -s -X POST $API/reprocess -H 'content-type: application/json' -d '{
 
 A prompt set (config axis `open_vocab`) lists text prompts such as "traffic
 cone". SAM 3 runs each prompt on the WHOLE source image and every hit becomes a
-normal item with `class_source: open_vocab_proposal`, `class_detector: sam3`,
-`source_prompt`, `open_vocab_set`, `open_vocab_revision` and (with `mask`) a
-`mask_polygon`. The target's `class_name` is the registry class, by name; an
-empty one stores the hit as an unlabeled proposal named by the prompt. It
-needs the segmenter (`OP_SEGMENTER_URL`).
+normal item with `class_detector: sam3`, `source_prompt`, `open_vocab_set`,
+`open_vocab_revision` and (with `mask`) a `mask_polygon`. The target's
+`class_name` is the registry class, by name, and the item's `class_source` is
+`open_vocab_target`: the VLM never relabels it (its answer is kept as the
+name-only suggestion `vlm_proposed_class_name`, see the lock rule below). An
+empty `class_name` stores the hit as an unlabeled proposal named by the prompt
+(`class_source: open_vocab_proposal`), which the VLM may label. It needs the
+segmenter (`OP_SEGMENTER_URL`). Items written before `open_vocab_target`
+existed keep `open_vocab_proposal`; `source_prompt` and `open_vocab_set` filter
+both.
 
 | Operation | Route |
 |---|---|
@@ -858,14 +900,27 @@ needs the segmenter (`OP_SEGMENTER_URL`).
   deterministic in (image, box): a re-run upserts, and output of the same set
   that a re-run no longer produces is removed.
 - Lock rule: a hit overlapping a locked item (IoU 0.8 or more, any class) is
-  skipped and counted; an existing item of the same class name that overlaps at
-  `dedup_iou` or more wins. A locked item is never overwritten, replaced or
-  deleted.
+  skipped and counted; an existing item with the SAME label that overlaps at
+  `dedup_iou` or more wins. A hit's label is its target's class name (or its
+  prompt in discovery mode); an existing item's label is its class name or, for
+  an unlabeled detector proposal, the detector's own label. A box with no label
+  at all, or another label, never absorbs a hit: both are kept. A locked item is
+  never overwritten, replaced or deleted. A VLM answer for an `open_vocab_target`
+  item is stored as a suggestion and the class, class source and cluster stay.
 - A segmenter outage is never "no hit": the image is left as it was. A target
   named like a primary-detector class is a warning. At most
   `max_enabled_targets` (default 8, ceiling 32) targets may be enabled.
 - `run_on_ingest` (off by default) queues newly ingested images in a background
-  task and stamps them `open_vocab_status: pending` until done.
+  task and stamps them `open_vocab_status: pending` until done. A sweeper in the
+  API (every `OP_OPEN_VOCAB_SWEEP_S` seconds, default 120, 0 = off) finishes
+  images a restart or a segmenter outage left `pending` for longer than ten
+  minutes, while the active set has `run_on_ingest` on.
+- Throughput: up to `OP_OPEN_VOCAB_CONCURRENCY` images (default 4) are in
+  flight at once, each fanning out one segmenter call per target. The dry run's
+  `estimated_minutes` uses the measured per-call latency (a moving average of
+  this API process's calls, 0.36 s until it has measured one) divided by the
+  smaller of the segmenter's instance count and that fan-out. A job over many
+  images reports `images_done` and `updated_at` after every image.
 - One gate decides whether to spend a segmenter call: registry rules
   (`parent_classes`), an optional vision-model yes/no
   (`gating.tier2_vlm_precheck`) and an optional hit-rate sampler
@@ -1266,7 +1321,7 @@ the config store and change at runtime.
 | Region limits | `OP_REGION_MAX_BOXES_PER_WRITE` |
 | Ingest and upload | `OP_MAX_INGEST_CONCURRENCY`, `OP_UPLOAD_MAX_IMAGES_PER_REQUEST`, `OP_UPLOAD_MAX_BYTES_PER_REQUEST`, `OP_UPLOAD_ACCEPTED_EXTENSIONS` |
 | Dataset import | `OP_DATASET_IMPORTS_DIR`, `OP_DATASET_IMPORT_CHUNK`, `OP_DATASET_IMPORT_MAX_PENDING`, `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` |
-| Reprocess | `OP_REPROCESS_JOBS_DIR`, `OP_REPROCESS_SYNC_MAX` |
+| Reprocess | `OP_REPROCESS_JOBS_DIR`, `OP_REPROCESS_SYNC_MAX`, `OP_OPEN_VOCAB_CONCURRENCY`, `OP_OPEN_VOCAB_SWEEP_S` |
 | Combine | `OP_COMBINE_JOBS_DIR`, `OP_COMBINE_PAGE_SIZE` |
 | PE text encoder | `OP_PE_TEXT_BACKEND`, `OP_PE_TEXT_ONNX_PATH`, `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |

@@ -8644,6 +8644,17 @@
             ],
             "title": "Region Detector Chain"
           },
+          "region_gate_skip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Gate Skip"
+          },
           "region_label_source": {
             "anyOf": [
               {
@@ -9252,6 +9263,17 @@
               }
             ],
             "title": "Proposed By Import"
+          },
+          "region_gate_skipped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Gate Skipped"
           },
           "review_dismissed": {
             "anyOf": [
@@ -15150,6 +15172,26 @@
             "title": "Feature Output",
             "type": "string"
           },
+          "gate_hit_miss_threshold": {
+            "default": 15,
+            "title": "Gate Hit Miss Threshold",
+            "type": "integer"
+          },
+          "gate_hit_rate": {
+            "default": false,
+            "title": "Gate Hit Rate",
+            "type": "boolean"
+          },
+          "gate_hit_sample_floor": {
+            "default": 0.1,
+            "title": "Gate Hit Sample Floor",
+            "type": "number"
+          },
+          "gate_hit_window": {
+            "default": 20,
+            "title": "Gate Hit Window",
+            "type": "integer"
+          },
           "human_detector_name": {
             "default": "human",
             "title": "Human Detector Name",
@@ -16826,6 +16868,17 @@
             ],
             "title": "Region Detector Chain"
           },
+          "region_gate_skip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Gate Skip"
+          },
           "region_label_source": {
             "anyOf": [
               {
@@ -17237,6 +17290,71 @@
           "page_size"
         ],
         "title": "RegionRowPage",
+        "type": "object"
+      },
+      "RegionStageCounts": {
+        "properties": {
+          "gate_skipped": {
+            "title": "Gate Skipped",
+            "type": "integer"
+          },
+          "pending_detection": {
+            "title": "Pending Detection",
+            "type": "integer"
+          },
+          "pending_verification": {
+            "title": "Pending Verification",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending_detection",
+          "pending_verification",
+          "gate_skipped"
+        ],
+        "title": "RegionStageCounts",
+        "type": "object"
+      },
+      "RegionStageState": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/RegionStageCounts"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "paused_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Since"
+          },
+          "pipeline_paused": {
+            "title": "Pipeline Paused",
+            "type": "boolean"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "rerun_skipped": {
+            "$ref": "#/components/schemas/ReprocessRequest-Output"
+          }
+        },
+        "required": [
+          "project",
+          "paused",
+          "pipeline_paused",
+          "counts",
+          "rerun_skipped"
+        ],
+        "title": "RegionStageState",
         "type": "object"
       },
       "RegionTestCandidate": {
@@ -18466,6 +18584,17 @@
             },
             "title": "Reason",
             "type": "array"
+          },
+          "region_gate_skipped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Gate Skipped"
           },
           "region_status": {
             "items": {
@@ -35444,6 +35573,133 @@
           }
         },
         "summary": "Get Region Profile Revision",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_stage": {
+      "get": {
+        "operationId": "get_region_stage_curation_projects__project__region_stage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionStageState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Region Stage",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_stage/pause": {
+      "post": {
+        "description": "Stop spending segmenter time on this project. Items stay\n``pending_detection``; in-flight items past the segmenter finish.",
+        "operationId": "pause_region_stage_curation_projects__project__region_stage_pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionStageState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Region Stage",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/region_stage/resume": {
+      "post": {
+        "operationId": "resume_region_stage_curation_projects__project__region_stage_resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionStageState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Region Stage",
         "tags": [
           "Curation"
         ]

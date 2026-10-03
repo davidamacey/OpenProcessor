@@ -25,6 +25,7 @@ from src.services.curation.ingest_class_sources import (
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     OPEN_VOCAB_CLASS_SOURCE,
+    OPEN_VOCAB_TARGET_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
     is_classifier_class_source,
 )
@@ -110,6 +111,12 @@ _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
         'open_vocab',
         'Open vocab',
     ),
+    (
+        OPEN_VOCAB_TARGET_CLASS_SOURCE,
+        'Class named by an open-vocabulary target',
+        'open_vocab',
+        'Target class',
+    ),
 )
 
 
@@ -150,7 +157,8 @@ def _raw_vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     if src.get('class_validated'):
         return None, None
     source = src.get('class_source')
-    if source == VLM_NEW_CLASS_PENDING_CLASS_SOURCE:
+    if source in (VLM_NEW_CLASS_PENDING_CLASS_SOURCE, OPEN_VOCAB_TARGET_CLASS_SOURCE):
+        # Name only: the target's own class stays, the VLM's answer is advice.
         return None, (src.get('vlm_proposed_class') or None)
     if source in VLM_SUGGESTION_CLASS_SOURCES:
         class_id = src.get('class_id')

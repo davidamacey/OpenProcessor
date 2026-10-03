@@ -178,6 +178,10 @@ class ItemDoc(BaseModel):
     region_label_source: str | None = None
     region_pairing: Any = None
     region_skip_verify: bool | None = None
+    # Set when the region gate skipped the segmenter for this item (the item
+    # sits in ``no_region_box`` without having been looked at); re-run it with
+    # the reprocess filter ``region_gate_skipped``.
+    region_gate_skip: str | None = None
     # The per-item box list plus its item-level summary fields. A box's own
     # data (state, geometry in both frames, score, detector, text, cluster
     # placement, thumbnail_url) is an element; element keys are fixed

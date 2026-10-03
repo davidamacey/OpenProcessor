@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from scripts.curation._project_worker_utils import is_project_paused
+from scripts.curation._project_worker_utils import is_project_paused, is_region_stage_paused
 
 
 if TYPE_CHECKING:
@@ -161,8 +161,9 @@ class FairnessScheduler:
 
 
 def discover_pollable_projects(all_active: list[ProjectRecord]) -> list[ProjectRecord]:
-    """``registry.active_projects()`` filtered to unpaused ones."""
-    return [p for p in all_active if not is_project_paused(p)]
+    """``registry.active_projects()`` without the projects whose pipeline or
+    region stage is paused."""
+    return [p for p in all_active if not (is_project_paused(p) or is_region_stage_paused(p))]
 
 
 def _liveness_path(record: ProjectRecord, host: str) -> Path:

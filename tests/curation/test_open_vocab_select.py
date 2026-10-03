@@ -124,3 +124,38 @@ def test_class_names_compare_by_the_one_name_equality_rule() -> None:
     rules = _rules('lamp', 'Traffic Light')
     sel = select_open_vocab_hits([(rules, [_c(BOX)])], existing, dedup_iou=0.5)
     assert _reasons(sel) == ['agree_existing']
+
+
+def _discovery(prompt: str) -> TargetRules:
+    return _rules(prompt=prompt, cls='')
+
+
+def test_hit_over_an_unlabeled_box_is_kept_not_agreed() -> None:
+    existing = [ExistingBox(bbox_norm=BOX, class_name=None, locked=False)]
+    for rules in (_rules(), _discovery('dog')):
+        sel = select_open_vocab_hits([(rules, [_c(BOX)])], existing, dedup_iou=0.5)
+        assert len(sel.kept) == 1
+        assert sel.dropped == []
+
+
+def test_hit_over_a_box_of_another_detector_label_is_kept() -> None:
+    existing = [ExistingBox(bbox_norm=BOX, class_name='cat', locked=False)]
+    for rules in (_rules(prompt='dog', cls='dog'), _discovery('dog')):
+        sel = select_open_vocab_hits([(rules, [_c(BOX)])], existing, dedup_iou=0.5)
+        assert len(sel.kept) == 1
+
+
+def test_discovery_hit_agrees_with_the_detector_label_of_its_prompt() -> None:
+    existing = [ExistingBox(bbox_norm=BOX, class_name='Dog', locked=False)]
+    sel = select_open_vocab_hits([(_discovery('dog'), [_c(BOX)])], existing, dedup_iou=0.5)
+    assert sel.kept == []
+    assert _reasons(sel) == ['agree_existing']
+
+
+def test_discovery_prompts_with_different_words_do_not_cross_nms() -> None:
+    sel = select_open_vocab_hits(
+        [(_discovery('dog'), [_c(BOX, 0.9)]), (_discovery('cat'), [_c(BOX, 0.8)])],
+        [],
+        dedup_iou=0.5,
+    )
+    assert sorted(h.prompt for h in sel.kept) == ['cat', 'dog']
