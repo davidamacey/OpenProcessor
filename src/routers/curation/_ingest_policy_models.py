@@ -21,7 +21,7 @@ class IngestPolicyPutResponse(IngestPolicy):
 
 
 class PolicyPreviewClass(BaseModel):
-    name: str
+    name: str = Field(description='The class NAME as stored / as the detector labels it.')
     would_embed: int
     would_not_embed: int
 
@@ -37,5 +37,11 @@ class IngestPolicyPreview(BaseModel):
     truncated: bool
     would_embed: int
     would_not_embed: int
+    embedded_because_labeled: int = Field(
+        description=(
+            'Of would_embed, the items that embed only because a human or validated label '
+            'always embeds; a fresh ingest of the same images has none of these.'
+        )
+    )
     estimated_vector_mb: float
     by_class: list[PolicyPreviewClass]

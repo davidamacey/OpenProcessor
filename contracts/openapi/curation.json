@@ -8406,6 +8406,11 @@
             "title": "By Class",
             "type": "array"
           },
+          "embedded_because_labeled": {
+            "description": "Of would_embed, the items that embed only because a human or validated label always embeds; a fresh ingest of the same images has none of these.",
+            "title": "Embedded Because Labeled",
+            "type": "integer"
+          },
           "estimated_vector_mb": {
             "title": "Estimated Vector Mb",
             "type": "number"
@@ -8437,6 +8442,7 @@
           "truncated",
           "would_embed",
           "would_not_embed",
+          "embedded_because_labeled",
           "estimated_vector_mb",
           "by_class"
         ],
@@ -13797,6 +13803,7 @@
       "PolicyPreviewClass": {
         "properties": {
           "name": {
+            "description": "The class NAME as stored / as the detector labels it.",
             "title": "Name",
             "type": "string"
           },
