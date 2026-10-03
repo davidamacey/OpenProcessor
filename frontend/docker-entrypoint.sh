@@ -50,6 +50,18 @@ if printf '%s' "$API_UPSTREAM" | grep -q '[^A-Za-z0-9.:/_-]'; then
   exit 1
 fi
 
+# Where nginx proxies /cropwright/ (the bundled docs site) to. Same shape
+# and validation as API_UPSTREAM.
+DOCS_UPSTREAM="${DOCS_UPSTREAM:-http://docs:8080}"
+case "$DOCS_UPSTREAM" in
+  http://*|https://*) ;;
+  *) echo "[entrypoint] DOCS_UPSTREAM must be http(s)://host[:port], got: $DOCS_UPSTREAM" >&2; exit 1 ;;
+esac
+if printf '%s' "$DOCS_UPSTREAM" | grep -q '[^A-Za-z0-9.:/_-]'; then
+  echo "[entrypoint] DOCS_UPSTREAM contains unsupported characters: $DOCS_UPSTREAM" >&2
+  exit 1
+fi
+
 # Deployment-owned upload/body-size cap (docs/design/
 # ingest-ui-and-acceptance-plan-2026-09-24.md §A.4) — ours, not the
 # backend's. Substituted into both nginx.conf's client_max_body_size
@@ -82,10 +94,11 @@ find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.html' \) \
 # nginx's proxy `location` must track the same prefix, or the SPA asks
 # for {prefix}/... and nginx answers with index.html. This runs as
 # /docker-entrypoint.d/40-runtime-config.sh, i.e. before nginx starts.
-sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g; s|__DATASET_UPLOAD_MAX_MB__|${DATASET_UPLOAD_MAX_MB}|g" /etc/nginx/conf.d/default.conf
+sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g; s|__DOCS_UPSTREAM__|${DOCS_UPSTREAM}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g; s|__DATASET_UPLOAD_MAX_MB__|${DATASET_UPLOAD_MAX_MB}|g" /etc/nginx/conf.d/default.conf
 
 echo "[entrypoint] PUBLIC_TRITON_API_URL=${TARGET_URL:-<empty - relative URLs via nginx proxy>}"
 echo "[entrypoint] PUBLIC_API_PREFIX=${API_PREFIX}"
 echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"
+echo "[entrypoint] DOCS_UPSTREAM=${DOCS_UPSTREAM}"
 echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"
 echo "[entrypoint] CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${DATASET_UPLOAD_MAX_MB}"

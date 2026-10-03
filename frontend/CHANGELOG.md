@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Cropwright is now the front door: `docker-compose.yml` runs the docs site as a
+  `docs` service (no published port), nginx proxies `/cropwright/` to it
+  (`DOCS_UPSTREAM`) and the API's `/docs`, `/redoc`, `/openapi.json` at the app
+  origin, and a top-bar **Resources** menu links to the docs, API reference and
+  every served monitoring dashboard / MLflow.
 - Docs screenshots `models-sharing`, `models-unshare-force` and `vlm-run-picker`, with
   capture states in `scripts/capture_docs_screenshots.py` (the unshare state allows
   only the non-force unshare PUT, which must answer 409, and aborts anything with `force`).
