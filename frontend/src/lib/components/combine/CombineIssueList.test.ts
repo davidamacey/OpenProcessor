@@ -41,7 +41,7 @@ describe('CombineIssueList', () => {
         severity: 'warning',
         message: '1 boxes disagree',
       },
-      { code: 'slug_taken', id: 'slug_taken', detail: {} },
+      { code: 'slug_taken', id: 'slug_taken', message: 'slug taken', detail: {} },
     ]);
     const items = [...target.querySelectorAll('[data-testid="combine-issue"]')];
     expect(items).toHaveLength(3);

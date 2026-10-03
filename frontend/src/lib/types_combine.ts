@@ -64,7 +64,8 @@ export interface CombineIssue {
   id: string;
   severity?: 'error' | 'warning';
   project?: string | null;
-  message?: string;
+  /** Always served (never absent). */
+  message: string;
   detail?: Record<string, unknown>;
 }
 

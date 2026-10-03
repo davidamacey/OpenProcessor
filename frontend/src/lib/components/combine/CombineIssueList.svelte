@@ -35,7 +35,7 @@
             >{i.project}</span
           >
         {/if}
-        {#if i.message}<span class="ml-1">{i.message}</span>{/if}
+        <span class="ml-1">{i.message}</span>
         <code class="ml-1 font-mono text-[10px] opacity-60">{i.code}</code>
         {#if i.detail && Object.keys(i.detail).length > 0}
           <details class="mt-1">
