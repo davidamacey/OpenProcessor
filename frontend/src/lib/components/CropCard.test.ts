@@ -259,6 +259,21 @@ describe('CropCard — W10 label lock badge', () => {
   });
 });
 
+describe('CropCard — v0.4.0 embedding state badge', () => {
+  const badge = (el: HTMLElement) =>
+    el.querySelector('[data-testid="embedding-state-badge"]');
+
+  it('shows the badge for a served failed state only', () => {
+    const el = renderCard({ crop: baseCrop({ embedding_state: 'failed' }) });
+    expect(badge(el)?.textContent).toBe('No vector: encoder failed');
+    unmount(instance as never);
+    instance = undefined;
+    target.remove();
+    const embedded = renderCard({ crop: baseCrop({ embedding_state: 'embedded' }) });
+    expect(badge(embedded)).toBeNull();
+  });
+});
+
 describe('CropCard — W10 image Reprocess from the expanded view', () => {
   let posts: Array<{ url: string; body: unknown }>;
 
