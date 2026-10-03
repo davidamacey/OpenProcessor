@@ -48,7 +48,7 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> Any:
 def _activate(targets: list[dict[str, Any]]) -> None:
     stored = StoredConfig(kind='open_vocab_set', name='s', revision=1, body={'targets': targets})
     get_config_store().apply_local(
-        config_revision=1,
+        config_revision=0,
         open_vocab_set=stored,
         active_open_vocab=('s', 1),
         active_open_vocab_body=stored,
