@@ -34,6 +34,16 @@ def embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
     return {'exists': {'field': field}}
 
 
+def state_clause(state: str) -> dict[str, Any]:
+    """Items whose recorded ``embedding_state`` is ``state``.
+
+    ``match_phrase`` answers identically on a keyword mapping and on the
+    dynamic ``text`` mapping an index created before the field was mapped
+    carries (a ``term`` or a terms aggregation would 400 or miss on those).
+    """
+    return {'match_phrase': {'embedding_state': state}}
+
+
 def not_embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
     """Items without the vector ``field``."""
     return {'bool': {'must_not': [embedded_clause(field)]}}
@@ -93,4 +103,5 @@ __all__ = [
     'keep_stored_vector_state',
     'legacy_embedded_clause',
     'not_embedded_clause',
+    'state_clause',
 ]

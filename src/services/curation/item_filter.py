@@ -23,7 +23,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
-from src.services.curation.embedding_state import EMBEDDED, EmbeddingState, embedded_clause
+from src.services.curation.embedding_state import (
+    EMBEDDED,
+    EmbeddingState,
+    embedded_clause,
+    state_clause,
+)
 from src.services.curation.item_text import item_text_query
 from src.services.curation.name_match import name_clause
 
@@ -132,7 +137,7 @@ def _review_clause(status: str) -> dict[str, Any]:
 def _embedding_clause(state: str) -> dict[str, Any]:
     if state == EMBEDDED:
         return embedded_clause()
-    return {'term': {'embedding_state': state}}
+    return state_clause(state)
 
 
 def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
