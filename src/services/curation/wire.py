@@ -461,8 +461,9 @@ ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''
 # Endpoint-specific keys layered on top of the shared item. Everything
 # else is identical across endpoints.
 REVIEW_EXTRA_KEYS = frozenset({'reason'})
-# A region row is the item plus the box it is about (``None`` for an item row).
-REGION_ROW_EXTRA_KEYS = frozenset({'region_box_id'})
+# A region row is the item plus the box it is about (``None`` for an item row)
+# and ``row_key``, its always-present list-unique key.
+REGION_ROW_EXTRA_KEYS = frozenset({'region_box_id', 'row_key'})
 TRAINING_CANDIDATE_EXTRA_KEYS = REGION_ROW_EXTRA_KEYS | {'selection_reason'}
 SEARCH_EXTRA_KEYS = frozenset({'semantic_score'})
 

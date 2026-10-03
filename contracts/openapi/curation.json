@@ -17355,7 +17355,7 @@
         "type": "object"
       },
       "RegionRow": {
-        "description": "A full wire item plus the box the row is about.\n\nKey a row by ``(crop_id, region_box_id)``. The route-specific keys are\npresent only on that route's rows.",
+        "description": "A full wire item plus the box the row is about.\n\nKey a row by ``row_key`` (equivalently ``(crop_id, region_box_id)``). The route-specific keys are\npresent only on that route's rows.",
         "properties": {
           "bbox_norm": {
             "items": {
@@ -18309,6 +18309,11 @@
             ],
             "title": "Review Dismissed At"
           },
+          "row_key": {
+            "description": "Non-empty, unique within a page and across pages of one query: `<crop_id>#<region_box_id>`, or `<crop_id>#item` for an item-level row. Key a list on this, not on region_box_id (null on item-level rows).",
+            "title": "Row Key",
+            "type": "string"
+          },
           "selection_reason": {
             "anyOf": [
               {
@@ -18482,7 +18487,8 @@
         },
         "required": [
           "id",
-          "crop_id"
+          "crop_id",
+          "row_key"
         ],
         "title": "RegionRow",
         "type": "object"
@@ -24667,17 +24673,6 @@
               }
             ],
             "title": "Error"
-          },
-          "eta_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Eta Seconds"
           },
           "eval": {
             "anyOf": [

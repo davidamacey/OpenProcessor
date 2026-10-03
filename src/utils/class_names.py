@@ -37,6 +37,11 @@ import os
 import re
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 # Mirrors src.services.training.triton_promote.resolve_triton_models_dir --
@@ -151,10 +156,73 @@ def normalize_class_name(text: str) -> str:
     return _NON_SLUG_RUN.sub('_', text.strip().lower()).strip('_')
 
 
+class _NamedClass(Protocol):
+    @property
+    def class_id(self) -> int: ...
+    @property
+    def class_name(self) -> str: ...
+    @property
+    def deprecated(self) -> bool: ...
+
+
+class NameMatch[C: _NamedClass](NamedTuple):
+    """Result of a by-name lookup. ``status`` is explicit so a caller cannot
+    mistake a retired class for a live one: ``'active'`` (``entry`` is the
+    class to use), ``'deprecated'`` (only retired classes carry the name;
+    ``entry`` is the lowest-id one, for reporting and never for assignment),
+    or ``'none'``."""
+
+    status: Literal['active', 'deprecated', 'none']
+    entry: C | None
+
+    @property
+    def active(self) -> C | None:
+        """The class to assign to, or ``None`` (deprecated-only or absent)."""
+        return self.entry if self.status == 'active' else None
+
+
+def resolve_class_by_name[C: _NamedClass](classes: Iterable[C], name: str) -> NameMatch[C]:
+    """The one by-name class lookup. Names compare by
+    :func:`normalize_class_name`. An ACTIVE class always wins over a
+    deprecated one with the same name (a name may be reused after
+    deprecation, so both can exist); among several matches of one kind the
+    exact spelling wins, then the lowest ``class_id`` - deterministic
+    whatever order the registry lists them in."""
+    wanted = normalize_class_name(name)
+    if not wanted:
+        return NameMatch('none', None)
+    matches = [c for c in classes if normalize_class_name(c.class_name) == wanted]
+
+    def pick(group: list[C]) -> C:
+        return min(group, key=lambda c: (c.class_name != name, c.class_id))
+
+    active = [c for c in matches if not c.deprecated]
+    if active:
+        return NameMatch('active', pick(active))
+    if matches:
+        return NameMatch('deprecated', pick(matches))
+    return NameMatch('none', None)
+
+
+def class_name_deprecation_index(classes: Iterable[_NamedClass]) -> dict[str, bool]:
+    """``{normalized name: deprecated}`` where an active class makes the
+    name ``False`` regardless of listing order (same precedence as
+    :func:`resolve_class_by_name`)."""
+    index: dict[str, bool] = {}
+    for c in classes:
+        key = normalize_class_name(c.class_name)
+        if key:
+            index[key] = index.get(key, True) and c.deprecated
+    return index
+
+
 __all__ = [
+    'NameMatch',
+    'class_name_deprecation_index',
     'clear_class_name_cache',
     'get_class_names',
     'invalidate_class_names',
     'normalize_class_name',
+    'resolve_class_by_name',
     'resolve_class_name',
 ]

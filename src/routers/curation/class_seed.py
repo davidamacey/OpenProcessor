@@ -21,6 +21,7 @@ from src.routers.curation.ingest import _get_detection_profile
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
 from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.utils.class_names import class_name_deprecation_index
 
 
 @router.post(
@@ -58,7 +59,7 @@ async def seed_from_detector(
             'no ingest detector labels available; set OP_INGEST_PRIMARY_DETECTOR_MODEL',
         )
     reg = get_class_registry()
-    existing = {c.class_name: c.deprecated for c in reg.load().classes}
+    existing = class_name_deprecation_index(reg.load().classes)
     plan = plan_seed(labels, existing, payload.names)
     if plan.unknown:
         raise api_error(

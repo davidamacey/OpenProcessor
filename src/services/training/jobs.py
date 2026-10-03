@@ -361,10 +361,6 @@ class TrainJobStatus(BaseModel):
     current_epoch: int | None = None
     total_epochs: int | None = None
     epoch_time_s: float | None = None
-    # Served-only (never written by the trainer): remaining epochs times the
-    # last epoch's duration, while the run is training; ``null`` otherwise
-    # or when no epoch has completed yet. See ``training_eta_seconds``.
-    eta_seconds: float | None = None
     # The true last TRAINING epoch's metrics (``{'epoch': N, 'map50': ...,
     # 'map50_95': ...}``) -- distinct from best_checkpoint_metric because
     # Ultralytics re-validates best.pt once more after training and that
@@ -560,21 +556,10 @@ def _rewrite_eval_for_wire(eval_block: Any, job_id: str) -> Any:
     return out
 
 
-def training_eta_seconds(s: TrainJobStatus) -> float | None:
-    """Seconds left in a running job: remaining epochs x the last epoch's
-    duration (the only timing the trainer records), else ``None``."""
-    if s.state != 'running' or not s.epoch_time_s or s.epoch_time_s <= 0:
-        return None
-    if s.current_epoch is None or s.total_epochs is None:
-        return None
-    return round(max(s.total_epochs - s.current_epoch, 0) * s.epoch_time_s, 1)
-
-
 def _prepare_status_for_wire(s: TrainJobStatus) -> TrainJobStatus:
     """Apply every serve-time rewrite to a ``TrainJobStatus`` before it's returned."""
     return s.model_copy(
         update={
-            'eta_seconds': training_eta_seconds(s),
             'eval': _rewrite_eval_for_wire(s.eval, s.job_id),
             'mlflow_run_url': _public_mlflow_url(s.mlflow_run_id, s.mlflow_experiment_id),
         }

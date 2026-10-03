@@ -18,6 +18,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from src.utils.class_names import resolve_class_by_name
+
 
 MapAction = Literal['map', 'create', 'skip', 'region']
 MatchKind = Literal[
@@ -126,26 +128,25 @@ def suggest_mapping(
             ):
                 return MappingSuggestion('map', 'same_registry', c.class_id, c.class_name)
 
-    for c in registry_classes:
-        if not c.deprecated and c.class_name == dataset_class:
+    by_name = resolve_class_by_name(registry_classes, dataset_class)
+    if by_name.active is not None:
+        c = by_name.active
+        if c.class_name == dataset_class:
             return MappingSuggestion('map', 'exact', c.class_id, c.class_name)
-
-    for c in registry_classes:
-        if not c.deprecated and norm_class_name(c.class_name) == norm:
-            return MappingSuggestion('map', 'case_insensitive', c.class_id, c.class_name)
-
-    for c in registry_classes:
-        if c.deprecated and c.merged_into is not None and norm_class_name(c.class_name) == norm:
-            target = next((t for t in registry_classes if t.class_id == c.merged_into), None)
-            if target is not None:
-                return MappingSuggestion('map', 'merged', target.class_id, target.class_name)
+        return MappingSuggestion('map', 'case_insensitive', c.class_id, c.class_name)
+    retired = by_name.entry
+    if retired is not None and retired.merged_into is not None:
+        target = next((t for t in registry_classes if t.class_id == retired.merged_into), None)
+        if target is not None:
+            return MappingSuggestion('map', 'merged', target.class_id, target.class_name)
 
     if synonyms:
         target_name = synonyms.get(norm)
         if target_name:
-            for c in registry_classes:
-                if not c.deprecated and c.class_name == target_name:
-                    return MappingSuggestion('map', 'synonym', c.class_id, c.class_name)
+            synonym = resolve_class_by_name(registry_classes, target_name)
+            if synonym.active is not None:
+                c = synonym.active
+                return MappingSuggestion('map', 'synonym', c.class_id, c.class_name)
 
     if region_class_name is not None and norm_class_name(region_class_name) == norm:
         return MappingSuggestion('region', 'region')
