@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.curation import ITEM_EMBEDDING_FIELD, IndexRole
 from src.config.project_context import bind_project
+from src.services.curation.embedding_state import embedded_clause
 from src.services.projects.combine.models import CombineIssue
 
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
     from src.services.projects.combine.models import CombineRequest
 
-_HAS_VECTOR = {'exists': {'field': ITEM_EMBEDDING_FIELD}}
+_HAS_VECTOR = embedded_clause()
 
 
 async def _stored_vector_dim(client: Any, record: ProjectRecord) -> tuple[int, int | None]:
