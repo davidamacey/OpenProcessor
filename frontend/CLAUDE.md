@@ -132,9 +132,9 @@ record.
   `page(kind, offset, limit, errorKind)`) over the served detail — no
   client-side prose parsing.
 - **Identifiers.** `${identifierPrefix}${relPath}` (default prefix
-  `${sourceTag}/`), computed by `src/lib/ingest/fileSource.ts`'s
-  `makeIdentifier` — normalizes backslashes, strips a leading `./`/`/`,
-  and rejects any `..` segment. `path_lookup` matches this identifier
+  `${sourceTag}/`), built from the collectors' normalized
+  `relPath` (`src/lib/ingest/fileSource.ts`: backslashes to `/`, a leading
+  `./`/`/` stripped, and any path with a `..` segment skipped). `path_lookup` matches this identifier
   exactly (against either `image_path` or, since BA-1, `source_identifier`
   — server-side), which is why the prefix matters: two different folders
   that both contain e.g. `img001.jpg` at their root would otherwise
@@ -1669,7 +1669,7 @@ below).
 
 The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over
 every non-deprecated class — the top-10 quick-assign row under the crop
-(`classesStore.topNForCluster(0, 10)`) only ever surfaces the most-validated
+(`quickAssignClasses`, `src/lib/classPicker.ts`) only ever surfaces the most-validated
 classes, leaving the long tail (including brand-new, zero-sample classes)
 reachable only via `/classes` without it. `/` is reserved
 (`RESERVED_HOTKEY_LETTERS` in `src/lib/classHotkey.ts`) so a class can never
@@ -2104,7 +2104,7 @@ verifier | human | classifier | proposal`) via `paletteForRole`
   shared source image's metadata plus every item cropped from it
   (siblings, including the requested crop, mapped through `mapRawCrop`
   like any other crop list). The image itself is served separately by
-  `getSourceImageScaled`/`getSourceImageFull` (`{API_PREFIX}/crops/{id}/image`).
+  `getSourceImageScaled` (`{API_PREFIX}/crops/{id}/image`).
 
 ## Client-side source-image overlay (K6, 2026-09-24)
 

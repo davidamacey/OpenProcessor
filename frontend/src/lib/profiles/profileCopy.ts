@@ -21,8 +21,3 @@ export const PROFILE_ACTIVE_COPY: ActivePanelCopy = {
       'No new regions are detected until a profile is activated again. Items already processed keep their results.',
   },
 };
-
-/** "name" or "name rN". */
-export function refLabel(name: string, revision: number | null | undefined): string {
-  return revision == null ? name : `${name} r${revision}`;
-}

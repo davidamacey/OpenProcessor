@@ -200,10 +200,6 @@ class KeyboardStore {
     this.#suspended = false;
   }
 
-  get suspended(): boolean {
-    return this.#suspended;
-  }
-
   toggleOverlay(): void {
     this.overlayOpen = !this.overlayOpen;
   }

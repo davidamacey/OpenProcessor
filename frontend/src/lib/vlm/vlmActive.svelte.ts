@@ -6,8 +6,6 @@
  * §3.2) plus
  *
  * - `acknowledge_external` on activate (via `extra`),
- * - `ackRequired`: the served 422 `vlm_external_not_acknowledged` detail
- *   (which endpoint, and where to acknowledge it),
  * - after every successful write: `/health` re-polled and `/methods`
  *   dropped, since the per-run ack flags and the VLM status change.
  */
@@ -24,12 +22,6 @@ export interface VlmActiveDeps {
   deactivateVlm: typeof deactivateVlm;
   /** After a successful write (default: re-poll `/health`, reset `/methods`). */
   onchanged: () => void;
-}
-
-export interface AckRequired {
-  endpoint: string | null;
-  activateVia: string | null;
-  message: string;
 }
 
 export class VlmActive extends ConfigActive<VlmActiveResponse> {
@@ -52,17 +44,5 @@ export class VlmActive extends ConfigActive<VlmActiveResponse> {
         void healthStore.poll();
         strategiesStore.reset();
       });
-  }
-
-  /** The served refusal when an external endpoint needs an
-   *  acknowledgement, else null. */
-  get ackRequired(): AckRequired | null {
-    const d = this.errorDetail;
-    if (d?.error !== 'vlm_external_not_acknowledged') return null;
-    return {
-      endpoint: d.endpoint ?? null,
-      activateVia: d.activate_via ?? null,
-      message: d.message,
-    };
   }
 }

@@ -166,9 +166,6 @@ export interface PipelineStatsEvent {
   stats: Record<string, unknown>;
 }
 
-export type PipelineEvent =
-  PipelineSnapshotEvent | PipelineStateEvent | PipelineStatsEvent;
-
 export interface PipelineSubscribeOptions {
   onSnapshot?: (state: Record<string, unknown>, stats: Record<string, unknown>) => void;
   onState?: (state: Record<string, unknown>) => void;

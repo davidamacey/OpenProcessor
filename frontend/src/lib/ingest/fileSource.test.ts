@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  collectFromDrop,
-  collectFromInput,
-  isAcceptedFile,
-  makeIdentifier,
-} from './fileSource';
+import { collectFromDrop, collectFromInput, isAcceptedFile } from './fileSource';
 
 function fakeFile(name: string, webkitRelativePath = ''): File {
   const f = new File(['x'], name, { type: 'image/jpeg' });
@@ -40,16 +35,27 @@ describe('isAcceptedFile', () => {
   });
 });
 
-describe('makeIdentifier', () => {
+describe('collectFromInput path rules', () => {
   it('normalizes backslashes and strips a leading ./ or /', () => {
-    expect(makeIdentifier('src/', 'a\\b\\c.jpg')).toBe('src/a/b/c.jpg');
-    expect(makeIdentifier('src/', './a/b.jpg')).toBe('src/a/b.jpg');
-    expect(makeIdentifier('src/', '/a/b.jpg')).toBe('src/a/b.jpg');
+    const result = collectFromInput(
+      fakeFileList([
+        fakeFile('c.jpg', 'a\\b\\c.jpg'),
+        fakeFile('b.jpg', './a/b.jpg'),
+        fakeFile('d.jpg', '/a/d.jpg'),
+      ]),
+    );
+    expect(result.map((r) => r.relPath)).toEqual(['a/b/c.jpg', 'a/b.jpg', 'a/d.jpg']);
   });
 
-  it('rejects a .. segment', () => {
-    expect(makeIdentifier('src/', '../../etc/passwd')).toBeNull();
-    expect(makeIdentifier('src/', 'a/../b.jpg')).toBeNull();
+  it('drops a path with a .. segment, the same rule the drop walker applies', () => {
+    const result = collectFromInput(
+      fakeFileList([
+        fakeFile('passwd', '../../etc/passwd'),
+        fakeFile('b.jpg', 'a/../b.jpg'),
+        fakeFile('ok.jpg', 'a/b/ok.jpg'),
+      ]),
+    );
+    expect(result.map((r) => r.relPath)).toEqual(['a/b/ok.jpg']);
   });
 });
 

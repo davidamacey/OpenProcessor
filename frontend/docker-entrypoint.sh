@@ -16,6 +16,13 @@
 # `location`, so the two stay in lockstep. See API_PREFIX below.
 set -eu
 TARGET_URL="${PUBLIC_TRITON_API_URL-}"
+# Empty is the default (relative URLs). Anything else is substituted into a
+# JS string literal through sed, so it is restricted to characters that are
+# inert in both (no `&`, `|`, quotes or whitespace).
+if [ -n "$TARGET_URL" ] && ! printf '%s' "$TARGET_URL" | grep -Eq '^https?://[][A-Za-z0-9.:/_-]+$'; then
+  echo "[entrypoint] PUBLIC_TRITON_API_URL must be empty or http(s)://host[:port][/path] using only A-Za-z0-9.:/_-[], got: $TARGET_URL" >&2
+  exit 1
+fi
 
 # Unlike the API URL, an EMPTY prefix is never valid — it would produce
 # request paths like /health instead of /curation/health. So this defaults
@@ -24,6 +31,11 @@ TARGET_URL="${PUBLIC_TRITON_API_URL-}"
 API_PREFIX="${PUBLIC_API_PREFIX:-/curation}"
 case "$API_PREFIX" in /*) ;; *) API_PREFIX="/$API_PREFIX" ;; esac
 API_PREFIX="${API_PREFIX%/}"
+# Also substituted into JS strings and an nginx regex `location`.
+if ! printf '%s' "$API_PREFIX" | grep -Eq '^/[A-Za-z0-9/_-]+$'; then
+  echo "[entrypoint] PUBLIC_API_PREFIX must be a non-empty path of A-Za-z0-9/_-, got: $API_PREFIX" >&2
+  exit 1
+fi
 
 # Where nginx proxies API_PREFIX/* to — the OpenProcessor API container,
 # reached by name over a shared docker network. Restricted to a plain

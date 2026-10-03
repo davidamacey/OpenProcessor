@@ -4,6 +4,7 @@
    * Open MLflow run + Cancel buttons live here too.
    */
   import type { TrainJobStatus } from '$lib/types_train';
+  import { externalHref } from '$lib/mlflowLink';
 
   interface Props {
     status: TrainJobStatus;
@@ -77,11 +78,17 @@
       {status.state}
     </span>
     <span class="grow"></span>
-    {#if status.mlflow_run_url}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route -->
-      <a href={status.mlflow_run_url} target="_blank" rel="noopener" class="btn">
+    {#if externalHref(status.mlflow_run_url)}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route -->
+      <a
+        href={externalHref(status.mlflow_run_url)}
+        target="_blank"
+        rel="noopener"
+        class="btn"
+      >
         Open MLflow run
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/if}
     {#if onCancel && (status.state === 'running' || status.state === 'starting' || status.state === 'queued' || status.state === 'exporting')}
       <button

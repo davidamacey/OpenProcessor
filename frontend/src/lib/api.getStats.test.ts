@@ -80,7 +80,6 @@ describe('getStats', () => {
 
     const result = await getStats();
     expect(result.total_crops).toBe(5);
-    expect(result.ingestion.images_processed).toBe(5);
   });
 
   // W4 (docs/design/logic-moves-adoption-plan-2026-09-24.md §1.7): thresholds

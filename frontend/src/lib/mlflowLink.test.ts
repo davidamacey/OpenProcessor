@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mlflowBaseUrl } from './mlflowLink';
+import { externalHref, mlflowBaseUrl } from './mlflowLink';
 
 describe('mlflowBaseUrl (visual audit T1)', () => {
   it('uses the origin of the first served run URL, never a hardcoded port', () => {
@@ -20,5 +20,19 @@ describe('mlflowBaseUrl (visual audit T1)', () => {
   it('nothing served means no link', () => {
     expect(mlflowBaseUrl([null, undefined, 'not a url'])).toBeNull();
     expect(mlflowBaseUrl([])).toBeNull();
+  });
+});
+
+describe('externalHref', () => {
+  it('keeps an http(s) URL and drops every other scheme', () => {
+    expect(externalHref('http://op-mlflow:5000/#/runs/1')).toBe(
+      'http://op-mlflow:5000/#/runs/1',
+    );
+    expect(externalHref('https://mlflow.example/r')).toBe('https://mlflow.example/r');
+    expect(externalHref('javascript:alert(1)')).toBeNull();
+    expect(externalHref('data:text/html,x')).toBeNull();
+    expect(externalHref('/relative')).toBeNull();
+    expect(externalHref(null)).toBeNull();
+    expect(externalHref('')).toBeNull();
   });
 });

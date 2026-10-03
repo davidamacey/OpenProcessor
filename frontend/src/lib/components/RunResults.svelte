@@ -14,6 +14,7 @@
    * false 0.
    */
   import { untrack } from 'svelte';
+  import { externalHref } from '$lib/mlflowLink';
   import { getTrainManifest, resolveApiUrl } from '$lib/api';
   import {
     evalSplitLabel,
@@ -89,7 +90,7 @@
     status.mlflow_run_id ?? manifest?.results?.mlflow_run_id ?? null,
   );
   const mlflowRunUrl = $derived(
-    status.mlflow_run_url ?? manifest?.results?.mlflow_run_url ?? null,
+    externalHref(status.mlflow_run_url ?? manifest?.results?.mlflow_run_url ?? null),
   );
 
   const lineage = $derived(manifest?.lineage ?? null);

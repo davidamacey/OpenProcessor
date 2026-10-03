@@ -9,7 +9,6 @@
 
 import { getClasses } from '$lib/api';
 import { onProjectChange } from '$lib/projectChange';
-import { isAssignableClass } from '$lib/classVisibility';
 import type { ClassThresholds, RegistryClass } from '$lib/types';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -128,24 +127,6 @@ class ClassesStore {
 
   byId(id: number): RegistryClass | undefined {
     return this.classes.find((c) => c.id === id);
-  }
-
-  byName(name: string): RegistryClass | undefined {
-    const n = name.toLowerCase();
-    return this.classes.find((c) => c.name.toLowerCase() === n);
-  }
-
-  /**
-   * Returns the top-N most-frequent classes for a given cluster.
-   * The server endpoint to do this exactly doesn't exist in MVP; instead we
-   * fall back to the global most-frequent classes. Page-level code can
-   * override by passing in a precomputed list.
-   */
-  topNForCluster(_clusterId: number, n = 10): RegistryClass[] {
-    return this.classes
-      .filter(isAssignableClass)
-      .sort((a, b) => (b.validated_count ?? 0) - (a.validated_count ?? 0))
-      .slice(0, n);
   }
 }
 

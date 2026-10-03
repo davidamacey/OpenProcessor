@@ -20,8 +20,6 @@ import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 export type LabelSource =
   'human' | 'human_confirmed' | 'vlm' | 'vlm_human_confirmed' | (string & {});
 
-export type ClassSource = 'registry' | 'derived' | 'imported';
-
 export interface RegistryClass {
   id: number;
   name: string;
@@ -668,11 +666,6 @@ export interface StatsSummary {
   total_crops: number;
   validated_crops: number;
   test_holdout_crops: number;
-  ingestion: {
-    images_processed: number;
-    images_pending: number;
-    last_run_at: string | null;
-  };
   per_class: Array<{
     class_id: number;
     class_name: string;

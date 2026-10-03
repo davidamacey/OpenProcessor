@@ -41,6 +41,20 @@ describe('/classes: merge dry-run preview gates the real merge', () => {
     );
     expect(fn).toMatch(/mergePreview\?\.blocked/);
   });
+
+  it('cannot be confirmed without a served dry run (no client-substituted count)', () => {
+    const disabledBlock = classesSrc.slice(
+      classesSrc.indexOf('void submitMerge()'),
+      classesSrc.indexOf('void submitMerge()') + 400,
+    );
+    expect(disabledBlock).toMatch(/mergePreview == null/);
+    const fn = classesSrc.slice(
+      classesSrc.indexOf('async function submitMerge'),
+      classesSrc.indexOf('async function syncToOpensearch'),
+    );
+    expect(fn).toMatch(/if \(mergePreview == null\) return;/);
+    expect(fn).not.toMatch(/validated_count/);
+  });
 });
 
 describe('/classes + AddClassModal: no client-side class-name slug regex', () => {

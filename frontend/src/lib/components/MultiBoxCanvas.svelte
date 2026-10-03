@@ -213,9 +213,23 @@
         return nudgeKey(-pxStep, 0);
       case 'box_edit.nudge_right':
         return nudgeKey(pxStep, 0);
+      case 'box_edit.shrink_right':
+        return moveRightEdge(-pxStep);
+      case 'box_edit.grow_right':
+        return moveRightEdge(pxStep);
       default:
         return false;
     }
+  }
+
+  /** Moves the selected box's right edge by `dw`, keeping the left edge
+   *  fixed; the width never drops below one step. */
+  function moveRightEdge(dw: number): boolean {
+    if (readonly || selectedIndex == null) return false;
+    const b = boxes[selectedIndex].box;
+    const w = Math.max(pxStep, b.w + dw);
+    onmove?.(selectedIndex, { cx: b.cx + (w - b.w) / 2, cy: b.cy, w, h: b.h });
+    return true;
   }
 
   function nudgeKey(dx: number, dy: number): boolean {

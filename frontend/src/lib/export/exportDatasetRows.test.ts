@@ -188,13 +188,13 @@ describe('isNothingExportable (DQ-M9 frontend half)', () => {
     ).toBe(true);
   });
 
-  it('true when every class is at the served block adequacy tier, even with some validated crops', () => {
+  it('false when every class is at the served block adequacy tier but has validated crops (the server decides)', () => {
     expect(
       isNothingExportable([
         row({ validated: 3, adequacy: 'block' }),
         row({ validated: 2, adequacy: 'block' }),
       ]),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('false when at least one class has validated crops and is not blocked', () => {

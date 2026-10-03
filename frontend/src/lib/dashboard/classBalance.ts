@@ -53,7 +53,7 @@ export interface ClassBalanceView {
  * only, never subtracted client-side); zero classes collapse into one
  * count and the overflow into "+N more".
  */
-export function buildClassBalance<T extends ClassBalanceRow & { adequacy?: string }>(
+export function buildClassBalance<T extends ClassBalanceRow & { adequacy: string }>(
   rows: readonly T[],
   holdout: Map<number, number>,
   limit = 30,
@@ -76,7 +76,7 @@ export function buildClassBalance<T extends ClassBalanceRow & { adequacy?: strin
       test,
       trainable,
       pct: Math.round((trainable / max) * 100),
-      tier: r.adequacy ?? 'block',
+      tier: r.adequacy,
     })),
     zeroCount,
     moreCount: nonZero.length - shown.length,

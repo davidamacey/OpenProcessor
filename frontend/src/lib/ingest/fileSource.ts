@@ -20,6 +20,7 @@ export function collectFromInput(files: FileList): IngestFile[] {
   const out: IngestFile[] = [];
   for (const file of Array.from(files)) {
     const relPath = normalizeRelPath(file.webkitRelativePath || file.name);
+    if (hasDotDotSegment(relPath)) continue;
     out.push({ id: relPath, relPath, file, size: file.size });
   }
   return out;
@@ -30,18 +31,9 @@ export function isAcceptedFile(name: string, exts: string[]): boolean {
   return exts.some((ext) => lower.endsWith(ext.toLowerCase()));
 }
 
-/**
- * Normalizes a relative path: backslashes to `/`, strips a leading
- * `./` or `/`, and rejects `..` segments (returns `null` for those —
- * callers must skip the file, never upload it under a
- * directory-traversal identifier).
- */
-export function makeIdentifier(prefix: string, relPath: string): string | null {
-  const normalized = normalizeRelPath(relPath);
-  if (hasDotDotSegment(normalized)) return null;
-  return `${prefix}${normalized}`;
-}
-
+/** Normalizes a relative path: backslashes to `/`, strips a leading `./`
+ *  or `/`. Both collectors skip any path with a `..` segment, so no
+ *  `IngestFile` carries a directory-traversal identifier. */
 function normalizeRelPath(raw: string): string {
   let p = raw.replace(/\\/g, '/');
   while (p.startsWith('./')) p = p.slice(2);
