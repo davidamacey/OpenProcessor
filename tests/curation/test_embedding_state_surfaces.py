@@ -204,7 +204,7 @@ def test_legacy_items_with_a_vector_count_as_embedded_in_by_state() -> None:
 
 
 def test_by_state_end_to_end_over_mixed_legacy_and_stated_items() -> None:
-    from tests.curation.query_fakes import _aggregate
+    from curation.query_fakes import _aggregate
 
     docs: list[dict[str, Any]] = [
         {'pe_embedding': [1.0], 'embedding_state': 'embedded'},
