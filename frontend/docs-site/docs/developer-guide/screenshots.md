@@ -99,7 +99,7 @@ paths, unexpected text), then commit them under
 
 ## Slots for the project, import, configuration and VLM pages
 
-Captured slots have their image; the slots still listed under "Still pending" below
+The import, multi-box and region-profile-test slots come from the `sample-coco-import` and `sample-coco-vehicles` projects (`IMPORT_PREVIEW_PATH` names a server path under an allowed source root, e.g. the project's uploaded archive). The region-profile test reads "not eligible" because the sample items carry no vehicle parent class; the candidates are still drawn. Captured slots have their image; the slots still listed under "Still pending" below
 render as "pending". Capture them against a backend holding public sample
 data (never from a real deployment). Rows marked **route** are in
 `screenshot_routes.json` and the script captures them as-is. Rows marked
@@ -114,10 +114,10 @@ a manual capture or a small extension that drives the clicks read-only.
 | `projects-copy-settings` | `/projects` | state | Copy settings dialog with the cloneable groups |
 | `combine-wizard` | `/projects/combine` | route | Ordered sources, class mapping, preview |
 | `combine-job` | `/projects/combine/<job>` | state | A running or completed job with next steps |
-| `import-wizard` | `/datasets/import` | route | A previewed import with the class-mapping table |
+| `import-wizard` | `/datasets/import` | state | A previewed import with the class-mapping table |
 | `import-job` | `/datasets/imports/<id>` | state | A job with progress, report and the Undo dry run |
 | `reprocess-dialog` | an item's Details | state | Scopes and the locked-and-skipped counts |
-| `review-imported` | `/review?tab=imported` | route | Imported tab with an import chip |
+| `review-imported` | `/review?tab=imported&import_id=<id>` | state | Imported tab with an import chip |
 | `review-regions-multibox` | `/review?tab=regions` | state | One item with several boxes in different states |
 | `box-editor` | `/review?tab=regions` (edit mode) | state | A selected box, Add box and the "N / max" counter |
 | `prompt-pack-editor` | `/settings/prompt-packs/<name>` | state | Grouped fields with a validation issue |
@@ -140,9 +140,6 @@ paths must be sample-data values.
 
 | Slot | Why |
 | --- | --- |
-| `import-wizard`, `import-job`, `review-imported` | the backend has no labeled dataset layout on a server path and no import has run, so there is no preview, job or Imported tab to show |
-| `review-regions-multibox`, `box-editor` | the sample project's region profile is off, so there is no region tab or multi-box item |
-| `region-profile-test` | needs a crop in a project with an active region profile |
 | `vlm-run-picker` | the acknowledgement only shows for an endpoint outside the deployment; only the built-in in-stack endpoint exists |
 | `models-sharing`, `models-unshare-force` | need a model another project has shared |
 

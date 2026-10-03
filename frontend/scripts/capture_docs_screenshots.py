@@ -65,7 +65,7 @@ OUT_DIR = REPO_ROOT / "docs-site" / "static" / "img" / "screenshots"
 WIDTHS = (1600, 800)
 VIEWPORT_HEIGHT = 1000
 # States whose page scrolls inside the app shell need a taller viewport to show it all.
-STATE_HEIGHT = {"prompt-pack-editor": 1500, "prompt-pack-test": 1500, "region-profile-editor": 2300}
+STATE_HEIGHT = {"region-profile-test": 1600, "import-wizard": 2250, "import-job": 1500, "prompt-pack-editor": 1500, "prompt-pack-test": 1500, "region-profile-editor": 2300}
 
 
 def load_routes() -> list[dict]:
@@ -101,6 +101,18 @@ READ_ONLY_CALLS: list[tuple[str, re.Pattern[str], str, object]] = [
         None,
     ),
     ("POST", re.compile(r"/region_profiles/validate$"), "region-profile validation report", None),
+    (
+        "POST",
+        re.compile(r"/region_profiles/test$"),
+        "region-profile 'Test on a crop' (runs the detector/segmenter on stored crops, writes nothing)",
+        None,
+    ),
+    (
+        "POST",
+        re.compile(r"/datasets/preview$"),
+        "import wizard preview (dry run: 'writes nothing', dataset problems come back as issues)",
+        None,
+    ),
     ("POST", re.compile(r"/keymap/validate$"), "keymap validation report", None),
     ("POST", re.compile(r"/vlm/endpoints/validate$"), "VLM endpoint validation report", None),
 ]
@@ -292,6 +304,105 @@ def state_vlm_endpoint_editor(page, ctx: Ctx) -> None:
     _settle(page)
 
 
+# Fixed public-sample projects the newer states read from (override via env).
+VEHICLES_PROJECT = os.environ.get("VEHICLES_PROJECT", "sample-coco-vehicles")
+IMPORT_PROJECT = os.environ.get("IMPORT_PROJECT", "sample-coco-import")
+
+
+def _multibox_crop_id(base: str) -> str:
+    """A wheel item whose boxes are in different states (accepted + rejected)."""
+    d = api_get(base, f"/curation/projects/{VEHICLES_PROJECT}/review/regions?page_size=60")
+    best = None
+    for it in d["items"]:
+        states = {b.get("state") for b in it["region_boxes"]}
+        if len(it["region_boxes"]) >= 3 and {"accepted", "rejected"} <= states:
+            return it["id"]
+        if best is None and len(it["region_boxes"]) >= 3:
+            best = it["id"]
+    if best is None:
+        raise RuntimeError("no multi-box item found")
+    return best
+
+
+def _open_multibox_review(page, ctx: Ctx) -> None:
+    cid = _multibox_crop_id(ctx.base)
+    page.goto(
+        f"{ctx.base}/p/{VEHICLES_PROJECT}/review?tab=regions&crop_id={cid}",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("text=/\\d+ \\/ \\d+ max/", timeout=20_000)
+    _settle(page, 2500)
+
+
+def state_review_regions_multibox(page, ctx: Ctx) -> None:
+    _open_multibox_review(page, ctx)
+
+
+def state_box_editor(page, ctx: Ctx) -> None:
+    _open_multibox_review(page, ctx)
+    page.get_by_role("button", name="Edit boxes").click()  # opens edit mode; nothing is saved
+    page.wait_for_selector("[data-testid='multibox-canvas']", timeout=10_000)
+    page.keyboard.press("Tab")  # select a box
+    _settle(page, 800)
+
+
+def state_region_profile_test(page, ctx: Ctx) -> None:
+    ids = [
+        api_get(ctx.base, f"/curation/projects/{VEHICLES_PROJECT}/review/regions?page_size=1")[
+            "items"
+        ][0]["id"]
+    ]  # the profile test takes exactly one crop id
+    page.goto(
+        f"{ctx.base}/p/{VEHICLES_PROJECT}/settings/region-profiles/coco_vehicle_wheels",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='profile-test-panel']", timeout=15_000)
+    page.locator("[data-testid='profile-test-crop-id']").fill(", ".join(ids))
+    page.locator("[data-testid='test-run']").click()
+    page.wait_for_selector("[data-testid='test-result'], [data-testid='test-error']", timeout=180_000)
+    if page.locator("[data-testid='test-error']").count():
+        raise RuntimeError(page.locator("[data-testid='test-error']").inner_text())
+    page.locator("[data-testid='profile-test-panel']").scroll_into_view_if_needed()
+    _settle(page, 800)
+
+
+def state_import_wizard(page, ctx: Ctx) -> None:
+    path = os.environ["IMPORT_PREVIEW_PATH"]  # a server path under an allowed root
+    page.goto(
+        f"{ctx.base}/p/{IMPORT_PROJECT}/datasets/import", wait_until="domcontentloaded", timeout=30_000
+    )
+    page.get_by_placeholder("/data/source/my_dataset").fill(path)
+    page.wait_for_selector("text=Class mapping", timeout=60_000)
+    page.get_by_label("Accept suggestions").check()  # client-side choice only
+    _settle(page, 1500)
+
+
+def state_import_job(page, ctx: Ctx) -> None:
+    jobs = api_get(ctx.base, f"/curation/projects/{IMPORT_PROJECT}/datasets/imports")["items"]
+    jid = next(j["import_id"] for j in jobs if j["status"].startswith("completed"))
+    page.goto(
+        f"{ctx.base}/p/{IMPORT_PROJECT}/datasets/imports/{jid}",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='import-job']", timeout=15_000)
+    _settle(page, 1200)
+
+
+def state_review_imported(page, ctx: Ctx) -> None:
+    jobs = api_get(ctx.base, f"/curation/projects/{IMPORT_PROJECT}/datasets/imports")["items"]
+    jid = next(j["import_id"] for j in jobs if j["status"].startswith("completed"))
+    page.goto(
+        f"{ctx.base}/p/{IMPORT_PROJECT}/review?tab=imported&import_id={jid}",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("text=/Import imp_/", timeout=20_000)
+    _settle(page, 2500)
+
+
 # name -> function; every state is captured at 1600px only.
 STATES = {
     "projects-delete-dry-run": state_projects_delete_dry_run,
@@ -303,6 +414,12 @@ STATES = {
     "prompt-pack-test": state_prompt_pack_test,
     "region-profile-editor": state_region_profile_editor,
     "vlm-endpoint-editor": state_vlm_endpoint_editor,
+    "review-regions-multibox": state_review_regions_multibox,
+    "box-editor": state_box_editor,
+    "region-profile-test": state_region_profile_test,
+    "import-wizard": state_import_wizard,
+    "import-job": state_import_job,
+    "review-imported": state_review_imported,
 }
 
 
