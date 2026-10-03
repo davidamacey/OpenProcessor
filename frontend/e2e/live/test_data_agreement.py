@@ -162,7 +162,13 @@ def test_region_tab_label_is_the_served_display_name(
         for t in page.get_by_test_id("review-tabs").locator("button").all_inner_texts()
     ]
     if live_region_profile is None:
-        assert len(labels) == 5, labels
+        # No region profile: every tab is a core tab the backend serves
+        # (a served `imported` tab included), never a region one.
+        served = {
+            t.get("label")
+            for t in api_get(live_url, live_project, "/review/tabs")["tabs"]
+        }
+        assert labels and set(labels) <= served, (labels, served)
         return
     served_tab = next(
         (t for t in api_get(live_url, live_project, "/review/tabs")["tabs"] if t["id"] == "regions"),
