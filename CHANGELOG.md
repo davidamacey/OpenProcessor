@@ -168,7 +168,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ### Fixed
 - `POST .../cluster/umap/rebuild` no longer 500s on small pools: UMAP components and neighbours are clamped below the item count with random init, and a pool under 32 items is a typed `422 too_few_items` (`min_items`). One size guard (`pool_size`) serves every clustering entry point.
 - The route guard and `GET /projects/{project}` read one registry lookup, which confirms a `building`/`deleting` status at the project doc, so a finished combine no longer answers `409 project_building` after the GET reads `active`.
-- `GET /review/tabs` filter specs carry `default` (read off the filter models) and `allows_unset`; `region_status` now defaults to `all` on the wire.
+- `GET /review/tabs` filter specs carry `default` (read off the filter models) and `allows_unset`; an enum whose default is null (`on_negative_frame`, `dataset_split`) lists an explicit `{value: "", label: "Any"}` option (omit the parameter when chosen); `region_status` now defaults to `all` on the wire.
 - `POST /ingest/policy/preview`: `by_class` names are class names (`traffic light`), and `embedded_because_labeled` separates items that embed only because a human or validated label always embeds.
 - `embedding.by_state` counts a pre-`embedding_state` item that has a vector as `embedded`, matching `embedding.embedded`.
 - Cloning a template no longer inherits its description, and `cloned_from` has no `@-` when the source has no revision.
