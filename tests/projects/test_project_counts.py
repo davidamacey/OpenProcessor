@@ -63,3 +63,15 @@ async def test_counts_are_top_level_documents_per_project() -> None:
         5,
     )
     assert (counts['beta'].images, counts['beta'].items) == (1, 2)
+
+
+@pytest.mark.asyncio
+async def test_embedded_count_is_none_when_uncountable() -> None:
+    from src.services.projects.stats import embedded_count
+
+    class _Down:
+        async def count(self, **_: Any) -> dict[str, int]:
+            raise RuntimeError('down')
+
+    assert await embedded_count(_Down(), 'items') is None
+    assert await embedded_count(_Client({'items': 9}, validated=4), 'items') == 4

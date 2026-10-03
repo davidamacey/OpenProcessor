@@ -592,6 +592,33 @@ enters the region worker's queue. An existing region status is never
 overwritten on re-ingest. Items that exist before you activate a profile are
 picked up with [`POST /reprocess`](#reprocess).
 
+### Items without an embedding
+
+Every item carries `embedding_state`: `embedded` (it has a vector), `failed`
+(the encoder raised at ingest; the item is still stored), `deferred` (a vector
+was dropped because the target project could not use it, as in a combine) or
+`not_selected` (reserved for selective embedding). `null` means the item was
+written before the field existed. Whether an item has a vector is always the
+`exists` test on its embedding; the state only says why not.
+
+Items without a vector are stored and browsable, but clustering, kNN search,
+the outlier and diverse orderings, the review queue's unclassed view and the VLM stage
+all skip them, so the API says so instead of returning a silent gap:
+
+- Ingest results and the batch summary carry `n_embedded` and `n_not_embedded`;
+  `ingest_walker.py` warns when any item was stored without one.
+- `GET /curation/projects/{project}/search/text` returns `unembedded_in_scope`.
+- `GET /curation/projects/{project}/crops` with `order=outliers` or
+  `order=diverse` returns `n_unembedded` next to `n_pool`.
+- `GET /curation/projects/{project}/stats/dataset` returns an `embedding` block
+  (`embedded`, `not_embedded`, `by_state`); the project counts return
+  `items_embedded`; the auto-label `baseline`/`after` snapshots return
+  `unembedded`.
+- An empty review `all` queue explains when the cause is unembedded items.
+
+The VLM stage works on embedded items only, so one setting (whether an item
+is embedded) bounds both the embedding and the VLM work.
+
 For bulk work from a shell:
 
 - `scripts/curation/ingest_walker.py`: walk a directory with a resumable

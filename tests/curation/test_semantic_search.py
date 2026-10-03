@@ -31,6 +31,7 @@ def _fake_encoder() -> MagicMock:
 def _fake_os(hits: list[dict]) -> AsyncMock:
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'hits': {'hits': hits, 'total': {'value': len(hits)}}})
+    fake.count = AsyncMock(return_value={'count': 0})
     return fake
 
 
@@ -54,6 +55,7 @@ def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
         return {'hits': {'hits': pool[frm : frm + size], 'total': {'value': total}}}
 
     fake.search = AsyncMock(side_effect=_search)
+    fake.count = AsyncMock(return_value={'count': 0})
     return fake
 
 
@@ -228,7 +230,13 @@ async def test_semantic_text_search_empty_query_short_circuits():
         page=1,
         page_size=30,
     )
-    assert result == {'items': [], 'total': 0, 'page': 1, 'page_size': 30}
+    assert result == {
+        'items': [],
+        'total': 0,
+        'page': 1,
+        'page_size': 30,
+        'unembedded_in_scope': 0,
+    }
 
 
 @pytest.mark.asyncio

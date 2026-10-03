@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.services.curation.embedding_state import embedded_clause
+
 
 # Sortable item fields -> the ``unmapped_type`` OpenSearch needs when a
 # shard has no document carrying the field yet.
@@ -111,6 +113,7 @@ def crops_page(
     method: str | None = None,
     version: str | None = None,
     n_pool: int | None = None,
+    n_unembedded: int | None = None,
 ) -> dict[str, Any]:
     """``CropsPageResponse``-shaped envelope around serialized items."""
     return {
@@ -121,6 +124,7 @@ def crops_page(
         'method': method,
         'version': version,
         'n_pool': n_pool,
+        'n_unembedded': n_unembedded,
     }
 
 
@@ -129,7 +133,7 @@ def with_exists_filter(query_clause: dict[str, Any], field: str) -> dict[str, An
     the ranking field can't be scored, so excluding them up front keeps
     the outliers/diverse pool query and its exact count in sync with
     what the ranker actually fetches."""
-    exists_clause = {'exists': {'field': field}}
+    exists_clause = embedded_clause(field)
     if 'bool' in query_clause:
         merged = dict(query_clause['bool'])
         merged['filter'] = [*(merged.get('filter') or []), exists_clause]
