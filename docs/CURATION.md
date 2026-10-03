@@ -345,6 +345,18 @@ mapping, model promotion (`labels.txt`) and the dense remap an export writes.
 train, promote and predict and assert the `(class_id, class_name)` pairing at
 every hop.
 
+**By-name resolution has one rule** (`resolve_class_by_name`). Names compare
+after normalization (case, spaces and hyphens fold to `_`). An *active* class
+always wins over a deprecated one with the same name; a name that only a
+deprecated class carries is reported as deprecated and never assigned to.
+Ties break on the exact spelling, then the lowest id. Creating an active class
+with a deprecated class's name is allowed; two active classes can never share
+a name, and restoring a deprecated class is refused while an active class holds
+its name. Dataset-import mapping, `ensure_class_by_name`, adopt-existing and
+detector seeding all go through it. Stored-item `class_name` filters on list
+routes match the name saved on each item, so use `class_id` to select one class
+exactly.
+
 Class routes: `GET /curation/projects/{project}/classes`,
 `POST /curation/projects/{project}/classes`,
 `PUT /curation/projects/{project}/classes/{class_id}`,
