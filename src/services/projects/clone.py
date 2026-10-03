@@ -10,7 +10,7 @@ and :func:`clone_settings_into` so every existing caller
 from __future__ import annotations
 
 import shutil
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
@@ -454,6 +454,44 @@ async def _apply_clone(
     return conflicts
 
 
+@dataclass(frozen=True)
+class ActivatedConfig:
+    name: str
+    revision: int | None
+    body: Any
+
+
+async def read_activated_config(
+    client: Any, record: ProjectRecord, axis: Any, kind: Any
+) -> ActivatedConfig | None:
+    """The config ``record`` has ACTIVE on ``axis``: its name, revision and
+    the body that was activated (the immutable ``<kind>:<name>@<rev>`` copy,
+    not whatever ``<kind>:<name>`` holds now, which diverges once the source
+    saves again without reactivating). ``None`` when the axis is off, unset,
+    an env/file id that was never stored (no revision copy), or its revision
+    copy is gone. A malformed stored doc raises."""
+    from opensearchpy.exceptions import NotFoundError
+
+    from src.config import get_curation_config
+    from src.services.config_store.index import config_doc_id, get_activation
+
+    with bind_project(record, read_only=True):
+        index = get_curation_config().configs_index
+        activation = await get_activation(client, index, axis)
+        if not activation or not activation.get('name'):
+            return None
+        name = activation['name']
+        revision = activation.get('revision')
+        try:
+            stored = await client.get(index=index, id=config_doc_id(kind, name, revision))
+        except NotFoundError:
+            return None
+    body = (stored.get('_source') or {}).get('body')
+    if body is None:
+        return None
+    return ActivatedConfig(name=name, revision=revision, body=body)
+
+
 async def _clone_activations(
     client: Any,
     *,
@@ -470,55 +508,19 @@ async def _clone_activations(
     keeps whatever it already had, which is empty for a brand-new
     project. Never raises on "nothing to clone" -- only on a genuine
     write failure."""
-    from opensearchpy.exceptions import NotFoundError
 
-    from src.services.config_store.index import (
-        ConfigAxis,
-        ConfigKind,
-        activate,
-        config_doc_id,
-        get_activation,
-        save_config,
-    )
+    from src.services.config_store.index import ConfigAxis, ConfigKind, activate, save_config
 
     axis_kinds: tuple[tuple[ConfigAxis, ConfigKind], ...] = (
         ('prompt_pack', 'prompt_pack'),
         ('detection_profile', 'region_profile'),
     )
     for axis, kind in axis_kinds:
-        with bind_project(source, read_only=True):
-            from src.config import get_curation_config as _get_cfg
-
-            source_index = _get_cfg().configs_index
-            # Minor 3 (W2 review): `get_activation` already maps a real
-            # (or fake) 404 to `None` itself -- nothing here can still
-            # raise `NotFoundError`/`KeyError` to catch.
-            activation = await get_activation(client, source_index, axis)
-            if not activation or not activation.get('name'):
-                continue
-            name = activation['name']
-            # Minor 2 (W2 review): copy the body that was actually
-            # ACTIVATED (the immutable `<kind>:<name>@<rev>` revision
-            # copy), not whatever `<kind>:<name>` (current) happens to
-            # hold now -- the two diverge once the source saves again
-            # without reactivating. `revision=None` (an env/file id,
-            # never written to the store) has no revision copy to read;
-            # the lookup below 404s and this axis is skipped, same as
-            # "nothing to clone".
-            revision = activation.get('revision')
-            # Minor 3 (W2 review): a genuine 404 here is the only expected
-            # failure (the activated revision copy no longer exists, e.g.
-            # a never-stored env/file id); a malformed real doc should
-            # raise, not be silently skipped, so `KeyError` is not caught.
-            try:
-                stored = await client.get(
-                    index=source_index, id=config_doc_id(kind, name, revision)
-                )
-            except NotFoundError:
-                continue
-            body = (stored.get('_source') or {}).get('body')
-            if body is None:
-                continue
+        activated = await read_activated_config(client, source, axis, kind)
+        if activated is None:
+            continue
+        name, body = activated.name, activated.body
+        revision = activated.revision
 
         with bind_project(target_record):
             from src.config import get_curation_config as _get_cfg

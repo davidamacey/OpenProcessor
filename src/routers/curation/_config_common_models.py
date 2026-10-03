@@ -220,6 +220,8 @@ ValidationCode = Literal[
     'target_is_source',
     'label_conflicts',
     'holdout_recompute_contamination',
+    'embedding_model_mismatch',
+    'region_profiles_differ',
     'class_mapping_invalid',
     # W9: VLM endpoint validation (any_domain_plan.md W9.4/W9.5)
     'vlm_name_invalid',

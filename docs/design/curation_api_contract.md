@@ -267,7 +267,11 @@ and its target busy (`project_busy`).
 (`CombineIssue`: `code`, `severity`, `message`, `project`, `detail`),
 `suggested_mapping`, `sources[]`, `target`, `dedup`, `bytes` and
 `preview_sha`. Starting with a different body than the one previewed is
-`409 preview_stale`.
+`409 preview_stale`. Warning codes: `shard_budget_high`, `label_conflicts`,
+`holdout_recompute_contamination`, `embedding_model_mismatch` (a source's
+stored vector dimension differs from the target encoder's; those vectors are
+not copied and the items are deferred for re-embedding) and
+`region_profiles_differ` (sources have different active region profiles).
 
 `CombineJobResponse`: `job_id`, `status` (`queued`, `running`, `completed`,
 `failed`, `cancelled`, `interrupted`), `phase`, `done`, `total`, `report`,

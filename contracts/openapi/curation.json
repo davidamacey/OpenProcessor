@@ -19981,6 +19981,8 @@
               "target_is_source",
               "label_conflicts",
               "holdout_recompute_contamination",
+              "embedding_model_mismatch",
+              "region_profiles_differ",
               "class_mapping_invalid",
               "vlm_name_invalid",
               "vlm_name_reserved",

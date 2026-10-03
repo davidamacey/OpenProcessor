@@ -22,6 +22,7 @@ from src.config.projects import ProjectRecord, new_project_record
 from src.services.curation.ingest_index import image_id_for
 from src.services.detection.geometry import crop_id as make_crop_id
 from src.services.projects import registry as registry_module
+from src.services.projects.combine import service as combine_service
 from src.services.projects.combine.models import CombineRequest
 from src.services.projects.registry import ProjectRegistry
 
@@ -74,6 +75,7 @@ class World:
         self.registry = StubRegistry(self.records)
         monkeypatch.setattr(registry_module, '_REGISTRY', self.registry)
         self._seed = 0
+        monkeypatch.setattr(combine_service, 'target_embedding_dim', lambda: DIM)
         self.settled: list[bool] = []
 
     # ------------------------------------------------------------ projects
