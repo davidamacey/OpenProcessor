@@ -441,6 +441,31 @@ GPU model and the Triton, TensorRT, driver and torch versions. Set B numbers
 stay in private notes, and only an aggregate ratio or pass/fail is stated in
 public text.
 
+### Baseline v0.4.0 (set A, public COCO, 4,000 images; commit 15f7bbb9)
+
+Host: single node, Triton + API on one A6000 (GPU 0, 32 API workers, multiprocess metrics on), PE image encoder + YOLO11s via Triton. Region profile off, open_vocab off, VLM/auto-label workers idle. Warmup 100 images excluded. One round per row (not the 3-round median).
+
+| row | images/s | items/s | items/image | ingest wall s | cluster s | store B/image | GPU0 mean util % |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A all (4,000 imgs, ingest+embed+cluster) | 4.25 | 32.1 | 7.6 | 918 | 172.7 | 75,410 | 30.4 |
+| A lazy (first 1,000, ingest only) | 10.28 | 81.4 | 7.9 | 88 | n/a | 10,883 | 19.8 |
+| A selected person,car,dog (first 1,000) | 6.10 | 48.2 | 7.9 | 148 | n/a | 67,583 | 44.3 |
+
+Per-stage totals, A all (op_pipeline_stage_*; seconds are summed across concurrent workers, so they exceed wall time):
+
+| stage | calls | sum s | mean ms | bytes |
+|---|---:|---:|---:|---:|
+| decode | 3,900 | 20.0 | 5.1 | 676 MB |
+| resize | 3,876 | 95.0 | 24.5 | n/a |
+| crop | 29,488 | 1.9 | 0.06 | n/a |
+| jpeg_encode | 29,488 | 11.0 | 0.37 | 235 MB |
+| embed | 8,165 | 6,012.6 | 736 | 45.2 GB |
+| opensearch_write | 7,776 | 2,054.6 | 264 | n/a |
+
+Triton compute_infer, A all: pe_image_encoder 1,590 s total for 33,388 inferences (3,120 execs, queue 1,680 s); yolov11_small 2.5 s for 3,900. Lazy policy still embeds one whole-image vector per image (900 embed calls on 900 images).
+
+A second baseline on a set of real high-resolution (about 20 MP) photos was measured privately; its numbers are not published. It showed the same pipeline is decode and I/O bound at that image size (the GPU was mostly idle), which is what the GPU decode and crop-at-model-size waves in the optimization plan target. Single run per row; a 3-round median is planned before the optimization work starts.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
