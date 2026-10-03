@@ -15,6 +15,13 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ### Added
 
+- Served facts for the thin client. `POST /region_profiles/test` answers `testable` and a
+  `reason` sentence (from `region_scope.out_of_scope_reason`, the worker's own
+  parent-class predicate, now case-insensitive and proposal-aware instead of the
+  route's old exact match). `GET /config/vocabulary` carries a `reprocess` block
+  (scopes, filter fields, job statuses, lock reasons with text). Dataset-import jobs carry
+  `actions.{can_cancel,can_resume,can_undo}` each `{allowed, reason}`, computed by the
+  same blockers `resume` / `undo` enforce.
 - Region list rows (`/regions`, `/regions/training_candidates`,
   `/regions/suspected_false_positives`, region clusters) carry a required,
   non-empty `row_key` (`<crop_id>#<region_box_id>` or `<crop_id>#item`),

@@ -209,6 +209,10 @@ class RegionTestResponse(BaseModel):
     #: Whether the item's class is one the profile applies to (its
     #: ``parent_classes``); the worker would skip it otherwise.
     item_eligible: bool
+    #: Same verdict as ``item_eligible`` under the name the UI gates its
+    #: run button on; ``reason`` says why when false, null otherwise.
+    testable: bool
+    reason: str | None = None
     legs: list[RegionTestLeg]
     verify: RegionTestVerify | None = None
     #: ``selection_accepted``: no VLM ran, so every selected box is shown as

@@ -64,6 +64,7 @@ def test_vocabulary_shape(app_client: TestClient) -> None:
         'registry_classes',
         'prompt_pack_calls',
         'labels',
+        'reprocess',
     }
 
 
@@ -137,3 +138,10 @@ def test_prompt_pack_calls_match_reply_key_contract(app_client: TestClient) -> N
     body = app_client.get('/curation/projects/default/config/vocabulary').json()
     ids = {c['id'] for c in body['prompt_pack_calls']}
     assert ids == set(REPLY_KEY_CONTRACT)
+
+
+def test_vocabulary_serves_the_reprocess_block(app_client: TestClient) -> None:
+    body = app_client.get('/curation/projects/default/config/vocabulary').json()['reprocess']
+    assert {e['id'] for e in body['scopes']} >= {'detect', 'region', 'embed'}
+    assert {e['id'] for e in body['lock_reasons']} >= {'human_label', 'validated', 'imported'}
+    assert all(e['label'] for e in body['job_statuses'])

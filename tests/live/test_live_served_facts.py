@@ -52,3 +52,19 @@ def test_region_rows_carry_unique_row_keys(api_client: Any) -> None:
     keys = [row['row_key'] for row in r.json()['items']]
     assert all(keys)
     assert len(keys) == len(set(keys))
+
+
+def test_vocabulary_serves_reprocess_labels_and_lock_reasons(api_client: Any) -> None:
+    block = api_client.get('/config/vocabulary').json()['reprocess']
+    assert {e['id'] for e in block['scopes']} >= {'detect', 'region', 'embed'}
+    assert {e['id'] for e in block['lock_reasons']} >= {'human_label', 'validated', 'imported'}
+    assert all(e['label'] for k in block for e in block[k])
+
+
+def test_dataset_import_jobs_serve_action_flags(api_client: Any) -> None:
+    jobs = api_client.get('/datasets/imports').json()['items']
+    for job in jobs:
+        for flag in ('can_cancel', 'can_resume', 'can_undo'):
+            action = job['actions'][flag]
+            assert isinstance(action['allowed'], bool)
+            assert action['allowed'] or action['reason']
