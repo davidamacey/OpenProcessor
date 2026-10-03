@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultTarget,
   issuePath,
+  unplacedOpenVocabIssues,
   issuesForTargetField,
   openVocabFieldAsProfileField,
   rowsByScope,
@@ -72,5 +73,32 @@ describe('defaultTarget', () => {
       max_instances: 20,
       parent_classes: [],
     });
+  });
+});
+
+describe('unplacedOpenVocabIssues', () => {
+  const schema = schemaFixture();
+
+  it('leaves out the issues a set, gating or target cell owns', () => {
+    const report = errorReport(
+      issue({ field: 'display_name', code: 'a' }),
+      issue({ field: 'targets[3].prompt', code: 'b' }),
+      issue({ field: 'gating.tier2_vlm_precheck', code: 'c' }),
+      issue({ field: 'gating.tier3_hit_rate.window', code: 'd' }),
+    );
+    expect(unplacedOpenVocabIssues(report, schema)).toEqual([]);
+  });
+
+  it('keeps whole-body issues and paths no served row names', () => {
+    const report = errorReport(
+      issue({ field: null, code: 'open_vocab_no_enabled_targets' }),
+      issue({ field: 'targets', code: 'open_vocab_too_many_targets' }),
+      issue({ field: 'targets[0].mystery', code: 'unknown_cell' }),
+    );
+    expect(unplacedOpenVocabIssues(report, schema).map((i) => i.code)).toEqual([
+      'open_vocab_no_enabled_targets',
+      'open_vocab_too_many_targets',
+      'unknown_cell',
+    ]);
   });
 });

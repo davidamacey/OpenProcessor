@@ -5,7 +5,7 @@
  * through this adapter; every label, default, range and help text is
  * served. Nothing here checks a value: the server's validate route does.
  */
-import { issuesForField } from '$lib/config/validationIssues';
+import { issuesForField, unplacedIssues } from '$lib/config/validationIssues';
 import type { ValidationIssue, ValidationReport } from '$lib/types_config';
 import type {
   OpenVocabFieldSchema,
@@ -80,4 +80,23 @@ export function defaultTarget(schema: OpenVocabSchema): OpenVocabTargetBody {
   const out: Record<string, unknown> = {};
   for (const f of schema.fields) if (f.scope === 'target') out[f.field] = f.default;
   return out as OpenVocabTargetBody;
+}
+
+/** The served issues no editor cell claims: whole-body issues, and paths
+ *  naming no served row (a set, gating or hit-rate field, or a field of a
+ *  target by its index). */
+export function unplacedOpenVocabIssues(
+  report: ValidationReport | null,
+  schema: OpenVocabSchema,
+): ValidationIssue[] {
+  const flat = schema.fields
+    .filter((f) => f.scope !== 'target')
+    .map((f) => issuePath(f.scope, f.field));
+  const targetFields = new Set(
+    schema.fields.filter((f) => f.scope === 'target').map((f) => f.field),
+  );
+  return unplacedIssues(report, flat).filter((i) => {
+    const m = /^targets\[\d+\]\.([^.[]+)/.exec(i.field ?? '');
+    return !(m && targetFields.has(m[1]!));
+  });
 }
