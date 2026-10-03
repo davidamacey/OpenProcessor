@@ -185,6 +185,22 @@ def live_region_profile(live_url: str, live_project: dict[str, Any]) -> dict[str
     return api_get(live_url, live_project, "/health").get("region_profile")
 
 
+NO_REGION_PROFILE_SKIP = (
+    "the live backend serves no region profile (/health region_profile is null), "
+    "so the region tab / region drain panel are correctly absent"
+)
+
+
+@pytest.fixture(scope="session")
+def require_region_profile(live_region_profile: dict[str, Any] | None) -> dict[str, Any]:
+    """Skip (never fail) a test that needs a served region profile when the
+    deployment has none. Still strict when one IS served: the test body runs
+    unchanged and fails on any disagreement."""
+    if live_region_profile is None:
+        pytest.skip(NO_REGION_PROFILE_SKIP)
+    return live_region_profile
+
+
 def _http_get(url: str) -> Any:
     import json
 

@@ -74,7 +74,8 @@ def test_dashboard_cluster_count_agrees_with_stats_dataset(
 
 
 def test_region_queue_total_agrees_with_review_regions(
-    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
 ) -> None:
     page = guarded_page.page
     page.goto(
@@ -104,7 +105,8 @@ def test_region_queue_total_agrees_with_review_regions(
 
 
 def test_region_queue_total_agrees_with_filtered_region_status(
-    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
 ) -> None:
     page = guarded_page.page
     page.goto(
@@ -221,7 +223,8 @@ def _resolve_reason_label(reason_id: str, vocab_entries: list[dict]) -> str | No
 
 
 def test_rejection_reason_label_renders_for_a_live_item(
-    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
 ) -> None:
     vocab = api_get(live_url, live_project, "/regions/vocabulary")
     vocab_entries = vocab.get("rejection_reasons", [])
@@ -284,7 +287,10 @@ def test_ingest_status_agrees(guarded_page: Any, live_url: str, live_project: di
     )
 
 
-def test_region_drain_agrees(guarded_page: Any, live_url: str, live_project: dict[str, Any]) -> None:
+def test_region_drain_agrees(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
+) -> None:
     """The /ingest region-drain panel's total_unfinished agrees with GET
     {prefix}/ingest/region_drain. Uses wait_for_stable_text — the value
     moves during a live cascade, per the plan."""
