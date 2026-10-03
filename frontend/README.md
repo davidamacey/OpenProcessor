@@ -88,6 +88,10 @@ docker compose pull && docker compose up -d
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set).
+The same compose file also runs the documentation site, reached on that
+origin at `/cropwright/`, and the API's own Swagger UI at `/docs`
+(ReDoc at `/redoc`); the top bar's **Resources** menu links to all of them
+and to any dashboards the backend serves.
 The image runs nginx as a non-root user (uid 101) listening on port 8080
 inside the container; compose maps `CROPWRIGHT_PORT` to it.
 
@@ -105,6 +109,7 @@ it never collides with a running instance:
 
 ```bash
 CROPWRIGHT_PORT=5190 CROPWRIGHT_CONTAINER_NAME=cw-second \
+  CROPWRIGHT_DOCS_CONTAINER_NAME=cw-second-docs \
   OP_DOCKER_NETWORK=some_other_openprocessor_net \
   docker compose -p cw-second up -d
 ```

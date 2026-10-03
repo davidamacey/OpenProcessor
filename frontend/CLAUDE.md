@@ -2432,10 +2432,12 @@ architecture.tsx` (tabbed: System / Workflows / Sequences, per
   `docs-site/src/data/screenshot_routes.json`, and aborts every request
   except GET/HEAD and the side-effect-free `/train/preflight`. See
   `docs-site/docs/developer-guide/screenshots.md`.
-- Hosted locally as the `cropwright-docs` container on :5185
-  (`docker build -t cropwright-docs:local docs-site && docker run -d
---name cropwright-docs -p 5185:8080 cropwright-docs:local`), served
-  under the same `/cropwright/` base path GitHub Pages uses.
+- Deployed as the `docs` service of `docker-compose.yml`
+  (`davidamacey/cropwright-docs`, built from `docs-site/` by the
+  `docker-compose.build.yml` overlay), no published port: it is reached at
+  `/cropwright/` on the app origin (see "Resources and docs on the app
+  origin"), the same base path GitHub Pages uses. There is no separate
+  :5185 container any more.
 - Deploys to GitHub Pages via `.github/workflows/docs.yml` (build on
   every PR touching `docs-site/**`, deploy on push to `main`/`master`) —
   won't actually publish until Pages/Actions are enabled on the public
@@ -2775,6 +2777,24 @@ on an inference-backend outage) replaces that attempt's fixed delay
 instead, clamped to `MAX_RETRY_AFTER_MS` (5s) so it can't stall the UI
 past the existing retry budget or add an extra attempt. Every caller
 still just sees the eventual `ApiError` with the served `detail` string.
+
+### Resources and docs on the app origin
+
+Cropwright is the one front door: `docker-compose.yml` runs a `docs` service
+(`davidamacey/cropwright-docs`, no published port, private compose network)
+beside `cropwright`, and nginx proxies, from the app origin: `/cropwright/` to
+`DOCS_UPSTREAM` (default `http://docs:8080`, variable-form `proxy_pass` with the
+resolver, so a missing/restarted docs container only 502s that path), and the
+backend's own `/docs`, `/docs/oauth2-redirect`, `/redoc` and `/openapi.json`
+(exact-match locations at the API root, to `API_UPSTREAM`; no SPA route lives
+there). `nginx-security-headers.conf` sets no CSP, so Swagger UI's CDN assets
+load without an override. The top bar's `ResourcesMenu` lists those four
+same-origin paths (constants in `src/lib/resourceLinks.ts`) plus every served
+`GET /settings` `monitoring_links` URL and MLflow (`PUBLIC_MLFLOW_URL`); served
+links stay served-only (null = absent), `MonitoringLinks` on `/train` and
+`/bakeoff` shares the same `monitoringResourceLinks`. Tests:
+`resourceLinks.test.ts`, `components/ResourcesMenu.test.ts`, the DOCS_UPSTREAM
+cases in `entrypoint.test.ts`, e2e `test_resources_menu.py`.
 
 ### Projects — `/p/[project]` routes, switcher, `/projects` (2026-09-26)
 

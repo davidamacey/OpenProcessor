@@ -10,6 +10,12 @@ served by nginx.
 
 - **Non-root**: the image runs nginx as uid 101, listening on container
   port `8080`. Compose maps `CROPWRIGHT_PORT` (default `5184`) to it.
+- **Docs on the same origin**: Compose also runs the documentation site
+  (`davidamacey/cropwright-docs`, no published port). nginx serves it at
+  `/cropwright/` and proxies the API's Swagger UI (`/docs`), ReDoc
+  (`/redoc`) and `/openapi.json`, so one origin reaches everything. Point
+  `DOCS_UPSTREAM` elsewhere to host the docs yourself; if the docs
+  container is down, only `/cropwright/` answers 502.
 - **One docker network**: the container joins the OpenProcessor API's own
   docker network so nginx can proxy `PUBLIC_API_PREFIX/*` to it by
   container name — no CORS, and the browser never sees the backend's real
