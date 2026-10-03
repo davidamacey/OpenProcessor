@@ -8,6 +8,7 @@
     ],
     "training_candidate": [
       "region_box_id",
+      "row_key",
       "selection_reason"
     ]
   },

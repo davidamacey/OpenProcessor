@@ -96,6 +96,7 @@ from pydantic import BaseModel, Field
 
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, items_index, router
 from src.services.curation import review_queries
+from src.services.curation.diverse_limits import DIVERSE_SELECT_MAX_K
 from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.selection import k_center_greedy
 from src.services.curation.selection.pool_fetch import (
@@ -242,7 +243,7 @@ class SelectDiverseScope(BaseModel):
 
 class SelectDiverseRequest(BaseModel):
     scope: SelectDiverseScope = Field(default_factory=SelectDiverseScope)
-    k: int = Field(..., ge=1, le=50_000)
+    k: int = Field(..., ge=1, le=DIVERSE_SELECT_MAX_K)
     seed_crop_id: str | None = None
 
 

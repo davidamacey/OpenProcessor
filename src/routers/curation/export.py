@@ -20,6 +20,7 @@ from src.routers.curation._common import (
     ExportYoloRequest,
     OpenSearchDep,
     RegistryDep,
+    items_index,
     logger,
     router,
 )
@@ -28,7 +29,7 @@ from src.services.curation.export import (
     GenericYoloExportService,
     resolve_current_export_dir,
 )
-from src.services.curation.export_readiness import NothingToExportError
+from src.services.curation.export_readiness import NothingToExportError, export_blocking_reasons
 
 
 if TYPE_CHECKING:
@@ -280,6 +281,18 @@ class ExportStatusResponse(BaseModel):
     """
 
     status: Literal['idle', 'unknown', 'success']
+    can_export: bool | None = Field(
+        default=None,
+        description=(
+            'Whether ``POST /export/yolo`` would run now (an unfiltered export). ``null`` when '
+            'the cohort could not be counted. Covers the pre-scan refusal; a row-level '
+            'refusal (no box / unregistered class) can still 422 at export time.'
+        ),
+    )
+    blocking_reasons: list[str] = Field(
+        default_factory=list,
+        description="Why not, in the words the export route's 422 uses; empty when exportable.",
+    )
     path: str | None = Field(default=None, description='Resolved export directory.')
     export_dir: str | None = Field(default=None, description='Same as ``path``.')
     last_run: str | None = Field(default=None, description='Finish (else start) time, ISO 8601.')
@@ -368,8 +381,20 @@ def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusRes
 
 
 @router.get('/export/status', response_model=ExportStatusResponse)
-async def export_status() -> ExportStatusResponse:
-    """Last completed export — the ``current`` symlink's manifest, if any."""
+async def export_status(opensearch: OpenSearchDep) -> ExportStatusResponse:
+    """Last completed export — the ``current`` symlink's manifest, if any —
+    plus whether a new export is possible (``can_export`` /
+    ``blocking_reasons``, from the same cohort query the export runs)."""
+    reasons = await export_blocking_reasons(opensearch, items_index())
+    readiness = {
+        'can_export': None if reasons is None else not reasons,
+        'blocking_reasons': reasons or [],
+    }
+    status = _last_export_status()
+    return status.model_copy(update=readiness)
+
+
+def _last_export_status() -> ExportStatusResponse:
     try:
         target = _resolve_current_export_dir()
     except FileNotFoundError:

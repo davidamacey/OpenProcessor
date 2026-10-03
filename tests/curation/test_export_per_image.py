@@ -452,7 +452,7 @@ def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = AsyncMock
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
     return TestClient(app)
 
 

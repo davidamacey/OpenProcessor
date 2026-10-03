@@ -176,12 +176,25 @@ def test_rebuild_cluster_scope_passes_cluster_id_through(
 
 def test_get_projection_not_built(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    app_client.fake_os.get = AsyncMock(side_effect=Exception('not found'))
+    from opensearchpy.exceptions import NotFoundError
+
+    app_client.fake_os.get = AsyncMock(side_effect=NotFoundError(404, 'nf', {}))
 
     r = app_client.get('/curation/projects/default/viz/projection')
-    assert r.status_code == 200
-    assert r.json() == {'status': 'not_built'}
+    assert r.status_code == 404
+    assert r.json()['error'] == 'projection_not_built'
     app_client.fake_os.search.assert_not_called()
+
+
+def test_get_projection_read_failure_is_503_not_not_built(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
+    app_client.fake_os.get = AsyncMock(side_effect=ConnectionError('opensearch down'))
+
+    r = app_client.get('/curation/projects/default/viz/projection')
+    assert r.status_code == 503
+    assert r.json()['error'] == 'projection_unavailable'
 
 
 def test_get_projection_serves_cached_points(

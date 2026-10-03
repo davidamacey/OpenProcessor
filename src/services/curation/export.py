@@ -57,7 +57,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
@@ -76,8 +76,10 @@ from src.services.curation.export_negatives import (
 )
 from src.services.curation.export_readiness import (
     MANIFEST_GENERATION_KEY,
+    NO_VALIDATED_ITEMS_REASON,
     NothingToExportError,
     items_index_generation,
+    validated_export_query,
 )
 from src.services.curation.export_retention import prune_exports_after_write
 from src.services.curation.export_split import (
@@ -103,7 +105,10 @@ from src.services.curation.export_support import (
     source_frozen_test_sha,
 )
 from src.services.curation.holdout import compute_holdout_sha
-from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+
+
+if TYPE_CHECKING:
+    from src.services.curation.item_filter import ItemFilter
 
 
 logger = get_logger(__name__)
@@ -363,28 +368,14 @@ class GenericYoloExportService:
             raise ValueError(msg)
         started_at = datetime.now(UTC).isoformat()
         generation = await items_index_generation(self.opensearch, self.config.items_index)
-        query = {
-            'bool': {
-                'filter': [
-                    {'term': {'class_validated': True}},
-                    *item_filter_clauses(item_filter or ItemFilter()),
-                ],
-                'must_not': [
-                    {'exists': {'field': 'review_dismissed_at'}},
-                    {'term': {'class_excluded': True}},
-                ],
-            }
-        }
+        query = validated_export_query(item_filter)
         # Scroll the FULL cohort — never cap here. Truncating the raw hit
         # list would hand the budget to whatever the scroll returned first
         # and let a rare class vanish; the cap is a class-balanced sample
         # of images applied once the pool has settled.
         hits = await self._scroll_items(query)
         if not hits:
-            raise NothingToExportError(
-                '0 items are class_validated (and not excluded or review-dismissed); '
-                'validate labels before exporting'
-            )
+            raise NothingToExportError(NO_VALIDATED_ITEMS_REASON)
 
         rows, skipped_items = self._hits_to_rows(hits)
         if not rows:

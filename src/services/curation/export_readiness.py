@@ -39,6 +39,7 @@ from src.services.curation.dataset_thresholds import (
     MIN_TRAIN_INSTANCES_PER_CLASS,
     MIN_VAL_INSTANCES_PER_CLASS,
 )
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 
 
 logger = get_logger(__name__)
@@ -47,6 +48,49 @@ MANIFEST_GENERATION_KEY = 'items_index'
 
 Severity = Literal['ok', 'warn', 'block', 'unknown']
 CheckResult = tuple[Severity, str, dict[str, Any]]
+
+
+NO_VALIDATED_ITEMS_REASON = (
+    '0 items are class_validated (and not excluded or review-dismissed); '
+    'validate labels before exporting'
+)
+
+
+def validated_export_query(item_filter: ItemFilter | None = None) -> dict[str, Any]:
+    """The cohort ``POST /export/yolo`` scrolls: validated items, minus
+    excluded / review-dismissed ones, narrowed by ``item_filter``. Shared
+    with ``GET /export/status``'s readiness count so the two cannot disagree
+    about what is exportable."""
+    return {
+        'bool': {
+            'filter': [
+                {'term': {'class_validated': True}},
+                *item_filter_clauses(item_filter or ItemFilter()),
+            ],
+            'must_not': [
+                {'exists': {'field': 'review_dismissed_at'}},
+                {'term': {'class_excluded': True}},
+            ],
+        }
+    }
+
+
+async def export_blocking_reasons(
+    opensearch: Any, index: str, item_filter: ItemFilter | None = None
+) -> list[str] | None:
+    """Why an export would be refused right now (``[]`` = exportable), or
+    ``None`` when the cohort could not be counted. Covers the pre-scan
+    refusal only; reasons that need the scrolled rows (no box, unregistered
+    class, fully-labeled filter) are still raised by the export itself."""
+    try:
+        resp = await opensearch.count(
+            index=index, body={'query': validated_export_query(item_filter)}
+        )
+        count = int(resp.get('count') or 0)
+    except Exception as exc:
+        logger.warning('export_readiness_count_failed', index=index, error=str(exc))
+        return None
+    return [] if count else [NO_VALIDATED_ITEMS_REASON]
 
 
 class NothingToExportError(Exception):
@@ -277,9 +321,11 @@ def export_unlabeled_objects_check(manifest: dict[str, Any]) -> CheckResult:
 
 __all__ = [
     'MANIFEST_GENERATION_KEY',
+    'NO_VALIDATED_ITEMS_REASON',
     'CheckResult',
     'NothingToExportError',
     'Severity',
+    'export_blocking_reasons',
     'export_class_split_check',
     'export_generation_check',
     'export_size_check',

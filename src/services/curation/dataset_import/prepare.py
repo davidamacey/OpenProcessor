@@ -34,6 +34,7 @@ from src.services.curation.dataset_import.regions import (
     parents_mode,
 )
 from src.services.curation.dataset_import.scan import scan_dataset, source_sha
+from src.utils.class_names import resolve_class_by_name
 
 
 if TYPE_CHECKING:
@@ -412,14 +413,8 @@ def materialize_created_classes(
         name = target.class_name or dataset_class
         new_id: int | None = None
         if adopt_existing:
-            new_id = next(
-                (
-                    c.class_id
-                    for c in registry.load().classes
-                    if c.class_name == name and not c.deprecated
-                ),
-                None,
-            )
+            adopted = resolve_class_by_name(registry.load().classes, name)
+            new_id = adopted.active.class_id if adopted.active is not None else None
         if new_id is None:
             new_id = registry.add_class(name, group=groups.get(dataset_class) or 'unknown')
         resolved.targets[dataset_class] = dataclasses.replace(target, class_id=new_id)

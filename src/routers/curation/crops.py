@@ -44,6 +44,7 @@ from src.services.curation.class_label import (
 from src.services.curation.cluster_ids import cluster_kind
 from src.services.curation.crop_browse import crops_page, parse_crop_sort
 from src.services.curation.crop_orders import ordered_crops_page
+from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.wire import (
     item_list_source_excludes,
@@ -196,7 +197,11 @@ async def list_crops(
     ] = 'default',
     k: Annotated[
         int | None,
-        Query(ge=1, le=10_000, description='order=diverse only: rank just the first k picks.'),
+        Query(
+            ge=1,
+            le=DIVERSE_BROWSE_MAX_K,
+            description='order=diverse only: rank just the first k picks.',
+        ),
     ] = None,
 ) -> dict[str, Any]:
     """Paginated crop browse with the standard filter set.

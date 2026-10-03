@@ -50,7 +50,13 @@ from typing import Any, Literal
 
 from src.core.logging import get_logger
 from src.services.curation.axis_copy import axis_copy, detection_profile_strategies
+from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K, DIVERSE_SELECT_MAX_K
 from src.services.curation.vlm_strategies import vlm_strategies
+from src.services.detection.frame_dedup import (
+    DEFAULT_FRAME_DEDUP_THRESHOLD,
+    FRAME_DEDUP_THRESHOLD_MAX,
+    FRAME_DEDUP_THRESHOLD_MIN,
+)
 
 
 logger = get_logger(__name__)
@@ -327,6 +333,8 @@ def _overlay_strategies() -> list[dict[str, Any]]:
             'default': False,
             'requires_field': None,
             'writes': [],
+            'max_k': DIVERSE_BROWSE_MAX_K,
+            'select_max_k': DIVERSE_SELECT_MAX_K,
         },
         *_viz_projection_strategy(),
         *_semantic_search_strategy(),
@@ -399,6 +407,16 @@ def _viz_projection_strategy() -> list[dict[str, Any]]:
     ]
 
 
+# What the export request's ``dedup_threshold`` accepts, and the value a UI
+# should pre-fill when the operator turns near-duplicate collapsing on (the
+# request itself defaults to ``None`` = off).
+_DEDUP_FIELDS: dict[str, float] = {
+    'dedup_threshold_default': DEFAULT_FRAME_DEDUP_THRESHOLD,
+    'dedup_threshold_min': FRAME_DEDUP_THRESHOLD_MIN,
+    'dedup_threshold_max': FRAME_DEDUP_THRESHOLD_MAX,
+}
+
+
 def _export_strategies() -> list[dict[str, Any]]:
     """Dataset-export capability axis.
 
@@ -421,6 +439,7 @@ def _export_strategies() -> list[dict[str, Any]]:
             'label': 'YOLO detection dataset export',
             'status': 'stable',
             'default': True,
+            **_DEDUP_FIELDS,
         },
         {
             'id': 'single_class',
@@ -428,6 +447,7 @@ def _export_strategies() -> list[dict[str, Any]]:
             'label': 'Single-class / class-subset dataset export',
             'status': 'stable',
             'default': False,
+            **_DEDUP_FIELDS,
         },
     ]
 
