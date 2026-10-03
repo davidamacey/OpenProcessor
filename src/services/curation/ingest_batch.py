@@ -240,6 +240,8 @@ async def run_ingest_batch(
         )
     )
 
+    await service.refresh_indexes()
+
     for res in results:
         if res.status == 'duplicate':
             summary.duplicates += 1

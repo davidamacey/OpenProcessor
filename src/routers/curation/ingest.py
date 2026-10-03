@@ -139,6 +139,7 @@ async def curation_ingest_image(
 
     service = await _get_ingest_service(opensearch, registry)
     result = await service.ingest_one(image_bytes, body.path, source=body.source)
+    await service.refresh_indexes()
     if result.status == 'success' and result.image_id:
         await schedule_open_vocab_after_ingest(opensearch, service, [result.image_id])
     return IngestImageResponse(

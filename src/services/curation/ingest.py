@@ -600,6 +600,17 @@ class CurationIngestService:
             except Exception as exc:
                 logger.warning('ingest_event_publish_failed', crop_id=crop_id, error=str(exc))
 
+    async def refresh_indexes(self) -> None:
+        """Make this call's writes visible to search (stats, previews) once the
+        ingest call ends: one refresh per call, never per item. A failure is
+        logged, not raised: the writes already succeeded."""
+        try:
+            await self.opensearch.indices.refresh(
+                index=f'{self.config.images_index},{self.config.items_index}'
+            )
+        except Exception as exc:
+            logger.warning('ingest_refresh_failed', error=str(exc))
+
     async def ingest_batch(
         self,
         images: list[bytes],
