@@ -16,7 +16,7 @@ FROM nginxinc/nginx-unprivileged:1.30-alpine
 LABEL org.opencontainers.image.title="Cropwright Documentation" \
       org.opencontainers.image.description="Docusaurus documentation site for Cropwright" \
       org.opencontainers.image.vendor="example-org LLC" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
 # The site is built for baseUrl /cropwright/ (site.config.ts), so it is served

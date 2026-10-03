@@ -20,7 +20,7 @@ ARG REVISION=unknown
 LABEL org.opencontainers.image.title="Cropwright" \
       org.opencontainers.image.description="From raw images to a trained detector, without labeling one box at a time. Labeling frontend for OpenProcessor." \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 

@@ -3099,7 +3099,7 @@ remote docker context (`CROPWRIGHT_REMOTE_ARM64_CONTEXT`, default
 ## Public export (F10, `scripts/oss-export/`)
 
 Cropwright is published as a separate public repo
-(`davidamacey/OpenProcessor`, fresh history, MIT, Copyright example-org LLC)
+(`davidamacey/OpenProcessor`, fresh history, AGPL-3.0-only, Copyright example-org LLC)
 built from a filtered export of this tree —
 `docs/design/cropwright-oss-export-plan-2026-09-25.md`. Scrubs land here
 as ordinary forward commits; the exporter is private-only and never

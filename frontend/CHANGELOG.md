@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **License is now AGPL-3.0-only** (Copyright (c) 2026 example-org LLC), replacing
+  MIT, so the code can be folded into OpenProcessor (AGPL-3.0) as one work.
+  `LICENSE`, the `package.json` / `docs-site` license fields and lockfile roots,
+  the image license labels, the docs-site config, the README and CLAUDE.md
+  follow.
+
 ### Fixed
 
 - `npm run test:mutation` measures again: Stryker's vitest runner runs no tests

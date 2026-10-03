@@ -34,7 +34,7 @@ export const siteConfig = {
   githubRepo: 'https://github.com/davidamacey/OpenProcessor',
   editUrlBase: 'https://github.com/davidamacey/OpenProcessor/tree/main/docs-site/',
 
-  license: 'MIT',
+  license: 'AGPL-3.0-only',
   copyrightHolder: 'example-org LLC',
 
   // Animated walkthrough under the hero title; built from the committed
