@@ -945,7 +945,11 @@ describe('undoLast branch coverage', () => {
 
 describe('ignoreSelected / undoIgnore', () => {
   it('excludes only the selected crops from the grid (leaving an unselected crop in place), claims the exclusion guard, and remembers the batch', async () => {
-    vi.mocked(excludeCrops).mockResolvedValue({ excluded: 1, errors: 0 });
+    vi.mocked(excludeCrops).mockResolvedValue({
+      excluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
     const b = crop('b'); // not selected -- must survive the ignore
@@ -963,7 +967,11 @@ describe('ignoreSelected / undoIgnore', () => {
   });
 
   it('defaults the reason to "ignore" and omits the parenthetical tag on the toast', async () => {
-    vi.mocked(excludeCrops).mockResolvedValue({ excluded: 1, errors: 0 });
+    vi.mocked(excludeCrops).mockResolvedValue({
+      excluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
     const { sel, controller } = setup([a]);
@@ -976,8 +984,16 @@ describe('ignoreSelected / undoIgnore', () => {
   });
 
   it('undoIgnore restores the last-ignored batch, releases the exclusion guard, and toasts the exact restored count', async () => {
-    vi.mocked(excludeCrops).mockResolvedValue({ excluded: 1, errors: 0 });
-    vi.mocked(unexcludeCrops).mockResolvedValue({ unexcluded: 1, errors: 0 });
+    vi.mocked(excludeCrops).mockResolvedValue({
+      excluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
+    vi.mocked(unexcludeCrops).mockResolvedValue({
+      unexcluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -1011,8 +1027,16 @@ describe('ignoreSelected / undoIgnore', () => {
   });
 
   it('undoIgnore only restores the most recent ignore batch, not an accumulated history', async () => {
-    vi.mocked(excludeCrops).mockResolvedValue({ excluded: 1, errors: 0 });
-    vi.mocked(unexcludeCrops).mockResolvedValue({ unexcluded: 1, errors: 0 });
+    vi.mocked(excludeCrops).mockResolvedValue({
+      excluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
+    vi.mocked(unexcludeCrops).mockResolvedValue({
+      unexcluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
     const b = crop('b');
@@ -1053,7 +1077,11 @@ describe('ignoreSelected / undoIgnore', () => {
   });
 
   it('toasts the error message when the un-exclude request fails, leaving the exclusion claim in place', async () => {
-    vi.mocked(excludeCrops).mockResolvedValue({ excluded: 1, errors: 0 });
+    vi.mocked(excludeCrops).mockResolvedValue({
+      excluded: 1,
+      updated_ids: [],
+      errors: 0,
+    });
     vi.mocked(unexcludeCrops).mockRejectedValue(new Error('unexclude down'));
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');

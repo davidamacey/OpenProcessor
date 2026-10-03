@@ -26,6 +26,8 @@
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
   import { formatCount } from '$lib/formatCount';
+  import ExportItemFilter from '$lib/components/itemFilter/ExportItemFilter.svelte';
+  import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -60,6 +62,9 @@
   // has an unlabeled object on it, rather than teaching the detector to
   // treat that object as background.
   let requireFullyLabeled = $state<boolean>(false);
+  // Optional: limit the export to the items a filter matches. Empty sends
+  // no `item_filter` at all (the whole dataset).
+  const exportFilter = new ItemFilterState();
   let exportRunning = $state<boolean>(false);
   let exportState = $state<ExportStatus | null>(null);
   let pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -217,6 +222,7 @@
       const res = await exportYolo({
         version_tag: versionTag.trim() || undefined,
         require_fully_labeled_images: requireFullyLabeled,
+        item_filter: exportFilter.toBody(),
       });
       exportState = {
         status: res.status,
@@ -674,6 +680,8 @@
         {/if}
       </div>
     </div>
+
+    <ExportItemFilter state={exportFilter} />
 
     {#if exportState}
       <div class="mt-3 text-xs text-zinc-400">

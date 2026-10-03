@@ -36,6 +36,13 @@
   import ClusterBadge from '$lib/components/ClusterBadge.svelte';
   import CropDetailModal from '$lib/components/CropDetailModal.svelte';
   import CropResultGrid from '$lib/components/CropResultGrid.svelte';
+  import ItemFilterBar from '$lib/components/itemFilter/ItemFilterBar.svelte';
+  import MatchingItemsView from '$lib/components/itemFilter/MatchingItemsView.svelte';
+  import {
+    ItemFilterState,
+    withoutOpenVocab,
+  } from '$lib/itemFilter/itemFilterState.svelte';
+  import type { ItemFilter, ItemFilterQuery } from '$lib/types_itemFilter';
   import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
   import SlotGallery from '$lib/components/slots/SlotGallery.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
@@ -157,6 +164,69 @@
     );
     return byName?.id ?? null;
   });
+
+  // The shared item filter (class by name, confidence / area band, origin,
+  // embedding and review state), seeded from and written back to the URL.
+  // The largest-N toggle below keeps `max_rank`, so the bar never draws it.
+  const itemFilter = new ItemFilterState();
+  itemFilter.fromUrl(page.url.searchParams);
+  let matchingModeActive = $state(
+    page.url.searchParams.get('mode') === 'matching' ||
+      !!itemFilter.openVocabSet ||
+      !!itemFilter.sourcePrompt,
+  );
+  const classFilterName = $derived(
+    classFilter == null
+      ? null
+      : (classesStore.classes.find((c) => c.id === classFilter)?.name ?? null),
+  );
+  // The sidebar's `?class=` scopes the grid by the served class name, unless
+  // the bar already names classes.
+  function withSidebarClass<T extends { class_name?: string[]; class_names?: string[] }>(
+    f: T,
+    key: 'class_name' | 'class_names',
+  ): T {
+    const named = f[key];
+    if (named && named.length > 0) return f;
+    return classFilterName ? { ...f, [key]: [classFilterName] } : f;
+  }
+  function gridItemFilter(): ItemFilterQuery {
+    return withSidebarClass(
+      itemFilter.toQuery((p) => withoutOpenVocab(p) && p !== 'max_rank'),
+      'class_name',
+    );
+  }
+  function matchingQuery(): ItemFilterQuery {
+    return withSidebarClass(itemFilter.toQuery(), 'class_name');
+  }
+  function matchingBody(): ItemFilter {
+    return withSidebarClass(itemFilter.toBody(), 'class_names');
+  }
+  const gridFilterKey = $derived(JSON.stringify(gridItemFilter()));
+  function syncFilterUrl(): void {
+    const url = new URL(page.url);
+    itemFilter.toUrl(url.searchParams);
+    if (matchingModeActive) url.searchParams.set('mode', 'matching');
+    else url.searchParams.delete('mode');
+    void goto(resolve(projectHref(`/clusters${url.search}`)), {
+      replaceState: true,
+      keepFocus: true,
+    });
+  }
+  function enterMatchingMode(): void {
+    if (searchModeActive) exitSearchMode();
+    if (ignoredModeActive) exitIgnoredMode();
+    if (itemTextModeActive) exitItemTextMode();
+    matchingModeActive = true;
+    syncFilterUrl();
+  }
+  function exitMatchingMode(): void {
+    matchingModeActive = false;
+    // The open-vocabulary pair only exists in this view.
+    itemFilter.openVocabSet = null;
+    itemFilter.sourcePrompt = null;
+    syncFilterUrl();
+  }
 
   // The backend stores a slot's regions as a *sub-bbox* on each item
   // (`region_boxes`), NOT as standalone docs in the cluster index. So
@@ -473,7 +543,7 @@
   // unfiltered clusters over a filtered page 1.
   function clusterQuery(page: number): ClusterFilter {
     return {
-      class_id: classFilter ?? undefined,
+      ...gridItemFilter(),
       sort,
       page,
       page_size: pageSize,
@@ -778,6 +848,7 @@
     void classFilter;
     void maxRank;
     void minBlurRatio;
+    void gridFilterKey;
     if (!isSlotFilter) untrack(() => void loadFirst());
   });
 
@@ -899,7 +970,7 @@
     {#if semanticSearchAvailable && !isSlotFilter}
       <SemanticSearchBox
         pageSize={200}
-        filter={classFilter != null ? { class_id: classFilter } : {}}
+        filter={{ ...gridItemFilter() }}
         initialQuery={page.url.searchParams.get('q')}
         onQueryChange={(q) => (searchQuery = q)}
         onResults={(res) => {
@@ -956,6 +1027,19 @@
       title="Crops excluded from training + clustering"
     >
       {ignoredModeActive ? '✓ ' : ''}Ignored
+    </button>
+
+    <!-- Every item the shared filter matches, with run-on-selection actions. -->
+    <button
+      type="button"
+      onclick={() => (matchingModeActive ? exitMatchingMode() : enterMatchingMode())}
+      class="btn-sm border text-xs transition-colors {matchingModeActive
+        ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
+        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
+      data-testid="matching-mode-toggle"
+      title="List every item the filter below matches, and act on all of them"
+    >
+      {matchingModeActive ? '✓ ' : ''}Matching items
     </button>
 
     <span class="grow"></span>
@@ -1063,6 +1147,21 @@
       </div>
     {/if}
   </div>
+
+  <!-- Shared item filter: scopes the cluster grid, or the Matching items list. -->
+  {#if !isSlotFilter && !ignoredModeActive && !searchModeActive && !itemTextModeActive}
+    <div
+      class="border-b border-zinc-800 bg-zinc-900/40 px-4 py-2"
+      data-testid="clusters-filter-bar"
+    >
+      <ItemFilterBar
+        state={itemFilter}
+        visible={(p) => p !== 'max_rank'}
+        showOpenVocab={matchingModeActive}
+        onchange={syncFilterUrl}
+      />
+    </div>
+  {/if}
 
   <!-- Grid -->
   <div class="flex-1 overflow-auto p-4">
@@ -1186,6 +1285,13 @@
           ondetail={(c) => (detailSearchCrop = c)}
         />
       {/if}
+    {:else if matchingModeActive}
+      <MatchingItemsView
+        query={matchingQuery}
+        body={matchingBody}
+        onexit={exitMatchingMode}
+        ondetail={(c) => (detailSearchCrop = c)}
+      />
     {:else if showEmbeddingViz}
       <!-- Replaces the card grid entirely (plan §5.6 — no layout thrash
            from showing both at once). Lazily mounted: this is the only
@@ -1353,7 +1459,9 @@
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    {#if ignoredModeActive}
+    {#if matchingModeActive}
+      <span class="font-mono text-xs text-zinc-400">matching items</span>
+    {:else if ignoredModeActive}
       <span class="font-mono text-xs text-zinc-500" data-testid="clusters-footer-count">
         {ignoredItems.length} / {ignoredTotal} ignored crops
       </span>

@@ -101,10 +101,11 @@ describe('review page: class/source/conf filters are sent unconditionally (no se
     expect(src).not.toMatch(/DEEP_LINK_MAX_ITEMS/);
   });
 
-  it('_filter() sends class_id/source/conf_min/conf_max', () => {
+  it('_filter() sends the shared item filter (class by name) and source/conf_min/conf_max', () => {
     const filterFnStart = src.indexOf('function _filter()');
     const filterFnBody = src.slice(filterFnStart, src.indexOf('\n  }\n', filterFnStart));
-    expect(filterFnBody).toMatch(/if \(classFilter != null\) f\.class_id = classFilter;/);
+    expect(filterFnBody).toMatch(/Object\.assign\(f, itemFilterQuery\);/);
+    expect(filterFnBody).not.toMatch(/class_id/);
     expect(filterFnBody).toMatch(/if \(sourceFilter\) f\.source = sourceFilter;/);
     expect(filterFnBody).toMatch(/if \(confMin > 0\) f\.conf_min = confMin;/);
     expect(filterFnBody).toMatch(/if \(confMax < 1\) f\.conf_max = confMax;/);

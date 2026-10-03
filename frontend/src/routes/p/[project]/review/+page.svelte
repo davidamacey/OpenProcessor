@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { enumFilterSelection } from '$lib/review/enumFilter';
+  import ItemFilterBar from '$lib/components/itemFilter/ItemFilterBar.svelte';
+  import ServedFilterField from '$lib/components/itemFilter/ServedFilterField.svelte';
+  import {
+    ItemFilterState,
+    withoutOpenVocab,
+  } from '$lib/itemFilter/itemFilterState.svelte';
+  import { ITEM_FILTER_PARAMS } from '$lib/itemFilter/itemFilterControls';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
@@ -21,6 +27,7 @@
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import MultiBoxCanvas from '$lib/components/MultiBoxCanvas.svelte';
+  import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
@@ -268,13 +275,15 @@
 
   function termFilters(): Record<string, unknown> {
     // Server-side, scope.filters on POST {API_PREFIX}/select/diverse only supports
-    // term/terms filters (class_id, source) — NOT conf_min/conf_max/
+    // term/terms filters (class_name, source) — NOT conf_min/conf_max/
     // min_blur_ratio/max_rank/region text. Those controls are disabled in
     // the UI while diverseMode is active (see the filter bar below) so
     // this never silently drops something the operator thinks is applied.
     const f: Record<string, unknown> = {};
     if (sourceFilter) f.source = sourceFilter;
-    if (classFilter != null) f.class_id = classFilter;
+    // scope.filters are exact-match terms keyed by index field; a list
+    // becomes a `terms` clause.
+    if (itemFilter.classNames.length > 0) f.class_name = [...itemFilter.classNames];
     return f;
   }
 
@@ -488,7 +497,28 @@
   // the same value under `source` too — the OpenProcessor 1327181 naming
   // sweep (F9) removed `?hdd_source=` outright, so both call sites agree.
   let sourceFilter = $state<string>('');
-  let classFilter = $state<number | null>(null);
+  // The shared item filter (class by name, origin, embedding / review state,
+  // area band), seeded from the URL and persisted back to it. Conf and the
+  // largest-N toggle keep their own controls below; the bar never draws them.
+  const itemFilter = new ItemFilterState();
+  itemFilter.fromUrl(page.url.searchParams);
+  const PAGE_OWNED_PARAMS = new Set(['conf_min', 'conf_max', 'max_rank']);
+  function itemFilterVisible(param: string): boolean {
+    if (PAGE_OWNED_PARAMS.has(param) || !withoutOpenVocab(param)) return false;
+    // POST /select/diverse's scope.filters only takes exact terms.
+    if (diverseMode) return param === 'class_name';
+    return filterVisible(param);
+  }
+  const itemFilterQuery = $derived(
+    itemFilter.toQuery(
+      (p) => !PAGE_OWNED_PARAMS.has(p) && withoutOpenVocab(p) && filterVisible(p),
+    ),
+  );
+  function persistItemFilter(): void {
+    const url = new URL(page.url);
+    itemFilter.toUrl(url.searchParams);
+    replaceState(resolve(projectHref(`/review${url.search}`)), {});
+  }
   let confMin = $state<number>(0);
   let confMax = $state<number>(1);
   // Slot text search — only meaningful on a slot tab with a text filter;
@@ -508,26 +538,52 @@
     'crop_id',
     'import_id',
     'combine_conflict',
+    ...ITEM_FILTER_PARAMS,
   ]);
-  let enumFilterValues = $state<Record<string, string>>(
+  type ServedFilterValue = string | string[];
+  let enumFilterValues = $state<Record<string, ServedFilterValue>>(
     Object.fromEntries(
-      [...page.url.searchParams.entries()].filter(
-        ([k]) => !NON_ENUM_FILTER_PARAMS.has(k),
-      ),
+      [...new Set(page.url.searchParams.keys())]
+        .filter((k) => !NON_ENUM_FILTER_PARAMS.has(k))
+        .map((k): [string, ServedFilterValue] => {
+          const all = page.url.searchParams.getAll(k);
+          return [k, all.length > 1 ? all : all[0]!];
+        }),
     ),
   );
-  const activeFilterSpecs = $derived(
+  const servedSpecs = $derived(
     reviewTabsVocabularyStore.filterSpecsFor(activeTabEndpointId),
+  );
+  // Params this page draws itself (the shared bar, the Source box, the
+  // strategy bar's sort / mistakenness / near-duplicate controls, the blur
+  // slider, the slot text box and the URL-seeded chips); every other served
+  // spec is drawn generically by its kind.
+  const SELF_DRAWN_PARAMS = new Set([
+    ...ITEM_FILTER_PARAMS,
+    'source',
+    'sort',
+    'min_blur_ratio',
+    'min_mistakenness',
+    'hide_near_duplicates',
+    'import_id',
+    'combine_conflict',
+  ]);
+  const activeFilterSpecs = $derived(
+    servedSpecs.filter(
+      (s) =>
+        !SELF_DRAWN_PARAMS.has(s.param) &&
+        s.param !== activeSlot?.capabilities.queue?.textFilter?.param,
+    ),
   );
   // Exactly the enum params _filter() sends: only those the active tab's
   // served filter_specs declare. The refetch effect keys on this, not on
   // enumFilterValues, so a URL-seeded ?region_status= that arrives before
   // /review/tabs has loaded still triggers a refetch once the spec lands.
-  const activeEnumParams = $derived.by<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
+  const activeEnumParams = $derived.by<Record<string, ServedFilterValue>>(() => {
+    const out: Record<string, ServedFilterValue> = {};
     for (const spec of activeFilterSpecs) {
       const value = enumFilterValues[spec.param];
-      if (value) out[spec.param] = value;
+      if (value && value.length > 0) out[spec.param] = value;
     }
     return out;
   });
@@ -566,13 +622,12 @@
     url.searchParams.delete(param);
     replaceState(resolve(projectHref(`/review${url.search}`)), {});
   }
-  function setEnumFilter(param: string, value: string): void {
+  function setEnumFilter(param: string, value: ServedFilterValue): void {
     enumFilterValues = { ...enumFilterValues, [param]: value };
     const url = new URL(page.url);
-    if (value) {
-      url.searchParams.set(param, value);
-    } else {
-      url.searchParams.delete(param);
+    url.searchParams.delete(param);
+    for (const v of Array.isArray(value) ? value : value ? [value] : []) {
+      url.searchParams.append(param, v);
     }
     replaceState(resolve(projectHref(`/review${url.search}`)), {});
   }
@@ -590,14 +645,14 @@
 
   function _filter(): Record<string, unknown> {
     const f: Record<string, unknown> = {};
-    // GET /review/{tab} accepts class_id/source/conf_min/conf_max as of
+    // GET /review/{tab} accepts class_name (by name, repeatable)/source/conf_min/conf_max as of
     // the 2026-09-24 logic-moves cutover (item 14/G3 — verified live
     // against the real backend). Diverse mode disables these controls
     // (see the filter bar below) since POST {API_PREFIX}/select/diverse's
     // `scope.filters` doesn't support conf_min/conf_max at all, and
-    // takes class_id/source through its own `termFilters()` instead of
+    // takes class_name/source through its own `termFilters()` instead of
     // this function.
-    if (classFilter != null) f.class_id = classFilter;
+    Object.assign(f, itemFilterQuery);
     if (sourceFilter) f.source = sourceFilter;
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
@@ -767,7 +822,7 @@
   // per keystroke.
   // Guards this effect the same way lastFilterKey guards the debounced one
   // below: observed live, this effect's body can execute an extra time
-  // for the same tab/preset/classFilter/subjectScope/minBlurRatio values
+  // for the same tab/preset/subjectScope/minBlurRatio values
   // (a harmless Svelte/SvelteKit-dev re-run, not a real dependency
   // change) — without a same-key guard, that spurious extra run still
   // unconditionally cancels+invalidates the in-flight diverse selection
@@ -778,14 +833,13 @@
   $effect(() => {
     void tab;
     void preset;
-    void classFilter;
     void subjectScope;
     void minBlurRatio;
     if (waitingForVocabulary) return;
-    const key = JSON.stringify([tab, preset, classFilter, subjectScope, minBlurRatio]);
+    const key = JSON.stringify([tab, preset, subjectScope, minBlurRatio]);
     if (key === lastImmediateKey) return;
     lastImmediateKey = key;
-    // effectiveTab/class_id changes invalidate any in-progress diverse
+    // effectiveTab/class-name changes invalidate any in-progress diverse
     // selection (P2-10) — the pool it was drawn from no longer matches
     // the current scope. Cancel any running job too; a stale poll left
     // running after the operator moved on would eventually resolve into
@@ -830,6 +884,7 @@
     void strategyBar.k;
     void activeEnumParams;
     void activeUrlFilters;
+    void itemFilterQuery;
     if (waitingForVocabulary) return;
     const key = JSON.stringify([
       sourceFilter,
@@ -842,6 +897,7 @@
       strategyBar.k,
       activeEnumParams,
       activeUrlFilters,
+      itemFilterQuery,
     ]);
     // The first run only records the starting filters: the immediate
     // effect above already loads page 1, and fetching it a second time
@@ -924,7 +980,7 @@
   // R3: the operator's own narrowing filters (never the strategy bar's
   // sort) — an empty queue under these may just be filtered empty.
   const clientFiltersActive = $derived(
-    classFilter != null ||
+    !itemFilter.isEmpty ||
       sourceFilter !== '' ||
       confMin > 0 ||
       confMax < 1 ||
@@ -975,12 +1031,6 @@
     quickAssignClasses(classesStore.classes, currentHintIds, 10),
   );
   const pickerClasses = $derived(itemClassTargets(classesStore.classes));
-
-  // Non-deprecated classes for the filter dropdown (P2-1). classesStore.classes
-  // is unfiltered; every other class-offering surface in the app already
-  // excludes deprecated (ClassSidebar.svelte:111, ClassSubsetPicker.svelte:35,
-  // ShortcutOverlay.svelte:15) — this dropdown was the one that didn't.
-  const filterableClasses = $derived(classesStore.classes.filter((c) => !c.deprecated));
 
   // P1-5: what Enter/Confirm would actually assign, or null when there's
   // nothing to confirm (67/100 `all`-tab items today). Drives the Confirm
@@ -1762,6 +1812,8 @@
               url.searchParams.delete(param);
             }
             enumFilterValues = {};
+            itemFilter.clear();
+            itemFilter.toUrl(url.searchParams);
             // The URL-seeded filters are per-tab too.
             url.searchParams.delete('import_id');
             url.searchParams.delete('combine_conflict');
@@ -1916,17 +1968,13 @@
       </label>
     {/if}
 
-    {#if filterVisible('class_id')}
-      <label class="flex shrink-0 items-center gap-1.5">
-        <span class="text-zinc-400">Class</span>
-        <select bind:value={classFilter} class="select-sm">
-          <option value={null}>any</option>
-          {#each filterableClasses as cls (cls.id)}
-            <option value={cls.id}>{cls.name}</option>
-          {/each}
-        </select>
-      </label>
-    {/if}
+    <ItemFilterBar
+      state={itemFilter}
+      visible={itemFilterVisible}
+      served={servedSpecs}
+      onchange={persistItemFilter}
+      rootClass="contents"
+    />
 
     {#if filterVisible('conf_min') || filterVisible('conf_max')}
       <label
@@ -1981,22 +2029,18 @@
          verifier-rejected candidates only). No param-specific markup —
          a future spec on any tab renders here unchanged. -->
     {#each activeFilterSpecs as spec (spec.param)}
-      <label class="flex shrink-0 items-center gap-1.5">
-        <span class="text-zinc-400">{spec.label}</span>
-        <select
-          value={enumFilterSelection(
-            spec,
-            enumFilterValues[spec.param],
-            reviewTabsVocabularyStore.filterDefault(activeTabEndpointId, spec.param),
-          )}
-          onchange={(e) => setEnumFilter(spec.param, e.currentTarget.value)}
-          class="select-sm"
-        >
-          {#each spec.options as opt (opt.value)}
-            <option value={opt.value}>{opt.label}</option>
-          {/each}
-        </select>
-      </label>
+      <ServedFilterField
+        {spec}
+        value={enumFilterValues[spec.param]}
+        servedDefault={(() => {
+          const d = reviewTabsVocabularyStore.filterDefault(
+            activeTabEndpointId,
+            spec.param,
+          );
+          return d == null ? null : String(d);
+        })()}
+        onchange={setEnumFilter}
+      />
     {/each}
 
     <!-- Always available, on every tab and preset — matches Conf/Class/HDD
@@ -2346,6 +2390,9 @@
               </span>
             {/if}
           </div>
+          {#if current}
+            <VectorRefreshNotice cropId={current.id} refresh={multiBox.vectorRefresh} />
+          {/if}
         {/if}
 
         <!-- Everything below the image scrolls in its own region — the

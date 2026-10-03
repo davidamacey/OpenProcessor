@@ -23,6 +23,7 @@ import {
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { Crop } from '$lib/types';
+import type { VectorRefresh } from '$lib/types_itemFilter';
 import type { SlotData } from '$lib/annotations/types';
 import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
@@ -61,6 +62,10 @@ function cropWithBoxes(
       },
     },
   } as unknown as Crop;
+}
+
+function written(crop: Crop, vectorRefresh: VectorRefresh | null = null) {
+  return { crop, vectorRefresh };
 }
 
 const boxA = makeSlotBox({
@@ -115,7 +120,7 @@ describe('createMultiBoxRegionController', () => {
 
   it('acceptSelected PATCHes the selected box and reseeds from the server item', async () => {
     const returned = cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }, boxB]);
-    vi.mocked(patchRegionBox).mockResolvedValue(returned);
+    vi.mocked(patchRegionBox).mockResolvedValue(written(returned));
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
     await c.acceptSelected('c1');
@@ -140,7 +145,7 @@ describe('createMultiBoxRegionController', () => {
       { ...boxA, state: 'accepted' },
       boxB, // still rejected — a whole-set confirm never overrides a per-box decision
     ]);
-    vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+    vi.mocked(putRegionBoxes).mockResolvedValue(written(returned));
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
     const result = await c.confirmAndSave('c1');
@@ -154,7 +159,7 @@ describe('createMultiBoxRegionController', () => {
 
   it('confirmAndSave sends a moved box AND a new box in the same write', async () => {
     const returned = cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }]);
-    vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+    vi.mocked(putRegionBoxes).mockResolvedValue(written(returned));
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA]));
     c.moveSelected({ cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 });
@@ -169,7 +174,7 @@ describe('createMultiBoxRegionController', () => {
 
   it('records a region undo entry on every successful write', async () => {
     const returned = cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }]);
-    vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+    vi.mocked(putRegionBoxes).mockResolvedValue(written(returned));
     const spy = vi.spyOn(undoStore, 'recordRegionWrites');
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA]));
@@ -190,7 +195,7 @@ describe('createMultiBoxRegionController', () => {
   describe('saveEdits (SlotBboxEditor modal — no confirm semantics)', () => {
     it('sends the geometry diff with no region_status key, unlike confirmAndSave', async () => {
       const returned = cropWithBoxes('c1', [{ ...boxA, state: 'proposed' }]);
-      vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+      vi.mocked(putRegionBoxes).mockResolvedValue(written(returned));
       const c = createMultiBoxRegionController(() => widgetTagSlot);
       c.seedFrom(cropWithBoxes('c1', [boxA]));
       c.moveSelected({ cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 });
@@ -205,7 +210,7 @@ describe('createMultiBoxRegionController', () => {
 
     it('never promotes a proposed box to accepted (no confirm semantics)', async () => {
       const returned = cropWithBoxes('c1', [{ ...boxA, state: 'proposed' }]);
-      vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+      vi.mocked(putRegionBoxes).mockResolvedValue(written(returned));
       const c = createMultiBoxRegionController(() => widgetTagSlot);
       c.seedFrom(cropWithBoxes('c1', [boxA]));
       c.moveSelected({ cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 });
@@ -216,7 +221,7 @@ describe('createMultiBoxRegionController', () => {
 
     it('records a region undo entry and reports the new item on success', async () => {
       const returned = cropWithBoxes('c1', [{ ...boxA, state: 'proposed' }]);
-      vi.mocked(putRegionBoxes).mockResolvedValue(returned);
+      vi.mocked(putRegionBoxes).mockResolvedValue(written(returned));
       const spy = vi.spyOn(undoStore, 'recordRegionWrites');
       const c = createMultiBoxRegionController(() => widgetTagSlot);
       c.seedFrom(cropWithBoxes('c1', [boxA]));
@@ -241,10 +246,10 @@ describe('createMultiBoxRegionController', () => {
   describe('region revision (optimistic concurrency)', () => {
     it('echoes the served region_revision as expected_region_revision on every write kind', async () => {
       vi.mocked(patchRegionBox).mockResolvedValue(
-        cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 5),
+        written(cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 5)),
       );
       vi.mocked(putRegionBoxes).mockResolvedValue(
-        cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 6),
+        written(cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 6)),
       );
       const c = createMultiBoxRegionController(() => widgetTagSlot);
       c.seedFrom(cropWithBoxes('c1', [boxA], 4));
@@ -326,7 +331,7 @@ describe('createMultiBoxRegionController', () => {
 
     it('reports every returned item through onitem', async () => {
       const returned = cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }], 5);
-      vi.mocked(patchRegionBox).mockResolvedValue(returned);
+      vi.mocked(patchRegionBox).mockResolvedValue(written(returned));
       const onitem = vi.fn();
       const c = createMultiBoxRegionController(() => widgetTagSlot, { onitem });
       c.seedFrom(cropWithBoxes('c1', [boxA], 4));
@@ -338,7 +343,7 @@ describe('createMultiBoxRegionController', () => {
   describe('setSelectedText (a reading is per box)', () => {
     it('PATCHes the selected stored box with the text and the revision', async () => {
       vi.mocked(patchRegionBox).mockResolvedValue(
-        cropWithBoxes('c1', [{ ...boxA, text: 'TAG-002' }], 5),
+        written(cropWithBoxes('c1', [{ ...boxA, text: 'TAG-002' }], 5)),
       );
       const c = createMultiBoxRegionController(() => widgetTagSlot);
       c.seedFrom(cropWithBoxes('c1', [boxA, boxB], 4));
@@ -351,7 +356,9 @@ describe('createMultiBoxRegionController', () => {
     });
 
     it('clears a reading with null (not undefined)', async () => {
-      vi.mocked(patchRegionBox).mockResolvedValue(cropWithBoxes('c1', [boxA], 5));
+      vi.mocked(patchRegionBox).mockResolvedValue(
+        written(cropWithBoxes('c1', [boxA], 5)),
+      );
       const c = createMultiBoxRegionController(() => widgetTagSlot);
       c.seedFrom(cropWithBoxes('c1', [boxA], 4));
       await c.setSelectedText('c1', null);
@@ -398,5 +405,58 @@ describe('createMultiBoxRegionController', () => {
       const c = createMultiBoxRegionController(() => null);
       expect(c.maxBoxes).toBeNull();
     });
+  });
+});
+
+describe('vector_refresh (boxes without a vector)', () => {
+  it('keeps the last served value from a write and exposes it', async () => {
+    const returned = cropWithBoxes('c1', [{ ...boxA, state: 'accepted' }, boxB]);
+    vi.mocked(patchRegionBox).mockResolvedValue(
+      written(returned, { embedded: 1, pending: 2 }),
+    );
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    expect(c.vectorRefresh).toBeNull();
+    await c.acceptSelected('c1');
+    expect(c.vectorRefresh).toEqual({ embedded: 1, pending: 2 });
+  });
+
+  it('a later write replaces it, and a null (not served) clears it', async () => {
+    const returned = cropWithBoxes('c1', [boxA, boxB]);
+    vi.mocked(putRegionBoxes).mockResolvedValueOnce(
+      written(returned, { embedded: 0, pending: 3 }),
+    );
+    vi.mocked(putRegionBoxes).mockResolvedValueOnce(written(returned, null));
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    await c.saveEdits('c1');
+    expect(c.vectorRefresh?.pending).toBe(3);
+    await c.saveEdits('c1');
+    expect(c.vectorRefresh).toBeNull();
+  });
+
+  it('survives a re-seed of the same crop (the page re-seeds after its own write)', async () => {
+    const returned = cropWithBoxes('c1', [boxA, boxB]);
+    vi.mocked(putRegionBoxes).mockResolvedValue(
+      written(returned, { embedded: 0, pending: 1 }),
+    );
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    await c.saveEdits('c1');
+    c.seedFrom(returned);
+    expect(c.vectorRefresh).toEqual({ embedded: 0, pending: 1 });
+  });
+
+  it('is cleared when the next item is seeded', async () => {
+    const returned = cropWithBoxes('c1', [boxA, boxB]);
+    vi.mocked(putRegionBoxes).mockResolvedValue(
+      written(returned, { embedded: 0, pending: 1 }),
+    );
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    await c.saveEdits('c1');
+    expect(c.vectorRefresh).not.toBeNull();
+    c.seedFrom(cropWithBoxes('c2', [boxA]));
+    expect(c.vectorRefresh).toBeNull();
   });
 });

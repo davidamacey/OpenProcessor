@@ -32,11 +32,11 @@ CLASSES = [
 # max_rank default of 2 (so its subject-toggle "unset" label should read
 # "Top 2").
 REVIEW_TABS = review_tabs(
-    review_tab("all", "All", filters=["class_id", "source"]),
+    review_tab("all", "All", filters=["class_name", "source"]),
     review_tab(
         "primary_low_conf",
         "Primary low-conf",
-        filters=["class_id", "source", "max_rank", "min_blur_ratio", "conf_min", "conf_max"],
+        filters=["class_name", "source", "max_rank", "min_blur_ratio", "conf_min", "conf_max"],
         filter_defaults={"max_rank": 2},
     ),
 )
@@ -80,9 +80,13 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
     assert page.locator('div:has(> span:text-is("subject"))').count() == 0
     assert page.locator('label[title*="Hide crops blurrier"]').count() == 0
     assert page.locator('label:has-text("Conf")').count() == 0
-    # class_id/source ARE served — those controls must render.
-    assert page.locator('label:has-text("Class")').count() >= 1
+    # class_name/source ARE served — those controls must render.
+    assert page.get_by_test_id("served-filter-class_name").count() == 1
     assert page.locator('label:has-text("Source")').count() >= 1
+    # The shared item filter's other controls are absent, not disabled, on a
+    # tab whose served list does not name them.
+    for param in ("exclude_class_name", "origin", "embedding_state", "review_status", "min_area"):
+        assert page.get_by_test_id(f"served-filter-{param}").count() == 0, param
 
 
 def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page, app_url):

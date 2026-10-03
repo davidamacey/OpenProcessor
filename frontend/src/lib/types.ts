@@ -942,7 +942,6 @@ export interface SelectJobStatus {
  *  (`ItemFilterQuery`: class names, confidence and area bands, `max_rank`,
  *  origin, embedding and review state) plus this route's own keys. */
 export interface CropFilter extends ItemFilterQuery {
-  class_id?: number | null;
   cluster_id?: number | null;
   label_source?: LabelSource;
   /** Original label source (where the class came from). Matches the
@@ -1015,8 +1014,10 @@ export interface CropContextResponse {
   items: Crop[];
 }
 
-export interface ClusterFilter {
-  class_id?: number | null;
+export interface ClusterFilter extends Omit<
+  ItemFilterQuery,
+  'open_vocab_set' | 'source_prompt'
+> {
   /** DQ-M4 (docs/design/data-quality-pass-2026-09-24.md): restrict to
    *  exactly one cluster, so its representatives can be fetched
    *  individually in the frontend's own (client-sorted) display order —
@@ -1247,7 +1248,7 @@ export interface UndoEntry {
    * thing on purpose: it's bound to its own `X`/`U` keys, never `Z`, so
    * there's no ordering question to get right by sharing a stack.
    */
-  kind?: 'label' | 'region' | 'vlm_dismiss';
+  kind?: 'label' | 'region' | 'vlm_dismiss' | 'exclude' | 'unexclude';
 }
 
 // -- ingest --

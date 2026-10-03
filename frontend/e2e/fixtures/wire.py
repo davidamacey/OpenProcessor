@@ -346,7 +346,13 @@ def make_item(**overrides: Any) -> dict[str, Any]:
 # param /review knows; a stubbed tab honours all of them unless a test
 # narrows `filters`.
 REVIEW_FILTER_PARAMS = [
-    "class_id",
+    "class_name",
+    "exclude_class_name",
+    "min_area",
+    "max_area",
+    "origin",
+    "embedding_state",
+    "review_status",
     "source",
     "conf_min",
     "conf_max",
