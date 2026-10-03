@@ -31,6 +31,9 @@ OPEN_VOCAB_ITEM_MAPPING: dict[str, Any] = {
 #: ``pending`` (queued by ingest, or the segmenter was down) | ``done`` | ``failed``.
 OPEN_VOCAB_IMAGE_MAPPING: dict[str, Any] = {
     'open_vocab_status': {'type': 'keyword'},
+    # When the status was last stamped: the sweeper leaves a fresh ``pending``
+    # to the drain that queued it.
+    'open_vocab_status_at': {'type': 'date'},
 }
 
 

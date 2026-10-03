@@ -6,8 +6,10 @@ After the ingest response is built, newly created images of an active set with
 ``run_on_ingest`` are stamped ``open_vocab_status: pending`` (the durable
 record) and drained by a background task of this process, one image at a time
 across all requests. An image the drain does not reach (segmenter down, process
-restart) stays ``pending``, and ``POST /reprocess`` with the image selector
-``open_vocab_status: ["pending"]`` and scope ``open_vocab`` picks it up.
+restart) stays ``pending`` until the sweeper
+(:mod:`~src.services.curation.open_vocab_sweeper`) or a ``POST /reprocess`` with
+the image selector ``open_vocab_status: ["pending"]`` and scope ``open_vocab``
+picks it up.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ _PASS_LOCK = asyncio.Lock()
 _tasks: set[asyncio.Task[None]] = set()
 
 
-async def _drain(
+async def drain(
     opensearch: AsyncOpenSearch,
     service: CurationIngestService,
     ov: OpenVocabSet,
@@ -81,7 +83,7 @@ async def schedule_open_vocab_after_ingest(
     except Exception as exc:
         logger.warning('open_vocab_ingest_schedule_failed', error=str(exc))
         return False
-    coro = _drain(opensearch, service, ov, revision, image_ids, segment or segment_image_http)
+    coro = drain(opensearch, service, ov, revision, image_ids, segment or segment_image_http)
     task = asyncio.create_task(coro)
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -94,4 +96,4 @@ async def wait_for_scheduled() -> None:
         await asyncio.gather(*_tasks, return_exceptions=True)
 
 
-__all__ = ['schedule_open_vocab_after_ingest', 'wait_for_scheduled']
+__all__ = ['drain', 'schedule_open_vocab_after_ingest', 'wait_for_scheduled']

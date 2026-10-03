@@ -23,6 +23,7 @@ import io
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from src.clients.curation_opensearch import get_class_registry
@@ -347,7 +348,12 @@ async def stamp_open_vocab_status(opensearch: AsyncOpenSearch, image_id: str, st
         await opensearch.update(
             index=get_curation_config().images_index,
             id=image_id,
-            body={'doc': {'open_vocab_status': status}},
+            body={
+                'doc': {
+                    'open_vocab_status': status,
+                    'open_vocab_status_at': datetime.now(UTC).isoformat(),
+                }
+            },
         )
     except Exception as exc:
         logger.warning(

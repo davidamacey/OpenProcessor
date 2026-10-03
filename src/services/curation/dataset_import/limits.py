@@ -53,6 +53,18 @@ def reprocess_sync_max() -> int:
     return _positive_int(os.environ.get('OP_REPROCESS_SYNC_MAX'), 20)
 
 
+def open_vocab_sweep_interval_s() -> int:
+    """Seconds between sweeps of images left ``pending`` by the ingest-time
+    open-vocabulary pass; ``0`` turns the sweeper off."""
+    raw = os.environ.get('OP_OPEN_VOCAB_SWEEP_S')
+    if raw is None or not raw.strip():
+        return 120
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 120
+
+
 def open_vocab_concurrency() -> int:
     """Images of the full-image SAM 3 pass in flight at once (each fans out
     one segmenter call per target, so calls in flight <= this x targets)."""
