@@ -4667,6 +4667,9 @@
             "title": "Defaults",
             "type": "object"
           },
+          "monitoring_links": {
+            "$ref": "#/components/schemas/MonitoringLinks"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -7322,6 +7325,8 @@
           "dedup_threshold": {
             "anyOf": [
               {
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -7453,6 +7458,26 @@
       "ExportStatusResponse": {
         "description": "``GET /export/status``: the last completed multi-class export.\n\n``idle`` = no export yet (every other field ``null``); ``unknown`` =\nthe ``current`` export exists but its manifest is missing or\nunreadable (only ``path``/``export_dir`` set); ``success`` = every\nfield below read from that export's ``manifest.json``.\nA field the manifest doesn't record (an export written before it\nexisted) is ``null``.\n\nThe export has one image file + one label file per source image:\n``image_count`` / ``split_counts`` count images, ``object_count`` /\n``split_object_counts`` count objects (label lines), and\n``class_split_counts`` counts objects per class per split.",
         "properties": {
+          "blocking_reasons": {
+            "description": "Why not, in the words the export route's 422 uses; empty when exportable.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking Reasons",
+            "type": "array"
+          },
+          "can_export": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether ``POST /export/yolo`` would run now (an unfiltered export). ``null`` when the cohort could not be counted. Covers the pre-scan refusal; a row-level refusal (no box / unregistered class) can still 422 at export time.",
+            "title": "Can Export"
+          },
           "class_count": {
             "anyOf": [
               {
@@ -7699,6 +7724,8 @@
           "dedup_threshold": {
             "anyOf": [
               {
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -11880,6 +11907,46 @@
         "title": "ModelSharingUser",
         "type": "object"
       },
+      "MonitoringLinks": {
+        "description": "Browser-reachable monitoring UIs; each ``null`` when not configured\n(``OP_GRAFANA_URL`` / ``OP_PROMETHEUS_URL`` / ``OP_DASHBOARDS_URL``).",
+        "properties": {
+          "grafana": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grafana"
+          },
+          "opensearch_dashboards": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opensearch Dashboards"
+          },
+          "prometheus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prometheus"
+          }
+        },
+        "title": "MonitoringLinks",
+        "type": "object"
+      },
       "NextStep": {
         "properties": {
           "action": {
@@ -14691,6 +14758,145 @@
           "message"
         ],
         "title": "ProjectWarning",
+        "type": "object"
+      },
+      "ProjectionError": {
+        "description": "404 / 503 body: ``error`` is the machine-readable discriminator.",
+        "properties": {
+          "error": {
+            "enum": [
+              "projection_not_built",
+              "projection_unavailable"
+            ],
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ProjectionError",
+        "type": "object"
+      },
+      "ProjectionPoint": {
+        "properties": {
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "class_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Source"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "crop_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crop Id"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          }
+        },
+        "title": "ProjectionPoint",
+        "type": "object"
+      },
+      "ProjectionResponse": {
+        "description": "``GET /viz/projection`` 200 body (cached coordinates).",
+        "properties": {
+          "fitted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fitted At"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectionPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "projection_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Version"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "points",
+          "stale"
+        ],
+        "title": "ProjectionResponse",
         "type": "object"
       },
       "ProjectsResponse": {
@@ -23560,6 +23766,39 @@
             "title": "Axis",
             "type": "string"
           },
+          "dedup_threshold_default": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dedup Threshold Default"
+          },
+          "dedup_threshold_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dedup Threshold Max"
+          },
+          "dedup_threshold_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dedup Threshold Min"
+          },
           "default": {
             "title": "Default",
             "type": "boolean"
@@ -23633,6 +23872,17 @@
             "title": "Label",
             "type": "string"
           },
+          "max_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max K"
+          },
           "per_run_ack_required": {
             "anyOf": [
               {
@@ -23654,6 +23904,17 @@
               }
             ],
             "title": "Requires Field"
+          },
+          "select_max_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Select Max K"
           },
           "sends_images_externally": {
             "anyOf": [
@@ -24406,6 +24667,17 @@
               }
             ],
             "title": "Error"
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Seconds"
           },
           "eval": {
             "anyOf": [
@@ -34235,7 +34507,7 @@
     },
     "/curation/projects/{project}/export/status": {
       "get": {
-        "description": "Last completed export — the ``current`` symlink's manifest, if any.",
+        "description": "Last completed export — the ``current`` symlink's manifest, if any —\nplus whether a new export is possible (``can_export`` /\n``blocking_reasons``, from the same cohort query the export runs).",
         "operationId": "export_status_curation_projects__project__export_status_get",
         "parameters": [
           {
@@ -44982,7 +45254,7 @@
     },
     "/curation/projects/{project}/viz/projection": {
       "get": {
-        "description": "Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers\na fit (see ``embedding_viz.get_cached_projection``'s docstring and\n``tests/curation/test_curation_viz_router.py::\ntest_get_projection_never_imports_or_calls_fit`` for the enforcement).\nReturns ``{'status': 'not_built'}`` if nothing has been fit yet.",
+        "description": "Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers\na fit (see ``embedding_viz_read.get_cached_projection``'s docstring and\n``tests/curation/test_curation_viz_router.py::\ntest_get_projection_never_imports_or_calls_fit`` for the enforcement).\n``404`` ``projection_not_built``: nothing has been fit yet (rebuild it).\n``503`` ``projection_unavailable``: the read failed; a projection may\nexist, so retry rather than rebuild.",
         "operationId": "viz_projection_curation_projects__project__viz_projection_get",
         "parameters": [
           {
@@ -45044,11 +45316,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Viz Projection Curation Projects  Project  Viz Projection Get"
+                  "$ref": "#/components/schemas/ProjectionResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionError"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "422": {
             "content": {
@@ -45059,6 +45341,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Viz Projection",

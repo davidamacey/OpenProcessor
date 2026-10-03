@@ -206,6 +206,13 @@ class CurationConfig:
     # ``null`` rather than leaking the internal hostname.
     mlflow_public_url: str | None = None
 
+    # Browser-reachable monitoring UIs, served on ``GET /settings`` as
+    # ``monitoring_links``. ``None`` = not configured / stack not running
+    # (the UI hides the link); no port is assumed.
+    grafana_url: str | None = None
+    prometheus_url: str | None = None
+    dashboards_url: str | None = None
+
     # Confidence floor gating the item wire's `probe_actionable` field
     # (see `src.services.curation.wire.serialize_item` and
     # `docs/design/curation_api_contract.md`). `probe_actionable` is true
@@ -371,6 +378,9 @@ class CurationConfig:
             api_prefix=_str('API_PREFIX', defaults.api_prefix),
             api_tag=_str('API_TAG', defaults.api_tag),
             mlflow_public_url=_optional_str('MLFLOW_PUBLIC_URL', defaults.mlflow_public_url),
+            grafana_url=_optional_str('GRAFANA_URL', defaults.grafana_url),
+            prometheus_url=_optional_str('PROMETHEUS_URL', defaults.prometheus_url),
+            dashboards_url=_optional_str('DASHBOARDS_URL', defaults.dashboards_url),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
             encoder_embedding_dim=_int('ENCODER_EMBEDDING_DIM', defaults.encoder_embedding_dim),
             backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),

@@ -240,3 +240,42 @@ def test_prompt_pack_paths_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_prompt_pack_paths_unset_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_PROMPT_PACK_PATHS', raising=False)
     assert CurationConfig.from_env().prompt_pack_paths == ()
+
+
+# =============================================================================
+# OP_GRAFANA_URL / OP_PROMETHEUS_URL / OP_DASHBOARDS_URL (served monitoring_links)
+# =============================================================================
+
+
+def test_monitoring_urls_default_to_none_and_read_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ('OP_GRAFANA_URL', 'OP_PROMETHEUS_URL', 'OP_DASHBOARDS_URL'):
+        monkeypatch.delenv(name, raising=False)
+    cfg = CurationConfig.from_env()
+    assert (cfg.grafana_url, cfg.prometheus_url, cfg.dashboards_url) == (None, None, None)
+    monkeypatch.setenv('OP_GRAFANA_URL', ' http://g:1 ')
+    monkeypatch.setenv('OP_DASHBOARDS_URL', 'http://d:2')
+    cfg = CurationConfig.from_env()
+    assert (cfg.grafana_url, cfg.prometheus_url, cfg.dashboards_url) == (
+        'http://g:1',
+        None,
+        'http://d:2',
+    )
+
+
+def test_settings_response_serves_monitoring_links_from_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.routers.curation._common_models import CurationSettingsResponse
+
+    monkeypatch.setattr(
+        'src.config.get_curation_config',
+        lambda: CurationConfig(
+            grafana_url='http://g:1', prometheus_url=None, dashboards_url='http://d:2'
+        ),
+    )
+    links = CurationSettingsResponse().monitoring_links
+    assert links.model_dump() == {
+        'grafana': 'http://g:1',
+        'prometheus': None,
+        'opensearch_dashboards': 'http://d:2',
+    }

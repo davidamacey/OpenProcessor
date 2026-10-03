@@ -148,6 +148,23 @@ def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestC
     assert body['flags']['select_diverse_enabled'] is False
 
 
+def test_diverse_overlay_serves_the_real_k_limits(app_client: TestClient) -> None:
+    """The served limits are the ones the routes enforce (openapi ``maximum``)."""
+    entry = next(
+        s
+        for s in app_client.get('/curation/projects/default/methods').json()['strategies']
+        if s['id'] == 'diverse'
+    )
+    schema = app_client.app.openapi()
+    crops = next(
+        p for path, ops in schema['paths'].items() if path.endswith('/crops') for p in [ops['get']]
+    )
+    k_param = next(p for p in crops['parameters'] if p['name'] == 'k')
+    assert entry['max_k'] == k_param['schema']['anyOf'][0]['maximum']
+    body_schema = schema['components']['schemas']['SelectDiverseRequest']['properties']['k']
+    assert entry['select_max_k'] == body_schema['maximum']
+
+
 def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -557,3 +574,26 @@ def test_every_sort_with_requires_field_has_integer_coverage(app_client: TestCli
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+def test_export_entries_serve_dedup_default_and_range(app_client: TestClient) -> None:
+    from src.services.detection.frame_dedup import DEFAULT_FRAME_DEDUP_THRESHOLD
+
+    body = app_client.get('/curation/projects/default/methods').json()
+    exports = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
+    for entry in exports.values():
+        assert entry['dedup_threshold_default'] == DEFAULT_FRAME_DEDUP_THRESHOLD == 0.98
+        assert (entry['dedup_threshold_min'], entry['dedup_threshold_max']) == (0.0, 1.0)
+
+
+def test_export_requests_enforce_the_served_dedup_range() -> None:
+    from pydantic import ValidationError
+
+    from src.routers.curation._common import ExportSingleClassRequest, ExportYoloRequest
+
+    ExportYoloRequest(dedup_threshold=1.0)
+    for bad in (-0.1, 1.01):
+        with pytest.raises(ValidationError):
+            ExportYoloRequest(dedup_threshold=bad)
+        with pytest.raises(ValidationError):
+            ExportSingleClassRequest(profile_name='p', class_ids=[1], dedup_threshold=bad)

@@ -112,7 +112,6 @@ EMBEDDING_FIELD = 'pe_embedding'
 
 # max_result_window is 10000; get_cached_projection() pages with search_after
 # in chunks of this size instead of a single oversized `size: max_points`.
-_VIZ_PROJECTION_PAGE_SIZE = 5000
 
 # Job pool cap. Residual-scope fetch has no built-in cap (unlike
 # selection.pool_fetch's `cap` kwarg), so this module samples down to
@@ -447,15 +446,6 @@ async def _save_run_metadata(
         logger.warning('curation_umap_viz_state_metadata_save_failed', error=str(exc))
 
 
-async def _load_run_metadata(opensearch: AsyncOpenSearch) -> dict[str, Any] | None:
-    try:
-        resp = await opensearch.get(index=umap_viz_state_index(), id='current')
-    except Exception as exc:
-        logger.debug('curation_umap_viz_state_metadata_not_found', error=str(exc))
-        return None
-    return resp.get('_source') or None
-
-
 async def _bulk_write_coordinates(
     opensearch: AsyncOpenSearch,
     ids: list[str],
@@ -582,101 +572,6 @@ async def run_projection_job(
             await ticker
 
 
-def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:
-    src = h.get('_source') or {}
-    return {
-        'crop_id': h['_id'],
-        'x': src.get('viz_x'),
-        'y': src.get('viz_y'),
-        'cluster_id': src.get('cluster_id'),
-        'class_name': src.get('class_name'),
-        'class_source': src.get('class_source'),
-    }
-
-
-async def get_cached_projection(
-    opensearch: AsyncOpenSearch,
-    *,
-    cluster_id: int | None = None,
-    class_id: int | None = None,
-    max_points: int = 50_000,
-) -> dict[str, Any]:
-    """Serve **cached coordinates only** — imports nothing UMAP-related,
-    calls no fit function, does one plain ``search`` over already-written
-    ``viz_x``/``viz_y`` fields. This is the entire GET
-    ``/curation/viz/projection`` contract (module docstring point 2).
-
-    Returns ``{'status': 'not_built'}`` when no projection has ever been
-    fit. Otherwise ``{points, projection_version, fitted_at, stale}`` where
-    ``stale`` is True iff there exist crops matching the requested scope
-    (embedding present, not test_holdout) whose cached
-    ``viz_projection_version`` doesn't match the latest fit's version --
-    i.e. some in-scope crops are missing/outdated coordinates, the same
-    "partial coverage is visible" philosophy ``/curation/scores/coverage`` uses.
-    """
-    meta = await _load_run_metadata(opensearch)
-    if meta is None:
-        return {'status': 'not_built'}
-
-    scope_must: list[dict[str, Any]] = [embedded_clause(EMBEDDING_FIELD)]
-    scope_must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
-    if cluster_id is not None:
-        scope_must.append({'term': {'cluster_id': cluster_id}})
-    if class_id is not None:
-        scope_must.append({'term': {'class_id': class_id}})
-
-    points_query = {
-        'bool': {
-            'filter': [*scope_must, {'exists': {'field': 'viz_x'}}],
-            'must_not': scope_must_not,
-        }
-    }
-    points: list[dict[str, Any]] = []
-    search_after: list[Any] | None = None
-    while len(points) < max_points:
-        page_size = min(_VIZ_PROJECTION_PAGE_SIZE, max_points - len(points))
-        body: dict[str, Any] = {
-            'size': page_size,
-            'query': points_query,
-            '_source': ['viz_x', 'viz_y', 'cluster_id', 'class_name', 'class_source'],
-            'sort': [{'crop_id': 'asc'}],
-            'track_total_hits': False,
-        }
-        if search_after is not None:
-            body['search_after'] = search_after
-        resp = await opensearch.search(index=items_index(), body=body)
-        hits = resp.get('hits', {}).get('hits') or []
-        if not hits:
-            break
-        points.extend(_point_from_hit(h) for h in hits)
-        if len(hits) < page_size:
-            break
-        search_after = hits[-1]['sort']
-
-    stale = False
-    try:
-        missing_query = {
-            'bool': {
-                'filter': scope_must,
-                'must_not': [
-                    *scope_must_not,
-                    {'term': {'viz_projection_version': meta.get('projection_version', '')}},
-                ],
-            }
-        }
-        count_resp = await opensearch.count(index=items_index(), body={'query': missing_query})
-        stale = int(count_resp.get('count', 0)) > 0
-    except Exception as exc:
-        logger.warning('curation_viz_projection_staleness_check_failed', error=str(exc))
-
-    return {
-        'points': points,
-        'projection_version': meta.get('projection_version'),
-        'fitted_at': meta.get('fitted_at'),
-        'stale': stale,
-    }
-
-
 __all__ = [
     'DEFAULT_MAX_N',
     'VIZ_METRIC',
@@ -687,7 +582,6 @@ __all__ = [
     'VIZ_RANDOM_STATE',
     'cancel_job',
     'fit_projection',
-    'get_cached_projection',
     'get_state',
     'is_cancelled',
     'reconcile_orphaned_jobs',

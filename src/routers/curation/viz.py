@@ -29,10 +29,11 @@ entry for how the measured purity maps to this entry's
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
 
@@ -103,7 +104,36 @@ async def viz_projection_cancel() -> dict[str, Any]:
     return {'cancelled': cancelled, **embedding_viz.get_state()}
 
 
-@router.get('/viz/projection')
+class ProjectionPoint(BaseModel):
+    crop_id: str | None = None
+    x: float | None = None
+    y: float | None = None
+    cluster_id: int | None = None
+    class_name: str | None = None
+    class_source: str | None = None
+
+
+class ProjectionResponse(BaseModel):
+    """``GET /viz/projection`` 200 body (cached coordinates)."""
+
+    points: list[ProjectionPoint]
+    projection_version: str | None = None
+    fitted_at: str | None = None
+    stale: bool
+
+
+class ProjectionError(BaseModel):
+    """404 / 503 body: ``error`` is the machine-readable discriminator."""
+
+    error: Literal['projection_not_built', 'projection_unavailable']
+    message: str
+
+
+@router.get(
+    '/viz/projection',
+    response_model=ProjectionResponse,
+    responses={404: {'model': ProjectionError}, 503: {'model': ProjectionError}},
+)
 async def viz_projection(
     opensearch: OpenSearchDep,
     cluster_id: int | None = Query(None),
@@ -111,10 +141,12 @@ async def viz_projection(
     max_points: int = Query(50_000, ge=1, le=200_000),
 ) -> Any:
     """Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers
-    a fit (see ``embedding_viz.get_cached_projection``'s docstring and
+    a fit (see ``embedding_viz_read.get_cached_projection``'s docstring and
     ``tests/curation/test_curation_viz_router.py::
     test_get_projection_never_imports_or_calls_fit`` for the enforcement).
-    Returns ``{'status': 'not_built'}`` if nothing has been fit yet.
+    ``404`` ``projection_not_built``: nothing has been fit yet (rebuild it).
+    ``503`` ``projection_unavailable``: the read failed; a projection may
+    exist, so retry rather than rebuild.
     """
     if not _viz_enabled():
         raise HTTPException(
@@ -123,14 +155,31 @@ async def viz_projection(
         )
     await _ensure_indexes(opensearch)
 
-    from src.services.curation import embedding_viz
+    from src.services.curation import embedding_viz_read
 
-    return await embedding_viz.get_cached_projection(
-        opensearch,
-        cluster_id=cluster_id,
-        class_id=class_id,
-        max_points=max_points,
-    )
+    try:
+        return await embedding_viz_read.get_cached_projection(
+            opensearch,
+            cluster_id=cluster_id,
+            class_id=class_id,
+            max_points=max_points,
+        )
+    except embedding_viz_read.ProjectionNotBuiltError:
+        return JSONResponse(
+            status_code=404,
+            content=ProjectionError(
+                error='projection_not_built',
+                message='no projection has been built yet; POST /viz/projection/rebuild',
+            ).model_dump(),
+        )
+    except embedding_viz_read.ProjectionUnavailableError:
+        return JSONResponse(
+            status_code=503,
+            content=ProjectionError(
+                error='projection_unavailable',
+                message='the projection could not be read; retry shortly',
+            ).model_dump(),
+        )
 
 
 __all__ = ['DEFAULT_MAX_N']

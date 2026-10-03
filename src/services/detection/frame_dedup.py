@@ -32,6 +32,9 @@ if TYPE_CHECKING:
 
 
 DEFAULT_FRAME_DEDUP_THRESHOLD = 0.98
+# Accepted range for an export's ``dedup_threshold`` (cosine similarity cut).
+FRAME_DEDUP_THRESHOLD_MIN = 0.0
+FRAME_DEDUP_THRESHOLD_MAX = 1.0
 DEFAULT_EMBEDDING_FIELD = 'pe_embedding'
 
 

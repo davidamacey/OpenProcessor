@@ -20,6 +20,7 @@ from src.routers.curation._selection import SelectionTargets
 from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_filter import ItemFilter  # noqa: TC001 - pydantic field type
+from src.services.detection.frame_dedup import FRAME_DEDUP_THRESHOLD_MAX, FRAME_DEDUP_THRESHOLD_MIN
 
 
 # =============================================================================
@@ -279,7 +280,9 @@ class ExportYoloRequest(BaseModel):
     # Optional whole-frame near-dup cut (cosine on the images index's
     # secondary embedding). e.g. 0.98 collapses near-identical bursts to
     # one image; None disables.
-    dedup_threshold: float | None = None
+    dedup_threshold: float | None = Field(
+        default=None, ge=FRAME_DEDUP_THRESHOLD_MIN, le=FRAME_DEDUP_THRESHOLD_MAX
+    )
     # False (default): an image that also holds unreviewed objects (or
     # objects on a class the export leaves out) is exported with its
     # validated objects labeled; the manifest counts the rest, and training
@@ -331,7 +334,9 @@ class ExportSingleClassRequest(BaseModel):
     # Optional whole-frame near-dup cut (cosine on the images index's
     # secondary embedding). e.g. 0.98 collapses near-identical bursts to
     # one frame; None disables.
-    dedup_threshold: float | None = None
+    dedup_threshold: float | None = Field(
+        default=None, ge=FRAME_DEDUP_THRESHOLD_MIN, le=FRAME_DEDUP_THRESHOLD_MAX
+    )
     # 'whole_frame' (full source frame) or 'item_crop' (parent item crop
     # with the region re-projected) — for whole-image vs crop training
     # A/B. 'item_crop' requires box_source='region'.
@@ -474,6 +479,26 @@ class CropFlagNewClassRequest(BaseModel):
     note: str = ''
 
 
+class MonitoringLinks(BaseModel):
+    """Browser-reachable monitoring UIs; each ``null`` when not configured
+    (``OP_GRAFANA_URL`` / ``OP_PROMETHEUS_URL`` / ``OP_DASHBOARDS_URL``)."""
+
+    grafana: str | None = None
+    prometheus: str | None = None
+    opensearch_dashboards: str | None = None
+
+
+def monitoring_links_from_config() -> MonitoringLinks:
+    from src.config import get_curation_config
+
+    cfg = get_curation_config()
+    return MonitoringLinks(
+        grafana=cfg.grafana_url,
+        prometheus=cfg.prometheus_url,
+        opensearch_dashboards=cfg.dashboards_url,
+    )
+
+
 class CurationSettingsResponse(BaseModel):
     """``GET,PUT /curation/settings`` response envelope.
 
@@ -488,6 +513,7 @@ class CurationSettingsResponse(BaseModel):
     defaults: dict[str, str] = Field(default_factory=dict)
     updated_at: str | None = None
     updated_by: str | None = None
+    monitoring_links: MonitoringLinks = Field(default_factory=monitoring_links_from_config)
 
 
 class CurationSettingsUpdateRequest(BaseModel):

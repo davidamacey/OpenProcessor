@@ -14,6 +14,17 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ## [0.4.0] - 2026-10-03
 
 ### Added
+
+- Served facts so the frontend stops computing or hardcoding them:
+  `GET /export/status` gains `can_export` / `blocking_reasons` (same cohort
+  query and message the export's 422 uses); `GET /methods` export entries serve
+  `dedup_threshold_default` / `_min` / `_max` (export requests now reject a
+  `dedup_threshold` outside 0..1) and the `diverse` overlay serves `max_k` /
+  `select_max_k`; `GET /settings` serves `monitoring_links`
+  (`OP_GRAFANA_URL` / `OP_PROMETHEUS_URL` / `OP_DASHBOARDS_URL`, null when
+  unset); train status serves `eta_seconds`. `GET /viz/projection` now answers
+  `404 projection_not_built` vs `503 projection_unavailable` (was `200
+  {"status": "not_built"}` for both) with a typed 200 body.
 - `POST /curation/projects/{project}/classes/seed_from_detector`: create registry classes from the ingest detector's labels by name (dry run by default, idempotent, labels with spaces become slugs).
 - `GET /curation/projects/{project}/ingest/config` returns a `detector` block (model, label list with raw name and slug, `assigns_class`) and the project `policy`.
 - `embedding_state` on every item (`embedded`, `failed`, `deferred`, `not_selected`; null for older items). An encoder failure at ingest is now marked `failed` and counted (`n_embedded`, `n_not_embedded` per image and in the batch summary) instead of silently storing a vectorless item.

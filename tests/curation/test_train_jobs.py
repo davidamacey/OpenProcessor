@@ -1033,3 +1033,37 @@ def test_hyperparameters_reject_top_level_spec_fields() -> None:
             hyperparameters={'include_classes': [1], 'epochs': 3},
         )
     TrainJobSpec(dataset_export_dir='/data/exports/x', hyperparameters={'epochs': 3})
+
+
+# =============================================================================
+# eta_seconds: served from epoch timing, never written by the trainer
+# =============================================================================
+
+
+def _eta_status(**kw) -> train_jobs.TrainJobStatus:
+    base = {'job_id': 'j1', 'state': 'running', 'current_epoch': 4, 'total_epochs': 10}
+    return train_jobs.TrainJobStatus(**{'epoch_time_s': 30.0, **base, **kw})
+
+
+def test_eta_is_remaining_epochs_times_last_epoch_time() -> None:
+    wired = train_jobs._prepare_status_for_wire(_eta_status())
+    assert wired.eta_seconds == 180.0
+
+
+@pytest.mark.parametrize(
+    'override',
+    [
+        {'state': 'finished'},
+        {'state': 'queued'},
+        {'epoch_time_s': None},
+        {'epoch_time_s': 0.0},
+        {'current_epoch': None},
+        {'total_epochs': None},
+    ],
+)
+def test_eta_is_null_without_usable_timing(override: dict) -> None:
+    assert train_jobs._prepare_status_for_wire(_eta_status(**override)).eta_seconds is None
+
+
+def test_eta_never_negative_past_total() -> None:
+    assert train_jobs.training_eta_seconds(_eta_status(current_epoch=12)) == 0.0
