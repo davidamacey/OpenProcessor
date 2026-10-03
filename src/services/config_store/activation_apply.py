@@ -65,6 +65,12 @@ async def activate_and_apply(
         config_revision=result['config_revision'],
         **{active_field: ref, f'{active_field}_body': body_ref},
     )
+    if axis == 'detection_profile':
+        # The profile's region class must exist in the project registry the
+        # moment it is active; a no-op when it already does or none is named.
+        from src.services.curation.region_class import ensure_region_class
+
+        ensure_region_class()
     return result
 
 
