@@ -32,7 +32,7 @@ import type {
   TrainedModel,
   TrainedModelForDataset,
 } from '$lib/types_bakeoff';
-import { buildRunRequest, isTerminal, selectedModelRefs } from './view';
+import { buildRunRequest, isTerminal } from './view';
 
 export interface BakeoffApi {
   profiles: typeof bakeoffProfiles;
@@ -236,10 +236,6 @@ export function createBakeoffController(
     };
   }
 
-  function modelCount(): number {
-    return selectedModelRefs(selection()).length;
-  }
-
   async function submit(): Promise<boolean> {
     s.runError = null;
     s.submitting = true;
@@ -347,7 +343,6 @@ export function createBakeoffController(
     setBaselineSelected,
     addCustom,
     removeCustom,
-    modelCount,
     submit,
     pollOnce,
     viewRun,

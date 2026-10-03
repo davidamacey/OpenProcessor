@@ -49,10 +49,6 @@ export const WIDGET_TAG_PROFILE_NO_TEXT: ServedRegionProfile = {
   limits: { max_boxes_per_write: 500 },
 };
 
-export const widgetTagServedSlotNoText: SlotSpec = regionSlotFromServedProfile(
-  WIDGET_TAG_PROFILE_NO_TEXT,
-);
-
 const served = widgetTagServedSlot;
 const wire = served.capabilities;
 

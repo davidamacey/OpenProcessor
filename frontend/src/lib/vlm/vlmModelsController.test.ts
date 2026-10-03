@@ -162,15 +162,11 @@ describe('activation', () => {
     expect(models.active.actionError).toBe(
       'cloud_vlm sends crops outside this deployment.',
     );
-    expect(models.active.ackRequired).toEqual({
-      endpoint: 'cloud_vlm',
-      activateVia: 'settings/models',
-      message: 'cloud_vlm sends crops outside this deployment.',
-    });
+    expect(models.active.errorDetail?.error).toBe('vlm_external_not_acknowledged');
     expect(
       await models.active.activate('cloud_vlm', 1, false, { acknowledge_external: true }),
     ).toBe(true);
-    expect(models.active.ackRequired).toBeNull();
+    expect(models.active.errorDetail).toBeNull();
     expect(deps.activateVlm.mock.calls[1]![1]).toMatchObject({
       acknowledge_external: true,
     });

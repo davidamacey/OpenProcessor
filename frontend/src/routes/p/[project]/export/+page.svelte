@@ -342,7 +342,7 @@
   // identical to "no source data at all".
   let hddSourcesError = $state<string | null>(null);
   // Pull from the same {API_PREFIX}/stats/dataset response — the existing `getStats`
-  // surface only exposes per_class + ingestion summary; we hit the
+  // surface only exposes per_class summary; we hit the
   // dataset-stats endpoint directly via fetch for the by_source bucket.
   // The thin {API_PREFIX}/stats/dataset response carries an `by_source` HDD bucket
   // array which `getStats` (typed to StatsSummary) doesn't surface. Hit it

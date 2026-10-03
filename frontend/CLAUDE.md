@@ -1669,7 +1669,7 @@ below).
 
 The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over
 every non-deprecated class — the top-10 quick-assign row under the crop
-(`classesStore.topNForCluster(0, 10)`) only ever surfaces the most-validated
+(`quickAssignClasses`, `src/lib/classPicker.ts`) only ever surfaces the most-validated
 classes, leaving the long tail (including brand-new, zero-sample classes)
 reachable only via `/classes` without it. `/` is reserved
 (`RESERVED_HOTKEY_LETTERS` in `src/lib/classHotkey.ts`) so a class can never
@@ -2104,7 +2104,7 @@ verifier | human | classifier | proposal`) via `paletteForRole`
   shared source image's metadata plus every item cropped from it
   (siblings, including the requested crop, mapped through `mapRawCrop`
   like any other crop list). The image itself is served separately by
-  `getSourceImageScaled`/`getSourceImageFull` (`{API_PREFIX}/crops/{id}/image`).
+  `getSourceImageScaled` (`{API_PREFIX}/crops/{id}/image`).
 
 ## Client-side source-image overlay (K6, 2026-09-24)
 

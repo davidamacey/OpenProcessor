@@ -2,7 +2,7 @@
  * Logic for the `/review` (and eventually `/clusters/[id]`) type-to-search
  * class picker — audit remediation plan Phase 7, P1-4/P1-5.
  *
- * `topNForCluster(0, 10)` (classesStore) caps quick-assign at the 10
+ * `quickAssignClasses` caps quick-assign at the 10
  * most-validated classes; 73 of 84 classes require a round-trip to
  * `/classes` to become assignable, which is exactly where the labeling
  * debt concentrates (44 classes at zero validated, including brand-new
@@ -45,7 +45,7 @@ function isSubsequence(name: string, query: string): boolean {
 /**
  * Search every non-deprecated class by name. Empty query returns the full
  * non-deprecated set ordered by validated_count desc (same ordering
- * `topNForCluster` uses, just not truncated to 10) so opening the picker
+ * `quickAssignClasses` uses, just not truncated to 10) so opening the picker
  * with no query still shows something useful before the operator types.
  *
  * `limit` truncates the *rendered* list (the combobox doesn't want an

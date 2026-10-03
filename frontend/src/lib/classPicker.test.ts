@@ -31,7 +31,7 @@ function cls(over: Partial<RegistryClass> & { id: number; name: string }): Regis
 
 // A pool shaped like the audit finding: 84 classes, only a handful with any
 // validated_count, `scion` among the zero-sample ones that can never climb
-// into topNForCluster(0, 10) on its own.
+// into quickAssignClasses on its own.
 function bigPool(): RegistryClass[] {
   const out: RegistryClass[] = [];
   for (let i = 0; i < 80; i++) {
@@ -74,11 +74,11 @@ describe('searchClasses', () => {
     const results = searchClasses(pool, '');
     expect(pool).toHaveLength(84);
     expect(results).toHaveLength(83); // 84 - 1 deprecated
-    // Still ordered most-validated-first, same convention as topNForCluster.
+    // Still ordered most-validated-first, same convention as quickAssignClasses.
     expect(results[0].name).toBe('class_0');
   });
 
-  it('finds a zero-sample, zero-validated class like "scion" that topNForCluster(0, 10) would never surface', () => {
+  it('finds a zero-sample, zero-validated class like "scion" that quickAssignClasses would never surface', () => {
     const pool = bigPool();
     const results = searchClasses(pool, 'sci');
     expect(results.map((c) => c.name)).toContain('scion');

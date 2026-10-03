@@ -1759,10 +1759,6 @@ export interface DatasetStats {
   };
 }
 
-export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
-  return apiFetch<DatasetStats>(`${scoped()}/stats/dataset`, {}, signal);
-}
-
 /**
  * `GET /stats/dataset?<item filter>` `total_crops` — how many items the
  * served filter matches (the `/export` "Matching items" line). `null` when
@@ -1785,7 +1781,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   //   {API_PREFIX}/stats/dataset:  {total_crops, validated, test_holdout, by_source}
   //   {API_PREFIX}/stats/classes:  {classes:[{class_id, class_name, count, validated_count}, ...]}
   // The labeler dashboard expects StatsSummary which uses validated_crops /
-  // test_holdout_crops / per_class / ingestion.* — fold the two server
+  // test_holdout_crops / per_class — fold the two server
   // payloads into that shape so the dashboard can render directly.
   type RawDataset = {
     total_crops?: number;
@@ -1809,21 +1805,12 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   const ds: RawDataset = dsResult.status === 'fulfilled' ? dsResult.value : {};
   const cls: RawClasses =
     clsResult.status === 'fulfilled' ? clsResult.value : { classes: [] };
-  const totalImages = (ds.by_source ?? []).reduce(
-    (acc, b) => acc + (b.doc_count || 0),
-    0,
-  );
   return {
     dataset_error:
       dsResult.status === 'rejected' ? (dsResult.reason as Error).message : null,
     total_crops: ds.total_crops ?? 0,
     validated_crops: ds.validated ?? 0,
     test_holdout_crops: ds.test_holdout ?? 0,
-    ingestion: {
-      images_processed: totalImages,
-      images_pending: 0,
-      last_run_at: null,
-    },
     per_class: cls.classes.map((c) => ({
       class_id: c.class_id,
       class_name: c.class_name,
@@ -2566,7 +2553,7 @@ export function getCropHistory(
  * `GET {API_PREFIX}/crops/{id}/context` — the crop's shared source image
  * metadata plus every item cropped from it (siblings, including the
  * requested crop). The image itself is served by `/crops/{id}/image`
- * (`getSourceImageScaled`/`getSourceImageFull`) — as of K6 this is a
+ * (`getSourceImageScaled`) — as of K6 this is a
  * clean image with no server-drawn boxes; `SourceImageOverlay.svelte`
  * draws every box/label from this response's `items`.
  */
@@ -4584,10 +4571,6 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
   return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
 }
 
-export function getSourceImageUrl(cropId: string): string {
-  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image`;
-}
-
 /**
  * Source image downscaled to ~`maxDim`px on the longest side — plenty
  * for `SourceImageOverlay`'s client-drawn boxes to be readable without
@@ -4595,17 +4578,10 @@ export function getSourceImageUrl(cropId: string): string {
  * k6-frontend-overlay-plan-2026-09-24.md): the backend no longer burns
  * any box/label into this image (`getSourceImageWithBbox` — the
  * server-overlay-era name — is retired; `SourceImageOverlay` draws
- * everything itself from `getCropContext`). Callers that need a
- * pixel-accurate frame (e.g. SlotBboxEditor) should hit
- * ``getSourceImageFull`` instead.
+ * everything itself from `getCropContext`).
  */
 export function getSourceImageScaled(cropId: string, maxDim: number = 1280): string {
   return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
-}
-
-/** Full-resolution source image; used by SlotBboxEditor where pixel accuracy matters. */
-export function getSourceImageFull(cropId: string): string {
-  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image`;
 }
 
 // -- training endpoints --------------------------------------------------

@@ -29,7 +29,6 @@ function read(rel: string): string {
 
 const ASSIGNMENT_SURFACES = [
   'src/lib/classPicker.ts',
-  'src/lib/stores/classes.svelte.ts',
   'src/lib/components/ClassSidebar.svelte',
   'src/routes/p/[project]/clusters/[id]/+page.svelte',
   'src/lib/components/EmbeddingPlot.svelte',

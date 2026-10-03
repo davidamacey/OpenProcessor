@@ -134,18 +134,6 @@ export interface SlotBox {
   thumbnailUrl: string | null;
 }
 
-/** Served `GET /regions/statuses` `box_states` entry (W8.7). */
-export interface BoxStateInfo {
-  value: string;
-  label: string;
-  role: 'proposed' | 'accepted' | 'rejected' | 'false_positive';
-  humanWritable: boolean;
-  exported: boolean;
-  dashed: boolean;
-  dim: boolean;
-  badge: string | null;
-}
-
 export interface SubBoxCapability {
   /**
    * EITHER `listField` (a multi-box list: the served region slot) OR
