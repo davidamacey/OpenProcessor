@@ -213,7 +213,12 @@ def test_every_compose_service_rotates_its_logs() -> None:
 
 def test_every_compose_service_has_a_memory_reservation() -> None:
     for name, svc in _compose_services().items():
-        assert svc.get('mem_reservation'), f'{name}: no mem_reservation'
+        # Compose 2.29 rejects mem_reservation next to deploy.resources.reservations,
+        # so GPU services state the same soft floor under deploy.
+        deploy_mem = (
+            svc.get('deploy', {}).get('resources', {}).get('reservations', {}).get('memory')
+        )
+        assert svc.get('mem_reservation') or deploy_mem, f'{name}: no memory reservation'
 
 
 def test_opensearch_memory_reservation_follows_the_heap() -> None:

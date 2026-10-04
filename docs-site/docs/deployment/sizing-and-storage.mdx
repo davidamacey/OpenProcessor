@@ -88,6 +88,6 @@ with the stack stopped) on your own schedule, and prune old `backups/` and
 ## Documentation container
 
 Source checkouts can serve the docs locally with
-`docker compose --profile docs up -d --build docs`, then open
+`docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d --build docs`, then open
 `http://localhost:4613/OpenProcessor/` (`DOCS_PORT`). The public site is built
 from `docs-site/` by `.github/workflows/docs.yml`.

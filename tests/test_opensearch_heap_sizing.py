@@ -1,7 +1,7 @@
 """OpenSearch heap sizing from host RAM (projects plan 2.3, installer plan 11.1 #8).
 
 The rule lives in exactly one place, scripts/lib/opensearch_heap.sh:
-heap = clamp(floor(RAM_GiB / 8), 1, 8) GB. Both config generators (the
+heap = clamp(floor(RAM_GiB / 2), 2, 30) GB. Both config generators (the
 one-line installer and scripts/lib/config.sh) use it, and neither ever
 overwrites an OPENSEARCH_HEAP the user already set.
 """
@@ -25,7 +25,7 @@ GIB_KIB = 1024 * 1024
 
 
 def _expected_heap(ram_gib: int) -> str:
-    return f'{min(8, max(1, ram_gib // 8))}g'
+    return f'{min(30, max(2, ram_gib // 2))}g'
 
 
 def _meminfo(tmp_path: Path, ram_gib: int) -> Path:
@@ -51,9 +51,9 @@ def _bash(script: str, **env: str) -> subprocess.CompletedProcess:
 
 @pytest.mark.parametrize(
     ('ram_gib', 'heap'),
-    [(7, '1g'), (16, '2g'), (32, '4g'), (64, '8g'), (128, '8g')],
+    [(3, '2g'), (7, '3g'), (16, '8g'), (32, '16g'), (64, '30g'), (128, '30g')],
 )
-def test_heap_for_host_is_ram_over_8_clamped(tmp_path: Path, ram_gib: int, heap: str) -> None:
+def test_heap_for_host_is_half_of_ram_clamped(tmp_path: Path, ram_gib: int, heap: str) -> None:
     assert _expected_heap(ram_gib) == heap
     result = _bash(
         f'source "{HEAP_LIB}"; opensearch_heap_for_host',
@@ -129,7 +129,7 @@ def test_config_sh_env_file_heap_comes_from_host_ram(tmp_path: Path) -> None:
     proj = _project(tmp_path)
     result = _generate(proj, _meminfo(tmp_path, 32), 'generate_env_file standard 0')
     assert result.returncode == 0, result.stderr
-    assert re.search(r'^OPENSEARCH_HEAP=4g$', (proj / '.env').read_text(), re.MULTILINE)
+    assert re.search(r'^OPENSEARCH_HEAP=16g$', (proj / '.env').read_text(), re.MULTILINE)
 
 
 def test_config_sh_forced_regen_keeps_a_user_heap(tmp_path: Path) -> None:

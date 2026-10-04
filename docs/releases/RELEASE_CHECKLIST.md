@@ -49,8 +49,7 @@ All decisions are final (owner, 4 Oct 2026). The only step left is the owner's g
   Rationale: this is OpenSearch's own sizing guidance, and the existing warn/refuse
   behavior already tells operators when to raise the heap.
 - **Docs hosting: DECIDED.** Both. A public GitHub Pages site built from `docs-site/` by
-  `.github/workflows/docs.yml`, and a local docs container (`docker compose --profile docs
-  up -d --build docs`, port 4613) for source checkouts. Rationale: Pages is free and
+  `.github/workflows/docs.yml`, and a local docs container (`docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d --build docs`, port 4613) for source checkouts. Rationale: Pages is free and
   already built in CI; the container serves offline readers. Owner one-time steps (not done):
   Settings > Pages > Source "GitHub Actions"; allow `main` on the `github-pages` environment;
   run the workflow by hand once from `main`. The docs image is not in `images.lock` or

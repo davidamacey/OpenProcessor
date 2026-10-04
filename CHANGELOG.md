@@ -14,7 +14,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ### Added
 - Every compose service rotates its logs (`json-file`, 10 MB x 5) and has a `mem_reservation` (OpenSearch reserves its heap size).
 - Installer warns when `vm.max_map_count` is below 262144, with the fix.
-- Optional `docs` compose profile serving the documentation site locally (port 4613); new "Memory, disk and storage" page.
+- Optional `docker-compose.docs.yml` overlay serving the documentation site locally (port 4613); new "Memory, disk and storage" page.
 - Release gate: the seven `linux-libc-dev` kernel-header CVEs (headers only, no upstream fix) are allowlisted per CVE with a reason (#110).
 
 ### Changed
