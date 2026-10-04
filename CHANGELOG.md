@@ -44,7 +44,6 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 ### Known issues
 - Trivy remainder (#110): the trainer image pins `mlflow>=2.18,<3` to match the server, and its mlflow 2.x CVEs clear only with a deliberate 3.x move of client and server together.
 - Export can run out of memory when Triton and the API share a 12 GB card (#111).
-- Trainer status reports GPU index 0 regardless of the GPU used (#112).
 
 ### Verified
 - Installer acceptance on 4 Oct 2026: clean install, lifecycle, upgrade/rollback and teardown, plus the installed-stack end-to-end run (ingest, cluster, VLM, export, train, promote, inference, delete) all passed.
