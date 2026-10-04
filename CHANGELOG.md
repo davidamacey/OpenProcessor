@@ -75,6 +75,25 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - Docs: replaced the Cropwright "Screenshot pending" placeholders with real captures from the
   public COCO sample projects (#43).
 
+### Fixed (live verification)
+
+- The queue, embedding-state and OpenSearch shard/store gauges now populate: the
+  refresh loop binds each project (and the registry-admin scope for
+  `_cat/indices`, by concrete index name) instead of running unbound and being
+  refused by the project guard (#123).
+- `op_ingest_*` counters carry the real project slug instead of `other` when this
+  process's registry snapshot lags; `other` is still only beyond
+  `OP_METRICS_MAX_PROJECT_LABELS` (#124).
+- Prompt-pack create, save, clone and validate keep `proposal_denylist`, validate
+  it (list of strings, no blank pattern, at most 500 patterns of 200 characters)
+  and the pack editor schema lists it as a `list` field (#125).
+- `openprocessor vlm use|probe` on an install without `OP_LOCAL_VLM_ENDPOINT`
+  explains how to enable the in-compose VLM; documented in the VLM guide and
+  `INSTALLATION.md`.
+- A `?wait=true` promote no longer stops mid-load when the client or a proxy drops
+  the connection; docs say to use the `202` job and polling behind a proxy
+  (`wait=true` needs a client timeout of at least 300 s).
+
 ## [0.4.0] - 2026-10-04
 
 OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend
