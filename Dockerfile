@@ -89,6 +89,10 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# The base image's pip vendors msgpack / setuptools / urllib3 builds that
+# Trivy flags (HIGH, fixed upstream); a current pip vendors fixed ones.
+RUN pip install --no-cache-dir --upgrade pip
+
 # Non-root user with video group for GPU access
 RUN groupadd -r appuser && \
     useradd -r -g appuser -G video -u 1000 -m -s /bin/bash appuser && \
