@@ -381,6 +381,12 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
 # ---------------------------------------------------------------------------
 
 
+def _host_gpu_order() -> tuple[int, ...]:
+    """``OP_TRAIN_GPU_ORDER`` (the compose ``device_ids`` list); empty = unrestricted."""
+    raw = os.environ.get('OP_TRAIN_GPU_ORDER', '')
+    return tuple(int(tok) for tok in raw.split(',') if tok.strip())
+
+
 def _gpu_telemetry() -> list[dict[str, Any]]:
     """Read util / memory from each visible GPU via NVML.
 
@@ -395,6 +401,7 @@ def _gpu_telemetry() -> list[dict[str, Any]]:
     except Exception:  # NVML raises its own error family
         return []
     out: list[dict[str, Any]] = []
+    order = _host_gpu_order()
     try:
         for i in range(pynvml.nvmlDeviceGetCount()):
             handle = pynvml.nvmlDeviceGetHandleByIndex(i)
@@ -406,7 +413,8 @@ def _gpu_telemetry() -> list[dict[str, Any]]:
                 continue
             out.append(
                 {
-                    'index': i,
+                    # NVML indexes are container-local; report the host id the API reasons in.
+                    'index': order[i] if i < len(order) else i,
                     'util_pct': int(util.gpu),
                     'mem_used_mb': int(mem.used // (1024 * 1024)),
                     'mem_total_mb': int(mem.total // (1024 * 1024)),

@@ -1465,3 +1465,29 @@ def test_watcher_processes_the_oldest_pending_job(
     status = asyncio.run(train_jobs.read_status(job_id))
     assert status is not None
     assert status.state == 'finished', status.error
+
+
+def test_gpu_telemetry_reports_host_index_through_gpu_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import types
+
+    class _H:
+        def __init__(self, i: int) -> None:
+            self.i = i
+
+    nvml = types.SimpleNamespace(
+        nvmlInit=lambda: None,
+        nvmlShutdown=lambda: None,
+        nvmlDeviceGetCount=lambda: 1,
+        nvmlDeviceGetHandleByIndex=_H,
+        nvmlDeviceGetUtilizationRates=lambda _h: types.SimpleNamespace(gpu=50),
+        nvmlDeviceGetMemoryInfo=lambda _h: types.SimpleNamespace(
+            used=2 * 1024 * 1024, total=8 * 1024 * 1024
+        ),
+    )
+    monkeypatch.setitem(sys.modules, 'pynvml', nvml)
+    monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '2')
+    assert [g['index'] for g in job_protocol._gpu_telemetry()] == [2]
+    monkeypatch.delenv('OP_TRAIN_GPU_ORDER')
+    assert [g['index'] for g in job_protocol._gpu_telemetry()] == [0]
