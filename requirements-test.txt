@@ -50,7 +50,9 @@ structlog>=24.1.0
 
 # src/clients/opensearch.py (imported transitively via src/clients/__init__.py
 # and src/core/dependencies.py, both on the src.main import path)
-opensearch-py>=2.3.0
+# [async] pulls aiohttp: without it opensearch-py does not export
+# AsyncOpenSearch and `import src.main` fails with an ImportError.
+opensearch-py[async]>=2.3.0
 
 # src/core/metrics.py / src/services/curation/metrics.py
 prometheus-client>=0.20
