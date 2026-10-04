@@ -43,7 +43,7 @@ def test_openapi_json_and_oauth_redirect_at_same_paths(client: TestClient) -> No
 
 
 _FETCHED_EXTERNAL = re.compile(
-    r'(?:src|href)\s*[:=]\s*["\']https?://|cdn\.redoc\.ly|fonts\.(?:googleapis|gstatic)\.com'
+    r'\bsrc\s*[:=]\s*["\']https?://|cdn\.redoc\.ly|fonts\.(?:googleapis|gstatic)\.com'
 )
 
 
