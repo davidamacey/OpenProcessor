@@ -163,3 +163,17 @@ def test_text_mode_consistency_warnings() -> None:
     reading_profile = DetectionProfile(name='p', text_reader='vlm')
     report2 = validate_pack(None, text_free_pack, profile=reading_profile)
     assert any(w.code == 'pack_no_text_profile_reads_text' for w in report2.warnings)
+
+
+def test_proposal_denylist_is_optional() -> None:
+    body = _valid_body()
+    body.pop('proposal_denylist')
+    assert validate_pack(None, body).errors == []
+
+
+def test_proposal_denylist_must_be_list_of_strings() -> None:
+    for bad in ('blurry_*', [1, 2]):
+        body = _valid_body()
+        body['proposal_denylist'] = bad
+        report = validate_pack(None, body)
+        assert [e.field for e in report.errors] == ['proposal_denylist']

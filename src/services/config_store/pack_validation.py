@@ -37,7 +37,7 @@ MAX_MAP_ENTRIES = 500
 _STRING_FIELDS = tuple(
     f.name
     for f in dc_fields(PromptPack)
-    if f.name not in ('name', 'class_descriptions', 'synonyms')
+    if f.name not in ('name', 'class_descriptions', 'synonyms', 'proposal_denylist')
 )
 _MAP_FIELDS = ('class_descriptions', 'synonyms')
 
@@ -125,6 +125,20 @@ def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
                     detail={'entries': len(value), 'max': MAX_MAP_ENTRIES},
                 )
             )
+    deny = body.get('proposal_denylist')
+    if deny is not None and (
+        not isinstance(deny, list)
+        or not all(isinstance(p, str) for p in deny)
+        or len(deny) > MAX_MAP_ENTRIES
+    ):
+        issues.append(
+            _issue(
+                'pack_field_missing',
+                'error',
+                'proposal_denylist must be a list of strings',
+                field='proposal_denylist',
+            )
+        )
     return issues
 
 
