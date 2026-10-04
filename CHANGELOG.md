@@ -86,7 +86,7 @@ optional Cropwright 0.1.0 UI that ships staged in the deploy bundle.
 - Every compose service rotates its logs (`json-file`, 10 MB x 5) and has a `mem_reservation` (OpenSearch reserves its heap size).
 - Installer warns when `vm.max_map_count` is below 262144, with the fix.
 - Optional `docker-compose.docs.yml` overlay serving the documentation site locally (port 4613); new "Memory, disk and storage" page.
-- Release gate: the seven `linux-libc-dev` kernel-header CVEs (headers only, no upstream fix) are allowlisted per CVE with a reason (#110).
+- Release gate: the seven `mlflow` 2.x CVEs in the trainer image (fixed only in 3.x) and the seven `linux-libc-dev` kernel-header CVEs (headers only, no upstream fix) are allowlisted per CVE with a reason (#110).
 - Cropwright 0.1.0 ships staged inside the deploy bundle: `cropwright.lock` pins release `v0.1.0` (image digest and the sha256 of its `SHA256SUMS`), and `build_deploy_bundle.sh` with `CW_RELEASE_DIR` puts its `docker-compose.yml`, `.env.example` and `SHA256SUMS` in the tarball under `cropwright-release/v0.1.0/`. The installer uses them with no network fetch (the standalone Cropwright repository is private until the 0.5.0 monorepo, #85) and still verifies them against `cropwright.lock`.
 
 - `OP_UI_BIND_ADDRESS` (default: `OP_BIND_ADDRESS`) publishes only the human-facing
