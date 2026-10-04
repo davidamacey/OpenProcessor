@@ -93,8 +93,12 @@ All decisions are final (owner, 4 Oct 2026). The only step left is the owner's g
    `git commit -m "chore(release): pin v0.4.0 image digests"`. (`images.lock.sha256` is a
    local artifact, not committed.)
 6. Build the release assets from the committed tree:
-   `scripts/release/build_deploy_bundle.sh v0.4.0` (add `CW_RELEASE_DIR=<dir>` to stage the
-   Cropwright files named in `cropwright.lock`). It refuses an unpinned lock. Output:
+   `CW_RELEASE_DIR=<dir> scripts/release/build_deploy_bundle.sh v0.4.0`. For v0.4.0 the
+   Cropwright files named in `cropwright.lock` MUST be staged: they ship inside the tarball
+   (`cropwright-release/v0.1.0/`) because the standalone Cropwright repository is private
+   until the 0.5.0 monorepo. Cropwright's `docs` service is behind compose profile `docs`;
+   the installer does not enable it, so `/cropwright/` docs 502 until the profile is on
+   (documented in the installer docs and release notes). It refuses an unpinned lock. Output:
    `dist/release-v0.4.0/` holding `openprocessor-deploy-v0.4.0.tar.gz`, `SHA256SUMS`,
    `setup-openprocessor.sh`, `release-manifest.txt`.
 7. Check the real assets before publishing:
