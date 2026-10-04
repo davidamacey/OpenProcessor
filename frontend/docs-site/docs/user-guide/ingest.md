@@ -58,6 +58,8 @@ region-drain panel showing whether the backend has finished processing
 everything ingested so far. The clustering handoff below waits for that
 served "drained" verdict before treating the pool as ready.
 
+<Screenshot name="region-stage-panel-1600.png" alt="Region detection worklog and Region stage panel on the ingest page with a Pause button" caption="Region stage — the worklog counts, the running or paused state and the Pause control" />
+
 ## Clustering handoff
 
 Reuses the same `AutoLabelPanel` as the dashboard, gated on the drain

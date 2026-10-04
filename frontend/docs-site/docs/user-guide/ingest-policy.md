@@ -42,6 +42,8 @@ that this describes detections **already stored** and that a policy change
 only affects **future** ingests. When the backend sampled, it says
 "estimated from S detections".
 
+<Screenshot name="ingest-policy-preview-1600.png" alt="Ingest policy page in selected mode with the cost preview table of would-embed and would-not counts per class" caption="Ingest policy — selected mode, and the served cost preview: how many stored detections would be embedded and about how much space" />
+
 ### Saving
 
 **Save** asks for confirmation, then writes the policy. If someone else saved

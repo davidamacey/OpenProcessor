@@ -47,6 +47,8 @@ image runs nginx as a non-root user (uid 101) listening on container port
 docs (`/cropwright/`) and the backend's API reference (`/docs`, `/redoc`,
 `/openapi.json`); the top-bar **Resources** menu links to them.
 
+<Screenshot name="resources-menu-1600.png" alt="Resources menu open in the top bar listing the bundled docs and the served service links" caption="Resources menu — the bundled docs, then exactly the links the backend serves" />
+
 For frontend development see
 [Development setup](../developer-guide/development-setup.md).
 

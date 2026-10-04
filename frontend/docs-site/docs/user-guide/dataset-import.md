@@ -119,3 +119,9 @@ frame. A row appears only when it has a value.
 <Screenshot name="import-job-1600.png" alt="Dataset import job view with progress, report counts and next steps" caption="Import job — progress, report, and Undo with a dry run" />
 
 <Screenshot name="reprocess-dialog-1600.png" alt="Reprocess dialog with scopes and the locked-and-skipped counts" caption="Reprocess — scopes, dry run and locked-and-skipped counts" />
+
+<Screenshot name="import-job-actions-1600.png" alt="Import job view for a completed import with Undo offered and the served reason Cancel and Resume are unavailable" caption="Import job — a completed import offers Undo; Cancel and Resume are listed with the served reason they are unavailable" />
+
+<Screenshot name="reprocess-served-scopes-1600.png" alt="Reprocess dialog over a cluster of imported items, with the served scope labels and the locked-and-skipped counts" caption="Reprocess — scope names come from the backend; the dry run shows how many items are locked and skipped" />
+
+<Screenshot name="locked-item-badge-1600.png" alt="Cluster grid of imported items, each card carrying a lock glyph" caption="Locked items — the lock glyph on each card; hover it for the backend's lock rule (a native tooltip, so it is not in the image)" />

@@ -80,3 +80,7 @@ verdicts**. A crop the profile can't be tested on shows the backend's reason ins
 <Screenshot name="region-profile-editor-1600.png" alt="Region-profile editor with grouped, typed fields and model pickers" caption="Region-profile editor — schema-driven form with model pickers" />
 
 <Screenshot name="region-profile-test-1600.png" alt="Region-profile test panel with candidate boxes drawn over the source image" caption="Test on a crop — candidates over the source image and in the crop's frame" />
+
+<Screenshot name="region-profile-testable-1600.png" alt="Region-profile Test on a crop for a segmenter-only profile: the detector leg is skipped with its served reason and the segmenter leg lists its candidate" caption="Test on a crop — each leg shows its served status; here the detector leg is skipped (no detector model) and the segmenter finds the wheel" />
+
+<Screenshot name="segmenter-prompt-check-1600.png" alt="Segmenter group of the region-profile editor with the result of Check segmenter prompt" caption="Check segmenter prompt — the segmenter's served status and a text-only check of the prompt" />
