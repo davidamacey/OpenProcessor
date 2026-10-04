@@ -148,15 +148,18 @@ def project_label(slug: str) -> str:
     """``slug`` when it is within the bounded label set, else ``other``.
 
     The set comes from the project registry snapshot so it is identical in every
-    process. An empty registry (not loaded yet) passes ``slug`` through: a bound
-    project is a registry project by construction, so that cannot grow the set.
+    process. ``slug`` is a bound project, hence a registry project by construction,
+    so it is ranked as a member even when this process's snapshot has not caught up
+    yet (a project created seconds ago, or a refresh that failed): a lagging snapshot
+    must not file a real project under ``other``. An empty registry passes ``slug``
+    through.
     """
     from src.services.projects.registry import get_project_registry
 
     known = get_project_registry().snapshot().keys()
     if not known:
         return slug
-    return slug if slug in allowed_project_slugs(known) else OTHER_PROJECT
+    return slug if slug in allowed_project_slugs({*known, slug}) else OTHER_PROJECT
 
 
 _INGEST_OUTCOME_BY_STATUS = {'success': 'ok', 'failed': 'failed', 'duplicate': 'skipped'}

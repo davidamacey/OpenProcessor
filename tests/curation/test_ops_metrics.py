@@ -469,3 +469,19 @@ def test_snapshot_gauge_shows_the_latest_live_value_across_processes(tmp_path: P
             proc.wait()
     lines = re.findall(r'^op_queue_depth\{[^}]*\} (\S+)$', out, re.MULTILINE)
     assert lines == ['3.0']
+
+
+def test_project_label_of_a_project_the_snapshot_has_not_seen_yet() -> None:
+    """#124: a bound project missing from this process's registry snapshot (created
+    moments ago / a failed refresh) still gets its own label, not ``other``."""
+    set_project_registry(StaticProjectRegistry([default_project_record()]))  # type: ignore[arg-type]
+    assert om.project_label('p1') == 'p1'
+
+
+def test_project_label_cap_still_folds_projects_beyond_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    base = default_project_record()
+    records = [base.__class__(**{**base.__dict__, 'slug': s}) for s in ('alpha', 'bravo')]
+    set_project_registry(StaticProjectRegistry(records))  # type: ignore[arg-type]
+    monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '2')
+    assert om.project_label('zulu') == 'other'
+    assert om.project_label('aaa-new') == 'aaa-new'
