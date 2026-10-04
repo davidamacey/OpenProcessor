@@ -1,9 +1,8 @@
 """The ``sample-coco-cars`` selection (W6): CC BY car images, pinned.
 
-The real ``coco_car_60.json`` can only be produced on a host with network
-access to the COCO annotation zip, so it is generated and committed from
-there; until it is, the pin test skips with that reason. The selection
-logic itself is exercised here on a synthetic COCO-shaped dataset.
+The committed ``coco_car_60.json`` is pinned here (it was generated from the
+COCO annotation zip with ``make sample-coco-cars``). The selection logic
+itself is exercised on a synthetic COCO-shaped dataset.
 """
 
 from __future__ import annotations
@@ -78,13 +77,6 @@ def test_selection_is_seed_stable(selected: list[dict]) -> None:
     assert [r['image_id'] for r in _pick()] == [r['image_id'] for r in selected]
 
 
-@pytest.mark.skipif(
-    not MANIFEST.is_file(),
-    reason=(
-        'coco_car_60.json must be generated on a host with network access '
-        '(make sample-coco-cars) and committed; see the W6 deferred-live list'
-    ),
-)
 def test_pinned_manifest_is_sixty_cc_by_cars() -> None:
     rows = json.loads(MANIFEST.read_text())
     assert len(rows) == 60

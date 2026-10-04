@@ -59,7 +59,8 @@ async def _ensure_active_region_class(client: Any) -> int | None:
 
 async def repair_bound_project(client: Any, slug: str, lock_file: Any, items_index: str) -> None:
     """Repair the bound project unless another process already holds its
-    lock. Logs one summary line; a failed step is logged and left for the
+    lock. Logs a summary at info only when rows were repaired (warning on a
+    failed step, debug otherwise); a failed step is logged and left for the
     next start."""
     with exclusive_start_lock(lock_file) as acquired:
         if not acquired:
@@ -73,7 +74,14 @@ async def repair_bound_project(client: Any, slug: str, lock_file: Any, items_ind
             summary['embedded_state_backfilled'] = await _backfill_with_retry(client, items_index)
         except Exception as exc:
             summary['embedded_state_error'] = str(exc)
-        level = logger.warning if any(k.endswith('_error') for k in summary) else logger.info
+        if any(k.endswith('_error') for k in summary):
+            level = logger.warning
+        elif summary.get('embedded_state_backfilled'):
+            level = logger.info
+        else:
+            # Nothing to repair: a worker that starts after the lock is
+            # released re-checks and must not repeat the line per project.
+            level = logger.debug
         level('legacy_project_repair', project=slug, **summary)
 
 
