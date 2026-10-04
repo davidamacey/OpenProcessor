@@ -44,20 +44,12 @@
          rendering matches across surfaces. -->
     <div class="flex min-h-0 flex-col gap-2">
       <div class="text-xs uppercase tracking-wider text-zinc-500">Source</div>
-      <!-- K5-follow-up (visual audit): below the lg breakpoint the two columns
-           stack (grid-cols-1 above), so this no longer needs flex-1 to fill a
-           shared grid row's height — that forced a narrow column into a tall,
-           mostly-empty box around a small object-contain'd image. Below lg it
-           sizes to its own content (max-h caps it instead of flex-1 stretching
-           it); at lg+ (the two-column layout) flex-1 fills the shared row as
-           before. -->
-      <div
-        class="flex max-h-[50vh] min-h-0 items-center justify-center bg-black lg:max-h-none lg:flex-1"
-      >
-        <SourceImageOverlay
-          cropId={crop.id}
-          class="max-h-[50vh] max-w-full lg:max-h-[78vh]"
-        />
+      <!-- A definite height: SourceImageOverlay sizes its image with
+           percentages, which collapse under an auto-height parent and left the
+           boxes off the picture. No stretched background either — a flex-1 box
+           taller than the image read as black bars under it. -->
+      <div class="h-[50vh] w-full lg:h-[62vh]" data-testid="source-box">
+        <SourceImageOverlay cropId={crop.id} align="start" class="h-full w-full" />
       </div>
       <div class="flex items-center gap-3">
         <div class="text-xs text-zinc-500">Crop</div>

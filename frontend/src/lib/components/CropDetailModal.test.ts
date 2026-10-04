@@ -69,21 +69,13 @@ describe('CropDetailModal narrow-viewport layout (visual-audit follow-up)', () =
     expect(grid?.className).toContain('grid-cols-1');
   });
 
-  it('the source image area sizes to its own content below lg (max-h, not flex-1)', () => {
+  it('the source image area has a definite height and no stretched black backdrop', () => {
     const el = render();
-    const sourceLabel = [...el.querySelectorAll('div')].find(
-      (d) => d.textContent?.trim() === 'Source',
-    );
-    const sourceBox = sourceLabel?.nextElementSibling as HTMLElement | null;
-    expect(sourceBox).not.toBeNull();
-    // Below `lg` it's capped by max-h so it can't stretch to a shared grid
-    // row's height; `lg:flex-1`/`lg:max-h-none` restore the original
-    // row-filling behavior once the two-column layout applies.
-    expect(sourceBox!.className).toContain('max-h-[50vh]');
-    expect(sourceBox!.className).toContain('lg:flex-1');
-    expect(sourceBox!.className).toContain('lg:max-h-none');
-    // It must not be unconditionally flex-1 (that was the bug: flex-1
-    // applied at every width, including the narrow stacked layout).
-    expect(sourceBox!.className).not.toMatch(/(?<!lg:)\bflex-1\b/);
+    const box = el.querySelector('[data-testid="source-box"]') as HTMLElement | null;
+    expect(box).not.toBeNull();
+    expect(box!.className).toContain('h-[50vh]');
+    expect(box!.className).toContain('lg:h-[62vh]');
+    expect(box!.className).not.toContain('bg-black');
+    expect(box!.className).not.toMatch(/\bflex-1\b/);
   });
 });
