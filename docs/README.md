@@ -24,6 +24,7 @@ Documentation for OpenProcessor: the inference API and the curation subsystem.
 | [CURATION.md](CURATION.md) | User guide: projects, ingest, region profiles, prompt packs, VLM endpoints, import, combine, export, training |
 | [design/curation_api_contract.md](design/curation_api_contract.md) | Route table and wire models for `/curation` |
 | [design/curation_design_rationale.md](design/curation_design_rationale.md) | Why the subsystem is built the way it is |
+| [market/README.md](market/README.md) | Market research and competitive analysis (landscape, feature matrix, gap analysis) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Services, project isolation, data model, the multi-box region cascade, config store, workers |
 | [opensearch_schema_design.md](opensearch_schema_design.md) | Global and per-project index schemas, `region_boxes`, clustering |
 | [../contracts/README.md](../contracts/README.md) | Generated OpenAPI and TypeScript contracts |
