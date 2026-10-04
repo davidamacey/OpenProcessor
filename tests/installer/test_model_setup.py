@@ -250,3 +250,45 @@ def test_a_failed_group_does_not_stop_later_groups(tmp_path: Path, bash) -> None
     )
     assert statuses['mobileclip'] == 'failed'
     assert statuses['faces'] == statuses['ocr'] == 'ok'
+
+
+def test_classify_failure_trt_cuda_init_error_2_is_oom(tmp_path: Path, bash) -> None:
+    """TensorRT's message when the card is full (#111): not a transient race."""
+    log = tmp_path / 'step.log'
+    log.write_text(
+        '[TRT] [E] createInferBuilder: Error Code 6: API Usage Error '
+        '(CUDA initialization failure with error: 2. Please check your CUDA installation)\n'
+    )
+    assert bash(_source(f'classify_failure "{log}"')).stdout.strip() == 'permanent:oom'
+
+
+def test_classify_failure_cuda_init_other_errors_stay_transient(tmp_path: Path, bash) -> None:
+    for text in (
+        'CUDA initialization failure with error: 100\n',
+        'CUDA initialization failure with error: 205\n',
+    ):
+        log = tmp_path / 'step.log'
+        log.write_text(text)
+        assert bash(_source(f'classify_failure "{log}"')).stdout.strip() == 'transient', text
+
+
+def test_retry_step_does_not_retry_an_export_oom(tmp_path: Path, bash) -> None:
+    marker = tmp_path / 'attempt_count'
+    fake_step = tmp_path / 'fake_step.sh'
+    fake_step.write_text(
+        '#!/bin/bash\n'
+        f'count_file="{marker}"\n'
+        'n=$(cat "$count_file" 2>/dev/null || echo 0)\n'
+        'echo $((n + 1)) > "$count_file"\n'
+        'echo "[TRT] [E] createInferBuilder: CUDA initialization failure with error: 2" >&2\n'
+        'exit 1\n'
+    )
+    fake_step.chmod(0o755)
+    script = _source(
+        f'MODEL_SETUP_LOGDIR="{tmp_path}/logs" retry_step yolo_export 3 -- bash "{fake_step}"'
+    )
+    result = bash(f'sleep() {{ :; }}; {script}')
+    assert result.returncode != 0
+    assert marker.read_text().strip() == '1'
+    assert 'permanent failure (oom)' in result.stdout + result.stderr
+    assert '--gpu-plan' in result.stdout + result.stderr

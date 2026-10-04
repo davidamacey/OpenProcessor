@@ -49,6 +49,8 @@ from src.services.training.yolo_triton_config import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.services.training.jobs import TrainJobStatus
 
 
@@ -302,8 +304,14 @@ class TritonPromoter:
         overwrite: bool = False,
         class_remap: ClassRemapResult | None = None,
         project: str | None = None,
+        on_phase: Callable[[str], None] | None = None,
     ) -> PromoteResult:
         """Run the promote pipeline end-to-end.
+
+        ``on_phase`` (optional) is told ``'exporting'`` (copy + config),
+        ``'loading'`` (Triton /load), ``'building'`` (first warm-up
+        inference, where the TensorRT engine compiles) and ``'warming'``
+        (max-batch warm-up) as each begins.
 
         Args:
             status: The trained run's TrainJobStatus (read by the caller
@@ -331,6 +339,8 @@ class TritonPromoter:
             msg = f'invalid triton_name {triton_name!r}: must be alphanumeric with optional _ or -'
             raise PromoteError(msg, status_code=400)
 
+        if on_phase:
+            on_phase('exporting')
         onnx_src = self._locate_onnx(status)
 
         model_dir = self.triton_models_dir / triton_name
@@ -481,8 +491,12 @@ class TritonPromoter:
 
         # Trigger Triton load, then pay the first-inference engine build here
         # rather than on the first real request.
+        if on_phase:
+            on_phase('loading')
         loaded = await self._trigger_load(triton_name)
-        warmed = loaded and await self._warm_up(triton_name, input_size, max_batch_size)
+        warmed = loaded and await self._warm_up(
+            triton_name, input_size, max_batch_size, on_phase=on_phase
+        )
 
         # F-42 (fresh-start E2E findings 2026-09-25, round 2): drop any
         # cached class-name mapping for this model name so the very next
@@ -556,7 +570,13 @@ class TritonPromoter:
             raise CheckpointNotFoundError(status.job_id, onnx_path)
         return onnx_path
 
-    async def _warm_up(self, triton_name: str, input_size: int, max_batch_size: int) -> bool:
+    async def _warm_up(
+        self,
+        triton_name: str,
+        input_size: int,
+        max_batch_size: int,
+        on_phase: Callable[[str], None] | None = None,
+    ) -> bool:
         """Throwaway inferences (blank images) so the TensorRT engine exists
         before the first real request. The accelerator builds for the shapes it
         has seen and rebuilds (~90 s) when a request arrives outside that range,
@@ -565,6 +585,8 @@ class TritonPromoter:
         warm-up succeeded; the promote itself is already complete."""
         url = f'{self.triton_http_url}/v2/models/{triton_name}/infer'
         for batch in sorted({1, max_batch_size}):
+            if on_phase:
+                on_phase('building' if batch == 1 else 'warming')
             body = {
                 'inputs': [
                     {
@@ -729,6 +751,7 @@ async def promote_yolo26_to_triton(
     class_remap: ClassRemapResult | None = None,
     promoter: TritonPromoter | None = None,
     project: str | None = None,
+    on_phase: Callable[[str], None] | None = None,
 ) -> PromoteResult:
     """Convenience wrapper. The router uses this; tests pass a custom promoter."""
     p = promoter or TritonPromoter()
@@ -742,6 +765,7 @@ async def promote_yolo26_to_triton(
         overwrite=overwrite,
         class_remap=class_remap,
         project=project,
+        **({'on_phase': on_phase} if on_phase is not None else {}),
     )
 
 

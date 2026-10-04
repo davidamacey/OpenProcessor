@@ -155,7 +155,22 @@ also claims its GPU through the arbiter, like training.
 `POST /curation/projects/{project}/train/promote/{job_id}` takes a finished
 run's ONNX export, writes it into the Triton model repository
 (`models/<name>/1/model.onnx` plus a YOLO26 single-output `config.pbtxt`
-and a `labels.txt`), and asks Triton to load it.
+and a `labels.txt`), and asks Triton to load it, then runs two warm-up inferences so the TensorRT
+engine is built before the first real request.
+
+That takes 2-3 minutes, so by default the call validates the request (gate,
+class remap, name) and returns `202` with a `promote_id`. Poll
+`GET .../train/promote/{job_id}/jobs/{promote_id}`: `status` moves through
+`queued`, `exporting` (copy and config), `loading` (Triton load), `building`
+(first warm-up, where the engine compiles), `warming` (max-batch warm-up) and
+ends at `done` (with `result`, the same body a synchronous promote returns) or
+`failed` (with `error` and `error_status`, the HTTP status a synchronous call
+would have returned). The latest promote also appears as `promote` in
+`GET .../train/status/{job_id}`. A second promote of the same run while one is
+active returns that job with `200` (`409 promote_in_progress` if it asked for a
+different `triton_name`); a job whose API process died reads `failed`. Pass
+`?wait=true` to block instead and get the `200` body directly; set client and
+proxy timeouts to at least 300 seconds.
 
 The Triton model is named `{slug}__<triton_name>` (the `default` project's
 models have no prefix), so two projects can promote the same name without

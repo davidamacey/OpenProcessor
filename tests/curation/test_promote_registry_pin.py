@@ -160,7 +160,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
     # (5) isn't contiguous from 0, so this also needs force -- the pin-vs-
     # live distinction under test is orthogonal to that gate.
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}?wait=true',
         json={'triton_name': 'yolo26m_pin_test', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -227,14 +227,14 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     # id (5) is not contiguous from 0 -- the identity map is unprovable, so
     # this now 422s unless forced (the class-remap correctness fix).
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}?wait=true',
         json={'triton_name': 'yolo26m_no_pin'},
     )
     assert r.status_code == 422, r.text
     assert r.json()['detail']['failures'][0]['code'] == 'class_remap_missing_full_class'
 
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}?wait=true',
         json={'triton_name': 'yolo26m_no_pin', 'force': True},
     )
     assert r.status_code == 200, r.text

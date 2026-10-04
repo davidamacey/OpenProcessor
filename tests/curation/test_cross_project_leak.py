@@ -123,6 +123,7 @@ def route_params(slug: str) -> dict[str, str]:
         'class_id': '2',
         'cluster_id': '1',
         'job_id': f'{slug}-job-0001',
+        'promote_id': f'{slug}-no-such-promote',
         'campaign_id': f'{slug}-campaign-0001',
         'name': f'{slug}-model',
         # A promoted model's triton_name is model_prefix + name (plan §5.3).

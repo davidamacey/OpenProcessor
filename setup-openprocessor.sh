@@ -766,7 +766,7 @@ recommend_plan() {
         n=$((n + 1))
     done <<< "$gpus"
 
-    local tri="" vlm="" seg="" trn="" profile="" inst=1 single=0
+    local tri="" vlm="" seg="" trn="" profile="" inst=1 single=0 tri_explicit=0
     local -a usable=()
     for (( i = 0; i < n; i++ )); do
         if (( free[i] >= 8 )); then usable+=("$i"); fi
@@ -864,7 +864,7 @@ recommend_plan() {
                 return 1
             fi
             case "$key" in
-                triton) tri=${pos[$val]} ;;
+                triton) tri=${pos[$val]}; tri_explicit=1 ;;
                 segmenter) seg=${pos[$val]} ;;
                 vlm) vlm=${pos[$val]} ;;
                 trainer|evaluator) trn=${pos[$val]} ;;
@@ -878,6 +878,23 @@ recommend_plan() {
         if (( tri == vlm && vlm == seg )); then single=1; fi
     fi
     [[ -n "$profile_ovr" ]] && profile="$profile_ovr"
+
+    # The API container runs the TensorRT exports on Triton's own card (API_GPU_ID
+    # == TRITON_GPU_ID). Triton loads existing engines first, so on a card with
+    # little free VRAM the builder hits CUDA out-of-memory (#111). An explicit
+    # --gpu-plan onto such a card is refused unless --force; the automatic plan
+    # only warns (a fresh install has no engines loaded yet).
+    local export_floor_gb=16
+    if (( free[tri] < export_floor_gb )); then
+        local share_msg="Triton and the API (which runs the engine exports) share GPU ${ids[tri]} with only ${free[tri]} GB free; exports need about ${export_floor_gb} GB there and fail with out-of-GPU-memory once Triton has engines loaded"
+        if (( tri_explicit == 1 )) && [[ "$force" != 1 ]]; then
+            echo "gpu_count=${n}"
+            echo "refuse=--gpu-plan triton=${ids[tri]}: ${share_msg}; put Triton on a card with at least ${export_floor_gb} GB free (--gpu-plan triton=N) or pass --force to try anyway"
+            for kv in "${warns[@]}"; do echo "warn=${kv}"; done
+            return 1
+        fi
+        warns+=("${share_msg}; if an export step reports out of GPU memory, re-run with --gpu-plan triton=<card with >= ${export_floor_gb} GB free> (or --force to keep this placement)")
+    fi
 
     local tn pe_need=2
     tn=$(_triton_need_gb "$profile")
