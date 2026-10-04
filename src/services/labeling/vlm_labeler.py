@@ -84,7 +84,7 @@ from src.services.labeling.vlm_client import (
     post_chat_with_retry,
     record_chat_exchange,
 )
-from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, proposal_denied
 from src.utils.upstream_errors import describe_upstream_error
 
 
@@ -937,14 +937,20 @@ class VlmLabeler:
         reasoning text tried -- a parsed ``content`` always wins.
         """
         content = _strip_markdown_fences(extract_message_content(response))
-        preds = self._parse_item_response(content, chunk, self._fields)
+        preds = self._parse_item_response(
+            content, chunk, self._fields, denylist=self._pack.proposal_denylist
+        )
         if any(p.failure is None for p in preds):
             return preds
         reasoning = extract_reasoning_content(response)
         if not reasoning:
             return preds
         from_reasoning = self._parse_item_response(
-            reasoning, chunk, self._fields, log_failures=False
+            reasoning,
+            chunk,
+            self._fields,
+            log_failures=False,
+            denylist=self._pack.proposal_denylist,
         )
         if any(p.failure is None for p in from_reasoning):
             logger.info(
@@ -962,6 +968,7 @@ class VlmLabeler:
         fields: RegionFields,
         *,
         log_failures: bool = True,
+        denylist: list[str] | tuple[str, ...] = (),
     ) -> list[VlmClassPrediction]:
         """Parse the VLM's JSON-array response into one prediction per chunk crop.
 
@@ -1035,6 +1042,9 @@ class VlmLabeler:
             proposed = str(entry.get('proposed_class', '') or '').strip().lower()
             # Sanitize the proposed slug — keep [a-z0-9_], cap length 32.
             proposed = ''.join(c for c in proposed if c.isalnum() or c == '_')[:32]
+            if proposed and proposal_denied(proposed, denylist):
+                logger.debug('vlm_labeler.proposal_denied', proposed=proposed)
+                proposed = ''
             # Per-crop raw_response: prefer the entry's `class` (the
             # VLM's actual answer for this crop) so unmatched
             # classifications land in the raw-label field instead of

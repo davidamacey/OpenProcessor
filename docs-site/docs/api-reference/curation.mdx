@@ -251,7 +251,7 @@ See [Keymaps](../guides/keymaps.mdx).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, purity, validated count, sub-clusters, representatives |
+| GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, `purity` (geometry), `label_agreement` (label share), validated count, sub-clusters, representatives |
 | GET | `/clusters/representatives` | Representatives only |
 | POST | `/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
 | POST | `/clusters/auto_promote` | Validate items in high-purity clusters |

@@ -499,7 +499,9 @@ Browse and cluster at box level:
 ## Prompt packs
 
 A prompt pack holds the VLM prompt templates and two vocabulary tables
-(`class_descriptions`, `synonyms`). It is separate from the region profile:
+(`class_descriptions`, `synonyms`) and an optional `proposal_denylist` of
+glob patterns (`blurry_*`, `*_scene`) whose matching new-class proposals are
+dropped. It is separate from the region profile:
 a profile says where to look, a pack says what to ask. Either can be used
 without the other.
 

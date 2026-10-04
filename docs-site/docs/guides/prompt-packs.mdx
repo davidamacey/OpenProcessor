@@ -29,6 +29,12 @@ code. Packs are editable per project, versioned, and can be rolled back.
   The maps are `class_descriptions` (class name to a short description for
   the model) and `synonyms` (a label the model may answer, mapped to the registry class
   name it stands for; matching tries the space and underscore forms).
+
+  An optional list, `proposal_denylist`, holds case-insensitive glob patterns
+  (`blurry_*`, `*_scene`) for proposed new-class names that are scene or image-quality
+  words rather than classes. A matching proposal is dropped, so the crop counts as
+  "nothing fits" and does not reach the new-class queue. It defaults to empty for a
+  stored pack that omits it; the shipped generic pack carries a starter list.
 - **Placeholders.** Only three fields are formatted with `str.format`:
   `class_user_template` and `open_class_user_template` accept
   `class_names_csv`; `combined_user_template` accepts `class_block` and

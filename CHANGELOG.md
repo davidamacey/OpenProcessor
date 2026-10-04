@@ -22,6 +22,14 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - The COCO car manifest pin test no longer skips or claims the manifest is
   missing; the tracked `coco_car_60.json` is always checked (#103).
 
+### Added
+
+- Prompt packs take an optional `proposal_denylist` (glob patterns); matching
+  new-class proposals such as `blurry_*` or `*_scene` are dropped. The generic
+  pack ships a starter list (#61).
+- Cluster cards serve `label_agreement` (equal to `label_purity`) so label
+  quality is not read from the geometric `purity` (#61).
+
 ## [0.4.0] - 2026-10-04
 
 OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend
