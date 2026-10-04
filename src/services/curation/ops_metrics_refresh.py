@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_region_fields
 from src.config.curation import IndexRole
-from src.config.projects import project_index_prefix
+from src.config.project_context import bind_project
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation import embedding_state as es
@@ -46,6 +46,7 @@ from src.services.curation.ops_metrics import (
     OTHER_PROJECT,
     allowed_project_slugs,
 )
+from src.services.projects.guard import bind_registry_admin
 
 
 if TYPE_CHECKING:
@@ -57,6 +58,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 DEFAULT_INTERVAL_S = 30.0
+_CAT_CHUNK = 40
 _SEGMENT_STATUSES = (RegionStatus.PENDING_DETECTION.value, 'pending')
 _LABEL_STATUSES = (RegionStatus.PENDING_VERIFICATION.value, 'pending_verify')
 
@@ -88,7 +90,10 @@ def _agg_body() -> dict[str, Any]:
 
 async def _project_snapshot(client: Any, record: ProjectRecord, now: float) -> dict[str, Any]:
     items = record.resources.indexes[IndexRole.ITEMS]
-    resp = await client.search(index=items, body=_agg_body())
+    # The refresh loop runs outside any request, so nothing is bound: bind this
+    # project (read-only) for its own reads, as every other cross-project reader does.
+    with bind_project(record, read_only=True):
+        resp = await client.search(index=items, body=_agg_body())
     aggs = resp.get('aggregations') or {}
 
     def count(name: str) -> int:
@@ -138,6 +143,38 @@ async def refresh_queues(client: Any, records: Iterable[ProjectRecord], *, now: 
         OP_QUEUE_OLDEST_ITEM_AGE_SECONDS.labels(queue=queue).set(oldest.get(queue, 0.0))
 
 
+async def _cat_index_rows(client: Any, names: list[str]) -> list[dict[str, Any]] | None:
+    """``_cat/indices`` rows for the concrete ``names`` (the guard refuses wildcards),
+    under the registry-admin binding that is the only one allowed to send it. A chunk
+    that fails (one missing index fails the whole call) is retried name by name so one
+    absent index cannot blank every other project; ``None`` when nothing could be read."""
+
+    async def _call(chunk: list[str]) -> list[dict[str, Any]]:
+        return list(
+            await client.cat.indices(
+                index=','.join(chunk), format='json', bytes='b', h='index,pri,rep,store.size'
+            )
+            or []
+        )
+
+    rows: list[dict[str, Any]] = []
+    read_any = False
+    with bind_registry_admin():
+        for i in range(0, len(names), _CAT_CHUNK):
+            chunk = names[i : i + _CAT_CHUNK]
+            try:
+                rows += await _call(chunk)
+                read_any = True
+                continue
+            except Exception as exc:
+                logger.warning('ops_metrics_storage_chunk_failed', error=str(exc))
+            for name in chunk:
+                with contextlib.suppress(Exception):
+                    rows += await _call([name])
+                    read_any = True
+    return rows if read_any or not names else None
+
+
 async def refresh_storage(client: Any, records: Iterable[ProjectRecord]) -> None:
     """Set shard and store-byte gauges per project and index role."""
     records = list(records)
@@ -148,15 +185,8 @@ async def refresh_storage(client: Any, records: Iterable[ProjectRecord]) -> None
         for role, name in record.resources.indexes.items():
             # Roles folded onto one shared index count once (first role wins).
             by_index.setdefault(name, (project, role.value))
-    try:
-        rows = await client.cat.indices(
-            index=f'{project_index_prefix()}*',
-            format='json',
-            bytes='b',
-            h='index,pri,rep,store.size',
-        )
-    except Exception as exc:
-        logger.warning('ops_metrics_storage_snapshot_failed', error=str(exc))
+    rows = await _cat_index_rows(client, list(by_index))
+    if rows is None:
         return
     shards: dict[tuple[str, str], int] = defaultdict(int)
     store: dict[tuple[str, str], int] = defaultdict(int)
@@ -234,7 +264,9 @@ async def refresh_loop() -> None:
             if _claim_turn(interval):
                 wrapper = await get_opensearch()
                 client = getattr(wrapper, 'client', wrapper)
-                await refresh_once(client, get_project_registry().active_projects())
+                registry = get_project_registry()
+                await registry.ensure_fresh()
+                await refresh_once(client, registry.active_projects())
         except Exception as exc:
             logger.warning('ops_metrics_refresh_failed', error=str(exc))
         await asyncio.sleep(interval)

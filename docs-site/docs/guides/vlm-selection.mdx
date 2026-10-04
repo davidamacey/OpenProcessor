@@ -276,6 +276,23 @@ failure it restores the previous `.env` and container. `--yes` skips the
 confirmation prompt. Both commands need `OP_LOCAL_VLM_ENDPOINT` to be set,
 which the installer does when it sets up an in-compose VLM.
 
+### Enabling the in-compose VLM on an existing install
+
+An install without the `vlm` tier has no `OP_LOCAL_VLM_ENDPOINT`, and
+`vlm use` / `vlm probe` stop with a message that points here. Either:
+
+- re-run the installer in the install directory with the tier added:
+  `./setup-openprocessor.sh --tiers core,curation,vlm` (list your installed
+  tiers plus `vlm`). It picks a catalog model that fits your GPU and writes
+  `VLM_CATALOG_ID`, `VLM_MODEL`, `OP_VLM_URL` and `OP_LOCAL_VLM_ENDPOINT=env`;
+  or
+- by hand: set `OP_LOCAL_VLM_ENDPOINT=env` in the install's `.env`, keep
+  `vlm` in `COMPOSE_PROFILES`, and start the container with
+  `docker compose --profile vlm up -d vlm` (on a checkout,
+  `openprocessor update` pulls and rebuilds first). Set the `VLM_*` model
+  values yourself in this case, or run `openprocessor vlm use <id>` once the
+  container is up.
+
 `vlm key set` needs a terminal. The slug matches `[a-z0-9][a-z0-9_-]{0,63}`
 and the endpoint refers to it as `secret:<slug>`.
 

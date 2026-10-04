@@ -168,9 +168,16 @@ ends at `done` (with `result`, the same body a synchronous promote returns) or
 would have returned). The latest promote also appears as `promote` in
 `GET .../train/status/{job_id}`. A second promote of the same run while one is
 active returns that job with `200` (`409 promote_in_progress` if it asked for a
-different `triton_name`); a job whose API process died reads `failed`. Pass
-`?wait=true` to block instead and get the `200` body directly; set client and
-proxy timeouts to at least 300 seconds.
+different `triton_name`); a job whose API process died reads `failed`. Use the `202` job
+and polling for UIs and for anything behind a reverse proxy: proxies time out
+near 120 seconds (an nginx in front of the API answers `504` at 120 s), well
+before a promote ends. `?wait=true` blocks and returns the `200` body
+directly; use it only from scripts that call the API directly, with a client
+timeout of at least 300 seconds. If a `wait=true` connection is cut (a proxy
+`504`, a client timeout), the promote is not cancelled: it keeps running and
+the model finishes loading and warming, so check
+that the model reports ready in the project's model list instead of
+re-submitting.
 
 The Triton model is named `{slug}__<triton_name>` (the `default` project's
 models have no prefix), so two projects can promote the same name without

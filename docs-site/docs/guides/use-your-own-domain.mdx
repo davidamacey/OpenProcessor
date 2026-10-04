@@ -213,7 +213,7 @@ from `GET /curation/projects/{project}/train/profiles` into
 `hyperparameters`. When the run finishes, promote it to Triton:
 
 ```bash
-curl -s -X POST "$API/train/promote/JOB_ID?wait=true" -H 'Content-Type: application/json' \
+curl -s --max-time 300 -X POST "$API/train/promote/JOB_ID?wait=true" -H 'Content-Type: application/json' \
   -d '{"triton_name": "wheel_detector", "force": false}'
 ```
 

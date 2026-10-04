@@ -7,7 +7,7 @@ or FastAPI would match ``{name}`` first.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._config_common_models import (
@@ -79,6 +79,13 @@ _FIELD_GROUP: dict[str, str] = {
     'region_visible_user': 'region_visible',
     'class_descriptions': 'vocabulary',
     'synonyms': 'vocabulary',
+    'proposal_denylist': 'vocabulary',
+}
+
+_FIELD_KIND: dict[str, Literal['map', 'list']] = {
+    'class_descriptions': 'map',
+    'synonyms': 'map',
+    'proposal_denylist': 'list',
 }
 
 _CALL_LABELS: dict[str, str] = {
@@ -158,7 +165,7 @@ async def get_prompt_pack_schema() -> PromptPackSchema:
     class_names = sorted(_registry_class_names())[:5] or ['car', 'truck', 'bus']
     fields: list[PromptPackFieldSchema] = []
     for f in PromptPackBody.model_fields:
-        kind = 'map' if f in ('class_descriptions', 'synonyms') else 'text'
+        kind = _FIELD_KIND.get(f, 'text')
         formatted = f in FORMATTED_PLACEHOLDERS
         call_id = _FIELD_GROUP.get(f, 'vocabulary')
         contract = REPLY_KEY_CONTRACT.get(call_id)

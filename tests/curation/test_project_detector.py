@@ -176,3 +176,33 @@ async def test_the_ingest_service_runs_the_project_detector_and_its_policy(
     assert mine.profile.detector_model == 'birds'
     assert mine.detector.profile is mine.profile
     assert mine.policy.detect.class_resolution == 'by_name'
+
+
+def test_deleting_the_model_the_stored_ingest_policy_names_is_refused(
+    world: Any, labels: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#75: the detector_in_use guard fires for a project-owned end2end model set as
+    the ingest detector through the real policy route (not a mocked policy). Fused
+    single-output promoted models never pass the servable check, so they never reach
+    it; a hand-installed end2end model owned by the project does."""
+    from unittest.mock import AsyncMock
+
+    from src.services.training.triton_promote import UnloadResult
+
+    client, _fake, _pool, _registry = world
+    unload = AsyncMock(return_value=UnloadResult('wheel_det', True, True))
+    monkeypatch.setattr('src.routers.curation.models.unload_triton_model', unload)
+    put = client.put(
+        URL,
+        json={'expected_revision': 0, 'detector': {'model': 'wheel_det', 'labels_path': labels}},
+    )
+    assert put.status_code == 200, put.text
+
+    refused = client.delete('/curation/projects/default/models/wheel_det')
+    assert refused.status_code == 409, refused.text
+    assert refused.json()['detail']['error'] == 'detector_in_use'
+    unload.assert_not_awaited()
+
+    forced = client.delete('/curation/projects/default/models/wheel_det', params={'force': 'true'})
+    assert forced.status_code == 200, forced.text
+    unload.assert_awaited_once()

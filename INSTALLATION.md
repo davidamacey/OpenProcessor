@@ -247,6 +247,12 @@ Entries whose status is not `tested` are never picked automatically; `use`
 accepts them with a warning. The API never restarts the container: it records
 the wanted model and reports `restart_required`.
 
+`use`, `apply` and `probe` need `OP_LOCAL_VLM_ENDPOINT` in `.env` (the installer
+sets it to `env` with the `vlm` tier). To add the in-compose VLM to an install
+that was made without it, re-run `./setup-openprocessor.sh --tiers <your
+tiers>,vlm`, or set `OP_LOCAL_VLM_ENDPOINT=env` in `.env`, keep `vlm` in
+`COMPOSE_PROFILES` and run `docker compose --profile vlm up -d vlm`.
+
 ### Upgrade, repair, rollback, uninstall
 
 Run these from the install directory.

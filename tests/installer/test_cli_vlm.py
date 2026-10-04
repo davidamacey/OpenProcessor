@@ -202,6 +202,20 @@ def test_a_stack_without_the_in_compose_vlm_is_refused(shimmed: Shimmed, stack: 
     assert 'OP_LOCAL_VLM_ENDPOINT' in result.stdout + result.stderr
 
 
+@pytest.mark.parametrize('sub', [('use', QWEN, '--yes'), ('probe',)])
+def test_no_endpoint_message_says_how_to_enable_the_vlm(
+    shimmed: Shimmed, stack: Path, sub: tuple[str, ...]
+) -> None:
+    set_env(stack, OP_LOCAL_VLM_ENDPOINT='')
+    result = cli(shimmed, stack, 'vlm', *sub, SHIM_VLM_ROOT=QWEN_REPO, **WAIT)
+    out = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert 'OP_LOCAL_VLM_ENDPOINT is not set' in out
+    assert '--tiers <your tiers>,vlm' in out
+    assert 'OP_LOCAL_VLM_ENDPOINT=env' in out
+    assert 'docker compose --profile vlm up -d vlm' in out
+
+
 def test_an_unreachable_api_container_aborts_before_touching_env(
     shimmed: Shimmed, stack: Path
 ) -> None:

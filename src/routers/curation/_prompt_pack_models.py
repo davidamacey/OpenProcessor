@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -39,6 +39,16 @@ class PromptPackBody(BaseModel):
     region_visible_user: str = ''
     class_descriptions: dict[str, str] = Field(default_factory=dict)
     synonyms: dict[str, str] = Field(default_factory=dict)
+    # Typed ``Any`` on purpose: a non-list or non-string entry must reach
+    # ``validate_pack`` and come back as a validation issue, not a pydantic
+    # 422. The schema still advertises ``list[str]`` to clients.
+    proposal_denylist: Annotated[
+        Any,
+        Field(
+            default_factory=list,
+            json_schema_extra={'type': 'array', 'items': {'type': 'string'}},
+        ),
+    ]
 
 
 class PromptPackSummary(BaseModel):
@@ -142,7 +152,7 @@ class PromptPackFieldSchema(BaseModel):
     field: str
     label: str
     group: str
-    kind: Literal['text', 'map']
+    kind: Literal['text', 'map', 'list']
     formatted: bool
     required_placeholders: list[str]
     allowed_placeholders: list[str]

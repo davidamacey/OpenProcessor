@@ -33,6 +33,7 @@ RESERVED_NAMES: frozenset[str] = frozenset({'off', 'none', 'default'})
 
 MAX_FIELD_LEN = 20_000
 MAX_MAP_ENTRIES = 500
+MAX_DENYLIST_PATTERN_LEN = 200
 
 _STRING_FIELDS = tuple(
     f.name
@@ -69,6 +70,54 @@ def _issue(
         detail=detail or {},
         bypassable=code in BYPASSABLE_CODES,
     )
+
+
+def _check_denylist(deny: Any) -> list[ValidationIssue]:
+    field_name = 'proposal_denylist'
+    if deny is None:
+        return []
+    if not isinstance(deny, list) or not all(isinstance(p, str) for p in deny):
+        return [
+            _issue(
+                'pack_field_missing',
+                'error',
+                f'{field_name} must be a list of strings',
+                field=field_name,
+            )
+        ]
+    if len(deny) > MAX_MAP_ENTRIES:
+        return [
+            _issue(
+                'pack_field_too_long',
+                'error',
+                f'{field_name} has more than {MAX_MAP_ENTRIES} entries',
+                field=field_name,
+                detail={'entries': len(deny), 'max': MAX_MAP_ENTRIES},
+            )
+        ]
+    issues: list[ValidationIssue] = []
+    for i, pattern in enumerate(deny):
+        if not pattern.strip():
+            issues.append(
+                _issue(
+                    'pack_field_empty',
+                    'error',
+                    f'{field_name}[{i}] must not be empty',
+                    field=field_name,
+                    detail={'index': i},
+                )
+            )
+        elif len(pattern) > MAX_DENYLIST_PATTERN_LEN:
+            issues.append(
+                _issue(
+                    'pack_field_too_long',
+                    'error',
+                    f'{field_name}[{i}] exceeds {MAX_DENYLIST_PATTERN_LEN} characters',
+                    field=field_name,
+                    detail={'index': i, 'length': len(pattern), 'max': MAX_DENYLIST_PATTERN_LEN},
+                )
+            )
+    return issues
 
 
 def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
@@ -125,20 +174,7 @@ def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
                     detail={'entries': len(value), 'max': MAX_MAP_ENTRIES},
                 )
             )
-    deny = body.get('proposal_denylist')
-    if deny is not None and (
-        not isinstance(deny, list)
-        or not all(isinstance(p, str) for p in deny)
-        or len(deny) > MAX_MAP_ENTRIES
-    ):
-        issues.append(
-            _issue(
-                'pack_field_missing',
-                'error',
-                'proposal_denylist must be a list of strings',
-                field='proposal_denylist',
-            )
-        )
+    issues.extend(_check_denylist(body.get('proposal_denylist')))
     return issues
 
 
