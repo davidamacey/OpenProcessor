@@ -55,7 +55,7 @@ from src.services.config_store.open_vocab import (
     save_set,
     template_names,
 )
-from src.services.config_store.open_vocab_validation import validate_open_vocab
+from src.services.config_store.open_vocab_validation import taken_message, validate_open_vocab
 
 
 def validation_inputs() -> dict[str, Any]:
@@ -240,7 +240,7 @@ async def create_open_vocab(
     ):
         raise api_error(422, 'validation_failed', 'the set name is not usable', report=report)
     if body.name in existing:
-        raise api_error(409, 'name_conflict', f'{body.name!r} is already taken')
+        raise api_error(409, 'name_conflict', taken_message(body.name))
     if not report.ok:
         raise api_error(
             422, 'validation_failed', f'the set has {len(report.errors)} error(s)', report=report

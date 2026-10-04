@@ -315,3 +315,10 @@ def test_clone_helpers_tag_and_describe_by_source() -> None:
     assert cloned_description(None, TEMPLATE_DESCRIPTION) == ''
     assert cloned_description(None, 'mine') == 'mine'
     assert cloned_description('given', TEMPLATE_DESCRIPTION) == 'given'
+
+
+def test_create_with_template_name_explains_the_conflict(client: TestClient) -> None:
+    r = client.post(PREFIX, json={'name': 'street_objects', 'body': _body()})
+    assert r.status_code == 409
+    assert r.json()['detail']['error'] == 'name_conflict'
+    assert 'template' in r.json()['detail']['message']
