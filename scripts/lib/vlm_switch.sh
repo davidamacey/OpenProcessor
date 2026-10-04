@@ -167,6 +167,18 @@ _vlm_recreate_targets() {
     return 0
 }
 
+# _vlm_no_endpoint ACTION -> the refusal for an install without an in-compose vlm,
+# with the steps that enable one on an existing install (docs: VLM selection).
+_vlm_no_endpoint() {
+    log_error "OP_LOCAL_VLM_ENDPOINT is not set: this install has no in-compose vlm${1:+ to $1}"
+    log_info "To enable one on this install, either:"
+    log_info "  - re-run the installer with the vlm tier added: ./setup-openprocessor.sh --tiers <your tiers>,vlm"
+    log_info "    (it picks a catalog model for your GPU and writes the VLM_* settings and OP_LOCAL_VLM_ENDPOINT=env), or"
+    log_info "  - set OP_LOCAL_VLM_ENDPOINT=env in ${PROJECT_DIR}/.env, keep 'vlm' in COMPOSE_PROFILES, then start it:"
+    log_info "    docker compose --profile vlm up -d vlm   (or 'openprocessor update' on a checkout)"
+    log_info "Docs: Guides > VLM selection, section 'CLI'."
+}
+
 _vlm_status() {
     local endpoint body
     endpoint="$(_env_value OP_LOCAL_VLM_ENDPOINT)"
@@ -190,7 +202,7 @@ _vlm_status() {
 _vlm_probe() {
     local endpoint body
     endpoint="$(_env_value OP_LOCAL_VLM_ENDPOINT)"
-    [[ -n "$endpoint" ]] || { log_error "OP_LOCAL_VLM_ENDPOINT is not set: this install has no in-compose vlm"; return 1; }
+    [[ -n "$endpoint" ]] || { _vlm_no_endpoint ""; return 1; }
     if ! body="$(_vlm_api POST "/curation/vlm/endpoints/${endpoint}/probe")"; then
         log_error "probe of '${endpoint}' failed: ${body}"
         return 1
@@ -250,7 +262,7 @@ _vlm_switch() {
     image_key="$(vlm_catalog_field "$id" vllm_image_key)"
     local endpoint gpu_id total_mib free_mib
     endpoint="$(_env_value OP_LOCAL_VLM_ENDPOINT)"
-    [[ -n "$endpoint" ]] || { log_error "OP_LOCAL_VLM_ENDPOINT is not set: this install has no in-compose vlm to switch"; return 1; }
+    [[ -n "$endpoint" ]] || { _vlm_no_endpoint "switch"; return 1; }
     gpu_id="$(_env_value VLM_GPU_ID)"; gpu_id="${gpu_id:-0}"
 
     # 1. fits the card
