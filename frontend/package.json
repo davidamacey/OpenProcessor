@@ -1,7 +1,7 @@
 {
   "name": "cropwright",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "From raw images to a trained detector, without labeling one box at a time. Labeling frontend for OpenProcessor.",
   "license": "AGPL-3.0-only",
   "author": "example-org LLC",

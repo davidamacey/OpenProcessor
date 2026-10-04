@@ -1324,6 +1324,19 @@ message, class_name?}], force_allowed, override?, thresholds?}`
   builds" only when the response serves
   `cold_start_expected_on_first_inference: true` (OpenProcessor ffb88b8;
   `promoteSuccessMessage`, `$lib/promote.ts`).
+  Since OpenProcessor 0.4.1 (#87) the promote is a background job: `POST
+/train/promote/{job_id}` answers `202` with a `PromoteJobStatus`
+  (`promote_id`, `status` queued/exporting/loading/building/warming/done/failed,
+  `error`/`error_status`, `result` on done, `poll_after_s`). `PromoteJobController`
+  (`$lib/promoteJobController.svelte.ts`) starts it, polls
+  `GET .../promote/{job_id}/jobs/{promote_id}` every `poll_after_s`, and the
+  modal shows the phases. A `200` (same job already active) and a `409
+promote_in_progress` (different name; body carries `promote_id`) both attach
+  to the running job; a failed job shows its served `error` plus
+  `error_status`. After a reload the `/train` page re-opens the modal on a run
+  whose `GET /train/status/{job_id}` `promote` is still in flight
+  (`findActivePromote`). Synchronous 4xx (gate 422, name 409, 404) arrive
+  before any job exists and render as before.
 - **Reproduce** — fetches `{API_PREFIX}/train/manifest/{job_id}` and submits a
   fresh job with the same `spec`/`lineage`. Phase 6 polish — design §15.4.
 
