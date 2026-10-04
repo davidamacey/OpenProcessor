@@ -233,7 +233,9 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 
     The API polls these files; a half-written status must never be readable.
     """
-    tmp = path.with_suffix(path.suffix + '.tmp')
+    # Unique per writer: the heartbeat thread and the main thread both write the
+    # same status file, and a shared tmp name let one rename the other's away.
+    tmp = path.with_suffix(f'{path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp')
     with tmp.open('w', encoding='utf-8') as fh:
         json.dump(payload, fh, indent=2, default=str)
     tmp.replace(path)
