@@ -20,6 +20,26 @@ scrape_configs:
         labels:
           group: 'api'
 
+  # Background workers (compose profile `curation`). Each serves its own
+  # registry; a target is down whenever that worker is not running.
+  - job_name: 'curation-detection-worker'
+    static_configs:
+      - targets: ['curation-detection-worker:4609']
+        labels:
+          group: 'worker'
+
+  - job_name: 'curation-vlm-worker'
+    static_configs:
+      - targets: ['curation-vlm-worker:4610']
+        labels:
+          group: 'worker'
+
+  - job_name: 'curation-auto-label-worker'
+    static_configs:
+      - targets: ['curation-auto-label-worker:4611']
+        labels:
+          group: 'worker'
+
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']

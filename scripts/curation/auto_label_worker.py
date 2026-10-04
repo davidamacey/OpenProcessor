@@ -91,6 +91,7 @@ from src.services.curation.autolabel.job import (
     _trigger_file,
     failed_stages,
 )
+from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.worker_liveness import write_heartbeat as _write_container_heartbeat
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import (
@@ -477,6 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         # project given here means every active project (multi-project
         # mode, §5.2), not a single-project env-var bind.
         bind_script_project(args.project)
+    start_worker_metrics_server(os.environ.get('OP_AUTO_LABEL_WORKER_METRICS_PORT', '4611'))
 
     stop = asyncio.Event()
 

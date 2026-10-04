@@ -56,12 +56,14 @@ import base64
 import contextlib
 import json
 import re
+import time
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.ops_metrics import record_vlm_request
 from src.services.labeling.region_overlay import (
     VlmBoxVerdict,
     box_verdicts,
@@ -805,6 +807,7 @@ class VlmLabeler:
         ``egress_check`` (the factory's) runs first and raises to refuse the
         send: a host's DNS can change after the endpoint was validated."""
 
+        started = time.monotonic()
         try:
             if self._egress_check is not None:
                 await self._egress_check()
@@ -813,8 +816,10 @@ class VlmLabeler:
                 self._client, url, self._headers, payload, self._bucket
             )
         except Exception as exc:
+            record_vlm_request(self.model, 'error', time.monotonic() - started)
             record_chat_exchange(payload, None, describe_upstream_error(exc))
             raise
+        record_vlm_request(self.model, 'ok', time.monotonic() - started, response)
         record_chat_exchange(payload, response)
         return response
 

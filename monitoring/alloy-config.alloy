@@ -2,7 +2,7 @@
 //
 // Replaces the former Promtail setup (Promtail is EOL since 2026-03-02).
 // Same topology: discover containers over the Docker socket, keep only
-// the Triton and FastAPI services, label with container + stream, and
+// the Triton, FastAPI and worker services, label with container + stream, and
 // push to Loki.
 //
 // Scope: only containers of THIS compose project. The Docker socket shows
@@ -72,6 +72,35 @@ discovery.relabel "fastapi" {
   }
 }
 
+// Background worker + segmenter logs (compose profile `curation`; absent
+// containers simply match nothing).
+discovery.relabel "workers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = sys.env("OP_LOG_PROJECT")
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "curation-detection-worker|curation-vlm-worker|curation-auto-label-worker|segmenter"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "worker"
+  }
+}
+
 loki.source.docker "triton" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.triton.output
@@ -81,6 +110,12 @@ loki.source.docker "triton" {
 loki.source.docker "fastapi" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.fastapi.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.source.docker "workers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.workers.output
   forward_to = [loki.write.default.receiver]
 }
 

@@ -86,6 +86,7 @@ class AppResources:
     arbiter_task: asyncio.Task[None] | None = None
     curation_knn_warmup_task: asyncio.Task[None] | None = None
     project_registry_poll_task: asyncio.Task[None] | None = None
+    ops_metrics_task: asyncio.Task[None] | None = None
     config_store_poll_task: asyncio.Task[None] | None = None
     open_vocab_sweeper_task: asyncio.Task[None] | None = None
     event_bus_started: bool = False
@@ -204,6 +205,11 @@ async def lifespan(app: FastAPI):
     from src.services.projects.bootstrap import startup_bootstrap_project_registry_safe
 
     AppResources.project_registry_poll_task = await startup_bootstrap_project_registry_safe()
+
+    # Snapshot gauges (queue depth, embedding state, shards) for the dashboards.
+    from src.services.curation.ops_metrics_refresh import refresh_loop as ops_metrics_refresh_loop
+
+    AppResources.ops_metrics_task = asyncio.create_task(ops_metrics_refresh_loop())
 
     # Best-effort: create each project's curation indexes (F-25) + kNN-warmup.
     from src.core.dependencies import bootstrap_opensearch_indexes
@@ -351,6 +357,12 @@ async def lifespan(app: FastAPI):
     # SHUTDOWN
     # =========================================================================
     logger.info('shutdown_begin', phase='cleanup')
+
+    if AppResources.ops_metrics_task is not None:
+        AppResources.ops_metrics_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await AppResources.ops_metrics_task
+        AppResources.ops_metrics_task = None
 
     # Cancel the GPU-arbiter reconcile loop. Cleared afterwards so a second
     # app lifecycle in the same process (tests, embedded runs) never sees a

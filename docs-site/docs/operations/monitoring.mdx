@@ -35,7 +35,7 @@ and OpenSearch Dashboards run without authentication, like the API.
 
 ## Prometheus targets
 
-`monitoring/prometheus.yml` scrapes five jobs:
+`monitoring/prometheus.yml` scrapes these jobs:
 
 | Job | Target | Metrics |
 | --- | --- | --- |
@@ -44,6 +44,15 @@ and OpenSearch Dashboards run without authentication, like the API.
 | `node` | `node-exporter:9100` | Host CPU, memory, load. |
 | `dcgm` | `dcgm-exporter:9400` | Per-GPU `DCGM_FI_DEV_*` series. |
 | `loki` | `loki:3100` | Loki's own health. |
+| `curation-detection-worker` | `curation-detection-worker:4609` | The detection worker's own `op_*` series (segmenter calls, stage timings, items written, VLM calls). |
+| `curation-vlm-worker` | `curation-vlm-worker:4610` | The VLM worker's `op_*` series (VLM tokens and latency, heartbeat). |
+| `curation-auto-label-worker` | `curation-auto-label-worker:4611` | The auto-label worker's heartbeat series. |
+
+The three worker jobs belong to the `curation` compose profile; each target
+shows as down whenever its worker is not running. Override the ports with
+`OP_REGION_WORKER_METRICS_PORT`, `OP_VLM_WORKER_METRICS_PORT` and
+`OP_AUTO_LABEL_WORKER_METRICS_PORT` (`0` turns the endpoint off; if you
+change a port, change the matching job in `prometheus.yml`).
 
 <Screenshot
   name="backend-prometheus-targets.png"
@@ -78,9 +87,9 @@ the `openprocessor` tag. Every dashboard has a data-source variable, a
 
 | Dashboard | Use it to | Metrics |
 |---|---|---|
-| **Overview** (`overview.json`) | See service health at a glance: scrape targets, API rate/5xx/p95, Triton failures, firing alerts, GPU and host load | `up`, `http_request_duration_seconds_*`, `nv_inference_*`, `ALERTS`, `DCGM_FI_DEV_*`, `node_*` |
-| **Ingest pipeline** (`ingest-pipeline.json`) | Find the slow ingest stage; watch decode, prefetch, thumbnail and crop caches, write conflicts | `op_pipeline_stage_seconds_*`, `op_pipeline_stage_bytes_total`, `op_source_image_*`, `op_thumbnail_cache_*`, `op_shm_crop_cache_*`, `op_open_vocab_items_written_total`, `op_ingest_occ_final_conflict_total` |
-| **API and labeling** (`api-curation.json`) | Per-route traffic, errors, latency; VLM call mix and parse failures | `http_request_duration_seconds_*`, `op_vlm_*` |
+| **Overview** (`overview.json`) | See service health at a glance: scrape targets, API rate/5xx/p95, Triton failures, firing alerts, queue backlog and oldest item, worker liveness, OpenSearch shards and storage per project, GPU and host load | `up`, `http_request_duration_seconds_*`, `nv_inference_*`, `ALERTS`, `DCGM_FI_DEV_*`, `node_*`, `op_queue_*`, `op_worker_*`, `op_opensearch_*` |
+| **Ingest pipeline** (`ingest-pipeline.json`) | Find the slow ingest stage; watch decode, prefetch, thumbnail and crop caches, write conflicts; per-project images, items, failures and embedding backlog | `op_pipeline_stage_seconds_*`, `op_pipeline_stage_bytes_total`, `op_source_image_*`, `op_thumbnail_cache_*`, `op_shm_crop_cache_*`, `op_open_vocab_items_written_total`, `op_ingest_occ_final_conflict_total`, `op_ingest_*`, `op_embedding_state_items` |
+| **API and labeling** (`api-curation.json`) | Per-route traffic, errors, latency; VLM call mix, parse failures, tokens and latency; segmenter hit ratio and latency; detection worker items | `http_request_duration_seconds_*`, `op_vlm_*`, `op_region_segmenter_request*`, `op_detection_worker_items_total` |
 | **OpenProcessor Triton Dashboard** (`triton-unified-dashboard.json`) | Per-model throughput, latency, batching, queue time | `nv_inference_*`, `nv_gpu_*`, `node_*` |
 | **GPUs** (`gpu-metrics-dashboard.json`) | Per-card utilization, VRAM, power, temperature, clocks, codecs, XID errors (`gpu` variable) | `DCGM_FI_DEV_*`, `nv_gpu_*` |
 | **Logs** (`logs.json`) | Log volume, error and warning counts, recent errors, search (Loki; `job`, `container`, search variables) | Loki streams from Alloy |
@@ -96,9 +105,10 @@ drop. The ingest dashboard stays flat until images are ingested.
 :::note[Panels without data]
 The error-ratio and error-log panels are empty when nothing is failing, and
 the latency percentiles of idle stages are empty because there are no
-observations. The segmenter and detection worker export no metrics, so they
-have no panels; see the tracking issue "observability: metrics needed for the
-Grafana dashboards".
+observations. Worker panels (segmenter, detection, VLM, worker liveness) are
+empty while the `curation` profile is not running. The segmenter container
+exports no metrics of its own: its requests are timed by the detection
+worker, and its liveness is a `/health` probe made by the API.
 :::
 
 Panels only move while the API is serving requests; an idle stack shows
@@ -117,8 +127,9 @@ Triton version does not export, so both show "No data". The
 ## Logs with Loki
 
 Alloy (`monitoring/alloy-config.alloy`) discovers containers through the
-Docker socket, keeps the Triton and API containers, labels each stream
-with `container`, `stream` and `job` (`triton` or `fastapi`), and pushes
+Docker socket, keeps this project's Triton and API containers plus the
+detection, VLM and auto-label workers and the segmenter, labels each stream
+with `container`, `stream` and `job` (`triton`, `fastapi` or `worker`), and pushes
 it to Loki. In Grafana's **Explore** view, pick the Loki data source and
 filter on those labels. Loki keeps its data in the `loki_data` volume.
 
@@ -132,6 +143,46 @@ to see which containers are actually shipping logs, and adjust the
 `regex` rules in `alloy-config.alloy` to match your container names
 before relying on Loki.
 :::
+
+## Operator metrics reference
+
+These `op_*` series feed the Overview, Ingest and API dashboards. Counters and
+histograms are emitted where the work happens (API or worker container).
+Snapshot gauges are sampled from OpenSearch every `OP_METRICS_REFRESH_INTERVAL_S`
+seconds (default 30, `0` disables) by the API; one API worker per interval does
+the queries and the gauges use `multiprocess_mode='livemostrecent'`, so a scrape
+shows the latest value rather than a sum. A failed OpenSearch read leaves the
+previous value in place.
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `op_ingest_images_total` | counter | `project`, `outcome` (`ok`, `failed`, `skipped`) | Images that finished ingest; `skipped` is a duplicate of an existing image. |
+| `op_ingest_items_total` | counter | `project` | Items (crops) indexed by ingest. |
+| `op_queue_depth` | gauge | `queue` (`segment`, `label`, `embed`), `project` | Items waiting: `segment` = `pending_detection`, `label` = `pending_verification`, `embed` = vector deferred. |
+| `op_queue_oldest_item_age_seconds` | gauge | `queue` | Age of the longest-waiting item in that queue, worst project. |
+| `op_embedding_state_items` | gauge | `project`, `state` (`pending`, `embedded`, `failed`) | Items by embedding state; `pending` is `embedding_state=deferred`. |
+| `op_worker_last_heartbeat_timestamp_seconds` | gauge | `worker` (`detection`, `vlm`, `curation`, `segmenter`) | Unix time of the worker's last liveness heartbeat (segmenter: last successful `/health` probe). |
+| `op_worker_up` | gauge | `worker` (same values) | 1 when every sub-task reported alive on the last heartbeat, else 0. |
+| `op_region_segmenter_requests_total` | counter | `outcome` (`hit`, `miss`, `error`) | Crop-stage segmenter requests made by the detection worker. |
+| `op_region_segmenter_request_seconds` | histogram | `outcome` | Duration of those requests. |
+| `op_detection_worker_items_total` | counter | `outcome` (`ok`, `skipped`, `failed`) | Items the detection worker finished: written, skipped on an OCC conflict, or lost to a bulk-write error. |
+| `op_vlm_tokens_total` | counter | `direction` (`prompt`, `completion`), `model` | Tokens from the VLM endpoint's `usage` block; endpoints that omit it add nothing. |
+| `op_vlm_request_seconds` | histogram | `model`, `outcome` (`ok`, `error`) | Duration of VLM chat-completion requests (retries included). |
+| `op_opensearch_shards` | gauge | `project`, `index_role` | Primaries x (1 + replicas) per project index role. |
+| `op_opensearch_store_bytes` | gauge | `project`, `index_role` | On-disk bytes (primaries + replicas) per project index role. |
+
+**Label cardinality.** No label is per item, crop or image. `project` is the one
+label that scales with usage, so it is capped: at most
+`OP_METRICS_MAX_PROJECT_LABELS` (default 50) projects get their own series, chosen
+as the first slugs in sorted order from the project registry (every process picks
+the same set); the rest are folded into `project="other"`. `model` is the
+configured VLM model id.
+
+**Not emitted.** There is no `ingest` value for `op_queue_depth` because ingest is
+a synchronous request with no persisted backlog. `op_plan_cost_units_total`
+(proposed in the tracking issue) is not defined: OpenProcessor has no plan or
+cost-unit accounting for requests to count, and an always-zero series would
+mislead.
 
 ## OpenSearch Dashboards
 

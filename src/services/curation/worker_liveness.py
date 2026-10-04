@@ -61,7 +61,13 @@ def write_heartbeat(name: str, tasks: Mapping[str, bool]) -> None:
     even though the file itself is fresh.
     """
     HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
-    payload = {'ts': time.time(), 'pid': os.getpid(), 'tasks': dict(tasks)}
+    now = time.time()
+    payload = {'ts': now, 'pid': os.getpid(), 'tasks': dict(tasks)}
+    # Lazy: the healthcheck CLI runs this file by path under a 5 s timeout and
+    # only ever calls check_heartbeat, never this writer.
+    from src.services.curation.ops_metrics import record_worker_heartbeat
+
+    record_worker_heartbeat(name, tasks, now)
     path = _heartbeat_path(name)
     tmp = path.with_suffix('.tmp')
     tmp.write_text(json.dumps(payload))

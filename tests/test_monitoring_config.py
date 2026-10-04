@@ -66,7 +66,7 @@ def _keep_rules(block: str) -> list[tuple[str, str]]:
 
 def _blocks() -> dict[str, str]:
     blocks = {m.group('name'): m.group('body') for m in _BLOCK_RE.finditer(_read_config())}
-    assert set(blocks) == {'triton', 'fastapi'}, blocks
+    assert set(blocks) == {'triton', 'fastapi', 'workers'}, blocks
     return blocks
 
 
@@ -101,6 +101,31 @@ def test_only_this_projects_triton_and_api_are_kept(project: str) -> None:
     assert not _kept(blocks['triton'], _container(project, 'yolo-api'), env)
     assert not _kept(blocks['fastapi'], _container(project, 'triton-server'), env)
     assert not _kept(blocks['fastapi'], _container(project, 'curation-detection-worker'), env)
+
+
+_WORKER_SERVICES = (
+    'curation-detection-worker',
+    'curation-vlm-worker',
+    'curation-auto-label-worker',
+    'segmenter',
+)
+
+
+@pytest.mark.parametrize('project', ['openprocessor', 'opinst-w0'])
+def test_worker_and_segmenter_logs_are_kept_for_this_project_only(project: str) -> None:
+    block = _blocks()['workers']
+    env = {'OP_LOG_PROJECT': project}
+    for service in _WORKER_SERVICES:
+        assert _kept(block, _container(project, service), env), service
+        assert not _kept(block, _container('opfinal', service), env), service
+    for service in ('yolo-api', 'triton-server', 'opensearch', 'curation-cluster-refresh'):
+        assert not _kept(block, _container(project, service), env), service
+    # fullmatch: a look-alike service name must not slip through
+    assert not _kept(block, _container(project, 'segmenter-extra'), env)
+
+
+def test_worker_streams_get_their_own_job_label() -> None:
+    assert 'replacement  = "worker"' in _read_config()
 
 
 def test_every_block_is_scoped_by_the_project_label_not_the_name() -> None:
@@ -154,3 +179,38 @@ def test_rendered_compose_config_sets_the_alloy_project(tmp_path: Path) -> None:
     env = {'OP_LOG_PROJECT': alloy['environment']['OP_LOG_PROJECT']}
     assert _kept(blocks['triton'], _container('opinst-test', 'triton-server'), env)
     assert not _kept(blocks['triton'], _container('openprocessor', 'triton-server'), env)
+
+
+def test_prometheus_scrapes_each_worker_on_the_port_it_serves() -> None:
+    import yaml
+
+    jobs = {
+        j['job_name']: j['static_configs'][0]['targets'][0]
+        for j in yaml.safe_load((REPO_ROOT / 'monitoring' / 'prometheus.yml').read_text())[
+            'scrape_configs'
+        ]
+    }
+    compose = (REPO_ROOT / 'docker-compose.yml').read_text()
+    expected = {
+        'curation-detection-worker': (
+            '4609',
+            'OP_REGION_WORKER_METRICS_PORT',
+            'scripts/curation/worker/runner.py',
+        ),
+        'curation-vlm-worker': (
+            '4610',
+            'OP_VLM_WORKER_METRICS_PORT',
+            'scripts/curation/vlm_worker.py',
+        ),
+        'curation-auto-label-worker': (
+            '4611',
+            'OP_AUTO_LABEL_WORKER_METRICS_PORT',
+            'scripts/curation/auto_label_worker.py',
+        ),
+    }
+    for service, (port, env_var, source) in expected.items():
+        assert jobs[service] == f'{service}:{port}'
+        assert f'\n  {service}:\n' in compose
+        text = (REPO_ROOT / source).read_text()
+        assert env_var in text
+        assert port in text

@@ -55,6 +55,7 @@ from scripts.curation._project_worker_utils import (
 )
 from src.config.project_context import bind_project
 from src.services.curation.embedding_state import embedded_clause
+from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import (
@@ -654,6 +655,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.project:
         # Fails fast on an unknown/unbindable slug.
         bind_script_project(args.project, opensearch_url=args.opensearch)
+    start_worker_metrics_server(os.environ.get('OP_VLM_WORKER_METRICS_PORT', '4610'))
     try:
         return asyncio.run(run(args))
     except KeyboardInterrupt:
