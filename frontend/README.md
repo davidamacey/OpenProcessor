@@ -54,9 +54,12 @@ it has no data of its own to show.
 
 ## Quick start (Docker)
 
-Cropwright is not published as a standalone image yet: it ships with the
-OpenProcessor 0.5.0 release. Until then, run it from a source checkout, which
-builds the app and its docs:
+Cropwright 0.1.0 is published as `davidamacey/cropwright` (and
+`davidamacey/cropwright-docs`) on Docker Hub, and the OpenProcessor installer
+sets it up for you. To run it standalone, use `docker-compose.yml` from the
+release (`docker compose pull && docker compose up -d`; add `--profile docs`
+for the bundled documentation). From a source checkout, build the app and its
+docs instead:
 
 ```bash
 cp .env.example .env

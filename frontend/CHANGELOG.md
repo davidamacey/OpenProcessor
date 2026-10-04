@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-04
+
+First public release. See `docs/releases/v0.1.0.md` for the full release notes.
+
 ### Added
 
 - **Documentation screenshots for the v0.4.0 features.** Sixteen new
@@ -18,6 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with the three new side-effect-free report POSTs allow-listed).
 
 ### Changed
+
+- **`docker-compose.yml` honours `CROPWRIGHT_IMAGE`** (a full image reference,
+  e.g. a digest pin; wins over `CROPWRIGHT_TAG`), and the bundled `docs`
+  service is now opt-in (`docker compose --profile docs up -d`) so the app is
+  the only default image. Both are required by the OpenProcessor installer.
 
 - **Resources menu and dashboards row render the served `resource_links`.**
   `GET /settings` `monitoring_links` is replaced by `resource_links` (id,

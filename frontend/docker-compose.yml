@@ -12,7 +12,7 @@
 # defaults to :latest.
 #
 # Two services: `cropwright` (the app, the only published port) and `docs`
-# (the documentation site, no published port). Both sit on a private compose
+# (the documentation site, no published port; opt in with `--profile docs`). Both sit on a private compose
 # network, so nginx reaches the docs at http://docs:8080 (DOCS_UPSTREAM) and
 # serves them at /cropwright/ on the app origin. The API's own Swagger UI /
 # ReDoc / openapi.json are proxied at /docs, /redoc and /openapi.json. Only
@@ -33,7 +33,9 @@
 #     docker compose -p cw-second up -d
 services:
   cropwright:
-    image: davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}
+    # CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over
+    # CROPWRIGHT_TAG; the OpenProcessor installer sets it.
+    image: ${CROPWRIGHT_IMAGE:-davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}}
     container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
     restart: unless-stopped
     security_opt:
@@ -71,6 +73,9 @@ services:
       - api
 
   docs:
+    # Opt-in: `docker compose --profile docs up -d`. Kept out of the default
+    # set so `docker compose config --images` lists only the app image.
+    profiles: ['docs']
     image: davidamacey/cropwright-docs:${CROPWRIGHT_TAG:-latest}
     container_name: ${CROPWRIGHT_DOCS_CONTAINER_NAME:-cropwright-docs}
     restart: unless-stopped
