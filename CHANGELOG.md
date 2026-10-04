@@ -30,6 +30,14 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   pre-commit job installs the app dependencies for the OpenAPI contract hook, and the Trivy
   steps honour `scripts/release/trivy-allowlist.txt`; docs-site pins patched `lodash-es` and
   `serialize-javascript` (#121).
+- CI: the offline-suite requirements now cover every dependency the not-live tests use and pin
+  the FastAPI and pydantic versions the committed OpenAPI contract is generated from (#121).
+- The installer dry-run test drives the placeholder-lock refusal with a fixture lock, and a new
+  test asserts the committed `images.lock` and `cropwright.lock` are fully pinned (#121).
+- Trainer status writes use a unique temporary file per writer, so the heartbeat thread can no
+  longer race the terminal status write (fixes a flaky cancel test).
+- The API image upgrades the base image's pip, whose vendored msgpack, setuptools and urllib3
+  were flagged by the Trivy image scan (#121).
 
 ## [0.4.0] - 2026-10-04
 
