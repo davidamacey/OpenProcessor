@@ -237,6 +237,14 @@ def test_version_mismatch_allowed_with_allow_dirty(sandbox: Path, fake_bin: Path
     assert result.returncode == 0, result.stderr
 
 
+def test_failed_docker_build_is_reported_not_logged_as_built(sandbox: Path, fake_bin: Path) -> None:
+    _write_shim(fake_bin / 'docker', 'case "$1" in build) exit 1 ;; esac; exit 0')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'builds failed' in result.stderr
+    assert 'built ' not in result.stderr.replace('builds failed', '')
+
+
 def test_trivy_critical_finding_fails_the_gate(sandbox: Path, fake_bin: Path) -> None:
     _write_shim(fake_bin / 'trivy', 'exit 10')
     result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
@@ -263,6 +271,7 @@ def test_trivy_gets_timeout_and_vuln_only_scanners(sandbox: Path, fake_bin: Path
     args = log.read_text()
     assert '--timeout 45m' in args
     assert '--scanners vuln' in args
+    assert '--exit-code 10' in args
 
 
 def test_allowlist_entry_without_reason_is_rejected(sandbox: Path, fake_bin: Path) -> None:

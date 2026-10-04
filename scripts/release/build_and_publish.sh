@@ -211,7 +211,7 @@ build_image() {
         --build-arg "OP_BUILD_SHA=${REVISION}" \
         --label "org.opencontainers.image.revision=${REVISION}" \
         --label "org.opencontainers.image.version=${VERSION}" \
-        "$context"
+        "$context" || return 1
     ok "built $version_tag"
     echo "$version_tag"
 }

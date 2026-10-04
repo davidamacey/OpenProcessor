@@ -25,7 +25,7 @@ LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
 # below (the published digest must be reproducible).
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
-    && dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'libnvinfer*' 'libnvonnxparsers*' 'libnvparsers*' 'tensorrt*' 2>/dev/null \
+    && { dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'libnvinfer*' 'libnvonnxparsers*' 'libnvparsers*' 'tensorrt*' 2>/dev/null || true; } \
        | awk '$1 == "ii" {print $2}' | sort -u | xargs -r apt-mark hold \
     && apt-get upgrade -y \
     && apt-get clean \

@@ -13,6 +13,13 @@ case "$*" in
         done
         awk -F', *' -v n="$idx" '$1 == n { printf "%d, %d\n", $3, $3 - $4 }' "${SHIM_STATE}/gpus.csv"
         ;;
+    *--query-compute-apps*)
+        # rows "pid, gpu_uuid, used_mib" from $SHIM_STATE/compute_apps.csv
+        cat "${SHIM_STATE:?}/compute_apps.csv" 2>/dev/null || true
+        ;;
+    *--query-gpu=index,uuid*)
+        cat "${SHIM_STATE:?}/gpu_uuids.csv" 2>/dev/null || true
+        ;;
     *--query-gpu*)
         [[ -f "${SHIM_STATE:?}/gpus.csv" ]] || { echo "NVIDIA-SMI has failed" >&2; exit 9; }
         cat "${SHIM_STATE}/gpus.csv"
