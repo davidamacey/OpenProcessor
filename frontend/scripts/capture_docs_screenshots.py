@@ -65,7 +65,11 @@ OUT_DIR = REPO_ROOT / "docs-site" / "static" / "img" / "screenshots"
 WIDTHS = (1600, 800)
 VIEWPORT_HEIGHT = 1000
 # States whose page scrolls inside the app shell need a taller viewport to show it all.
-STATE_HEIGHT = {"region-profile-test": 1600, "import-wizard": 2250, "import-job": 1500, "prompt-pack-editor": 1500, "prompt-pack-test": 1500, "region-profile-editor": 2300}
+STATE_HEIGHT = {"region-profile-test": 1600, "import-wizard": 2250, "import-job": 1500, "prompt-pack-editor": 1500, "prompt-pack-test": 1500, "region-profile-editor": 2300,
+    "resources-menu": 560, "import-job-actions": 560, "region-profile-testable": 1400,
+    "ingest-policy-preview": 1300, "open-vocab-editor": 1300, "open-vocab-test": 1500,
+    "run-results-confusion": 1300, "clone-from-project": 800, "reprocess-served-scopes": 1000,
+    "region-stage-panel": 1500}
 
 
 def load_routes() -> list[dict]:
@@ -114,6 +118,20 @@ READ_ONLY_CALLS: list[tuple[str, re.Pattern[str], str, object]] = [
         None,
     ),
     ("POST", re.compile(r"/keymap/validate$"), "keymap validation report", None),
+    ("POST", re.compile(r"/ingest/policy/preview$"), "ingest policy cost preview (a report over stored detections)", None),
+    (
+        "POST",
+        re.compile(r"/region_profiles/validate_segmenter_prompt$"),
+        "'Check segmenter prompt' (text-only validation report)",
+        None,
+    ),
+    ("POST", re.compile(r"/open_vocab/validate$"), "open-vocabulary set validation report", None),
+    (
+        "POST",
+        re.compile(r"/open_vocab/test$"),
+        "open-vocabulary 'Test on an image' (runs SAM 3 on one stored image, writes nothing)",
+        None,
+    ),
     ("POST", re.compile(r"/vlm/endpoints/validate$"), "VLM endpoint validation report", None),
 ]
 
@@ -497,6 +515,227 @@ def state_vlm_run_picker(page, ctx: Ctx) -> None:
     _settle(page, 800)
 
 
+# --- v0.4.0 feature slots (issue #36) -------------------------------------------------
+# MAIN_PROJECT holds the full public COCO sample (VLM labels, embeddings); LIFE_PROJECT is
+# a throwaway `cwlife-<epoch>-x` project holding public COCO vehicle photos with a wheel
+# region profile, an ingest policy that leaves some detections un-embedded and an
+# open-vocabulary set (created by hand: see developer-guide/screenshots.md).
+MAIN_PROJECT = os.environ.get("MAIN_PROJECT", "sample-coco-2k-v3")
+LIFE_PROJECT = os.environ.get("LIFE_PROJECT", "")
+
+
+def _life() -> str:
+    if not LIFE_PROJECT.startswith("cwlife-"):
+        raise RuntimeError("set LIFE_PROJECT to the throwaway cwlife-<epoch>-x project")
+    return LIFE_PROJECT
+
+
+def state_resources_menu(page, ctx: Ctx) -> None:
+    page.goto(f"{ctx.base}/p/{MAIN_PROJECT}/dashboard", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("[data-testid='resources-trigger']", timeout=20_000)
+    _settle(page, 1500)
+    page.locator("[data-testid='resources-trigger']").click()
+    page.wait_for_selector("[data-testid='resources-list']", timeout=10_000)
+    _settle(page, 600)
+
+
+def state_wheels_inventory_card(page, ctx: Ctx) -> None:
+    page.goto(f"{ctx.base}/p/{_life()}/clusters", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("text=inventory", timeout=30_000)
+    _settle(page, 3000)
+
+
+def state_region_gallery_boxes(page, ctx: Ctx) -> None:
+    page.goto(
+        f"{ctx.base}/p/{_life()}/clusters?class=wheel", wait_until="domcontentloaded", timeout=30_000
+    )
+    page.wait_for_selector("text=/boxes listed/", timeout=30_000)
+    _settle(page, 3000)
+
+
+def state_import_job_actions(page, ctx: Ctx) -> None:
+    jobs = api_get(ctx.base, f"/curation/projects/{IMPORT_PROJECT}/datasets/imports")["items"]
+    jid = next(j["import_id"] for j in jobs if j["status"].startswith("completed"))
+    page.goto(
+        f"{ctx.base}/p/{IMPORT_PROJECT}/datasets/imports/{jid}",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='import-job']", timeout=15_000)
+    page.wait_for_selector("text=/Cancel import:/", timeout=15_000)
+    _settle(page, 1200)
+
+
+def state_region_profile_testable(page, ctx: Ctx) -> None:
+    life = _life()
+    first = api_get(ctx.base, f"/curation/projects/{life}/review/regions?page_size=1")["items"][0]["id"]
+    page.goto(
+        f"{ctx.base}/p/{life}/settings/region-profiles/wheels",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='profile-test-panel']", timeout=20_000)
+    page.locator("[data-testid='profile-test-crop-id']").fill(first)
+    page.locator("[data-testid='test-run']").click()
+    page.wait_for_selector("[data-testid='test-result'], [data-testid='test-error']", timeout=180_000)
+    if page.locator("[data-testid='test-error']").count():
+        raise RuntimeError(page.locator("[data-testid='test-error']").inner_text())
+    page.locator("[data-testid='profile-test-panel']").scroll_into_view_if_needed()
+    _settle(page, 800)
+    return page.locator("[data-testid='profile-test-panel']")
+
+
+def state_segmenter_prompt_check(page, ctx: Ctx) -> None:
+    page.goto(
+        f"{ctx.base}/p/{_life()}/settings/region-profiles/wheels",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='check-segmenter-prompt']", timeout=20_000)
+    page.locator("[data-testid='check-segmenter-prompt']").click()
+    page.wait_for_selector("[data-testid='segmenter-prompt-check']", timeout=60_000)
+    page.locator("[data-testid='segmenter-prompt-check']").scroll_into_view_if_needed()
+    _settle(page, 800)
+    return page.locator("[data-testid='profile-group']", has=page.locator("[data-testid='check-segmenter-prompt']"))
+
+
+def _first_locked_cluster(base: str) -> int:
+    d = api_get(base, f"/curation/projects/{IMPORT_PROJECT}/crops?page_size=100")
+    counts: dict[int, int] = {}
+    for c in d["crops"]:
+        if c.get("label_locked") and c.get("cluster_id", -1) >= 0:
+            counts[c["cluster_id"]] = counts.get(c["cluster_id"], 0) + 1
+    return max(counts, key=lambda k: counts[k])
+
+
+def state_locked_item_badge(page, ctx: Ctx) -> None:
+    cid = _first_locked_cluster(ctx.base)
+    page.goto(f"{ctx.base}/p/{IMPORT_PROJECT}/clusters/{cid}", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("[data-testid='label-locked-badge']", timeout=30_000)
+    _settle(page, 2000)
+
+
+def state_reprocess_served_scopes(page, ctx: Ctx) -> None:
+    cid = _first_locked_cluster(ctx.base)
+    page.goto(f"{ctx.base}/p/{IMPORT_PROJECT}/clusters/{cid}", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("[data-testid='cluster-header-counts']", timeout=15_000)
+    _settle(page)
+    page.keyboard.press("a")
+    page.wait_for_timeout(500)
+    page.locator("[data-testid='reprocess-open']").first.click()
+    page.wait_for_selector("[role='dialog'][aria-label='Reprocess']", timeout=10_000)
+    scopes = page.locator("[role='dialog'][aria-label='Reprocess'] input[type=checkbox]")
+    scopes.nth(0).check()
+    scopes.nth(3).check()
+    page.get_by_role("button", name="Check what would run").click()
+    page.wait_for_selector("[data-testid='reprocess-dry-run']", timeout=30_000)
+    _settle(page, 800)
+
+
+def state_clone_from_project(page, ctx: Ctx) -> None:
+    page.goto(
+        f"{ctx.base}/p/{MAIN_PROJECT}/settings/prompt-packs", wait_until="domcontentloaded", timeout=30_000
+    )
+    page.get_by_role("button", name=re.compile("^Clone")).first.click()
+    page.wait_for_selector("[data-testid='clone-from-project']", timeout=15_000)
+    # A native select popup is not part of a screenshot: show its options inline
+    # (display only; nothing is picked, nothing is submitted).
+    # Only the public sample projects are listed in the image: other options are
+    # removed from this page's DOM before the shot (the served list is unchanged).
+    page.locator("[data-testid='clone-from-project']").evaluate(
+        """(el, keep) => {
+          for (const o of [...el.options]) {
+            if (o.value !== '' && !keep.includes(o.value)) o.remove();
+          }
+          el.size = el.options.length;
+        }""",
+        [MAIN_PROJECT, IMPORT_PROJECT, "sample-coco-vehicles-v2", SHARE_OWNER, SHARE_CONSUMER],
+    )
+    _settle(page, 800)
+
+
+def state_ingest_policy_preview(page, ctx: Ctx) -> None:
+    page.goto(
+        f"{ctx.base}/p/{_life()}/settings/ingest-policy", wait_until="domcontentloaded", timeout=30_000
+    )
+    page.wait_for_selector("[data-testid='policy-preview-summary']", timeout=30_000)
+    _settle(page, 1000)
+
+
+def state_open_vocab_editor(page, ctx: Ctx) -> None:
+    page.goto(
+        f"{ctx.base}/p/{_life()}/settings/open-vocab/vehicle_parts",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='open-vocab-targets']", timeout=20_000)
+    _settle(page, 1500)
+
+
+def state_open_vocab_test(page, ctx: Ctx) -> None:
+    life = _life()
+    items = api_get(ctx.base, f"/curation/projects/{life}/review/regions?page_size=100")["items"]
+    car = max(  # the car crop with the most wheel boxes: a part is surely visible in it
+        items, key=lambda it: len(it["region_boxes"])
+    )["id"]
+    page.goto(
+        f"{ctx.base}/p/{life}/settings/open-vocab/vehicle_parts",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='open-vocab-test-panel']", timeout=20_000)
+    page.locator("[data-testid='ov-test-crop-id']").fill(car)
+    page.locator("[data-testid='ov-test-run']").click()
+    page.wait_for_selector("[data-testid='ov-test-result'], [data-testid='ov-test-error']", timeout=180_000)
+    if page.locator("[data-testid='ov-test-error']").count():
+        raise RuntimeError(page.locator("[data-testid='ov-test-error']").inner_text())
+    panel = page.locator("[data-testid='open-vocab-test-panel']")
+    panel.scroll_into_view_if_needed()
+    _settle(page, 800)
+    return panel
+
+
+def state_region_stage_panel(page, ctx: Ctx) -> None:
+    page.goto(f"{ctx.base}/p/{_life()}/ingest", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("[data-testid='region-stage-panel']", timeout=30_000)
+    panel = page.locator("[data-testid='region-stage-panel']")
+    panel.scroll_into_view_if_needed()
+    _settle(page, 1500)
+    return panel.locator("xpath=..")  # the worklog card: no server paths in the crop
+
+
+def state_dashboard_embedding(page, ctx: Ctx) -> None:
+    page.goto(f"{ctx.base}/p/{_life()}/dashboard", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("text=Embedding", timeout=30_000)
+    _settle(page, 2500)
+
+
+def state_crop_embedding_row(page, ctx: Ctx) -> None:
+    page.goto(
+        f"{ctx.base}/p/{_life()}/clusters?mode=matching&embedding_state=not_selected",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    page.wait_for_selector("[data-testid='embedding-state-badge']", timeout=30_000)
+    _settle(page, 1500)
+    card = page.locator("[data-testid='embedding-state-badge']").first.locator("xpath=ancestor::*[contains(@class,'group')][1]")
+    card.hover()
+    card.locator("button[title^='Details']").first.click()
+    page.wait_for_selector("[aria-label='Crop details']", timeout=15_000)
+    page.get_by_text("Embedding", exact=True).first.scroll_into_view_if_needed()
+    _settle(page, 1200)
+
+
+def state_run_results_confusion(page, ctx: Ctx) -> None:
+    page.goto(f"{ctx.base}/p/{SHARE_OWNER}/train", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("text=Past runs", timeout=30_000)
+    _settle(page, 1500)
+    page.locator("button[aria-expanded]", has_text="Results").first.click()
+    page.wait_for_selector("[data-testid='run-results-title']", timeout=20_000)
+    page.get_by_label("Enlarge confusion matrix").first.scroll_into_view_if_needed()
+    _settle(page, 2500)
+
+
 # name -> function; every state is captured at 1600px only.
 STATES = {
     "projects-delete-dry-run": state_projects_delete_dry_run,
@@ -517,6 +756,22 @@ STATES = {
     "models-sharing": state_models_sharing,
     "models-unshare-force": state_models_unshare_force,
     "vlm-run-picker": state_vlm_run_picker,
+    "resources-menu": state_resources_menu,
+    "wheels-inventory-card": state_wheels_inventory_card,
+    "region-gallery-boxes": state_region_gallery_boxes,
+    "import-job-actions": state_import_job_actions,
+    "region-profile-testable": state_region_profile_testable,
+    "segmenter-prompt-check": state_segmenter_prompt_check,
+    "locked-item-badge": state_locked_item_badge,
+    "reprocess-served-scopes": state_reprocess_served_scopes,
+    "clone-from-project": state_clone_from_project,
+    "ingest-policy-preview": state_ingest_policy_preview,
+    "open-vocab-editor": state_open_vocab_editor,
+    "open-vocab-test": state_open_vocab_test,
+    "region-stage-panel": state_region_stage_panel,
+    "dashboard-embedding": state_dashboard_embedding,
+    "crop-embedding-row": state_crop_embedding_row,
+    "run-results-confusion": state_run_results_confusion,
 }
 
 
@@ -576,9 +831,12 @@ def main() -> int:
 
     print(f"Capturing against {args.base_url} — confirm this is a PUBLIC-sample-data instance.")
 
-    def finish(page, name: str, width: int) -> None:
+    def finish(page, name: str, width: int, clip=None) -> None:
         out_path = args.out / f"{name}-{width}.png"
-        page.screenshot(path=str(out_path), full_page=True)
+        if clip is not None:  # a state may return a locator to crop to
+            clip.screenshot(path=str(out_path))
+        else:
+            page.screenshot(path=str(out_path), full_page=True)
         print(f"  wrote {out_path.relative_to(REPO_ROOT)}")
 
     with sync_playwright() as p:
@@ -606,8 +864,7 @@ def main() -> int:
                 )
                 page.route("**/*", _read_only)
                 try:
-                    fn(page, ctx)
-                    finish(page, name, 1600)
+                    finish(page, name, 1600, fn(page, ctx))
                 except Exception as e:  # keep going; a failed state is reported, not faked
                     print(f"  FAILED state {name}: {type(e).__name__}: {str(e)[:300]}")
                 page.close()

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Documentation screenshots for the v0.4.0 features.** Sixteen new
+  `<Screenshot>` slots (Resources menu, Wheels inventory card, region gallery
+  box count, import job actions, Reprocess scopes and lock badge, region-profile
+  test and segmenter prompt check, clone from another project, ingest policy
+  preview, open-vocabulary editor and test, region stage, embedding state, run
+  results with the confusion matrix), captured from public COCO sample projects
+  by new scripted states in `scripts/capture_docs_screenshots.py` (read-only,
+  with the three new side-effect-free report POSTs allow-listed).
+
 ### Changed
 
 - **Resources menu and dashboards row render the served `resource_links`.**
