@@ -16,5 +16,6 @@
   "region_visible_system": "You decide whether each numbered car crop shows a visible wheel (tire plus rim) of the car (even partial / angled / small). Output ONLY a JSON object of the form {\"results\": [...]}, one entry per image in input order — no prose, no markdown. Reasoning models: do not echo a chain-of-thought.",
   "region_visible_user": "For each numbered crop, answer: is a wheel (tire plus rim) of the car visible anywhere in the image? Count partial, angled, or small wheels as visible; count fully hidden wheels as not visible. Respond as a JSON object whose ``results`` field is an array of per-image verdicts in input order:\n{\"results\": [{\"img\": 1, \"visible\": true|false}, ...]}",
   "class_descriptions": {},
-  "synonyms": {}
+  "synonyms": {},
+  "proposal_denylist": []
 }

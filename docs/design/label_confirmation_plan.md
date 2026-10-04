@@ -149,7 +149,7 @@ Adopt a layered design, shipped in this order:
 3. **`detector_disagreements` review tab**: `class_source in vlm` and
    `detector_class_name != class_name`, sorted by `vlm_confidence` asc then
    `confidence` desc (hard cases first).
-4. **Accuracy audit** (`POST /audit/start`, `GET /audit/report`): draws a
+4. **Accuracy audit** (`proposed route `/audit/start` (POST)`, `proposed route `/audit/report` (GET)`): draws a
    stratified sample (per detector class, `min_per_class` default 30, global
    default 300) of machine-labelled, unvalidated, non-holdout crops into a review
    queue (`review_status`-style marker `audit_sample=true`). When a human
@@ -208,14 +208,14 @@ Files:
 - `src/services/curation/ingest_policy.py`: no change (ingest policy is for
   ingest). Add a sibling model.
 - New `src/services/curation/vlm_policy.py`: `VlmPolicyBody` (`scope: Literal['all','uncertain','representatives','off']='all'`, `conf_max=0.80`, `per_cluster=5`, `max_crops_per_day=0`, `sample_frac=1.0`), stored under the settings doc key `vlm_policy` using the exact optimistic-revision pattern of `ingest_policy_store.py` (`revision`, `PolicyConflictError`). Do not add it to `ingest_policy`.
-- New `src/routers/curation/vlm_policy.py`: `GET/PUT /vlm/policy` (409 on stale revision), registered in `src/routers/curation/__init__.py`.
+- New `src/routers/curation/vlm_policy.py`: `proposed route `/vlm/policy` (GET/PUT)` (409 on stale revision), registered in `src/routers/curation/__init__.py`.
 - `src/services/projects/clone_settings.py`: clone `vlm_policy` with the project.
 - `src/services/curation/autolabel/selection.py`: `vlm_selection_query` takes the policy; add scope clauses (`uncertain`: must `bool.should` of no class / `confidence < conf_max` / `*_low_conf`; `representatives`: terms on a representatives id set from the existing representatives query; `off`: return match-none). `sample_frac` via `random_score` or id hash.
-- `scripts/curation/vlm_worker.py`: `_build_pending_query` reads the same policy through the API (the worker is an HTTP client; add `GET /vlm/policy` call per project per poll, cached 30 s) and applies the same clauses. Daily budget: count `vlm_class_attempted_at >= today` per project via `_count`, stop fetching when reached. Keep the two selectors in one shared function to stop drift (they are duplicated today, `vlm_worker.py:99` vs `selection.py:35`; extract `vlm_pending_clauses(policy, classifier_skip_conf)` into `selection.py` and import from both).
+- `scripts/curation/vlm_worker.py`: `_build_pending_query` reads the same policy through the API (the worker is an HTTP client; add `proposed route `/vlm/policy` (GET)` call per project per poll, cached 30 s) and applies the same clauses. Daily budget: count `vlm_class_attempted_at >= today` per project via `_count`, stop fetching when reached. Keep the two selectors in one shared function to stop drift (they are duplicated today, `vlm_worker.py:99` vs `selection.py:35`; extract `vlm_pending_clauses(policy, classifier_skip_conf)` into `selection.py` and import from both).
 - `contracts/`: regenerate the OpenAPI snapshot; add `VlmPolicy` schema.
 - Docs: `docs-site/docs/guides/vlm-selection.mdx` (new "Scope and budget" section), `docs-site/docs/api-reference/curation.mdx`.
 
-API delta (additive): `GET/PUT /curation/projects/{p}/vlm/policy`; `auto_label/start` honours the policy unless `vlm_scope` query override is given. Default `all` = unchanged behaviour.
+API delta (additive): `proposed route `/curation/projects/{p}/vlm/policy` (GET/PUT)`; `auto_label/start` honours the policy unless `vlm_scope` query override is given. Default `all` = unchanged behaviour.
 
 Tests (`tests/` curation unit tests; watch each fail first):
 - selector: each scope returns the expected clauses; `off` selects nothing; `representatives` limits to K per cluster; budget stops at N.
@@ -234,7 +234,7 @@ Tests: seeded items with agree/disagree/validated; only unvalidated disagreement
 
 ### PR 4: accuracy audit
 
-Files: new `src/services/curation/audit.py` (stratified sampler: per detector class, `min_per_class`, sha1-deterministic like `holdout.py`), `src/routers/curation/audit.py` (`POST /audit/start`, `GET /audit/report`, `GET /audit/queue`), mapping `audit_sample`, `audit_batch_id`, `audit_outcome` (agree/detector_wrong/vlm_wrong/both_wrong), a hook in the human label writer (`class_label.py`, near :121/:201) that stamps `audit_outcome` when `audit_sample` is true. Report math in a pure function (Wilson interval, confusion matrix as `{detector_class: {human_class: n}}`), `insufficient_sample` flag.
+Files: new `src/services/curation/audit.py` (stratified sampler: per detector class, `min_per_class`, sha1-deterministic like `holdout.py`), `src/routers/curation/audit.py` (`proposed route `/audit/start` (POST)`, `proposed route `/audit/report` (GET)`, `proposed route `/audit/queue` (GET)`), mapping `audit_sample`, `audit_batch_id`, `audit_outcome` (agree/detector_wrong/vlm_wrong/both_wrong), a hook in the human label writer (`class_label.py`, near :121/:201) that stamps `audit_outcome` when `audit_sample` is true. Report math in a pure function (Wilson interval, confusion matrix as `{detector_class: {human_class: n}}`), `insufficient_sample` flag.
 Tests: sampler floors and determinism; report math against a hand-computed table; outcome stamping; audited human labels are holdout-eligible and unaudited VLM labels are not.
 
 ### PR 5: auto_promote gate
@@ -246,7 +246,7 @@ Tests: promote refused without audit; allowed above threshold; `force` bypasses.
 
 All additive; no removals, so old frontends keep working.
 
-1. Project settings: VLM scope panel bound to `GET/PUT /vlm/policy` (scope radio, thresholds, per-day budget), with the estimated crop count from a new `GET /vlm/policy/preview` (count of crops the policy would select) and a cost line.
+1. Project settings: VLM scope panel bound to `proposed route `/vlm/policy` (GET/PUT)` (scope radio, thresholds, per-day budget), with the estimated crop count from a new `proposed route `/vlm/policy` (GET)/preview` (count of crops the policy would select) and a cost line.
 2. Item/Crop cards: render `detector_class_name` and `confidence` next to the label when `class_source='vlm'`; badge wording "VLM suggestion" vs "Human-confirmed" vs "Auto-validated" (`cluster_majority_agreement`). Dashboard: show unvalidated-by-source counts so "14k labelled" is not read as ground truth.
 3. Review: new `detector_disagreements` tab (read label and description from `GET /review/tabs`, which already serves them).
 4. Audit UI: audit queue view, report page with confusion matrix and `insufficient_sample` state.
