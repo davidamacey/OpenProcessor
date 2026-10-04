@@ -36,7 +36,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   test asserts the committed `images.lock` and `cropwright.lock` are fully pinned (#121).
 - Trainer status writes use a unique temporary file per writer, so the heartbeat thread can no
   longer race the terminal status write (fixes a flaky cancel test).
-- The API image upgrades the base image's pip, whose vendored msgpack, setuptools and urllib3
+- The API image no longer ships pip, whose vendored msgpack, setuptools and urllib3
   were flagged by the Trivy image scan (#121).
 
 ## [0.4.0] - 2026-10-04
