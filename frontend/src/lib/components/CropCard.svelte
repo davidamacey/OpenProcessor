@@ -224,7 +224,6 @@
 <div
   role="button"
   tabindex="0"
-  style="content-visibility:auto;contain-intrinsic-size:auto 260px"
   class="group relative flex flex-col rounded-md border bg-zinc-900 text-left transition focus:outline-none {selected
     ? 'border-blue-500 ring-2 ring-blue-500/40'
     : 'border-zinc-800 hover:border-zinc-600'}"
