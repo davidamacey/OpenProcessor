@@ -76,10 +76,20 @@ afterEach(() => {
 });
 
 describe('PackEditor load and draft', () => {
+  it('a list field edit stays a string[] in the draft and the dirty check sees it (#61)', async () => {
+    const { ed } = setup();
+    await ed.load();
+    ed.setField('proposal_denylist', ['blurry_*']);
+    expect(ed.draftBody.proposal_denylist).toEqual(['blurry_*']);
+    expect(ed.dirty).toBe(true);
+    ed.setField('proposal_denylist', ['blurry_*', '*_scene']);
+    expect(ed.dirty).toBe(false);
+  });
+
   it('loads schema, doc, active and revisions; the draft starts clean', async () => {
     const { ed, deps } = setup();
     await ed.load();
-    expect(ed.schema?.fields).toHaveLength(4);
+    expect(ed.schema?.fields).toHaveLength(5);
     expect(ed.draftBody).toEqual(docFixture().body);
     expect(ed.expectedRevision).toBe(2);
     expect(ed.report).toEqual(cleanReport());

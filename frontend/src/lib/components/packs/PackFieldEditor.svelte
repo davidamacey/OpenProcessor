@@ -3,10 +3,12 @@
    * One prompt-pack field, rendered from its served schema row (§3.4):
    * label, help, placeholder and reply-key chips, the pipeline steps that
    * use it, and the served issues on it. `kind: "text"` is a textarea,
-   * `kind: "map"` a key/value list. No client rule checks the value.
+   * `kind: "map"` a key/value list, and `proposal_denylist` a list of glob
+   * patterns (always sent as `string[]`). No client rule checks the value.
    */
   import type { ValidationIssue } from '$lib/types_config';
   import type { PackFieldValue, PackSchemaField } from '$lib/types_packs';
+  import { isListField, listValue } from '$lib/packs/packFieldValue';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
 
   interface Props {
@@ -19,10 +21,12 @@
 
   let { field, value, issues, readonly = false, onchange }: Props = $props();
 
-  const isMap = $derived(field.kind === 'map');
+  const isList = $derived(isListField(field));
+  const isMap = $derived(!isList && field.kind === 'map');
   const text = $derived(typeof value === 'string' ? value : '');
+  const patterns = $derived(listValue(value));
   const entries = $derived(
-    value && typeof value === 'object'
+    value && typeof value === 'object' && !Array.isArray(value)
       ? Object.entries(value)
       : ([] as [string, string][]),
   );
@@ -45,6 +49,15 @@
   }
   function addEntry(): void {
     setEntries([...entries, ['', '']]);
+  }
+  function setPattern(idx: number, v: string): void {
+    onchange(patterns.map((p, i) => (i === idx ? v : p)));
+  }
+  function removePattern(idx: number): void {
+    onchange(patterns.filter((_, i) => i !== idx));
+  }
+  function addPattern(): void {
+    onchange([...patterns, '']);
   }
 </script>
 
@@ -98,7 +111,44 @@
     </div>
   {/if}
 
-  {#if isMap}
+  {#if isList}
+    <div class="space-y-1" data-testid="pack-list">
+      {#each patterns as p, idx (idx)}
+        <div class="flex items-center gap-1">
+          <input
+            class="input input-sm min-w-0 flex-1 font-mono"
+            aria-label="{field.label}: pattern {idx + 1}"
+            value={p}
+            {readonly}
+            spellcheck="false"
+            oninput={(e) => setPattern(idx, (e.currentTarget as HTMLInputElement).value)}
+          />
+          {#if !readonly}
+            <button
+              type="button"
+              class="btn btn-sm"
+              aria-label="Remove {p || 'pattern'}"
+              onclick={() => removePattern(idx)}>Remove</button
+            >
+          {/if}
+        </div>
+      {:else}
+        <p class="text-xs text-zinc-500">No patterns.</p>
+      {/each}
+      {#if !readonly}
+        <button
+          type="button"
+          class="btn btn-sm"
+          disabled={patterns.some((p) => p === '')}
+          onclick={addPattern}>Add pattern</button
+        >
+      {/if}
+      <p class="text-[11px] text-zinc-500">
+        Case-insensitive globs (<code>blurry_*</code>, <code>*_scene</code>). A proposed
+        new class matching one is dropped and never reaches the new-class queue.
+      </p>
+    </div>
+  {:else if isMap}
     <div class="space-y-1" data-testid="pack-map">
       {#each entries as [k, v], idx (idx)}
         <div class="flex items-center gap-1">
@@ -155,5 +205,5 @@
   {#if field.used_by.length > 0}
     <p class="text-[11px] text-zinc-500">used by: {field.used_by.join(', ')}</p>
   {/if}
-  <ConfigIssueList {issues} showField={isMap} />
+  <ConfigIssueList {issues} showField={isMap || isList} />
 </div>

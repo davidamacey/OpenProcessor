@@ -115,6 +115,59 @@ describe('PackFieldEditor', () => {
     expect(onchange).toHaveBeenLastCalledWith({ a: 'widget', b: 'gadget', '': '' });
   });
 
+  it('proposal_denylist is a list of glob patterns: edit, add and remove rows, always string[]', () => {
+    const onchange = vi.fn();
+    render({
+      field: field('proposal_denylist'),
+      value: ['blurry_*', '*_scene'],
+      onchange,
+    });
+    expect(target.querySelector('textarea')).toBeNull();
+    const inputs = [
+      ...target.querySelectorAll<HTMLInputElement>('[data-testid="pack-list"] input'),
+    ];
+    expect(inputs.map((i) => i.value)).toEqual(['blurry_*', '*_scene']);
+    type(inputs[0]!, 'dark_*');
+    expect(onchange).toHaveBeenLastCalledWith(['dark_*', '*_scene']);
+    const remove = [...target.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Remove',
+    )!;
+    remove.click();
+    expect(onchange).toHaveBeenLastCalledWith(['*_scene']);
+    const add = [...target.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add pattern',
+    )!;
+    add.click();
+    expect(onchange).toHaveBeenLastCalledWith(['blurry_*', '*_scene', '']);
+  });
+
+  it('proposal_denylist: a missing value renders an empty list, never a string', () => {
+    const onchange = vi.fn();
+    render({ field: field('proposal_denylist'), value: undefined, onchange });
+    expect(target.textContent).toContain('No patterns.');
+    const add = [...target.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add pattern',
+    )!;
+    add.click();
+    expect(onchange).toHaveBeenLastCalledWith(['']);
+  });
+
+  it('proposal_denylist: the served issue on the field shows', () => {
+    render({
+      field: field('proposal_denylist'),
+      value: [],
+      issues: [
+        issue({
+          code: 'pack_field_missing',
+          id: 'pack_field_missing',
+          field: 'proposal_denylist',
+          message: 'proposal_denylist must be a list of strings',
+        }),
+      ],
+    });
+    expect(target.textContent).toContain('proposal_denylist must be a list of strings');
+  });
+
   it('read-only: no add/remove, inputs are read-only', () => {
     render({ field: field('synonyms'), value: { a: 'widget' }, readonly: true });
     expect(target.textContent).not.toContain('Add entry');
