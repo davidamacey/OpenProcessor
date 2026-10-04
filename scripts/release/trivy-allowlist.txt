@@ -9,3 +9,10 @@
 # CVE-2024-00000 # no fix available upstream yet, tracked in issue #123
 
 CVE-2026-6653 # libxml2 (Debian trixie): status "affected", no fixed version; owner-accepted recurring item, re-check each release and drop when Debian ships a fix
+CVE-2025-37777 # linux-libc-dev kernel headers only (segmenter); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package
+CVE-2026-43185 # linux-libc-dev kernel headers only (evaluator); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package
+CVE-2026-53398 # linux-libc-dev kernel headers only (triton); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package
+CVE-2026-63940 # linux-libc-dev kernel headers only (triton, segmenter); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package
+CVE-2026-64535 # linux-libc-dev kernel headers only (triton, segmenter); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package
+CVE-2026-64564 # linux-libc-dev kernel headers only (triton, segmenter); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package
+CVE-2026-74394 # linux-libc-dev kernel headers only (triton, segmenter); no kernel runs in the container, no upstream fix; owner-accepted (#110), re-check each release and drop when the base image ships a fixed package

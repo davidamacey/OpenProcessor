@@ -233,6 +233,13 @@ Each catalog entry has `id`, `hf_repo`, `license`, `gated`, `vram_gb`,
 `served`, `desired`, `restart_required`, `can_restart_from_api` and
 `gpu_total_gb`.
 
+`tested` entries are verified with the prompt contract; `to_verify` entries are
+served with the label "Unverified (experimental)". They stay in the catalog but
+are never auto-selected: the installer picks only a tested entry (the default is the
+first `tested` entry that fits), and an unverified one runs only when you name it with
+`--vlm-model-id`, with a warning. After choosing one, run `openprocessor vlm probe`
+and read the pairing warnings.
+
 The API cannot restart containers. Selecting a model records the request;
 the host applies it:
 

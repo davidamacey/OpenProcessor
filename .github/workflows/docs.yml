@@ -4,6 +4,13 @@ name: Deploy Documentation
 # Pages on a push to the default branch. Won't actually publish anything
 # until GitHub Pages / Actions are enabled on the repository -- safe to
 # land regardless, since the `deploy` job is gated to push-on-main only.
+#
+# One-time owner setup (nothing here enables it): Settings > Pages > Source:
+# "GitHub Actions"; Settings > Environments > github-pages (created on first
+# deploy) allows the main branch. First publish: run this workflow by hand
+# (Actions > Deploy Documentation > Run workflow, branch main). The site is
+# built for https://davidamacey.github.io/OpenProcessor/ (docs-site/site.config.ts);
+# change `url`/`baseUrl` there if the repository is renamed or moved.
 
 on:
   push:

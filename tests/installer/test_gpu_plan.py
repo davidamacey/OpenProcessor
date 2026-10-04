@@ -106,7 +106,7 @@ def test_24gb_explicit_unverified_vlm_needs_force_and_warns() -> None:
     assert rc == 0
     assert kv['VLM_CATALOG_ID'] == 'qwen2.5-vl-7b-awq'
     assert kv['vlm_status'] == 'to_verify'
-    assert any('not yet verified' in w for w in warns)
+    assert any('unverified/experimental' in w for w in warns)
     assert any('shares GPU 0 with Triton' in w for w in warns)
 
 

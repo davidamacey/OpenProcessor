@@ -1,0 +1,93 @@
+---
+sidebar_position: 2
+title: Memory, disk and storage
+---
+
+# Memory, disk and storage
+
+What the installer sizes for you, what it only checks, and what stays your call.
+
+## OpenSearch heap and shards
+
+The installer sets `OPENSEARCH_HEAP` to half of host RAM, never below 2 GB and
+never above 30 GB (the JVM's compressed-pointer limit is about 31 GB). Minimum
+and maximum heap are equal (`-Xms` equals `-Xmx`), memory is locked
+(`bootstrap.memory_lock`, `memlock` unlimited) and the file limit is 65536.
+
+| Host RAM | Heap | Soft shard budget (20 per heap GB) |
+|---|---|---|
+| under 6 GiB | 2g | 40 |
+| 8 GiB | 4g | 80 |
+| 16 GiB | 8g | 160 |
+| 32 GiB | 16g | 320 |
+| 60 GiB and up | 30g (cap) | 600 |
+
+A heap you set in `.env` is never overwritten. Every project adds six shards
+(six single-shard indexes). The budget is heap GB times `OP_SHARDS_PER_HEAP_GB`
+(default 20), so a 16 GiB host holds about 26 projects before the warning.
+
+- Past the soft budget, creating a project succeeds and the response carries a
+  `shard_budget_high` warning with the capacity block.
+- Past `cluster.max_shards_per_node` (the hard limit), creation is refused with
+  `409 shard_budget_exceeded`.
+- `GET /curation/projects` always reports the current capacity.
+
+To make room, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and run
+`./openprocessor restart opensearch`.
+
+### Host kernel setting
+
+OpenSearch needs `vm.max_map_count` of at least 262144. The installer warns when
+it is lower, with the fix:
+
+```bash
+sudo sysctl -w vm.max_map_count=262144
+echo 'vm.max_map_count=262144' | sudo tee /etc/sysctl.d/99-openprocessor.conf
+```
+
+## Container memory
+
+Every service has a `mem_reservation` (a soft floor, never a kill limit);
+OpenSearch reserves its heap size. Hard memory limits are not set because model
+servers pin host memory unpredictably; set them in a compose override if you
+share the host. Typical reservations: Triton 4 GB, trainer 8 GB, VLM 8 GB,
+segmenter 4 GB, API 2 GB, workers 0.5 to 2 GB.
+
+GPU memory is planned by the installer per card (Triton, segmenter, VLM, trainer);
+see [GPU sizing](./gpu-sizing.mdx) and the plan it prints.
+
+## Disk
+
+- The installer checks free space on the install filesystem and on Docker's data
+  root before pulling images (about 60 GB for core, about 135 GB for every tier,
+  plus 20 GB headroom) and stops unless `--force`.
+- OpenSearch keeps its default disk watermarks (85% low, 90% high, 95%
+  flood-stage, which makes indexes read-only). Keep the volume under 80% full.
+- Vectors cost about 8.4 KB each (see `docs/design/storage_sizing_and_ingest_baselines.md`
+  for per-1,000-image figures).
+- Every container rotates its logs (`json-file`, 10 MB by 5 files).
+
+## Where data lives and backups
+
+| Data | Location |
+|---|---|
+| OpenSearch indexes | named volume `opensearch_data` |
+| Project state, jobs | named volumes `openprocessor-state`, `openprocessor-jobs` |
+| MLflow | named volume `mlflow_data` |
+| Prometheus, Grafana, Loki | named volumes (monitoring profile) |
+| Images, exports, models, caches | the install directory (`data/`, `models/`, `cache/`) |
+| Crop cache | tmpfs, rebuilt on restart |
+
+`./openprocessor upgrade` backs up release files, `.env` and state to
+`backups/<UTC timestamp>/` first; it does not copy the OpenSearch volume. To
+protect the data itself, snapshot the install directory and the named volumes
+(for example `docker run --rm -v <project>_opensearch_data:/d -v "$PWD":/b alpine tar czf /b/os.tgz -C /d .`
+with the stack stopped) on your own schedule, and prune old `backups/` and
+`exports/` directories by age.
+
+## Documentation container
+
+Source checkouts can serve the docs locally with
+`docker compose --profile docs up -d --build docs`, then open
+`http://localhost:4613/OpenProcessor/` (`DOCS_PORT`). The public site is built
+from `docs-site/` by `.github/workflows/docs.yml`.

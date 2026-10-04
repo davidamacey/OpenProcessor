@@ -714,7 +714,7 @@ TRITON_WORKERS=$PROFILE_WORKERS
 MAX_BATCH_SIZE=$PROFILE_MAX_BATCH
 SHM_SIZE=$PROFILE_SHM_SIZE
 
-# OpenSearch JVM heap: host RAM/8, clamped to 1g..8g (scripts/lib/opensearch_heap.sh)
+# OpenSearch JVM heap: host RAM/2, clamped to 2g..30g (scripts/lib/opensearch_heap.sh)
 OPENSEARCH_HEAP=$heap
 
 # Ports (change if these conflict with something else on your host, or
