@@ -7,6 +7,7 @@ run that tried to change anything would both fail and be visible.
 
 from __future__ import annotations
 
+import re
 import shutil
 import stat
 from typing import TYPE_CHECKING
@@ -779,17 +780,44 @@ def test_lock_repo_check_accepts_a_tagged_build_image(shimmed: Shimmed, tmp_path
     assert result.returncode == 0, result.stderr[-2000:]
 
 
-def test_committed_placeholder_lock_is_refused_not_installed(
+def test_placeholder_lock_is_refused_not_installed(
     shimmed: Shimmed, tmp_path: Path, repo_root: Path
 ) -> None:
-    shimmed.release = build_fake_release(
-        tmp_path / 'r', lock_override=(repo_root / 'images.lock').read_text()
+    # A development checkout's images.lock carries placeholder digests; the
+    # committed lock is a release pin now, so drive the refusal with a copy.
+    placeholder = re.sub(
+        r'@sha256:[0-9a-f]{64}',
+        '@sha256:' + '0' * 60 + 'dev0',
+        (repo_root / 'images.lock').read_text(),
     )
+    shimmed.release = build_fake_release(tmp_path / 'r', lock_override=placeholder)
     result = dry(shimmed)
     assert result.returncode == 7
     assert '--image-tag' in result.stderr
     assert 'development placeholder digest' in result.stderr
     assert 'this checkout is not a release' in result.stderr
+
+
+def test_committed_locks_are_fully_pinned(repo_root: Path) -> None:
+    """A placeholder or floating reference must never ship in a release."""
+    images = [
+        ln
+        for ln in (repo_root / 'images.lock').read_text().splitlines()
+        if ln.strip() and not ln.startswith('#')
+    ]
+    assert images
+    for line in images:
+        assert re.fullmatch(r'[a-z0-9_]+=\S+@sha256:[0-9a-f]{64}', line), line
+        assert ':latest@' not in line, line
+
+    cw = dict(
+        ln.split('=', 1)
+        for ln in (repo_root / 'cropwright.lock').read_text().splitlines()
+        if '=' in ln and not ln.startswith('#')
+    )
+    assert re.fullmatch(r'v\d+\.\d+\.\d+', cw['tag']), cw['tag']
+    assert re.fullmatch(r'[0-9a-f]{64}', cw['sha256sums_sha256'])
+    assert re.fullmatch(r'\S+@sha256:[0-9a-f]{64}', cw['image']), cw['image']
 
 
 def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:

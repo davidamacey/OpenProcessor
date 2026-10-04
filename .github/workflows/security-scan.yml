@@ -28,6 +28,8 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '1'
           ignore-unfixed: true
+          # Same owner-accepted CVEs (with reasons) the release gate honours.
+          trivyignores: scripts/release/trivy-allowlist.txt
           format: sarif
           output: trivy-fs.sarif
 
@@ -53,6 +55,8 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '1'
           ignore-unfixed: true
+          # Same owner-accepted CVEs (with reasons) the release gate honours.
+          trivyignores: scripts/release/trivy-allowlist.txt
           # ~19 GB image: default 5m analysis deadline is far too short
           timeout: 30m
 

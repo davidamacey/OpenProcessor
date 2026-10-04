@@ -70,7 +70,11 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Reference',
-      items: ['reference/licenses', 'developer-guide/screenshots'],
+      items: [
+        'reference/licenses',
+        'developer-guide/screenshots',
+        'developer-guide/restart-after-update',
+      ],
     },
   ],
 };

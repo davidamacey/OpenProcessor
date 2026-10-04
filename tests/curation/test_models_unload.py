@@ -40,9 +40,22 @@ def app_client():
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
+    from src.routers.curation._common import _raw_opensearch_dep
+
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()
     mount_curation_routers(app, models_mod.router)
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture(autouse=True)
+def _no_ingest_detector(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No OpenSearch behind these routes; the ingest-detector guard is
+    # exercised explicitly at the bottom of the file.
+    monkeypatch.setattr(
+        'src.routers.curation.models.get_ingest_policy',
+        AsyncMock(return_value=type('_P', (), {'detector': None})()),
+    )
 
 
 def _mock_unload(monkeypatch: pytest.MonkeyPatch, **overrides) -> AsyncMock:
@@ -343,3 +356,51 @@ def test_external_service_model_names_includes_segmenter_and_vlm(
     names = external_service_model_names()
     assert 'sam3' in names
     assert {'env', 'test-vlm'} <= names
+
+
+# =============================================================================
+# The project's own ingest detector
+# =============================================================================
+
+
+class _Policy:
+    def __init__(self, model: str | None) -> None:
+        self.detector = None if model is None else type('_D', (), {'model': model})()
+
+
+def _ingest_detector(monkeypatch: pytest.MonkeyPatch, model: str | None) -> None:
+    monkeypatch.setattr(
+        'src.routers.curation.models.get_ingest_policy',
+        AsyncMock(return_value=_Policy(model)),
+    )
+
+
+def test_delete_refuses_the_projects_own_ingest_detector(app_client, monkeypatch):
+    """Deleting the model ingest runs on would turn every later ingest into a
+    503, so it needs ``force`` and says why."""
+    mock = _mock_unload(monkeypatch)
+    _ingest_detector(monkeypatch, 'my_detector_v1')
+    resp = app_client.delete('/curation/projects/default/models/my_detector_v1')
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()['detail']
+    assert detail['error'] == 'detector_in_use'
+    assert 'my_detector_v1' in detail['message']
+    mock.assert_not_awaited()
+
+
+def test_delete_of_the_ingest_detector_goes_through_with_force(app_client, monkeypatch):
+    mock = _mock_unload(monkeypatch)
+    _ingest_detector(monkeypatch, 'my_detector_v1')
+    resp = app_client.delete(
+        '/curation/projects/default/models/my_detector_v1', params={'force': 'true'}
+    )
+    assert resp.status_code == 200, resp.text
+    mock.assert_awaited_once()
+
+
+def test_delete_of_a_different_model_ignores_the_ingest_detector(app_client, monkeypatch):
+    mock = _mock_unload(monkeypatch)
+    _ingest_detector(monkeypatch, 'my_detector_v1')
+    resp = app_client.delete('/curation/projects/default/models/other_model')
+    assert resp.status_code == 200, resp.text
+    mock.assert_awaited_once()

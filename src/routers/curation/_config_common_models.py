@@ -44,6 +44,7 @@ ErrorCode = Literal[
     'target_not_empty',
     'preview_stale',
     'in_use',
+    'detector_in_use',
     'slug_invalid',
     'confirm_mismatch',
     'combine_invalid',

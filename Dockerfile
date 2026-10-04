@@ -51,6 +51,14 @@ RUN python -m venv /opt/venv-y11 \
         --extra-index-url https://pypi.nvidia.com \
         -r requirements-export-y11.txt
 
+# Strip pip from everything stage 2 copies (see the runtime-stage note).
+RUN rm -rf /root/.local/lib/python3.13/site-packages/pip \
+        /root/.local/lib/python3.13/site-packages/pip-*.dist-info \
+        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.13 \
+        /opt/venv-y11/lib/python3.13/site-packages/pip \
+        /opt/venv-y11/lib/python3.13/site-packages/pip-*.dist-info \
+        /opt/venv-y11/bin/pip /opt/venv-y11/bin/pip3 /opt/venv-y11/bin/pip3.13
+
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # -----------------------------------------------------------------------------
@@ -88,6 +96,14 @@ RUN apt-get update && apt-get upgrade -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# No package manager in the runtime image: even the newest pip vendors
+# msgpack / setuptools / urllib3 builds that Trivy flags (HIGH), and nothing
+# here installs packages at run time. Removed from the base image's system
+# site-packages; the builder copies below are stripped in the builder stage.
+RUN rm -rf /usr/local/lib/python3.13/site-packages/pip \
+        /usr/local/lib/python3.13/site-packages/pip-*.dist-info \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.13
 
 # Non-root user with video group for GPU access
 RUN groupadd -r appuser && \

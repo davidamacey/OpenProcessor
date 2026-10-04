@@ -20,7 +20,8 @@ import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
-from src.routers.curation._common import logger, router
+from src.routers.curation._common import OpenSearchDep, logger, router
+from src.routers.curation._config_common_models import api_error
 from src.routers.curation._models_class_mapping import (
     bound_registry,
     dedupe_triton_rows,
@@ -32,6 +33,7 @@ from src.routers.curation._models_segmenter import (
     build_standalone_segmenter_entry,
 )
 from src.routers.curation._models_vlm import vlm_status_rows
+from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.model_unload_guard import (
     UnloadRefusedError,
@@ -309,9 +311,10 @@ class UnloadModelResponse(BaseModel):
 @router.delete('/models/{model_name}', response_model=UnloadModelResponse)
 async def unload_model(
     model_name: str,
+    opensearch: OpenSearchDep,
     force: Annotated[
         bool,
-        Query(description='Bypass the region-detector / core-pipeline-model guard'),
+        Query(description='Bypass the region-detector / core-pipeline / ingest-detector guard'),
     ] = False,
 ) -> UnloadModelResponse:
     """Unload ``model_name`` from Triton and delete its model repo directory.
@@ -328,6 +331,9 @@ async def unload_model(
       detect/recognition) need ``force=true`` — without it, 409 with a
       loud explanation. Unloading any of them breaks live serving until
       something else is loaded.
+    - The model this project's own ingest policy runs as its detector is a
+      409 ``detector_in_use`` without ``force=true``: deleting it makes every
+      later ingest fail until another detector is set.
     """
     if not project_owns_model(model_name):
         raise HTTPException(
@@ -339,6 +345,25 @@ async def unload_model(
         is_core = check_unload(model_name, force=force)
     except UnloadRefusedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    if not force:
+        try:
+            policy = await get_ingest_policy(opensearch)
+        except Exception as exc:
+            raise api_error(
+                503,
+                'config_store_unavailable',
+                'could not read the ingest policy to see whether this is the ingest '
+                'detector; retry, or pass force',
+            ) from exc
+        if policy.detector is not None and policy.detector.model == model_name:
+            raise api_error(
+                409,
+                'detector_in_use',
+                f"{model_name!r} is this project's ingest detector; deleting it makes "
+                'ingest fail until another detector is set. Change the ingest policy '
+                'first, or pass force=true.',
+            )
 
     try:
         result: UnloadResult = await unload_triton_model(model_name)

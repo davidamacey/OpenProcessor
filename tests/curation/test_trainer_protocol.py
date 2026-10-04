@@ -169,6 +169,35 @@ def test_trainer_sibling_paths_match_the_api_side(jobs_dir: Path, export_dir: Pa
     assert spec.manifest_path == train_jobs._manifest_path(job_id)
 
 
+def test_concurrent_status_writes_do_not_collide_on_the_tmp_file(tmp_path: Path) -> None:
+    """The heartbeat thread and the main thread both write status.json; a shared
+    ``.tmp`` name let one rename the other's file away, so the terminal write
+    raised FileNotFoundError (a flaky cancel test, and a lost terminal status)."""
+    import threading
+
+    path = tmp_path / 'job.status.json'
+    errors: list[BaseException] = []
+    start = threading.Barrier(8)
+
+    def _writer() -> None:
+        start.wait()
+        for i in range(200):
+            try:
+                job_protocol._atomic_write_json(path, {'n': i})
+            except OSError as exc:
+                errors.append(exc)
+
+    threads = [threading.Thread(target=_writer) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert json.loads(path.read_text())['n'] == 199
+    assert [p.name for p in tmp_path.iterdir()] == ['job.status.json']
+
+
 def test_api_cancel_sentinel_is_seen_by_the_trainer(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
     spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')

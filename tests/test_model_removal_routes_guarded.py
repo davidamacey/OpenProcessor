@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from src.main import create_app
+from src.routers.curation._common import _raw_opensearch_dep
 
 
 def _removal_routes() -> list[tuple[str, str]]:
@@ -54,7 +55,11 @@ def test_route_refuses_an_ocr_model_and_removes_nothing(
     url = path.replace('{project}', 'default').replace('{model_name}', 'paddleocr_det')
     if path.endswith('/unload') or '/curation/' in path:
         url = url.replace('paddleocr_det', 'paddleocr_det_trt')
-    resp = TestClient(create_app()).request(method, url, params={'force': str(force).lower()})
+    app = create_app()
+    # The project delete also reads the ingest policy; the OCR guard refuses
+    # before that, so no OpenSearch is needed (or reachable) here.
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()
+    resp = TestClient(app).request(method, url, params={'force': str(force).lower()})
 
     assert resp.status_code == 403, (path, resp.text)
     for remover in removers:

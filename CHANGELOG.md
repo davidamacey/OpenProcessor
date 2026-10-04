@@ -21,6 +21,23 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 - The COCO car manifest pin test no longer skips or claims the manifest is
   missing; the tracked `coco_car_60.json` is always checked (#103).
+- `DELETE /curation/projects/{project}/models/{name}` now refuses a project's own ingest
+  detector with 409 `detector_in_use` unless `force=true`, so a delete cannot silently break
+  ingest (#75).
+- Developer guide: a "restart after pulling or updating" note (`make dev-restart`, stale
+  modules can raise an `ImportError` until the API restarts) (#75).
+- CI: the offline suite installs `opensearch-py[async]` so `AsyncOpenSearch` imports, the
+  pre-commit job installs the app dependencies for the OpenAPI contract hook, and the Trivy
+  steps honour `scripts/release/trivy-allowlist.txt`; docs-site pins patched `lodash-es` and
+  `serialize-javascript` (#121).
+- CI: the offline-suite requirements now cover every dependency the not-live tests use and pin
+  the FastAPI and pydantic versions the committed OpenAPI contract is generated from (#121).
+- The installer dry-run test drives the placeholder-lock refusal with a fixture lock, and a new
+  test asserts the committed `images.lock` and `cropwright.lock` are fully pinned (#121).
+- Trainer status writes use a unique temporary file per writer, so the heartbeat thread can no
+  longer race the terminal status write (fixes a flaky cancel test).
+- The API image no longer ships pip, whose vendored msgpack, setuptools and urllib3
+  were flagged by the Trivy image scan (#121).
 
 ## [0.4.0] - 2026-10-04
 
