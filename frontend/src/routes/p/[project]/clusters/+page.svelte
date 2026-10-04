@@ -1312,7 +1312,7 @@
       <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {#each gridItems as c (c.isSlotCard ? `slot-${c.id}` : c.id)}
           {@const pb = purityBadge(c)}
-          <li>
+          <li style="content-visibility:auto;contain-intrinsic-size:auto 280px">
             <button
               type="button"
               class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {borderColor(

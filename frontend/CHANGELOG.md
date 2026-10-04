@@ -54,11 +54,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Cluster cards, crop cards, slot cards and the region gallery tiles no longer
-  use `content-visibility: auto` off-screen culling. On Safari 26.6 the cluster
-  and crop grids showed no images or cards although every thumbnail request
-  returned 200; the grids are already paged and their images lazy, so the
-  culling bought little. A scan test fails if it comes back.
 - The docs site and README no longer link to pages that do not exist yet: the
   GitHub repository, issues, "edit this page", GitHub Pages and the raw
   `docker-compose.yml` / `.env.example` downloads of a public Cropwright

@@ -129,6 +129,7 @@
 <div class="group relative">
   <button
     type="button"
+    style="content-visibility:auto;contain-intrinsic-size:auto 130px"
     class="relative flex w-full flex-col items-stretch overflow-hidden rounded-md border bg-zinc-950 text-left transition-colors {selected
       ? 'border-blue-500 ring-2 ring-blue-500/40'
       : 'border-zinc-800 hover:border-blue-500/50'} {isFalsePositive ? 'opacity-50' : ''}"

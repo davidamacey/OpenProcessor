@@ -377,7 +377,7 @@
          permanent false-positive bucket gets a red border + label. -->
     <ul class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
       {#each gallery.clusters as c (c.id)}
-        <li>
+        <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
           <button
             type="button"
             class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {c.cluster_kind ===
