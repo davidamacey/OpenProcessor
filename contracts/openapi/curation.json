@@ -15424,6 +15424,13 @@
             "title": "Open Class User Template",
             "type": "string"
           },
+          "proposal_denylist": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Proposal Denylist",
+            "type": "array"
+          },
           "region_batch_system": {
             "default": "",
             "title": "Region Batch System",
@@ -15759,7 +15766,8 @@
           "kind": {
             "enum": [
               "text",
-              "map"
+              "map",
+              "list"
             ],
             "title": "Kind",
             "type": "string"

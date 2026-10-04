@@ -107,8 +107,8 @@ named region profile (default: the active one). The response is
 |---|---|---|
 | `pack_name_invalid`, `pack_name_reserved` | error | Name must match `^[a-z0-9][a-z0-9_.-]{1,63}$`; `off`, `none` and `default` are reserved |
 | `name_conflict` | error | Name already used |
-| `pack_field_missing`, `pack_field_empty` | error | A text field is absent or blank |
-| `pack_field_too_long` | error | A field over 20000 characters, or a map over 500 entries |
+| `pack_field_missing`, `pack_field_empty` | error | A text field is absent or blank; `proposal_denylist` is not a list of strings, or holds a blank pattern |
+| `pack_field_too_long` | error | A field over 20000 characters, a map or `proposal_denylist` over 500 entries, or a denylist pattern over 200 characters |
 | `pack_template_format_error` | error | The field cannot be formatted (for example a single brace) |
 | `pack_placeholder_missing`, `pack_placeholder_unknown` | error | A formatted field lacks a required placeholder or uses another |
 | `pack_placeholder_in_verbatim_field` | error | A placeholder in a field that is not formatted |
