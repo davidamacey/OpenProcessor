@@ -458,7 +458,8 @@ negative verdict, so the item can be retried.
 | GET | `/train/artifacts/{job_id}/{name}` | A whitelisted run artifact |
 | POST | `/train/cancel/{job_id}` | Cancel a run. `/train/cancel_campaign/{campaign_id}` cancels a campaign |
 | GET | `/train/profiles` | Hyperparameter tables. `/train/presets`, `/train/augmentation_presets` and `/train/gpus` list presets and GPU options |
-| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate. The model is named for the project (`{slug}__...`, none for `default`) |
+| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate. The model is named for the project (`{slug}__...`, none for `default`). Returns `202` with a `promote_id`; `?wait=true` blocks until loaded and warmed (2-3 minutes) and returns `200` |
+| GET | `/train/promote/{job_id}/jobs/{promote_id}` | Phase of a background promote: `queued`, `exporting`, `loading`, `building`, `warming`, `done` or `failed` |
 | POST | `/train/reload_promoted` | Reload promoted models after a Triton restart |
 | GET | `/bakeoff/eval_datasets` | Eval sets: exports with a labelled test split and frozen external sets. `/bakeoff/trained_models`, `/bakeoff/baseline_models` and `/bakeoff/profiles` list the rest of what can be compared |
 | POST | `/bakeoff/run` | Queue a comparison for the evaluator |

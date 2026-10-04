@@ -1131,7 +1131,7 @@ Training is a control plane over a shared-volume file protocol
 | Status, run list, log tail | `GET /train/status`, `GET /train/status/{job_id}`, `GET /train/runs`, `GET /train/log/tail/{job_id}` |
 | Cancel | `POST /train/cancel/{job_id}`, `POST /train/cancel_campaign/{campaign_id}` |
 | Profiles, presets, GPUs | `GET /train/profiles`, `GET /train/presets`, `GET /train/gpus` |
-| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}`, `POST /train/reload_promoted` |
+| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}` (202 + `promote_id`; `?wait=true` blocks), `GET /train/promote/{job_id}/jobs/{promote_id}`, `POST /train/reload_promoted` |
 
 ```bash
 docker compose --profile training up -d curation-trainer

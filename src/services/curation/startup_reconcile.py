@@ -23,6 +23,7 @@ JOB_MODULES = (
     'src.services.curation.probe_job',
     'src.services.curation.reprocess_job',
     'src.services.curation.dataset_import.runner',
+    'src.services.training.promote_job',
 )
 
 

@@ -391,6 +391,9 @@ class TrainJobStatus(BaseModel):
     compare: dict[str, Any] | None = None
     error: str | None = None
     heartbeat_at: str | None = None
+    # Latest background promote of this run (``GET /train/status/{job_id}``
+    # only; null in lists and when the run was never promoted async).
+    promote: dict[str, Any] | None = None
 
     @model_validator(mode='before')
     @classmethod

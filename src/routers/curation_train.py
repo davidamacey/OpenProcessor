@@ -37,9 +37,9 @@ import os
 import shutil
 from datetime import UTC
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Path as PathParam, Query, status
+from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Response, status
 from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel, Field
 
@@ -64,7 +64,7 @@ from src.services.curation.export_readiness import (
     export_unlabeled_objects_check,
     items_index_generation,
 )
-from src.services.training import jobs as train_jobs
+from src.services.training import jobs as train_jobs, promote_job
 from src.services.training.augmentation_presets import (
     AUGMENTATION_PRESETS,
     DEFAULT_AUGMENTATION_PRESET,
@@ -93,6 +93,9 @@ from src.services.training.profiles import (
     get_profiles,
 )
 
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -1368,7 +1371,7 @@ async def status_by_id(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail=f'job_id not found: {job_id}')
-    return result
+    return result.model_copy(update={'promote': promote_job.latest_for_run(job_id)})
 
 
 class RunsListResponse(BaseModel):
@@ -1858,15 +1861,49 @@ class PromoteResponse(BaseModel):
     cold_start_expected_on_first_inference: bool = True
 
 
+class PromoteJobStatus(BaseModel):
+    """A background promote (``POST /train/promote/{job_id}`` without ``wait=true``)."""
+
+    promote_id: str
+    job_id: str
+    triton_name: str
+    status: Literal['queued', 'exporting', 'loading', 'building', 'warming', 'done', 'failed']
+    error: str | None = None
+    error_status: int | None = Field(
+        default=None, description='HTTP status a synchronous promote would have returned'
+    )
+    result: PromoteResponse | None = None
+    started_at: str | None = None
+    updated_at: str | None = None
+    finished_at: str | None = None
+    poll_after_s: int | None = None
+
+
 @router.post(
     '/promote/{job_id}',
-    response_model=PromoteResponse,
-    responses={422: {'model': PromoteGateFailedResponse}},
+    response_model=PromoteResponse | PromoteJobStatus,
+    status_code=202,
+    responses={
+        200: {'model': PromoteResponse, 'description': 'wait=true, or an already-active job'},
+        422: {'model': PromoteGateFailedResponse},
+    },
 )
 async def promote_run(
     payload: PromoteRequest,
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
-) -> PromoteResponse:
+    response: Response,
+    wait: Annotated[
+        bool,
+        Query(
+            description=(
+                'true: block until the model is loaded and warmed (2-3 minutes; '
+                'raise client/proxy timeouts to >= 300 s) and return the full '
+                'PromoteResponse with 200. false (default): return 202 with a '
+                'promote_id to poll.'
+            )
+        ),
+    ] = False,
+) -> PromoteResponse | PromoteJobStatus:
     """Promote a finished training run into the Triton model repo.
 
     Reads the run's ``status.json`` for the ONNX export the trainer
@@ -2115,71 +2152,119 @@ async def promote_run(
             ),
         )
 
-    try:
-        result = await promote_yolo26_to_triton(
-            status=job_status,
-            triton_name=triton_name,
-            class_id_to_name=class_id_to_name,
-            max_batch_size=payload.max_batch_size,
-            input_size=payload.input_size,
-            fp16=payload.fp16,
-            overwrite=payload.overwrite,
-            class_remap=class_remap,
-            project=config.project_slug,
-        )
-    except CheckpointNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ModelNameConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except TritonLoadError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except PromoteError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    async def _execute(on_phase: Callable[[str], None] | None = None) -> PromoteResponse:
+        try:
+            result = await promote_yolo26_to_triton(
+                status=job_status,
+                triton_name=triton_name,
+                class_id_to_name=class_id_to_name,
+                max_batch_size=payload.max_batch_size,
+                input_size=payload.input_size,
+                fp16=payload.fp16,
+                overwrite=payload.overwrite,
+                class_remap=class_remap,
+                project=config.project_slug,
+                on_phase=on_phase,
+            )
+        except CheckpointNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ModelNameConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except TritonLoadError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except PromoteError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    # Stamp the manifest's promoted_to field, including
-    # whether the gate was bypassed and the (possibly-failing) report so a
-    # forced promote is traceable later. Older runs without a manifest
-    # legitimately have nothing to stamp — stamp_manifest_promotion returns
-    # False for that case, which is NOT an error. An actual write failure
-    # (disk, permissions, corrupt JSON) is a real problem: we don't fail
-    # the promote outright (the model is already live in Triton at this
-    # point — a 500 here would be misleading), but we surface it loudly via
-    # both an ERROR-level log and `lineage_stamped: false` in the response
-    # instead of the previous silent WARNING-and-forget.
-    from datetime import datetime
+        # Stamp the manifest's promoted_to field, including
+        # whether the gate was bypassed and the (possibly-failing) report so a
+        # forced promote is traceable later. Older runs without a manifest
+        # legitimately have nothing to stamp — stamp_manifest_promotion returns
+        # False for that case, which is NOT an error. An actual write failure
+        # (disk, permissions, corrupt JSON) is a real problem: we don't fail
+        # the promote outright (the model is already live in Triton at this
+        # point — a 500 here would be misleading), but we surface it loudly via
+        # both an ERROR-level log and `lineage_stamped: false` in the response
+        # instead of the previous silent WARNING-and-forget.
+        from datetime import datetime
 
-    promoted_at = datetime.now(tz=UTC).isoformat()
-    lineage_stamped = False
-    try:
-        lineage_stamped = await train_jobs.stamp_manifest_promotion(
-            job_id,
+        promoted_at = datetime.now(tz=UTC).isoformat()
+        lineage_stamped = False
+        try:
+            lineage_stamped = await train_jobs.stamp_manifest_promotion(
+                job_id,
+                triton_name=result.triton_name,
+                promoted_at=promoted_at,
+                force_used=payload.force,
+                gate_report=gate_report if gate_failures else None,
+            )
+            if not lineage_stamped:
+                logger.warning(
+                    'manifest_stamp_skipped_no_manifest',
+                    job_id=job_id,
+                    note='no manifest on disk for this job (older run) — nothing to stamp',
+                )
+        except Exception as exc:
+            logger.error('manifest_stamp_failed', job_id=job_id, error=str(exc))
+
+        return PromoteResponse(
+            job_id=result.job_id,
             triton_name=result.triton_name,
-            promoted_at=promoted_at,
+            onnx_path=result.onnx_path,
+            config_path=result.config_path,
+            labels_path=result.labels_path,
+            triton_loaded=result.triton_loaded,
             force_used=payload.force,
             gate_report=gate_report if gate_failures else None,
+            lineage_stamped=lineage_stamped,
+            class_remap_source=class_remap.source,
+            cold_start_expected_on_first_inference=result.cold_start_expected_on_first_inference,
         )
-        if not lineage_stamped:
-            logger.warning(
-                'manifest_stamp_skipped_no_manifest',
-                job_id=job_id,
-                note='no manifest on disk for this job (older run) — nothing to stamp',
-            )
-    except Exception as exc:
-        logger.error('manifest_stamp_failed', job_id=job_id, error=str(exc))
 
-    return PromoteResponse(
-        job_id=result.job_id,
-        triton_name=result.triton_name,
-        onnx_path=result.onnx_path,
-        config_path=result.config_path,
-        labels_path=result.labels_path,
-        triton_loaded=result.triton_loaded,
-        force_used=payload.force,
-        gate_report=gate_report if gate_failures else None,
-        lineage_stamped=lineage_stamped,
-        class_remap_source=class_remap.source,
-        cold_start_expected_on_first_inference=result.cold_start_expected_on_first_inference,
-    )
+    if wait:
+        response.status_code = 200
+        return await _execute()
+
+    # Async (default): the validation above already ran, so every 4xx a
+    # caller can fix is synchronous; only the build/load/warm-up is a job.
+    try:
+        pjob, created = promote_job.claim(run_job_id=job_id, triton_name=triton_name)
+    except promote_job.PromoteJobConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'code': 'promote_in_progress',
+                'message': str(exc),
+                'promote_id': exc.promote_id,
+            },
+        ) from exc
+    if created:
+
+        async def _work(on_phase: Callable[[str], None]) -> dict[str, Any]:
+            return (await _execute(on_phase)).model_dump()
+
+        promote_job.start(pjob, _work)
+    else:
+        response.status_code = 200  # idempotent: the already-active job
+    state = promote_job.read_job(pjob.directory.name)
+    assert state is not None  # claim() just wrote it
+    return PromoteJobStatus(**state)
+
+
+@router.get('/promote/{job_id}/jobs/{promote_id}', response_model=PromoteJobStatus)
+async def promote_job_status(
+    job_id: Annotated[str, PathParam(description='Training job_id the promote belongs to')],
+    promote_id: Annotated[str, PathParam(description='promote_id from the 202 response')],
+) -> PromoteJobStatus:
+    """Phase of a background promote: ``queued`` -> ``exporting`` -> ``loading``
+    -> ``building`` -> ``warming`` -> ``done`` | ``failed``. ``result`` (the
+    synchronous :class:`PromoteResponse` shape) is set on ``done``; ``error``
+    and ``error_status`` (the HTTP status a synchronous promote would have
+    returned) on ``failed``. 404 for an unknown id or one that belongs to a
+    different run."""
+    state = promote_job.read_job(promote_id)
+    if state is None or state['job_id'] != job_id:
+        raise HTTPException(status_code=404, detail=f'promote job {promote_id!r} not found')
+    return PromoteJobStatus(**state)
 
 
 # =============================================================================

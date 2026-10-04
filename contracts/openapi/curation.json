@@ -15105,6 +15105,121 @@
         "title": "PromoteGateFailure",
         "type": "object"
       },
+      "PromoteJobStatus": {
+        "description": "A background promote (``POST /train/promote/{job_id}`` without ``wait=true``).",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HTTP status a synchronous promote would have returned",
+            "title": "Error Status"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "poll_after_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After S"
+          },
+          "promote_id": {
+            "title": "Promote Id",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromoteResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "exporting",
+              "loading",
+              "building",
+              "warming",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "triton_name": {
+            "title": "Triton Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "promote_id",
+          "job_id",
+          "triton_name",
+          "status"
+        ],
+        "title": "PromoteJobStatus",
+        "type": "object"
+      },
       "PromoteRequest": {
         "description": "Body for ``POST {api_prefix}/train/promote/{job_id}``.",
         "properties": {
@@ -24955,6 +25070,18 @@
               }
             ],
             "title": "Mlflow Run Url"
+          },
+          "promote": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promote"
           },
           "started_at": {
             "anyOf": [
@@ -44950,6 +45077,18 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "true: block until the model is loaded and warmed (2-3 minutes; raise client/proxy timeouts to >= 300 s) and return the full PromoteResponse with 200. false (default): return 202 with a promote_id to poll.",
+            "in": "query",
+            "name": "wait",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true: block until the model is loaded and warmed (2-3 minutes; raise client/proxy timeouts to >= 300 s) and return the full PromoteResponse with 200. false (default): return 202 with a promote_id to poll.",
+              "title": "Wait",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -44971,6 +45110,24 @@
                 }
               }
             },
+            "description": "wait=true, or an already-active job"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PromoteResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PromoteJobStatus"
+                    }
+                  ],
+                  "title": "Response Promote Run Curation Projects  Project  Train Promote  Job Id  Post"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "422": {
@@ -44985,6 +45142,71 @@
           }
         },
         "summary": "Promote Run",
+        "tags": [
+          "Curation - Train"
+        ]
+      }
+    },
+    "/curation/projects/{project}/train/promote/{job_id}/jobs/{promote_id}": {
+      "get": {
+        "description": "Phase of a background promote: ``queued`` -> ``exporting`` -> ``loading``\n-> ``building`` -> ``warming`` -> ``done`` | ``failed``. ``result`` (the\nsynchronous :class:`PromoteResponse` shape) is set on ``done``; ``error``\nand ``error_status`` (the HTTP status a synchronous promote would have\nreturned) on ``failed``. 404 for an unknown id or one that belongs to a\ndifferent run.",
+        "operationId": "promote_job_status_curation_projects__project__train_promote__job_id__jobs__promote_id__get",
+        "parameters": [
+          {
+            "description": "Training job_id the promote belongs to",
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "Training job_id the promote belongs to",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "promote_id from the 202 response",
+            "in": "path",
+            "name": "promote_id",
+            "required": true,
+            "schema": {
+              "description": "promote_id from the 202 response",
+              "title": "Promote Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromoteJobStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote Job Status",
         "tags": [
           "Curation - Train"
         ]

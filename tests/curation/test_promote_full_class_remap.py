@@ -162,7 +162,8 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
     _mock_promote(monkeypatch, captured, 'yolo26m_gap_test')
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/gap-job', json={'triton_name': 'yolo26m_gap_test'}
+        '/curation/projects/default/train/promote/gap-job?wait=true',
+        json={'triton_name': 'yolo26m_gap_test'},
     )
     assert r.status_code == 200, r.text
 
@@ -196,7 +197,7 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/gap-no-remap-job',
+        '/curation/projects/default/train/promote/gap-no-remap-job?wait=true',
         json={'triton_name': 'yolo26m_gap_no_remap'},
     )
     assert r.status_code == 422, r.text
@@ -205,7 +206,7 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     captured: dict[str, Any] = {}
     _mock_promote(monkeypatch, captured, 'yolo26m_gap_no_remap')
     r = app_client.post(
-        '/curation/projects/default/train/promote/gap-no-remap-job',
+        '/curation/projects/default/train/promote/gap-no-remap-job?wait=true',
         json={'triton_name': 'yolo26m_gap_no_remap', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -255,7 +256,7 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
     _mock_promote(monkeypatch, captured, 'yolo26m_contiguous')
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/contiguous-no-remap-job',
+        '/curation/projects/default/train/promote/contiguous-no-remap-job?wait=true',
         json={'triton_name': 'yolo26m_contiguous'},
     )
     assert r.status_code == 200, r.text

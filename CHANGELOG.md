@@ -21,6 +21,21 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 - The COCO car manifest pin test no longer skips or claims the manifest is
   missing; the tracked `coco_car_60.json` is always checked (#103).
+- `POST /train/promote/{job_id}` now returns `202` with a `promote_id` and runs the
+  export/load/warm-up as a background job; poll the new
+  `GET /train/promote/{job_id}/jobs/{promote_id}` for its phase. `?wait=true` keeps
+  the previous synchronous `200` response. A repeat promote of a run with an active
+  job returns that job. `GET /train/status/{job_id}` gains a nullable `promote`
+  field (#87).
+- The installer refuses an explicit `--gpu-plan triton=N` onto a card with under
+  16 GB free (the API runs the engine exports on Triton's card) unless `--force`,
+  and the automatic plan warns (#111).
+
+### Fixed (installer)
+
+- A CUDA out-of-memory during an export step (TensorRT's `CUDA initialization
+  failure with error: 2`) is a permanent `oom` failure with a `--gpu-plan` hint,
+  not retried as transient (#111).
 
 ## [0.4.0] - 2026-10-04
 

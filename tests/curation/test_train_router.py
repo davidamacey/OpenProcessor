@@ -1217,7 +1217,7 @@ def test_promote_endpoint_returns_422_when_gate_fails(
     )
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/gate-fail-job',
+        '/curation/projects/default/train/promote/gate-fail-job?wait=true',
         json={'triton_name': 'yolo26m_fail'},
     )
     assert r.status_code == 422, r.text
@@ -1251,7 +1251,7 @@ def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
     monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/still-running-job',
+        '/curation/projects/default/train/promote/still-running-job?wait=true',
         json={'triton_name': 'yolo26m_running', 'force': True},
     )
     assert r.status_code == 422, r.text
@@ -1329,7 +1329,7 @@ def test_promote_endpoint_force_bypasses_gate(
     )
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/force-job',
+        '/curation/projects/default/train/promote/force-job?wait=true',
         json={'triton_name': 'yolo26m_forced', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -1421,7 +1421,7 @@ def test_force_promote_returns_gate_report(
     )
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/force-report-job',
+        '/curation/projects/default/train/promote/force-report-job?wait=true',
         json={'triton_name': 'yolo26m_forced_report', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -1474,7 +1474,7 @@ def test_force_promote_records_force_used_in_manifest(
     )
 
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}',
+        f'/curation/projects/default/train/promote/{job_id}?wait=true',
         json={'triton_name': 'yolo26m_forced_manifest', 'force': True},
     )
     assert r.status_code == 200, r.text
@@ -1555,7 +1555,7 @@ def test_stamp_failure_is_not_swallowed(
 
     with capture_logs() as cap:
         r = app_client.post(
-            f'/curation/projects/default/train/promote/{job_id}',
+            f'/curation/projects/default/train/promote/{job_id}?wait=true',
             json={'triton_name': 'yolo26m_stamp_fail'},
         )
 
