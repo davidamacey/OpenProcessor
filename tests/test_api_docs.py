@@ -40,3 +40,16 @@ def test_openapi_json_and_oauth_redirect_at_same_paths(client: TestClient) -> No
     assert client.get('/openapi.json').status_code == 200
     assert client.get('/docs/oauth2-redirect').status_code == 200
     assert 'openapi.json' in client.get('/redoc').text
+
+
+_FETCHED_EXTERNAL = re.compile(
+    r'\bsrc\s*[:=]\s*["\']https?://|cdn\.redoc\.ly|fonts\.(?:googleapis|gstatic)\.com'
+)
+
+
+@pytest.mark.parametrize('asset', ['redoc.standalone.js', 'swagger-ui-bundle.js'])
+def test_vendored_bundle_does_not_fetch_external_assets(asset: str) -> None:
+    from src.routers.api_docs import ASSETS_DIR
+
+    text = (ASSETS_DIR / asset).read_text(encoding='utf-8', errors='ignore')
+    assert not _FETCHED_EXTERNAL.findall(text)

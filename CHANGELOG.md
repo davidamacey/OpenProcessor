@@ -20,6 +20,11 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - `Dockerfile.triton` holds the TensorRT packages before `apt-get upgrade`, making cold builds deterministic (#109).
 - `Dockerfile.triton` upgrades `anyio>=4.14.2` next to the starlette fix, clearing CVE-2026-63374 in the triton image (#110).
 - Release gate: `CVE-2026-6653` (libxml2, Debian trixie, status `affected`, no fixed version) is allowlisted as an owner-accepted recurring item; re-check each release (#110).
+- Trainer status reports the host GPU id (through `OP_TRAIN_GPU_ORDER`) instead of the container-local index (#112).
+- Creating an open-vocabulary set named after a shipped template now says so in the 409, and `validate` does too (#114).
+- Region-profile and prompt-pack activate re-read the store before 404ing, so a clone made through another API worker is found (#115).
+- Auto-label's `vlm` stage reports `skipped` with an explicit `reason` when it selects nothing or `run_vlm` is off (#116).
+- ReDoc no longer loads its footer logo from `cdn.redoc.ly`; a test scans the vendored bundles for external fetches (#117).
 
 ### Security
 - Grafana keeps the default `admin` password for LAN-only installs. Change it before exposing the stack beyond a trusted LAN.

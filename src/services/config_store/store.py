@@ -34,6 +34,7 @@ from src.services.config_store.index import (
     ConfigKind,
     config_doc_id,
     config_poll_interval_s,
+    forget_absent_revision,
     get_activation,
     get_config_revision,
 )
@@ -195,15 +196,20 @@ class ConfigStore:
         self.pending_snapshot: ConfigSnapshot | None = None
         self._lock = asyncio.Lock()
 
-    async def refresh(self, client: Any) -> ConfigSnapshot:
-        """Fetch the global revision counter; if it changed, reload every
+    async def refresh(self, client: Any, *, force: bool = False) -> ConfigSnapshot:
+        """``force`` skips the unchanged-revision shortcut and the absent-
+        revision-doc cache: a by-name lookup that missed uses it, because a
+        write made through another API worker bumps the counter in a doc this
+        process may have cached as absent for a whole poll interval.
+
+        Fetch the global revision counter; if it changed, reload every
         config doc plus both activations and swap (``live``) or stage
         (``pinned``) the new snapshot. A no-op (returns ``current``) when
         the revision hasn't moved -- one cheap ``GET`` per call in the
         steady state."""
         async with self._lock:
             with self._read_scope():
-                return await self._refresh_locked(client)
+                return await self._refresh_locked(client, force=force)
 
     def _read_scope(self) -> contextlib.AbstractContextManager[None]:
         """The global store's reads are allowed while a project is bound
@@ -215,7 +221,9 @@ class ConfigStore:
 
         return global_configs_read()
 
-    async def _refresh_locked(self, client: Any) -> ConfigSnapshot:
+    async def _refresh_locked(self, client: Any, *, force: bool = False) -> ConfigSnapshot:
+        if force:
+            forget_absent_revision(client, self.index)
         try:
             revision = await get_config_revision(client, self.index)
         except Exception as exc:
@@ -223,7 +231,7 @@ class ConfigStore:
             self.current = replace(self.current, stale=True)
             return self.current
 
-        if revision == self.current.config_revision and self.current.loaded_at:
+        if not force and revision == self.current.config_revision and self.current.loaded_at:
             return self.current
 
         try:

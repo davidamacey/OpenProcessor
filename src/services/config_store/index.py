@@ -95,6 +95,10 @@ class ActiveConflictError(Exception):
         super().__init__(f'active conflict (current={current})')
 
 
+def forget_absent_revision(client: Any, index: str) -> None:
+    _absent_until.pop((id(client), index), None)
+
+
 async def bump_config_revision(client: Any, index: str) -> int:
     """Atomically increment ``meta:config_revision`` (upsert-on-first-use)
     and return the new value. Every config mutation ends by calling this

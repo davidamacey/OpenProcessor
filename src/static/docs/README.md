@@ -5,3 +5,4 @@ Vendored API-docs assets served at `/docs-assets` by `src/routers/api_docs.py`
 - `redoc.standalone.js`: redoc 2.5.1 (MIT, `LICENSE.redoc`)
 
 To update: `npm pack swagger-ui-dist@<v> redoc@<v>` and copy the same files.
+- `redoc.standalone.js` is patched: the footer logo URL (`cdn.redoc.ly/.../logo-mini.svg`) points at the local `redoc-logo-mini.svg` placeholder. Re-apply after upgrading.

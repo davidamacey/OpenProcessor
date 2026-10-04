@@ -92,6 +92,74 @@ def unvalidated_count_query(
     return {'bool': bool_q}
 
 
+VLM_OFF_REASON = 'run_vlm=false (the default); pass run_vlm=true to run the VLM stage'
+
+
+def skipped_vlm_stage(reason: str = VLM_OFF_REASON) -> dict[str, Any]:
+    return {'skipped': True, 'reason': reason, 'predicted': 0, 'updated': 0}
+
+
+async def count_unvalidated_remaining(
+    opensearch: Any,
+    index: str,
+    class_id: int | None,
+    cluster_id: int | None,
+    item_filter: ItemFilter | None,
+) -> int:
+    """Dashboard count of unvalidated items left in scope; ``-1`` when unavailable."""
+    query = unvalidated_count_query(
+        class_id=class_id, cluster_id=cluster_id, item_filter=item_filter
+    )
+    try:
+        return int((await opensearch.count(index=index, body={'query': query})).get('count', 0))
+    except Exception:
+        return -1
+
+
+async def explain_empty_vlm_selection(
+    opensearch: Any,
+    index: str,
+    class_id: int | None,
+    cluster_id: int | None,
+    item_filter: ItemFilter | None,
+) -> str:
+    """Why the VLM stage selected nothing, so an empty run is never a silent
+    ``0/0``: no items in scope, none embedded yet (the VLM only sees embedded
+    items), or every unvalidated one excluded by the sweep rules."""
+    scope = unvalidated_count_query(
+        class_id=class_id, cluster_id=cluster_id, item_filter=item_filter
+    )
+    try:
+        unvalidated = int(
+            (await opensearch.count(index=index, body={'query': scope})).get('count', 0)
+        )
+        embedded_q = {
+            'bool': {
+                **scope['bool'],
+                'filter': [*scope['bool'].get('filter', []), embedded_clause()],
+            }
+        }
+        embedded = int(
+            (await opensearch.count(index=index, body={'query': embedded_q})).get('count', 0)
+        )
+    except Exception as exc:
+        logger.warning('vlm_empty_selection_explain_failed', error=str(exc))
+        return 'no items selected (could not determine why: item counts unavailable)'
+    if unvalidated == 0:
+        return 'no unvalidated items in scope'
+    if embedded == 0:
+        return (
+            f'{unvalidated} unvalidated item(s) in scope but none embedded yet; the VLM '
+            'only labels embedded items (pass embed_missing=true or wait for the embedder)'
+        )
+    return (
+        f'all {embedded} embedded unvalidated item(s) were excluded from the sweep '
+        '(classifier-labeled at/above classifier_confidence_skip_vlm, vlm_unmatched, '
+        'verified by the region worker in the last 24 h, or an empty VLM answer in the '
+        'retry window); use cluster_id scope to force a cluster'
+    )
+
+
 async def scroll_unvalidated(
     opensearch: Any,
     *,

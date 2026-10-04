@@ -66,6 +66,19 @@ def _norm(name: str | None) -> str:
     return normalize_class_name(name or '')
 
 
+def taken_message(name: str) -> str:
+    """``name_conflict`` text; names a shipped template explicitly, since a
+    new project has no sets yet and a bare 'already taken' reads as a bug."""
+    from src.services.config_store.open_vocab import template_names
+
+    if name in template_names():
+        return (
+            f'{name!r} is the name of a shipped read-only template; '
+            f'pick another name or clone it (POST /open_vocab/{name}/clone)'
+        )
+    return f'{name!r} is already taken'
+
+
 def _check_name(name: str | None, existing_names: frozenset[str]) -> list[ValidationIssue]:
     if name is None:
         return []
@@ -75,7 +88,7 @@ def _check_name(name: str | None, existing_names: frozenset[str]) -> list[Valida
     if name in RESERVED_NAMES:
         issues.append(_issue('open_vocab_name_reserved', 'error', f'{name!r} is a reserved name'))
     if name in existing_names:
-        issues.append(_issue('name_conflict', 'error', f'{name!r} is already taken'))
+        issues.append(_issue('name_conflict', 'error', taken_message(name)))
     return issues
 
 
