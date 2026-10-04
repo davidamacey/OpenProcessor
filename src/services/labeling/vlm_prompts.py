@@ -21,6 +21,7 @@ construction.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 from dataclasses import asdict, dataclass, field, fields
@@ -92,6 +93,13 @@ class PromptPack:
     # predictions that don't already match a class name verbatim.
     synonyms: dict[str, str] = field(default_factory=dict)
 
+    # Glob patterns (``fnmatch``, case-insensitive, against the sanitized
+    # slug) for proposed class names that are scene / image-quality words,
+    # not classes (``blurry_*``, ``*_scene``). A matching proposal is
+    # dropped so the crop reads as "nothing fits", not a new-class
+    # candidate. Empty = no filtering.
+    proposal_denylist: list[str] = field(default_factory=list)
+
     def to_dict(self) -> dict[str, Any]:
         """Plain-dict serialization -- every field is a ``str`` or a
         ``dict[str, str]``, so this round-trips through JSON cleanly."""
@@ -126,6 +134,12 @@ class PromptPack:
         """
         data = json.loads(Path(path).read_text())
         return cls.from_dict(data)
+
+
+def proposal_denied(slug: str, patterns: list[str] | tuple[str, ...]) -> bool:
+    """True when ``slug`` matches any ``patterns`` glob (case-insensitive)."""
+    low = slug.lower()
+    return any(fnmatch.fnmatchcase(low, str(p).lower()) for p in patterns)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +280,20 @@ GENERIC_ITEM_PACK = PromptPack(
     # Deliberately no class_descriptions/synonyms: they name registry classes,
     # and the shipped default must validate with zero warnings on any registry
     # (empty, COCO, ...). Domain vocabulary belongs in a stored pack.
+    proposal_denylist=[
+        'blurry*',
+        '*_blurry',
+        'blur_*',
+        'out_of_focus*',
+        'low_quality*',
+        'low_resolution*',
+        'unclear*',
+        '*_scene',
+        'scene_*',
+        'background*',
+        'empty_*',
+        'unknown*',
+    ],
 )
 
 

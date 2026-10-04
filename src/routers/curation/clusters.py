@@ -344,6 +344,9 @@ async def list_clusters(
                 # auto-promote gate's input), and how many members carry
                 # a label at all.
                 'label_purity': label_purity,
+                # Same value under the name the UI should read for "how
+                # much do the labels agree"; `purity` is geometry only.
+                'label_agreement': label_purity,
                 'labelled_share': (labelled_total / size) if size else None,
                 # Only candidate clusters are ever auto-promote
                 # targets. Class clusters have cluster_id == class_id by

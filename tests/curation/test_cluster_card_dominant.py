@@ -166,3 +166,17 @@ async def test_kind_class_returns_every_class_bucket_even_with_far_more_candidat
         class_source=None,
     )
     assert {c['cluster_id'] for c in resp['items']} == set(range(80))
+
+
+@pytest.mark.asyncio
+async def test_label_agreement_is_served_and_equals_label_purity() -> None:
+    cards = await _cards(_bucket(CANDIDATE, 10, [('a', 3), ('b', 3)]))
+    card = cards[CANDIDATE]
+    assert card['label_agreement'] == pytest.approx(0.5)
+    assert card['label_agreement'] == card['label_purity']
+
+
+@pytest.mark.asyncio
+async def test_label_agreement_null_when_unlabelled() -> None:
+    cards = await _cards(_bucket(CANDIDATE, 10, []))
+    assert cards[CANDIDATE]['label_agreement'] is None

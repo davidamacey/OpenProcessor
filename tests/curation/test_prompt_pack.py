@@ -46,6 +46,7 @@ def test_prompt_pack_is_frozen_dataclass() -> None:
         'region_visible_user',
         'class_descriptions',
         'synonyms',
+        'proposal_denylist',
     }
 
 

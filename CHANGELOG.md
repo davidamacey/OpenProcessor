@@ -65,6 +65,14 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   failure with error: 2`) is a permanent `oom` failure with a `--gpu-plan` hint,
   not retried as transient (#111).
 
+### Added
+
+- Prompt packs take an optional `proposal_denylist` (glob patterns); matching
+  new-class proposals such as `blurry_*` or `*_scene` are dropped. The generic
+  pack ships a starter list (#61).
+- Cluster cards serve `label_agreement` (equal to `label_purity`) so label
+  quality is not read from the geometric `purity` (#61).
+
 ## [0.4.0] - 2026-10-04
 
 OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend

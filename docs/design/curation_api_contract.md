@@ -1372,6 +1372,10 @@ and `label_purity` describe the top class among them. For a candidate,
 members and half of the labelled ones, else `null`, and `dominant_class_id`
 is `null`.
 
+`label_agreement` is the same value as `label_purity` (the top class's share
+of the labelled members, `null` with none labelled) under the name a UI should
+read for label quality; `label_purity` stays for existing callers.
+
 `purity` is geometric and independent of labels: the share of members whose
 nearest cluster centroid is their own cluster. `purity_n` is how many members
 it covers and `purity_basis` is `nearest_centroid`; with `purity_n` of `0`
