@@ -21,6 +21,8 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 - The COCO car manifest pin test no longer skips or claims the manifest is
   missing; the tracked `coco_car_60.json` is always checked (#103).
+- Docs: replaced the Cropwright "Screenshot pending" placeholders with real captures from the
+  public COCO sample projects (#43).
 
 ## [0.4.0] - 2026-10-04
 

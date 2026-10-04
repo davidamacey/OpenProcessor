@@ -15,10 +15,13 @@ cluster cards (`GET /curation/projects/{project}/clusters`), review queues
 (`GET /curation/projects/{project}/review/{tab}`), region review, training
 (the `train` routes) and model comparison (the `bakeoff` routes).
 
-Screens for the project, config-store, VLM-selection and multi-box features
-are not captured yet. Where a page needs one, it carries a placeholder of
-the form `> Screenshot pending: Cropwright (<what it will show>)`. Replace
-the placeholder with a `<Screenshot />` once the PNG exists.
+The project, config-store, VLM-selection, import, reprocess and multi-box
+pages carry captures too. The states that need a running job or a
+destructive confirmation (project archive and delete dialogs, reprocess job
+progress, import undo) are not captured; their pages describe them in text.
+A page that still needs a capture carries a placeholder of the form
+`> Screenshot pending: Cropwright (<what it will show>)`; replace it with a
+`<Screenshot />` once the PNG exists.
 
 **Public data only.** Every screenshot must come from an instance holding
 public sample data (`make sample-coco`, `make sample-plates`). Never
