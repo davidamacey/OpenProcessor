@@ -130,3 +130,37 @@ async def test_active_region_class_is_registered_after_the_snapshot_loads(
     monkeypatch.setattr('src.services.curation.region_class.ensure_region_class', _ensure)
     assert await _REAL_ENSURE(object()) == 7
     assert order == ['refresh', 'ensure']
+
+
+class _Recorder:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def info(self, event: str, **_kw: Any) -> None:
+        self.calls.append(('info', event))
+
+    def warning(self, event: str, **_kw: Any) -> None:
+        self.calls.append(('warning', event))
+
+    def debug(self, event: str, **_kw: Any) -> None:
+        self.calls.append(('debug', event))
+
+
+@pytest.mark.asyncio
+async def test_a_repair_that_changed_nothing_is_not_logged_at_info(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rec = _Recorder()
+    monkeypatch.setattr(legacy_repair, 'logger', rec)
+    await legacy_repair.repair_bound_project(_Client(legacy=0), 'p', tmp_path / 'l', 'items')
+    assert ('info', 'legacy_project_repair') not in rec.calls
+
+
+@pytest.mark.asyncio
+async def test_a_repair_that_backfilled_rows_is_logged_at_info(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rec = _Recorder()
+    monkeypatch.setattr(legacy_repair, 'logger', rec)
+    await legacy_repair.repair_bound_project(_Client(legacy=5), 'p', tmp_path / 'l', 'items')
+    assert ('info', 'legacy_project_repair') in rec.calls

@@ -11,6 +11,17 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Startup legacy-project repair logs at info only when it repaired rows; a worker
+  that re-checks a clean project after the lock is released no longer repeats the
+  line per project (#92).
+
+### Changed
+
+- The COCO car manifest pin test no longer skips or claims the manifest is
+  missing; the tracked `coco_car_60.json` is always checked (#103).
+
 ## [0.4.0] - 2026-10-04
 
 OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend
