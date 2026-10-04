@@ -555,3 +555,22 @@ async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reac
         await shutdown_config_store_poll(task)
         reset_config_stores()
         reset_global_config_store()
+
+
+@pytest.mark.asyncio
+async def test_forced_refresh_sees_write_made_through_another_worker() -> None:
+    from src.services.config_store import index as config_index
+
+    writer = FakeConfigOpenSearch()
+    reader = FakeConfigOpenSearch()
+    reader.__dict__ = writer.__dict__  # same cluster, distinct client (own absent-doc cache)
+    config_index._absent_until.clear()
+    store = ConfigStore(INDEX)
+    await store.refresh(reader)  # fresh project: revision doc absent, cached as absent
+    await save_config(
+        writer, INDEX, kind='region_profile', name='clone1', body={}, expected_revision=None
+    )
+    await store.refresh(reader)
+    assert 'clone1' not in store.current.profiles  # the 404 window the issue saw
+    await store.refresh(reader, force=True)
+    assert 'clone1' in store.current.profiles

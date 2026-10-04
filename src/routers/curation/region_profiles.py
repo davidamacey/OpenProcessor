@@ -477,6 +477,10 @@ async def activate_region_profile_route(
     store = get_config_store()
     await store.refresh(opensearch)
     record = build_record(name, revision=body.revision)
+    if record is None and body.revision is None:
+        # Written through another API worker: this process may hold a stale snapshot.
+        await store.refresh(opensearch, force=True)
+        record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
 
