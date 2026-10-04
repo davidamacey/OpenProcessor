@@ -72,6 +72,8 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   pack ships a starter list (#61).
 - Cluster cards serve `label_agreement` (equal to `label_purity`) so label
   quality is not read from the geometric `purity` (#61).
+- Docs: replaced the Cropwright "Screenshot pending" placeholders with real captures from the
+  public COCO sample projects (#43).
 
 ## [0.4.0] - 2026-10-04
 

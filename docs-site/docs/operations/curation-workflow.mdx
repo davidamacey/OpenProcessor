@@ -37,9 +37,11 @@ omits that prefix. A project can copy another's settings at creation
 (`clone_settings_from`), be archived (read-only) and be deleted (not
 `default`). Projects share the models, workers and GPU, not their data.
 
-:::note
-> Screenshot pending: Cropwright (the project switcher listing two projects with item counts)
-:::
+<Screenshot
+  name="projects-1600.png"
+  alt="Cropwright projects page listing the public COCO sample projects with image, item, validated and embedded counts"
+  caption="The projects page: one row per project with its counts (captured from Cropwright against the public COCO sample projects)"
+/>
 
 ## 2. Classes
 
@@ -160,9 +162,11 @@ The [wheel example](../guides/wheel-example.mdx) walks this on public data
 and [Multi-box regions](../guides/multi-box-regions.mdx) explains the box
 model.
 
-:::note
-> Screenshot pending: Cropwright (region review with several numbered boxes on one item, each with its own state)
-:::
+<Screenshot
+  name="review-regions-multibox-1600.png"
+  alt="Cropwright region review on a COCO vehicle crop with four numbered wheel boxes, each accepted"
+  caption="Region review: several numbered boxes on one item, each with its own state (captured from Cropwright against the public COCO sample projects)"
+/>
 
 After changing a profile, pack or VLM, re-run existing items with
 `POST /reprocess` (see
