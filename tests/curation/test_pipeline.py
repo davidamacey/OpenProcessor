@@ -226,3 +226,65 @@ class TestPipelineClassIdScoping:
         # Only the two class-3 items are in scope -- forklift-1 (class 7)
         # is excluded.
         assert summary['stages']['unvalidated_after_promote'] == 2
+
+
+class TestVlmStageExplainsEmptySelection:
+    """A ``run_vlm=true`` run that selects nothing must say why (fresh project)."""
+
+    @staticmethod
+    async def _run(fake_os: Any, run_vlm: bool) -> dict[str, Any]:
+        from src.routers.curation import pipeline
+
+        return await pipeline.pipeline_auto_label(
+            opensearch=fake_os,
+            train_clusters=False,
+            promote_min_purity=0.85,
+            promote_min_members=4,
+            vlm_batch_size=32,
+            vlm_concurrency=8,
+            max_vlm_crops=0,
+            classifier_confidence_skip_vlm=0.80,
+            clustering_method=None,
+            run_vlm=run_vlm,
+            recluster_unvalidated=False,
+            reassign_only=False,
+            run_auto_promote=False,
+            gate_max_rank=None,
+            gate_min_blur_ratio=None,
+            n_clusters=None,
+            class_id=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_fresh_project_reports_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            'src.routers.curation.get_class_registry',
+            lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
+        )
+        vlm = (await self._run(_FakeOpenSearch({}), True))['stages']['vlm']
+        assert vlm['skipped'] is True
+        assert 'no unvalidated items' in vlm['reason']
+
+    @pytest.mark.asyncio
+    async def test_unembedded_items_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            'src.routers.curation.get_class_registry',
+            lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
+        )
+
+        class _Os(_FakeOpenSearch):
+            async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+                filters = body['query']['bool'].get('filter', [])
+                return {'count': 0 if len(filters) > 0 else 5}
+
+        vlm = (await self._run(_Os({}), True))['stages']['vlm']
+        assert 'none embedded' in vlm['reason']
+
+    @pytest.mark.asyncio
+    async def test_run_vlm_false_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            'src.routers.curation.get_class_registry',
+            lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
+        )
+        vlm = (await self._run(_FakeOpenSearch({}), False))['stages']['vlm']
+        assert 'run_vlm=false' in vlm['reason']

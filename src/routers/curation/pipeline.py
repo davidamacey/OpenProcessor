@@ -32,7 +32,10 @@ from src.routers.curation.pipeline_vlm import job_endpoint, resolve_run_vlm
 from src.routers.curation.vlm import _get_vlm_labeler, _resolve_pack, _vlm_stamp
 from src.services.curation.autolabel.embed_stage import run_embed_missing_stage
 from src.services.curation.autolabel.selection import (
+    count_unvalidated_remaining,
+    explain_empty_vlm_selection,
     scroll_unvalidated,
+    skipped_vlm_stage,
     unvalidated_count_query,
     vlm_selection_query,
 )
@@ -351,21 +354,14 @@ async def _run_auto_label(
     # no-region cohort (items where the segmenter returned no candidate,
     # so the combined call never fired and no class label was written).
     if not run_vlm:
-        summary['stages']['vlm'] = {'skipped': True, 'predicted': 0, 'updated': 0}
+        summary['stages']['vlm'] = skipped_vlm_stage()
         summary['stages']['cluster_id_normalize_post_vlm'] = {'skipped': True}
         if progress is not None:
             progress.start_stage('vlm', total=0)
             progress.start_stage('finalize')
-        try:
-            body = {
-                'query': unvalidated_count_query(
-                    class_id=class_id, cluster_id=cluster_id, item_filter=scope_filter
-                )
-            }
-            cnt = await opensearch.count(index=items_index(), body=body)
-            summary['unvalidated_remaining'] = int(cnt.get('count', 0))
-        except Exception:
-            summary['unvalidated_remaining'] = -1
+        summary['unvalidated_remaining'] = await count_unvalidated_remaining(
+            opensearch, items_index(), class_id, cluster_id, scope_filter
+        )
         summary['after'] = await pipeline_health_snapshot(opensearch)
         return summary
 
@@ -394,7 +390,11 @@ async def _run_auto_label(
     summary['stages']['unvalidated_after_promote'] = len(unvalidated_ids)
 
     if not unvalidated_ids:
-        summary['stages']['vlm'] = {'predicted': 0, 'updated': 0}
+        summary['stages']['vlm'] = skipped_vlm_stage(
+            await explain_empty_vlm_selection(
+                opensearch, items_index(), class_id, cluster_id, scope_filter
+            )
+        )
         summary['final'] = {'unvalidated': 0, 'human_required': 0}
         return summary
 
