@@ -62,6 +62,7 @@ _STDLIB_AND_LOCAL = {
     'enum',
     'errno',
     'fcntl',
+    'fnmatch',
     'functools',
     'gc',
     'getpass',
