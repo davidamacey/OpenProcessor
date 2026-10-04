@@ -245,6 +245,22 @@ def test_failed_docker_build_is_reported_not_logged_as_built(sandbox: Path, fake
     assert 'built ' not in result.stderr.replace('builds failed', '')
 
 
+def test_segmenter_builds_with_its_own_directory_as_context(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'segmenter,api'])
+    assert result.returncode == 0, result.stderr
+    builds = [
+        ln
+        for ln in (tmp_path / 'docker_calls.log').read_text().splitlines()
+        if ln.startswith('build ')
+    ]
+    seg = next(ln for ln in builds if 'docker/segmenter/Dockerfile' in ln)
+    api = next(ln for ln in builds if '--file Dockerfile ' in ln)
+    assert seg.endswith(' docker/segmenter')
+    assert api.endswith(' .')
+
+
 def test_trivy_critical_finding_fails_the_gate(sandbox: Path, fake_bin: Path) -> None:
     _write_shim(fake_bin / 'trivy', 'exit 10')
     result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])

@@ -84,3 +84,11 @@ def test_probe_degraded_without_vlm_fails_cleanly_not_keyerror() -> None:
     r = _run_probe(HEALTH_DEGRADED_NO_VLM)
     assert r.returncode == 1
     assert "'registry'" not in r.stdout + r.stderr
+
+
+def test_health_waits_for_the_vlm_before_the_functional_probe() -> None:
+    """A cold VLM load takes minutes and the probe requires it reachable."""
+    text = (REPO_ROOT / 'setup-openprocessor.sh').read_text()
+    body = text[text.index('run_health() {') :]
+    body = body[: body.index('\n}\n')]
+    assert body.index('VLM_PORT') < body.index('_API_PROBE_PY')

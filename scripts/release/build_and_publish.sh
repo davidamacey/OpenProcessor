@@ -65,7 +65,11 @@ source "$REPO_ROOT/scripts/lib/image_keys.sh"
 # "${OP_IMAGE_NAMESPACE}/${image_name}:${VERSION}".
 declare -A IMAGE_SPECS=()
 for _key in $(image_keys build); do
-    IMAGE_SPECS[$_key]="$(image_key_field "$_key" dockerfile)|.|$(image_key_field "$_key" image)"
+    # The segmenter's Dockerfile COPYs from its own directory (compose builds it
+    # with context docker/segmenter); every other image builds from the repo root.
+    _ctx="."
+    [[ "$_key" == segmenter ]] && _ctx="docker/segmenter"
+    IMAGE_SPECS[$_key]="$(image_key_field "$_key" dockerfile)|${_ctx}|$(image_key_field "$_key" image)"
 done
 ALL_SERVICES="$(image_keys build | tr '\n' ' ')"
 THIRD_PARTY_KEYS="$(image_keys third | tr '\n' ' ')"

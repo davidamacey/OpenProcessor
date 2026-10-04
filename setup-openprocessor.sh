@@ -1957,7 +1957,7 @@ sys.exit(1 if fails else 0)
 
 # run_health -- every check in plan 6.1 for the selected tiers
 run_health() {
-    local h p m fails=() vlm_repo
+    local h p vp m fails=() vlm_repo
     h="$(_health_host)"
     HEALTH_RESULT="not-run"
     if [[ "$OP_DRY_RUN" == 1 || "$OP_NO_START" == 1 ]]; then
@@ -1982,6 +1982,19 @@ run_health() {
             fails+=("triton not ready: ./openprocessor logs triton-server")
         fi
     fi
+    # The VLM loads for minutes on a cold start; the functional probe below
+    # requires it reachable, so wait for it first.
+    if _has_tier vlm; then
+        vp="$(read_env_var "$ENV_FILE" VLM_PORT)"
+        vlm_repo="$(read_env_var "$ENV_FILE" VLM_MODEL)"
+        if wait_http "http://${h}:${vp}/health" 1200 \
+                && wait_http "http://${h}:${vp}/v1/models" 60 '"id":"local-vlm"' \
+                && wait_http "http://${h}:${vp}/v1/models" 5 "\"root\":\"${vlm_repo}\""; then
+            :
+        else
+            fails+=("vlm not serving local-vlm (${vlm_repo}): ./openprocessor logs vlm")
+        fi
+    fi
     if ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
         if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] && wait_http "http://${h}:${p}/health" 5; then
             log_warn "API is up but not ready (expected without Triton in control-plane-only mode)"
@@ -1999,17 +2012,6 @@ run_health() {
     if _has_tier segmenter; then
         p="$(read_env_var "$ENV_FILE" SEGMENTER_PORT)"
         wait_http "http://${h}:${p}/health" 600 '"loaded":true' || fails+=("segmenter not loaded: ./openprocessor logs segmenter")
-    fi
-    if _has_tier vlm; then
-        p="$(read_env_var "$ENV_FILE" VLM_PORT)"
-        vlm_repo="$(read_env_var "$ENV_FILE" VLM_MODEL)"
-        if wait_http "http://${h}:${p}/health" 1200 \
-                && wait_http "http://${h}:${p}/v1/models" 60 '"id":"local-vlm"' \
-                && wait_http "http://${h}:${p}/v1/models" 5 "\"root\":\"${vlm_repo}\""; then
-            :
-        else
-            fails+=("vlm not serving local-vlm (${vlm_repo}): ./openprocessor logs vlm")
-        fi
     fi
     if _has_tier trainer; then
         p="$(read_env_var "$ENV_FILE" MLFLOW_PORT)"

@@ -20,13 +20,24 @@ LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
 # Pull in the latest Ubuntu + NVIDIA security updates on every build; the NGC
-# base lags between monthly tags. TensorRT packages are held at the base
-# image's version so a cold layer cache cannot drift past the lockstep check
-# below (the published digest must be reproducible).
+# base lags between monthly tags. The base image ships an older TensorRT than
+# the pinned one, so install exactly TRT_VERSION for every TensorRT package
+# the base carries, then hold them: a cold layer cache can then neither
+# drift past nor fall behind the lockstep check below (reproducible digest).
+# The pin must stay available in NVIDIA's apt repo (the build fails loudly if
+# it is not).
+ARG TRT_VERSION=11.1.0.106
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
-    && { dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'libnvinfer*' 'libnvonnxparsers*' 'libnvparsers*' 'tensorrt*' 2>/dev/null || true; } \
-       | awk '$1 == "ii" {print $2}' | sort -u | xargs -r apt-mark hold \
+    && pkgs="$({ dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'libnvinfer*' 'libnvonnxparsers*' 'libnvparsers*' 'tensorrt*' 2>/dev/null || true; } | awk '$1 == "ii" {print $2}' | sort -u)" \
+    && spec="" \
+    && for p in $pkgs; do \
+         v="$(apt-cache madison "$p" | awk -v t="$TRT_VERSION" '$3 ~ "^" t "-1\\+cuda13" {print $3; exit}')"; \
+         [ -n "$v" ] || { echo "ERROR: no $p at TensorRT ${TRT_VERSION} in the apt repo" >&2; exit 1; }; \
+         spec="$spec $p=$v"; \
+       done \
+    && apt-get install -y --no-install-recommends --allow-downgrades $spec \
+    && apt-mark hold $pkgs \
     && apt-get upgrade -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -37,7 +48,6 @@ SHELL ["/bin/sh", "-c"]
 # requirements-export-y11.txt) MUST move together. When apt brings a newer
 # TRT, this fails the build until the pip pins and this check are bumped in
 # the same commit — drift can never ship silently.
-ARG TRT_VERSION=11.1.0.106
 RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
     && case "$actual" in "${TRT_VERSION}"*) echo "TensorRT ${actual} matches pinned ${TRT_VERSION}";; \
        *) echo "ERROR: image TensorRT is ${actual}, expected ${TRT_VERSION}." \

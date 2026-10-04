@@ -56,6 +56,8 @@ def test_dockerfile_copies_config_templates_for_preflight_profile() -> None:
 def test_dockerfile_triton_holds_tensorrt_before_upgrade() -> None:
     """A cold apt layer must not upgrade TensorRT past the pinned lockstep."""
     text = (REPO_ROOT / 'Dockerfile.triton').read_text()
+    install = text.find('apt-get install -y --no-install-recommends --allow-downgrades $spec')
     hold = text.find('apt-mark hold')
     upgrade = text.find('apt-get upgrade')
-    assert 0 <= hold < upgrade
+    # the base image's stock TensorRT is older than the pin: install the pin, then hold it
+    assert 0 <= install < hold < upgrade
