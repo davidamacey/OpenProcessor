@@ -34,6 +34,7 @@ write.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import numpy as np
@@ -158,6 +159,28 @@ async def _write(client: Any, actions: list[Any]) -> int:
     return failed
 
 
+_BACKFILL_PAUSE_S = 0.05
+
+
+async def write_member_distances(
+    client: Any, *, index: str, cluster_id: int, distances: dict[str, float]
+) -> int:
+    """Persist ``cluster_distance`` (+ its reference cluster) for ``distances``
+    (crop id -> distance to the member-mean centroid), guarded on each item
+    still being in ``cluster_id``. Throttled between bulk chunks so a lazy
+    backfill never floods a small node. Returns the failed-item count."""
+    items = list(distances.items())
+    failed = 0
+    for start in range(0, len(items), _BULK_CHUNK):
+        actions: list[Any] = []
+        for crop_id, dist in items[start : start + _BULK_CHUNK]:
+            fields = {DISTANCE_REF_FIELD: cluster_id, 'cluster_distance': float(dist)}
+            actions.extend(_update(index, crop_id, cluster_id, fields))
+        failed += await _write(client, actions)
+        await asyncio.sleep(_BACKFILL_PAUSE_S)
+    return failed
+
+
 async def write_cluster_geometry(client: Any, *, index: str | None = None) -> dict[str, Any]:
     """Measure every clustered item against the cluster centroids and write
     the geometry fields. Returns a stage summary for the pipeline.
@@ -235,4 +258,5 @@ __all__ = [
     'cluster_geometry_stage',
     'unit_centroid',
     'write_cluster_geometry',
+    'write_member_distances',
 ]

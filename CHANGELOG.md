@@ -47,6 +47,7 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ### Verified
 - Installer acceptance on 4 Oct 2026: clean install, lifecycle, upgrade/rollback and teardown, plus the installed-stack end-to-end run (ingest, cluster, VLM, export, train, promote, inference, delete) all passed.
+- `GET /crops?order=core_first` on a large cluster no longer scans every member per request (5.1 s at 4,221 members): pages are a native sort on the stored `cluster_distance`, and unmeasured legacy clusters are computed once and written back lazily (#118).
 
 ## [0.4.0] - 2026-10-03
 
