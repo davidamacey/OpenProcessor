@@ -7,3 +7,5 @@
 #
 # Example (remove once a real waiver is needed):
 # CVE-2024-00000 # no fix available upstream yet, tracked in issue #123
+
+CVE-2026-6653 # libxml2 (Debian trixie): status "affected", no fixed version; owner-accepted recurring item, re-check each release and drop when Debian ships a fix
