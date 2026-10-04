@@ -74,7 +74,10 @@ LOCALITY_LABELS: dict[str, str] = {
     'unknown': 'Unknown (treated as outside)',
 }
 SOURCE_LABELS: dict[str, str] = {'env': 'Built in (environment)', 'stored': 'Saved'}
-CATALOG_STATUS_LABELS: dict[str, str] = {'tested': 'Tested', 'to_verify': 'Not yet verified'}
+CATALOG_STATUS_LABELS: dict[str, str] = {
+    'tested': 'Tested',
+    'to_verify': 'Unverified (experimental)',
+}
 
 
 class VlmEndpointUnavailableError(RuntimeError):

@@ -370,3 +370,27 @@ def test_release_lock_round_trips_through_the_installer_parser(
     assert by_key['opensearch'] == ('OPENSEARCH_IMAGE', by_key['opensearch'][1])
     assert by_key['opensearch'][1].startswith('opensearchproject/opensearch:3.6.0@sha256:')
     assert len(rows) == len(lock.read_text().splitlines())
+
+
+def _docker_calls(fake_bin: Path) -> list[str]:
+    return (fake_bin.parent / 'docker_calls.log').read_text().splitlines()
+
+
+def test_stable_release_pushes_latest(sandbox: Path, fake_bin: Path) -> None:
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api'])
+    assert result.returncode == 0, result.stderr
+    assert any(
+        c.startswith('push') and c.endswith('openprocessor:latest') for c in _docker_calls(fake_bin)
+    )
+
+
+def test_prerelease_version_is_refused_so_latest_is_stable_only(
+    sandbox: Path, fake_bin: Path
+) -> None:
+    (sandbox / 'VERSION').write_text('1.2.3-rc1\n')
+    subprocess.run(['git', 'commit', '-q', '-am', 'rc'], cwd=sandbox, check=True)
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api'])
+    assert result.returncode != 0
+    assert 'plain X.Y.Z semver' in result.stderr
+    log = fake_bin.parent / 'docker_calls.log'
+    assert not log.exists() or not any(c.startswith('push') for c in log.read_text().splitlines())

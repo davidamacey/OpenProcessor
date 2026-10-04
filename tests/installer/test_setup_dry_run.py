@@ -268,23 +268,27 @@ def _meminfo(shimmed: Shimmed, ram_gib: int) -> str:
     return str(f)
 
 
-def test_opensearch_heap_is_ram_over_8_clamped(shimmed: Shimmed) -> None:
-    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 32))
+@pytest.mark.parametrize(
+    ('ram_gib', 'heap'),
+    [(2, '2g'), (16, '8g'), (32, '16g'), (64, '30g'), (256, '30g')],
+)
+def test_opensearch_heap_is_half_of_ram_clamped(shimmed: Shimmed, ram_gib: int, heap: str) -> None:
+    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, ram_gib))
     assert result.returncode == 0, result.stderr
-    assert env_file(shimmed)['OPENSEARCH_HEAP'] == '4g'
+    assert env_file(shimmed)['OPENSEARCH_HEAP'] == heap
 
 
 def test_summary_prints_heap_and_soft_shard_budget(shimmed: Shimmed) -> None:
     result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 16))
     assert result.returncode == 0, result.stderr
-    assert 'OpenSearch  : heap 2g, soft shard budget 40 (20 shards per heap GB)' in result.stdout
+    assert 'OpenSearch  : heap 8g, soft shard budget 160 (20 shards per heap GB)' in result.stdout
 
 
 def test_summary_budget_uses_the_user_heap_and_shard_knob(shimmed: Shimmed) -> None:
     mem = _meminfo(shimmed, 16)
     assert configure(shimmed, OP_MEMINFO_PATH=mem).returncode == 0
     env_path = shimmed.root / 'inst' / '.env'
-    text = env_path.read_text().replace('OPENSEARCH_HEAP=2g', 'OPENSEARCH_HEAP=3g', 1)
+    text = env_path.read_text().replace('OPENSEARCH_HEAP=8g', 'OPENSEARCH_HEAP=3g', 1)
     env_path.write_text(text + 'OP_SHARDS_PER_HEAP_GB=25\n')
     result = configure(shimmed, OP_MEMINFO_PATH=mem)
     assert result.returncode == 0, result.stderr
@@ -338,7 +342,7 @@ def test_unverified_vlm_only_by_explicit_id_and_force(shimmed: Shimmed) -> None:
     assert dry(shimmed, '--vlm-model-id', 'qwen2.5-vl-7b-awq', tiers='vlm').returncode == 4
     result = configure(shimmed, '--vlm-model-id', 'qwen2.5-vl-7b-awq', '--force', tiers='vlm')
     assert result.returncode == 0, result.stderr
-    assert 'not yet verified' in result.stderr
+    assert 'unverified/experimental' in result.stderr
     assert env_file(shimmed)['VLM_CATALOG_ID'] == 'qwen2.5-vl-7b-awq'
 
 
@@ -355,6 +359,42 @@ def test_host_shaped_three_gpus_write_the_placement(shimmed: Shimmed, tmp_path: 
     assert env['SEGMENTER_GPU_ID'] == env['OP_TRAIN_GPU_ORDER'] == env['EVALUATOR_GPU_ID'] == '2'
     assert env['OP_GPU_ALLOWED_IDS'] == '0,1,2'
     assert env['OP_GPU_LABELS'].startswith('0=NVIDIA RTX A6000,1=NVIDIA GeForce RTX 3080 Ti')
+
+
+def test_segmenter_tier_sets_api_segmenter_url(shimmed: Shimmed, tmp_path: Path) -> None:
+    # /models/status builds the sam3 row from OP_SEGMENTER_URL only (#113).
+    shimmed.gpus(GPU_HOST)
+    tok = tmp_path / 'tok'
+    tok.write_text('hf_TESTSECRET1234567890\n')
+    tok.chmod(0o600)
+    result = configure(shimmed, tiers='segmenter', HF_TOKEN_FILE=str(tok))
+    assert result.returncode == 0, result.stderr
+    assert env_file(shimmed)['OP_SEGMENTER_URL'] == 'http://segmenter:8000'
+
+
+def test_no_segmenter_tier_leaves_segmenter_url_unset(shimmed: Shimmed) -> None:
+    result = configure(shimmed)
+    assert result.returncode == 0, result.stderr
+    assert not env_file(shimmed).get('OP_SEGMENTER_URL')
+
+
+def _map_count(shimmed: Shimmed, value: int) -> str:
+    f = shimmed.root / f'map_count_{value}'
+    f.write_text(f'{value}\n')
+    return str(f)
+
+
+def test_low_vm_max_map_count_warns_with_the_fix(shimmed: Shimmed) -> None:
+    result = configure(shimmed, OP_MAX_MAP_COUNT_PATH=_map_count(shimmed, 65530))
+    assert result.returncode == 0, result.stderr
+    assert 'vm.max_map_count is 65530' in result.stderr
+    assert 'sysctl -w vm.max_map_count=262144' in result.stderr
+
+
+def test_sufficient_vm_max_map_count_is_silent(shimmed: Shimmed) -> None:
+    result = configure(shimmed, OP_MAX_MAP_COUNT_PATH=_map_count(shimmed, 262144))
+    assert result.returncode == 0, result.stderr
+    assert 'vm.max_map_count' not in result.stderr
 
 
 # --- HF token ----------------------------------------------------------------------

@@ -932,7 +932,7 @@ recommend_plan() {
             else
                 (( need > vlm_avail )) && warns+=("VLM ${vlm_id} needs ${need} GB but only ${vlm_avail} GB is free; forced")
                 allowed[vlm]=1; vlm_pick="$vlm_id"; vlm_status="$st"
-                [[ "$st" != tested ]] && warns+=("VLM ${vlm_id} is not yet verified with the prompt contract; run 'openprocessor vlm probe' after install and check the pairing warnings")
+                [[ "$st" != tested ]] && warns+=("VLM ${vlm_id} is unverified/experimental (not tested with the prompt contract; prefer a tested catalog entry); run 'openprocessor vlm probe' after install and check the pairing warnings")
             fi
         else
             if ! line="$(pick_vlm "$vlm_avail")" && (( inst == 2 && seg == vlm )); then
@@ -2935,6 +2935,7 @@ do_install() {
             env_set VLM_GPU_MEMORY_UTILIZATION "$(plan_get "$plan" VLM_GPU_MEMORY_UTILIZATION)"
             env_set VLM_GPU_TOTAL_MIB "$(plan_get "$plan" VLM_GPU_TOTAL_MIB)"
             log_info "local VLM: ${VLM_PICK} ($(read_env_var "$ENV_FILE" VLM_MODEL), status $(plan_get "$plan" vlm_status))"
+            [[ "$(plan_get "$plan" vlm_status)" == tested ]] || log_warn "VLM ${VLM_PICK} is unverified/experimental; prefer a tested catalog entry"
         fi
     fi
     log_info "tiers: ${SELECTED_TIERS}"
@@ -2969,6 +2970,8 @@ do_install() {
     heap="$(opensearch_heap_for_host)" || die "could not read host memory from ${OP_MEMINFO_PATH:-/proc/meminfo} to size the OpenSearch heap"
     env_set_default OPENSEARCH_HEAP "$heap"
     env_set_default OP_SOURCE_ROOT_HOST ./data
+    # The API's /models/status sam3 row and the segmenter leg read this (#113).
+    _has_tier segmenter && env_set_default OP_SEGMENTER_URL http://segmenter:8000
 
     ensure_hf_token
     plan_ports
@@ -3005,6 +3008,14 @@ do_install() {
         (( free_kib / 1024 / 1024 < need )) && log_warn "Docker's data root ${root} has $(( free_kib / 1024 / 1024 )) GB free; images need ~${need} GB"
     else
         log_warn "could not check free disk space on Docker's data root"
+    fi
+
+    # OpenSearch (mmapfs) needs vm.max_map_count >= 262144; it is a host
+    # kernel setting a container cannot change, so warn with the fix.
+    local mmc
+    mmc="$(cat "${OP_MAX_MAP_COUNT_PATH:-/proc/sys/vm/max_map_count}" 2>/dev/null || true)"
+    if [[ "$mmc" =~ ^[0-9]+$ ]] && (( mmc < 262144 )); then
+        log_warn "vm.max_map_count is ${mmc}; OpenSearch needs 262144. Fix: sudo sysctl -w vm.max_map_count=262144, and persist it in /etc/sysctl.d/99-openprocessor.conf"
     fi
 
     # --- images ---------------------------------------------------------------

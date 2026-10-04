@@ -134,16 +134,15 @@ served and probes it. See [VLM selection](../guides/vlm-selection.mdx).
 ## OpenSearch heap sizing
 
 The installer sets `OPENSEARCH_HEAP` from host RAM:
-`clamp(floor(RAM_GiB / 8), 1, 8)` GB.
+`clamp(floor(RAM_GiB / 2), 2, 30)` GB (half of RAM, 2 GB minimum, 30 GB cap).
 
 | Host RAM | Heap | Soft shard budget (20 per heap GB) |
 |---|---|---|
-| under 16 GiB | 1g | 20 |
-| 16-23 GiB | 2g | 40 |
-| 24-31 GiB | 3g | 60 |
-| 32-39 GiB | 4g | 80 |
-| 40-63 GiB | 5g-7g | 100-140 |
-| 64 GiB and up | 8g (cap) | 160 |
+| under 6 GiB | 2g | 40 |
+| 8 GiB | 4g | 80 |
+| 16 GiB | 8g | 160 |
+| 32 GiB | 16g | 320 |
+| 60 GiB and up | 30g (cap) | 600 |
 
 A heap you set in `.env` is never overwritten. Every [project](../guides/projects.mdx)
 adds shards, so the budget bounds how many projects fit. The soft shard
@@ -188,6 +187,9 @@ project.
 | 8 | health check or model setup failed: check `./openprocessor logs`, then `--repair` |
 | 9 | consent not given: re-run with `--yes` or the consent variable |
 
-There is no CPU inference path: `--cpu --control-plane-only` installs
-OpenSearch, the API and Cropwright without inference, and the API reports
-`degraded`.
+There is no CPU inference path. `--cpu --control-plane-only` is an optional
+mode (never the default) for a machine with no usable GPU. It starts only
+OpenSearch and the API, plus Cropwright if requested. It does not start Triton,
+the curation workers, the VLM, the segmenter, the trainer or monitoring. Use it
+to browse an existing index or when the models run elsewhere. Anything needing
+local inference answers 503 and the API reports `degraded`.

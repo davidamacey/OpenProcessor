@@ -48,7 +48,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Deployment',
-      items: ['deployment/gpu-sizing', 'deployment/security'],
+      items: ['deployment/gpu-sizing', 'deployment/sizing-and-storage', 'deployment/security'],
     },
     {
       type: 'category',

@@ -6,10 +6,19 @@
 # get its own project name, container names, network and volumes.
 name: ${COMPOSE_PROJECT_NAME:-openprocessor}
 
+# Every service rotates its json-file logs (a long-running stack otherwise
+# fills the disk); mem_reservation is a soft floor for scheduling, not a cap.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   triton-server:
     image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
+    logging: *default-logging
     restart: always
     ports:
       - "${OP_BIND_ADDRESS:-127.0.0.1}:${TRITON_HTTP_PORT:-4600}:8000"  # HTTP
@@ -65,6 +74,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 4g
           devices:
             - driver: nvidia
               device_ids: [ '${TRITON_GPU_ID:-0}' ]
@@ -76,6 +86,7 @@ services:
   yolo-api:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
+    logging: *default-logging
     restart: always
     # CFG-5: previously the ONLY var reaching this container from .env was
     # OP_API_PREFIX (explicitly interpolated below) -- everything else in
@@ -219,6 +230,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 2g
           devices:
             - driver: nvidia
               device_ids: [ '${API_GPU_ID:-0}' ]
@@ -260,6 +272,8 @@ services:
   curation-detection-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
+    logging: *default-logging
+    mem_reservation: 1g
     profiles:
       - curation
     restart: unless-stopped
@@ -324,6 +338,8 @@ services:
   curation-vlm-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
+    logging: *default-logging
+    mem_reservation: 512m
     profiles:
       - curation
     restart: unless-stopped
@@ -361,6 +377,8 @@ services:
   curation-auto-label-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
+    logging: *default-logging
+    mem_reservation: 2g
     profiles:
       - curation
     restart: unless-stopped
@@ -423,6 +441,8 @@ services:
   curation-cluster-refresh:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
+    logging: *default-logging
+    mem_reservation: 1g
     profiles:
       - curation
     restart: unless-stopped
@@ -457,6 +477,7 @@ services:
   curation-evaluator:
     image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
+    logging: *default-logging
     profiles:
       - curation
     env_file:
@@ -478,6 +499,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 2g
           devices:
             - driver: nvidia
               device_ids: [ '${EVALUATOR_GPU_ID:-0}' ]
@@ -497,6 +519,7 @@ services:
   segmenter:
     image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
+    logging: *default-logging
     profiles:
       - segmenter
     restart: unless-stopped
@@ -539,6 +562,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 4g
           devices:
             - driver: nvidia
               device_ids: [ '${SEGMENTER_GPU_ID:-0}' ]
@@ -564,6 +588,7 @@ services:
   curation-trainer:
     image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.4.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
+    logging: *default-logging
     profiles:
       - training
     restart: unless-stopped
@@ -601,6 +626,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 8g
           devices:
             - driver: nvidia
               # G-14: single-GPU default, interpolated from the same var as
@@ -623,6 +649,8 @@ services:
   curation-mlflow:
     image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v2.19.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow
+    logging: *default-logging
+    mem_reservation: 512m
     profiles:
       - training
     restart: unless-stopped
@@ -676,6 +704,7 @@ services:
     # untested vLLM bump can silently change chat-template / parser behavior.
     image: ${VLM_IMAGE:-vllm/vllm-openai:gemma4-cu130@sha256:0d152595cd940ea1e0890fa190a37b7a86e3f7f0f5048ac3e2e4c14529fea833}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm
+    logging: *default-logging
     profiles:
       - vlm
     restart: unless-stopped
@@ -734,6 +763,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 8g
           devices:
             - driver: nvidia
               device_ids: [ '${VLM_GPU_ID:-0}' ]
@@ -745,6 +775,8 @@ services:
   triton-sdk:
     image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-sdk
+    logging: *default-logging
+    mem_reservation: 256m
     profiles:
       - benchmark
     command: sleep infinity
@@ -756,6 +788,8 @@ services:
   node-exporter:
     image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.10.2}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-node-exporter
+    logging: *default-logging
+    mem_reservation: 64m
     restart: always
     profiles:
       - monitoring
@@ -772,6 +806,7 @@ services:
   dcgm-exporter:
     image: ${DCGM_EXPORTER_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-dcgm
+    logging: *default-logging
     restart: always
     profiles:
       - monitoring
@@ -784,6 +819,7 @@ services:
     deploy:
       resources:
         reservations:
+          memory: 128m
           devices:
             - driver: nvidia
               count: all
@@ -794,6 +830,8 @@ services:
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.12.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-prometheus
+    logging: *default-logging
+    mem_reservation: 512m
     restart: always
     profiles:
       - monitoring
@@ -817,6 +855,8 @@ services:
   grafana:
     image: ${GRAFANA_IMAGE:-grafana/grafana:13.1.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-grafana
+    logging: *default-logging
+    mem_reservation: 256m
     restart: always
     profiles:
       - monitoring
@@ -847,6 +887,8 @@ services:
     # docs/MIGRATION_TRITON_26.md.
     image: ${LOKI_IMAGE:-grafana/loki:3.6.12}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-loki
+    logging: *default-logging
+    mem_reservation: 512m
     restart: always
     profiles:
       - monitoring
@@ -863,6 +905,8 @@ services:
   alloy:
     image: ${ALLOY_IMAGE:-grafana/alloy:v1.17.1}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-alloy
+    logging: *default-logging
+    mem_reservation: 256m
     restart: always
     profiles:
       - monitoring
@@ -889,11 +933,13 @@ services:
   opensearch:
     image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:3.6.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-opensearch
+    logging: *default-logging
+    mem_reservation: ${OPENSEARCH_HEAP:-2g}
     restart: always
     environment:
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      # Heap: OPENSEARCH_HEAP in .env; the installer sizes it to RAM/8, clamped to 1-8g.
+      # Heap: OPENSEARCH_HEAP in .env; the installer sizes it to RAM/2, clamped to 2-30g.
       - "OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}"
       - DISABLE_SECURITY_PLUGIN=true  # Disable security for dev (enable in production)
     ulimits:
@@ -918,6 +964,8 @@ services:
   opensearch-dashboards:
     image: ${OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:3.6.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-osd
+    logging: *default-logging
+    mem_reservation: 512m
     restart: always
     profiles:
       - monitoring

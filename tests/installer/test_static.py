@@ -197,6 +197,34 @@ def test_compose_opensearch_heap_is_driven_by_opensearch_heap() -> None:
     assert re.search(r'^OPENSEARCH_HEAP=', (REPO_ROOT / 'env.template').read_text(), re.MULTILINE)
 
 
+def _compose_services() -> dict:
+    import yaml
+
+    return yaml.safe_load((REPO_ROOT / 'docker-compose.yml').read_text())['services']
+
+
+def test_every_compose_service_rotates_its_logs() -> None:
+    for name, svc in _compose_services().items():
+        opts = svc.get('logging', {}).get('options', {})
+        assert svc.get('logging', {}).get('driver') == 'json-file', f'{name}: no log rotation'
+        assert opts.get('max-size'), f'{name}: no max-size'
+        assert opts.get('max-file'), f'{name}: no max-file'
+
+
+def test_every_compose_service_has_a_memory_reservation() -> None:
+    for name, svc in _compose_services().items():
+        # Compose 2.29 rejects mem_reservation next to deploy.resources.reservations,
+        # so GPU services state the same soft floor under deploy.
+        deploy_mem = (
+            svc.get('deploy', {}).get('resources', {}).get('reservations', {}).get('memory')
+        )
+        assert svc.get('mem_reservation') or deploy_mem, f'{name}: no memory reservation'
+
+
+def test_opensearch_memory_reservation_follows_the_heap() -> None:
+    assert _compose_services()['opensearch']['mem_reservation'] == '${OPENSEARCH_HEAP:-2g}'
+
+
 def test_shellcheck_clean_on_all_scripts() -> None:
     result = subprocess.run(
         ['shellcheck', '--severity=warning', *[str(REPO_ROOT / s) for s in ALL_SCRIPTS]],

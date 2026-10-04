@@ -5,11 +5,10 @@
 # The one place the heap rule lives (projects plan 2.3, installer plan
 # 11.1 #8). Sourced by setup-openprocessor.sh and scripts/lib/config.sh.
 #
-# heap = clamp(floor(RAM_GiB / 8), 1, 8) GB. OpenSearch wants at most half
-# of the memory it gets for heap and the rest for page cache; this host also
-# runs Triton, the API and the model workers, so OpenSearch gets about a
-# quarter of RAM in total. The 8 GB cap stays far below the ~31 GB
-# compressed-pointer limit.
+# heap = clamp(floor(RAM_GiB / 2), 2, 30) GB: the OpenSearch guidance of
+# about half of the memory for heap (the rest is page cache), never below a
+# 2 GB working minimum, and capped at 30 GB to stay under the ~31 GB
+# compressed-pointer limit. The shard budget (heap GB x 20) follows the heap.
 #
 # OP_MEMINFO_PATH overrides /proc/meminfo (tests).
 # =============================================================================
@@ -20,9 +19,9 @@ opensearch_heap_for_host() {
     kib="$(awk '/^MemTotal:/ { print $2; exit }' "${OP_MEMINFO_PATH:-/proc/meminfo}" 2>/dev/null)"
     [[ "$kib" =~ ^[0-9]+$ ]] || return 1
     ram_gib=$(( kib / 1024 / 1024 ))
-    heap=$(( ram_gib / 8 ))
-    (( heap < 1 )) && heap=1
-    (( heap > 8 )) && heap=8
+    heap=$(( ram_gib / 2 ))
+    (( heap < 2 )) && heap=2
+    (( heap > 30 )) && heap=30
     echo "${heap}g"
 }
 

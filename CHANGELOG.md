@@ -11,7 +11,19 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
+### Added
+- Every compose service rotates its logs (`json-file`, 10 MB x 5) and has a `mem_reservation` (OpenSearch reserves its heap size).
+- Installer warns when `vm.max_map_count` is below 262144, with the fix.
+- Optional `docker-compose.docs.yml` overlay serving the documentation site locally (port 4613); new "Memory, disk and storage" page.
+- Release gate: the seven `linux-libc-dev` kernel-header CVEs (headers only, no upstream fix) are allowlisted per CVE with a reason (#110).
+
+### Changed
+- OpenSearch heap default is now half of host RAM, 2 GB minimum, 30 GB cap (was RAM/8, 1 to 8 GB); the shard budget follows the heap. A heap set in `.env` is kept.
+- Unverified VLM catalog entries are labelled "Unverified (experimental)" in the catalog and installer output; the verified default is unchanged and they are never auto-selected.
+- Release decisions recorded as DECIDED in `docs/releases/RELEASE_CHECKLIST.md`: `latest` ships with 0.4.0, control-plane-only stays optional, docs on GitHub Pages plus a local container (#63).
+
 ### Fixed
+- Installer sets `OP_SEGMENTER_URL` for the API when the segmenter tier is installed, so `/models/status` shows `sam3` as running (#113).
 - Installer: the API image now ships `config_templates/`, so the `preflight_profile` step works without a source checkout (#105).
 - Installer: the `/curation/health` functional probe no longer requires a `registry` key (#106).
 - Release gate: Trivy scans use `--scanners vuln`, a configurable `TRIVY_TIMEOUT`, and report scanner errors/timeouts as errors instead of CRITICAL findings (#107).
@@ -30,10 +42,9 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - Grafana keeps the default `admin` password for LAN-only installs. Change it before exposing the stack beyond a trusted LAN.
 
 ### Known issues
-- Trivy remainder (#110): `linux-libc-dev` kernel-header CVEs in triton, segmenter and evaluator (no fix upstream, headers only); the trainer image pins `mlflow>=2.18,<3` to match the server, and its mlflow 2.x CVEs clear only with a deliberate 3.x move of client and server together.
+- Trivy remainder (#110): the trainer image pins `mlflow>=2.18,<3` to match the server, and its mlflow 2.x CVEs clear only with a deliberate 3.x move of client and server together.
 - Export can run out of memory when Triton and the API share a 12 GB card (#111).
 - Trainer status reports GPU index 0 regardless of the GPU used (#112).
-- `/models/status` shows the `sam3` row as `not_configured` while the segmenter is running; the installer does not set `OP_SEGMENTER_URL` (#113).
 
 ### Verified
 - Installer acceptance on 4 Oct 2026: clean install, lifecycle, upgrade/rollback and teardown, plus the installed-stack end-to-end run (ingest, cluster, VLM, export, train, promote, inference, delete) all passed.

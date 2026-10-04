@@ -133,30 +133,39 @@ everything on 127.0.0.1.**
 
 Details: [SECURITY.md](SECURITY.md).
 
+### Control-plane-only mode (optional, not the default)
+
+`--cpu --control-plane-only` is an installer option for a machine with no
+usable NVIDIA GPU. It starts only OpenSearch and the API, plus Cropwright if you
+ask for that tier. It does not start Triton, the curation workers, the VLM, the
+segmenter, the trainer or monitoring, and it refuses `--tiers` that include
+them. Use it to browse or manage an existing index, or when the models run on
+another machine. Anything that needs local inference (ingest detection, embeddings,
+exports, training) answers 503, and the API reports `degraded`. The default
+install requires a GPU and builds the full stack for the tiers you pick.
+
 ### OpenSearch heap sizing
 
 The installer sets `OPENSEARCH_HEAP` in `.env` from the host's RAM:
-`clamp(floor(RAM_GiB / 8), 1, 8)` GB. `docker-compose.yml` passes it as
+`clamp(floor(RAM_GiB / 2), 2, 30)` GB (half of RAM, 2 GB minimum, 30 GB cap). `docker-compose.yml` passes it as
 `-Xms`/`-Xmx`.
 
 | Host RAM | Heap | Soft shard budget (20 per heap GB) |
 |---|---|---|
-| under 16 GiB | 1g | 20 |
-| 16-23 GiB | 2g | 40 |
-| 24-31 GiB | 3g | 60 |
-| 32-39 GiB | 4g | 80 |
-| 40-63 GiB | 5g-7g | 100-140 |
-| 64 GiB and up | 8g (cap) | 160 |
+| under 6 GiB | 2g | 40 |
+| 8 GiB | 4g | 80 |
+| 16 GiB | 8g | 160 |
+| 32 GiB | 16g | 320 |
+| 60 GiB and up | 30g (cap) | 600 |
 
-Why 1/8 with a cap of 8 GB: OpenSearch wants at most half of its memory as
-heap (the rest is page cache) and stays well below the ~31 GB
-compressed-pointer limit, and this host also runs Triton, the API and the
-model workers. A heap you set yourself in `.env` is never overwritten, on a
+Why half with a cap of 30 GB: OpenSearch guidance is about half of memory as
+heap (the rest is page cache), below the ~31 GB compressed-pointer limit. See
+[Memory, disk and storage](docs-site/docs/deployment/sizing-and-storage.mdx). A heap you set yourself in `.env` is never overwritten, on a
 re-run or by `scripts/setup.sh --force`.
 
 The **soft shard budget** is heap GB x `OP_SHARDS_PER_HEAP_GB` (advanced,
 default 20, commented out in `env.template`). It is not a cap: going past it
-only warns. The installer summary prints both, for example
+only warns (a hard refusal comes only at `cluster.max_shards_per_node`). The installer summary prints both, for example
 `OpenSearch  : heap 4g, soft shard budget 80 (20 shards per heap GB)`. To make
 room for more, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and
 `./openprocessor restart opensearch`.

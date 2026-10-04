@@ -1,0 +1,21 @@
+# Optional overlay: serve the documentation site locally from a source checkout.
+#   docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d --build docs
+# then open http://localhost:4613/OpenProcessor/ (DOCS_PORT). The release bundle
+# does not ship docs-site/; installed stacks read the public GitHub Pages site.
+services:
+  docs:
+    image: ${OP_DOCS_IMAGE:-openprocessor-docs:local}
+    build:
+      context: ./docs-site
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-docs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    mem_reservation: 64m
+    restart: unless-stopped
+    ports:
+      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${DOCS_PORT:-4613}:8080"
+    networks:
+      - triton_net
