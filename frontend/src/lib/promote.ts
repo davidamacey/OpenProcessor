@@ -9,7 +9,8 @@
  * guess.
  */
 import { ApiError } from '$lib/api';
-import type { PromoteResponse } from '$lib/types_train';
+import { isPromoteActive } from '$lib/promoteJobController.svelte';
+import type { PromoteJobStatus, PromoteResponse, TrainJobStatus } from '$lib/types_train';
 
 export interface PromoteGateFailure {
   code: string;
@@ -80,4 +81,26 @@ export function promoteSuccessMessage(
   return res.cold_start_expected_on_first_inference
     ? `${base}. The first prediction will be slow while its engine builds.`
     : base;
+}
+
+/**
+ * Page-reload resume: the first of `runJobIds` whose served train status
+ * (`GET /train/status/{job_id}`, the only route carrying `promote`) has a
+ * promote still in flight. A failed lookup skips that run.
+ */
+export async function findActivePromote(
+  runJobIds: string[],
+  getStatus: (jobId?: string) => Promise<TrainJobStatus | null>,
+): Promise<{ runJobId: string; promote: PromoteJobStatus } | null> {
+  for (const runJobId of runJobIds) {
+    try {
+      const st = await getStatus(runJobId);
+      if (st?.promote && isPromoteActive(st.promote)) {
+        return { runJobId, promote: st.promote };
+      }
+    } catch {
+      // Non-fatal: resume is best effort.
+    }
+  }
+  return null;
 }

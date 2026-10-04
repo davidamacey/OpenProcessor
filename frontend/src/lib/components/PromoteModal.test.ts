@@ -6,13 +6,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import PromoteModal from './PromoteModal.svelte';
-import { ApiError, promoteTrainJob } from '$lib/api';
+import { ApiError, getPromoteJob, promoteTrainJob } from '$lib/api';
+import type { PromoteJobStatus } from '$lib/types_train';
 import { defaultTritonName } from '$lib/promote';
 import { toastStore } from '$stores/toast.svelte';
 
 vi.mock('$lib/api', async () => {
   const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
-  return { ...actual, promoteTrainJob: vi.fn() };
+  return { ...actual, promoteTrainJob: vi.fn(), getPromoteJob: vi.fn() };
 });
 
 let target: HTMLDivElement;
@@ -28,7 +29,23 @@ afterEach(() => {
   instance = undefined;
   target.remove();
   vi.mocked(promoteTrainJob).mockReset();
+  vi.mocked(getPromoteJob).mockReset();
+  vi.useRealTimers();
 });
+
+function pj(
+  status: PromoteJobStatus['status'],
+  extra: Partial<PromoteJobStatus> = {},
+): PromoteJobStatus {
+  return {
+    promote_id: 'p1',
+    job_id: 'run-1',
+    triton_name: 'run_1',
+    status,
+    poll_after_s: ['done', 'failed'].includes(status) ? null : 1,
+    ...extra,
+  };
+}
 
 function gate422(forceAllowed: boolean): ApiError {
   return new ApiError(422, '/curation/train/promote/run-1', {
@@ -88,15 +105,7 @@ describe('PromoteModal gate failure', () => {
     expect(force).not.toBeNull();
     force.click();
     flushSync();
-    vi.mocked(promoteTrainJob).mockResolvedValueOnce({
-      job_id: 'run-1',
-      triton_name: 'run_1',
-      onnx_path: '',
-      config_path: '',
-      labels_path: '',
-      triton_loaded: true,
-      cold_start_expected_on_first_inference: false,
-    });
+    vi.mocked(promoteTrainJob).mockResolvedValueOnce(pj('queued'));
     submitButton().click();
     await vi.waitFor(() => expect(promoteTrainJob).toHaveBeenCalledTimes(2));
     expect(vi.mocked(promoteTrainJob).mock.calls[0]![1].force).toBeUndefined();
@@ -167,14 +176,19 @@ describe('PromoteModal success toast', () => {
 
   async function promoteWith(extra: Record<string, unknown>): Promise<string> {
     const success = vi.spyOn(toastStore, 'success');
-    vi.mocked(promoteTrainJob).mockResolvedValue({ ...RES, ...extra });
+    vi.mocked(promoteTrainJob).mockResolvedValue(
+      pj('done', { result: { ...RES, ...extra } }),
+    );
     instance = mount(PromoteModal, {
       target,
       props: { open: true, jobId: 'run-1', defaultName: 'run_1', onclose: () => {} },
     });
     flushSync();
     submitButton().click();
-    await vi.waitFor(() => expect(success).toHaveBeenCalled());
+    vi.mocked(getPromoteJob).mockResolvedValue(
+      pj('done', { result: { ...RES, ...extra } }),
+    );
+    await vi.waitFor(() => expect(success).toHaveBeenCalled(), { timeout: 3000 });
     const msg = String(success.mock.calls[0][0]);
     success.mockRestore();
     return msg;
@@ -190,5 +204,101 @@ describe('PromoteModal success toast', () => {
     expect(await promoteWith({ cold_start_expected_on_first_inference: false })).toBe(
       'Promoted run_1 → Triton',
     );
+  });
+});
+
+describe('PromoteModal background job (#87)', () => {
+  function mountOpen(extra: Record<string, unknown> = {}) {
+    const onclose = vi.fn();
+    const onpromoted = vi.fn();
+    instance = mount(PromoteModal, {
+      target,
+      props: {
+        open: true,
+        jobId: 'run-1',
+        defaultName: 'run_1',
+        onclose,
+        onpromoted,
+        ...extra,
+      },
+    });
+    flushSync();
+    return { onclose, onpromoted };
+  }
+  const phaseOf = (name: string) =>
+    target.querySelector(`[data-testid="promote-phase-${name}"]`);
+  const current = () =>
+    target.querySelector('[aria-current="step"]')?.getAttribute('data-testid');
+
+  it('walks the served phases then closes with the result on done', async () => {
+    const { onclose, onpromoted } = mountOpen();
+    vi.mocked(promoteTrainJob).mockResolvedValue(pj('queued'));
+    const polls = [pj('exporting'), pj('loading'), pj('building'), pj('warming')];
+    const RES = {
+      job_id: 'run-1',
+      triton_name: 'run_1',
+      cold_start_expected_on_first_inference: false,
+    };
+    vi.mocked(getPromoteJob).mockImplementation(async () =>
+      polls.length ? polls.shift()! : pj('done', { result: RES as never }),
+    );
+    submitButton().click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(current()).toBe('promote-phase-queued');
+    });
+    const seen: string[] = [];
+    await vi.waitFor(
+      () => {
+        flushSync();
+        const c = current();
+        if (c && seen[seen.length - 1] !== c) seen.push(c);
+        expect(onpromoted).toHaveBeenCalled();
+      },
+      { timeout: 8000, interval: 100 },
+    );
+    expect(seen).toEqual([
+      'promote-phase-queued',
+      'promote-phase-exporting',
+      'promote-phase-loading',
+      'promote-phase-building',
+      'promote-phase-warming',
+    ]);
+    expect(onclose).toHaveBeenCalled();
+  }, 15000);
+
+  it('failed: shows the served error with its status and offers edit-and-retry', async () => {
+    mountOpen();
+    vi.mocked(promoteTrainJob).mockResolvedValue(pj('queued'));
+    vi.mocked(getPromoteJob).mockResolvedValue(
+      pj('failed', { error: 'Triton refused the load', error_status: 502 }),
+    );
+    submitButton().click();
+    await vi.waitFor(
+      () => {
+        flushSync();
+        expect(target.querySelector('[data-testid="promote-failed"]')).not.toBeNull();
+      },
+      { timeout: 4000 },
+    );
+    expect(target.querySelector('[data-testid="promote-failed"]')!.textContent).toContain(
+      'Triton refused the load (502)',
+    );
+    const retry = Array.from(target.querySelectorAll('button')).find((b) =>
+      /edit and retry/i.test(b.textContent ?? ''),
+    )!;
+    retry.click();
+    flushSync();
+    expect(target.querySelector('[data-testid="promote-progress"]')).toBeNull();
+    expect(submitButton()).not.toBeNull();
+  });
+
+  it('attachJob with an active promote shows progress instead of the form', () => {
+    vi.mocked(getPromoteJob).mockResolvedValue(pj('building'));
+    mountOpen({ attachJob: pj('building') });
+    expect(target.querySelector('[data-testid="promote-progress"]')).not.toBeNull();
+    expect(current()).toBe('promote-phase-building');
+    expect(phaseOf('exporting')!.textContent).toContain('✓');
+    expect(target.querySelector('button[type="submit"]')).toBeNull();
   });
 });

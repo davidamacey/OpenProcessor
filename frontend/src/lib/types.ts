@@ -627,6 +627,9 @@ export interface Cluster {
    *  label-based "purity" — 1.0 for a class cluster by construction).
    *  `promotable` is gated on this, not the geometry-based `purity`. */
   label_purity?: number | null;
+  /** #61: served `label_agreement` (same value as `label_purity`) — what
+   *  the UI reads for label quality; `purity` stays geometry-only. */
+  label_agreement?: number | null;
   /** Share of this cluster's members that carry any label at all. */
   labelled_share?: number | null;
   /** Server's auto-promote eligibility for this cluster (purity +

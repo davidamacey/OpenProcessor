@@ -189,6 +189,8 @@ export interface TrainEpochMetric {
 /** Status JSON the trainer writes; nullable everywhere except job_id+state. */
 export interface TrainJobStatus {
   job_id: string;
+  /** Latest promote of this run; served by `GET /train/status/{job_id}` only. */
+  promote?: PromoteJobStatus | null;
   campaign_id?: string | null;
   state: TrainState;
   started_at?: string | null;
@@ -400,6 +402,30 @@ export interface PromoteRequest {
   /** Bypass the promote gate. Offered only when the server's 422 says
    *  `force_allowed` (F-64). */
   force?: boolean;
+}
+
+/** `PromoteJobStatus.status`. Active phases run in this order. */
+export type PromoteJobPhase =
+  'queued' | 'exporting' | 'loading' | 'building' | 'warming' | 'done' | 'failed';
+
+/** `POST {API_PREFIX}/train/promote/{job_id}` 202 (and the 200 for an
+ *  already-active job), `GET .../train/promote/{job_id}/jobs/{promote_id}`
+ *  and `TrainJobStatus.promote`. */
+export interface PromoteJobStatus {
+  promote_id: string;
+  job_id: string;
+  triton_name: string;
+  status: PromoteJobPhase;
+  error?: string | null;
+  /** HTTP status a synchronous promote would have returned. */
+  error_status?: number | null;
+  /** The synchronous body; only on `done`. */
+  result?: PromoteResponse | null;
+  started_at?: string | null;
+  updated_at?: string | null;
+  finished_at?: string | null;
+  /** Seconds to wait before the next poll; null once terminal. */
+  poll_after_s?: number | null;
 }
 
 export interface PromoteResponse {
