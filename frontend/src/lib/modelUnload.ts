@@ -14,7 +14,7 @@
  * would be a second, driftable copy of the real guard.
  */
 
-import { apiErrorText } from './api';
+import { apiErrorText, projectErrorDetail } from './api';
 import type { ModelInfo } from './types';
 
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
@@ -89,4 +89,43 @@ export function unloadForceConfirmMessage(model: Pick<ModelInfo, 'name'>): strin
  */
 export function unloadFailureMessage(e: unknown): string {
   return `Unload failed: ${apiErrorText(e)}`;
+}
+
+export interface UnloadRefusal {
+  kind: 'detector_in_use' | 'config_store_unavailable';
+  /** The server's own message, shown verbatim. */
+  message: string;
+  canForce: boolean;
+}
+
+/**
+ * The two refusals a `force=true` retry can pass (OpenProcessor #75/#121):
+ * 409 `detector_in_use` (this project's ingest detector) and 503
+ * `config_store_unavailable` (the ingest policy could not be read, so the
+ * guard could not run). Everything else (the 403 region guard, the plain
+ * core-model 409, transport errors) is not forceable from here: null.
+ */
+export function unloadRefusal(e: unknown): UnloadRefusal | null {
+  const d = projectErrorDetail(e);
+  if (!d) return null;
+  const status = (e as { status?: number }).status;
+  if (status === 409 && d.error === 'detector_in_use') {
+    return { kind: 'detector_in_use', message: d.message, canForce: true };
+  }
+  if (status === 503 && d.error === 'config_store_unavailable') {
+    return { kind: 'config_store_unavailable', message: d.message, canForce: true };
+  }
+  return null;
+}
+
+/** Confirm text for the force retry after an `UnloadRefusal`. */
+export function unloadRefusalConfirmMessage(
+  model: Pick<ModelInfo, 'name'>,
+  r: UnloadRefusal,
+): string {
+  const tail =
+    r.kind === 'detector_in_use'
+      ? 'Delete it anyway? Ingest will fail until another detector is set.'
+      : 'Delete it anyway without that check?';
+  return `${r.message}\n\n${tail}`;
 }

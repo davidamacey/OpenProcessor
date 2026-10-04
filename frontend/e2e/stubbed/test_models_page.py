@@ -133,3 +133,46 @@ def test_ordinary_unloadable_model_still_offers_a_plain_unload_button(
 
     card = page.locator("li", has_text="PE-Core-L14-336 Image Encoder")
     assert card.get_by_role("button", name="Unload").count() == 1
+
+
+def test_unload_refused_detector_in_use_shows_reason_and_offers_force(
+    stub, page, app_url
+):
+    """OpenProcessor #75/#121: the ingest detector is a 409 detector_in_use
+    without force; the served reason is shown and a confirmed retry sends
+    force=true."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
+    stub.on("GET", r"/models/status(\?|$)", MODELS)
+    reason = "'pe_core' is this project's ingest detector; deleting it makes ingest fail"
+    seen: list[str] = []
+
+    def delete(request, _match):
+        seen.append(request.url)
+        if "force=true" in request.url:
+            return (
+                200,
+                {"triton_name": "pe_core", "triton_unloaded": True,
+                 "directory_removed": True, "forced": True, "warning": None},
+            )
+        return (409, {"detail": {"error": "detector_in_use", "message": reason}})
+
+    stub.on("DELETE", r"/models/[^/?]+(\?|$)", delete)
+    messages: list[str] = []
+
+    def on_dialog(d):
+        messages.append(d.message)
+        d.accept()
+
+    page.on("dialog", on_dialog)
+    page.goto(f"{app_url}/p/default/models")
+    card = page.locator("li", has_text="PE-Core-L14-336 Image Encoder")
+    card.wait_for(timeout=ACTION_TIMEOUT_MS)
+    card.get_by_role("button", name="Unload").click()
+    deadline = ACTION_TIMEOUT_MS
+    while len(seen) < 2 and deadline > 0:
+        page.wait_for_timeout(100)
+        deadline -= 100
+    assert len(seen) == 2, seen
+    assert "force=true" not in seen[0]
+    assert "force=true" in seen[1]
+    assert any(reason in m for m in messages), messages
