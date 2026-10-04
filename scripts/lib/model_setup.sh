@@ -66,7 +66,10 @@ classify_failure() {
         echo "permanent:disk"
         return 0
     fi
-    if grep -qiE 'out of memory' "$logfile"; then
+    # TensorRT reports an exhausted card as "CUDA initialization failure with
+    # error: 2" (cudaErrorMemoryAllocation), not as "out of memory". Retrying
+    # does not help: the memory is held by Triton's loaded engines (#111).
+    if grep -qiE 'out of memory|CUDA initialization failure with error: 2([^0-9]|$)|cudaErrorMemoryAllocation' "$logfile"; then
         echo "permanent:oom"
         return 0
     fi
@@ -92,7 +95,7 @@ permanent_hint() {
         permanent:disk)
             echo "no space left on the install filesystem" ;;
         permanent:oom)
-            echo "out of memory on the first attempt; review the GPU plan (openprocessor gpu plan)" ;;
+            echo "out of GPU memory (Triton and the export share a card with too little free VRAM); move Triton with --gpu-plan triton=N, or free the card, then re-run" ;;
         *)
             echo "" ;;
     esac

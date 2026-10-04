@@ -208,6 +208,34 @@ def test_gpu_plan_override_and_its_validation() -> None:
     assert 'unknown key' in kv['refuse']
 
 
+def test_explicit_triton_on_a_small_card_is_refused_unless_forced() -> None:
+    gpus = [(0, 49140, 0), (1, 12288, 0), (2, 49140, 0)]
+    rc, kv, _ = plan(gpus, 'core curation', 'gpu_plan=triton=1')
+    assert rc == 1
+    assert 'out-of-GPU-memory' in kv['refuse']
+    assert '--gpu-plan' in kv['refuse']
+    assert '--force' in kv['refuse']
+    rc, kv, warns = plan(gpus, 'core curation', 'gpu_plan=triton=1', 'force=1')
+    assert rc == 0
+    assert kv['TRITON_GPU_ID'] == kv['API_GPU_ID'] == '1'
+    assert any('share GPU 1' in w for w in warns)
+
+
+def test_explicit_triton_on_a_big_card_is_not_refused() -> None:
+    rc, _kv, warns = plan(
+        [(0, 49140, 0), (1, 12288, 0), (2, 49140, 0)], 'core curation', 'gpu_plan=triton=2'
+    )
+    assert rc == 0
+    assert not any('engine exports' in w for w in warns)
+
+
+def test_automatic_plan_on_a_small_triton_card_only_warns() -> None:
+    rc, kv, warns = plan([(0, 49140, 0), (1, 12288, 0), (2, 49140, 0)], 'core curation')
+    assert rc == 0
+    assert kv['TRITON_GPU_ID'] == '1'
+    assert any('engine exports' in w and '--gpu-plan' in w for w in warns)
+
+
 def test_remote_vlm_is_never_recommended_as_local() -> None:
     rc, kv, _ = plan([(0, 49140, 0)], '', 'remote=1')
     assert rc == 0
