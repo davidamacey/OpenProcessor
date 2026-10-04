@@ -72,3 +72,5 @@ deployment requires ticking the same acknowledgement used elsewhere; see
 <Screenshot name="prompt-pack-editor-1600.png" alt="Prompt-pack editor with grouped fields and validation issues" caption="Prompt-pack editor — schema-driven fields with live validation" />
 
 <Screenshot name="prompt-pack-test-1600.png" alt="Prompt-pack test panel showing the prompt, raw reply and parsed answer for a crop" caption="Test on a crop — the prompt, raw reply and parsed answer" />
+
+<Screenshot name="clone-from-project-1600.png" alt="Clone dialog for a prompt pack with the Copy from another project list open" caption="Clone from another project — the list holds the projects the server returns; nothing is copied until Clone is pressed" />

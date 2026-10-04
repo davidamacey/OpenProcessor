@@ -38,6 +38,8 @@ Submit a training job against the current export.
 
 <Screenshot name="train-1600.png" alt="Cropwright training cockpit" caption="Train — preflight, live progress, past-run results" />
 
+<Screenshot name="run-results-confusion-1600.png" alt="Finished-run Results panel with training-epoch metrics, evaluation figures and the confusion matrix image" caption="Finished-run Results — metrics, evaluation split and the confusion matrix the trainer wrote" />
+
 ## Training cohorts
 
 A per-class cohort picker sourced from the backend

@@ -47,6 +47,8 @@ it finds appears next to the cell it names.
 - **Check the draft for activation** runs the activation checks without
   activating.
 
+<Screenshot name="open-vocab-editor-1600.png" alt="Open-vocabulary set editor with the segmenter notice and a list of targets" caption="Open-vocabulary editor — the segmenter notice, set fields and one row per target" />
+
 ## Activating
 
 Activating pins the revision you are looking at and asks for confirmation.
@@ -62,6 +64,8 @@ pre-check. The result shows the gate decision and each hit with its score,
 whether it was selected, and why a dropped hit was dropped. Hits are drawn
 over the image, with dropped ones dimmed. A segmenter error is shown as an
 error, never as "no hits".
+
+<Screenshot name="open-vocab-test-1600.png" alt="Open-vocabulary test panel with a hits table of scores, selected and dropped reasons, and the hits drawn over the image" caption="Test a target — every hit with its score and why dropped hits were dropped, drawn over the image" />
 
 ## Run on existing images
 

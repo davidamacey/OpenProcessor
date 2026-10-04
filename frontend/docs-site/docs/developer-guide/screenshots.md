@@ -68,6 +68,9 @@ exactly these calls, each of which writes nothing server-side:
 | `POST .../prompt_packs/validate` | live pack validation |
 | `POST .../prompt_packs/test` | "Test on a crop" (runs the VLM, "Nothing is written") |
 | `POST .../region_profiles/validate`, `.../keymap/validate`, `.../vlm/endpoints/validate` | validation reports |
+| `POST .../ingest/policy/preview` | the ingest policy cost preview (a report over stored detections) |
+| `POST .../region_profiles/validate_segmenter_prompt` | "Check segmenter prompt" (a text-only check) |
+| `POST .../open_vocab/validate`, `.../open_vocab/test` | open-vocabulary validation and "Test a target" (runs the segmenter on one stored image, writes nothing) |
 
 ### Fixtures that need a write
 
@@ -152,3 +155,54 @@ model twice there and the page stays on "Loading...".
 `vlm-endpoint-editor` shows the built-in endpoint's key reference with no key
 value; the "host has it" state needs a key file on the host, which the sample
 stack does not have.
+
+## Slots for the v0.4.0 features
+
+These sixteen slots show the final v0.4.0 backend. They are scripted states
+(`--only <name>`) in `scripts/capture_docs_screenshots.py`, 1600px only (none of
+these layouts is narrow-sensitive). Two environment variables pick the projects:
+`IMPORT_PROJECT=sample-coco-import-v2` and `LIFE_PROJECT=<the throwaway cwlife- project>`.
+
+| File (`-1600.png`) | Project | What it shows |
+| --- | --- | --- |
+| `resources-menu` | `sample-coco-2k-v3` | The open Resources menu: bundled docs plus the served service links |
+| `wheels-inventory-card` | throwaway | The pinned Wheels inventory card on `/clusters` |
+| `region-gallery-boxes` | throwaway | The gallery toolbar's "N / M boxes listed (K items)" |
+| `import-job-actions` | `sample-coco-import-v2` | A completed import: Undo offered, Cancel and Resume with the served reason |
+| `reprocess-served-scopes` | `sample-coco-import-v2` | The Reprocess dialog's served scope labels and the dry-run counts (dry run only, never applied) |
+| `locked-item-badge` | `sample-coco-import-v2` | The lock glyph on imported items |
+| `region-profile-testable` | throwaway | "Test on a crop": each leg's served status and reason, candidates drawn |
+| `segmenter-prompt-check` | throwaway | The result of "Check segmenter prompt" |
+| `clone-from-project` | `sample-coco-2k-v3` | The clone dialog's "Copy from another project" list (never submitted) |
+| `ingest-policy-preview` | throwaway | The ingest policy editor in `selected` mode with the served cost preview |
+| `open-vocab-editor` | throwaway | The open-vocabulary editor with three targets |
+| `open-vocab-test` | throwaway | "Test a target": hits, scores and dropped reasons |
+| `region-stage-panel` | throwaway | The Region stage panel (cropped to its card) |
+| `dashboard-embedding` | throwaway | The dashboard Embedding card with a `not_selected` count |
+| `crop-embedding-row` | throwaway | A crop's detail panel with the Embedding row |
+| `run-results-confusion` | `model-demo-owner` | A finished run's Results with the confusion matrix image |
+
+Notes on how they were made:
+
+- **Throwaway project.** The wheel profile, the open-vocabulary set, the ingest
+  policy and the un-embedded detections only exist after writes, so they live in
+  one project `cwlife-<epoch>-x` created for the capture and deleted afterwards
+  (dry run first, then `confirm=<slug>`). It holds 72 COCO vehicle photos
+  uploaded through `/ingest/upload` (the bytes were read from the public
+  `sample-coco-vehicles-v2` project), a `vehicle_wheel` profile cloned from the
+  served template and activated, the detector's classes seeded, an ingest policy
+  in `selected` mode for `car` and `truck`, and an open-vocabulary set
+  `vehicle_parts` (wheel, side mirror, headlight). All writes went to that
+  project only; the browser stayed read-only.
+- **Clone picker.** The native select is shown open by sizing it to its options.
+  Before the shot the capture removes, from that page only, the options for projects
+  that are not part of the public sample set; the served list is unchanged.
+- **Lock tooltip.** The lock glyph's tooltip is a native `title`, which a page
+  screenshot cannot contain; the caption says so. The tooltip text is the served
+  lock rule from `GET /config/vocabulary`.
+- **Not captured.** The Resources menu's "not configured" row and "not running"
+  note: the sample stack serves every link as configured and reachable, and
+  faking a served state in the browser would not be a real capture.
+- Images that show a whole panel (`region-stage-panel`, `open-vocab-test`,
+  `region-profile-testable`, `segmenter-prompt-check`) are element crops so that
+  no server path or throwaway slug appears in them.

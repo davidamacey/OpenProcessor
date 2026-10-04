@@ -60,3 +60,5 @@ listing short.
 <Screenshot name="review-regions-multibox-1600.png" alt="Region review with several boxes on one item in different states" caption="Region review — several boxes on one item, each with its own state" />
 
 <Screenshot name="box-editor-1600.png" alt="Multi-box editor with a selected box, Add box and the N of max counter" caption="Box editor — select, move, add and delete boxes" />
+
+<Screenshot name="region-gallery-boxes-1600.png" alt="Region gallery with the boxes-listed versus items count in the toolbar" caption="Region gallery — read the toolbar count as boxes listed versus items (12 / 12 boxes listed, 8 items)" />

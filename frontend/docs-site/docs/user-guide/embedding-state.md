@@ -26,6 +26,10 @@ how to repair it.
 
 <Screenshot name="dashboard-1600.png" alt="Cropwright dashboard" caption="Dashboard, which carries the Embedding card and the Detections summary" />
 
+<Screenshot name="dashboard-embedding-1600.png" alt="Dashboard Embedding card showing embedded and not embedded counts with a not_selected chip" caption="Dashboard Embedding card — served embedded / not embedded counts and the per-state chips" />
+
+<Screenshot name="crop-embedding-row-1600.png" alt="Crop detail panel with an Embedding row reading Not embedded" caption="Crop detail — the Embedding row names why an item has no vector" />
+
 ## Filling in missing vectors
 
 Wherever missing vectors matter there is an **Embed** action, and each one

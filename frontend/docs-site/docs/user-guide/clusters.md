@@ -27,6 +27,8 @@ representative crops.
 
 <Screenshot name="clusters-1600.png" alt="Cropwright cluster grid" caption="Cluster grid with cohesion badges" />
 
+<Screenshot name="wheels-inventory-card-1600.png" alt="Cluster grid with a Wheels inventory card pinned first, showing the number of region items listed" caption="Wheels inventory card — pinned first, it opens the slot's region gallery" />
+
 The filter bar above the grid, and the **Matching items** mode that lists and
 bulk-edits everything the filter matches, are described in
 [Item filter and Matching items](./item-filter.md).
