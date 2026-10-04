@@ -238,10 +238,31 @@ def test_version_mismatch_allowed_with_allow_dirty(sandbox: Path, fake_bin: Path
 
 
 def test_trivy_critical_finding_fails_the_gate(sandbox: Path, fake_bin: Path) -> None:
-    _write_shim(fake_bin / 'trivy', 'exit 1')
+    _write_shim(fake_bin / 'trivy', 'exit 10')
     result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
     assert result.returncode == 1
+    assert 'CRITICAL finding' in result.stderr
     assert not (sandbox / 'images.lock').exists()
+
+
+def test_trivy_scanner_error_is_reported_as_error_not_a_finding(
+    sandbox: Path, fake_bin: Path
+) -> None:
+    _write_shim(fake_bin / 'trivy', 'echo "context deadline exceeded" >&2; exit 1')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'scan ERROR' in result.stderr
+    assert 'CRITICAL finding' not in result.stderr
+
+
+def test_trivy_gets_timeout_and_vuln_only_scanners(sandbox: Path, fake_bin: Path) -> None:
+    log = sandbox / 'trivy.args'
+    _write_shim(fake_bin / 'trivy', f'echo "$@" > {log}; exit 0')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'], {'TRIVY_TIMEOUT': '45m'})
+    assert result.returncode == 0, result.stderr
+    args = log.read_text()
+    assert '--timeout 45m' in args
+    assert '--scanners vuln' in args
 
 
 def test_allowlist_entry_without_reason_is_rejected(sandbox: Path, fake_bin: Path) -> None:

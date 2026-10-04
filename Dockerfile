@@ -123,6 +123,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser VERSION ./VERSION
+COPY --chown=appuser:appuser config_templates/ ./config_templates/
 
 # Installer plan §1: docker-compose.yml is deploy-safe (no bind mount of
 # ./export or ./examples), so both must be baked into the image or every

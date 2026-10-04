@@ -48,6 +48,7 @@ EXIT_PRECONDITION=3
 OP_IMAGE_NAMESPACE="${OP_IMAGE_NAMESPACE:-davidamacey}"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 TRIVY_BIN="${TRIVY_BIN:-trivy}"
+TRIVY_TIMEOUT="${TRIVY_TIMEOUT:-30m}"
 ALLOWLIST_FILE="${TRIVY_ALLOWLIST_FILE:-$SCRIPT_DIR/trivy-allowlist.txt}"
 LOCK_FILE="${IMAGES_LOCK_FILE:-$REPO_ROOT/images.lock}"
 LOCK_SUMS_FILE="${IMAGES_LOCK_SUMS_FILE:-${LOCK_FILE}.sha256}"
@@ -228,13 +229,18 @@ scan_image() {
     trap 'rm -f "$ignorefile"' RETURN
     build_trivy_ignorefile "$ignorefile" || return 1
 
-    log "scanning $svc ($tag) -- fail on CRITICAL"
-    if "$TRIVY_BIN" image --severity CRITICAL --exit-code 1 --ignorefile "$ignorefile" "$tag"; then
-        ok "$tag -- no un-allowlisted CRITICAL findings"
-        return 0
-    fi
-    err "$tag has a CRITICAL finding not in $ALLOWLIST_FILE"
-    return 1
+    # --exit-code 10 is reserved for "findings": any other non-zero exit
+    # (timeout, DB download failure, ...) is a scanner error, not a finding.
+    # Vuln scanner only: the secret scanner walks the baked model seed.
+    log "scanning $svc ($tag) -- fail on CRITICAL (timeout $TRIVY_TIMEOUT)"
+    local rc=0
+    "$TRIVY_BIN" image --scanners vuln --severity CRITICAL --exit-code 10 \
+        --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" "$tag" || rc=$?
+    case "$rc" in
+        0) ok "$tag -- no un-allowlisted CRITICAL findings"; return 0 ;;
+        10) err "$tag has a CRITICAL finding not in $ALLOWLIST_FILE"; return 1 ;;
+        *) err "$tag: Trivy scan ERROR (exit $rc, e.g. timeout or DB failure) -- the image was NOT assessed; raise TRIVY_TIMEOUT or fix the scanner"; return 1 ;;
+    esac
 }
 
 # ── push + digest capture ───────────────────────────────────────────────────

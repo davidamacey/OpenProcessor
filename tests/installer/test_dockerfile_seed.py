@@ -41,3 +41,21 @@ def test_every_tracked_config_pbtxt_would_land_in_the_seed() -> None:
                 ln for ln in dockerignore.splitlines() if ln.strip().startswith('!models')
             ]
             assert reincludes, f'.dockerignore excludes {line} with no !models re-include'
+
+
+def test_dockerfile_copies_config_templates_for_preflight_profile() -> None:
+    """preflight_profile runs generate_all_configs inside the API image with
+    PROJECT_DIR=/app, which reads /app/config_templates/profiles/*.json."""
+    text = (REPO_ROOT / 'Dockerfile').read_text()
+    assert re.search(r'COPY\s+(--chown=\S+\s+)?config_templates/\s+\./config_templates/', text)
+    assert (REPO_ROOT / 'config_templates' / 'profiles' / 'minimal.json').is_file()
+    for line in (REPO_ROOT / '.dockerignore').read_text().splitlines():
+        assert not line.strip().rstrip('/').startswith('config_templates'), line
+
+
+def test_dockerfile_triton_holds_tensorrt_before_upgrade() -> None:
+    """A cold apt layer must not upgrade TensorRT past the pinned lockstep."""
+    text = (REPO_ROOT / 'Dockerfile.triton').read_text()
+    hold = text.find('apt-mark hold')
+    upgrade = text.find('apt-get upgrade')
+    assert 0 <= hold < upgrade

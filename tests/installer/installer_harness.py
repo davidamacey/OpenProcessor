@@ -227,6 +227,7 @@ class Shimmed:
         xtrace: bool = False,
         script: Path = SCRIPT,
         timeout: int = 180,
+        cwd: Path | None = None,
         **extra: str,
     ) -> subprocess.CompletedProcess:
         bash = ['bash', '-x'] if xtrace else ['bash']
@@ -237,7 +238,7 @@ class Shimmed:
         return subprocess.run(
             cmd,
             check=False,
-            cwd=str(self.root),
+            cwd=str(cwd or self.root),
             env=self.env(**extra),
             capture_output=True,
             text=True,

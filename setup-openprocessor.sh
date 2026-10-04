@@ -27,7 +27,7 @@
 #   OP_ARTIFACT_BASE_URL   release-asset base (https only; <base>/<ref>/<asset>)
 #   OP_RAW_BASE_URL        raw-file base (https only; <base>/<ref>/<path>)
 #   CW_ARTIFACT_BASE_URL / CW_RAW_BASE_URL   the same for Cropwright
-#   OP_INSTALL_DIR / --dir           install directory (default ./openprocessor)
+#   OP_INSTALL_DIR / --dir           install directory (default ./openprocessor, or . when run inside an install dir)
 #   OP_PROJECT / --project           compose project name + container prefix
 #   OP_VERSION / --version           pinned release tag (vX.Y.Z)
 #   OP_BRANCH / --branch             testing install from a branch head
@@ -679,6 +679,36 @@ gpu_labels() {
         gsub(/^[ \t]+|[ \t]+$/, "", name); gsub(/[^A-Za-z0-9 ._()-]/, "", name)
         printf "%s%s=%s", (n++ ? "," : ""), idx, name
     } END { print "" }'
+}
+
+# gpu_own_usage -> "index mib" per GPU: VRAM held by this project's own
+# containers, so a re-run does not count its own services as "other
+# processes" (the plan would otherwise refuse or shrink what is installed).
+gpu_own_usage() {
+    command -v nvidia-smi >/dev/null 2>&1 || return 0
+    local cid pids="" apps idx
+    for cid in $(docker ps -q --filter "label=com.docker.compose.project=${OP_PROJECT}" 2>/dev/null); do
+        pids+=" $(docker top "$cid" -eo pid 2>/dev/null | awk 'NR > 1 { print $1 }' | tr '\n' ' ')"
+    done
+    [[ -n "${pids// /}" ]] || return 0
+    apps="$(nvidia-smi --query-compute-apps=pid,gpu_uuid,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null || true)"
+    idx="$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null || true)"
+    awk -F', *' -v pids="$pids" -v idxmap="$idx" '
+        BEGIN {
+            n = split(pids, a, " "); for (i = 1; i <= n; i++) mine[a[i]] = 1
+            m = split(idxmap, rows, "\n")
+            for (i = 1; i <= m; i++) { split(rows[i], f, ", *"); if (f[2] != "") byuuid[f[2]] = f[1] }
+        }
+        ($1 in mine) && ($2 in byuuid) { sum[byuuid[$2]] += $3 }
+        END { for (g in sum) print g, sum[g] }' <<< "$apps"
+}
+
+# gpu_subtract_own GPUS OWN -- GPUS rows "index total used" minus OWN rows
+# "index mib" (never below 0)
+gpu_subtract_own() {
+    awk 'NR == FNR { own[$1] += $2; next }
+         { u = $3 - ($1 in own ? own[$1] : 0); if (u < 0) u = 0; print $1, $2, u }' \
+        <(printf '%s\n' "$2") <(printf '%s\n' "$1")
 }
 
 # docker_runtime_has_nvidia -> 1 yes, 0 no, 2 could not determine
@@ -1916,11 +1946,9 @@ if sys.argv[1] == "1":
         h = call("/curation/health")
         ok = h.get("status") == "ok" or (
             h.get("status") == "degraded" and h["triton"].get("reachable") and h["opensearch"].get("reachable")
-            and (h["registry"].get("exists") is False or h["vlm"].get("reachable") or sys.argv[2] == "0"))
+            and (h.get("vlm", {}).get("reachable") or sys.argv[2] == "0"))
         if not ok:
             fails.append("/curation/health: " + json.dumps(h)[:300])
-        elif h["registry"].get("exists") is False:
-            print("curation: no classes yet (expected before your first class)")
     except Exception as e:
         fails.append(f"/curation/health: {e}")
 print("\n".join(fails) if fails else "all functional probes passed")
@@ -2413,6 +2441,10 @@ need_arg() {
 parse_args() {
     OP_TIERS="${OP_TIERS:-}"
     OP_BIND_ADDRESS="${OP_BIND_ADDRESS:-127.0.0.1}"
+    if [[ -z "${OP_INSTALL_DIR:-}" && -f ./.install/state.json ]]; then
+        # Running from inside an install dir means "this install".
+        OP_INSTALL_DIR="."
+    fi
     OP_INSTALL_DIR="${OP_INSTALL_DIR:-./openprocessor}"
     OP_VERSION="${OP_VERSION:-}"
     OP_BRANCH="${OP_BRANCH:-}"
@@ -2751,6 +2783,21 @@ do_install() {
 
     env_create_or_merge
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
+    if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
+        # Without a primary ingest detector /ingest answers 503 on a fresh install.
+        env_set_default OP_INGEST_PRIMARY_DETECTOR_MODEL yolov11_small_trt_end2end
+    fi
+
+    # A re-run keeps the installed catalog VLM unless --vlm-model-id says
+    # otherwise: re-planning must never silently swap the model.
+    if (( existing )) && [[ -z "$OP_VLM_CATALOG_ID" && -z "$OP_VLM_URL" && ",${OP_TIERS}," == *",vlm,"* ]]; then
+        local kept_vlm
+        kept_vlm="$(read_env_var "$ENV_FILE" VLM_CATALOG_ID || true)"
+        if [[ -n "$kept_vlm" && -n "$(vlm_catalog_field "$kept_vlm" hf_repo 2>/dev/null || true)" ]]; then
+            OP_VLM_CATALOG_ID="$kept_vlm"
+            log_info "keeping the installed VLM: ${kept_vlm} (pass --vlm-model-id to change it)"
+        fi
+    fi
 
     # --- consent ------------------------------------------------------------
     require_bind_consent "$OP_BIND_ADDRESS"
@@ -2764,6 +2811,9 @@ do_install() {
     local raw_gpus gpus=""
     raw_gpus="$(gpu_query || true)"
     gpus="$(printf '%s\n' "$raw_gpus" | gpu_normalize)"
+    if (( existing )) && [[ -n "$gpus" ]]; then
+        gpus="$(gpu_subtract_own "$gpus" "$(gpu_own_usage)")"
+    fi
     if [[ "$OP_FORCE_CPU" == 1 || -z "$gpus" ]]; then
         if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
             log_error "No usable NVIDIA GPU. There is no CPU inference path today."
@@ -2834,6 +2884,10 @@ do_install() {
         for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID \
                 OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE SEGMENTER_INSTANCES; do
             val="$(plan_get "$plan" "$key")"
+            if [[ "$key" == SEGMENTER_* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* \
+                    && -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]]; then
+                continue
+            fi
             if [[ -n "$OP_GPU_PLAN" || ( "$key" == GPU_PROFILE && -n "$GPU_PROFILE_FLAG" ) ]]; then
                 env_set "$key" "$val"
             else
