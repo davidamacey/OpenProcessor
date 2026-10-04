@@ -237,11 +237,57 @@ def test_version_mismatch_allowed_with_allow_dirty(sandbox: Path, fake_bin: Path
     assert result.returncode == 0, result.stderr
 
 
-def test_trivy_critical_finding_fails_the_gate(sandbox: Path, fake_bin: Path) -> None:
-    _write_shim(fake_bin / 'trivy', 'exit 1')
+def test_failed_docker_build_is_reported_not_logged_as_built(sandbox: Path, fake_bin: Path) -> None:
+    _write_shim(fake_bin / 'docker', 'case "$1" in build) exit 1 ;; esac; exit 0')
     result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
     assert result.returncode == 1
+    assert 'builds failed' in result.stderr
+    assert 'built ' not in result.stderr.replace('builds failed', '')
+
+
+def test_segmenter_builds_with_its_own_directory_as_context(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'segmenter,api'])
+    assert result.returncode == 0, result.stderr
+    builds = [
+        ln
+        for ln in (tmp_path / 'docker_calls.log').read_text().splitlines()
+        if ln.startswith('build ')
+    ]
+    seg = next(ln for ln in builds if 'docker/segmenter/Dockerfile' in ln)
+    api = next(ln for ln in builds if '--file Dockerfile ' in ln)
+    assert seg.endswith(' docker/segmenter')
+    assert api.endswith(' .')
+
+
+def test_trivy_critical_finding_fails_the_gate(sandbox: Path, fake_bin: Path) -> None:
+    _write_shim(fake_bin / 'trivy', 'exit 10')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'CRITICAL finding' in result.stderr
     assert not (sandbox / 'images.lock').exists()
+
+
+def test_trivy_scanner_error_is_reported_as_error_not_a_finding(
+    sandbox: Path, fake_bin: Path
+) -> None:
+    _write_shim(fake_bin / 'trivy', 'echo "context deadline exceeded" >&2; exit 1')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'scan ERROR' in result.stderr
+    assert 'CRITICAL finding' not in result.stderr
+
+
+def test_trivy_gets_timeout_and_vuln_only_scanners(sandbox: Path, fake_bin: Path) -> None:
+    log = sandbox / 'trivy.args'
+    _write_shim(fake_bin / 'trivy', f'echo "$@" > {log}; exit 0')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api'], {'TRIVY_TIMEOUT': '45m'})
+    assert result.returncode == 0, result.stderr
+    args = log.read_text()
+    assert '--timeout 45m' in args
+    assert '--scanners vuln' in args
+    assert '--exit-code 10' in args
 
 
 def test_allowlist_entry_without_reason_is_rejected(sandbox: Path, fake_bin: Path) -> None:

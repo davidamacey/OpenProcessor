@@ -245,6 +245,11 @@ case "${1:-}" in
         esac
         ;;
     ps) shift; cmd_ps "$@" ;;
+    top)
+        # `docker top <c> -eo pid`: the container's host pids from $SHIM_STATE/own_pids
+        echo PID
+        cat "${state}/own_pids" 2>/dev/null || true
+        ;;
     compose) shift; cmd_compose "$@" ;;
     image)
         [[ "${2:-}" == inspect ]] || exit 1

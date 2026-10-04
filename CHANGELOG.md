@@ -11,6 +11,14 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
+### Fixed
+- Installer: the API image now ships `config_templates/`, so the `preflight_profile` step works without a source checkout (#105).
+- Installer: the `/curation/health` functional probe no longer requires a `registry` key (#106).
+- Release gate: Trivy scans use `--scanners vuln`, a configurable `TRIVY_TIMEOUT`, and report scanner errors/timeouts as errors instead of CRITICAL findings (#107).
+- Installer: a re-run subtracts the install's own VRAM from the GPU plan, keeps the installed VLM and segmenter placement unless asked, and `--dir` defaults to `.` inside an install dir (#108).
+- Installer: fresh installs set `OP_INGEST_PRIMARY_DETECTOR_MODEL` so `/ingest` works.
+- `Dockerfile.triton` holds the TensorRT packages before `apt-get upgrade`, making cold builds deterministic (#109).
+
 ## [0.4.0] - 2026-10-03
 
 ### Added

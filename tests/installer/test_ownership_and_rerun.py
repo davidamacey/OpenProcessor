@@ -368,3 +368,99 @@ def test_nothing_env_driven_remains_in_the_bootstrap_guard() -> None:
     assert 'OP_BOOTSTRAPPED' not in text
     assert 'trap "rm -rf \'' not in text
     assert SCRIPT.name == 'setup-openprocessor.sh'
+
+
+# --- #108: a re-run never silently swaps the installed VLM / counts itself as "other" ---
+
+
+def test_rerun_never_silently_switches_the_installed_vlm(shimmed: Shimmed) -> None:
+    first = install(shimmed, '--no-start', tiers='vlm')
+    assert first.returncode == 0, first.stderr[-2000:]
+    inst = shimmed.root / 'inst'
+    installed = env_value(inst / '.env', 'VLM_CATALOG_ID')
+    assert installed
+    # 8 GB used: planning from scratch would fall back to the smaller qwen entry.
+    shimmed.gpus('0, NVIDIA RTX A6000, 49140, 8000, 8.6\n')
+    again = install(shimmed, '--no-start', tiers=None)
+    assert 'keeping the installed VLM' in again.stdout
+    assert env_value(inst / '.env', 'VLM_CATALOG_ID') == installed, again.stdout[-1500:]
+    # the kept model is refused (not swapped) when it no longer fits
+    assert again.returncode != 0
+    assert f'{installed} needs' in again.stderr
+
+
+def test_rerun_subtracts_its_own_vram_so_the_installed_vlm_still_fits(shimmed: Shimmed) -> None:
+    assert install(shimmed, '--no-start', tiers='vlm').returncode == 0
+    inst = shimmed.root / 'inst'
+    installed = env_value(inst / '.env', 'VLM_CATALOG_ID')
+    shimmed.containers([(PROJECT, str(inst), f'{PROJECT}-vlm', '')])
+    shimmed.flag('own_pids', '4242\n')
+    shimmed.flag('gpu_uuids.csv', '0, GPU-aaaa\n')
+    # 31 GB used, 26 GB of it by this project's own VLM process; pid 999 is someone else's.
+    shimmed.flag('compute_apps.csv', '4242, GPU-aaaa, 26000\n999, GPU-aaaa, 5000\n')
+    shimmed.gpus('0, NVIDIA RTX A6000, 49140, 31000, 8.6\n')
+    again = install(shimmed, '--no-start', tiers=None)
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert env_value(inst / '.env', 'VLM_CATALOG_ID') == installed
+
+
+def test_rerun_without_gpu_plan_keeps_the_installed_placement(shimmed: Shimmed) -> None:
+    two = '0, NVIDIA RTX A6000, 49140, 0, 8.6\n1, NVIDIA RTX A6000, 49140, 0, 8.6\n'
+    shimmed.gpus(two)
+    first = install(shimmed, '--no-start', '--gpu-plan', 'triton=1', tiers='core')
+    assert first.returncode == 0, first.stderr[-1500:]
+    inst = shimmed.root / 'inst'
+    assert env_value(inst / '.env', 'TRITON_GPU_ID') == '1'
+    again = install(shimmed, '--no-start', tiers=None)
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert 'keeping the installed GPU placement' in again.stdout
+    assert env_value(inst / '.env', 'TRITON_GPU_ID') == '1'
+
+
+def test_rerun_without_the_segmenter_tier_keeps_its_gpu_assignment(shimmed: Shimmed) -> None:
+    assert install(shimmed, '--no-start').returncode == 0
+    inst = shimmed.root / 'inst'
+    env = inst / '.env'
+    kept = [ln for ln in env.read_text().splitlines() if not ln.startswith('SEGMENTER_GPU_ID=')]
+    env.write_text('\n'.join([*kept, 'SEGMENTER_GPU_ID=7']) + '\n')
+    shimmed.gpus('0, NVIDIA RTX A6000, 49140, 0, 8.6\n1, NVIDIA RTX A6000, 49140, 0, 8.6\n')
+    again = install(shimmed, '--no-start', '--gpu-plan', 'triton=0', tiers=None)
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert env_value(inst / '.env', 'SEGMENTER_GPU_ID') == '7'
+
+
+def test_gpu_subtract_own_removes_the_installs_own_vram() -> None:
+    out = subprocess.run(
+        [
+            'bash',
+            '-c',
+            f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; '
+            'gpu_subtract_own "$(printf "0 49140 1000\\n2 49140 22528\\n")" "$(printf "2 22000\\n")"',
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert out.stdout.split('\n')[:2] == ['0 49140 1000', '2 49140 528']
+
+
+def test_fresh_install_sets_a_working_primary_ingest_detector(shimmed: Shimmed) -> None:
+    assert install(shimmed, '--no-start').returncode == 0
+    inst = shimmed.root / 'inst'
+    assert (
+        env_value(inst / '.env', 'OP_INGEST_PRIMARY_DETECTOR_MODEL') == 'yolov11_small_trt_end2end'
+    )
+
+
+def test_rerun_from_inside_the_install_dir_needs_no_dir_flag(shimmed: Shimmed) -> None:
+    assert install(shimmed, '--no-start').returncode == 0
+    inst = shimmed.root / 'inst'
+    shimmed.flag('allow_mutations')
+    result = shimmed.run(
+        ['--unattended', '--project', PROJECT, '--version', RELEASE, '--no-start'],
+        cwd=inst,
+        OP_HEALTH_TIMEOUT='1',
+    )
+    assert result.returncode == 0, result.stderr[-1500:]
+    assert 'keeping the installed tiers' in result.stdout
