@@ -18,6 +18,20 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - Installer: a re-run subtracts the install's own VRAM from the GPU plan, keeps the installed VLM and segmenter placement unless asked, and `--dir` defaults to `.` inside an install dir (#108).
 - Installer: fresh installs set `OP_INGEST_PRIMARY_DETECTOR_MODEL` so `/ingest` works.
 - `Dockerfile.triton` holds the TensorRT packages before `apt-get upgrade`, making cold builds deterministic (#109).
+- `Dockerfile.triton` upgrades `anyio>=4.14.2` next to the starlette fix, clearing CVE-2026-63374 in the triton image (#110).
+- Release gate: `CVE-2026-6653` (libxml2, Debian trixie, status `affected`, no fixed version) is allowlisted as an owner-accepted recurring item; re-check each release (#110).
+
+### Security
+- Grafana keeps the default `admin` password for LAN-only installs. Change it before exposing the stack beyond a trusted LAN.
+
+### Known issues
+- Trivy remainder (#110): `linux-libc-dev` kernel-header CVEs in triton, segmenter and evaluator (no fix upstream, headers only); the trainer image pins `mlflow>=2.18,<3` to match the server, and its mlflow 2.x CVEs clear only with a deliberate 3.x move of client and server together.
+- Export can run out of memory when Triton and the API share a 12 GB card (#111).
+- Trainer status reports GPU index 0 regardless of the GPU used (#112).
+- `/models/status` shows the `sam3` row as `not_configured` while the segmenter is running; the installer does not set `OP_SEGMENTER_URL` (#113).
+
+### Verified
+- Installer acceptance on 4 Oct 2026: clean install, lifecycle, upgrade/rollback and teardown, plus the installed-stack end-to-end run (ingest, cluster, VLM, export, train, promote, inference, delete) all passed.
 
 ## [0.4.0] - 2026-10-03
 

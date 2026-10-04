@@ -39,6 +39,19 @@ Recommendations only; the owner decides before step 4. Tick a box when decided.
   Pages is enabled. Rationale: zero extra infrastructure and the build already runs in CI.
   [ ] owner decision
 
+## Acceptance status and open items
+
+- Installer acceptance passed 4 Oct 2026 (clean install, lifecycle, upgrade/rollback,
+  teardown, installed-stack e2e ingest to delete); fixes #105 to #109 are merged.
+- Decided: Grafana keeps the default admin password for LAN-only installs; the docs
+  warn to change it before exposing beyond the LAN.
+- Still open decisions (above): `:latest` and control-plane-only (#63), unverified VLM
+  catalog entries, default OpenSearch heap versus the 40-shard soft limit, docs hosting.
+- Known items shipping in 0.4.0: #110 Trivy remainder (kernel headers; trainer mlflow
+  3.x move), #111 export OOM on a shared 12 GB card, trainer status GPU index 0,
+  `/models/status` sam3 `not_configured`. `CVE-2026-6653` is allowlisted; re-check it
+  each release and drop the entry when Debian ships a fix.
+
 ## Steps
 
 1. Pre-flight. Confirm `VERSION` is `0.4.0`, the `CHANGELOG.md` `[0.4.0]` date is the

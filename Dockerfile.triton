@@ -56,9 +56,10 @@ RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
 # CVE hygiene beyond apt:
 # - Nsight Systems profiler CLI ships Go binaries carrying stdlib CVEs and
 #   is dev tooling unused at inference — drop it (also shrinks the image).
-# - starlette in the image's python env lags its security fixes.
+# - starlette and anyio in the image's python env lag their security fixes
+#   (anyio >=4.14.2 clears CVE-2026-63374; starlette 1.x accepts any anyio >=3.6).
 RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
-    && pip install --no-cache-dir --upgrade 'starlette>=1.3.1'
+    && pip install --no-cache-dir --upgrade 'starlette>=1.3.1' 'anyio>=4.14.2'
 
 # Install PyTorch and TorchVision (CUDA 13.x wheels)
 # Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)
