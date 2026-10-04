@@ -1814,19 +1814,29 @@ setup_cropwright() {
     fi
     mkdir -p "$dir"
     cw_base="${CW_ARTIFACT_BASE_URL:-https://github.com/${CW_GH_REPO}/releases/download}/${tag}"
+    # Files shipped inside the deploy bundle (cropwright-release/<tag>/, already
+    # verified as part of the tarball) win over any network fetch: the
+    # standalone Cropwright repo is private, so a fetch would fail.
+    local bundled="${OP_DIR}/cropwright-release/${tag}" bundled_ok=0
+    if [[ -f "${bundled}/SHA256SUMS" && -f "${bundled}/docker-compose.yml" && -f "${bundled}/.env.example" ]]; then
+        bundled_ok=1
+        log_info "Cropwright ${tag}: using the files shipped in the deploy bundle"
+    fi
     if [[ -n "${OP_RELEASE_DIR:-}" ]]; then
         # build_deploy_bundle.sh stages these when given CW_RELEASE_DIR.
         if [[ -f "${OP_RELEASE_DIR}/cropwright/${tag}/SHA256SUMS" ]]; then
             cw_base="file://${OP_RELEASE_DIR}/cropwright/${tag}"
             log_info "Cropwright ${tag}: using the files from the release dir"
-        else
+        elif (( ! bundled_ok )); then
             log_warn "the release dir has no cropwright/${tag}/: fetching Cropwright from the network (this install is not offline); still verified against cropwright.lock"
         fi
     fi
     # Cropwright's release assets carry the section 3 names; its SHA256SUMS is
     # itself pinned by cropwright.lock, which this release's checksums cover.
     for f in SHA256SUMS docker-compose.yml .env.example; do
-        if ! _dl "${cw_base}/${f}" "${dir}/${f}.new"; then
+        if (( bundled_ok )) && [[ "$cw_base" != file://* ]]; then
+            cp -f -- "${bundled}/${f}" "${dir}/${f}.new" || die "could not copy bundled Cropwright ${f}" "$EXIT_VERIFY"
+        elif ! _dl "${cw_base}/${f}" "${dir}/${f}.new"; then
             _dl "${CW_RAW_BASE_URL:-https://raw.githubusercontent.com/${CW_GH_REPO}}/${tag}/${f}" "${dir}/${f}.new" \
                 || die "could not download Cropwright ${f} at ${tag}" "$EXIT_VERIFY"
         fi

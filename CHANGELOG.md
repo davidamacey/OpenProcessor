@@ -11,47 +11,84 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
+OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend
+for computer-vision dataset curation and training, with the fast Triton
+inference API underneath. Isolated projects each have their own indexes,
+classes, settings and jobs. A stock full-vocabulary detector (80 COCO classes)
+or SAM 3 text prompts propose regions, a vision-language model (VLM) suggests
+labels that people confirm, datasets can be imported, combined and exported, and
+models are trained, compared, promoted to Triton and shared between projects.
+A digest-pinned installer manages install, upgrade, rollback and uninstall. The
+`contracts/` directory freezes the HTTP wire for any frontend, including the
+optional Cropwright 0.1.0 UI that ships staged in the deploy bundle.
+
+### Breaking changes and migration from 0.3.0
+- No data migration. The curation wire is new (`/curation/projects/{project}/...`,
+  260 operations in `contracts/openapi/curation.json` against 109 routes in 0.3.0):
+  existing 0.3.0 `op_*` indexes are not migrated, so re-create projects and re-ingest.
+  `./openprocessor upgrade` takes a backup first.
+- `default` is an ordinary project (created at first boot, can be archived, never
+  deleted). The `OP_*_INDEX`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_REGISTRY_PATH`,
+  `OP_EXPORT_ROOT`, `OP_UPLOAD_ROOT` and `OP_BAKEOFF_EVAL_ROOT` variables are gone.
+- Class identity is by name: `class_id` is no longer a query parameter on the review,
+  search, crops, regions and clusters list routes (use `class_name`, repeatable).
+- `OP_INGEST_PRIMARY_CLASS_IDS` is retired and ignored (a warning is logged); use the
+  per-project detect filter. Remove it from `.env`.
+- `GET /settings` `monitoring_links` is replaced by `resource_links`.
+- The single-box region routes (`PUT /crops/{id}/region`, `PUT /crops/batch_region`) and
+  the item-level per-box region scalars are removed; use `PUT /crops/{id}/regions`.
+  Frontends that still call them need the update (#104).
+- Region routes with no active profile, and the seed and ingest-policy errors, answer
+  a structured `{error, message}` body instead of a string detail.
+- Activation calls: a missing `expected_active` answers 409 `active_conflict` when
+  something is already active.
+
+### Known issues
+- Accepted Trivy CRITICAL classes, each allowlisted per CVE with a reason in
+  `scripts/release/trivy-allowlist.txt` and re-checked every release: libxml2
+  `CVE-2026-6653` (Debian trixie, no fixed version); `linux-libc-dev` kernel headers
+  (headers only, no kernel runs in a container, no upstream fix); the trainer image's
+  `mlflow` 2.x pin (`mlflow>=2.18,<3`, needs a 3.x move of client and server together, #110).
+- VLM labels are unvalidated suggestions: they are never trainable or holdout-eligible
+  until a human validates them. The continuous VLM worker labels every unlabelled
+  embedded crop by default. Pause it per project with
+  `POST /curation/projects/{project}/pause`, or stop the `curation-vlm-worker`
+  service. A per-project scope policy and accuracy audit are planned for 0.5.0 (#119).
+- VLM catalog entries other than the `tested` ones are `Unverified (experimental)` and
+  are never auto-selected.
+- The first open of a very large cluster can be slow until the background
+  `cluster_distance` backfill finishes (#118).
+- Export can run out of memory when Triton and the API share a 12 GB card (#111).
+- Grafana keeps the default `admin` password on LAN installs.
+- Safari can show a stale cached UI bundle after an upgrade; a hard refresh fixes it.
+- With Cropwright installed, the `/cropwright/` documentation route answers 502 unless
+  its `docs` compose profile is enabled (the installer does not enable it).
+
+### Security
+- Grafana keeps the default `admin` password for LAN-only installs. Change it before exposing the stack beyond a trusted LAN (`GF_SECURITY_ADMIN_PASSWORD` is overridable from `.env`).
+- Remote VLM endpoints need an explicit acknowledgement because crops leave the host; endpoint secrets live in `./secrets/vlm`, mounted read-only. `SECURITY.md` records the SSRF residual risk (#101 tracks pinning the connection to the validated IP).
+- Only the human-facing UIs are published on `OP_UI_BIND_ADDRESS`; OpenSearch, Triton, the VLM and the segmenter stay on `OP_BIND_ADDRESS`.
+- The release gate fails on any CRITICAL not on the allowlist, and scanner errors or timeouts are errors, not findings (#107).
+- Dependency fixes in the triton image (`anyio>=4.14.2`, starlette).
+
+### Deprecated
+- None.
+
+### Verified
+- Installer acceptance on 4 Oct 2026: clean install, lifecycle, upgrade/rollback and teardown, plus the installed-stack end-to-end run (ingest, cluster, VLM, export, train, promote, inference, delete).
+- Full gate on the release commit: 6,943 tests passed (12 skipped), `pre-commit run --all-files` and `generate_contracts.py --check` clean.
+- Measured on the public COCO set (2,000-image subset, one run): 13.39 images/s, 0 failed, 1.37 crops per image (`docs/PERFORMANCE.md`).
+
+
 ### Added
 - Every compose service rotates its logs (`json-file`, 10 MB x 5) and has a `mem_reservation` (OpenSearch reserves its heap size).
 - Installer warns when `vm.max_map_count` is below 262144, with the fix.
 - Optional `docker-compose.docs.yml` overlay serving the documentation site locally (port 4613); new "Memory, disk and storage" page.
-- Release gate: the seven `linux-libc-dev` kernel-header CVEs (headers only, no upstream fix) are allowlisted per CVE with a reason (#110).
+- Release gate: the seven `mlflow` 2.x CVEs in the trainer image (fixed only in 3.x) and the seven `linux-libc-dev` kernel-header CVEs (headers only, no upstream fix) are allowlisted per CVE with a reason (#110).
+- Cropwright 0.1.0 ships staged inside the deploy bundle: `cropwright.lock` pins release `v0.1.0` (image digest and the sha256 of its `SHA256SUMS`), and `build_deploy_bundle.sh` with `CW_RELEASE_DIR` puts its `docker-compose.yml`, `.env.example` and `SHA256SUMS` in the tarball under `cropwright-release/v0.1.0/`. The installer uses them with no network fetch (the standalone Cropwright repository is private until the 0.5.0 monorepo, #85) and still verifies them against `cropwright.lock`.
 
-### Changed
-- OpenSearch heap default is now half of host RAM, 2 GB minimum, 30 GB cap (was RAM/8, 1 to 8 GB); the shard budget follows the heap. A heap set in `.env` is kept.
-- Unverified VLM catalog entries are labelled "Unverified (experimental)" in the catalog and installer output; the verified default is unchanged and they are never auto-selected.
-- Release decisions recorded as DECIDED in `docs/releases/RELEASE_CHECKLIST.md`: `latest` ships with 0.4.0, control-plane-only stays optional, docs on GitHub Pages plus a local container (#63).
-
-### Fixed
-- Installer sets `OP_SEGMENTER_URL` for the API when the segmenter tier is installed, so `/models/status` shows `sam3` as running (#113).
-- Installer: the API image now ships `config_templates/`, so the `preflight_profile` step works without a source checkout (#105).
-- Installer: the `/curation/health` functional probe no longer requires a `registry` key (#106).
-- Release gate: Trivy scans use `--scanners vuln`, a configurable `TRIVY_TIMEOUT`, and report scanner errors/timeouts as errors instead of CRITICAL findings (#107).
-- Installer: a re-run subtracts the install's own VRAM from the GPU plan, keeps the installed VLM and segmenter placement unless asked, and `--dir` defaults to `.` inside an install dir (#108).
-- Installer: fresh installs set `OP_INGEST_PRIMARY_DETECTOR_MODEL` so `/ingest` works.
-- `Dockerfile.triton` holds the TensorRT packages before `apt-get upgrade`, making cold builds deterministic (#109).
-- `Dockerfile.triton` upgrades `anyio>=4.14.2` next to the starlette fix, clearing CVE-2026-63374 in the triton image (#110).
-- Release gate: `CVE-2026-6653` (libxml2, Debian trixie, status `affected`, no fixed version) is allowlisted as an owner-accepted recurring item; re-check each release (#110).
-- Trainer status reports the host GPU id (through `OP_TRAIN_GPU_ORDER`) instead of the container-local index (#112).
-- Creating an open-vocabulary set named after a shipped template now says so in the 409, and `validate` does too (#114).
-- Region-profile and prompt-pack activate re-read the store before 404ing, so a clone made through another API worker is found (#115).
-- Auto-label's `vlm` stage reports `skipped` with an explicit `reason` when it selects nothing or `run_vlm` is off (#116).
-- ReDoc no longer loads its footer logo from `cdn.redoc.ly`; a test scans the vendored bundles for external fetches (#117).
-
-### Security
-- Grafana keeps the default `admin` password for LAN-only installs. Change it before exposing the stack beyond a trusted LAN.
-
-### Known issues
-- Trivy remainder (#110): the trainer image pins `mlflow>=2.18,<3` to match the server, and its mlflow 2.x CVEs clear only with a deliberate 3.x move of client and server together.
-- Export can run out of memory when Triton and the API share a 12 GB card (#111).
-
-### Verified
-- Installer acceptance on 4 Oct 2026: clean install, lifecycle, upgrade/rollback and teardown, plus the installed-stack end-to-end run (ingest, cluster, VLM, export, train, promote, inference, delete) all passed.
-- `GET /crops?order=core_first` on a large cluster no longer scans every member per request (5.1 s at 4,221 members): pages are a native sort on the stored `cluster_distance`, and unmeasured legacy clusters are computed once and written back lazily (#118).
-
-## [0.4.0] - 2026-10-03
-
-### Added
 - `OP_UI_BIND_ADDRESS` (default: `OP_BIND_ADDRESS`) publishes only the human-facing
   UIs (Grafana, Prometheus, OpenSearch Dashboards, MLflow) on a separate address, so
   LAN browsers can follow resource links without exposing OpenSearch, Triton, the VLM
@@ -215,6 +252,10 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   anchor that does not resolve.
 
 ### Changed
+- OpenSearch heap default is now half of host RAM, 2 GB minimum, 30 GB cap (was RAM/8, 1 to 8 GB); the shard budget follows the heap. A heap set in `.env` is kept.
+- Unverified VLM catalog entries are labelled "Unverified (experimental)" in the catalog and installer output; the verified default is unchanged and they are never auto-selected.
+- Release decisions recorded as DECIDED in `docs/releases/RELEASE_CHECKLIST.md`: `latest` ships with 0.4.0, control-plane-only stays optional, docs on GitHub Pages plus a local container (#63).
+
 - `GET /settings` `monitoring_links` is replaced by `resource_links`, one typed
   list of `{id, label, url, kind: service|docs, status: configured|not_configured,
   hint, reachable}`: `swagger`, `redoc`, `openapi_json` (path-relative `/docs`,
@@ -254,6 +295,21 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   sibling `enum` (static) or `choices_from` (dynamic source).
 
 ### Fixed
+- Installer sets `OP_SEGMENTER_URL` for the API when the segmenter tier is installed, so `/models/status` shows `sam3` as running (#113).
+- Installer: the API image now ships `config_templates/`, so the `preflight_profile` step works without a source checkout (#105).
+- Installer: the `/curation/health` functional probe no longer requires a `registry` key (#106).
+- Release gate: Trivy scans use `--scanners vuln`, a configurable `TRIVY_TIMEOUT`, and report scanner errors/timeouts as errors instead of CRITICAL findings (#107).
+- Installer: a re-run subtracts the install's own VRAM from the GPU plan, keeps the installed VLM and segmenter placement unless asked, and `--dir` defaults to `.` inside an install dir (#108).
+- Installer: fresh installs set `OP_INGEST_PRIMARY_DETECTOR_MODEL` so `/ingest` works.
+- `Dockerfile.triton` holds the TensorRT packages before `apt-get upgrade`, making cold builds deterministic (#109).
+- `Dockerfile.triton` upgrades `anyio>=4.14.2` next to the starlette fix, clearing CVE-2026-63374 in the triton image (#110).
+- Release gate: `CVE-2026-6653` (libxml2, Debian trixie, status `affected`, no fixed version) is allowlisted as an owner-accepted recurring item; re-check each release (#110).
+- Trainer status reports the host GPU id (through `OP_TRAIN_GPU_ORDER`) instead of the container-local index (#112).
+- Creating an open-vocabulary set named after a shipped template now says so in the 409, and `validate` does too (#114).
+- Region-profile and prompt-pack activate re-read the store before 404ing, so a clone made through another API worker is found (#115).
+- Auto-label's `vlm` stage reports `skipped` with an explicit `reason` when it selects nothing or `run_vlm` is off (#116).
+- ReDoc no longer loads its footer logo from `cdn.redoc.ly`; a test scans the vendored bundles for external fetches (#117).
+
 
 - The config-store poll no longer logs a 404 WARNING per request for projects that never wrote `meta:config_revision`: optional documents (revision counter, activations, curation settings) are read through one shared reader that treats a miss as absent without a transport error, and an absent revision is remembered for one poll interval (`OP_CONFIG_POLL_S`).
 - `resource_links` no longer lists `triton_metrics` and `dcgm_metrics` (and `OP_TRITON_METRICS_*` / `OP_DCGM_*` are gone): they are Prometheus scrape endpoints bound to localhost, not browser UIs; Grafana and Prometheus show their data.

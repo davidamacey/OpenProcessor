@@ -505,6 +505,36 @@ def test_bundle_refuses_cropwright_assets_that_do_not_match_the_lock(
     assert 'cropwright.lock' in result.stderr
 
 
+def test_cropwright_ships_inside_the_tarball_for_an_asset_only_install(
+    shimmed: Shimmed, tmp_path: Path
+) -> None:
+    # Cropwright's repo is private, so the four GitHub release assets must be
+    # enough: strip the side-car cropwright/ dir and keep only the tarball.
+    out = tmp_path / 'assets'
+    _bundle_with_cropwright(shimmed, out, shimmed.release / 'cw' / CW_TAG)
+    shutil.rmtree(out / 'cropwright')
+    listing = subprocess.run(
+        ['tar', '-tzf', str(next(out.glob('*.tar.gz')))], capture_output=True, text=True, check=True
+    ).stdout
+    for f in ('SHA256SUMS', 'docker-compose.yml', '.env.example'):
+        assert f'cropwright-release/{CW_TAG}/{f}' in listing
+        assert f'cropwright-release/{CW_TAG}/{f}' in (out / 'SHA256SUMS').read_text()
+    result = install(
+        shimmed,
+        '--release-dir',
+        str(out),
+        '--no-start',
+        tiers='cropwright',
+        CW_ARTIFACT_BASE_URL='https://unreachable.invalid/a',
+        CW_RAW_BASE_URL='https://unreachable.invalid/r',
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert 'shipped in the deploy bundle' in result.stderr + result.stdout
+    assert 'not offline' not in result.stderr
+    assert [ln for ln in shimmed.log_lines('curl') if 'unreachable' in ln or 'cw.test' in ln] == []
+    assert (shimmed.root / 'inst' / 'cropwright' / 'docker-compose.yml').is_file()
+
+
 def test_release_dir_without_cropwright_warns_it_is_not_offline(
     shimmed: Shimmed, tmp_path: Path
 ) -> None:

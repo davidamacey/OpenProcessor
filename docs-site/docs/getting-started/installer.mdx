@@ -88,6 +88,25 @@ pin exact digests and are covered by `SHA256SUMS`; the installer also checks
 that each `images.lock` entry names the image repo expected for its key.
 Signed releases are follow-up work.
 
+## Cropwright in the bundle
+
+For v0.4.0 the Cropwright files ship **staged inside the deploy bundle**: the tarball
+carries `cropwright-release/<tag>/` for the tag pinned in `cropwright.lock` (`SHA256SUMS`, `docker-compose.yml`, `.env.example`),
+built with `CW_RELEASE_DIR=<dir> scripts/release/build_deploy_bundle.sh`. The installer
+uses those files with no fetch from Cropwright's repository, and still checks them
+against `cropwright.lock`. The standalone Cropwright repository is private until the
+0.5.0 monorepo, so a network fetch would fail.
+
+Cropwright's compose file puts its documentation service behind the `docs` profile. The
+installer starts only the `cropwright` service, so the `/cropwright/` docs route answers
+502 until you enable the profile:
+
+```bash
+docker compose -p <project>-cw --env-file <dir>/cropwright/.env \
+  --project-directory <dir>/cropwright -f <dir>/cropwright/docker-compose.yml \
+  --profile docs up -d
+```
+
 ## Network access
 
 :::warning[Cropwright on your LAN]
