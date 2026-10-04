@@ -431,11 +431,11 @@ def _py(code: str, mp_dir: Path) -> str:
 def test_snapshot_gauge_shows_the_latest_live_value_across_processes(tmp_path: Path) -> None:
     # Two live API workers: the older one's value must not pin the scrape.
     holder = (
-        'import time\n'
+        'import sys\n'
         'from src.services.curation.ops_metrics import OP_QUEUE_DEPTH as G\n'
         "G.labels(queue='segment', project='p').set({v})\n"
         'print("ready", flush=True)\n'
-        'time.sleep(8)\n'
+        'sys.stdin.read()\n'  # stay alive (a live pid) until the test closes stdin
     )
     env = dict(os.environ)
     env.update(PROMETHEUS_MULTIPROC_DIR=str(tmp_path), PYTHONPATH=str(REPO_ROOT))
@@ -446,12 +446,18 @@ def test_snapshot_gauge_shows_the_latest_live_value_across_processes(tmp_path: P
                 [sys.executable, '-c', holder.format(v=value)],
                 env=env,
                 cwd=REPO_ROOT,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 text=True,
             )
             procs.append(proc)
             assert proc.stdout is not None
-            assert proc.stdout.readline().strip() == 'ready'
+            # Imports may print unrelated warnings to stdout first.
+            for line in iter(proc.stdout.readline, ''):
+                if line.strip() == 'ready':
+                    break
+            else:
+                pytest.fail('holder process exited before it was ready')
             time.sleep(0.05)
         out = _py(
             'from src.core.metrics import render_metrics\nprint(render_metrics()[0].decode())\n',
