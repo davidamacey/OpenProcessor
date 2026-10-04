@@ -2801,6 +2801,25 @@ do_install() {
         fi
     fi
 
+    # Likewise the installed GPU placement: re-planning from today's free VRAM
+    # would move services (and recreate their containers) on an unchanged re-run.
+    if (( existing )) && [[ -z "$OP_GPU_PLAN" && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
+        local kept_plan="" kv_id
+        kv_id="$(read_env_var "$ENV_FILE" TRITON_GPU_ID || true)"
+        [[ -n "$kv_id" ]] && kept_plan+="triton=${kv_id},"
+        kv_id="$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID || true)"
+        [[ -n "$kv_id" && ",${OP_TIERS}," == *",segmenter,"* ]] && kept_plan+="segmenter=${kv_id},"
+        kv_id="$(read_env_var "$ENV_FILE" VLM_GPU_ID || true)"
+        [[ -n "$kv_id" && ",${OP_TIERS}," == *",vlm,"* && -z "$OP_VLM_URL" ]] && kept_plan+="vlm=${kv_id},"
+        kv_id="$(read_env_var "$ENV_FILE" OP_TRAIN_GPU_ORDER || true)"
+        kv_id="${kv_id%%,*}"
+        [[ -n "$kv_id" && ",${OP_TIERS}," == *",trainer,"* ]] && kept_plan+="trainer=${kv_id},"
+        if [[ -n "$kept_plan" ]]; then
+            OP_GPU_PLAN="${kept_plan%,}"
+            log_info "keeping the installed GPU placement: ${OP_GPU_PLAN} (pass --gpu-plan to change it)"
+        fi
+    fi
+
     # --- consent ------------------------------------------------------------
     require_bind_consent "$OP_BIND_ADDRESS"
     env_set OP_BIND_ADDRESS "$OP_BIND_ADDRESS"
