@@ -175,6 +175,31 @@ def start(job: FileJob, work: Callable[[Callable[[str], None]], Awaitable[dict[s
     _tasks[job.directory.name] = asyncio.create_task(_run(job, work))
 
 
+_detached: set[asyncio.Task[Any]] = set()
+
+
+async def run_detached(work: Awaitable[Any]) -> Any:
+    """Await ``work`` so that the *caller* being cancelled does not cancel it.
+
+    ``?wait=true`` runs the whole export, load and warm-up inside one request.
+    A proxy that times out (nginx 504 at 120 s) drops the connection and the
+    handler can be cancelled mid-load, leaving a model Triton has half loaded
+    and not ready. The work runs as its own task and is shielded: an aborted
+    client abandons the response, never the promote, so the model finishes
+    loading and warming.
+    """
+    task = asyncio.ensure_future(work)
+    _detached.add(task)
+
+    def _done(t: asyncio.Task[Any]) -> None:
+        _detached.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            logger.warning('promote_wait_abandoned_failed', error=str(t.exception()))
+
+    task.add_done_callback(_done)
+    return await asyncio.shield(task)
+
+
 async def _run(
     job: FileJob, work: Callable[[Callable[[str], None]], Awaitable[dict[str, Any]]]
 ) -> None:
@@ -218,5 +243,6 @@ __all__ = [
     'latest_for_run',
     'read_job',
     'reconcile_orphaned_jobs',
+    'run_detached',
     'start',
 ]

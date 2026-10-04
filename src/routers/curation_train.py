@@ -2222,7 +2222,8 @@ async def promote_run(
 
     if wait:
         response.status_code = 200
-        return await _execute()
+        # Shielded: a proxy timeout / client abort must not cancel the load mid-way.
+        return await promote_job.run_detached(_execute())
 
     # Async (default): the validation above already ran, so every 4xx a
     # caller can fix is synchronous; only the build/load/warm-up is a job.

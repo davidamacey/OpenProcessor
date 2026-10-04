@@ -242,3 +242,46 @@ def test_a_job_left_active_by_a_dead_process_reads_failed(client, tmp_path) -> N
     again, created = promote_job.claim(run_job_id=RUN, triton_name='pj_model')
     assert created
     assert again.directory != job.directory
+
+
+@pytest.mark.asyncio
+async def test_aborted_wait_does_not_cancel_the_promote() -> None:
+    """A proxy timeout cancels the awaiting request; the load/warm-up it started must
+    still finish, or Triton is left with a half-loaded model."""
+    import asyncio
+
+    from src.services.training import promote_job
+
+    finished: list[str] = []
+    gate = asyncio.Event()
+
+    async def _promote() -> str:
+        await gate.wait()
+        finished.append('warmed')
+        return 'ok'
+
+    request = asyncio.create_task(promote_job.run_detached(_promote()))
+    await asyncio.sleep(0)
+    request.cancel()  # the 504: the handler awaiting the promote is cancelled
+    with pytest.raises(asyncio.CancelledError):
+        await request
+    assert finished == []
+    gate.set()
+    await asyncio.sleep(0.05)
+    assert finished == ['warmed']
+
+
+@pytest.mark.asyncio
+async def test_detached_promote_still_returns_and_raises_to_a_live_caller() -> None:
+    from src.services.training import promote_job
+
+    async def _ok() -> int:
+        return 7
+
+    async def _boom() -> int:
+        msg = 'load refused'
+        raise RuntimeError(msg)
+
+    assert await promote_job.run_detached(_ok()) == 7
+    with pytest.raises(RuntimeError, match='load refused'):
+        await promote_job.run_detached(_boom())
