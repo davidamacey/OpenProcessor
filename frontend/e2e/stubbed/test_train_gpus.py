@@ -31,6 +31,14 @@ def register_train_mount(stub):
     stub.on("GET", r"/train/profiles(\?|$)", {"profiles": []})
     stub.on("GET", r"/train/presets(\?|$)", {"class_subset_presets": []})
     stub.on("GET", r"/train/runs(\?|$)", {"items": [], "total": 0})
+    # The /train page asks each finished run's status for an in-flight
+    # promote on load (#87); no promote by default. A test that cares
+    # registers its own `/train/status/<id>` after this.
+    stub.on(
+        "GET",
+        r"/train/status/([^/?]+)(\?|$)",
+        lambda _r, m: (200, {"job_id": m.group(1), "state": "finished", "promote": None}),
+    )
     stub.on("GET", r"/train/gpus(\?|$)", GPU_OPTIONS)
     # OpenProcessor df01309: AugmentationPanel now fetches its preset list
     # from the backend instead of a hardcoded id table.
