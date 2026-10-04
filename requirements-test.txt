@@ -2,12 +2,11 @@
 # GPU-less CI runner. Traced from `import src.main`'s real import graph plus
 # every top-level (non-lazy) third-party import reachable from `tests/`.
 #
-# NOT included here because nothing in the base ("not live") suite imports
-# them at module scope -- verified by tracing every top-level import under
-# src/ and tests/, not assumed: faiss, tensorrt, onnx*, nvidia-modelopt,
-# aiohttp, pandas, matplotlib, seaborn, open-clip-torch, ftfy, timm,
-# huggingface_hub, imohash, umap-learn, hdbscan, joblib (all lazy-imported
-# inside functions -- see requirements.txt for their call sites).
+# NOT included here: tensorrt, nvidia-modelopt, pandas, matplotlib, seaborn,
+# open-clip-torch, ftfy, timm, huggingface_hub (lazy-imported, and no
+# not-live test calls them -- see requirements.txt for their call sites).
+# faiss-cpu, umap-learn, hdbscan, imohash, onnxruntime, pycocotools and docker
+# are lazy-imported by src/ but exercised by not-live tests, so they ARE here.
 #
 # torch/torchvision need the CPU wheel index, which pip requirements files
 # cannot mix inline with the default PyPI index. Install this file in two
@@ -20,8 +19,12 @@
 # https://download.pytorch.org/whl/cpu`, which also resolves torch/torchvision
 # to CPU wheels because PyPI has no matching CUDA-free version for this pin).
 
-# Web framework (src/main.py)
-fastapi
+# Web framework (src/main.py). fastapi/pydantic are pinned because the committed
+# OpenAPI contract (contracts/openapi/curation.json) is generated from them and
+# schema naming/shape changes between releases; bump together with
+# `make contracts`.
+fastapi==0.136.1
+pydantic==2.12.5
 uvicorn[standard]
 python-multipart
 orjson
@@ -54,6 +57,9 @@ structlog>=24.1.0
 # AsyncOpenSearch and `import src.main` fails with an ImportError.
 opensearch-py[async]>=2.3.0
 
+# src/clients/triton_client.py (gRPC) -- on the src.main import path
+tritonclient[grpc,http]
+
 # src/core/metrics.py / src/services/curation/metrics.py
 prometheus-client>=0.20
 
@@ -69,3 +75,16 @@ scikit-learn
 pytest>=8.0.0
 pytest-cov>=5.0.0
 pytest-asyncio>=0.24.0
+
+# tests/curation/test_seed_class_registry.py (reads ONNX metadata)
+onnx
+
+# Lazy-imported by src/, but exercised by tests that are not marked live.
+faiss-cpu
+umap-learn
+hdbscan
+joblib
+imohash
+onnxruntime
+pycocotools
+docker
