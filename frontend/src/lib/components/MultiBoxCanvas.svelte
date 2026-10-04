@@ -78,6 +78,22 @@
   });
 
   let canvasEl = $state<HTMLDivElement | null>(null);
+  // The thumbnail keeps its aspect ratio, so the image is letterboxed inside
+  // the container. Boxes and pointer mapping live in a frame sized to the
+  // image itself (1:1 until the image reports its natural size).
+  let natural = $state<{ w: number; h: number } | null>(null);
+  function onImgLoad(e: Event): void {
+    const img = e.currentTarget as HTMLImageElement;
+    natural =
+      img.naturalWidth > 0 && img.naturalHeight > 0
+        ? { w: img.naturalWidth, h: img.naturalHeight }
+        : null;
+  }
+  const frameStyle = $derived(
+    natural
+      ? `aspect-ratio:${natural.w} / ${natural.h};${natural.w >= natural.h ? 'width:100%' : 'height:100%'}`
+      : 'aspect-ratio:1 / 1;height:100%',
+  );
 
   interface DragState {
     mode: 'create' | 'move';
@@ -245,81 +261,87 @@
 </script>
 
 <div
-  bind:this={canvasEl}
-  class="relative touch-none overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none {containerClass}"
-  onpointerdown={onPointerDownCanvas}
-  onpointermove={onPointerMove}
-  onpointerup={onPointerUp}
-  onpointercancel={onPointerUp}
-  role="application"
-  aria-label="multi-box canvas"
-  data-testid="multibox-canvas"
+  class="relative flex touch-none items-center justify-center overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none {containerClass}"
 >
-  <img
-    src={getThumbUrl(cropId, thumbSize)}
-    alt="crop preview"
-    draggable="false"
-    class="pointer-events-none h-full w-full object-contain"
-  />
+  <div
+    bind:this={canvasEl}
+    class="relative max-h-full max-w-full"
+    style={frameStyle}
+    onpointerdown={onPointerDownCanvas}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+    role="application"
+    aria-label="multi-box canvas"
+    data-testid="multibox-canvas"
+  >
+    <img
+      src={getThumbUrl(cropId, thumbSize)}
+      alt="crop preview"
+      draggable="false"
+      class="pointer-events-none block h-full w-full object-fill"
+      onload={onImgLoad}
+    />
 
-  {#each boxes as b, i (b.box.cx + ':' + b.box.cy + ':' + i)}
-    {@const x1 = (b.box.cx - b.box.w / 2) * 100}
-    {@const y1 = (b.box.cy - b.box.h / 2) * 100}
-    <div
-      class="absolute border-2"
-      data-box-index={i}
-      data-selected={selectedIndex === i}
-      style="left:{x1}%;top:{y1}%;width:{b.box.w * 100}%;height:{b.box.h *
-        100}%;border-color:{ringColorFor(b.state)};border-style:{dashedFor(b.state)
-        ? 'dashed'
-        : 'solid'};"
-      onpointerdown={(e) => onPointerDownBox(e, i)}
-      role="button"
-      tabindex="-1"
-      aria-label={b.label}
-    >
-      <span
-        class="absolute -top-2 -left-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-[10px] text-zinc-100"
-        style="border:1px solid {ringColorFor(b.state)}"
+    {#each boxes as b, i (b.box.cx + ':' + b.box.cy + ':' + i)}
+      {@const x1 = (b.box.cx - b.box.w / 2) * 100}
+      {@const y1 = (b.box.cy - b.box.h / 2) * 100}
+      <div
+        class="absolute border-2"
+        data-box-index={i}
+        data-selected={selectedIndex === i}
+        style="left:{x1}%;top:{y1}%;width:{b.box.w * 100}%;height:{b.box.h *
+          100}%;border-color:{ringColorFor(b.state)};border-style:{dashedFor(b.state)
+          ? 'dashed'
+          : 'solid'};"
+        onpointerdown={(e) => onPointerDownBox(e, i)}
+        role="button"
+        tabindex="-1"
+        aria-label={b.label}
       >
-        {i + 1}
-      </span>
-      {#if b.locked}
         <span
-          class="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-zinc-100"
+          class="absolute -top-2 -left-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-[10px] text-zinc-100"
           style="border:1px solid {ringColorFor(b.state)}"
-          title={reprocessVocabularyStore.lockText()}
-          data-testid="box-locked"
         >
-          <svg
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            class="h-2.5 w-2.5"
-            aria-hidden="true"
-          >
-            <path
-              d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
-            />
-          </svg>
+          {i + 1}
         </span>
-      {/if}
-    </div>
-  {/each}
+        {#if b.locked}
+          <span
+            class="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-zinc-100"
+            style="border:1px solid {ringColorFor(b.state)}"
+            title={reprocessVocabularyStore.lockText()}
+            data-testid="box-locked"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              class="h-2.5 w-2.5"
+              aria-hidden="true"
+            >
+              <path
+                d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
+              />
+            </svg>
+          </span>
+        {/if}
+      </div>
+    {/each}
 
-  {#if pendingCreate}
-    <div
-      class="pointer-events-none absolute border-2 border-dashed border-sky-400"
-      style="left:{(pendingCreate.cx - pendingCreate.w / 2) *
-        100}%;top:{(pendingCreate.cy - pendingCreate.h / 2) *
-        100}%;width:{pendingCreate.w * 100}%;height:{pendingCreate.h * 100}%"
-    ></div>
-  {/if}
+    {#if pendingCreate}
+      <div
+        class="pointer-events-none absolute border-2 border-dashed border-sky-400"
+        style="left:{(pendingCreate.cx - pendingCreate.w / 2) *
+          100}%;top:{(pendingCreate.cy - pendingCreate.h / 2) *
+          100}%;width:{pendingCreate.w * 100}%;height:{pendingCreate.h * 100}%"
+      ></div>
+    {/if}
 
-  {#if boxes.length === 0 && !pendingCreate}
-    <span
-      class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
-    >
-      drag to draw a box
-    </span>
-  {/if}
+    {#if boxes.length === 0 && !pendingCreate}
+      <span
+        class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
+      >
+        drag to draw a box
+      </span>
+    {/if}
+  </div>
 </div>

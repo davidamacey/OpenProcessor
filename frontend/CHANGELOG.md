@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Boxes now line up with the image in the box editor (the crop pencil) and the
+  crop detail modal. The editor drew and mapped pointer positions against a
+  square around an aspect-preserving thumbnail, so boxes drifted and drawn or
+  moved boxes saved shifted coordinates; it now uses the image's own frame. The
+  detail modal's source area has a definite height and no stretched black box.
+
 ## [0.1.0] - 2026-10-04
 
 First public release. See `docs/releases/v0.1.0.md` for the full release notes.
