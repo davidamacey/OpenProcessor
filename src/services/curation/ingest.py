@@ -97,6 +97,7 @@ from src.services.curation.ingest_policy import (
     registry_name_index,
 )
 from src.services.curation.item_doc import DetectedItem, region_seed_status
+from src.services.curation.ops_metrics import record_ingest_result
 from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
 from src.utils.stage_timing import stage_timer
 
@@ -555,7 +556,7 @@ class CurationIngestService:
             ingest_run_id=ingest_run_id,
         )
         if isinstance(ctx, IngestResult):
-            return ctx
+            return record_ingest_result(ctx)
         img = ctx.pil
 
         try:
@@ -567,12 +568,14 @@ class CurationIngestService:
             )
         except Exception as exc:
             logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
-            return IngestResult(
-                status='failed',
-                image_path=image_path,
-                source_identifier=source_identifier,
-                error=str(exc),
-                error_kind=ERROR_KIND_DETECTOR_INFER,
+            return record_ingest_result(
+                IngestResult(
+                    status='failed',
+                    image_path=image_path,
+                    source_identifier=source_identifier,
+                    error=str(exc),
+                    error_kind=ERROR_KIND_DETECTOR_INFER,
+                )
             )
 
         outcome = await index_items(
@@ -582,7 +585,7 @@ class CurationIngestService:
             secondary_detector_error=detected.secondary_detector_error,
         )
         outcome.result.n_filtered = detected.n_filtered
-        return outcome.result
+        return record_ingest_result(outcome.result)
 
     @staticmethod
     def _publish_created(crop_ids: list[str], image_path: str) -> None:

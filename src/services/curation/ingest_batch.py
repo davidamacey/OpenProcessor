@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
+from src.services.curation.ops_metrics import record_ingest_result
 
 
 if TYPE_CHECKING:
@@ -193,23 +194,27 @@ async def run_ingest_batch(
         source_identifier = source_identifiers[i] if source_identifiers else None
         existing_id = hash_to_existing.get(image_hash)
         if existing_id:
-            return IngestResult(
-                status='duplicate',
-                image_id=existing_id,
-                image_path=image_path,
-                imohash=image_hash,
-                source_identifier=source_identifier,
+            return record_ingest_result(
+                IngestResult(
+                    status='duplicate',
+                    image_id=existing_id,
+                    image_path=image_path,
+                    imohash=image_hash,
+                    source_identifier=source_identifier,
+                )
             )
         rep = batch_dup_of.get(i)
         if rep is not None:
             rep_result = await rep_futures[rep]
             if rep_result.status == 'success':
-                return IngestResult(
-                    status='duplicate',
-                    image_id=rep_result.image_id,
-                    image_path=image_path,
-                    imohash=image_hash,
-                    source_identifier=source_identifier,
+                return record_ingest_result(
+                    IngestResult(
+                        status='duplicate',
+                        image_id=rep_result.image_id,
+                        image_path=image_path,
+                        imohash=image_hash,
+                        source_identifier=source_identifier,
+                    )
                 )
             # The representative failed (e.g. undecodable bytes) — don't
             # guess a duplicate-of relationship against a failed ingest;

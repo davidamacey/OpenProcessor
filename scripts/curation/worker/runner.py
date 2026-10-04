@@ -28,6 +28,10 @@ from src.services.curation.metrics import (
     OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS,
     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
+from src.services.curation.ops_metrics import (
+    OP_DETECTION_WORKER_ITEMS_TOTAL,
+    record_segmenter_request,
+)
 from src.services.curation.region_boxes import RegionBox, new_box_placeholder
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect import (
@@ -1226,17 +1230,20 @@ async def run(args: argparse.Namespace) -> int:
                     OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(outcome='error').observe(
                         time.monotonic() - _sam_t0
                     )
+                    record_segmenter_request('error', time.monotonic() - _sam_t0)
                     await leave_pending_segmenter_down(t, exc)
                     continue
                 except Exception:
                     OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(outcome='error').observe(
                         time.monotonic() - _sam_t0
                     )
+                    record_segmenter_request('error', time.monotonic() - _sam_t0)
                     raise
                 _sam_elapsed = time.monotonic() - _sam_t0
                 OP_STAGE_A_SEGMENTER_DURATION_SECONDS.labels(
                     outcome='hit' if raw_sam_cands else 'miss'
                 ).observe(_sam_elapsed)
+                record_segmenter_request('hit' if raw_sam_cands else 'miss', _sam_elapsed)
                 logger.info(
                     'stage_a_sam_took_ms',
                     crop_id=t.crop_id,
@@ -1705,10 +1712,14 @@ async def run(args: argparse.Namespace) -> int:
                 async with in_flight_lock:
                     for t in flushing:
                         in_flight.discard(t.crop_id)
+                OP_DETECTION_WORKER_ITEMS_TOTAL.labels(outcome='failed').inc(len(flushing))
                 for _ in flushing:
                     out_q.task_done()
                 last_flush = time.monotonic()
                 return
+            OP_DETECTION_WORKER_ITEMS_TOTAL.labels(outcome='ok').inc(n_written)
+            if n_skipped:
+                OP_DETECTION_WORKER_ITEMS_TOTAL.labels(outcome='skipped').inc(n_skipped)
             metrics['total_processed'] += len(flushing)
             metrics['total_written'] += n_written
             elapsed = time.monotonic() - t0

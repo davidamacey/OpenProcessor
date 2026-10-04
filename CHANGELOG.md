@@ -22,6 +22,17 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - The COCO car manifest pin test no longer skips or claims the manifest is
   missing; the tracked `coco_car_60.json` is always checked (#103).
 
+### Added
+
+- Fourteen operator `op_*` metrics for the Grafana dashboards (#94): per-project
+  ingest images and items, queue depth and oldest-item age, embedding state,
+  worker heartbeat and up, segmenter hit/miss/error counts and latency, detection
+  worker items, VLM tokens and latency, and OpenSearch shards and store bytes per
+  project. `op_plan_cost_units_total` is not added: no plan-cost accounting exists.
+- The detection, VLM and auto-label workers are now scraped by Prometheus, and
+  Alloy ships the worker and segmenter container logs (`job="worker"`).
+- Overview, Ingest and API dashboards gain panels for the new series.
+
 ## [0.4.0] - 2026-10-04
 
 OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend
