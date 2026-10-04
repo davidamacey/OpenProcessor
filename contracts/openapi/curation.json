@@ -3664,6 +3664,7 @@
               "target_not_empty",
               "preview_stale",
               "in_use",
+              "detector_in_use",
               "slug_invalid",
               "confirm_mismatch",
               "combine_invalid",
@@ -35933,7 +35934,7 @@
     },
     "/curation/projects/{project}/models/{model_name}": {
       "delete": {
-        "description": "Unload ``model_name`` from Triton and delete its model repo directory.\n\nGuardrails:\n- External-service entries (the segmenter, the VLM) are rejected\n  unconditionally: there is no Triton repository entry to unload, and\n  treating their name as one would just surface a confusing Triton\n  404.\n- Region-detector + OCR models (per the active ``DetectionProfile``)\n  can **never** be unloaded here, even with ``force=true`` — 403\n  unconditionally.\n- Other core pipeline models (CLIP image encoder, face\n  detect/recognition) need ``force=true`` — without it, 409 with a\n  loud explanation. Unloading any of them breaks live serving until\n  something else is loaded.",
+        "description": "Unload ``model_name`` from Triton and delete its model repo directory.\n\nGuardrails:\n- External-service entries (the segmenter, the VLM) are rejected\n  unconditionally: there is no Triton repository entry to unload, and\n  treating their name as one would just surface a confusing Triton\n  404.\n- Region-detector + OCR models (per the active ``DetectionProfile``)\n  can **never** be unloaded here, even with ``force=true`` — 403\n  unconditionally.\n- Other core pipeline models (CLIP image encoder, face\n  detect/recognition) need ``force=true`` — without it, 409 with a\n  loud explanation. Unloading any of them breaks live serving until\n  something else is loaded.\n- The model this project's own ingest policy runs as its detector is a\n  409 ``detector_in_use`` without ``force=true``: deleting it makes every\n  later ingest fail until another detector is set.",
         "operationId": "unload_model_curation_projects__project__models__model_name__delete",
         "parameters": [
           {
@@ -35955,13 +35956,13 @@
             }
           },
           {
-            "description": "Bypass the region-detector / core-pipeline-model guard",
+            "description": "Bypass the region-detector / core-pipeline / ingest-detector guard",
             "in": "query",
             "name": "force",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Bypass the region-detector / core-pipeline-model guard",
+              "description": "Bypass the region-detector / core-pipeline / ingest-detector guard",
               "title": "Force",
               "type": "boolean"
             }
