@@ -54,6 +54,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `/clusters/[id]` says what it is doing while the first page of a large cluster
+  loads (the backend orders every member, which can take seconds): after 1.5 s
+  it reads "Ordering N crops. A large cluster can take a few seconds.", and the
+  footer reads "loading…" instead of "0 / 0 listed" and "all loaded".
 - The docs site and README no longer link to pages that do not exist yet: the
   GitHub repository, issues, "edit this page", GitHub Pages and the raw
   `docker-compose.yml` / `.env.example` downloads of a public Cropwright

@@ -37,6 +37,12 @@
   import { createGridGroups } from '$lib/gridGroups.svelte';
   import { createPager } from '$lib/pager.svelte';
   import { computeCutLine } from '$lib/clusters/cutLine';
+  import {
+    SLOW_LOAD_MS,
+    firstLoadHint,
+    listedText,
+    statusBarText,
+  } from '$lib/clusters/firstLoad';
   import { createSelection } from '$lib/selection.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strategies';
@@ -284,6 +290,25 @@
     if (!Number.isFinite(clusterId)) return;
     await cropPager.loadMore();
   }
+
+  // The first page of a large cluster can take seconds; say so after SLOW_LOAD_MS.
+  let slowFirstLoad = $state(false);
+  $effect(() => {
+    const firstLoad = cropPager.loading && cropPager.items.length === 0;
+    if (!firstLoad) {
+      slowFirstLoad = false;
+      return;
+    }
+    const timer = setTimeout(() => (slowFirstLoad = true), SLOW_LOAD_MS);
+    return () => clearTimeout(timer);
+  });
+  const pagerState = $derived({
+    loading: cropPager.loading,
+    loadingMore: cropPager.loadingMore,
+    hasMore: cropPager.hasMore,
+    itemCount: cropPager.items.length,
+    total: cropPager.total,
+  });
 
   $effect(() => {
     keyboardStore.setScope('cluster');
@@ -1257,7 +1282,12 @@
         </button>
       {/if}
       {#if cropPager.loading && cropPager.items.length === 0}
-        <p class="text-sm text-zinc-500">Loading...</p>
+        <p class="text-sm text-zinc-500" data-testid="cluster-first-load">
+          Loading...
+          {#if slowFirstLoad}<span data-testid="cluster-slow-load-hint"
+              >{firstLoadHint(cluster?.size ?? null)}</span
+            >{/if}
+        </p>
       {:else if cropPager.error}
         <p class="text-sm text-red-300">API unavailable: {cropPager.error}</p>
       {:else if filteredCrops.length === 0}
@@ -1358,17 +1388,17 @@
   <!-- Status bar (sentinel lives inside the scroll container, see above) -->
   <div
     class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
+    data-testid="cluster-status-bar"
   >
     <span class="font-mono text-xs text-zinc-500">
       <span
         title="Loaded / reviewable members matching the current filters. Test-holdout and ignored crops are never listed, so this can be lower than the header's cluster size."
-        >{cropPager.items.length} / {cropPager.total} listed</span
+        >{listedText(pagerState)}</span
       >
       {#if sel.size > 0}<span class="ml-2 text-blue-300">· {sel.size} selected</span>{/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if cropPager.loadingMore}loading more…{:else if cropPager.hasMore}scroll for more{:else}all
-        loaded{/if}
+      {statusBarText(pagerState)}
     </span>
   </div>
 </div>
