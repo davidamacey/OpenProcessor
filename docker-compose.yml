@@ -16,7 +16,7 @@ x-logging: &default-logging
 
 services:
   triton-server:
-    image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
     logging: *default-logging
     restart: always
@@ -84,7 +84,7 @@ services:
       - triton_net
 
   yolo-api:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     logging: *default-logging
     restart: always
@@ -270,7 +270,7 @@ services:
   # ===================================================================
 
   curation-detection-worker:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
     logging: *default-logging
     mem_reservation: 1g
@@ -336,7 +336,7 @@ services:
       - triton_net
 
   curation-vlm-worker:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
     logging: *default-logging
     mem_reservation: 512m
@@ -375,7 +375,7 @@ services:
       - triton_net
 
   curation-auto-label-worker:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
     logging: *default-logging
     mem_reservation: 2g
@@ -439,7 +439,7 @@ services:
       - triton_net
 
   curation-cluster-refresh:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
     logging: *default-logging
     mem_reservation: 1g
@@ -475,7 +475,7 @@ services:
   # On-demand only (no `restart:` — see docker/evaluator/Dockerfile):
   # `docker compose --profile curation run --rm curation-evaluator`.
   curation-evaluator:
-    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
     logging: *default-logging
     profiles:
@@ -517,7 +517,7 @@ services:
   #   OP_SEGMENTER_URL=http://segmenter:8000 \
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
-    image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
     logging: *default-logging
     profiles:
@@ -586,7 +586,7 @@ services:
   # ===================================================================
 
   curation-trainer:
-    image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.4.0}}
+    image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
     logging: *default-logging
     profiles:

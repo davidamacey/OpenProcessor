@@ -15,6 +15,8 @@
 #   training_lock       present -> `compose exec ... lock-check` finds the GPU lock
 #   pause_sentinel      the shared pause sentinel: `compose exec ... pause-create`
 #                       prints created/present, `pause-remove` deletes it
+#   vlm_container       present -> `compose ps -q vlm` prints a container id whose
+#                       `docker top` pids come from own_pids
 #   up_hangs            present -> `compose up` creates up_started and blocks (a
 #                       long recreate a test can interrupt)
 # Writes mutations.log: every state-changing call, whether allowed or not.
@@ -122,7 +124,7 @@ cmd_compose() {
             if [[ " ${args[*]:-} " == *" --images "* && "$project" != *-cw ]]; then
                 local k v repo tag
                 repo="$(env_val "$envfile" OP_IMAGE_REPO)"; repo="${repo:-davidamacey}"
-                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.4.0}"
+                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.4.1}"
                 local profiles wanted
                 profiles=",$(env_val "$envfile" COMPOSE_PROFILES),"
                 wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton"
@@ -201,6 +203,9 @@ JSON
         ps)
             if [[ " ${args[*]:-} " == *" --services "* ]]; then
                 cat "${state}/running_services" 2>/dev/null || true
+            elif [[ " ${args[*]:-} " == *" -q "* ]]; then
+                # `compose ps -q <service>`: the container id, only when vlm_container exists
+                [[ -e "${state}/vlm_container" ]] && echo vlmcid
             fi
             ;;
         exec)

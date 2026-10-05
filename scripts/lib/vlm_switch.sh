@@ -96,6 +96,29 @@ _vlm_card_mib() {
         | head -1 | tr -d ' ' | tr ',' ' '
 }
 
+# _vlm_own_mib INDEX -> MiB the running vlm container holds on GPU INDEX (0 when
+# it is not running or nvidia-smi cannot attribute it). The switch recreates that
+# container, so this memory is free by the time the new model loads. Same pid ->
+# uuid -> index attribution as gpu_own_usage in setup-openprocessor.sh (that
+# script is standalone, so it cannot be sourced here), narrowed to the vlm service.
+_vlm_own_mib() {
+    local gpu="$1" cid pids apps idx
+    cid="$(dc ps -q vlm 2>/dev/null | head -1)"
+    [[ -n "$cid" ]] || { echo 0; return 0; }
+    pids="$(docker top "$cid" -eo pid 2>/dev/null | awk 'NR > 1 { print $1 }' | tr '\n' ' ')"
+    [[ -n "${pids// /}" ]] || { echo 0; return 0; }
+    apps="$(nvidia-smi --query-compute-apps=pid,gpu_uuid,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null || true)"
+    idx="$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null || true)"
+    awk -F', *' -v pids="$pids" -v idxmap="$idx" -v gpu="$gpu" '
+        BEGIN {
+            n = split(pids, a, " "); for (i = 1; i <= n; i++) mine[a[i]] = 1
+            m = split(idxmap, rows, "\n")
+            for (i = 1; i <= m; i++) { split(rows[i], f, ", *"); if (f[2] != "") byuuid[f[2]] = f[1] }
+        }
+        ($1 in mine) && ($2 in byuuid) && (byuuid[$2] == gpu) { sum += $3 }
+        END { print sum + 0 }' <<< "$apps"
+}
+
 # _vlm_in_api SUBCOMMAND -> runs one of the three fixed state-volume actions
 # inside the API container (the state volume is not visible from the host)
 _vlm_in_api() {
@@ -106,7 +129,8 @@ _vlm_in_api() {
             lock-check) [ -e "$d/training_gpus.lock" ] ;;
             pause-create)
                 mkdir -p "$d/vlm_worker"
-                if [ -e "$s" ]; then echo present; else : > "$s"; echo created; fi ;;
+                if [ -e "$s" ]; then echo present
+                else printf "{\"owner\": \"vlm-switch\", \"created_at\": %s}\n" "$(date +%s)" > "$s"; echo created; fi ;;
             pause-remove) rm -f "$s" ;;
             *) exit 2 ;;
         esac' _ "$1"
@@ -281,8 +305,11 @@ _vlm_switch() {
         fi
         log_warn "${id} needs about ${vram_gb} GB; GPU ${gpu_id} has ${total_gb} GB (forced)"
     fi
+    local own_mib
+    own_mib="$(_vlm_own_mib "$gpu_id")"
+    free_mib=$(( free_mib + own_mib ))
     if (( free_mib < need_mib )) && (( force == 0 )); then
-        log_error "${id} needs about ${vram_gb} GB free; GPU ${gpu_id} has $(( free_mib / 1024 )) GB free now (--force to try anyway)"
+        log_error "${id} needs about ${vram_gb} GB free; GPU ${gpu_id} would have $(( free_mib / 1024 )) GB free once the running vlm (${own_mib} MiB) is replaced (--force to try anyway)"
         return 1
     fi
     if [[ "$gated" == "true" ]]; then

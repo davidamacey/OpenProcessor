@@ -6,7 +6,7 @@ title: Curation routes
 # Curation routes
 
 :::info[Experimental]
-The curation subsystem is experimental in v0.4.0. It is real and tested,
+The curation subsystem is experimental in v0.4.1. It is real and tested,
 but backward compatibility across releases is not guaranteed until it
 graduates. It ships opt-in behind the `curation` compose profile.
 :::
@@ -458,7 +458,7 @@ negative verdict, so the item can be retried.
 | GET | `/train/artifacts/{job_id}/{name}` | A whitelisted run artifact |
 | POST | `/train/cancel/{job_id}` | Cancel a run. `/train/cancel_campaign/{campaign_id}` cancels a campaign |
 | GET | `/train/profiles` | Hyperparameter tables. `/train/presets`, `/train/augmentation_presets` and `/train/gpus` list presets and GPU options |
-| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate. The model is named for the project (`{slug}__...`, none for `default`). Returns `202` with a `promote_id`: use this job and poll it for UIs and anything behind a reverse proxy (proxies time out near 120 s). `?wait=true` blocks until loaded and warmed (2-3 minutes) and returns `200`; it is for direct API scripting with a client timeout of at least 300 s. A dropped `wait=true` connection abandons the response, not the promote: the load still finishes |
+| POST | `/train/promote/{job_id}` | Promote a finished run into Triton, behind a quality gate. The model is named for the project (`{slug}__...`, none for `default`). Returns `202` with a `promote_id`: use this job and poll it for UIs and anything behind a reverse proxy (proxies time out near 120 s). `?wait=true` blocks until loaded and warmed (2-3 minutes) and returns `200`; it is for direct API scripting with a client timeout of at least 300 s. A dropped `wait=true` connection abandons the response, not the promote: the load still finishes. The gate-bypass `force` may be sent in the JSON body or as `?force=true` |
 | GET | `/train/promote/{job_id}/jobs/{promote_id}` | Phase of a background promote: `queued`, `exporting`, `loading`, `building`, `warming`, `done` or `failed` |
 | POST | `/train/reload_promoted` | Reload promoted models after a Triton restart |
 | GET | `/bakeoff/eval_datasets` | Eval sets: exports with a labelled test split and frozen external sets. `/bakeoff/trained_models`, `/bakeoff/baseline_models` and `/bakeoff/profiles` list the rest of what can be compared |

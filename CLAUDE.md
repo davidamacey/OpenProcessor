@@ -7,7 +7,7 @@ where things live, and the commands and rules that matter.
 
 Before making design decisions or judgment calls, read
 [`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md): what OpenProcessor is
-for, the v0.4.0 feature scope, and the standards the code is held to (no dead
+for, the v0.4.1 feature scope, and the standards the code is held to (no dead
 code, no compatibility shims, fail-closed isolation, class identity by name
 never index, review depth matched to real risk).
 

@@ -1,6 +1,6 @@
 # Curation and Active Learning
 
-> **Status: experimental for v0.4.0.** This is a working, tested subsystem,
+> **Status: experimental for v0.4.1.** This is a working, tested subsystem,
 > but it is new and its API can still change between releases. It ships
 > opt-in, behind Docker Compose profiles, and is off by default.
 
@@ -1133,7 +1133,7 @@ Training is a control plane over a shared-volume file protocol
 | Status, run list, log tail | `GET /train/status`, `GET /train/status/{job_id}`, `GET /train/runs`, `GET /train/log/tail/{job_id}` |
 | Cancel | `POST /train/cancel/{job_id}`, `POST /train/cancel_campaign/{campaign_id}` |
 | Profiles, presets, GPUs | `GET /train/profiles`, `GET /train/presets`, `GET /train/gpus` |
-| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}` (202 + `promote_id`: use it, and poll, for UIs and anything behind a proxy that times out near 120 s; `?wait=true` blocks 2-3 minutes and is for direct scripting with a >= 300 s client timeout), `GET /train/promote/{job_id}/jobs/{promote_id}`, `POST /train/reload_promoted` |
+| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}` (202 + `promote_id`: use it, and poll, for UIs and anything behind a proxy that times out near 120 s; `?wait=true` blocks 2-3 minutes and is for direct scripting with a >= 300 s client timeout; `force` bypasses the promote gate and goes in the JSON body or as `?force=true`), `GET /train/promote/{job_id}/jobs/{promote_id}`, `POST /train/reload_promoted` |
 
 ```bash
 docker compose --profile training up -d curation-trainer
@@ -1388,7 +1388,7 @@ deployment with existing data under other field names builds its own
 Retired environment-variable prefixes are rejected at startup by
 `src/config/retired_env.py`.
 
-Item wire fields that were renamed or replaced in v0.4.0:
+Item wire fields that were renamed or replaced in 0.4.0:
 
 | Old | Now |
 |---|---|

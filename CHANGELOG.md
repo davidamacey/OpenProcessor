@@ -93,6 +93,20 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - A `?wait=true` promote no longer stops mid-load when the client or a proxy drops
   the connection; docs say to use the `202` job and polling behind a proxy
   (`wait=true` needs a client timeout of at least 300 s).
+- `op_ingest_*` and the other `project`-labelled metrics rank only live projects for
+  the `OP_METRICS_MAX_PROJECT_LABELS` cap; deleted-project tombstones no longer use
+  the cap up and fold every live project into `other` (#124).
+- `openprocessor vlm use` credits the running VLM container's own GPU memory when it
+  checks free VRAM, so a legitimate switch is no longer refused (#126).
+- The `vlm use` pause sentinel records its owner and the GPU arbiter reconcile loop
+  leaves a sentinel it did not create alone (a stale one still expires after
+  `OP_PAUSE_SENTINEL_TTL_S`, default 1800 s), so workers stay paused during the
+  model load (#127).
+- `POST .../train/promote/{job_id}` accepts `force` as a query parameter as well as
+  the body field (additive; the OpenAPI contract gains one optional query
+  parameter), and the docs and the 422 `override` text say so (#128).
+- Version bumped to 0.4.1 (`VERSION`, `pyproject.toml`, compose image tags, installer
+  and CLI).
 
 ## [0.4.0] - 2026-10-04
 

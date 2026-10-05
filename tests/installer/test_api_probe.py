@@ -22,7 +22,7 @@ HEALTH_OK = {
     'opensearch': {'reachable': True},
     'vlm': {'reachable': True, 'model': 'local-vlm'},
     'mlflow_public_url': 'http://localhost:4609',
-    'version': '0.4.0',
+    'version': '0.4.1',
     'api_version': 'v1',
 }
 HEALTH_DEGRADED_NO_VLM = {**HEALTH_OK, 'status': 'degraded', 'vlm': {'reachable': False}}

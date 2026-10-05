@@ -485,3 +485,42 @@ def test_project_label_cap_still_folds_projects_beyond_it(monkeypatch: pytest.Mo
     monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '2')
     assert om.project_label('zulu') == 'other'
     assert om.project_label('aaa-new') == 'aaa-new'
+
+
+@pytest.mark.asyncio
+async def test_tombstones_sorting_before_a_live_project_do_not_push_it_to_other(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#124: deleted tombstones stay in the registry snapshot; ranking them used up the
+    whole label cap so every live project was filed under ``other``."""
+    base = default_project_record()
+
+    def rec(slug: str, status: str) -> Any:
+        return base.__class__(**{**base.__dict__, 'slug': slug, 'status': status})
+
+    tombstones = [rec(f'accept-{i:02d}', 'deleted') for i in range(12)]
+    live = rec('v041-verify', 'active')
+    set_project_registry(StaticProjectRegistry([*tombstones, live]))  # type: ignore[arg-type]
+    monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '10')
+    assert om.project_label('v041-verify') == 'v041-verify'
+
+    svc, _, _ = _make_service()
+    with bind_project(live):
+        before = _sample('op_ingest_images_total', project='v041-verify', outcome='ok')
+        ok = await svc.ingest_one(_jpeg_bytes(), '/tmp/tomb.jpg')
+    assert ok.status == 'success'
+    assert _sample('op_ingest_images_total', project='v041-verify', outcome='ok') == before + 1
+
+
+def test_live_projects_beyond_the_cap_still_fold_to_other_with_tombstones_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = default_project_record()
+    records = [
+        base.__class__(**{**base.__dict__, 'slug': s, 'status': st})
+        for s, st in (('aaa', 'deleted'), ('bravo', 'active'), ('charlie', 'active'))
+    ]
+    set_project_registry(StaticProjectRegistry(records))  # type: ignore[arg-type]
+    monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '1')
+    assert om.project_label('bravo') == 'bravo'
+    assert om.project_label('charlie') == 'other'

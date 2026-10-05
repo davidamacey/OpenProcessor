@@ -90,7 +90,7 @@ Signed releases are follow-up work.
 
 ## Cropwright in the bundle
 
-For v0.4.0 the Cropwright files ship **staged inside the deploy bundle**: the tarball
+For v0.4.1 the Cropwright files ship **staged inside the deploy bundle**: the tarball
 carries `cropwright-release/<tag>/` for the tag pinned in `cropwright.lock` (`SHA256SUMS`, `docker-compose.yml`, `.env.example`),
 built with `CW_RELEASE_DIR=<dir> scripts/release/build_deploy_bundle.sh`. The installer
 uses those files with no fetch from Cropwright's repository, and still checks them

@@ -179,6 +179,11 @@ the model finishes loading and warming, so check
 that the model reports ready in the project's model list instead of
 re-submitting.
 
+Promote is gated on the run's metrics (mAP50, per-class precision and support). To
+bypass the gate, send `"force": true` in the JSON body or add `?force=true` to the
+URL; either works (the 422 `override` text names both). A forced promote reports
+`force_used` in the response and the run manifest.
+
 The Triton model is named `{slug}__<triton_name>` (the `default` project's
 models have no prefix), so two projects can promote the same name without
 colliding. A requested name may not itself contain `__` (`422

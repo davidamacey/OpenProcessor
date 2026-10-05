@@ -1903,6 +1903,15 @@ async def promote_run(
             )
         ),
     ] = False,
+    force: Annotated[
+        bool,
+        Query(
+            description=(
+                'Same as the request-body ``force`` (either one bypasses the promote gate); '
+                'accepted on the query string so it reads like train/start.'
+            )
+        ),
+    ] = False,
 ) -> PromoteResponse | PromoteJobStatus:
     """Promote a finished training run into the Triton model repo.
 
@@ -1927,6 +1936,9 @@ async def promote_run(
               ``force=true`` can get past this specific failure.
         502: Triton refused the load (config or weights mismatch)
     """
+    if force and not payload.force:
+        payload = payload.model_copy(update={'force': True})
+
     # Lazy import — keeps the API container slim if no one ever
     # promotes (e.g. a fresh dev box).
     from pathlib import Path
@@ -2022,7 +2034,7 @@ async def promote_run(
                 message='promote gate failed',
                 failures=gate_failures,
                 force_allowed=True,
-                override='pass force=true in the request body',
+                override='pass force=true in the request body or as ?force=true',
                 thresholds=gate_thresholds,
             ).model_dump(),
         )
@@ -2060,7 +2072,7 @@ async def promote_run(
                         )
                     ],
                     force_allowed=True,
-                    override='pass force=true in the request body',
+                    override='pass force=true in the request body or as ?force=true',
                 ).model_dump(),
             )
         logger.warning(
@@ -2096,7 +2108,7 @@ async def promote_run(
                             )
                         ],
                         force_allowed=True,
-                        override='pass force=true in the request body',
+                        override='pass force=true in the request body or as ?force=true',
                     ).model_dump(),
                 )
             logger.warning(
