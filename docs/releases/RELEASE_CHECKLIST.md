@@ -72,6 +72,32 @@ All decisions are final (owner, 4 Oct 2026). The only step left is the owner's g
   shared 12 GB card. #113 (`/models/status` sam3) is fixed: the installer sets
   `OP_SEGMENTER_URL` with the segmenter tier. Allowlisted CVEs are re-checked each release.
 
+## Scripted acceptance run (release gate)
+
+Replaces the manual acceptance walk-through (issue #54, plan:
+`docs/design/release_acceptance_plan.md`). Install the release candidate with the
+installer into an ISOLATED compose project and install directory (non-default
+`--port-base`, GPUs nothing else uses), then run:
+
+```bash
+python3 scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va   # public COCO, once
+scripts/release/acceptance_run.sh \
+  --base-url http://localhost:<port> --project-name <compose-project> \
+  --install-dir <install-dir> --models-dir <install-dir>/models \
+  --project acc-v041 --images-dir data/samples/coco_va --report acceptance.json
+# or: make acceptance ACC_ARGS="<the same flags>"
+```
+
+It exercises health, self-hosted docs, ingest of ~100 COCO images, clustering, VLM
+labeling, human confirmation, holdout, export, a 2-epoch probe train, bake-off,
+promote (forced when the gate rejects the undertrained model), inference via
+`/detect?model_name=`, model delete, metrics and log-noise checks, and the installer
+lifecycle (`--only installer_uninstall` and `--upgrade-version vX` are opt-in). A
+cleanup trap always deletes the throwaway project and promoted models. Exit status is
+non-zero if any required phase failed; the JSON report has per-phase status, seconds
+and evidence. Attach `acceptance.json` to the go/no-go record. Screenshot review
+(plan phase K) stays manual.
+
 ## Steps
 
 1. Pre-flight. Confirm `VERSION` is `0.4.0`, the `CHANGELOG.md` `[0.4.0]` date is the

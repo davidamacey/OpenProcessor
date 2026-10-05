@@ -1,0 +1,30 @@
+---
+sidebar_position: 8
+title: Release acceptance run
+---
+
+# Release acceptance run
+
+`scripts/release/acceptance_run.sh` proves an installed stack works end to end:
+health, self-hosted API docs, a throwaway project, ingest of public COCO images,
+clustering, VLM labeling, human confirmation, test holdout, YOLO export, a short
+training run, promote, inference with the promoted model, delete, metrics and
+log-noise checks, and the installer lifecycle hooks. It needs only `bash`, `curl`
+and `jq`.
+
+Run it against an isolated install (own compose project and install directory),
+never a stack you care about, because it creates, trains and deletes a project:
+
+```bash
+python3 scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va
+scripts/release/acceptance_run.sh \
+  --base-url http://localhost:4703 --project-name op-acc \
+  --install-dir ~/op-acc --models-dir ~/op-acc/models \
+  --project acc-run --images-dir data/samples/coco_va --report acceptance.json
+```
+
+Useful flags: `--only a,b` and `--skip a,b` (see `--list` for phase names),
+`--train-gpu`, `--vlm-switch-id <id>`, `--upgrade-version vX.Y.Z`, `--strict`.
+The JSON report records, per phase, pass/fail/skip, seconds and evidence; the exit
+status is non-zero when a required phase fails. A cleanup trap always removes the
+throwaway project and any model the run promoted.

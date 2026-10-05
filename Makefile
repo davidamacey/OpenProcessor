@@ -320,6 +320,10 @@ release-dry-run: ## Build + Trivy-scan every published image; push nothing
 release-verify: ## Build the release assets to a temp dir and dry-run the installer on them (publishes nothing)
 	scripts/release/verify_release_assets.sh
 
+.PHONY: acceptance
+acceptance: ## Scripted end-to-end acceptance run against an isolated stack (ACC_ARGS="--base-url ... --project-name ..."; see scripts/release/acceptance_run.sh --help)
+	scripts/release/acceptance_run.sh $(ACC_ARGS)
+
 .PHONY: release
 release: ## Build + Trivy-scan + push every published image; writes images.lock
 	scripts/release/build_and_publish.sh --push
