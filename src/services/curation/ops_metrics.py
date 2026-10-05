@@ -147,7 +147,7 @@ def allowed_project_slugs(slugs: Any) -> frozenset[str]:
 def project_label(slug: str) -> str:
     """``slug`` when it is within the bounded label set, else ``other``.
 
-    The set comes from the project registry snapshot so it is identical in every
+    The set comes from the registry's active projects so it is identical in every
     process. ``slug`` is a bound project, hence a registry project by construction,
     so it is ranked as a member even when this process's snapshot has not caught up
     yet (a project created seconds ago, or a refresh that failed): a lagging snapshot
@@ -156,7 +156,9 @@ def project_label(slug: str) -> str:
     """
     from src.services.projects.registry import get_project_registry
 
-    known = get_project_registry().snapshot().keys()
+    # Live records only (the set the gauge refresh ranks): deleted tombstones stay in
+    # the snapshot and would otherwise use up the whole cap.
+    known = {r.slug for r in get_project_registry().active_projects()}
     if not known:
         return slug
     return slug if slug in allowed_project_slugs({*known, slug}) else OTHER_PROJECT
