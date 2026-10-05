@@ -94,7 +94,10 @@ promote (forced when the gate rejects the undertrained model), inference via
 `/detect?model_name=`, model delete, metrics and log-noise checks, and the installer
 lifecycle (`--only installer_uninstall` and `--upgrade-version vX` are opt-in). A
 cleanup trap always deletes the throwaway project and promoted models. Exit status is
-non-zero if any required phase failed; the JSON report has per-phase status, seconds
+non-zero if any required phase failed. The trainer refuses classes under 20 validated
+crops, so the run confirms `--confirm-crops` (default 40) crops into one class and
+trains a single-class subset; the model proves the pipeline, not accuracy. A project
+slug is retired once deleted, so use a fresh `--project` per run; the JSON report has per-phase status, seconds
 and evidence. Attach `acceptance.json` to the go/no-go record. Screenshot review
 (plan phase K) stays manual.
 
