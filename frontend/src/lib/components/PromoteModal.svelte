@@ -21,6 +21,7 @@
     isPromoteActive,
   } from '$lib/promoteJobController.svelte';
   import {
+    gateFailureMessage,
     promoteGateDetail,
     promoteSuccessMessage,
     type PromoteGateDetail,
@@ -254,8 +255,9 @@
                 >
                   {#each gate.failures as f, i (f.code + (f.class_name ?? '') + i)}
                     <li>
-                      {#if f.class_name}<span class="font-mono">{f.class_name}</span>:
-                      {/if}{f.message}
+                      {#if f.class_name}<span class="font-mono">{f.class_name}:</span
+                        >{/if}
+                      {gateFailureMessage(f)}
                     </li>
                   {/each}
                 </ul>

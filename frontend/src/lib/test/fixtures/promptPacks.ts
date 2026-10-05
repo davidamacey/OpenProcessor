@@ -86,12 +86,12 @@ export function schemaFixture(): PromptPackSchema {
         help: 'Maps a word the VLM may answer to a registry class.',
       },
       {
-        // Served as `kind: 'text'` (the backend's schema only special-cases
-        // the two maps) although its value is a list of globs (#61).
+        // Served as `kind: 'list'` since OpenProcessor 05ec48a8 (a list of
+        // case-insensitive globs).
         field: 'proposal_denylist',
         label: 'Proposal denylist',
         group: 'vocabulary',
-        kind: 'text',
+        kind: 'list',
         formatted: false,
         required_placeholders: [],
         allowed_placeholders: [],

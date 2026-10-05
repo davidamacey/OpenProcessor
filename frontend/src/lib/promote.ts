@@ -56,6 +56,17 @@ export function promoteGateDetail(e: unknown): PromoteGateDetail | null {
   };
 }
 
+/** The served message sometimes already starts with "<class_name>:"; the
+ *  modal adds the class itself, so strip it to avoid "object:object: …". */
+export function gateFailureMessage(f: PromoteGateFailure): string {
+  const name = f.class_name;
+  if (!name) return f.message;
+  const prefix = `${name}:`;
+  return f.message.startsWith(prefix)
+    ? f.message.slice(prefix.length).trimStart()
+    : f.message;
+}
+
 /** `PromoteRequest.triton_name` limits: `[A-Za-z0-9_-]`, 1..64 chars. */
 const TRITON_NAME_MAX = 64;
 

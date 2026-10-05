@@ -9,10 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.1.1] - TBD
 
 Adopts the OpenProcessor 0.4.1 API (contract snapshot synced at backend
-`a09b86de`).
+`05ec48a8`).
 
 ### Changed
 
+- **`proposal_denylist` is a `kind: list` pack field.** The pack editor now
+  picks the list-of-strings editor from the served field `kind` (not the field
+  id): add and remove rows, entries are trimmed, blanks and case-insensitive
+  duplicates are dropped, at most 500 entries of 200 characters, and the served
+  validate issue shows on the field. The saved body always carries
+  `proposal_denylist` as `string[]`. An unknown future field `kind` is shown
+  read-only and saved unchanged instead of crashing the editor.
+- **Promote gate failures no longer repeat the class prefix** (`object:object:
+precision ...`); the modal strips a `<class_name>:` the served message already
+  starts with. A source-scan test pins that nothing sends or suggests
+  `wait=true` (promote stays on the 202 job flow).
 - **Promote to Triton is a background job (OpenProcessor #87).**
   `POST /train/promote/{job_id}` now answers `202` with a job instead of
   blocking for 2 to 3 minutes. The promote dialog follows the served phases

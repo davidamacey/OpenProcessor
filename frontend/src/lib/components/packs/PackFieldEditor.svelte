@@ -3,12 +3,21 @@
    * One prompt-pack field, rendered from its served schema row (§3.4):
    * label, help, placeholder and reply-key chips, the pipeline steps that
    * use it, and the served issues on it. `kind: "text"` is a textarea,
-   * `kind: "map"` a key/value list, and `proposal_denylist` a list of glob
-   * patterns (always sent as `string[]`). No client rule checks the value.
+   * `kind: "map"` a key/value list and `kind: "list"` a list of strings
+   * (always sent as a clean `string[]`: trimmed, no blanks or duplicates,
+   * max 500 entries of 200 chars). Any other kind is shown read-only so a
+   * future kind never crashes the editor or has its value rewritten.
    */
   import type { ValidationIssue } from '$lib/types_config';
   import type { PackFieldValue, PackSchemaField } from '$lib/types_packs';
-  import { isListField, listValue } from '$lib/packs/packFieldValue';
+  import { untrack } from 'svelte';
+  import {
+    LIST_MAX_ENTRIES,
+    LIST_MAX_ENTRY_CHARS,
+    duplicateRows,
+    listValue,
+    normalizeList,
+  } from '$lib/packs/packFieldValue';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
 
   interface Props {
@@ -21,10 +30,27 @@
 
   let { field, value, issues, readonly = false, onchange }: Props = $props();
 
-  const isList = $derived(isListField(field));
-  const isMap = $derived(!isList && field.kind === 'map');
+  const isList = $derived(field.kind === 'list');
+  const isMap = $derived(field.kind === 'map');
+  const isText = $derived(field.kind === 'text');
+  const unknownText = $derived.by(() => {
+    try {
+      return JSON.stringify(value ?? null, null, 2);
+    } catch {
+      return String(value);
+    }
+  });
   const text = $derived(typeof value === 'string' ? value : '');
-  const patterns = $derived(listValue(value));
+  // Draft rows keep a just-added blank row on screen; only the cleaned list
+  // is emitted.
+  let rows = $state<string[]>([]);
+  $effect(() => {
+    const v = listValue(value);
+    untrack(() => {
+      if (JSON.stringify(normalizeList(rows)) !== JSON.stringify(v)) rows = [...v];
+    });
+  });
+  const dups = $derived(duplicateRows(rows));
   const entries = $derived(
     value && typeof value === 'object' && !Array.isArray(value)
       ? Object.entries(value)
@@ -50,14 +76,18 @@
   function addEntry(): void {
     setEntries([...entries, ['', '']]);
   }
+  function emitRows(next: string[]): void {
+    rows = next;
+    onchange(normalizeList(next));
+  }
   function setPattern(idx: number, v: string): void {
-    onchange(patterns.map((p, i) => (i === idx ? v : p)));
+    emitRows(rows.map((p, i) => (i === idx ? v : p)));
   }
   function removePattern(idx: number): void {
-    onchange(patterns.filter((_, i) => i !== idx));
+    emitRows(rows.filter((_, i) => i !== idx));
   }
   function addPattern(): void {
-    onchange([...patterns, '']);
+    rows = [...rows, ''];
   }
 </script>
 
@@ -113,13 +143,14 @@
 
   {#if isList}
     <div class="space-y-1" data-testid="pack-list">
-      {#each patterns as p, idx (idx)}
+      {#each rows as p, idx (idx)}
         <div class="flex items-center gap-1">
           <input
             class="input input-sm min-w-0 flex-1 font-mono"
             aria-label="{field.label}: pattern {idx + 1}"
             value={p}
             {readonly}
+            maxlength={LIST_MAX_ENTRY_CHARS}
             spellcheck="false"
             oninput={(e) => setPattern(idx, (e.currentTarget as HTMLInputElement).value)}
           />
@@ -131,6 +162,9 @@
               onclick={() => removePattern(idx)}>Remove</button
             >
           {/if}
+          {#if dups.has(idx)}
+            <span class="text-[11px] text-amber-300">Duplicate, ignored</span>
+          {/if}
         </div>
       {:else}
         <p class="text-xs text-zinc-500">No patterns.</p>
@@ -139,7 +173,7 @@
         <button
           type="button"
           class="btn btn-sm"
-          disabled={patterns.some((p) => p === '')}
+          disabled={rows.length >= LIST_MAX_ENTRIES || rows.some((p) => p.trim() === '')}
           onclick={addPattern}>Add pattern</button
         >
       {/if}
@@ -188,7 +222,7 @@
         >
       {/if}
     </div>
-  {:else}
+  {:else if isText}
     <textarea
       id="pack-field-{field.field}"
       class="input min-h-24 w-full resize-y font-mono text-xs {hasError
@@ -200,6 +234,14 @@
       spellcheck="false"
       oninput={(e) => onchange((e.currentTarget as HTMLTextAreaElement).value)}
     ></textarea>
+  {:else}
+    <div data-testid="pack-unknown" class="space-y-1">
+      <p class="text-xs text-amber-300">
+        Unsupported field kind “{field.kind}”: shown read-only and saved unchanged.
+      </p>
+      <pre
+        class="max-h-48 overflow-auto rounded border border-zinc-800 p-2 font-mono text-[11px] text-zinc-400">{unknownText}</pre>
+    </div>
   {/if}
 
   {#if field.used_by.length > 0}

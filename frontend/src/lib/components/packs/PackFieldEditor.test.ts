@@ -115,7 +115,16 @@ describe('PackFieldEditor', () => {
     expect(onchange).toHaveBeenLastCalledWith({ a: 'widget', b: 'gadget', '': '' });
   });
 
-  it('proposal_denylist is a list of glob patterns: edit, add and remove rows, always string[]', () => {
+  function listInputs(): HTMLInputElement[] {
+    return [
+      ...target.querySelectorAll<HTMLInputElement>('[data-testid="pack-list"] input'),
+    ];
+  }
+  function button(label: string): HTMLButtonElement {
+    return [...target.querySelectorAll('button')].find((b) => b.textContent === label)!;
+  }
+
+  it('kind list renders a list editor: edit and remove rows emit string[]', () => {
     const onchange = vi.fn();
     render({
       field: field('proposal_denylist'),
@@ -123,33 +132,73 @@ describe('PackFieldEditor', () => {
       onchange,
     });
     expect(target.querySelector('textarea')).toBeNull();
-    const inputs = [
-      ...target.querySelectorAll<HTMLInputElement>('[data-testid="pack-list"] input'),
-    ];
-    expect(inputs.map((i) => i.value)).toEqual(['blurry_*', '*_scene']);
-    type(inputs[0]!, 'dark_*');
+    expect(listInputs().map((i) => i.value)).toEqual(['blurry_*', '*_scene']);
+    type(listInputs()[0]!, 'dark_*');
     expect(onchange).toHaveBeenLastCalledWith(['dark_*', '*_scene']);
-    const remove = [...target.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Remove',
-    )!;
-    remove.click();
+    button('Remove').click();
+    flushSync();
     expect(onchange).toHaveBeenLastCalledWith(['*_scene']);
-    const add = [...target.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Add pattern',
-    )!;
-    add.click();
-    expect(onchange).toHaveBeenLastCalledWith(['blurry_*', '*_scene', '']);
   });
 
-  it('proposal_denylist: a missing value renders an empty list, never a string', () => {
+  it('the list shape follows the served kind, not the field id', () => {
+    const base = field('proposal_denylist');
+    render({ field: { ...base, field: 'other_list' }, value: ['a'] });
+    expect(target.querySelector('[data-testid="pack-list"]')).not.toBeNull();
+    unmount(instance!);
+    instance = undefined;
+    target.remove();
+    render({ field: { ...base, kind: 'text' }, value: 'plain' });
+    expect(target.querySelector('[data-testid="pack-list"]')).toBeNull();
+    expect(target.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('adding a row shows a blank input but never emits a blank entry', () => {
     const onchange = vi.fn();
-    render({ field: field('proposal_denylist'), value: undefined, onchange });
+    render({ field: field('proposal_denylist'), value: ['a'], onchange });
+    button('Add pattern').click();
+    flushSync();
+    expect(listInputs()).toHaveLength(2);
+    expect(onchange).not.toHaveBeenCalled();
+    type(listInputs()[1]!, '  b_*  ');
+    expect(onchange).toHaveBeenLastCalledWith(['a', 'b_*']);
+  });
+
+  it('blank and duplicate (case-insensitive) rows are dropped from the emitted list', () => {
+    const onchange = vi.fn();
+    render({ field: field('proposal_denylist'), value: ['a', 'b'], onchange });
+    type(listInputs()[1]!, ' A ');
+    expect(onchange).toHaveBeenLastCalledWith(['a']);
+    expect(target.textContent).toContain('Duplicate');
+    type(listInputs()[1]!, '   ');
+    expect(onchange).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('limits: 200 chars per entry, add disabled at 500 entries', () => {
+    const many = Array.from({ length: 500 }, (_, i) => `p${i}`);
+    render({ field: field('proposal_denylist'), value: many });
+    expect(listInputs()[0]!.maxLength).toBe(200);
+    expect(button('Add pattern').disabled).toBe(true);
+  });
+
+  it('a missing value renders an empty list, never a string', () => {
+    render({ field: field('proposal_denylist'), value: undefined });
     expect(target.textContent).toContain('No patterns.');
-    const add = [...target.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Add pattern',
-    )!;
-    add.click();
-    expect(onchange).toHaveBeenLastCalledWith(['']);
+    expect(listInputs()).toHaveLength(0);
+  });
+
+  it('an unknown future kind degrades to a read-only view without crashing', () => {
+    const onchange = vi.fn();
+    render({
+      field: { ...field('proposal_denylist'), kind: 'matrix' },
+      value: { x: [1, 2] } as unknown as PackFieldValue,
+      onchange,
+    });
+    expect(target.querySelector('[data-testid="pack-unknown"]')!.textContent).toContain(
+      '"x"',
+    );
+    expect(target.querySelector('textarea')).toBeNull();
+    expect(target.querySelectorAll('input')).toHaveLength(0);
+    expect(onchange).not.toHaveBeenCalled();
   });
 
   it('proposal_denylist: the served issue on the field shows', () => {

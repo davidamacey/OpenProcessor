@@ -73,6 +73,19 @@ SCHEMA: dict[str, Any] = {
             "used_by": ["auto_label_vlm_stage"],
             "help": "Maps a word the VLM may answer to a registry class.",
         },
+        {
+            "field": "proposal_denylist",
+            "label": "Proposal denylist",
+            "group": "vocabulary",
+            "kind": "list",
+            "formatted": False,
+            "required_placeholders": [],
+            "allowed_placeholders": [],
+            "expected_reply_keys": [],
+            "optional_reply_keys": [],
+            "used_by": ["auto_label_vlm_stage"],
+            "help": "Case-insensitive globs.",
+        },
     ],
     "placeholders": [
         {
@@ -91,6 +104,7 @@ BODY = {
     "class_system": "You classify widgets.",
     "class_user_template": "Pick one of: {class_names_csv}",
     "synonyms": {"doohickey": "gadget"},
+    "proposal_denylist": ["blurry_*"],
 }
 
 
@@ -285,6 +299,61 @@ def test_edit_validate_save_and_resolve_a_conflict(stub, page, app_url):
     assert puts[2]["expected_revision"] == 4
     assert puts[2]["body"]["class_system"] == "You classify widgets and gadgets."
     expect(page.get_by_test_id("config-meta")).to_contain_text("revision 5", timeout=ACTION_TIMEOUT_MS)
+
+
+def test_denylist_list_editor_cleans_input_shows_served_issue_and_saves_string_list(stub, page, app_url):
+    serve_packs(stub)
+    validated: list[Any] = []
+
+    def validate(request: Any, _m: Any):
+        validated.append(request.post_data_json)
+        return (
+            200,
+            {
+                "ok": False,
+                "errors": [
+                    {
+                        "code": "pack_field_too_long",
+                        "id": "pack_field_too_long",
+                        "severity": "error",
+                        "field": "proposal_denylist",
+                        "message": "proposal_denylist entry is too long",
+                        "detail": {},
+                        "bypassable": False,
+                    }
+                ],
+                "warnings": [],
+                "force_allowed": False,
+            },
+        )
+
+    stub.on("POST", r"/prompt_packs/validate$", validate)
+    puts: list[Any] = []
+
+    def put(request: Any, _m: Any):
+        body = request.post_data_json
+        puts.append(body)
+        return (200, doc(revision=3, body=body["body"], description=body["description"]))
+
+    stub.on("PUT", r"/prompt_packs/widget_tag$", put)
+
+    open_editor(page, app_url)
+    field = page.locator('[data-field="proposal_denylist"]')
+    expect(field.get_by_test_id("pack-list")).to_be_visible()
+    expect(field.locator("textarea")).to_have_count(0)
+    field.get_by_role("button", name="Add pattern").click()
+    with expect_handled(page, lambda r: r.method == "POST" and r.url.endswith("/prompt_packs/validate")):
+        field.locator("input").nth(1).fill("  *_scene  ")
+    field.get_by_role("button", name="Add pattern").click()
+    field.locator("input").nth(2).fill("BLURRY_*")
+    expect(field).to_contain_text("Duplicate")
+    expect(field.get_by_test_id("config-issue")).to_contain_text(
+        "proposal_denylist entry is too long", timeout=ACTION_TIMEOUT_MS
+    )
+    assert validated[-1]["body"]["proposal_denylist"] == ["blurry_*", "*_scene"]
+    with expect_handled(page, lambda r: r.method == "PUT"):
+        page.get_by_test_id("config-save").click()
+    assert puts[0]["body"]["proposal_denylist"] == ["blurry_*", "*_scene"], puts[0]
 
 
 def test_activate_needs_force_only_when_the_server_allows_it(stub, page, app_url):

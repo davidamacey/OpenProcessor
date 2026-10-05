@@ -96,6 +96,29 @@ describe('PromoteModal gate failure', () => {
     expect(target.textContent).not.toContain('API 422');
   });
 
+  it('does not repeat the class prefix when the served message already carries it', async () => {
+    vi.mocked(promoteTrainJob).mockRejectedValue(
+      new ApiError(422, '/curation/train/promote/run-1', {
+        detail: {
+          message: 'promote gate failed: 1 check(s)',
+          failures: [
+            {
+              code: 'class_precision_below_threshold',
+              message: 'object: precision 0.412 < 0.5',
+              class_name: 'object',
+            },
+          ],
+          force_allowed: false,
+        },
+      }),
+    );
+    await openAndSubmit();
+    const li = target.querySelector('[data-testid="promote-gate-failures"] li')!;
+    expect(li.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'object: precision 0.412 < 0.5',
+    );
+  });
+
   it('force_allowed: offers force, and a checked force re-submits with force=true', async () => {
     vi.mocked(promoteTrainJob).mockRejectedValueOnce(gate422(true));
     await openAndSubmit();
