@@ -3,7 +3,7 @@
   "note": "Hand-maintained, not derived from an issue tracker. 'Shipped' means it is on main today; 'Planned' items are design work that has not landed and may change after measurement. Update this file when scope actually changes; never describe work that isn't planned.",
   "releases": [
     {
-      "version": "v0.4.0",
+      "version": "v0.4.1",
       "headline": "Core inference API plus an experimental curation backend",
       "stage": "shipped",
       "summary": "The Triton-backed core API (detection, faces, embeddings, OCR, search, ingest, analyze) and the opt-in /curation active-learning subsystem with its reference workers, trainer, evaluator, segmenter and VLM compose profiles.",

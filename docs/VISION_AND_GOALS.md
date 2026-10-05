@@ -1,7 +1,7 @@
 # OpenProcessor: Vision and Goals
 
 This document is the canonical statement of what OpenProcessor is for, what
-the v0.4.0 release must deliver, and the standards the codebase is held to.
+the v0.4.1 release must deliver, and the standards the codebase is held to.
 It exists so that anyone — human or AI agent — working in this repository
 can orient quickly: `CLAUDE.md` and `README.md` both link here rather than
 restating it.
@@ -28,10 +28,10 @@ Every stage is designed to be reused across domains by *configuring* it
 (detection profiles, prompt packs, class registries) rather than by
 forking the code per domain.
 
-**Explicit owner scope decision:** the full v0.4.0 feature set below was
+**Explicit owner scope decision:** the full v0.4.1 feature set below was
 deliberately *not* trimmed to ship faster. Nothing here is a stretch goal.
 
-## What "done" means for v0.4.0
+## What "done" means for v0.4.1
 
 - **Multiple isolated projects.** Each project is its own dataset
   workspace — its own indexes, its own directories, its own class
@@ -104,7 +104,7 @@ release.
   touching data integrity, isolation, or security — an independent review
   before it lands, not batched into one release-day merge.
 
-## What's explicitly not in v0.4.0, and why
+## What's explicitly not in v0.4.1, and why
 
 These are real, tracked commitments, not abandoned ideas — they are
 sequenced deliberately rather than included now:
@@ -113,7 +113,7 @@ sequenced deliberately rather than included now:
   strategy, GPU utilization, and a zero-copy pipeline (decode once, keep
   data resident on the GPU across models) are real, planned work — but
   they should be tuned against the *final* workload shape. Full-image
-  SAM3 detection has shipped in v0.4.0, so the call pattern is now known and
+  SAM3 detection has shipped in v0.4.1, so the call pattern is now known and
   optimization work (plan: `docs/design/triton_pipeline_optimization_plan.md`)
   follows the release.
 - Benchmarks, a technical white paper, and additional domain showcases

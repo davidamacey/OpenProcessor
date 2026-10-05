@@ -1,6 +1,6 @@
 # Curation and Active Learning
 
-> **Status: experimental for v0.4.0.** This is a working, tested subsystem,
+> **Status: experimental for v0.4.1.** This is a working, tested subsystem,
 > but it is new and its API can still change between releases. It ships
 > opt-in, behind Docker Compose profiles, and is off by default.
 
@@ -1388,7 +1388,7 @@ deployment with existing data under other field names builds its own
 Retired environment-variable prefixes are rejected at startup by
 `src/config/retired_env.py`.
 
-Item wire fields that were renamed or replaced in v0.4.0:
+Item wire fields that were renamed or replaced in 0.4.0:
 
 | Old | Now |
 |---|---|
