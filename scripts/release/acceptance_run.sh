@@ -49,6 +49,7 @@ SLUG="acc-$(date +%s)"
 IMAGES_DIR=""
 IMAGE_COUNT=100
 VLM_CROPS=20
+CONFIRM_CROPS=40
 TRAIN_GPU="${ACC_TRAIN_GPU:-0}"
 TRAIN_EPOCHS=2
 TRAIN_TIMEOUT=3600
@@ -78,6 +79,7 @@ Options:
   --images-dir DIR       COCO (or any) JPEG/PNG directory for ingest
   --image-count N        images to ingest (default 100)
   --vlm-crops N          crops to VLM-label (default 20)
+  --confirm-crops N      crops to human-confirm into one class for training (default 40; trainer floor is 20)
   --train-gpu IDS        CUDA_VISIBLE_DEVICES for the trainer (default $ACC_TRAIN_GPU or 0)
   --train-epochs N       probe-profile epochs (default 2)
   --train-timeout S      seconds to wait for the training run (default 3600)
@@ -106,6 +108,7 @@ while (($#)); do
         --images-dir) IMAGES_DIR="${2:?}"; shift 2 ;;
         --image-count) IMAGE_COUNT="${2:?}"; shift 2 ;;
         --vlm-crops) VLM_CROPS="${2:?}"; shift 2 ;;
+        --confirm-crops) CONFIRM_CROPS="${2:?}"; shift 2 ;;
         --train-gpu) TRAIN_GPU="${2:?}"; shift 2 ;;
         --train-epochs) TRAIN_EPOCHS="${2:?}"; shift 2 ;;
         --train-timeout) TRAIN_TIMEOUT="${2:?}"; shift 2 ;;
@@ -212,20 +215,25 @@ cleanup_resources() {
         while IFS= read -r m; do
             [[ -z "$m" ]] && continue
             api DELETE "${PROJECT_API}/models/${m}?force=true"
-            case "$HTTP_CODE" in 200|404) ;; *) rc=1 ;; esac
+            case "$HTTP_CODE" in 200|202|404) ;; *) rc=1 ;; esac
         done <<< "$models"
     fi
     if [[ "$(st_get project_created)" == 1 ]]; then
         api DELETE "${PROJECT_API}?confirm=${SLUG}&force=true"
         case "$HTTP_CODE" in
-            200|404) ;;
+            200|202|404) ;;
             *)
                 # a project must be archived-or-idle to delete; one retry via archive
                 api POST "${PROJECT_API}/archive"
                 api DELETE "${PROJECT_API}?confirm=${SLUG}&force=true"
-                case "$HTTP_CODE" in 200|404) ;; *) rc=1 ;; esac
+                case "$HTTP_CODE" in 200|202|404) ;; *) rc=1 ;; esac
                 ;;
         esac
+    fi
+    if [[ "$(st_get project_created)" == 1 && $rc == 0 ]]; then
+        # project delete is asynchronous (status "deleting"): wait for 404
+        _gone() { api GET "${PROJECT_API}"; [[ "$HTTP_CODE" == 404 ]]; }
+        poll 120 _gone || rc=1
     fi
     ((rc == 0)) && st_set cleaned 1
     return "$rc"
@@ -317,6 +325,9 @@ collect_images() {
     printf '%s\n' "${all[@]}"
 }
 
+# first image path; reads all of collect_images so it never dies of SIGPIPE
+first_image() { collect_images | sed -n 1p; }
+
 ph_ingest() {
     local -a imgs=() args=()
     local f sent=0 base_total
@@ -345,7 +356,7 @@ ph_ingest() {
 
 ph_detect_embed() {
     local img
-    img="$(collect_images | head -1)" || fail "no image"
+    img="$(first_image)" || fail "no image"
     api POST /detect -F "image=@${img}"; expect 200
     ev "POST /detect -> 200, detections=$(jqb '(.detections // []) | length')"
     api POST /embed/image -F "image=@${img}"; expect 200
@@ -363,9 +374,9 @@ ph_detect_embed() {
 }
 
 ph_cluster() {
-    api POST "${PROJECT_API}/classes/seed_from_detector" -H 'Content-Type: application/json' --data '{}'
+    api POST "${PROJECT_API}/classes/seed_from_detector" -H 'Content-Type: application/json' --data '{"dry_run":false}'
     expect 200
-    ev "classes seeded from detector"
+    ev "classes seeded from detector: $(jqb '(.created // []) | length') created"
     api POST "${PROJECT_API}/pipeline/auto_label?run_vlm=false&train_clusters=true"
     expect 200
     _clustered() {
@@ -390,6 +401,10 @@ ph_vlm_label() {
     ev "vlm/label_batch on $(jq 'length' <<< "$ids") crops -> 200: $(snippet)"
 }
 
+# The trainer refuses classes under the per-class floor (20 validated crops),
+# so the run confirms CONFIRM_CROPS crops into ONE class and trains a
+# single-class subset. The labels are arbitrary: this proves the pipeline
+# runs end to end, not that the model is any good.
 ph_confirm_labels() {
     local ids cid class_id n=0
     ids="$(st_get crop_ids)"
@@ -397,18 +412,17 @@ ph_confirm_labels() {
     api GET "${PROJECT_API}/classes"; expect 200
     class_id="$(jqb '[.classes[]? | (.class_id // .id)] | .[0] // empty')"
     [[ -n "$class_id" ]] || fail "project has no classes to confirm against"
+    api GET "${PROJECT_API}/crops?limit=${CONFIRM_CROPS}"; expect 200
+    ids="$(jqb "[.crops[]? | (.crop_id // .id)] | .[0:${CONFIRM_CROPS}]")"
     for cid in $(jq -r '.[]' <<< "$ids"); do
-        api GET "${PROJECT_API}/crops/${cid}"
-        local cls
-        cls="$(jqb '(.class_id // empty)')"
-        [[ "$cls" =~ ^[0-9]+$ ]] || cls="$class_id"
-        api_json PUT "${PROJECT_API}/crops/${cid}/label" "$(jq -nc --argjson c "$cls" '{class_id:$c, label_source:"human"}')"
+        api_json PUT "${PROJECT_API}/crops/${cid}/label" "$(jq -nc --argjson c "$class_id" '{class_id:$c, label_source:"human"}')"
         expect 200
         n=$((n + 1))
     done
+    st_set confirm_class "$class_id"
     api GET "${PROJECT_API}/crops?label_source=human&label_validated=true&limit=1"; expect 200
     [[ "$(jqb '.total // 0')" -ge "$n" ]] || fail "only $(jqb '.total // 0') human-validated crops, wanted >= ${n}"
-    ev "human-confirmed ${n} labels; API reports $(jqb '.total') validated"
+    ev "human-confirmed ${n} crops as class ${class_id}; API reports $(jqb '.total') validated"
 }
 
 ph_holdout() {
@@ -429,8 +443,11 @@ ph_export() {
 }
 
 train_spec() {
-    jq -nc --arg gpu "$TRAIN_GPU" --argjson ep "$TRAIN_EPOCHS" \
-        '{profile:"probe", model_size:"n", cuda_visible_devices:$gpu, hyperparameters:{epochs:$ep}, submitted_by:"acceptance"}'
+    local cls
+    cls="$(st_get confirm_class)"
+    jq -nc --arg gpu "$TRAIN_GPU" --argjson ep "$TRAIN_EPOCHS" --argjson cls "${cls:-null}" \
+        '{profile:"probe", model_size:"n", cuda_visible_devices:$gpu, hyperparameters:{epochs:$ep}, submitted_by:"acceptance"}
+         + (if $cls == null then {} else {include_classes:[$cls], single_cls:true} end)'
 }
 
 ph_train() {
@@ -438,7 +455,7 @@ ph_train() {
     local blocked
     blocked="$(jqb '.blocked')"
     ev "preflight blocked=${blocked}: $(jqb '.summary // ""')"
-    [[ "$blocked" == false ]] || fail "preflight blocked the run: $(snippet)"
+    [[ "$blocked" == false ]] || fail "preflight blocked the run: $(jqb '[.checks[] | select(.severity == "block") | "\(.name): \(.message)"] | join("; ")' | head -c 600)"
     api_json POST "${PROJECT_API}/train/start" "$(train_spec)"; expect 201
     local job
     job="$(jqb '.job_id')"
@@ -457,16 +474,17 @@ ph_train() {
 }
 
 ph_bakeoff() {
+    local trainjob
+    trainjob="$(st_get train_job)"
+    [[ -n "$trainjob" ]] || skip "no training run in this session"
     api GET "${PROJECT_API}/bakeoff/trained_models"
     [[ "$HTTP_CODE" == 200 ]] || skip "bake-off not available (HTTP ${HTTP_CODE})"
-    local model ds
-    model="$(jqb '[.models[]? // .[]? | (.name // .model // .id // .)] | .[0] // empty' 2>/dev/null)"
-    [[ -n "$model" ]] || skip "no trained model to bake off"
-    api GET "${PROJECT_API}/bakeoff/eval_datasets"
-    ds="$(jqb '[.datasets[]? // .[]? | (.name // .id // .)] | .[0] // empty' 2>/dev/null)"
-    [[ -n "$ds" ]] || skip "no eval dataset"
-    api_json POST "${PROJECT_API}/bakeoff/run" "$(jq -nc --arg m "$model" --arg d "$ds" '{models:[$m], datasets:[$d]}')"
-    expect 200
+    [[ "$(jq -r --arg j "$trainjob" '[.models[]? | select(.run_id == $j)] | length' "$BODY")" -gt 0 ]] \
+        || skip "trained run ${trainjob} not offered for bake-off"
+    # the run's own training export is always a valid eval dataset (run:<job_id>)
+    api_json POST "${PROJECT_API}/bakeoff/run" \
+        "$(jq -nc --arg j "$trainjob" '{models:[{source:"run", run_id:$j}], datasets:[{id:("run:" + $j)}]}')"
+    expect 200 202
     local job
     job="$(jqb '.job_id')"
     _bake() {
@@ -503,7 +521,7 @@ promote_once() { # promote_once FORCE(true|false): leaves final status in BODY/H
 }
 
 ph_promote() {
-    local job name
+    local job name final
     job="$(st_get train_job)"
     [[ -n "$job" ]] || fail "no training job (train did not run in this session)"
     name="acc_$(printf '%s' "$SLUG" | tr -c 'a-z0-9\n' '_')"
@@ -517,6 +535,14 @@ ph_promote() {
         promote_once true "$job" "$name" || fail "forced promote failed: $(snippet)"
         ev "promoted ${name} with force=true"
     fi
+    # the API namespaces the Triton model as <project>__<name>; use what it reports
+    final="$(jq -r '.triton_name // .result.triton_name // empty' "$BODY" 2>/dev/null)"
+    if [[ -n "$final" && "$final" != "$name" ]]; then
+        ev "API served the model as ${final} (requested ${name})"
+        name="$final"
+        st_add promoted_models "$name"
+        st_set promoted_name "$name"
+    fi
     if [[ -n "$MODELS_DIR" ]]; then
         [[ -d "${MODELS_DIR}/${name}" ]] || fail "promoted model dir ${MODELS_DIR}/${name} not found"
         ev "model dir ${MODELS_DIR}/${name} present"
@@ -527,7 +553,7 @@ ph_infer() {
     local name img n
     name="$(st_get promoted_name)"
     [[ -n "$name" ]] || fail "no promoted model (promote did not run in this session)"
-    img="$(collect_images | head -1)" || fail "no image"
+    img="$(first_image)" || fail "no image"
     for n in 1 2 3 4 5; do   # first inference may cold-start the engine
         api POST "/detect?model_name=${name}" -F "image=@${img}"
         [[ "$HTTP_CODE" == 200 ]] && break

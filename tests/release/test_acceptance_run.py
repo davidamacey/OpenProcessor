@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,7 +13,10 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = REPO_ROOT / 'scripts' / 'release' / 'acceptance_run.sh'
+SCRIPT = Path(
+    os.environ.get('ACC_SCRIPT_UNDER_TEST')
+    or REPO_ROOT / 'scripts' / 'release' / 'acceptance_run.sh'
+)
 SLUG = 'acc-test'
 P = f'/curation/projects/{SLUG}'
 
@@ -44,6 +48,7 @@ class Fake:
     def __init__(self, routes: dict[tuple[str, str], tuple[int, object]]) -> None:
         self.routes = routes
         self.requests: list[tuple[str, str]] = []
+        self.raw: list[tuple[str, str, str]] = []  # method, path?query, body
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -52,6 +57,7 @@ class Fake:
                 payload = self.rfile.read(n).decode(errors='replace') if n else ''
                 path = self.path.split('?')[0]
                 fake.requests.append((self.command, path))
+                fake.raw.append((self.command, self.path, payload))
                 code, body = fake.routes.get((self.command, path), (404, {'detail': 'nf'}))
                 if callable(body):
                     code, body = body(payload)
@@ -277,3 +283,130 @@ def test_train_promote_infer_delete_chain_forces_after_gate_failure(fake, tmp_pa
     assert f.count('POST', f'{P}/train/promote/{job}') == 2
     # deleted by the model_delete phase, so cleanup does not delete it again
     assert f.count('DELETE', f'{P}/models/{name}') == 1
+
+
+# --- shapes observed against a live dev stack (v0.4.1) -----------------------
+
+
+def _write_images(tmp_path: Path, n: int) -> Path:
+    imgs = tmp_path / 'imgs'
+    imgs.mkdir()
+    for i in range(n):
+        (imgs / f'{i:03d}.jpg').write_bytes(b'\xff\xd8\xff\xd9')
+    return imgs
+
+
+def test_detect_embed_survives_many_images(fake, tmp_path):
+    # `collect_images | head -1` died of SIGPIPE once there were enough images
+    routes = _happy_routes()
+    routes[('POST', '/detect')] = (200, {'detections': []})
+    routes[('POST', '/embed/image')] = (200, {'embedding': [0.0] * 512})
+    routes[('GET', f'{P}/crops')] = (200, {'total': 3, 'crops': [], 'n_unembedded': None})
+    imgs = _write_images(tmp_path, 60)
+    proc, data = run(
+        fake(routes), tmp_path, '--only', 'detect_embed', '--images-dir', str(imgs),
+        '--image-count', '60',
+    )  # fmt: skip
+    assert by_name(data)['detect_embed']['status'] == 'pass', proc.stdout
+
+
+def test_cluster_seeds_classes_for_real(fake, tmp_path):
+    # seed_from_detector is a dry run unless dry_run=false is sent
+    routes = _happy_routes()
+    routes[('POST', f'{P}/classes/seed_from_detector')] = (200, {'created': [{'class_id': 0}]})
+    routes[('POST', f'{P}/pipeline/auto_label')] = (200, {'stages': {}})
+    routes[('GET', f'{P}/pipeline/auto_label/status')] = (200, {'status': 'idle'})
+    routes[('GET', f'{P}/clusters')] = (200, {'clusters': []})
+    f = fake(routes)
+    proc, data = run(f, tmp_path, '--only', 'cluster')
+    assert by_name(data)['cluster']['status'] == 'pass', proc.stdout
+    seed = [r for r in f.raw if r[1].endswith('/classes/seed_from_detector')]
+    assert json.loads(seed[0][2]) == {'dry_run': False}
+
+
+def test_teardown_accepts_async_202_delete_and_waits_for_404(fake, tmp_path):
+    # live DELETE /projects/{slug} answers 202 (status "deleting"), then 404
+    routes = _happy_routes()
+    state = {'gets': 0, 'deleted': False}
+
+    def delete(_payload: str):
+        state['deleted'] = True
+        return 202, {'project': {'slug': SLUG, 'status': 'deleting'}}
+
+    def get(_payload: str):
+        if not state['deleted']:
+            return 404, {'detail': 'nf'}  # project_create precheck
+        state['gets'] += 1
+        return (200, {'project': {'status': 'deleting'}}) if state['gets'] < 3 else (404, {})
+
+    routes[('DELETE', P)] = (200, delete)
+    routes[('GET', P)] = (200, get)
+    proc, data = run(fake(routes), tmp_path, '--only', 'project_create,teardown')
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert by_name(data)['teardown']['status'] == 'pass'
+    assert data['cleanup_complete'] is True
+
+
+def test_confirm_one_class_then_train_single_class_subset(fake, tmp_path):
+    # the trainer blocks any class under 20 validated crops, so train a 1-class subset
+    routes = _happy_routes()
+    crops = [{'crop_id': f'c{i}'} for i in range(60)]
+    routes[('GET', f'{P}/crops')] = (200, {'total': 40, 'crops': crops})
+    routes[('GET', f'{P}/classes')] = (200, {'classes': [{'class_id': 7, 'class_name': 'x'}]})
+    for c in crops:
+        routes[('PUT', f'{P}/crops/{c["crop_id"]}/label')] = (200, {'class_id': 7})
+    routes[('POST', f'{P}/train/preflight')] = (200, {'blocked': False, 'checks': []})
+    routes[('POST', f'{P}/train/start')] = (201, {'job_id': 'j'})
+    routes[('GET', f'{P}/train/status/j')] = (200, {'state': 'finished'})
+    routes[('POST', f'{P}/vlm/label_batch')] = (200, {'predicted': 1})
+    f = fake(routes)
+    proc, data = run(
+        f, tmp_path, '--only', 'vlm_label,confirm_labels,train', '--confirm-crops', '40'
+    )  # fmt: skip
+    ph = by_name(data)
+    assert ph['confirm_labels']['status'] == 'pass', proc.stdout
+    assert ph['train']['status'] == 'pass', proc.stdout
+    puts = [r for r in f.raw if r[0] == 'PUT']
+    assert len(puts) == 40
+    spec = json.loads(next(r for r in f.raw if r[1].endswith('/train/start'))[2])
+    assert spec['include_classes'] == [7]
+    assert spec['single_cls'] is True
+
+
+def test_promote_uses_the_namespaced_triton_name(fake, tmp_path):
+    # live API serves the model as <project>__<requested name>
+    routes = _happy_routes()
+    served = f'{SLUG}__acc_acc_test'
+    routes[('POST', f'{P}/train/preflight')] = (200, {'blocked': False, 'checks': []})
+    routes[('POST', f'{P}/train/start')] = (201, {'job_id': 'j'})
+    routes[('GET', f'{P}/train/status/j')] = (200, {'state': 'finished'})
+    routes[('POST', f'{P}/train/promote/j')] = (
+        202,
+        {'promote_id': 'p1', 'triton_name': served, 'status': 'building'},
+    )
+    routes[('GET', f'{P}/train/promote/j/jobs/p1')] = (
+        200,
+        {'promote_id': 'p1', 'triton_name': served, 'status': 'done'},
+    )
+    routes[('POST', '/detect')] = (200, {'detections': []})
+    routes[('DELETE', f'{P}/models/{served}')] = (200, {})
+    f = fake(routes)
+    proc, _data = run(f, tmp_path, '--only', 'train,promote,infer,model_delete,teardown')
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert any(r[1] == f'/detect?model_name={served}' for r in f.raw), f.raw
+    assert f.count('DELETE', f'{P}/models/{served}') == 1
+
+
+def test_bakeoff_posts_run_and_dataset_refs(fake, tmp_path):
+    routes = _happy_routes()
+    routes[('POST', f'{P}/train/preflight')] = (200, {'blocked': False, 'checks': []})
+    routes[('POST', f'{P}/train/start')] = (201, {'job_id': 'j'})
+    routes[('GET', f'{P}/train/status/j')] = (200, {'state': 'finished'})
+    routes[('GET', f'{P}/bakeoff/trained_models')] = (200, {'models': [{'run_id': 'j'}]})
+    routes[('POST', f'{P}/bakeoff/run')] = (202, {'job_id': 'b1'})
+    routes[('GET', f'{P}/bakeoff/status/b1')] = (200, {'state': 'done'})
+    f = fake(routes)
+    proc, data = run(f, tmp_path, '--only', 'train,bakeoff,teardown')
+    assert by_name(data)['bakeoff']['status'] == 'pass', proc.stdout
+    body = json.loads(next(r for r in f.raw if r[1].endswith('/bakeoff/run'))[2])
+    assert body == {'models': [{'source': 'run', 'run_id': 'j'}], 'datasets': [{'id': 'run:j'}]}
