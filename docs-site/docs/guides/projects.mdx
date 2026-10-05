@@ -147,8 +147,12 @@ The response is 202 with the record in status `deleting`. Index and
 directory removal run in the background. Poll
 `GET /curation/projects/{project}` until it answers 404, or follow the
 `project.deleted` event on the global event stream
-(`GET /curation/events`). A failed finish leaves the record `deleting`;
-repeat the same call with `confirm` to retry.
+(`GET /curation/events`). A repeat call while it is deleting also answers
+`202` `deleting`. A failed finish leaves the record `deleting`; repeat the same
+call with `confirm` to retry.
+
+A deleted slug is retired: creating a project with the same slug afterwards
+answers `slug_retired`, so scripts must use a fresh slug each run.
 
 `force=true` skips the refusal for models that other projects share. It
 does not skip the busy check, the last-active check or the `default`

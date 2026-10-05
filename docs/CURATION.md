@@ -264,7 +264,7 @@ project that can be archived but never deleted.
 | List, create | `GET /curation/projects`, `POST /curation/projects` |
 | Read, rename | `GET /curation/projects/{project}`, `PATCH /curation/projects/{project}` |
 | Archive, restore | `POST /curation/projects/{project}/archive`, `POST /curation/projects/{project}/unarchive` |
-| Delete | `DELETE /curation/projects/{project}` |
+| Delete | `DELETE /curation/projects/{project}` (async: `202` with status `deleting`, then `404` a few seconds later; a deleted slug is retired and cannot be reused, so create a fresh slug) |
 | Pause the workers for one project | `POST /curation/projects/{project}/pause`, `POST /curation/projects/{project}/resume` |
 | Pause only the region stage | `GET /curation/projects/{project}/region_stage`, `POST /curation/projects/{project}/region_stage/pause`, `POST /curation/projects/{project}/region_stage/resume` |
 
@@ -710,7 +710,9 @@ all skip them, so the API says so instead of returning a silent gap:
   item was stored without a vector.
 - `GET /curation/projects/{project}/search/text` returns `unembedded_in_scope`.
 - `GET /curation/projects/{project}/crops` with `order=outliers` or
-  `order=diverse` (and `core_first`) returns `n_unembedded` next to `n_pool`, plus
+  `order=diverse` (and `core_first`) returns `n_unembedded` next to `n_pool` (null for every
+  other ordering, including the default listing, so it is not an embed-drain signal there;
+  use `GET .../stats/dataset` `embedding` for that), plus
   `suggested_reprocess`: the dry-run embed request to POST for the items it could not rank.
   An empty `GET /review/tabs` queue offers the same request in `empty_state`.
 - `GET /curation/projects/{project}/stats/dataset` returns an `embedding` block
@@ -1133,7 +1135,7 @@ Training is a control plane over a shared-volume file protocol
 | Status, run list, log tail | `GET /train/status`, `GET /train/status/{job_id}`, `GET /train/runs`, `GET /train/log/tail/{job_id}` |
 | Cancel | `POST /train/cancel/{job_id}`, `POST /train/cancel_campaign/{campaign_id}` |
 | Profiles, presets, GPUs | `GET /train/profiles`, `GET /train/presets`, `GET /train/gpus` |
-| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}` (202 + `promote_id`: use it, and poll, for UIs and anything behind a proxy that times out near 120 s; `?wait=true` blocks 2-3 minutes and is for direct scripting with a >= 300 s client timeout; `force` bypasses the promote gate and goes in the JSON body or as `?force=true`), `GET /train/promote/{job_id}/jobs/{promote_id}`, `POST /train/reload_promoted` |
+| Lineage, promote, reload | `GET /train/manifest/{job_id}`, `POST /train/promote/{job_id}` (the model is served as `{slug}__<requested triton_name>`, none for `default`; the final name is returned as `triton_name` in the result and job status and is what `/detect?model_name=` and `DELETE /models/{model_name}` expect; 202 + `promote_id`: use it, and poll, for UIs and anything behind a proxy that times out near 120 s; `?wait=true` blocks 2-3 minutes and is for direct scripting with a >= 300 s client timeout; `force` bypasses the promote gate and goes in the JSON body or as `?force=true`), `GET /train/promote/{job_id}/jobs/{promote_id}`, `POST /train/reload_promoted` |
 
 ```bash
 docker compose --profile training up -d curation-trainer
