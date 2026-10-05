@@ -60,6 +60,7 @@ const sidebars: SidebarsConfig = {
         'operations/exports-and-retention',
         'operations/training-and-promote',
         'operations/monitoring',
+        'operations/release-acceptance',
       ],
     },
     {

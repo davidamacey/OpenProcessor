@@ -108,6 +108,14 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - Version bumped to 0.4.1 (`VERSION`, `pyproject.toml`, compose image tags, installer
   and CLI).
 
+### Added
+
+- `scripts/release/acceptance_run.sh` (`make acceptance`): a scripted end-to-end release
+  acceptance run (health, docs, ingest, cluster, VLM label, confirm, holdout, export,
+  train, bake-off, promote, inference, delete, metrics, log noise, VLM switch, installer
+  lifecycle, teardown) against an isolated install, with a JSON report and a cleanup
+  trap that always removes the throwaway project and promoted models (#54).
+
 ## [0.4.0] - 2026-10-04
 
 OpenProcessor 0.4.0 is the first release that is a generic, any-domain backend
