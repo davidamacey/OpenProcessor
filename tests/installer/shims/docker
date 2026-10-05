@@ -124,7 +124,7 @@ cmd_compose() {
             if [[ " ${args[*]:-} " == *" --images "* && "$project" != *-cw ]]; then
                 local k v repo tag
                 repo="$(env_val "$envfile" OP_IMAGE_REPO)"; repo="${repo:-davidamacey}"
-                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.4.0}"
+                tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.4.1}"
                 local profiles wanted
                 profiles=",$(env_val "$envfile" COMPOSE_PROFILES),"
                 wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton"
