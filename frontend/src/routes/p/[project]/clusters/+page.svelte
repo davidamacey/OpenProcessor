@@ -1358,9 +1358,9 @@
                       <span
                         class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
                         data-testid="cluster-cohesion"
-                        title="{COHESION_TOOLTIP} · label agreement {c.label_purity !=
+                        title="{COHESION_TOOLTIP} · label agreement {c.label_agreement !=
                         null
-                          ? `${(c.label_purity * 100).toFixed(0)}%`
+                          ? `${(c.label_agreement * 100).toFixed(0)}%`
                           : '—'} · labelled share {c.labelled_share != null
                           ? `${(c.labelled_share * 100).toFixed(0)}%`
                           : '—'}"

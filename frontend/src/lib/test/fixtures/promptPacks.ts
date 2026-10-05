@@ -85,6 +85,21 @@ export function schemaFixture(): PromptPackSchema {
         used_by: ['auto_label_vlm_stage'],
         help: 'Maps a word the VLM may answer to a registry class.',
       },
+      {
+        // Served as `kind: 'list'` since OpenProcessor 05ec48a8 (a list of
+        // case-insensitive globs).
+        field: 'proposal_denylist',
+        label: 'Proposal denylist',
+        group: 'vocabulary',
+        kind: 'list',
+        formatted: false,
+        required_placeholders: [],
+        allowed_placeholders: [],
+        expected_reply_keys: [],
+        optional_reply_keys: [],
+        used_by: ['auto_label_vlm_stage'],
+        help: '',
+      },
     ],
     placeholders: [
       {
@@ -131,6 +146,7 @@ export function docFixture(over: Partial<PromptPackDoc> = {}): PromptPackDoc {
       class_user_template: 'Pick one of: {class_names_csv}',
       combined_user_template: '{class_block}{region_block}',
       synonyms: { doohickey: 'gadget' },
+      proposal_denylist: ['blurry_*', '*_scene'],
     },
     created_at: '2026-09-26T10:00:00Z',
     updated_at: '2026-09-26T12:00:00Z',

@@ -52,7 +52,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
         region_calls.append(request.post_data_json or {})
         return (200, {"item": tag_item()})
 
-    stub.on("PUT", r"/crops/([^/]+)/region$", region_handler)
+    stub.on("PUT", r"/crops/([^/]+)/regions$", region_handler)
 
     meta_calls: list[dict] = []
 

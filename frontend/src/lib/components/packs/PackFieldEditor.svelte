@@ -3,10 +3,21 @@
    * One prompt-pack field, rendered from its served schema row (§3.4):
    * label, help, placeholder and reply-key chips, the pipeline steps that
    * use it, and the served issues on it. `kind: "text"` is a textarea,
-   * `kind: "map"` a key/value list. No client rule checks the value.
+   * `kind: "map"` a key/value list and `kind: "list"` a list of strings
+   * (always sent as a clean `string[]`: trimmed, no blanks or duplicates,
+   * max 500 entries of 200 chars). Any other kind is shown read-only so a
+   * future kind never crashes the editor or has its value rewritten.
    */
   import type { ValidationIssue } from '$lib/types_config';
   import type { PackFieldValue, PackSchemaField } from '$lib/types_packs';
+  import { untrack } from 'svelte';
+  import {
+    LIST_MAX_ENTRIES,
+    LIST_MAX_ENTRY_CHARS,
+    duplicateRows,
+    listValue,
+    normalizeList,
+  } from '$lib/packs/packFieldValue';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
 
   interface Props {
@@ -19,10 +30,29 @@
 
   let { field, value, issues, readonly = false, onchange }: Props = $props();
 
+  const isList = $derived(field.kind === 'list');
   const isMap = $derived(field.kind === 'map');
+  const isText = $derived(field.kind === 'text');
+  const unknownText = $derived.by(() => {
+    try {
+      return JSON.stringify(value ?? null, null, 2);
+    } catch {
+      return String(value);
+    }
+  });
   const text = $derived(typeof value === 'string' ? value : '');
+  // Draft rows keep a just-added blank row on screen; only the cleaned list
+  // is emitted.
+  let rows = $state<string[]>([]);
+  $effect(() => {
+    const v = listValue(value);
+    untrack(() => {
+      if (JSON.stringify(normalizeList(rows)) !== JSON.stringify(v)) rows = [...v];
+    });
+  });
+  const dups = $derived(duplicateRows(rows));
   const entries = $derived(
-    value && typeof value === 'object'
+    value && typeof value === 'object' && !Array.isArray(value)
       ? Object.entries(value)
       : ([] as [string, string][]),
   );
@@ -45,6 +75,19 @@
   }
   function addEntry(): void {
     setEntries([...entries, ['', '']]);
+  }
+  function emitRows(next: string[]): void {
+    rows = next;
+    onchange(normalizeList(next));
+  }
+  function setPattern(idx: number, v: string): void {
+    emitRows(rows.map((p, i) => (i === idx ? v : p)));
+  }
+  function removePattern(idx: number): void {
+    emitRows(rows.filter((_, i) => i !== idx));
+  }
+  function addPattern(): void {
+    rows = [...rows, ''];
   }
 </script>
 
@@ -98,7 +141,48 @@
     </div>
   {/if}
 
-  {#if isMap}
+  {#if isList}
+    <div class="space-y-1" data-testid="pack-list">
+      {#each rows as p, idx (idx)}
+        <div class="flex items-center gap-1">
+          <input
+            class="input input-sm min-w-0 flex-1 font-mono"
+            aria-label="{field.label}: pattern {idx + 1}"
+            value={p}
+            {readonly}
+            maxlength={LIST_MAX_ENTRY_CHARS}
+            spellcheck="false"
+            oninput={(e) => setPattern(idx, (e.currentTarget as HTMLInputElement).value)}
+          />
+          {#if !readonly}
+            <button
+              type="button"
+              class="btn btn-sm"
+              aria-label="Remove {p || 'pattern'}"
+              onclick={() => removePattern(idx)}>Remove</button
+            >
+          {/if}
+          {#if dups.has(idx)}
+            <span class="text-[11px] text-amber-300">Duplicate, ignored</span>
+          {/if}
+        </div>
+      {:else}
+        <p class="text-xs text-zinc-500">No patterns.</p>
+      {/each}
+      {#if !readonly}
+        <button
+          type="button"
+          class="btn btn-sm"
+          disabled={rows.length >= LIST_MAX_ENTRIES || rows.some((p) => p.trim() === '')}
+          onclick={addPattern}>Add pattern</button
+        >
+      {/if}
+      <p class="text-[11px] text-zinc-500">
+        Case-insensitive globs (<code>blurry_*</code>, <code>*_scene</code>). A proposed
+        new class matching one is dropped and never reaches the new-class queue.
+      </p>
+    </div>
+  {:else if isMap}
     <div class="space-y-1" data-testid="pack-map">
       {#each entries as [k, v], idx (idx)}
         <div class="flex items-center gap-1">
@@ -138,7 +222,7 @@
         >
       {/if}
     </div>
-  {:else}
+  {:else if isText}
     <textarea
       id="pack-field-{field.field}"
       class="input min-h-24 w-full resize-y font-mono text-xs {hasError
@@ -150,10 +234,18 @@
       spellcheck="false"
       oninput={(e) => onchange((e.currentTarget as HTMLTextAreaElement).value)}
     ></textarea>
+  {:else}
+    <div data-testid="pack-unknown" class="space-y-1">
+      <p class="text-xs text-amber-300">
+        Unsupported field kind “{field.kind}”: shown read-only and saved unchanged.
+      </p>
+      <pre
+        class="max-h-48 overflow-auto rounded border border-zinc-800 p-2 font-mono text-[11px] text-zinc-400">{unknownText}</pre>
+    </div>
   {/if}
 
   {#if field.used_by.length > 0}
     <p class="text-[11px] text-zinc-500">used by: {field.used_by.join(', ')}</p>
   {/if}
-  <ConfigIssueList {issues} showField={isMap} />
+  <ConfigIssueList {issues} showField={isMap || isList} />
 </div>

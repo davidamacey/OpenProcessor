@@ -91,8 +91,8 @@ import type {
   PresetsResponse,
   PreflightReport,
   ProfilesResponse,
+  PromoteJobStatus,
   PromoteRequest,
-  PromoteResponse,
   RunsListResponse,
   StartCampaignResponse,
   StartTrainResponse,
@@ -1919,6 +1919,9 @@ type RawCluster = {
    *  exactly why it stopped being called `purity`). `promotable` uses
    *  this, not the geometry-based `purity` above. */
   label_purity: number | null;
+  /** #61: the same value as `label_purity` under the name a UI reads for
+   *  label quality. Absent on a backend older than 0.4.1. */
+  label_agreement?: number | null;
   /** Share of this cluster's members that have any label at all. */
   labelled_share: number | null;
   /** Server's auto-promote eligibility gate for this cluster. */
@@ -1962,6 +1965,7 @@ function _rawClusterToCluster(
   c: RawCluster,
   coreSimilarityMin: number | null = null,
 ): Cluster {
+  const label_agreement = c.label_agreement ?? c.label_purity ?? null;
   return {
     id: c.cluster_id,
     cluster_kind: c.cluster_kind,
@@ -1974,7 +1978,7 @@ function _rawClusterToCluster(
     // members), never the nearest-centroid geometry `purity` below —
     // mapping `purity` here rendered "class_b · 3%" for a cluster that
     // is 616/616 class_b.
-    dominant_pct: c.label_purity,
+    dominant_pct: label_agreement,
     dominant_count: c.dominant_count ?? null,
     labelled_count: c.labelled_count ?? null,
     purity: c.purity,
@@ -1982,6 +1986,7 @@ function _rawClusterToCluster(
     purity_basis: c.purity_basis,
     purity_tier: c.purity_tier ?? null,
     label_purity: c.label_purity,
+    label_agreement,
     labelled_share: c.labelled_share,
     promotable: !!c.promotable,
     core_similarity_min: coreSimilarityMin,
@@ -4789,14 +4794,35 @@ export function getAugmentationPresets(
   );
 }
 
+/**
+ * Start a background promote. The default is 202 with a
+ * `PromoteJobStatus`; an identical promote already running answers 200 with
+ * that same job. A different `triton_name` while one runs is 409
+ * `promote_in_progress` with the active `promote_id` (see
+ * `promoteInProgressId` in `$lib/promote`). Synchronous gate / name
+ * failures (422, 409, 404) still arrive as `ApiError` before any job exists.
+ */
 export function promoteTrainJob(
   jobId: string,
   body: PromoteRequest,
   signal?: AbortSignal,
-): Promise<PromoteResponse> {
-  return apiFetch<PromoteResponse>(
+): Promise<PromoteJobStatus> {
+  return apiFetch<PromoteJobStatus>(
     `${scoped()}/train/promote/${encodeURIComponent(jobId)}`,
     { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `GET {API_PREFIX}/train/promote/{job_id}/jobs/{promote_id}`. */
+export function getPromoteJob(
+  jobId: string,
+  promoteId: string,
+  signal?: AbortSignal,
+): Promise<PromoteJobStatus> {
+  return apiFetch<PromoteJobStatus>(
+    `${scoped()}/train/promote/${encodeURIComponent(jobId)}/jobs/${encodeURIComponent(promoteId)}`,
+    {},
     signal,
   );
 }

@@ -1995,6 +1995,56 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
     });
   });
 
+  it('#61: label_agreement is read for label quality (dominant_pct); purity stays geometry-only', async () => {
+    const card = (extra: Record<string, unknown>) => ({
+      cluster_id: 64,
+      cluster_kind: 'class',
+      size: 10,
+      validated_count: 0,
+      labelled_count: 10,
+      dominant_class_id: 64,
+      dominant_class_name: 'class_b',
+      dominant_count: 9,
+      purity: 0.4,
+      purity_n: 10,
+      purity_basis: 'nearest_centroid',
+      purity_tier: 'noisy',
+      labelled_share: 1.0,
+      promotable: false,
+      is_unlabeled: false,
+      n_subclusters: 0,
+      updated_at: null,
+      representatives: [],
+      ...extra,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            card({ label_agreement: 0.9, label_purity: 0.9 }),
+            card({ cluster_id: 65, label_agreement: null, label_purity: null }),
+            card({ cluster_id: 66, label_purity: 0.7 }),
+          ],
+          total: 3,
+          total_class_clusters: 3,
+          total_candidate_clusters: 0,
+          cluster_id_offset: 10000,
+        }),
+      ),
+    );
+    const res = await getClusters();
+    expect(res.items[0]).toMatchObject({
+      label_agreement: 0.9,
+      dominant_pct: 0.9,
+      purity: 0.4,
+      purity_tier: 'noisy',
+    });
+    expect(res.items[1]).toMatchObject({ label_agreement: null, dominant_pct: null });
+    // An older backend that only serves label_purity still renders.
+    expect(res.items[2]).toMatchObject({ label_agreement: 0.7, dominant_pct: 0.7 });
+  });
+
   it('getClusters reports purity_thresholds as null when the server omits it, never a stale hardcoded value', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

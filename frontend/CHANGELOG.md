@@ -6,8 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.1] - TBD
+
+Adopts the OpenProcessor 0.4.1 API (contract snapshot synced at backend
+`05ec48a8`).
+
+### Changed
+
+- **`proposal_denylist` is a `kind: list` pack field.** The pack editor now
+  picks the list-of-strings editor from the served field `kind` (not the field
+  id): add and remove rows, entries are trimmed, blanks and case-insensitive
+  duplicates are dropped, at most 500 entries of 200 characters, and the served
+  validate issue shows on the field. The saved body always carries
+  `proposal_denylist` as `string[]`. An unknown future field `kind` is shown
+  read-only and saved unchanged instead of crashing the editor.
+- **Promote gate failures no longer repeat the class prefix** (`object:object:
+precision ...`); the modal strips a `<class_name>:` the served message already
+  starts with. A source-scan test pins that nothing sends or suggests
+  `wait=true` (promote stays on the 202 job flow).
+- **Promote to Triton is a background job (OpenProcessor #87).**
+  `POST /train/promote/{job_id}` now answers `202` with a job instead of
+  blocking for 2 to 3 minutes. The promote dialog follows the served phases
+  (queued, exporting, loading, building, warming) by polling
+  `GET /train/promote/{job_id}/jobs/{promote_id}` every `poll_after_s`, shows
+  the result on `done` and the served `error` with its status on `failed`,
+  treats a double click (the `200` for the already-running job) and a `409
+promote_in_progress` as "follow that job", and re-opens on a running promote
+  after a page reload through the new `promote` object on
+  `GET /train/status/{job_id}`. Closing the dialog leaves the job running.
+- **Cluster cards read `label_agreement` for label quality (#61).** It is the
+  same value as `label_purity` under the name a UI should read; `purity` and
+  `purity_tier` stay geometry-only. A backend that does not serve it yet falls
+  back to `label_purity`.
+
+### Added
+
+- **Proposal denylist in the prompt-pack editor (#61).** Packs take an
+  optional `proposal_denylist` of case-insensitive glob patterns; the editor
+  shows it as a list of patterns and always saves a list of strings (the
+  backend still serves the field as `kind: text`).
+- **Model delete surfaces the ingest-detector guard (#75, #121).** A `409
+detector_in_use` (the model is this project's ingest detector) or `503
+config_store_unavailable` now shows the served reason and offers a confirmed
+  force retry instead of a bare error toast.
+
 ### Fixed
 
+- The e2e stubs no longer register the removed `PUT /crops/{id}/region`
+  route, and a source scan fails if the app or its stubs name it, or
+  `/crops/batch_region`, again (#104; the app itself already used
+  `PUT /crops/{id}/regions`).
 - Boxes now line up with the image in the box editor (the crop pencil) and the
   crop detail modal. The editor drew and mapped pointer positions against a
   square around an aspect-preserving thumbnail, so boxes drifted and drawn or

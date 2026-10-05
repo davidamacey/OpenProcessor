@@ -54,7 +54,7 @@
   import SlotCard from '$components/SlotCard.svelte';
   import CropCard from '$components/CropCard.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
-  import { defaultTritonName } from '$lib/promote';
+  import { defaultTritonName, findActivePromote } from '$lib/promote';
   import RunResults from '$components/RunResults.svelte';
   import TrainForm from '$components/TrainForm.svelte';
   import TrainProgress from '$components/TrainProgress.svelte';
@@ -88,6 +88,7 @@
     Profile,
     TrainCampaignSpec,
     TrainJobSpec,
+    PromoteJobStatus,
     TrainJobStatus,
   } from '$lib/types_train';
 
@@ -566,7 +567,19 @@
   let promoteJobId = $state<string | null>(null);
   let promoteDefaultName = $state<string>('');
 
-  function openPromote(r: TrainJobStatus): void {
+  /** A promote already running for `promoteJobId`, followed by the modal. */
+  let promoteAttach = $state<PromoteJobStatus | null>(null);
+
+  async function openPromote(r: TrainJobStatus): Promise<void> {
+    promoteAttach = null;
+    try {
+      // The runs list does not carry `promote`; the per-run status does.
+      const st = await getTrainStatus(r.job_id);
+      if (st?.promote) promoteAttach = st.promote;
+    } catch {
+      // Best effort: the form still works, and a duplicate promote is
+      // answered by the server with the already-active job.
+    }
     promoteJobId = r.job_id;
     // F-64: the run's own id, Triton-safe. No version suffix — nothing
     // client-side knows this deployment's versioning.
@@ -633,7 +646,23 @@
         }
       })(),
       refreshDataset(),
-      refreshRuns(),
+      (async () => {
+        await refreshRuns();
+        // Reload resume: re-open the modal on a promote still running.
+        const hit = await findActivePromote(
+          runs
+            .filter((r) => r.state === 'finished' || r.state === 'exporting')
+            .slice(0, 3)
+            .map((r) => r.job_id),
+          getTrainStatus,
+        );
+        if (hit) {
+          promoteJobId = hit.runJobId;
+          promoteDefaultName = hit.promote.triton_name;
+          promoteAttach = hit.promote;
+          promoteOpen = true;
+        }
+      })(),
       (async () => {
         try {
           holdout = await getTestHoldoutStats();
@@ -1604,6 +1633,7 @@
   open={promoteOpen}
   jobId={promoteJobId}
   defaultName={promoteDefaultName}
+  attachJob={promoteAttach}
   onclose={() => (promoteOpen = false)}
   onpromoted={() => {
     promoteOpen = false;

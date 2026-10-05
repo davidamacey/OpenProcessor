@@ -9,7 +9,8 @@
  * guess.
  */
 import { ApiError } from '$lib/api';
-import type { PromoteResponse } from '$lib/types_train';
+import { isPromoteActive } from '$lib/promoteJobController.svelte';
+import type { PromoteJobStatus, PromoteResponse, TrainJobStatus } from '$lib/types_train';
 
 export interface PromoteGateFailure {
   code: string;
@@ -55,6 +56,17 @@ export function promoteGateDetail(e: unknown): PromoteGateDetail | null {
   };
 }
 
+/** The served message sometimes already starts with "<class_name>:"; the
+ *  modal adds the class itself, so strip it to avoid "object:object: …". */
+export function gateFailureMessage(f: PromoteGateFailure): string {
+  const name = f.class_name;
+  if (!name) return f.message;
+  const prefix = `${name}:`;
+  return f.message.startsWith(prefix)
+    ? f.message.slice(prefix.length).trimStart()
+    : f.message;
+}
+
 /** `PromoteRequest.triton_name` limits: `[A-Za-z0-9_-]`, 1..64 chars. */
 const TRITON_NAME_MAX = 64;
 
@@ -80,4 +92,26 @@ export function promoteSuccessMessage(
   return res.cold_start_expected_on_first_inference
     ? `${base}. The first prediction will be slow while its engine builds.`
     : base;
+}
+
+/**
+ * Page-reload resume: the first of `runJobIds` whose served train status
+ * (`GET /train/status/{job_id}`, the only route carrying `promote`) has a
+ * promote still in flight. A failed lookup skips that run.
+ */
+export async function findActivePromote(
+  runJobIds: string[],
+  getStatus: (jobId?: string) => Promise<TrainJobStatus | null>,
+): Promise<{ runJobId: string; promote: PromoteJobStatus } | null> {
+  for (const runJobId of runJobIds) {
+    try {
+      const st = await getStatus(runJobId);
+      if (st?.promote && isPromoteActive(st.promote)) {
+        return { runJobId, promote: st.promote };
+      }
+    } catch {
+      // Non-fatal: resume is best effort.
+    }
+  }
+  return null;
 }

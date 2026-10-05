@@ -16,6 +16,7 @@ import {
   unloadConfirmMessage,
   unloadFailureMessage,
   unloadForceConfirmMessage,
+  unloadRefusal,
 } from './modelUnload';
 
 // GET {API_PREFIX}/models/status serves `unloadable` on every entry
@@ -158,5 +159,40 @@ describe('unloadFailureMessage', () => {
         new ApiError(409, '/curation/models/clip_image', { detail: detail409 }),
       ),
     ).toBe(`Unload failed: ${detail409}`);
+  });
+});
+
+// OpenProcessor #75/#121: the project's own ingest detector is 409
+// `detector_in_use` without force; an unreadable ingest policy is 503
+// `config_store_unavailable`. Both answer the structured {error, message}.
+describe('unloadRefusal', () => {
+  const structured = (status: number, error: string, message: string) =>
+    new ApiError(status, '/curation/projects/p/models/m', { detail: { error, message } });
+
+  it('409 detector_in_use is a forceable refusal carrying the served message', () => {
+    const msg = "'m' is this project's ingest detector; deleting it makes ingest fail";
+    expect(unloadRefusal(structured(409, 'detector_in_use', msg))).toEqual({
+      kind: 'detector_in_use',
+      message: msg,
+      canForce: true,
+    });
+  });
+
+  it('503 config_store_unavailable is a forceable refusal (retry or force)', () => {
+    const msg = 'could not read the ingest policy; retry, or pass force';
+    expect(unloadRefusal(structured(503, 'config_store_unavailable', msg))).toEqual({
+      kind: 'config_store_unavailable',
+      message: msg,
+      canForce: true,
+    });
+  });
+
+  it('anything else (403 region guard, plain 409, network) is not forceable here', () => {
+    expect(unloadRefusal(structured(403, 'read_only', 'region detector'))).toBeNull();
+    expect(
+      unloadRefusal(new ApiError(409, '/x', { detail: 'core pipeline model' })),
+    ).toBeNull();
+    expect(unloadRefusal(structured(409, 'in_use', 'x'))).toBeNull();
+    expect(unloadRefusal(new Error('network'))).toBeNull();
   });
 });

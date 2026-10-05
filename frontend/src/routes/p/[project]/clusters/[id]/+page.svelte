@@ -883,8 +883,8 @@
         <span
           class="font-mono text-xs text-zinc-500"
           data-testid="cluster-cohesion"
-          title="{COHESION_TOOLTIP} · label agreement {cluster.label_purity != null
-            ? `${(cluster.label_purity * 100).toFixed(0)}%`
+          title="{COHESION_TOOLTIP} · label agreement {cluster.label_agreement != null
+            ? `${(cluster.label_agreement * 100).toFixed(0)}%`
             : '—'} · labelled share {cluster.labelled_share != null
             ? `${(cluster.labelled_share * 100).toFixed(0)}%`
             : '—'}"

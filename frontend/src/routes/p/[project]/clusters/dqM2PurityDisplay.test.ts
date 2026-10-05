@@ -23,11 +23,11 @@ describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_s
     expect(gridSrc).toContain("{pb.text} · {cohesionText(c) ?? 'cohesion —'}");
   });
 
-  it('the chip tooltip explains cohesion and carries label_purity and labelled_share', () => {
+  it('the chip tooltip explains cohesion and carries label_agreement and labelled_share', () => {
     const idx = gridSrc.indexOf('title="{COHESION_TOOLTIP}');
     expect(idx).toBeGreaterThan(-1);
     const block = gridSrc.slice(idx, idx + 400);
-    expect(block).toMatch(/c\.label_purity/);
+    expect(block).toMatch(/c\.label_agreement/);
     expect(block).toMatch(/c\.labelled_share/);
     expect(gridSrc).not.toMatch(/>purity (asc|desc)</);
   });
@@ -48,10 +48,10 @@ describe('/clusters/[id] header shows purity with basis/n and label_purity/label
     expect(block).toMatch(/COHESION_TOOLTIP/);
   });
 
-  it('carries label_purity/labelled_share in the tooltip', () => {
+  it('carries label_agreement/labelled_share in the tooltip', () => {
     const idx = detailSrc.indexOf('{#if cluster.purity != null}');
     const block = detailSrc.slice(idx, idx + 700);
-    expect(block).toMatch(/cluster\.label_purity/);
+    expect(block).toMatch(/cluster\.label_agreement/);
     expect(block).toMatch(/cluster\.labelled_share/);
   });
 });

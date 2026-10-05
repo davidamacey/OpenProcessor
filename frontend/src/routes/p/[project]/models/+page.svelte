@@ -8,6 +8,8 @@
     unloadConfirmMessage,
     unloadFailureMessage,
     unloadForceConfirmMessage,
+    unloadRefusal,
+    unloadRefusalConfirmMessage,
   } from '$lib/modelUnload';
   import { toastStore } from '$stores/toast.svelte';
   import { isInstalled, modelStatusPill } from '$lib/modelStatus';
@@ -124,7 +126,20 @@
 
     unloadingName = m.name;
     try {
-      const res = await unloadModel(m.name, forced);
+      let res;
+      try {
+        res = await unloadModel(m.name, forced);
+      } catch (e) {
+        // #75/#121: the ingest-detector guard (409 detector_in_use) and an
+        // unreadable ingest policy (503 config_store_unavailable) are
+        // refused without force; show the served reason and let the
+        // operator confirm a force retry instead of a bare error toast.
+        const refusal = forced ? null : unloadRefusal(e);
+        if (!refusal || !window.confirm(unloadRefusalConfirmMessage(m, refusal))) {
+          throw e;
+        }
+        res = await unloadModel(m.name, true);
+      }
       toastStore.success(
         `Unloaded ${res.triton_name}` + (res.warning ? ` — ${res.warning}` : ''),
       );
