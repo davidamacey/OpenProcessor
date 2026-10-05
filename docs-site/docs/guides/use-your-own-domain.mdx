@@ -217,7 +217,8 @@ curl -s --max-time 300 -X POST "$API/train/promote/JOB_ID?wait=true" -H 'Content
   -d '{"triton_name": "wheel_detector", "force": false}'
 ```
 
-Promote is gated on the run's metrics. A subset or single-class run needs its
+Promote is gated on the run's metrics; `force` bypasses the gate and goes in the
+JSON body (as above) or as `?force=true` on the URL. A subset or single-class run needs its
 class remap, and promote refuses rather than serve the full registry as if it
 were the trained subset. After promoting a region detector, set
 `detector_model` in the region profile to its Triton name, then reprocess.

@@ -1857,7 +1857,8 @@ trained it.
 `POST /train/promote/{job_id}` copies the run's ONNX export into the Triton
 model repository, writes the config and `labels.txt`, and asks Triton to load
 it. Request: `triton_name`, `force`, `fp16`, `input_size`, `max_batch_size`,
-`overwrite`. Response: `triton_name`, `onnx_path`, `config_path`,
+`overwrite`. `force` may also be given as the query parameter `?force=true`
+(either one bypasses the gate). Response: `triton_name`, `onnx_path`, `config_path`,
 `labels_path`, `triton_loaded`, `class_remap_source`, `force_used`,
 `gate_report`, `lineage_stamped`, `cold_start_expected_on_first_inference`.
 

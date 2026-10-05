@@ -45098,6 +45098,18 @@
               "title": "Wait",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Same as the request-body ``force`` (either one bypasses the promote gate); accepted on the query string so it reads like train/start.",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Same as the request-body ``force`` (either one bypasses the promote gate); accepted on the query string so it reads like train/start.",
+              "title": "Force",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {

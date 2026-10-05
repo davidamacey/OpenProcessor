@@ -261,3 +261,39 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
     )
     assert r.status_code == 200, r.text
     assert captured['class_id_to_name'] == {0: 'car', 1: 'truck', 2: 'van'}
+
+
+def test_promote_force_is_accepted_as_a_query_parameter_too(
+    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#128: ``?force=true`` (as on train/start) bypasses the gate like the body field."""
+    job_id = 'gap-query-force-job'
+    (tmp_path / f'{job_id}.job.json').write_text(
+        json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
+    )
+    monkeypatch.setattr('src.routers.curation_train.get_class_registry', _gapped_registry)
+
+    from src.services.training.jobs import TrainJobStatus
+
+    fake_status = TrainJobStatus(
+        job_id=job_id,
+        state='finished',
+        checkpoint_path=f'/jobs/{job_id}/best.pt',
+        eval={'map50': 0.90, 'per_class': []},
+    )
+
+    async def _fake_read_status(jid: str) -> TrainJobStatus | None:
+        return fake_status if jid == job_id else None
+
+    monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
+    captured: dict[str, Any] = {}
+    _mock_promote(monkeypatch, captured, 'yolo26m_qforce')
+
+    url = f'/curation/projects/default/train/promote/{job_id}?wait=true'
+    refused = app_client.post(url, json={'triton_name': 'yolo26m_qforce'})
+    assert refused.status_code == 422, refused.text
+    assert '?force=true' in refused.json()['detail']['override']
+
+    r = app_client.post(url + '&force=true', json={'triton_name': 'yolo26m_qforce'})
+    assert r.status_code == 200, r.text
+    assert r.json()['force_used'] is True
