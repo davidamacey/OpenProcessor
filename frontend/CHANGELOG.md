@@ -6,10 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.1.1] - TBD
+## [0.1.1] - 2026-10-04
 
 Adopts the OpenProcessor 0.4.1 API (contract snapshot synced at backend
-`05ec48a8`).
+`c984fd8c`, the 0.4.1 head). See `docs/releases/v0.1.1.md` for the release
+notes.
 
 ### Changed
 
