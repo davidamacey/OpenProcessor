@@ -7,37 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases 0.2.0, 0.2.1 and 0.3.0 are published on GitHub; their entries below are
 the content of those tags. The entry headed `Pre-release 0.1.0` is the earliest private
-history of this codebase and was never published. This release is `[0.4.0]`.
+history of this codebase and was never published. This release is `[0.4.1]`.
 
 ## [Unreleased]
 
-### Fixed
+## [0.4.1] - 2026-10-04
 
-- Startup legacy-project repair logs at info only when it repaired rows; a worker
-  that re-checks a clean project after the lock is released no longer repeats the
-  line per project (#92).
-
-### Changed
-
-- The COCO car manifest pin test no longer skips or claims the manifest is
-  missing; the tracked `coco_car_60.json` is always checked (#103).
-- `DELETE /curation/projects/{project}/models/{name}` now refuses a project's own ingest
-  detector with 409 `detector_in_use` unless `force=true`, so a delete cannot silently break
-  ingest (#75).
-- Developer guide: a "restart after pulling or updating" note (`make dev-restart`, stale
-  modules can raise an `ImportError` until the API restarts) (#75).
-- CI: the offline suite installs `opensearch-py[async]` so `AsyncOpenSearch` imports, the
-  pre-commit job installs the app dependencies for the OpenAPI contract hook, and the Trivy
-  steps honour `scripts/release/trivy-allowlist.txt`; docs-site pins patched `lodash-es` and
-  `serialize-javascript` (#121).
-- CI: the offline-suite requirements now cover every dependency the not-live tests use and pin
-  the FastAPI and pydantic versions the committed OpenAPI contract is generated from (#121).
-- The installer dry-run test drives the placeholder-lock refusal with a fixture lock, and a new
-  test asserts the committed `images.lock` and `cropwright.lock` are fully pinned (#121).
-- Trainer status writes use a unique temporary file per writer, so the heartbeat thread can no
-  longer race the terminal status write (fixes a flaky cancel test).
-- The API image no longer ships pip, whose vendored msgpack, setuptools and urllib3
-  were flagged by the Trivy image scan (#121).
+Patch release on 0.4.0: repaired CI, operator metrics and dashboards, promote as a
+background job, label-confirmation quick wins, installer and VLM-switch fixes, a
+scripted release acceptance run, real documentation screenshots, and the fixes found
+by live verification of all of it on a running stack. Behaviour changes to know about:
+`POST .../train/promote/{job_id}` now answers `202` by default (`?wait=true` keeps the
+old blocking `200`), and `DELETE .../models/{name}` refuses a project's own ingest
+detector without `force=true`. Cropwright 0.1.1 requires this backend.
 
 ### Added
 
@@ -55,28 +37,64 @@ history of this codebase and was never published. This release is `[0.4.0]`.
   the previous synchronous `200` response. A repeat promote of a run with an active
   job returns that job. `GET /train/status/{job_id}` gains a nullable `promote`
   field (#87).
-- The installer refuses an explicit `--gpu-plan triton=N` onto a card with under
-  16 GB free (the API runs the engine exports on Triton's card) unless `--force`,
-  and the automatic plan warns (#111).
-
-### Fixed (installer)
-
-- A CUDA out-of-memory during an export step (TensorRT's `CUDA initialization
-  failure with error: 2`) is a permanent `oom` failure with a `--gpu-plan` hint,
-  not retried as transient (#111).
-
-### Added
-
+- `POST .../train/promote/{job_id}` accepts `force` as a query parameter as well as
+  the body field (additive; the OpenAPI contract gains one optional query
+  parameter), and the docs and the 422 `override` text say so (#128).
 - Prompt packs take an optional `proposal_denylist` (glob patterns); matching
   new-class proposals such as `blurry_*` or `*_scene` are dropped. The generic
   pack ships a starter list (#61).
 - Cluster cards serve `label_agreement` (equal to `label_purity`) so label
   quality is not read from the geometric `purity` (#61).
-- Docs: replaced the Cropwright "Screenshot pending" placeholders with real captures from the
-  public COCO sample projects (#43).
+- `scripts/release/acceptance_run.sh` (`make acceptance`): a scripted end-to-end release
+  acceptance run (health, docs, ingest, cluster, VLM label, confirm, holdout, export,
+  train, bake-off, promote, inference, delete, metrics, log noise, VLM switch, installer
+  lifecycle, teardown) against an isolated install, with a JSON report and a cleanup
+  trap that always removes the throwaway project and promoted models (#54).
+- Docs: the label confirmation plan and market research and competitive analysis,
+  linked from the docs index.
+- Docs: replaced the Cropwright "Screenshot pending" placeholders with 24 real captures
+  from the public COCO sample projects (#43).
+- The installer refuses an explicit `--gpu-plan triton=N` onto a card with under
+  16 GB free (the API runs the engine exports on Triton's card) unless `--force`,
+  and the automatic plan warns (#111).
 
-### Fixed (live verification)
+### Changed
 
+- **Behaviour change:** `POST .../train/promote/{job_id}` answers `202` unless
+  `?wait=true` is sent (see Added). Clients that read the model result from the first
+  response must poll the job, or add `?wait=true`.
+- `DELETE /curation/projects/{project}/models/{name}` now refuses a project's own ingest
+  detector with 409 `detector_in_use` unless `force=true`, so a delete cannot silently break
+  ingest (#75).
+- Docs: promote serves the model as `<project>__<requested triton_name>` and returns the
+  final name as `triton_name` in the result and job status; the `PromoteRequest`
+  `triton_name` schema description says so (description-only contract change) (#129).
+- Docs: project delete is asynchronous (`202` `deleting`, then `404` a few seconds later),
+  a deleted slug is retired and cannot be reused, and `n_unembedded` on `GET .../crops` is
+  returned only for `order=diverse` or `core_first` (#130).
+- The COCO car manifest pin test no longer skips or claims the manifest is
+  missing; the tracked `coco_car_60.json` is always checked (#103).
+- Developer guide: a "restart after pulling or updating" note (`make dev-restart`, stale
+  modules can raise an `ImportError` until the API restarts) (#75).
+- CI: the offline suite installs `opensearch-py[async]` so `AsyncOpenSearch` imports, the
+  pre-commit job installs the app dependencies for the OpenAPI contract hook, and the Trivy
+  steps honour `scripts/release/trivy-allowlist.txt`; docs-site pins patched `lodash-es`,
+  `serialize-javascript` and the `sockjs` uuid (#121).
+- CI: the offline-suite requirements now cover every dependency the not-live tests use and pin
+  the FastAPI and pydantic versions the committed OpenAPI contract is generated from (#121).
+- The installer dry-run test drives the placeholder-lock refusal with a fixture lock, and a new
+  test asserts the committed `images.lock` and `cropwright.lock` are fully pinned (#121).
+- Version bumped to 0.4.1 (`VERSION`, `pyproject.toml`, compose image tags, installer
+  and CLI).
+
+### Fixed
+
+- A CUDA out-of-memory during an export step (TensorRT's `CUDA initialization
+  failure with error: 2`) is a permanent `oom` failure with a `--gpu-plan` hint,
+  not retried as transient (#111).
+- Startup legacy-project repair logs at info only when it repaired rows; a worker
+  that re-checks a clean project after the lock is released no longer repeats the
+  line per project (#92).
 - The queue, embedding-state and OpenSearch shard/store gauges now populate: the
   refresh loop binds each project (and the registry-admin scope for
   `_cat/indices`, by concrete index name) instead of running unbound and being
@@ -84,6 +102,9 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - `op_ingest_*` counters carry the real project slug instead of `other` when this
   process's registry snapshot lags; `other` is still only beyond
   `OP_METRICS_MAX_PROJECT_LABELS` (#124).
+- `op_ingest_*` and the other `project`-labelled metrics rank only live projects for
+  the `OP_METRICS_MAX_PROJECT_LABELS` cap; deleted-project tombstones no longer use
+  the cap up and fold every live project into `other` (#124).
 - Prompt-pack create, save, clone and validate keep `proposal_denylist`, validate
   it (list of strings, no blank pattern, at most 500 patterns of 200 characters)
   and the pack editor schema lists it as a `list` field (#125).
@@ -93,28 +114,19 @@ history of this codebase and was never published. This release is `[0.4.0]`.
 - A `?wait=true` promote no longer stops mid-load when the client or a proxy drops
   the connection; docs say to use the `202` job and polling behind a proxy
   (`wait=true` needs a client timeout of at least 300 s).
-- `op_ingest_*` and the other `project`-labelled metrics rank only live projects for
-  the `OP_METRICS_MAX_PROJECT_LABELS` cap; deleted-project tombstones no longer use
-  the cap up and fold every live project into `other` (#124).
 - `openprocessor vlm use` credits the running VLM container's own GPU memory when it
   checks free VRAM, so a legitimate switch is no longer refused (#126).
 - The `vlm use` pause sentinel records its owner and the GPU arbiter reconcile loop
   leaves a sentinel it did not create alone (a stale one still expires after
   `OP_PAUSE_SENTINEL_TTL_S`, default 1800 s), so workers stay paused during the
   model load (#127).
-- `POST .../train/promote/{job_id}` accepts `force` as a query parameter as well as
-  the body field (additive; the OpenAPI contract gains one optional query
-  parameter), and the docs and the 422 `override` text say so (#128).
-- Version bumped to 0.4.1 (`VERSION`, `pyproject.toml`, compose image tags, installer
-  and CLI).
+- Trainer status writes use a unique temporary file per writer, so the heartbeat thread can no
+  longer race the terminal status write (fixes a flaky cancel test).
 
-### Added
+### Security
 
-- `scripts/release/acceptance_run.sh` (`make acceptance`): a scripted end-to-end release
-  acceptance run (health, docs, ingest, cluster, VLM label, confirm, holdout, export,
-  train, bake-off, promote, inference, delete, metrics, log noise, VLM switch, installer
-  lifecycle, teardown) against an isolated install, with a JSON report and a cleanup
-  trap that always removes the throwaway project and promoted models (#54).
+- The API image no longer ships pip, whose vendored msgpack, setuptools and urllib3
+  were flagged by the Trivy image scan (#121).
 
 ## [0.4.0] - 2026-10-04
 

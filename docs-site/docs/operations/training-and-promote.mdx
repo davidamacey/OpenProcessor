@@ -186,7 +186,11 @@ URL; either works (the 422 `override` text names both). A forced promote reports
 
 The Triton model is named `{slug}__<triton_name>` (the `default` project's
 models have no prefix), so two projects can promote the same name without
-colliding. A requested name may not itself contain `__` (`422
+colliding. The name you request is not the served name: the final one is
+returned as `triton_name` in the promote result and in the promote job status,
+and that is the name to use for `/detect?model_name=` and
+`DELETE .../models/{model_name}`. A request that names the bare
+`<triton_name>` fails with `unknown model` or `not a model owned by this project`. A requested name may not itself contain `__` (`422
 triton_name_reserved_separator`). A promoted model belongs to its project:
 `GET .../models/{model_name}/class_mapping` shows how its classes map onto
 a project's classes by name, and `PUT .../models/{model_name}/sharing`

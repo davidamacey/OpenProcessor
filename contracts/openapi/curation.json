@@ -15259,7 +15259,7 @@
             "type": "boolean"
           },
           "triton_name": {
-            "description": "Desired Triton model name. Alphanumeric + underscore + hyphen.",
+            "description": "Desired Triton model name (alphanumeric, underscore, hyphen). The model is served as `<project>__<triton_name>` (no prefix for `default`); the final name is returned as `triton_name` in the promote result and job status.",
             "maxLength": 64,
             "minLength": 1,
             "title": "Triton Name",

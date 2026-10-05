@@ -1615,7 +1615,11 @@ class PromoteRequest(BaseModel):
 
     triton_name: str = Field(
         ...,
-        description='Desired Triton model name. Alphanumeric + underscore + hyphen.',
+        description=(
+            'Desired Triton model name (alphanumeric, underscore, hyphen). The model is served as '
+            '`<project>__<triton_name>` (no prefix for `default`); the final name is returned as '
+            '`triton_name` in the promote result and job status.'
+        ),
         min_length=1,
         max_length=64,
     )
