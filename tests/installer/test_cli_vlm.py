@@ -186,6 +186,36 @@ def test_a_card_with_too_little_free_memory_is_refused(shimmed: Shimmed, stack: 
     _untouched(shimmed, stack, before)
 
 
+def _running_vlm_holds(shimmed: Shimmed, mib: int) -> None:
+    shimmed.flag('vlm_container')
+    shimmed.flag('own_pids', '111\n')
+    shimmed.flag('gpu_uuids.csv', '0, GPU-aaa\n')
+    shimmed.flag('compute_apps.csv', f'111, GPU-aaa, {mib}\n999, GPU-aaa, 1000\n')
+
+
+def test_the_running_vlms_own_memory_is_credited_back_when_planning_the_switch(
+    shimmed: Shimmed, stack: Path
+) -> None:
+    # 9 GB free now, but 21 GB of the 40 GB used is the vlm this switch replaces
+    shimmed.gpus('0, NVIDIA RTX A6000, 49140, 40000, 8.6\n')
+    _running_vlm_holds(shimmed, 21000)
+    result = use(shimmed, stack)  # no --force
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert env_value(stack, 'VLM_CATALOG_ID') == QWEN
+
+
+def test_credit_is_only_the_vlms_own_memory_other_consumers_still_refuse(
+    shimmed: Shimmed, stack: Path
+) -> None:
+    shimmed.gpus('0, NVIDIA RTX A6000, 49140, 40000, 8.6\n')
+    _running_vlm_holds(shimmed, 3000)  # 9 + 3 GB < 17 GB needed
+    before = (stack / '.env').read_text()
+    result = use(shimmed, stack)
+    assert result.returncode == 1
+    assert 'free' in result.stdout + result.stderr
+    _untouched(shimmed, stack, before)
+
+
 def test_a_running_training_job_blocks_the_switch(shimmed: Shimmed, stack: Path) -> None:
     (shimmed.state / 'training_lock').write_text('')
     before = (stack / '.env').read_text()

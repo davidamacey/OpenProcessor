@@ -49,6 +49,7 @@ from typing import Any
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.services.training.arbiter_dirs import all_bakeoff_jobs_dirs, all_train_jobs_dirs
+from src.services.training.pause_sentinel import arbiter_body, arbiter_may_clear
 
 
 logger = get_logger(__name__)
@@ -283,7 +284,7 @@ async def pause_gpu_worker(
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
         return ArbiterAction(action='noop', detail=f'sentinel already at {target}')
-    target.touch()
+    target.write_text(arbiter_body(), encoding='utf-8')
     logger.info('arbiter_sentinel_set', path=str(target))
     return ArbiterAction(action='sentinel_set', detail=str(target))
 
@@ -292,10 +293,13 @@ async def resume_gpu_worker(
     *,
     sentinel: Path | None = None,
 ) -> ArbiterAction:
-    """Remove the pause sentinel. Idempotent."""
+    """Remove the arbiter's pause sentinel (never another owner's, unless stale). Idempotent."""
     target = sentinel_path(sentinel)
     if not target.exists():
         return ArbiterAction(action='noop', detail=f'no sentinel at {target}')
+    if not arbiter_may_clear(target):
+        # e.g. `openprocessor vlm use` paused the workers for a model swap (#127)
+        return ArbiterAction(action='noop', detail=f"sentinel at {target} is not the arbiter's")
     try:
         target.unlink()
     except OSError as exc:
