@@ -20,7 +20,7 @@ torch
 torchvision
 
 # ONNX toolchain for the EfficientNMS graph surgery
-onnx>=1.12.0,<1.22  # upper bound tracks nvidia-modelopt
+onnx>=1.12.0,<1.24  # upper bound tracks nvidia-modelopt
 onnxslim>=0.1.71
 onnxsim>=0.4.33
 onnx-graphsurgeon
