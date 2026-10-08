@@ -2978,11 +2978,11 @@ ask BA-5 in [internal design note]).
 
 ## Documentation & changelog discipline
 
-This is enforced (CI, see `.github/workflows/ci.yml`'s `changelog` job), not
+This is enforced (CI, see `.github/workflows/frontend.yml`'s `changelog` job), not
 just a convention — don't rely on remembering it:
 
-- **Every push/PR that changes `src/` or `scripts/` must also touch
-  `CHANGELOG.md`.** Add the entry under `## [Unreleased]` in Keep a
+- **Every push/PR that changes `frontend/src/` or `frontend/scripts/` must also touch
+  `frontend/CHANGELOG.md`.** Add the entry under `## [Unreleased]` in Keep a
   Changelog format. For a multi-commit batch of work, one consolidated
   entry in the batch's last commit is fine — CI checks the whole
   push/PR diff, not each commit individually.

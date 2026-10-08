@@ -1,28 +1,37 @@
-name: CI
+name: Frontend
 
+# Cropwright (frontend/). Path-filtered: a backend-only change does not run this, and a
+# frontend or contract change does. The frontend tests read the generated API contract
+# from contracts/, so a contract change must run them too.
 on:
   push:
     branches: [main]
+    paths: ['frontend/**', 'contracts/**', '.github/workflows/frontend.yml']
   pull_request:
     branches: [main]
+    paths: ['frontend/**', 'contracts/**', '.github/workflows/frontend.yml']
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: frontend-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc
+          node-version-file: frontend/.nvmrc
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -33,7 +42,7 @@ jobs:
       - name: Lint (prettier + eslint)
         run: npm run lint
 
-      - name: Unit tests
+      - name: Unit and contract tests
         run: npm test
 
       - name: Build
@@ -44,24 +53,28 @@ jobs:
 
   e2e-stubbed:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc
+          node-version-file: frontend/.nvmrc
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: e2e/requirements.txt
+          cache-dependency-path: frontend/e2e/requirements.txt
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Ensure the browser dependencies apt needs are present
+      - name: Install the Playwright browser and its system dependencies
         run: |
           python3 -m venv e2e/.venv
           e2e/.venv/bin/pip install -q -r e2e/requirements.txt
@@ -77,7 +90,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Require a CHANGELOG.md entry when src/ or scripts/ change
+      - name: Require a frontend/CHANGELOG.md entry when frontend/src/ or frontend/scripts/ change
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -109,20 +122,8 @@ jobs:
             exit 0
           fi
 
-          if echo "$CHANGED" | grep -qE '^(src|scripts)/' \
-             && ! echo "$CHANGED" | grep -qx 'CHANGELOG.md'; then
-            echo "::error::This push/PR changes src/ or scripts/ but does not update CHANGELOG.md. Add an entry under ## [Unreleased] (see CLAUDE.md's 'Documentation & changelog discipline'), or add [skip-changelog] to the last commit message if this truly has no user-facing/architectural effect."
+          if echo "$CHANGED" | grep -qE '^frontend/(src|scripts)/' \
+             && ! echo "$CHANGED" | grep -qx 'frontend/CHANGELOG.md'; then
+            echo "::error::This push/PR changes frontend/src/ or frontend/scripts/ but does not update frontend/CHANGELOG.md. Add an entry under ## [Unreleased] (see CLAUDE.md's 'Documentation & changelog discipline'), or add [skip-changelog] to the last commit message if this truly has no user-facing/architectural effect."
             exit 1
           fi
-
-  secrets:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      # The container image, not gitleaks-action: the action needs a
-      # license key on organization-owned repositories.
-      - name: gitleaks (full history)
-        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --no-banner --redact

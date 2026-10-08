@@ -23,3 +23,39 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+
+  # Cropwright (frontend/): same grouping as the standalone project used, one npm PR a week.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript 7 conflicts with svelte-check and @sveltejs/kit peer ranges (^5 || ^6);
+      # un-ignore once svelte-check ships TS 7 support.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/frontend/docs-site"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "docs"
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "frontend"
