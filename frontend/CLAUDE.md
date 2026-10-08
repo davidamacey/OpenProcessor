@@ -1,26 +1,26 @@
 # Cropwright — CLAUDE.md
 
-SvelteKit + TypeScript image-crop annotation web app (product name
-**Cropwright**, package name `cropwright`; repo directory is still
-`legacy-labeler` pending a physical rename). Generalized via a
-capability-model / annotation-slot mechanism (see
-`docs/genericization-plan-2026-09-13.md`) so it is no longer
-hardcoded to vehicles or license plates. The build ships with no domain
-built in: the region slot is synthesized from the backend's served
-region profile (`GET {API_PREFIX}/health` `region_profile`, see
-"Served region profile" below), and example domain profiles (license
-plate, aircraft tail number, defect code) live under `examples/` as
-tier-2 JSON, never bundled. A new domain is a backend region profile
-plus, optionally, a tier-2 profile, not an app-code edit. Sister project to `legacy_sorter` (v2 Tauri app for
-the actual sort UX) and `openprocessor` (server-side inference + OpenSearch
+SvelteKit + TypeScript web app for labeling image crops at scale (product
+name **Cropwright**, package name `cropwright`), the human-in-the-loop
+frontend for [OpenProcessor](https://github.com/davidamacey/OpenProcessor)
+(server-side inference, OpenSearch and clustering). It is domain-agnostic
+through a capability-model / annotation-slot mechanism: the build ships
+with no domain built in, the region slot is synthesized from the
+backend's served region profile (`GET {API_PREFIX}/health`
+`region_profile`, see "Served region profile" below), and example domain
+profiles (license plate, aircraft tail number, defect code) live under
+`examples/` as tier-2 JSON, never bundled. A new domain is a backend
+region profile plus, optionally, a tier-2 profile, not an app-code edit.
 
-- clustering).
+Design notes under `docs/design/` from before the public 0.1.0 release
+are not published; source comments that cite them (and the "internal
+design note" references below) are historical.
 
 ## Purpose
 
 Manage a high-volume labeling workflow over hundreds of thousands of image
-crops, with cluster-based assisted labeling, VLM vision suggestions, and a
-keyboard-first UX matching the legacy_sorter manual-mode speed budget.
+crops, with cluster-based assisted labeling, VLM suggestions, and a
+keyboard-first UX built for speed.
 
 ## Architecture
 
@@ -53,26 +53,26 @@ hand-assembled. The MVP/post-MVP split from the original design doc is
 gone — every route in this table exists and works; nothing here is a
 stub.
 
-| Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/dashboard`     | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool. Below the stats, `DetectionsSummaryPanel` shows the served `GET {API_PREFIX}/detections/summary` (totals, embedding breakdown, per-label table) with an "Embed N detections" action when the summary serves a `suggested_reprocess`; `AutoLabelPanel` has an "Embed missing vectors first" option (`embed_missing`). See "Detector, ingest policy and embedding state".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when `GET {API_PREFIX}/ingest/config` serves `batch.enabled: true` and at least one `batch.source_roots` entry; `upload.enabled: false` replaces the browser-upload panel with one line (see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The page renders from the served `GET {API_PREFIX}/ingest/config`: a loading line until it loads, its error if the read fails. Also shows the served detector and ingest-policy summary (`IngestDetectorCard`), the served per-file and total embedding counts of a run, and links to `/settings/ingest-policy`. See "Detector, ingest policy and embedding state".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `/datasets`      | Labeled-dataset import (OpenProcessor W10): the imports list, the `/datasets/import` wizard (preview, name-based class mapping, options, confirm-gated start) and the `/datasets/imports/[id]` job view (served progress, cancel / resume / dry-run-first undo). Reached from `/ingest`; absent when the backend doesn't serve `GET {API_PREFIX}/datasets/formats`. See "Dataset import and Reprocess" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/p/[project]/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box. The shared item-filter bar scopes the cluster grid, and a **Matching items** mode (`?mode=matching`) lists every item the filter matches with Ignore / Restore / Label / Move on all of them (served dry run first); see "Shared item filter and run on selection".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / VLM Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_name`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below). An **Imported** tab (W10) appears only when `GET {API_PREFIX}/review/tabs` serves it, and a link can seed `import_id` / `combine_conflict` filters (shown as removable chips; see "Dataset import and Reprocess" below). The shared item-filter bar (class by name, not-class, area band, origin, embedding and review state) sits in the filter row, gated per tab by the served `filters`, and every other served `filter_specs` entry renders by its kind; see "Shared item filter and run on selection".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `/classes`       | Add / rename / merge / **deprecate** / **restore** classes, per-class hotkey binding, and a **Proposals** section (`GET {API_PREFIX}/review/new_class_proposals/summary`) for creating a class from — or mapping onto an existing class — a VLM-proposed term the registry doesn't have yet, bulk-resolving _every_ pending crop proposing that term (`POST {API_PREFIX}/review/new_class_proposals/resolve`), not just the summary's sample thumbnails. Every active row has a **Deprecate** button (`POST {API_PREFIX}/classes/{id}/deprecate`, confirm-gated) — 409 with a structured `class_still_referenced` detail (`{message, item_count, confirmed_label_count}`) offers the existing merge dialog instead, preselecting the class as the merge source. The deprecated-classes table's **Restore** button (OpenProcessor 01324cb, 243f7f2) is real, not the permanently-disabled placeholder it used to be — `POST {API_PREFIX}/classes/{id}/restore`, whose 409 is either a PLAIN STRING detail (a live class already claims the name) shown verbatim, or, for a class merged into another (OpenProcessor 4c125ec, F-56), a structured `class_merged` detail rendered as "Merged into `<served class_name>`; un-merge isn't supported." plus the served message and hint (`classMergedDetail`/`classMergedRestoreText`, `api.ts`). Since OpenProcessor 51b05d7, `GET {API_PREFIX}/classes` serves `merged_into`, so a merged deprecated class shows "merged into `<name>`" instead of a Restore button (the 409 path stays for a stale page). The merge dry-run's `validations_carried_over` reads "N human validations will carry over" (a merge keeps validations; the old `would_unvalidate` key is gone, no shim). The class table renders first; the Proposals list sits below it (and below the deprecated table) in a collapsed `<details>` (F-53), its per-term Hide button is session-only (not persisted, F-58), and the page scrolls as a whole rather than in an inner pane (F-50). A collapsed "Create classes from the detector" panel (`SeedFromDetectorPanel`: dry run, then a confirm) appears when `GET {API_PREFIX}/ingest/config` reports a detector.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `/export`        | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`). Since OpenProcessor df01309, `GET {API_PREFIX}/export/status` also serves `image_count`/`class_count`/`group_key`/`split_counts`/`class_split_counts` — the page shows the served train/val/test totals and a collapsible per-class table (any class at 0 train or 0 val highlighted, served numbers only). The freeze modal has no Seed field: `POST {API_PREFIX}/test_holdout/freeze`'s body is `{percent}` only (selection is deterministic, SHA1 of each crop id per class — an extra `seed` key is a 422); the success toast shows the served `selection`/`min_per_class`. Since OpenProcessor 4c9499a (one image + one label file per source image), `ExportStatus` also carries `object_count`/`split_object_counts` (label lines, distinct from `image_count`/`split_counts`) — the page reads "N objects in M images" and separate images:/objects: split badges, never one ambiguous number. An opt-in "Only images whose every object is labeled" checkbox sends `require_fully_labeled_images` on `POST {API_PREFIX}/export/yolo`; the served partial-frame counts (`unlabeled_items_on_exported_images`/`images_with_unlabeled_items`/`images_dropped_not_fully_labeled`) render when present. Every one of these fields is `null` (not `0`) on an export written before it was recorded — rendered via `formatCount()` (`src/lib/formatCount.ts`) as "—". The `ExportStatus` fields are nullable because the served schema types them so; `TestHoldoutFreezeResult`'s `selection`/`percent`/`min_per_class` are required. A collapsed "Only items matching a filter" limits the export (`item_filter`) and shows the served matching count; see "Shared item filter and run on selection".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `/models`        | Triton model registry browser. Lists the project's own models, the base models and, via `GET {API_PREFIX}/models/status?include_other_projects=true`, other projects' models their owners shared, each with the served `project`/`shared`/`class_mapping` — see "Model sharing" below. The VLM is no longer a single external service: since OpenProcessor W9 each registered endpoint is its own `kind: 'vlm'` row (name = endpoint name, served resolved `model`, served `active` chip, status named through the registry's `labels.status`, no Unload) with a link to **Settings → Models** while the registry is served — see "VLM models" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + the region profile's 5 server-side modes when one is configured — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor df01309) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" line for an explicitly-picked past export version, which `/export/status` does not describe. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a failed load shows its error (there is no hardcoded preset list or default id). `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor 4c9499a, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before 4c9499a recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `/bakeoff`       | Model comparison on OpenProcessor #34's v2 wire (F6, `docs/design/bakeoff-v2-ui-plan-2026-09-25.md`). Pick eval datasets (`GET {API_PREFIX}/bakeoff/eval_datasets`: export test splits first with the current one flagged and preselected, external frozen sets grouped by served `group`), models (finished training runs from `/bakeoff/trained_models`, each with the served per-selected-dataset `for_dataset` facts and a train/test overlap warning when the served overlap is non-null and > 0; the profile's `/bakeoff/baseline_models`; an optional custom ref) and a profile (whatever `/bakeoff/profiles` serves, `default_profile` preselected, `default_error` shown). A confirm dialog precedes `POST /bakeoff/run` (typed `run`/`baseline`/`custom` refs; 400/409/422 detail shown verbatim); the job polls `/bakeoff/status/{id}` with progress, per-stage failures and the enqueue-time class mapping. Results: the `/bakeoff/matrix/{id}` model × dataset matrix bolds every served tied winner (`best` is a list), and `/bakeoff/results/{id}?dataset_id=` renders ranked rows plus a per-class table where an uncovered class reads "not covered" and each model's unmapped classes are listed; a 409 (pre-v2 result) shows a note. Previous runs (`/bakeoff/runs`) stay selectable. State in `src/lib/bakeoff/bakeoffController.svelte.ts`, types in `src/lib/types_bakeoff.ts` (pinned to the vendored OpenAPI by `contract/bakeoffContract.test.ts`); nothing computes a metric, mapping, rank or winner client-side. The nav link and page always render (the backend mounts the `{API_PREFIX}/bakeoff/*` router unconditionally); the page runs its discovery reads on mount.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus, for any axis the server marks not `settable`, a read-only "Not settable on this backend" section (none today: since OpenProcessor f14f4ddc `detection_profile`, `prompt_pack` and `vlm` are activation-backed and settable, and `GET /settings` `defaults` for them come only from the activation records, so a served `off` renders as a disabled option, `unofferedServedValue`). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). A failed coverage read shows its error with a retry; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below. Also hosts the **Keyboard shortcuts** card (`KeymapCard.svelte`, K2, 2026-09-26) — absent, not disabled, until OpenProcessor W2b's `GET/PUT {API_PREFIX}/keymap` route exists; see "Keyboard shortcuts" below. Also links to the **Prompt packs** editor (`/settings/prompt-packs`, see "Prompt-pack editor" below), absent until the backend serves W3, and the **Region profiles** editor (`/settings/region-profiles`, see "Region-profile editor" below), absent until the backend serves W4. Also links to the **VLM models** page (`/settings/models`, see "VLM models" below) and hosts a `vlm` axis dropdown (served endpoints plus `off`, an unacknowledged external entry disabled), both absent until the backend serves W9. Also links to the **Open-vocabulary sets** editor (`/settings/open-vocab`, see "Open-vocabulary sets" below), absent until the backend serves `GET {API_PREFIX}/open_vocab`. Also links to the **Ingest policy** page (`/settings/ingest-policy`, see "Detector, ingest policy and embedding state"). |
-| `/projects`      | Global project management (not under `/p/`; `src/routes/projects/+page.svelte`, state in `$lib/projects/projectsAdminController.svelte.ts`). The served list (`GET {API_PREFIX}/projects`, with a Show-archived toggle sending `include_archived=true`), the served shard `capacity` block, and the P3 lifecycle actions: create (`POST /projects`), edit (`PATCH /projects/{slug}` with `expected_revision`; a 409 `revision_conflict` offers a reload that keeps the typed edit), archive / unarchive, copy settings (`POST /projects/{slug}/clone_settings`, axes from the served `limits.cloneable_axes`), and a guarded delete (the served dry run's report and `blocking` reasons first; no confirm field while anything blocks; `confirm` = the typed slug). Every action is gated on served flags only (Open/Edit: `selectable`; Copy settings: `writable`; Archive: the served `archivable`; Unarchive: the served `unarchivable`; Delete: `deletable`; Create disabled only by a served `blocked` capacity). Refusals render the served `detail.message` verbatim; the lifecycle envelope's `warnings` become toasts. Each selectable row also reads its served pipeline-pause flag (`GET {prefix}/pause` through that row's own served `prefix`) and shows a "paused" chip; writable rows get a confirm-gated Pause / Resume pipeline (`POST {prefix}/pause` / `/resume`) once that flag has loaded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/dashboard`     | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool. Below the stats, `DetectionsSummaryPanel` shows the served `GET {API_PREFIX}/detections/summary` (totals, embedding breakdown, per-label table) with an "Embed N detections" action when the summary serves a `suggested_reprocess`; `AutoLabelPanel` has an "Embed missing vectors first" option (`embed_missing`). See "Detector, ingest policy and embedding state".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `/ingest`        | Bring images into the pool. Offers browser upload (files, folders and drag-drop) to `POST {API_PREFIX}/ingest/upload`, chunked to the served per-request cap with bounded concurrency. It shows a per-file result (ingested / duplicate / failed + served reason), supports pause/resume/cancel, and pre-filters already-indexed identifiers via `POST {API_PREFIX}/ingest/path_lookup`. An optional server-path mode uses `POST {API_PREFIX}/ingest/batch` and is shown only when `GET {API_PREFIX}/ingest/config` serves `batch.enabled: true` and at least one `batch.source_roots` entry; `upload.enabled: false` replaces the browser-upload panel with one line (see "Ingest" below). The page also has an ingest status table by source (`GET {API_PREFIX}/ingest/status`), a region-drain panel (`GET {API_PREFIX}/ingest/region_drain`, only with a served region profile), and a clustering handoff that reuses `AutoLabelPanel`. The page renders from the served `GET {API_PREFIX}/ingest/config`: a loading line until it loads, its error if the read fails. Also shows the served detector and ingest-policy summary (`IngestDetectorCard`), the served per-file and total embedding counts of a run, and links to `/settings/ingest-policy`. See "Detector, ingest policy and embedding state".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/datasets`      | Labeled-dataset import (OpenProcessor W10): the imports list, the `/datasets/import` wizard (preview, name-based class mapping, options, confirm-gated start) and the `/datasets/imports/[id]` job view (served progress, cancel / resume / dry-run-first undo). Reached from `/ingest`; absent when the backend doesn't serve `GET {API_PREFIX}/datasets/formats`. See "Dataset import and Reprocess" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (the served region profile's `region_class_name`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/p/[project]/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box. The shared item-filter bar scopes the cluster grid, and a **Matching items** mode (`?mode=matching`) lists every item the filter matches with Ignore / Restore / Label / Move on all of them (served dry run first); see "Shared item filter and run on selection".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **Classifier Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (in practice the one region tab, present only when the backend serves a region profile and labelled by its `display_name`, `?tab=regions`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / VLM Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_name`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab carries provenance chips + the region text reading, driven by the active slot's capabilities rather than a hardcoded tab check (see "Slot-generic review tabs" below). An **Imported** tab (W10) appears only when `GET {API_PREFIX}/review/tabs` serves it, and a link can seed `import_id` / `combine_conflict` filters (shown as removable chips; see "Dataset import and Reprocess" below). The shared item-filter bar (class by name, not-class, area band, origin, embedding and review state) sits in the filter row, gated per tab by the served `filters`, and every other served `filter_specs` entry renders by its kind; see "Shared item filter and run on selection".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/classes`       | Add / rename / merge / **deprecate** / **restore** classes, per-class hotkey binding, and a **Proposals** section (`GET {API_PREFIX}/review/new_class_proposals/summary`) for creating a class from — or mapping onto an existing class — a VLM-proposed term the registry doesn't have yet, bulk-resolving _every_ pending crop proposing that term (`POST {API_PREFIX}/review/new_class_proposals/resolve`), not just the summary's sample thumbnails. Every active row has a **Deprecate** button (`POST {API_PREFIX}/classes/{id}/deprecate`, confirm-gated) — 409 with a structured `class_still_referenced` detail (`{message, item_count, confirmed_label_count}`) offers the existing merge dialog instead, preselecting the class as the merge source. The deprecated-classes table's **Restore** button (OpenProcessor 01324cb, 243f7f2) is real, not the permanently-disabled placeholder it used to be — `POST {API_PREFIX}/classes/{id}/restore`, whose 409 is either a PLAIN STRING detail (a live class already claims the name) shown verbatim, or, for a class merged into another (OpenProcessor 4c125ec, F-56), a structured `class_merged` detail rendered as "Merged into `<served class_name>`; un-merge isn't supported." plus the served message and hint (`classMergedDetail`/`classMergedRestoreText`, `api.ts`). Since OpenProcessor 51b05d7, `GET {API_PREFIX}/classes` serves `merged_into`, so a merged deprecated class shows "merged into `<name>`" instead of a Restore button (the 409 path stays for a stale page). The merge dry-run's `validations_carried_over` reads "N human validations will carry over" (a merge keeps validations; the old `would_unvalidate` key is gone, no shim). The class table renders first; the Proposals list sits below it (and below the deprecated table) in a collapsed `<details>` (F-53), its per-term Hide button is session-only (not persisted, F-58), and the page scrolls as a whole rather than in an inner pane (F-50). A collapsed "Create classes from the detector" panel (`SeedFromDetectorPanel`: dry run, then a confirm) appears when `GET {API_PREFIX}/ingest/config` reports a detector.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `/export`        | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`). Since OpenProcessor df01309, `GET {API_PREFIX}/export/status` also serves `image_count`/`class_count`/`group_key`/`split_counts`/`class_split_counts` — the page shows the served train/val/test totals and a collapsible per-class table (any class at 0 train or 0 val highlighted, served numbers only). The freeze modal has no Seed field: `POST {API_PREFIX}/test_holdout/freeze`'s body is `{percent}` only (selection is deterministic, SHA1 of each crop id per class — an extra `seed` key is a 422); the success toast shows the served `selection`/`min_per_class`. Since OpenProcessor 4c9499a (one image + one label file per source image), `ExportStatus` also carries `object_count`/`split_object_counts` (label lines, distinct from `image_count`/`split_counts`) — the page reads "N objects in M images" and separate images:/objects: split badges, never one ambiguous number. An opt-in "Only images whose every object is labeled" checkbox sends `require_fully_labeled_images` on `POST {API_PREFIX}/export/yolo`; the served partial-frame counts (`unlabeled_items_on_exported_images`/`images_with_unlabeled_items`/`images_dropped_not_fully_labeled`) render when present. Every one of these fields is `null` (not `0`) on an export written before it was recorded — rendered via `formatCount()` (`src/lib/formatCount.ts`) as "—". The `ExportStatus` fields are nullable because the served schema types them so; `TestHoldoutFreezeResult`'s `selection`/`percent`/`min_per_class` are required. A collapsed "Only items matching a filter" limits the export (`item_filter`) and shows the served matching count; see "Shared item filter and run on selection".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/models`        | Triton model registry browser. Lists the project's own models, the base models and, via `GET {API_PREFIX}/models/status?include_other_projects=true`, other projects' models their owners shared, each with the served `project`/`shared`/`class_mapping` — see "Model sharing" below. The VLM is no longer a single external service: since OpenProcessor W9 each registered endpoint is its own `kind: 'vlm'` row (name = endpoint name, served resolved `model`, served `active` chip, status named through the registry's `labels.status`, no Unload) with a link to **Settings → Models** while the registry is served — see "VLM models" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + the region profile's 5 server-side modes when one is configured — see "Training cohorts" below). The dataset card shows the _current export's own_ `image_count`/`class_count`/`split_counts`/per-class `class_split_counts` (from `GET {API_PREFIX}/export/status`, OpenProcessor df01309) rather than the dataset-wide validated total — the old global number (which double-counted `test_holdout` crops) survives only as a clearly-labelled "(global pool)" line for an explicitly-picked past export version, which `/export/status` does not describe. `AugmentationPanel`'s preset picker is served from `GET {API_PREFIX}/train/augmentation_presets` (id/label/description/orientation-sensitive), defaulting to the served `default`; a failed load shows its error (there is no hardcoded preset list or default id). `/train/start`/`/start_campaign`'s 422 on an unknown `augmentation.preset` (`{detail: {message, field, valid_presets}}`) surfaces `valid_presets` in the toast alongside the message. Since OpenProcessor 4c9499a, the card also shows the export's `object_count`/`split_object_counts` (label lines) alongside `image_count`/`split_counts` — "N objects in M images" plus separate images:/objects: split badges — and its per-class table is objects, not an ambiguous count; a `null` field (an export written before 4c9499a recorded it) renders via `formatCount()` as "—", never 0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `/bakeoff`       | Model comparison on OpenProcessor #34's v2 wire (F6, [internal design note]). Pick eval datasets (`GET {API_PREFIX}/bakeoff/eval_datasets`: export test splits first with the current one flagged and preselected, external frozen sets grouped by served `group`), models (finished training runs from `/bakeoff/trained_models`, each with the served per-selected-dataset `for_dataset` facts and a train/test overlap warning when the served overlap is non-null and > 0; the profile's `/bakeoff/baseline_models`; an optional custom ref) and a profile (whatever `/bakeoff/profiles` serves, `default_profile` preselected, `default_error` shown). A confirm dialog precedes `POST /bakeoff/run` (typed `run`/`baseline`/`custom` refs; 400/409/422 detail shown verbatim); the job polls `/bakeoff/status/{id}` with progress, per-stage failures and the enqueue-time class mapping. Results: the `/bakeoff/matrix/{id}` model × dataset matrix bolds every served tied winner (`best` is a list), and `/bakeoff/results/{id}?dataset_id=` renders ranked rows plus a per-class table where an uncovered class reads "not covered" and each model's unmapped classes are listed; a 409 (pre-v2 result) shows a note. Previous runs (`/bakeoff/runs`) stay selectable. State in `src/lib/bakeoff/bakeoffController.svelte.ts`, types in `src/lib/types_bakeoff.ts` (pinned to the vendored OpenAPI by `contract/bakeoffContract.test.ts`); nothing computes a metric, mapping, rank or winner client-side. The nav link and page always render (the backend mounts the `{API_PREFIX}/bakeoff/*` router unconditionally); the page runs its discovery reads on mount.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/settings`      | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus, for any axis the server marks not `settable`, a read-only "Not settable on this backend" section (none today: since OpenProcessor f14f4ddc `detection_profile`, `prompt_pack` and `vlm` are activation-backed and settable, and `GET /settings` `defaults` for them come only from the activation records, so a served `off` renders as a disabled option, `unofferedServedValue`). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see [internal design note] — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. Also hosts the **Curation scores card** (`ScoresCard.svelte`, G10, 2026-09-24) — per-scorer coverage from `GET {API_PREFIX}/scores/coverage`, confirm-gated "Compute all"/"Compute selected" (`POST {API_PREFIX}/scores/compute {scorers}`, ids always sourced from the served coverage keys), a progress poll of `GET {API_PREFIX}/scores/status` following `EmbeddingPlot`'s rebuild-job pattern, and "Cancel" (`POST {API_PREFIX}/scores/cancel`). A failed coverage read shows its error with a retry; a failed compute (e.g. mistakenness lacking probe predictions) shows the backend's error verbatim. A completed compute reloads coverage and resets `strategiesStore` so `StrategyBar`'s sort/score options pick up the new coverage without a full page reload — see "Curation-strategy selector bar" below. Also hosts the **Keyboard shortcuts** card (`KeymapCard.svelte`, K2, 2026-09-26) — absent, not disabled, until OpenProcessor W2b's `GET/PUT {API_PREFIX}/keymap` route exists; see "Keyboard shortcuts" below. Also links to the **Prompt packs** editor (`/settings/prompt-packs`, see "Prompt-pack editor" below), absent until the backend serves W3, and the **Region profiles** editor (`/settings/region-profiles`, see "Region-profile editor" below), absent until the backend serves W4. Also links to the **VLM models** page (`/settings/models`, see "VLM models" below) and hosts a `vlm` axis dropdown (served endpoints plus `off`, an unacknowledged external entry disabled), both absent until the backend serves W9. Also links to the **Open-vocabulary sets** editor (`/settings/open-vocab`, see "Open-vocabulary sets" below), absent until the backend serves `GET {API_PREFIX}/open_vocab`. Also links to the **Ingest policy** page (`/settings/ingest-policy`, see "Detector, ingest policy and embedding state"). |
+| `/projects`      | Global project management (not under `/p/`; `src/routes/projects/+page.svelte`, state in `$lib/projects/projectsAdminController.svelte.ts`). The served list (`GET {API_PREFIX}/projects`, with a Show-archived toggle sending `include_archived=true`), the served shard `capacity` block, and the P3 lifecycle actions: create (`POST /projects`), edit (`PATCH /projects/{slug}` with `expected_revision`; a 409 `revision_conflict` offers a reload that keeps the typed edit), archive / unarchive, copy settings (`POST /projects/{slug}/clone_settings`, axes from the served `limits.cloneable_axes`), and a guarded delete (the served dry run's report and `blocking` reasons first; no confirm field while anything blocks; `confirm` = the typed slug). Every action is gated on served flags only (Open/Edit: `selectable`; Copy settings: `writable`; Archive: the served `archivable`; Unarchive: the served `unarchivable`; Delete: `deletable`; Create disabled only by a served `blocked` capacity). Refusals render the served `detail.message` verbatim; the lifecycle envelope's `warnings` become toasts. Each selectable row also reads its served pipeline-pause flag (`GET {prefix}/pause` through that row's own served `prefix`) and shows a "paused" chip; writable rows get a confirm-gated Pause / Resume pipeline (`POST {prefix}/pause` / `/resume`) once that flag has loaded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ## Ingest (`/ingest`, 2026-09-24; BA-1..BA-7 adopted 2026-09-25)
 
 Bring images into the pool — the frontend side of
-`docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`. All 13 pieces
+[internal design note]. All 13 pieces
 of that plan are implemented as of OpenProcessor #36 (backend commit
 c5c606f) — see the plan's status section for the full piece-by-piece
 record.
@@ -179,8 +179,7 @@ record.
   with a 600s `proxy_read_timeout` — a 128-image batch with detector +
   embedding inference can exceed the general API location's 120s.
 - **Security.** The curation API still has **no request authentication
-  at all** (an explicit owner decision — see `docs/design/
-ingest-ui-and-acceptance-plan-2026-09-24.md` §A.6). Anyone who can reach
+  at all** (an explicit owner decision — see [internal design note] §A.6). Anyone who can reach
   the nginx origin can already ingest (including, now, via the
   server-path batch panel above), label, export and train. Expose
   Cropwright (and the OpenProcessor API it proxies) only on a trusted
@@ -308,9 +307,7 @@ number, list and request is served, and a refusal shows the served
 ## Dataset import and Reprocess (`/datasets`, OpenProcessor W10, 2026-09-27)
 
 Import an already-labeled dataset (YOLO, COCO, or an OpenProcessor export)
-into the current project, and re-run machine proposals under the lock rule (OpenProcessor `any_domain_plan.md` §7.12 / W10; plan:
-`docs/design/w10-import-reprocess-ui-plan-2026-09-27.md`, which also holds the
-numbered questions for the backend).
+into the current project, and re-run machine proposals under the lock rule.
 Built against the frozen W10 spec before the backend ships it.
 
 - **Not-yet-deployed gate, not back-compat.** W10's `/health api_features`
@@ -440,9 +437,7 @@ has_imported_labels` is false (and W10 is served) the empty panel links
 ## Prompt-pack editor (`/settings/prompt-packs`, OpenProcessor W3, 2026-09-27)
 
 Edit, validate, test, save, activate and roll back the project's VLM prompt
-packs (OpenProcessor `any_domain_plan.md` §3, §5.1, §7.2, §7.5, §7.6; plan:
-`docs/design/w3-pack-editor-ui-plan-2026-09-27.md`, which also holds the
-numbered backend questions W3-Q1..Q16). Built against the frozen W3 spec
+packs Built against the frozen W3 spec
 before the backend ships it.
 
 - **Not-yet-deployed gate, not back-compat.** W3 has no capability
@@ -498,18 +493,18 @@ before the backend ships it.
   `SourceImageOverlay`). `crop_not_found` names the listed ids in the
   input; every other refusal is the served message. A new run aborts the
   one in flight.
-- **Contract:** types in `src/lib/types_packs.ts` (the shared §7.1
+- **Contract:** types in `src/lib/types_packs.ts` (the shared config
   models live in `src/lib/types_config.ts`); routes
   resolve for real in `endpointCatalog.test.ts`; `ActiveConfigResponse`'s
   `source`/`activated_at`/`applied[]` are required (served since W2) and
   `AppliedRuntime.vlm` is required-nullable (OpenProcessor d00e8957): `null` renders "not reported" (the worker never reported a VLM axis), a null name renders the axis's `appliedNoneText` ("no VLM"). Refusals render `apiErrorText` (the served `message`).
-- **Shared with the region-profile editor** (W4, below): the pack
-  modules are thin bindings of `src/lib/config/` (`ConfigActive`,
-  `ConfigEditor`, `ConfigList`, `ConfigAvailability`, `validationIssues`)
-  and the pages use `src/lib/components/config/` (`ConfigActivePanel`,
-  `ConfigSavePanel`, `ConfigRevisions`, `ConfigViewingBanner`,
-  `ConfigActivateDialog`, `ConfigRestoreDialog`, `ConfigCloneDialog`,
-  `ConfigIssueList`, `ConfigGate`).
+- **Shared with the region-profile editor** (below): the pack modules are
+  thin bindings of `src/lib/config/` (`ConfigActive`, `ConfigEditor`,
+  `ConfigList`, `ConfigAvailability`, `validationIssues`) and the pages use
+  `src/lib/components/config/` (`ConfigActivePanel`, `ConfigSavePanel`,
+  `ConfigRevisions`, `ConfigViewingBanner`, `ConfigActivateDialog`,
+  `ConfigRestoreDialog`, `ConfigCloneDialog`, `ConfigIssueList`,
+  `ConfigGate`).
 - **Clone from another project.** `ConfigCloneDialog` takes `offerProjects`
   (the three list pages: packs, profiles, open-vocab sets; not for a
   template): a picker over the other served selectable projects; the chosen
@@ -526,16 +521,13 @@ before the backend ships it.
 ## Region-profile editor (`/settings/region-profiles`, OpenProcessor W4, 2026-09-27)
 
 Edit, validate, save, activate, roll back and turn off the project's region
-profiles, and read the config vocabulary (OpenProcessor `any_domain_plan.md`
-§4, §7.3, §7.4, §7.6; plan: `docs/design/w4-profile-editor-ui-plan-2026-09-27.md`,
-which also holds the numbered backend questions W4-Q1..Q16 and the spec
-conflicts). Built against the frozen W4 spec before the backend ships it,
-on the shared config machinery listed under "Prompt-pack editor".
+profiles, and read the config vocabulary. Built against the frozen W4 spec
+before the backend ships it, on the shared config machinery above.
 
 - **Gate.** `profilesAvailability` (`src/lib/profiles/profilesAvailability.svelte.ts`,
   a `ConfigAvailability`) probes `GET {API_PREFIX}/region_profiles` once
   per project, lazily; 404/501 makes every profile surface absent (W4
-  serves no capability signal, W4-Q1). Reset on project switch.
+  serves no capability signal). Reset on project switch.
 - **List** (`profileListController.svelte.ts`): the served profiles and
   templates (`?include_templates=true`), the active profile
   (`ConfigActivePanel` with `PROFILE_ACTIVE_COPY`: Rollback and a
@@ -552,20 +544,20 @@ on the shared config machinery listed under "Prompt-pack editor".
   chosen by the served `type` (`string`/`int`/`float`/`bool`/`enum`/
   `string_list`/`int_list`/`float_pair`/`rgb`; anything else edits as JSON);
   `advanced` rows behind a toggle; a row whose `applies_when` is off in the
-  saved revision's served `effective` is dimmed, never disabled (W4-Q2).
-  `choices_from` resolves through `profileFields.ts`'s `choiceList` (the
-  spec's CHOICE_SOURCES table) to the vocabulary's `choice.{id,label}`,
-  with the served `empty_choice` first and a stored value the list lacks
-  kept and marked. The segmenter group shows the served segmenter cap and
-  floor (`SegmenterStatus`). "Include other projects' shared models"
-  re-reads the vocabulary with `include_other_projects=true`. Live
-  validation posts `{name: null, body}`; "Check the draft for activation"
-  posts it with `for_activation=true` and shows that report apart.
+  saved revision's served `effective` is dimmed, never disabled.
+  `choices_from` resolves through `profileFields.ts`'s `choiceList` to the
+  vocabulary's `choice.{id,label}`, with the served `empty_choice` first
+  and a stored value the list lacks kept and marked. The segmenter group
+  shows the served segmenter cap and floor (`SegmenterStatus`). "Include
+  other projects' shared models" re-reads the vocabulary with
+  `include_other_projects=true`. Live validation posts `{name: null,
+body}`; "Check the draft for activation" posts it with
+  `for_activation=true` and shows that report apart.
 - **Activation.** Pins the revision shown; "Activate anyway" only on a
   served `force_allowed`. The response's served `impact` and `validation`
   render (`ProfileImpactPanel`); a served `suggested_reprocess` gets a
-  Re-run (W10's `ReprocessFlow` with a `request` target: the served
-  request as served, dry run first, apply behind a confirm; only when W10
+  Re-run (`ReprocessFlow` with a `request` target: the served request as
+  served, dry run first, apply behind a confirm; only when the backend
   serves Reprocess). Every successful activate / rollback / turn-off calls
   `healthStore.poll()`, so `regionProfileStore` raises its existing
   "reload to apply" notice; nothing hot-swaps the region slot.
@@ -612,10 +604,9 @@ on the shared config machinery listed under "Prompt-pack editor".
 ## VLM models (`/settings/models`, OpenProcessor W9, 2026-10-01)
 
 Register VLM endpoints, test them, choose which one a project uses, switch
-the local model and read every model choice (OpenProcessor `any_domain_plan.md`
-§7.8; contract f582aa05; plan: `docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md`
-§3, which also holds the numbered backend questions A-1..A-9). Built on the
-shared config machinery listed under "Prompt-pack editor".
+the local model and read every model choice (OpenProcessor W9; contract
+f582aa05). Built on the shared config machinery listed under "Prompt-pack
+editor".
 
 - **Global registry, per-project activation.** The registry, schema, validate,
   probe, catalog and local-model routes are GLOBAL (`globalApi()`, one
@@ -701,7 +692,7 @@ acknowledgeExternal})`). Run refusals show the served words
   the served `errorDetail`; `ConfigList`/`ConfigEditor` are generic over the
   event type; `ConfigDocBase.active` is optional (a VLM doc serves `active_in`)
   and `validation` may be null; `ConfigActivateDialog` takes the optional `ack`.
-- **Questions built by their literal reading** (A-1..A-9 in the plan): this
+- **Reading choices where the contract is silent:** this
   project's activation is read from the scoped `GET vlm/endpoints/active`
   beside the served `active_in`; `external_policy` prints as its served id;
   validate sends `name: null` for an existing endpoint; `vlm.changed` is used
@@ -710,7 +701,7 @@ acknowledgeExternal})`). Run refusals show the served words
   a run with no `?vlm=` never sends the acknowledgement; `off` is a served
   entry; a VLM row's `status` is named through `labels.status` when it matches.
 - **Not built (out of scope):** the VLM picker on the pack and profile test
-  panels (plan §6 I-1, after the W5 panels merge), `vlm_draft`, the `vlm`
+  panels (planned, once the W5 panels merge), `vlm_draft`, the `vlm`
   parameter on `label_batch`/`verify_region*` (no surface runs them).
 - **Tests:** `api_vlm.test.ts`, `contract/vlmContract.test.ts` (key maps pinned
   to the vendored OpenAPI, strict request bodies through wrappers and
@@ -826,14 +817,13 @@ the shared config machinery listed under "Prompt-pack editor".
 
 ## `/review` tab consolidation (2026-09)
 
-A review of all 9 original review-queue tabs against the live
-1,000-crop index found three were too big to function as curated
-queues — closer to "most of the dataset" than a triaged worklist:
-Mismatches (1,000 rows · 97.5% the size of All), VLM Low-Conf
-(1,000 · 11% of the dataset), and Primary · Low-Conf (1,000 · 92% of
-the _entire_ dataset). A fourth, Outliers, had only 3 live rows and was
-functionally identical to the `atypicality` sort already available via
-the strategy bar below.
+A review of all 9 original review-queue tabs against a large production
+index found three were too big to function as curated queues — closer
+to "most of the dataset" than a triaged worklist: Mismatches (nearly the
+size of All), VLM Low-Conf (about a tenth of the dataset), and Primary ·
+Low-Conf (most of the _entire_ dataset). A fourth, Outliers, had only a
+handful of rows and was functionally identical to the `atypicality` sort
+already available via the strategy bar below.
 
 - **Outliers** was retired entirely — no tab, no rendering path. Its
   backend `{API_PREFIX}/review/outliers` query is untouched/unlinked, not
@@ -985,17 +975,6 @@ served `probe_disagreement` is `true` (`probeOpinion`,
 `$lib/review/probeOpinion.ts`) — never on a null disagreement — and an
 item with `probe_in_scope: false` reads "no opinion (outside the probe's
 classes)" instead of showing the probe's out-of-vocabulary prediction.
-Since OpenProcessor main 8990ede, the button additionally requires the
-served `probe_actionable === true` (server-computed from in-scope +
-disagreement + the server's own `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE`
-threshold, echoed read-only as `ProbeStatusResponse.actionable_min_confidence`
-— no client-side threshold anywhere); a disagreement that isn't
-actionable renders as a muted "model unsure: `<predicted class>`" with
-no Accept button. class-id-display-audit-2026-09-26: `showAccept` used
-to also require a client-side `probe_pred_class_id !== class_id`
-comparison — dropped, since it was redundant with (and riskier than)
-the served flags above; the served `probe_disagreement`/
-`probe_actionable`/non-null `probe_pred_class_id` decide alone.
 
 ## Shared item filter and run on selection (OpenProcessor v0.4.0, 2026-10-03)
 
@@ -1149,10 +1128,9 @@ controls, never a replacement for the production defaults:
   The first (and, today, only) surface in the app exposing the
   `cluster` axis at all is `/settings` (see above) — it is a
   deployment-wide default picker, not a per-session `StrategyBar`
-  control, and was built there deliberately (`docs/design/
-curation-settings-ui-plan-2026-09-21.md` §1.5/§2). Production default
+  control, and was built there deliberately ([internal design note] §1.5/§2). Production default
   (`ivf`, FAISS IVF-512 + AHC refine, see
-  `openprocessor/docs/design/clustering_methods.md`) is untouched by this;
+  OpenProcessor's [internal design note]) is untouched by this;
   other methods (`hdbscan`, retired `ahc`-primary) are informational/
   dormant unless explicitly pinned via `/settings`.
 - **Review-sort dropdown** — `axis=sort` entries (`review_sorts.py`):
@@ -1216,7 +1194,7 @@ own. There is deliberately no detection-profile control: region detection is
 the backend's startup config (`OP_REGION_PROFILE`), so OpenProcessor rejects a
 per-run `detection_profile` with a 422, and `/settings` shows that axis
 read-only. See
-`docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md` for the full
+[internal design note] for the full
 contract. Landed on OpenProcessor main (f4551bf): unknown ids 422 with
 `{axis, requested, valid_ids}`, resolved values echo in the job's `args`,
 and `class_id` scopes only the VLM sweep, not clustering or auto-promote.
@@ -1244,9 +1222,7 @@ also gained a top-level `empty_state` (`has_probe_predictions`/
 (`reviewTabsVocabularyStore.emptyState`). When the served reason mentions a probe or a score and the
 matching `empty_state` flag is false, the panel adds a direct link ("Run
 a probe on /train" / "Compute scores on /settings") instead of leaving
-the operator to guess where to go — verified live: the Uncertainty
-queue's empty panel links to `/train` on this deployment (no probe has
-ever run).
+the operator to guess where to go.
 
 ## Cluster purity (DQ-M2, dq-queues cutover 2026-09-24)
 
@@ -1429,13 +1405,7 @@ trainer_image_id}`, and a class-remap table (new id → original
   since it predates both — see that file's doc comment; plus a
   hand-constructed `trainStatusFixtureW1` for the epoch-labelled-metrics
   and `eval.head` rendering paths no live pre-fix run can exercise yet),
-  `e2e/stubbed/test_train_results.py`. Verified against the real
-  deployed backend at `:5184` via a temporary `vite preview` proxy
-  (reverted before commit, never shipped) — that backend still predates
-  the #34 W1 fix (both runs it serves show the buggy
-  `best_checkpoint_metric` back-fill), so the fixtures above are
-  hand-corrected to the fixed shape rather than mirroring the live
-  response verbatim.
+  `e2e/stubbed/test_train_results.py`.
 
 ### Probe control (`ProbeControl.svelte`, OpenProcessor #36 item 8, 2026-09-25)
 
@@ -1455,9 +1425,7 @@ check found `GET {API_PREFIX}/train/status/{job_id}` never serves at the
 top level (only inside the run's manifest, `results.checkpoint_sha256`,
 which this control doesn't fetch — it renders instantly off the
 already-loaded status like the rest of `RunResults`). Gating on the sha
-hid the button for every real finished run on the live deployment; fixed
-before commit and verified live via the temporary preview-proxy
-screenshot pass. `GET {API_PREFIX}/probe/status` is a single current/last-job
+would hide the button for every real finished run. `GET {API_PREFIX}/probe/status` is a single current/last-job
 singleton, not scoped per training run — a probe started for a
 _different_ run still polls as "running" here, so the control detects
 that via the response's `train_job_id` and shows "already running for
@@ -1468,7 +1436,7 @@ past run makes zero `/probe/status` requests.
 
 ### Training cohorts (2026-09-24 logic-moves W6; originally P2.12-P2.14,
 
-docs/genericization-plan-2026-09-13.md §9.2/§9.3)
+[internal design note] §9.2/§9.3)
 
 The **Training cohorts** section on `/train`, grouped by class, now
 sources its cohort _definitions_ from the backend:
@@ -1578,8 +1546,8 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   Fixed form, modal and a11y keys (Enter submits, Esc cancels, ↑↓ in a
   listbox, Tab) are not actions and are not routed through the keymap.
 - **W8 per-box actions** (`review.region.accept_box` / `reject_box`,
-  `box_edit.next_box`) are `available: true`, registered by the
-  multi-box region surface (see "W8 multi-box regions" below).
+  `box_edit.next_box`) are `available: true`, registered by the multi-box
+  region surface (see "W8 multi-box regions" below).
 - **K2 (2026-09-26): the served keymap is live.** `loadKeymap()`
   (`src/lib/stores/keymap.svelte.ts`) reads the scoped `GET {prefix}
 /keymap` once from the root layout's `load()` and hands the result to
@@ -1609,28 +1577,6 @@ serve) and read through `keymapStore` (`src/lib/stores/keymap.svelte.ts`):
   `hotkey_taken` details (naming the owning action(s)/class) instead of
   a generic string. The four `/keymap*` routes are vendored and resolve in
   `endpointCatalog.test.ts` like every other route.
-- **K2b (2026-09-26): per-context overrides.** Plan §0 decision 4 — a
-  verb rebind applies on every page by default, with a per-context
-  override available. `KeymapCard.svelte` now has two sections: a
-  **Verb groups** list (one row per served `group` id shared by 2+
-  modifiable actions across contexts — `undo`, `confirm`, `discard`,
-  `skip`, `prev`, `next`, `select_all`, `ignore`, `nudge`), where
-  editing the row's keys writes every member action id at once, and a
-  **"Customize per page" disclosure** under each group listing every
-  member by its own context label with its own key chips — editing one
-  there writes only that action id and detaches it. Detachment is
-  computed each render (does this member's draft differ from the other
-  members' shared value), never a stored flag, so a "differs from the
-  group" marker + "reset to group" also surface a pre-existing
-  server-side per-context override for free. Locked keys stay locked in
-  both views; a group-level capture rejects any `grammar.locked_keys`
-  combo outright rather than checking per-member locked-key sets. The
-  per-context tables below the Verb groups section now hold only
-  ungrouped actions and locked/non-modifiable actions (the whole
-  `cancel` group has no modifiable members, so it never appears in Verb
-  groups at all). Writing is unchanged: the same `overrides` action-id
-  map, the same `PUT`/`validate`/`reset` calls — a group edit just
-  happens to populate more than one key.
 
 Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
 region slot's keymap — server-served today as `/abdefgmnuxz`)
@@ -1656,8 +1602,8 @@ suppresses class-drop registration entirely
 (`isSlotSuppressedTab`/`isSlotTab`), so all of this is defense in depth, not
 a fix for a live collision — it's what keeps a bound letter from firing two
 handlers on the same keypress. `/classes` shows a banner for any class whose
-bound hotkey predates its reservation — live example: `bmw` is bound to `b`,
-which is now reserved; the binding is kept, not auto-cleared.
+bound hotkey predates its reservation; the binding is kept, not
+auto-cleared.
 
 The tables below are the **default** keys (`FALLBACK_KEYMAP`), which is
 what every deployment runs today.
@@ -1702,9 +1648,9 @@ Global:
 | `E`             | Plates tab: enter bbox edit mode                                                                                                                                                                                                                                                                                     |
 | `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                                                                                                                                                                                                                                       |
 
-### Slot-generic review tabs (P2.8b/P2.8c, docs/genericization-plan-2026-09-13.md §9.5;
+### Slot-generic review tabs (P2.8b/P2.8c, [internal design note] §9.5;
 
-panel body generalized by C6, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §6)
+panel body generalized by C6, [internal design note] §6)
 
 The ~12 hardcoded tab-id call sites that used to gate the region-tab-only
 behavior above are gone. `review/+page.svelte` derives one value,
@@ -1828,17 +1774,15 @@ and the protected chip is dropped for a model that isn't installed
 (`isInstalled`). An installed-but-unloaded optional model still reads
 "not ready". Covered by `src/routes/p/[project]/models/modelStatus.test.ts`.
 
-## W8 multi-box regions (lockstep branch `feat/w8-multibox-lockstep`)
+## W8 multi-box regions
 
 A region item can carry an **unbounded list of boxes**, not one — the
 owner's binding rule (approved 2026-09-26): "a region is a list per item;
 one element is not a special case." No client cap; the only limit is the
 served `region_profile.limits.max_boxes_per_write` (a request-size guard,
-not a labeling rule). Built against, and merged only alongside, the
-backend's W8 wave (`openprocessor/docs/design/
-openprocessor_internal/any_domain_plan.md` §7.7); see
-`docs/design/w8-multibox-frontend-plan-2026-09-26.md` for the full wire
-model, write-path table and the current gap list.
+not a labeling rule). Built against the backend's W8 wave; see
+[internal design note] for the full wire model, write-path table and the
+gap list.
 
 **No backward compatibility (owner decision, 2026-09-26): the single-box
 scalar region fields are gone, not additive.** `REGION_SUB_BOX` declares
@@ -1879,7 +1823,7 @@ regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
   pending geometry edit in the same write; the on-screen Confirm/Save-
   bbox buttons (not just the keyboard path) branch on `isMultiBoxSlot`.
 - `keymapFallback.ts`'s `review.region.accept_box`/`reject_box`/
-  `box_edit.next_box` are `available: true` on this branch.
+  `box_edit.next_box` are `available: true`.
 - `SlotGallery.svelte` shows the served `total_rows` (box count) beside
   the item count when they differ, and region cluster cards show
   `box_count` beside `size`; the `has_rejected_box` region-status filter
@@ -2008,7 +1952,7 @@ render via the shared chip components.
   gate (`sanity_reject:<gate>`), or no verdict at all
   (`verifier_no_verdict` — needs human review, not a rejection). Labeled
   by `GET {API_PREFIX}/regions/vocabulary`'s `rejection_reasons`
-  (openprocessor fix #29 / OpenProcessor 3f1a11e) — see
+  (OpenProcessor 3f1a11e) — see
   `regionVocabularyStore.rejectionReasonLabel`/`rejectionReasonKind`
   below.
 - `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`,
@@ -2101,7 +2045,7 @@ the active profile's region-text validity rules) and label helpers —
 `textChoiceLabel`/`invalidReasonLabel` are still a titlecase-id
 placeholder (the backend doesn't serve real labels for those two
 vocabularies yet). `rejectionReasonLabel`/`rejectionReasonKind` are NOT
-placeholders as of OpenProcessor 3f1a11e (openprocessor fix #29): the
+placeholders as of OpenProcessor 3f1a11e: the
 endpoint's new `rejection_reasons` list (`{id, label, kind, match,
 label_template}`) is resolved exact-match-first, then longest-prefix
 (`label_template`'s `{detail}` filled from the rest of the stored
@@ -2133,7 +2077,7 @@ unknown value, `GET {API_PREFIX}/regions/statuses` for the vocabulary)
 pattern (`slotGalleryController`'s `statusFilter`).
 
 **New shared components** (renamed off the license-plate-specific names
-during the genericization pass — see `docs/genericization-plan-2026-09-13.md`):
+during the genericization pass — see [internal design note]):
 
 - `src/lib/components/ProvenanceChip.svelte` (formerly `DetectorChip.svelte`)
   — color-coded chip. Since the OpenProcessor 1327181 naming sweep (W0,
@@ -2169,7 +2113,7 @@ verifier | human | classifier | proposal`) via `paletteForRole`
   fetches (on open, keyed to `crop.id`) the label-write history
   (`getCropHistory`) and the source image's metadata + sibling crops
   (`getCropContext`), and renders `item_text_lines` with the optional box
-  overlay. Since K6 (`docs/design/k6-frontend-overlay-plan-2026-09-24.md`)
+  overlay. Since K6 ([internal design note])
   its "Source image" section also embeds `SourceImageOverlay` (see
   below), passing its own already-fetched context down instead of
   double-fetching.
@@ -2197,7 +2141,7 @@ OpenProcessor removed its server-side burn-in of boxes/labels on
 clean image (optionally `?max_dim=N`). Cropwright draws every box/label
 itself from `getCropContext`'s `items`, via
 `src/lib/components/SourceImageOverlay.svelte`
-(`docs/design/k6-frontend-overlay-plan-2026-09-24.md`):
+([internal design note]):
 
 - Each item's own box (`bbox_norm`, already source-image-normalized)
   renders labelled (emerald), proposed (amber, "`<name>` (proposed)"),
@@ -2240,28 +2184,11 @@ The backend serves at most one region profile, on
 region_class_name, text_reader, reads_text, text_hint_enabled} | null`
 (`display_name_singular` added 2026-09-25, OpenProcessor #36 item 10;
 `reads_text`/`text_hint_enabled` added 2026-09-26, OpenProcessor W1
-"text-free region mode", 5cbd7ee4 — see below). **It is the only
+"text-free region mode" — see below). **It is the only
 gate for region features.** With `null`, every
 region route (`/regions`, `/crops/{id}/region*`, region undo, the VLM
 verify routes, `/regions/clusters`) answers 409, so the UI renders no
 region surface at all and calls none of them.
-
-- **Text-free profiles (OpenProcessor W1, 2026-09-26).** A profile can
-  detect/segment a region without ever reading text off it —
-  `text_reader: 'none'`, `reads_text: false`. Whether the synthesized
-  region slot gets a text capability (`SlotCard`'s text value,
-  `/review`'s inline text row/edit, `CropMetaPanel`'s text section, the
-  region browse text filter) is gated on the served `reads_text` alone
-  (`servedRegionSlot.ts`; `ServedRegionProfile.reads_text` is required).
-  On a text-free profile,
-  `/regions/vocabulary` also serves `text_rules: null`/
-  `text_choices: []` and drops the `ocr` actor and (when the profile is
-  segmenter-only) the `detector` entry — `regionVocabularyStore` already
-  renders both as empty/absent cleanly. A `region_meta` PATCH carrying
-  `region_text` against a text-free profile 422s
-  `{"detail":{"error":"region_text_disabled"}}`, surfaced through the
-  existing generic `ApiError`/toast path (no special-casing needed — the
-  detail's `error` string already becomes the toast text).
 
 - `regionProfileStore` / `loadRegionProfile()`
   (`src/lib/stores/regionProfile.svelte.ts`) reads the prefixed
@@ -2329,7 +2256,7 @@ allow-lists in `src/lib/annotations/config/allowLists.ts`. See
 `pallet_label` profile) and `examples/annotation-profiles/` (license
 plate, aircraft tail number, defect code; `examples/README.md`) for
 worked examples, `docs/annotation-slots-contract-draft.md` §4 for the
-schema, and `docs/design/tier2-annotation-profile-config-plan-2026-09-20.md`
+schema, and [internal design note]
 for the full design.
 
 **Region-profile rule** (`applyRegionProfileRule`,
@@ -2353,7 +2280,7 @@ every consumer reads.
 ## Domain-neutral source (2026-09-24, completed 2026-09-25)
 
 Cropwright must work for any data domain
-(`docs/design/domain-neutral-audit-2026-09-24.md`). All 11 steps of that
+([internal design note]). All 11 steps of that
 audit are done; its status section records the deviations.
 
 - **Naming:** `api.ts` wrappers of `/regions` endpoints use `Region`
@@ -2405,78 +2332,35 @@ audit are done; its status section records the deviations.
   id or its served vocabulary label (approved content per owner
   direction), and a bare-word scan would flag those fixtures for no real
   signal; the audit doc's §8 entry has the full reasoning.
-- **Private-origin leak gate (F10, 2026-09-25).** The company name in
-  every spelling, the retired `/curation` prefix and `op_` names,
-  `openprocessor`, private host paths/IPs, sibling project names, private
-  dataset numbers/class names and personal emails are NOT in
-  `domainNeutral.scan.test.ts` (that file ships publicly, so it can't
-  spell them out). They live in the private-only
-  `scripts/oss-export/leak-patterns.txt`, enforced by
-  `scripts/oss-export/leak-scan.sh --tree .` over every file a public
-  export would ship (tracked files minus `exclude.txt`, with `overlay/`
-  in place of the files it replaces) — CI's `export-leak-gate` job. See
-  "Public export" below.
 
 ## Documentation site (`docs-site/`)
 
-A standalone Docusaurus 3 site, not part of the SvelteKit app — its own
-`package.json`/`node_modules`/build, excluded from this project's root
-`npm run lint`/`check`/`test` (see `.prettierignore`, `eslint.config.js`).
-Build/serve it from inside that directory:
+A standalone Docusaurus 3 site with its own `package.json` and build,
+excluded from the root `npm run lint`/`check`/`test`. Build it from
+inside that directory (`npm install`, `npm start` for
+http://localhost:3000/cropwright/, `npm run build`, which fails on any
+broken link or anchor).
 
-```bash
-cd docs-site
-npm install
-npm start      # http://localhost:3000/cropwright/
-npm run build  # -> build/, fails on any broken link/anchor
-```
-
-- **`docs-site/site.config.ts`** is the single place every
-  project-specific value lives (title, repo, URLs, nav/footer links,
-  sibling cross-links) — `docusaurus.config.ts` and every landing-page/
-  roadmap/architecture component read from it, never hardcode copy, so
-  the whole directory is designed to be cloned for a sibling project
-  (see `docs-site/TEMPLATE.md` for the exact clone checklist and
-  build-time assumptions table).
-- Content lives in `docs-site/docs/**` (getting-started, user-guide,
-  configuration, operations, developer-guide, faq) and
-  `docs-site/src/data/*.json` (`features.json`, `workflow.json`,
-  `screenshots.json`, `roadmap.json`, `architecture-diagrams.json` — the
-  `/architecture` page's tab/group metadata, not diagram content).
-- **Architecture diagrams** are hand-authored [Archify](https://github.com/tt-a1i/archify)
-  specs under `docs-site/architecture-diagrams/specs/*.json`
-  (architecture/workflow/sequence types), built from real repo evidence
-  (`src/routes/`, `src/lib/api.ts`, the controllers, the slot registry,
-  `nginx.conf`, `docker-compose.yml`) — not Mermaid, and not app code.
-  `scripts/generate-architecture-diagrams.sh` validates each spec at
-  showcase quality and renders it to `docs-site/static/architecture/
-<name>.html`, embedded as an iframe by `docs-site/src/pages/
-architecture.tsx` (tabbed: System / Workflows / Sequences, per
-  `docs-site/src/data/architecture-diagrams.json`). See
-  `docs-site/architecture-diagrams/README.md` for the diagram list and
-  regeneration instructions. Treat a stale diagram like any other doc:
-  edit the spec and re-run the generator when the code it describes
-  changes — never hand-edit the rendered HTML.
-- **Screenshots are never captured from the shared dev stack** — only
-  from a Cropwright instance pointed at a public-sample-data
-  OpenProcessor backend (COCO val2017 / Open Images plates). The 1600px
-  captures are committed under `docs-site/static/img/screenshots/`
-  (image credits on the screenshots page); a `<Screenshot>` slot with no
-  file renders a "pending" placeholder. `scripts/capture_docs_screenshots.py`
-  requires an explicit `--base-url`, reads its routes from
-  `docs-site/src/data/screenshot_routes.json`, and aborts every request
-  except GET/HEAD and the side-effect-free `/train/preflight`. See
-  `docs-site/docs/developer-guide/screenshots.md`.
-- Deployed as the `docs` service of `docker-compose.yml`
-  (`davidamacey/cropwright-docs`, built from `docs-site/` by the
-  `docker-compose.build.yml` overlay), no published port: it is reached at
-  `/cropwright/` on the app origin (see "Resources and docs on the app
-  origin"), the same base path GitHub Pages uses. There is no separate
-  :5185 container any more.
-- Deploys to GitHub Pages via `.github/workflows/docs.yml` (build on
-  every PR touching `docs-site/**`, deploy on push to `main`/`master`) —
-  won't actually publish until Pages/Actions are enabled on the public
-  repo.
+- `docs-site/site.config.ts` holds every project-specific value (title,
+  repo, URLs, nav/footer links); `docs-site/TEMPLATE.md` is the checklist
+  for cloning the site for a sibling project.
+- Content lives in `docs-site/docs/**` and `docs-site/src/data/*.json`
+  (features, workflow, screenshots, roadmap, and `architecture-diagrams.json`
+  — the `/architecture` page's tab/group metadata).
+- Architecture diagrams are hand-authored Archify specs under
+  `docs-site/architecture-diagrams/specs/*.json`, rendered by
+  `scripts/generate-architecture-diagrams.sh` into `docs-site/static/
+architecture/*.html` and embedded by `docs-site/src/pages/architecture.tsx`.
+  Not Mermaid. See `docs-site/architecture-diagrams/README.md`.
+- Screenshots come only from a Cropwright instance pointed at a
+  public-sample-data OpenProcessor backend (COCO val2017 / Open Images
+  plates). `scripts/capture_docs_screenshots.py` requires an explicit
+  `--base-url`, reads `docs-site/src/data/screenshot_routes.json`, and
+  aborts every request except GET/HEAD and `/train/preflight`. Only the
+  1600px captures are committed; image credits are on the screenshots
+  page.
+- `docs-site/Dockerfile` serves the build under `/cropwright/`, the same
+  base path GitHub Pages uses; `.github/workflows/docs.yml` deploys it.
 
 ## Development
 
@@ -2510,7 +2394,7 @@ Prefer this over a source-text regex scan whenever the behavior is
 actually renderable — `CropCard.test.ts` / `DatasetStats.test.ts` /
 `SlotCard.test.ts` / `TrainForm.gpuPicker.test.ts` /
 `StrategyBar.appliedSort.test.ts` are the worked examples
-(docs/design/test-audit-2026-09-24.md recommendation 7). A source scan
+([internal design note] recommendation 7). A source scan
 is still the right tool for something a mount can't reach — absence of
 dead code, a call site's exact wiring the test would otherwise have to
 drive a full user flow to observe — see `TrainForm.test.ts`'s remaining
@@ -2554,12 +2438,7 @@ scale for a file already in `stryker.config.json`'s `mutate` list.
 (never installed on the host), installs `e2e/requirements.txt` and a
 chromium browser if missing (`scripts/run-e2e.mjs`), then runs
 `e2e/stubbed/` (`npm run build` + `vite preview`, driven by pytest +
-Playwright). The runner builds and serves once, then runs the suite in
-parallel with pytest-xdist (`--dist loadfile`; workers default to half the
-CPUs, capped at 6; override with `E2E_WORKERS`), which takes about 40 s
-instead of about 160 s. Tests must wait on real conditions such as a
-selector or `page.expect_request`, not fixed sleeps, because a sleep that
-works serially flakes under parallel load. Covers the flows a plain `npm test` (jsdom, no real
+Playwright). Covers the flows a plain `npm test` (jsdom, no real
 browser) can't: keyboard-driven `/review` assign/undo, `/clusters/[id]`
 drag/hotkey/discard, the `/settings` and dashboard assist-scope
 wire-composition round trips, tier-2 annotation-profile loading, and
@@ -2574,15 +2453,12 @@ test failure, SIGINT/SIGTERM/SIGHUP and uncaught errors, so no server is
 left running; killing only an `npx` wrapper used to orphan one per run.
 `src/lib/testing/previewServer.test.ts` pins the group stop.
 
-**Fail-closed, on purpose** (see docs/design/test-audit-2026-09-24.md
-recommendation 5 — this replaced the old `scripts/playwright_*.py`
-runbooks, which drifted to a stale `/curation/**` prefix for weeks because
-their catch-all stub silently answered `200 {}`): a request under
+**Fail-closed, on purpose** (an earlier generation of stubbed runbooks
+drifted to a stale API prefix for weeks because their catch-all stub
+silently answered `200 {}`): a request under
 `{API_PREFIX}` that no test registered gets `501` and is recorded in
 `stub.unhandled`; every test asserts at teardown that it is empty and
-that at least one stub actually fired. (The separate retired-prefix
-intercept, `stub.op_hits`, was removed in F10: the fail-closed 501 is
-the real guard.) An API-prefix
+that at least one stub actually fired. An API-prefix
 change or a route rename fails the test outright instead of the page
 silently rendering empty. CI runs this in the `e2e-stubbed` job on every
 push/PR; a `py_compile` pre-commit hook (and CI step) gates
@@ -2686,8 +2562,7 @@ nav is now its own horizontally-scrolling strip, `overflow-x-auto
 whitespace-nowrap`, with every link `shrink-0` and the status chip
 pinned `shrink-0` so it's never squeezed.)
 
-Three test modules, 26 tests total against this deployment's live
-dataset:
+Three test modules, 26 tests total:
 
 - **`test_route_sweep.py`** — every project-scoped top-level route mounts
   under `/p/<slug>/...` (`live_project`'s resolved default-project slug):
@@ -2699,7 +2574,7 @@ dataset:
   `/settings` — plus the one GLOBAL page, `/projects` (never under
   `/p/<slug>/...`), swept by its own
   `test_global_route_mounts_cleanly`. `/ingest` fails against any backend that predates
-  `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`. Each asserts:
+  [internal design note]. Each asserts:
   no `pageerror`; no `**/curation/**` response >= 400 outside a small,
   explicit, documented allow-list (`ALLOWED_4XX_5XX` in
   `e2e/live/conftest.py` — one entry today, `GET .../projects/combine/
@@ -2756,8 +2631,7 @@ testing against 17 pure, high-value modules (`stryker.config.json`'s
 wire params), `stores/undo.svelte.ts`, `datasetStats.ts`,
 `autoLabelRunVlm.ts`, `sourceBadge.ts`, `reviewTabs.ts`,
 `curationSettings.ts`, `strategies.ts`, `classPicker.ts`,
-`annotations/readSlot.ts` — the files `docs/design/
-test-audit-2026-09-24.md` flagged as most exposed to "the suite passes
+`annotations/readSlot.ts` — the files [internal design note] flagged as most exposed to "the suite passes
 but doesn't actually test the behavior." It answers a different
 question than `npm test`: not "does every assertion pass" but "if I
 break this line on purpose, does some test actually notice." Takes
@@ -2782,25 +2656,16 @@ Measured 2026-10-03: sourceBadge 72.7%, uploadPlanner 87.5%, classPicker
 
 The production build runs in a non-root
 `nginxinc/nginx-unprivileged:1.31.2-alpine3.23` container (uid 101, nginx on
-container port 8080; F10 D13), host port 5184 (`CROPWRIGHT_PORT`, mapped
-to 8080). `docker-compose.yml` is pull-only (`image:
-davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}`, no `build:` —
-needs no repo checkout, see README's "Quick start"); building from
-source is the `docker-compose.build.yml` overlay (`docker compose -f
-docker-compose.yml -f docker-compose.build.yml up -d --build`, tagged
-`cropwright-dev:local`, never `docker-compose.override.yml` — that
-auto-loads and would make a plain clone silently build instead of
-pull). Rebuilding a source-built instance always needs the overlay
+container port 8080), host port 5184 (`CROPWRIGHT_PORT`, mapped to
+8080). `docker-compose.yml` is pull-only (`docker compose pull && docker
+compose up -d`, no repo checkout needed — see README's "Quick start");
+building from source uses the `docker-compose.build.yml` overlay
 (`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
---build`): the base file is pull-only, so a bare `docker compose up -d
---build` has no `build:` to run. Port conflicts:
-5174=example-app-backend, 5180/5181=example-app-opensearch,
-5183=example-app-docs.
+--build`).
 
 ## Connecting to OpenProcessor
 
-The backend is OpenProcessor's public `main` (the pre-cutover private stack
-serving `{API_PREFIX}/*` is retired). Three runtime env vars, all substituted at
+The backend is OpenProcessor's public `main`. Three runtime env vars, all substituted at
 container start by `docker-entrypoint.sh`, so one image fits any deployment:
 
 - `PUBLIC_API_PREFIX` (default `/curation`) — must equal the API's
@@ -2814,14 +2679,7 @@ container start by `docker-entrypoint.sh`, so one image fits any deployment:
   set only when the browser must call an API on a different origin.
 
 All API calls flow through `src/lib/api.ts` with retry + AbortController
-for in-flight cancellation. `apiFetch` retries a 5xx up to 3 times
-(250/500/1000ms backoff); since OpenProcessor 3cd4ca87, a 503 carrying a
-`Retry-After` header (seconds — the shape the backend's Triton-outage
-handler sends, `Retry-After: 5`, in place of the old bare 500/silent-200
-on an inference-backend outage) replaces that attempt's fixed delay
-instead, clamped to `MAX_RETRY_AFTER_MS` (5s) so it can't stall the UI
-past the existing retry budget or add an extra attempt. Every caller
-still just sees the eventual `ApiError` with the served `detail` string.
+for in-flight cancellation.
 
 ### Resources and docs on the app origin
 
@@ -2855,7 +2713,7 @@ resets and re-reads on a project switch). Tests: `resourceLinks.test.ts`,
 `contract/curationSettingsContract.test.ts`, the nginx cases in
 `entrypoint.test.ts`, e2e `test_resources_menu.py`.
 
-### Projects — `/p/[project]` routes, switcher, `/projects` (2026-09-26)
+### Projects — `/p/[project]` routes, switcher, `/projects`
 
 **OWNER DECISION: a fresh build, no backward compatibility.** The
 backend's projects cutover removes the old unscoped `{API_PREFIX}/...`
@@ -2866,9 +2724,7 @@ build.
   list and every lifecycle write), the global `{API_PREFIX}/health` and
   the global `{API_PREFIX}/events`.
 - **Everything else** lives ONLY under a project's own served `prefix`:
-  `{API_PREFIX}/projects/{project}/...`
-  (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
-  §7).
+  `{API_PREFIX}/projects/{project}/...`.
 
 **The active project lives in the URL path only** (`/p/<slug>/...`,
 owner decision) — reconstructable from the URL, so nothing is persisted.
@@ -3060,9 +2916,7 @@ instead of silently rendering blanks or 404ing.
   verbatim, never hand-edited.
 - **Sync / check:** `npm run contract:sync` refreshes the snapshot from a
   local OpenProcessor checkout (`OPENPROCESSOR_REPO`, default
-  `../OpenProcessor` — on this host set
-  `OPENPROCESSOR_REPO=/data/repos/openprocessor`, or the check silently
-  skips; `OPENPROCESSOR_REF`, default `main`) via
+  `../OpenProcessor`, the check skips when it is absent; `OPENPROCESSOR_REF`, default `main`) via
   `git -C $OPENPROCESSOR_REPO show $OPENPROCESSOR_REF:contracts/...`.
   `SOURCE.md` records the public repo URL (`OPENPROCESSOR_URL`) and the
   sha, never the local checkout path.
@@ -3126,49 +2980,13 @@ train, ingest — is reachable by anyone who can reach the nginx origin,
 with no login and no token. Never expose Cropwright (or the
 OpenProcessor API it proxies) on the public internet; run it only on a
 trusted LAN/VPN until the backend adds opt-in auth (tracked as backend
-ask BA-5 in `docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md`).
-
-**Releasing** is local (`./scripts/release.sh`), not a GitHub Actions
-workflow, so the arm64 image is built and smoke-tested natively.
-Multi-arch
-(`linux/amd64`+`linux/arm64`) via a multi-arch buildx builder with a
-remote node that builds arm64 natively, no QEMU (`CROPWRIGHT_BUILDER`,
-default `cropwright-multiarch`); the arm64 leg is smoke-tested over its
-remote docker context (`CROPWRIGHT_REMOTE_ARM64_CONTEXT`, default
-`remote-arm64`) since it can't run on an amd64 host. See README's
-"Releasing" section for the stage list and usage; there is no
-`.github/workflows/release.yml`.
+ask BA-5 in [internal design note]).
 
 ## Style
 
 - Dark theme by default (photographers work in dim environments).
 - No emoji. No gradients. Apple system colors.
 - Tailwind `bg-zinc-950` base, accent via CSS variables for easy retheme.
-
-## Public export (F10, `scripts/oss-export/`)
-
-Cropwright is published as a separate public repo
-(`davidamacey/OpenProcessor`, fresh history, AGPL-3.0-only, Copyright example-org LLC)
-built from a filtered export of this tree —
-`docs/design/cropwright-oss-export-plan-2026-09-25.md`. Scrubs land here
-as ordinary forward commits; the exporter is private-only and never
-ships:
-
-- `scripts/oss-export/export.sh <SHA> <EXPORT_DIR>` — `git archive` the
-  sha, delete every path in `exclude.txt` (each must exist, or the export
-  fails), copy `overlay/` over the result, strip the private
-  `export-leak-gate` CI job and the `master` trigger, run prettier and the
-  leak gate. `EXPORT_DIR` must be empty and outside any git work tree.
-- `overlay/` holds the public `CLAUDE.md`, a fresh `CHANGELOG.md`
-  (curated `[0.1.0]`), `docs/README.md` and the `docs/design/README.md`
-  stub. **Keep the public `CLAUDE.md` in step** with this one when a
-  route, mechanism or test tier changes (until the public repo becomes
-  the upstream and this repo is archived — D5-A).
-- `leak-scan.sh <EXPORT_DIR>` / `--tree .` — `leak-patterns.txt` (zero
-  tolerance, no allow-list), email/IPv4 sweeps, excluded-path presence,
-  lockfile registries and gitleaks (container image).
-- Public screenshots come only from the fresh-start public-data run
-  (COCO val2017, Open Images plates) — the docs-site captures above.
 
 ## Documentation & changelog discipline
 
@@ -3193,7 +3011,7 @@ just a convention — don't rely on remembering it:
   (or agent) judgment call, but it's the reason this file has stayed
   accurate through several large refactors instead of rotting.
 - Planning passes for non-trivial work leave a dated plan doc behind in
-  `docs/design/` (see existing files there for the naming convention) —
+  `docs/design/` (`<topic>-plan-<yyyy-mm-dd>.md`) —
   this is how the reasoning behind a change stays discoverable after
   the fact, not just the diff.
 
