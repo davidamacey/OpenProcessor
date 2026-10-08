@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess  # nosec B404 - fixed git invocation, no shell
 import sys
 from pathlib import Path
 
@@ -83,14 +84,32 @@ def _rel(path: Path) -> Path:
         return path
 
 
+def _tracked_paths() -> set[Path] | None:
+    """Paths git tracks, or ``None`` outside a git checkout.
+
+    Untracked local files (private notes, gitignored artifacts) are not part
+    of the published documentation, so the checks ignore them.
+    """
+    try:
+        out = subprocess.run(  # nosec B603 B607
+            ['git', 'ls-files', '-z'], cwd=REPO_ROOT, capture_output=True, check=True
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return {REPO_ROOT / p for p in out.decode().split('\0') if p}
+
+
 def doc_files() -> list[Path]:
     """Every doc file the checks apply to (or only ``--only`` paths)."""
     only = _STATE['only']
     if only is not None:
         return list(only)
     files: list[Path] = []
+    tracked = _tracked_paths()
     for path in REPO_ROOT.rglob('*'):
         if path.suffix not in _DOC_SUFFIXES and path.suffix != '.json':
+            continue
+        if tracked is not None and path not in tracked:
             continue
         rel = path.relative_to(REPO_ROOT)
         if set(rel.parts) & _SKIP_DIR_NAMES:
