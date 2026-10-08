@@ -62,7 +62,7 @@ exactly these calls, each of which writes nothing server-side:
 | Call | Why |
 | --- | --- |
 | `POST .../train/preflight` | preflight report |
-| `DELETE /projects/<slug>?dry_run=true` (never with `confirm`) | the delete dialog's dry-run report |
+| `DELETE /curation/projects/{project}?dry_run=true` (never with `confirm`) | the delete dialog's dry-run report |
 | `POST /projects/combine/preview` | combine preview report |
 | `POST .../reprocess` with `dry_run: true` | Reprocess "Check what would run" |
 | `POST .../prompt_packs/validate` | live pack validation |

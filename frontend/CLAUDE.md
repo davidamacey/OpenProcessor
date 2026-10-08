@@ -1793,7 +1793,7 @@ block for a capability that declares `listField`; `region_bbox_norm`,
 from the wire and from this codebase's reads. A `SubBoxCapability` declares exactly one of `listField` or
 `bboxField` (a read-only scalar box for a tier-2 slot, e.g.
 `aircraftTailNumberSlot`; `parseSlotConfig` rejects both/neither). `setBox`/`clearBox` are gone from
-`REGION_ENDPOINTS` (`PUT /crops/{id}/region` is a removed 410 route).
+`REGION_ENDPOINTS` (the single-box region write route no longer exists).
 
 - `SlotData.subBoxes: SlotBox[]`, populated by `readSlot` from
   `SubBoxCapability.listField` — `src/lib/annotations/types.ts`/
@@ -1807,8 +1807,7 @@ from the wire and from this codebase's reads. A `SubBoxCapability` declares exac
   rule — a whole-set confirm never overrides a per-box decision;
   `rejected`/`false_positive` boxes are left exactly as they are.
 - `api.ts`: `putRegionBoxes` (`PUT /crops/{id}/regions`), `putBatchRegions`
-  (`PUT /crops/batch_regions`), `patchRegionBox` (`PATCH /crops/{id}/
-regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
+  (`PUT /crops/batch_regions`), `patchRegionBox` (`PATCH /crops/{id}/regions/{box_id}` — the per-box accept/reject keys, `y`/`r`), and
   `postBatchBoxState` (`POST /regions/batch_box_state`, region-cluster
   triage, called from the gallery's open-cluster toolbar).
 - `MultiBoxCanvas.svelte` — select/add/delete/Tab-cycle/arrow-nudge over
