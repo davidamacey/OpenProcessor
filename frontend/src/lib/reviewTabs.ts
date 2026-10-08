@@ -290,7 +290,7 @@ export const REVIEW_PRESETS: ReviewPresetDef[] = [
   {
     id: 'primary_low_conf',
     label: 'Primary · low-conf',
-    description: 'Largest-subject-in-frame crops v6 was unsure on',
+    description: 'Largest-subject-in-frame crops the detector was unsure on',
   },
 ];
 

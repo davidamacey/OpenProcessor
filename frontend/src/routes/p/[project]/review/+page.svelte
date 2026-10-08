@@ -497,12 +497,9 @@
     maybePrefetch: () => maybePrefetch(),
   });
 
-  // Filter bar. `sourceFilter` sends `source` to {API_PREFIX}/review/{tab} (item
-  // 14/G3, 2026-09-24 logic-moves — renamed off the old `hdd_source`
-  // control, which the endpoint never actually read). `termFilters()`
-  // below (the diverse-selection scope, a different endpoint) now sends
-  // the same value under `source` too — the OpenProcessor 1327181 naming
-  // sweep (F9) removed `?hdd_source=` outright, so both call sites agree.
+  // Filter bar. `sourceFilter` sends `source` to {API_PREFIX}/review/{tab};
+  // `termFilters()` below (the diverse-selection scope, a different
+  // endpoint) sends the same value under `source` too.
   let sourceFilter = $state<string>('');
   // The shared item filter (class by name, origin, embedding / review state,
   // area band), seeded from the URL and persisted back to it. Conf and the

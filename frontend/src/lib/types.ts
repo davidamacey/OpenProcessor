@@ -406,7 +406,7 @@ export interface Crop {
   /** Whether the *class* assignment specifically was human-validated.
    *  Independent of region_validated — a crop can be
    *  `label_validated=true` (region validated) while `class_validated`
-   *  is still false, e.g. a v6-model class label on a region a human
+   *  is still false, e.g. a model-proposed class label on a region a human
    *  confirmed has no visible region. */
   class_validated: boolean;
   label_confidence: number | null;
@@ -463,11 +463,7 @@ export interface Crop {
   class_labeled_at?: string | null;
   class_labeler?: string | null;
   /** Ingest source tag (`GET {API_PREFIX}/review/{tab}?source=` /
-   *  `GET {API_PREFIX}/crops?source=`). Replaces the old `hdd_source` field the
-   *  backend never actually populated (2026-09-24 logic-moves cutover) —
-   *  `source` is the live wire key. `?hdd_source=` itself was removed from
-   *  `GET {API_PREFIX}/crops` by the OpenProcessor 1327181 naming sweep (F9); every
-   *  query-param site uses `?source=` now too (see `CropFilter.source` below). */
+   *  `GET {API_PREFIX}/crops?source=`); see `CropFilter.source` below. */
   source?: string | null;
   /** The backend's confirmable suggestion for this crop — what
    *  Enter/Confirm assigns. Served on every crop-shaped item, not just
@@ -500,7 +496,7 @@ export interface Crop {
   /** Crop/full Laplacian ratio (higher = clearer).
    *  Drives the clarity slider. */
   blur_lap_ratio?: number | null;
-  /** Raw v6 detection confidence (recorded even below the 0.75 floor). */
+  /** Raw detector confidence (recorded even below the 0.75 floor). */
   classifier_raw_confidence?: number | null;
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
   proposal_name?: string | null;
@@ -953,8 +949,7 @@ export interface CropFilter extends ItemFilterQuery {
    *  {API_PREFIX}/crops?class_source= query param. */
   class_source?: string;
   label_validated?: boolean;
-  /** `GET {API_PREFIX}/crops?source=` — renamed off the removed `?hdd_source=` param
-   *  by the OpenProcessor 1327181 naming sweep (F9). */
+  /** `GET {API_PREFIX}/crops?source=`: filter by ingest source tag. */
   source?: string;
   sort?: string;
   limit?: number;
@@ -962,7 +957,7 @@ export interface CropFilter extends ItemFilterQuery {
   // -- Primary-subject filters -------------------------------------------
   /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
   min_blur_ratio?: number | null;
-  /** Mine the low-confidence pool: classifier_raw_confidence < this OR no v6 box. */
+  /** Mine the low-confidence pool: classifier_raw_confidence < this OR no detector box. */
   classifier_conf_lt?: number | null;
   /** Crops permanently dismissed from every /review queue via {API_PREFIX}/crops/{id}/review_dismiss. */
   review_dismissed?: boolean;

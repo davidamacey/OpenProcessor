@@ -56,9 +56,8 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.class_detector_version).toBe(raw.class_detector_version);
     expect(crop.class_labeled_at).toBe(raw.class_labeled_at);
     expect(crop.class_labeler).toBe(raw.class_labeler);
-    // source (2026-09-24 logic-moves item 14/G3 — replaces the dead
-    // hdd_source field) and proposed_class_id/_name (item 11 — served on
-    // every crop-shaped item, not just review-queue rows).
+    // source and proposed_class_id/_name (served on every crop-shaped item,
+    // not just review-queue rows).
     expect(crop.source).toBe(raw.source);
     expect(crop.proposed_class_id).toBe(raw.proposed_class_id);
     expect(crop.proposed_class_name).toBe(raw.proposed_class_name);
@@ -83,8 +82,7 @@ describe('mapRawCrop full field mapping', () => {
     // OpenProcessor main 8990ede: server-computed actionability.
     expect(crop.probe_actionable).toBe(raw.probe_actionable);
     expect(crop.updated_at).toBe(raw.updated_at);
-    // 2026-09-24 logic-moves W7: source (replaces the dead hdd_source),
-    // exclude/ignore provenance, and item-text OCR lines.
+    // source, exclude/ignore provenance, and item-text OCR lines.
     expect(crop.source).toBe(raw.source);
     expect(crop.class_excluded).toBe(true);
     expect(crop.excluded_reason).toBe(raw.excluded_reason);

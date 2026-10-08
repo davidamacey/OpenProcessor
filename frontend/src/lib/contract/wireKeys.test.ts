@@ -47,11 +47,7 @@ describe('vendored item-wire snapshot sanity', () => {
  * One previously-flagged stale field, `Class.added_at`, is NOT a
  * `RawCrop` field at all — it's a `GET {API_PREFIX}/classes` response field
  * (`RawClass`, a different endpoint's wire shape, not covered by
- * `item_wire.json`). `hdd_source` (formerly flagged the same way, as a
- * dead `CropFilter` query param) was removed outright by the
- * OpenProcessor 1327181 naming sweep (F9) — `CropFilter.source` /
- * `?source=` replaced it everywhere, so there's nothing left to list
- * here. If a genuinely stale `RawCrop` field turns up later, list it
+ * `item_wire.json`). If a genuinely stale `RawCrop` field turns up later, list it
  * here with a one-line reason instead of silently excluding it.
  */
 const KNOWN_STALE: readonly string[] = [

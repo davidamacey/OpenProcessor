@@ -2,7 +2,7 @@
  * G2: `label_validated` on the wire is `class_validated OR
  * region_validated` (wire.py:105) — 125/422 live crops have
  * label_validated=true with class_validated=false (e.g. crop
- * `67fd954c…`, class_source=v6_model, region_status=no_region_visible).
+ * `67fd954c…`, class_source=model, region_status=no_region_visible).
  * mapRawCrop must carry `class_validated` through as its own field so
  * class-label UI can tell the difference.
  */
@@ -29,7 +29,7 @@ describe('mapRawCrop class_validated', () => {
           crop_id: '67fd954c',
           image_path: '/img/1.jpg',
           bbox_norm: [0, 0, 0.4, 0.2],
-          class_source: 'v6_model',
+          class_source: 'model',
           label_validated: true,
           class_validated: false,
         }),

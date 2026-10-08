@@ -1100,7 +1100,7 @@
   </div>
 
   <!-- class_source filter chips. Narrows the grid to one source bucket
-       (v6_model / gemma / human / v6_low_conf / ...) without changing
+       (model / vlm / human / low_conf / ...) without changing
        the cluster card stats. Active filter is reflected in the URL-free
        reactive state so re-mounting the page resets to "all". -->
   <div

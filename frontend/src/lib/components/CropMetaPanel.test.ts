@@ -12,7 +12,7 @@
  *    "widget_a", "widget_b", ...) a region sub-box actually lives on. Fixed to
  *    iterate every REGISTERED slot and gate on slotIsPresent(), the same
  *    presence check every other slot-generic surface in this app uses.
- *  - DQ-M8: `label_confidence` is the detector/v6 score on every row
+ *  - DQ-M8: `label_confidence` is the detector score on every row
  *    (including VLM-sourced ones), but the row was unconditionally
  *    labeled "Confidence" next to a VLM-sourced label, reading as the
  *    VLM's own certainty. Now relabeled "Detector score" for a

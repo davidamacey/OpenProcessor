@@ -169,3 +169,30 @@ tests/curation/test_region_profiles_router.py # W4: exercises the public license
 # examples/region_profiles/license_plate.json's real secondary_shape_groups,
 # and the `tests/curation/test_cascade_detect.py` entry above covers its
 # assertion on those same real groups.
+
+# ---------------------------------------------------------------------------
+# frontend/ (Cropwright monorepo merge)
+# ---------------------------------------------------------------------------
+frontend/package-lock.json # lockfile: dependency version strings such as v6 match the v6 pattern; not prose
+frontend/docs-site/package-lock.json # lockfile: dependency version strings such as v6 match the v6 pattern; not prose
+frontend/src/lib/components/CropCard.svelte:d="M8 1a3\.5 # SVG path data (V6H4) matches the v6 pattern; not vocabulary
+frontend/src/lib/components/MultiBoxCanvas.svelte:d="M8 1a3\.5 # SVG path data (V6H4) matches the v6 pattern; not vocabulary
+frontend/src/lib/components/SlotCard.svelte:d="M8 1a3\.5 # SVG path data (V6H4) matches the v6 pattern; not vocabulary
+frontend/examples/ # tier-2 example annotation profiles; the license-plate profile is the public reference example (a new domain is a profile, not an app-code edit)
+frontend/src/lib/annotations/profiles.falsification.test.ts # exercises the shipped license-plate example profile against the generic slot machinery
+frontend/src/lib/domainNeutral.scan.test.ts # the frontend's own domain-neutrality scan; spells the patterns it forbids by definition
+frontend/docs/annotation-slots-contract-draft.md # slot-contract design draft that uses the license-plate reference example throughout
+frontend/CLAUDE.md # frontend developer guide; describes the license-plate reference example profile
+frontend/README.md:license plate # names the reference example domains (license plate, aircraft tail number, defect code)
+frontend/docs/README.md:license plate # index line naming the reference example profiles
+frontend/examples/README.md:license_plate # points at the backend's public license_plate region profile example
+frontend/scripts/docs_screenshot_fixtures.py:license_plate # clones the shipped license_plate region profile for the docs screenshots
+frontend/docs-site/docs/:license[ -]plate # user docs describing the example license-plate profile
+frontend/src/lib/annotations/builtinDetectors.test.ts:gemma # asserts the public gemma-4-e4b VLM catalog entry (Apache-2.0), not a leak
+frontend/src/lib/annotations/readSlot.test.ts:gemma # fixture uses the public gemma-4-e4b VLM catalog id and its text-source tag
+frontend/src/lib/api.regionVocabulary.test.ts:gemma # fixture uses the public gemma-4-e4b VLM catalog id
+frontend/src/lib/api.slotMapping.test.ts:gemma # fixture uses the public gemma-4-e4b VLM catalog id and its text-source tag
+frontend/src/lib/api.trainGpus.test.ts:gemma # fixture names the shipped vllm-gemma4-e4b container
+frontend/src/lib/components/ProvenanceChip.test.ts:gemma|Gemma # fixture uses the public gemma-4-e4b VLM catalog id and its label
+frontend/src/lib/components/DatasetStats.test.ts:Gemma # asserts the retired model names no longer appear in the dashboard text
+frontend/src/lib/stores/regionVocabulary.svelte.test.ts:gemma|Gemma # fixture uses the public gemma-4-e4b VLM catalog id and its label

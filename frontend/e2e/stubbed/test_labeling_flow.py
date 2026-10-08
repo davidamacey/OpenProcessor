@@ -64,7 +64,7 @@ def crop(i: int) -> dict:
         image_path=f"/nas/img-{i}.jpg",
         class_id=1,
         class_name="ducati",
-        class_source="v6_model",
+        class_source="model",
         confidence=0.9,
         cluster_id=1,
         label_validated=False,

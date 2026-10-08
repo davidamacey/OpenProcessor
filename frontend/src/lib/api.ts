@@ -2131,8 +2131,7 @@ export type RawCrop = {
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
   class_labeler?: string | null;
-  /** Ingest source tag — replaces the dead `hdd_source` (2026-09-24
-   *  logic-moves cutover, item 14/G3). */
+  /** Ingest source tag. */
   source?: string | null;
   test_holdout?: boolean;
   crop_rank_in_image?: number | null;
@@ -2445,7 +2444,7 @@ export async function getCluster(
   // derives any of the cluster's identity fields client-side.
   //
   // `classSource` narrows the crop grid to one source bucket
-  // (v6_model / gemma / human / v6_low_conf / ...) without touching
+  // (model / vlm / human / low_conf / ...) without touching
   // the cluster card stats — the header still shows the whole-cluster
   // totals so the operator sees the filter against the full size.
   type CropPage = {

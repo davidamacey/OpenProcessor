@@ -169,7 +169,7 @@ _EXPLICIT: dict[str, Any] = {
     "label_source": "human_review",
     "label_validated": True,
     "class_validated": True,
-    "class_detector": "v6_model",
+    "class_detector": "model",
     "class_detector_version": "6.2.1",
     "class_labeled_at": "2026-01-02T03:04:05Z",
     "class_labeler": "labeler@example.com",
@@ -184,7 +184,7 @@ _EXPLICIT: dict[str, Any] = {
     # batch (per instructions, a separate pass wires these up) -- just
     # present so make_item()'s fail-closed contract-key check passes.
     "class_confidence": 0.73,
-    "class_confidence_source": "v6_model",
+    "class_confidence_source": "model",
     "vlm_raw_class": "pickup truck",
     "vlm_proposed_class_id": 99,
     "vlm_proposed_class_name": "pickup_truck",

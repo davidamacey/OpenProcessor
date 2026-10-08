@@ -40,7 +40,7 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   label_validated: true,
   class_validated: true,
   label_source: 'human_review',
-  class_detector: 'v6_model',
+  class_detector: 'model',
   class_detector_version: '6.2.1',
   class_labeled_at: '2026-01-02T03:04:05Z',
   class_labeler: 'labeler@example.com',
