@@ -264,7 +264,9 @@ services:
     profiles: ['cropwright']
     # CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over CROPWRIGHT_TAG.
     image: ${CROPWRIGHT_IMAGE:-davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}}
-    container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cropwright
+    # Soft scheduling floor for the static-file nginx, not a cap.
+    mem_reservation: 64m
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -289,7 +291,8 @@ services:
       # Where nginx proxies /cropwright/ (the bundled docs site, when run).
       - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
     ports:
-      - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
+      # A UI like Grafana: OP_UI_BIND_ADDRESS opens it (and the other UIs) to a LAN while the API stays on loopback.
+      - '${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${CROPWRIGHT_PORT:-5184}:8080'
     healthcheck:
       # 127.0.0.1, not localhost: localhost resolves to ::1 and nginx listens on IPv4 only.
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
