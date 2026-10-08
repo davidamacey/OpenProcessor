@@ -18,17 +18,17 @@ never index, review depth matched to real risk).
 ```bash
 .venv/bin/python -m pytest tests/ -q
 .venv/bin/pre-commit run --all-files
-.venv/bin/python -m ruff check src/
-.venv/bin/python -m mypy src/
+.venv/bin/pre-commit run ruff --all-files
+.venv/bin/pre-commit run mypy --all-files
 ```
 
 - Correct: `.venv/bin/python tests/test_full_system.py`
 - Wrong: `source .venv/bin/activate && python ...` (some harnesses flag it)
 - Wrong: bare `python` or `python3` (system Python, missing dependencies)
 
-Create the venv with `python3 -m venv .venv` and
-`.venv/bin/pip install -r requirements.txt -r requirements-test.txt`
-(see [CONTRIBUTING.md](CONTRIBUTING.md)). The offline suite needs no Docker
+Create the venv with `python3 -m venv .venv`, then install CPU torch and
+`requirements-test.txt` exactly as CONTRIBUTING.md shows. Do not add
+`requirements.txt` (its `faiss-gpu-cu12` breaks `faiss-cpu`). The offline suite needs no Docker
 and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'`.
 
 ## Project overview
