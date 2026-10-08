@@ -454,7 +454,7 @@
        in the key the previous project's page-local state (queue, cursor,
        selection) would survive a switch. -->
     {#key `${active.slug}:${regionProfileStore.seedVersion}`}
-      <div class="flex min-h-0 flex-1">
+      <div class="flex min-h-0 flex-1 flex-col md:flex-row">
         {#if showSidebar}
           <ClassSidebar
             selectedId={selectedClassId}

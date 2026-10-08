@@ -126,7 +126,11 @@
   // count the same way.
 </script>
 
-<aside class="relative flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-950">
+<!-- Narrow screens: a short strip above the content, so the page keeps the full width.
+     md and up: the fixed 16rem column beside it. -->
+<aside
+  class="relative flex h-44 w-full shrink-0 flex-col border-b border-zinc-800 bg-zinc-950 md:h-full md:w-64 md:border-r md:border-b-0"
+>
   <div class="border-b border-zinc-800 p-3">
     <h2 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
       Classes
