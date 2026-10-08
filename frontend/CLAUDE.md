@@ -2319,7 +2319,7 @@ audit are done; its status section records the deviations.
 - **Ratchet:** `src/lib/domainNeutral.scan.test.ts` fails on any plate
   noun, `LPR`/`lpr_`, or car/
   vehicle-domain word (`vehicle`, `sedan`, `suv(s)`, `motorcycle`, `bmw`,
-  `audi`, `brand_b`, `porsche`, `subaru`, `pickup`, `coupe`, `sidecar`,
+  `audi`, `honda`, `porsche`, `subaru`, `pickup`, `coupe`, `sidecar`,
   `classic_car`, `sports_car`, `dumptruck` — the audit §8 sweep,
   2026-09-25) anywhere under `src/` (code, strings, comments, tests). Its
   allow-list is this file, `profiles.falsification.test.ts` (the one test

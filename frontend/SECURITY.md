@@ -5,7 +5,7 @@
 Please **do not open a public issue** for a security problem. Report it
 privately through GitHub's private vulnerability reporting: on the
 repository's **Security** tab, choose **Report a vulnerability**. The
-maintainers (example-org LLC) will assess it and coordinate a fix before
+maintainers (OpenProcessor Contributors) will assess it and coordinate a fix before
 disclosure.
 
 Include:

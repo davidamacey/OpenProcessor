@@ -318,7 +318,7 @@ dataset, photograph or deployment detail.
 ## License
 
 GNU Affero General Public License v3.0 (AGPL-3.0-only), Copyright (c) 2026
-example-org LLC. See [LICENSE](LICENSE). Cropwright is the frontend companion to
+OpenProcessor Contributors. See [LICENSE](../LICENSE). Cropwright is the frontend companion to
 [OpenProcessor](https://github.com/davidamacey/OpenProcessor) (by David
 Macey, also AGPL-3.0), which handles inference, search and clustering
 server-side.

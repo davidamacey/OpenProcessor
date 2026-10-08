@@ -26,7 +26,7 @@ export const siteConfig = {
   logo: 'img/favicon.svg',
 
   // GitHub Pages deployment target.
-  organizationName: 'example-org',
+  organizationName: 'davidamacey',
   projectName: 'cropwright',
   url: 'http://localhost:5184',
   baseUrl: '/cropwright/',
@@ -37,7 +37,7 @@ export const siteConfig = {
   editUrlBase: undefined,
 
   license: 'AGPL-3.0-only',
-  copyrightHolder: 'example-org LLC',
+  copyrightHolder: 'OpenProcessor Contributors',
 
   // Animated walkthrough under the hero title; built from the committed
   // screenshots by scripts/create-workflow-gif.sh. Set to null to omit.

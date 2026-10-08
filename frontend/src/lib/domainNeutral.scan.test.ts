@@ -48,7 +48,7 @@ const DOMAIN_PATTERN = /(?<!tem)plate|\blpr\b|lpr_/i;
  *  `sports_car`/`dumptruck` are matched as substrings since they're
  *  compound identifiers, not standalone words. */
 const VEHICLE_DOMAIN_PATTERN =
-  /\b(vehicle|sedan|suvs?|motorcycle|bmw|audi|brand_b|porsche|subaru|pickup|coupe|sidecar|car)\b|classic_car|sports_car|dumptruck/i;
+  /\b(vehicle|sedan|suvs?|motorcycle|bmw|audi|honda|porsche|subaru|pickup|coupe|sidecar|car)\b|classic_car|sports_car|dumptruck/i;
 
 /** `src/`-relative path -> why it may still match. */
 const ALLOWED: Record<string, string> = {

@@ -107,7 +107,7 @@ one at the location named — never by patching `docusaurus.config.ts`,
 | Assumption | Lives at | Sibling-site value |
 | --- | --- | --- |
 | Site `url` / `baseUrl` | `site.config.ts`: `url`, `baseUrl` | e.g. `https://davidamacey.github.io` / `/OpenProcessor/` |
-| Org/repo name (GitHub Pages project settings) | `site.config.ts`: `organizationName`, `projectName` | e.g. `example-org` / `OpenProcessor` |
+| Org/repo name (GitHub Pages project settings) | `site.config.ts`: `organizationName`, `projectName` | e.g. `davidamacey` / `OpenProcessor` |
 | Docs "Edit this page" target | `site.config.ts`: `editUrlBase` | e.g. `https://github.com/davidamacey/OpenProcessor/tree/main/docs-site/` |
 | GitHub repo link (navbar/footer/hero) | `site.config.ts`: `githubRepo` | e.g. `https://github.com/davidamacey/OpenProcessor` |
 | Pages deploy workflow's repo/branch | `.github/workflows/docs.yml` (repo root) — triggers off `push` to the *checked-out* repo's default branch via `github.ref`; no hardcoded repo name in the workflow itself, but confirm the sibling repo's default branch is actually `main` (the workflow's `if:` gate names it explicitly) | Edit the `if: github.ref == 'refs/heads/main'` line only if the sibling uses a different default branch |

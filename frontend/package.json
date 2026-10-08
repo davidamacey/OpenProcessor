@@ -4,7 +4,7 @@
   "version": "0.1.1",
   "description": "From raw images to a trained detector, without labeling one box at a time. Labeling frontend for OpenProcessor.",
   "license": "AGPL-3.0-only",
-  "author": "example-org LLC",
+  "author": "OpenProcessor Contributors",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/davidamacey/OpenProcessor.git"
