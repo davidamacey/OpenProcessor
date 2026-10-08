@@ -1,0 +1,62 @@
+[
+  {
+    "id": "system",
+    "label": "System",
+    "diagrams": [
+      {
+        "id": "system-overview",
+        "title": "System Overview",
+        "description": "The full stack in one diagram: browser, the Cropwright nginx serving the static bundle and proxying one API prefix, the OpenProcessor API, and behind it OpenSearch, Triton, the VLM, the trainer/evaluator and the segmenter. Start here.",
+        "height": 900
+      },
+      {
+        "id": "frontend-modules",
+        "title": "Frontend Module Map",
+        "description": "Routes, controllers, runes stores, the slot registry (served region profile + tier-2 annotation profiles), api.ts, and the contract tests that check it against the backend's vendored wire format.",
+        "height": 900
+      },
+      {
+        "id": "projects-config",
+        "title": "Projects and Config Store",
+        "description": "The URL as the active project, project-scoped versus global calls, revisioned per-project config (packs, profiles, active VLM, keymap), the shared VLM registry with host-held secrets, and combine and model sharing.",
+        "height": 900
+      }
+    ]
+  },
+  {
+    "id": "workflows",
+    "label": "Workflows",
+    "diagrams": [
+      {
+        "id": "labeling-loop",
+        "title": "Labeling Loop",
+        "description": "Ingest, then clustering/VLM assist, clusters, review, classes, export + holdout, train, bake-off, promote, and probe predictions feeding back into review.",
+        "height": 900
+      },
+      {
+        "id": "ingest-upload",
+        "title": "Ingest Upload Run",
+        "description": "The browser upload run controller: path_lookup prefilter, chunk planning, bounded-concurrency upload, 413/422/503 handling, the region-drain gate, and the clustering handoff.",
+        "height": 900
+      },
+      {
+        "id": "config-activation",
+        "title": "Edit, Test and Activate",
+        "description": "Editing a prompt pack, region profile or VLM endpoint: server-side validation, a revisioned save, test on a crop with an optional VLM pick, then confirmed activation with the external-VLM acknowledgement and the reload notice.",
+        "height": 900
+      }
+    ]
+  },
+  {
+    "id": "sequences",
+    "label": "Sequences",
+    "diagrams": [
+      {
+        "id": "review-assign-undo",
+        "title": "Review Assign + Undo",
+        "description": "A /review keypress, the optimistic queue update, the API write (with rollback on failure), and the Z undo round trip through undoStore.",
+        "height": 950
+      }
+    ]
+  }
+]

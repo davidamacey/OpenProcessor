@@ -1,0 +1,52 @@
+[
+  {
+    "step": "Pick a project",
+    "route": "/projects",
+    "desc": "Create or open a project, or combine several into a new one."
+  },
+  {
+    "step": "Ingest",
+    "route": "/ingest",
+    "desc": "Bring images into the pool via browser upload or a server-path batch."
+  },
+  {
+    "step": "Or import labels",
+    "route": "/datasets/import",
+    "desc": "Import an already-labeled dataset with a previewed, by-name class mapping, then review it on the Imported tab."
+  },
+  {
+    "step": "Cluster & review",
+    "route": "/clusters + /review",
+    "desc": "Triage clusters in bulk or work a keyboard-driven review queue, one item at a time."
+  },
+  {
+    "step": "Manage classes",
+    "route": "/classes",
+    "desc": "Add, rename, merge, deprecate classes and resolve VLM-proposed new-class terms."
+  },
+  {
+    "step": "Export",
+    "route": "/export",
+    "desc": "Freeze a test holdout and export a YOLO dataset with per-class balance reporting."
+  },
+  {
+    "step": "Train",
+    "route": "/train",
+    "desc": "Launch a preflight-checked training run, then promote the result to the model registry."
+  },
+  {
+    "step": "Compare",
+    "route": "/bakeoff",
+    "desc": "Bake-off trained and baseline models across evaluation datasets."
+  },
+  {
+    "step": "Tune the setup",
+    "route": "/settings",
+    "desc": "Edit prompt packs, region profiles, VLM endpoints and shortcuts; test on a crop before activating."
+  },
+  {
+    "step": "Back to review",
+    "route": "/review",
+    "desc": "Model Disagreements surfaces where the newly promoted model and the human label diverge — the next cycle's input."
+  }
+]

@@ -1,0 +1,1381 @@
+{
+  "extra_keys": {
+    "review": [
+      "reason"
+    ],
+    "search": [
+      "semantic_score"
+    ],
+    "training_candidate": [
+      "region_box_id",
+      "row_key",
+      "selection_reason"
+    ]
+  },
+  "generated_by": "scripts/codegen/export_api_contracts.py",
+  "item_keys": [
+    "id",
+    "crop_id",
+    "image_id",
+    "image_path",
+    "source_image_path",
+    "bbox_norm",
+    "class_id",
+    "class_name",
+    "class_source",
+    "confidence",
+    "embedding_state",
+    "class_confidence",
+    "class_confidence_source",
+    "label_source",
+    "label_validated",
+    "class_validated",
+    "class_detector",
+    "class_detector_version",
+    "class_labeled_at",
+    "class_labeler",
+    "vlm_confidence",
+    "vlm_prompt_pack",
+    "vlm_endpoint",
+    "vlm_model",
+    "vlm_class_attempted_at",
+    "vlm_class_empty_reason",
+    "vlm_raw_class",
+    "vlm_proposed_class_id",
+    "vlm_proposed_class_name",
+    "proposed_class_id",
+    "proposed_class_name",
+    "needs_new_class",
+    "needs_new_class_note",
+    "cluster_id",
+    "cluster_kind",
+    "cluster_distance",
+    "cluster_similarity",
+    "cluster_is_core",
+    "cluster_nearest_id",
+    "cluster_subid",
+    "class_excluded",
+    "excluded_reason",
+    "excluded_at",
+    "review_dismissed_at",
+    "source",
+    "test_holdout",
+    "crop_rank_in_image",
+    "crop_area_norm",
+    "blur_lap_ratio",
+    "proposal_name",
+    "source_prompt",
+    "open_vocab_set",
+    "open_vocab_revision",
+    "mask_polygon",
+    "probe_pred_class",
+    "probe_pred_class_id",
+    "probe_pred_entropy",
+    "probe_disagreement",
+    "probe_in_scope",
+    "probe_model_version",
+    "probe_actionable",
+    "mistakenness_score",
+    "mistakenness_method",
+    "mistakenness_version",
+    "mistakenness_scored_at",
+    "uniqueness_score",
+    "dup_group_id",
+    "dup_group_size",
+    "dup_is_representative",
+    "updated_at",
+    "thumbnail_url",
+    "region_status",
+    "region_reason",
+    "region_rejection_reason",
+    "region_validated",
+    "region_auto_confirmed",
+    "region_verified",
+    "region_verified_at",
+    "region_verifier",
+    "region_verifier_version",
+    "region_visible",
+    "region_detector_chain",
+    "region_detected_at",
+    "region_profile",
+    "region_profile_revision",
+    "region_class_id",
+    "region_label_source",
+    "region_pairing",
+    "region_skip_verify",
+    "region_gate_skip",
+    "region_boxes",
+    "region_count",
+    "region_rejected_count",
+    "region_max_score",
+    "region_set_complete",
+    "region_revision",
+    "label_locked",
+    "import_ids",
+    "dataset_split",
+    "imported_at",
+    "proposed_by_import",
+    "on_negative_frame",
+    "import_standalone_region",
+    "proposal_chain",
+    "origin_project",
+    "origin_item_id",
+    "origin_image_id",
+    "origin_split",
+    "combine_conflict",
+    "combine_conflict_origins",
+    "combine_merged_origins",
+    "item_text_lines"
+  ],
+  "json_schema": {
+    "$defs": {
+      "ItemTextLine": {
+        "description": "One OCR text line on the item crop (``box_norm`` in the item-crop\nframe; ``rel_height`` = line height / crop height).",
+        "properties": {
+          "box_norm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Box Norm"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence"
+          },
+          "rel_height": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rel Height"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text"
+          }
+        },
+        "title": "ItemTextLine",
+        "type": "object"
+      }
+    },
+    "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
+    "properties": {
+      "bbox_norm": {
+        "items": {
+          "type": "number"
+        },
+        "title": "Bbox Norm",
+        "type": "array"
+      },
+      "blur_lap_ratio": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Blur Lap Ratio"
+      },
+      "class_confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Confidence"
+      },
+      "class_confidence_source": {
+        "anyOf": [
+          {
+            "enum": [
+              "vlm",
+              "model"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Confidence Source"
+      },
+      "class_detector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Detector"
+      },
+      "class_detector_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Detector Version"
+      },
+      "class_excluded": {
+        "default": false,
+        "title": "Class Excluded",
+        "type": "boolean"
+      },
+      "class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Id"
+      },
+      "class_labeled_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Labeled At"
+      },
+      "class_labeler": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Labeler"
+      },
+      "class_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "title": "Class Name"
+      },
+      "class_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "title": "Class Source"
+      },
+      "class_validated": {
+        "default": false,
+        "title": "Class Validated",
+        "type": "boolean"
+      },
+      "cluster_distance": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Distance"
+      },
+      "cluster_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Id"
+      },
+      "cluster_is_core": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Is Core"
+      },
+      "cluster_kind": {
+        "anyOf": [
+          {
+            "enum": [
+              "class",
+              "candidate",
+              "unassigned"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Kind"
+      },
+      "cluster_nearest_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Nearest Id"
+      },
+      "cluster_similarity": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Similarity"
+      },
+      "cluster_subid": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Subid"
+      },
+      "combine_conflict": {
+        "default": false,
+        "title": "Combine Conflict",
+        "type": "boolean"
+      },
+      "combine_conflict_origins": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Combine Conflict Origins",
+        "type": "array"
+      },
+      "combine_merged_origins": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Combine Merged Origins",
+        "type": "array"
+      },
+      "confidence": {
+        "default": 0.0,
+        "title": "Confidence",
+        "type": "number"
+      },
+      "crop_area_norm": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Crop Area Norm"
+      },
+      "crop_id": {
+        "title": "Crop Id",
+        "type": "string"
+      },
+      "crop_rank_in_image": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Crop Rank In Image"
+      },
+      "dataset_split": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dataset Split"
+      },
+      "dup_group_id": {
+        "default": null,
+        "title": "Dup Group Id"
+      },
+      "dup_group_size": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dup Group Size"
+      },
+      "dup_is_representative": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dup Is Representative"
+      },
+      "embedding_state": {
+        "anyOf": [
+          {
+            "enum": [
+              "embedded",
+              "not_selected",
+              "deferred",
+              "failed"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Embedding State"
+      },
+      "excluded_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Excluded At"
+      },
+      "excluded_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Excluded Reason"
+      },
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "image_id": {
+        "default": "",
+        "title": "Image Id",
+        "type": "string"
+      },
+      "image_path": {
+        "default": "",
+        "title": "Image Path",
+        "type": "string"
+      },
+      "import_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Import Ids",
+        "type": "array"
+      },
+      "import_standalone_region": {
+        "default": false,
+        "title": "Import Standalone Region",
+        "type": "boolean"
+      },
+      "imported_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Imported At"
+      },
+      "item_text_lines": {
+        "items": {
+          "$ref": "#/$defs/ItemTextLine"
+        },
+        "title": "Item Text Lines",
+        "type": "array"
+      },
+      "label_locked": {
+        "default": false,
+        "title": "Label Locked",
+        "type": "boolean"
+      },
+      "label_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "title": "Label Source"
+      },
+      "label_validated": {
+        "default": false,
+        "title": "Label Validated",
+        "type": "boolean"
+      },
+      "mask_polygon": {
+        "anyOf": [
+          {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mask Polygon"
+      },
+      "mistakenness_method": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Method"
+      },
+      "mistakenness_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Score"
+      },
+      "mistakenness_scored_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Scored At"
+      },
+      "mistakenness_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Version"
+      },
+      "needs_new_class": {
+        "default": false,
+        "title": "Needs New Class",
+        "type": "boolean"
+      },
+      "needs_new_class_note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Needs New Class Note"
+      },
+      "on_negative_frame": {
+        "default": false,
+        "title": "On Negative Frame",
+        "type": "boolean"
+      },
+      "open_vocab_revision": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Open Vocab Revision"
+      },
+      "open_vocab_set": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Open Vocab Set"
+      },
+      "origin_image_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Image Id"
+      },
+      "origin_item_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Item Id"
+      },
+      "origin_project": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Project"
+      },
+      "origin_split": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Origin Split"
+      },
+      "probe_actionable": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Actionable"
+      },
+      "probe_disagreement": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Disagreement"
+      },
+      "probe_in_scope": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe In Scope"
+      },
+      "probe_model_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Model Version"
+      },
+      "probe_pred_class": {
+        "default": null,
+        "title": "Probe Pred Class"
+      },
+      "probe_pred_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Pred Class Id"
+      },
+      "probe_pred_entropy": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Pred Entropy"
+      },
+      "proposal_chain": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Proposal Chain",
+        "type": "array"
+      },
+      "proposal_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposal Name"
+      },
+      "proposed_by_import": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposed By Import"
+      },
+      "proposed_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposed Class Id"
+      },
+      "proposed_class_name": {
+        "default": "",
+        "title": "Proposed Class Name",
+        "type": "string"
+      },
+      "region_auto_confirmed": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Auto Confirmed"
+      },
+      "region_boxes": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Region Boxes",
+        "type": "array"
+      },
+      "region_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Class Id"
+      },
+      "region_count": {
+        "default": 0,
+        "title": "Region Count",
+        "type": "integer"
+      },
+      "region_detected_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Detected At"
+      },
+      "region_detector_chain": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Detector Chain"
+      },
+      "region_gate_skip": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Gate Skip"
+      },
+      "region_label_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Label Source"
+      },
+      "region_max_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Max Score"
+      },
+      "region_pairing": {
+        "default": null,
+        "title": "Region Pairing"
+      },
+      "region_profile": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Profile"
+      },
+      "region_profile_revision": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Profile Revision"
+      },
+      "region_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Reason"
+      },
+      "region_rejected_count": {
+        "default": 0,
+        "title": "Region Rejected Count",
+        "type": "integer"
+      },
+      "region_rejection_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Rejection Reason"
+      },
+      "region_revision": {
+        "default": 0,
+        "title": "Region Revision",
+        "type": "integer"
+      },
+      "region_set_complete": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Set Complete"
+      },
+      "region_skip_verify": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Skip Verify"
+      },
+      "region_status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Status"
+      },
+      "region_validated": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Validated"
+      },
+      "region_verified": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verified"
+      },
+      "region_verified_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verified At"
+      },
+      "region_verifier": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verifier"
+      },
+      "region_verifier_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verifier Version"
+      },
+      "region_visible": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Visible"
+      },
+      "review_dismissed_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Review Dismissed At"
+      },
+      "source": {
+        "default": "",
+        "title": "Source",
+        "type": "string"
+      },
+      "source_image_path": {
+        "default": "",
+        "title": "Source Image Path",
+        "type": "string"
+      },
+      "source_prompt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Source Prompt"
+      },
+      "test_holdout": {
+        "default": false,
+        "title": "Test Holdout",
+        "type": "boolean"
+      },
+      "thumbnail_url": {
+        "default": "",
+        "title": "Thumbnail Url",
+        "type": "string"
+      },
+      "uniqueness_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Uniqueness Score"
+      },
+      "updated_at": {
+        "default": "",
+        "title": "Updated At",
+        "type": "string"
+      },
+      "vlm_class_attempted_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Class Attempted At"
+      },
+      "vlm_class_empty_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Class Empty Reason"
+      },
+      "vlm_confidence": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Confidence"
+      },
+      "vlm_endpoint": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Endpoint"
+      },
+      "vlm_model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Model"
+      },
+      "vlm_prompt_pack": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Prompt Pack"
+      },
+      "vlm_proposed_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Proposed Class Id"
+      },
+      "vlm_proposed_class_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Proposed Class Name"
+      },
+      "vlm_raw_class": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Raw Class"
+      }
+    },
+    "required": [
+      "id",
+      "crop_id"
+    ],
+    "title": "ItemDoc",
+    "type": "object"
+  },
+  "notes": "Every item-returning endpoint emits exactly item_keys (all always present; nullable per json_schema), plus that endpoint's extra_keys. region_keys is the item-level region subset; a box's own data (geometry, score, detector, text, cluster, thumbnail_url) is an element of region_boxes.",
+  "region_keys": [
+    "region_status",
+    "region_reason",
+    "region_rejection_reason",
+    "region_validated",
+    "region_auto_confirmed",
+    "region_verified",
+    "region_verified_at",
+    "region_verifier",
+    "region_verifier_version",
+    "region_visible",
+    "region_detector_chain",
+    "region_detected_at",
+    "region_profile",
+    "region_profile_revision",
+    "region_class_id",
+    "region_label_source",
+    "region_pairing",
+    "region_skip_verify",
+    "region_gate_skip"
+  ],
+  "source": {
+    "model": "src/routers/curation/_item_models.py:ItemDoc",
+    "serializer": "src/services/curation/wire.py:serialize_item"
+  }
+}

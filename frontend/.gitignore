@@ -1,0 +1,41 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+.env
+.env.*
+!.env.example
+.vite/
+.DS_Store
+*.log
+.vscode/
+.idea/
+coverage/
+.cache/
+reports/
+.stryker-tmp/
+__pycache__/
+
+# Stubbed-backend Playwright/pytest e2e suite (docs/design/
+# test-audit-2026-09-24.md recommendation 5) — its own per-project venv,
+# never installed on the host.
+e2e/.venv/
+e2e/.pytest_cache/
+test-results/
+
+# Deployment-local annotation-slot configuration (tier 2). The real file
+# is supplied per-deployment; only the .example.json is tracked, exactly
+# like .env / .env.example above.
+static/annotation-profiles.json
+
+# Docusaurus docs site (docs-site/node_modules and docs-site/build are
+# already covered by the generic node_modules/ and build/ patterns above;
+# .docusaurus is Docusaurus-specific and needs its own entry).
+docs-site/.docusaurus/
+docs-site/.cache-loader/
+
+# Validated local artifacts kept out of /tmp (evidence, exports); never committed.
+artifacts_local/
+
+# Release orchestrator ledger (scripts/release.sh) — local run state only.
+/.release/

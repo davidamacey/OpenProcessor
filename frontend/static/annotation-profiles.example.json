@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "key": "pallet_label",
+      "bind": {
+        "className": "pallet_label"
+      },
+      "label": {
+        "singular": "pallet label",
+        "plural": "pallet labels",
+        "title": "Pallet label"
+      },
+      "capabilities": {
+        "subBox": {
+          "listField": "region_boxes",
+          "countField": "region_count",
+          "rejectedCountField": "region_rejected_count",
+          "maxScoreField": "region_max_score",
+          "setCompleteField": "region_set_complete",
+          "revisionField": "region_revision",
+          "thumbnail": {
+            "path": "/crops/{cropId}/region_thumbnail?box_id={boxId}&size={size}",
+            "aspect": "1 / 1",
+            "defaultSize": 160
+          },
+          "ring": "default",
+          "editor": {
+            "thumbSize": 512,
+            "viewPadding": 2.0,
+            "nudgeStep": 0.001953125
+          }
+        },
+        "text": {
+          "label": "SSCC code",
+          "placeholder": "000123456700000000",
+          "transform": "uppercase",
+          "monospace": true,
+          "pattern": {
+            "source": "^[0-9]{18}$",
+            "flags": ""
+          },
+          "maxLength": 18
+        },
+        "provenance": {
+          "chainField": "region_detector_chain",
+          "verifierField": "region_verifier",
+          "verifiedAtField": "region_verified_at",
+          "showChainOnCard": true
+        },
+        "lifecycle": {
+          "statusField": "region_status",
+          "verifiedField": "region_verified",
+          "validatedField": "region_validated",
+          "autoConfirmedField": "region_auto_confirmed",
+          "rejectionReasonField": "region_rejection_reason",
+          "states": [
+            {
+              "value": "pending_detection",
+              "label": "pending detection",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "pending_verification",
+              "label": "pending verification",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "detected",
+              "label": "detected (label visible)",
+              "humanWritable": true,
+              "role": "proposed"
+            },
+            {
+              "value": "verify_rejected",
+              "label": "rejected (bad detection)",
+              "humanWritable": true,
+              "role": "rejected"
+            },
+            {
+              "value": "no_region_box",
+              "label": "no box found",
+              "humanWritable": false,
+              "role": "absent"
+            },
+            {
+              "value": "no_region_visible",
+              "label": "no label visible",
+              "humanWritable": true,
+              "role": "absent"
+            },
+            {
+              "value": "detection_failed",
+              "label": "detection failed",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "false_positive",
+              "label": "false positive (keep box)",
+              "humanWritable": true,
+              "role": "falsePositive",
+              "dim": true,
+              "badge": "false pos"
+            }
+          ],
+          "confirmState": "detected",
+          "rejectState": "no_region_visible",
+          "falsePositiveState": "false_positive"
+        },
+        "queue": {
+          "endpointId": "regions",
+          "urlId": "pallet_labels",
+          "tabLabel": "Pallet labels",
+          "browsePath": "/regions",
+          "keymap": {
+            "confirm": [
+              "enter"
+            ],
+            "reject": [
+              "r"
+            ],
+            "markFalsePositive": [
+              "f"
+            ],
+            "editBox": [
+              "e"
+            ],
+            "back": [
+              "arrowleft",
+              "b"
+            ]
+          },
+          "textFilter": {
+            "param": "text",
+            "label": "SSCC",
+            "placeholder": "e.g. 0001234"
+          },
+          "alwaysVisible": true
+        },
+        "trainingCohorts": {
+          "cohorts": [
+            {
+              "id": "validated_labels",
+              "label": "Validated pallet labels",
+              "description": "Human-confirmed label boxes for this class",
+              "query": {
+                "kind": "endpoint",
+                "path": "/crops",
+                "params": {
+                  "class_id": "{classId}",
+                  "label_validated": true
+                }
+              },
+              "rowKind": "crop",
+              "reviewTarget": "all"
+            }
+          ]
+        }
+      },
+      "endpoints": {
+        "patchMeta": "/crops/{cropId}/region_meta",
+        "batchStatus": "/regions/batch_status"
+      },
+      "stats": {
+        "key": "regions",
+        "panelTitle": "Pallet-label detections",
+        "coverageTitle": "Pallet-label coverage"
+      }
+    }
+  ]
+}

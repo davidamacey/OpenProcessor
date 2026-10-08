@@ -1,0 +1,212 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cropwright \u2014 Labeling Loop",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "curate",
+        "label": "Ingest to review",
+        "focus": [
+          "ingest",
+          "cluster_vlm",
+          "clusters",
+          "review"
+        ],
+        "note": "Ingest hands off to clustering/VLM assist; an operator then works clusters and the review queues."
+      },
+      {
+        "id": "ship",
+        "label": "Classes to model",
+        "focus": [
+          "review",
+          "classes_export",
+          "ship"
+        ],
+        "note": "Export freezes a test holdout; train, bake-off, and promote to the Triton registry follow."
+      },
+      {
+        "id": "feedback",
+        "label": "Probe feedback",
+        "focus": [
+          "ship",
+          "review"
+        ],
+        "note": "A promoted model's probe predictions feed the Model Disagreements review queue \u2014 the loop's only feedback edge."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "data",
+      "label": "Data in"
+    },
+    {
+      "id": "curation",
+      "label": "Curation"
+    },
+    {
+      "id": "registry",
+      "label": "Model lifecycle"
+    }
+  ],
+  "phases": [
+    {
+      "id": "ingest_phase",
+      "label": "Ingest + assist",
+      "fromCol": 0,
+      "toCol": 1,
+      "variant": "emphasis"
+    },
+    {
+      "id": "curate_phase",
+      "label": "Curate",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "default"
+    },
+    {
+      "id": "ship_phase",
+      "label": "Ship a model",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "ingest",
+    "cluster_vlm",
+    "clusters",
+    "review",
+    "classes_export",
+    "ship"
+  ],
+  "nodes": [
+    {
+      "id": "ingest",
+      "lane": "data",
+      "col": 0,
+      "type": "frontend",
+      "label": "Ingest",
+      "sublabel": "upload, batch or import",
+      "width": 140
+    },
+    {
+      "id": "cluster_vlm",
+      "lane": "data",
+      "col": 1,
+      "type": "backend",
+      "label": "Cluster + VLM",
+      "sublabel": "clustering + VLM sweep",
+      "width": 140
+    },
+    {
+      "id": "clusters",
+      "lane": "curation",
+      "col": 2,
+      "type": "frontend",
+      "label": "Clusters",
+      "sublabel": "/clusters, /clusters/[id]",
+      "width": 140
+    },
+    {
+      "id": "review",
+      "lane": "curation",
+      "col": 3,
+      "type": "frontend",
+      "label": "Review",
+      "sublabel": "/review queues",
+      "width": 140
+    },
+    {
+      "id": "classes_export",
+      "lane": "curation",
+      "col": 4,
+      "type": "frontend",
+      "label": "Classes + Export",
+      "sublabel": "finalize + YOLO export",
+      "width": 140
+    },
+    {
+      "id": "ship",
+      "lane": "registry",
+      "col": 5,
+      "type": "database",
+      "label": "Train \u2192 Promote",
+      "sublabel": "train, bake-off, promote",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "ingest-cluster",
+      "from": "ingest",
+      "to": "cluster_vlm",
+      "label": "region-drain gate",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cluster-clusters",
+      "from": "cluster_vlm",
+      "to": "clusters",
+      "variant": "emphasis"
+    },
+    {
+      "id": "clusters-review",
+      "from": "clusters",
+      "to": "review",
+      "label": "confirm / discard / move",
+      "variant": "emphasis"
+    },
+    {
+      "id": "review-classes",
+      "from": "review",
+      "to": "classes_export",
+      "label": "new-class proposals",
+      "variant": "emphasis"
+    },
+    {
+      "id": "classes-ship",
+      "from": "classes_export",
+      "to": "ship",
+      "label": "frozen test split",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ship-review",
+      "from": "ship",
+      "to": "review",
+      "label": "probe feeds Model Disagreements",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "The loop closes through the probe, not the export",
+      "items": [
+        "A promoted checkpoint's probe predictions populate probe_pred_* fields, which the Uncertainty and Model Disagreements review queues need",
+        "Re-running auto_label after a promote is what actually surfaces the next cycle's high-signal candidates"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Test-holdout crops never re-enter labeling",
+      "items": [
+        "test_holdout=true crops are filtered out at the API level \u2014 the UI never receives them, and the VLM/cluster auto-suggest can't touch them",
+        "Export freezes the holdout by a deterministic SHA1-of-crop-id selection, not a client-picked seed"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Every stage is thin on the frontend",
+      "items": [
+        "Clustering, scoring, purity, and promote-gate checks are all server-computed and rendered verbatim \u2014 the UI never re-derives a decision",
+        "Bake-off's ranked results, mappings, and winners are entirely served, never computed client-side"
+      ]
+    }
+  ]
+}

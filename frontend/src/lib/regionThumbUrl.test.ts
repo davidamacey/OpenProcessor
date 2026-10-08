@@ -1,0 +1,65 @@
+/**
+ * Regression coverage for the cross-origin region-thumbnail 404 bug
+ * (2026-09-12 report): with `PUBLIC_TRITON_API_URL` set to a remote
+ * host, several call sites built region-thumbnail `<img src>` values as
+ * bare relative region-thumbnail paths instead of
+ * going through `apiBase`, so the browser resolved them against the
+ * frontend's OWN origin instead of the configured remote OpenProcessor.
+ *
+ * `apiBase` (and therefore `getThumbUrl`/
+ * `resolveApiUrl`) is computed once at module load from
+ * `import.meta.env.PUBLIC_TRITON_API_URL`, so exercising the
+ * non-empty-base case requires stubbing the env var, resetting the
+ * module registry, and re-importing fresh — `vi.stubEnv` +
+ * `vi.resetModules()` + a dynamic `import('./api')` per test.
+ */
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const REMOTE_BASE = 'http://remote-host:4603';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.resetModules();
+});
+
+async function loadApiWithRemoteBase() {
+  vi.stubEnv('PUBLIC_TRITON_API_URL', REMOTE_BASE);
+  vi.resetModules();
+  const mod = await import('./api');
+  // A fresh module instance has its own scopeHolder — seed it the same
+  // way src/lib/test/setup.ts does for the normal (non-reset) module.
+  mod.setScopedPrefix(mod.API_PREFIX);
+  return mod;
+}
+
+describe('resolveApiUrl', () => {
+  it('prefixes a bare relative {API_PREFIX}/... path with the configured remote apiBase', async () => {
+    const { resolveApiUrl, API_PREFIX } = await loadApiWithRemoteBase();
+    expect(resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail?size=160`)).toBe(
+      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160`,
+    );
+  });
+
+  it('is idempotent — a no-op on an already-absolute URL, never double-prefixes', async () => {
+    const { resolveApiUrl, API_PREFIX } = await loadApiWithRemoteBase();
+    const once = resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail`);
+    const twice = resolveApiUrl(once);
+    expect(twice).toBe(once);
+    expect(twice.match(new RegExp(REMOTE_BASE, 'g'))).toHaveLength(1);
+  });
+
+  it('leaves a foreign absolute URL (e.g. http already present) untouched', async () => {
+    const { resolveApiUrl } = await loadApiWithRemoteBase();
+    expect(resolveApiUrl('http://other-host/x')).toBe('http://other-host/x');
+  });
+
+  it('is a plain no-op prefix (empty apiBase) when PUBLIC_TRITON_API_URL is unset', async () => {
+    vi.stubEnv('PUBLIC_TRITON_API_URL', '');
+    vi.resetModules();
+    const { resolveApiUrl, API_PREFIX } = await import('./api');
+    expect(resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail`)).toBe(
+      `${API_PREFIX}/crops/abc/region_thumbnail`,
+    );
+  });
+});

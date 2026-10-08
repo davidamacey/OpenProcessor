@@ -1,0 +1,337 @@
+"""Live read-only tier: the UI shows what the API actually serves.
+
+Every test here reads a number or a set of labels off the real rendered
+page and compares it against a direct `GET {prefix}/...` call, scoped to
+the default project's own served prefix (`live_project`, conftest.py) —
+never a bare unscoped path, since the projects cutover removed the
+unscoped alias entirely. A concurrent actor (another agent's UI-write
+smoke test, per this task's brief) can change dataset-derived counts
+between our API read and the browser's — `agrees_with_retry`
+(conftest.py) re-reads the API once on a mismatch and accepts either
+value, so this suite only goes red on a genuine frontend/backend
+disagreement, not a race with someone else's writes.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+import pytest
+
+from conftest import agrees_with_retry, api_get, int_field, page_path, wait_for_stable_text
+from fixtures.wire import REGION_TAB_URL_ID
+
+TOTAL_RE = re.compile(r"·\s*([\d,]+)\s*total")  # "#1 · 18 loaded · 18 total"
+
+
+def _queue_total(page: Any) -> int:
+    text = page.locator('[data-testid="queue-counter"]').inner_text()
+    m = TOTAL_RE.search(text)
+    assert m, f"queue-counter text didn't match the expected '· N total' shape: {text!r}"
+    return int(m.group(1).replace(",", ""))
+
+
+def test_dashboard_cluster_count_agrees_with_stats_dataset(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    served = int_field(api_get(live_url, live_project, "/stats/dataset"), "clusters", "cluster_count")
+    if served == 0:
+        pytest.skip("the live project has no clusters yet; nothing to agree on")
+    page = guarded_page.page
+    page.goto(f"{live_url}{page_path(live_project, '/dashboard')}", wait_until="domcontentloaded")
+    # `data-testid="dataset-cluster-count"` (DatasetStats.svelte) is only
+    # in source as of this change — the deployment at CROPWRIGHT_LIVE_URL
+    # is a prior build without it (this tier is instructed not to rebuild
+    # or restart the container), so select by the stable dt/dd label
+    # pairing instead, which works against both the old and new build.
+    dt = page.locator('dt:has-text("Clusters (total now)")')
+    dt.wait_for(timeout=15_000)
+    dd = dt.locator("xpath=following-sibling::dd[1]")
+    # SSE-pushed; the first snapshot frame can take a beat past DOM mount.
+    page.wait_for_function(
+        """
+        () => {
+          const dt = Array.from(document.querySelectorAll('dt'))
+            .find((el) => el.textContent.includes('Clusters (total now)'));
+          const dd = dt && dt.nextElementSibling;
+          const text = dd && dd.textContent.trim();
+          return !!text && text !== '0';
+        }
+        """,
+        timeout=15_000,
+    )
+    displayed = int(dd.inner_text().strip().replace(",", ""))
+
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, "/stats/dataset", ("clusters", "cluster_count"), displayed
+    )
+    assert ok, (
+        f"dashboard 'Clusters (total now)' showed {displayed}, but "
+        f"GET {{prefix}}/stats/dataset clusters.cluster_count was "
+        f"{first} (and, on retry, {second})"
+    )
+
+
+def test_region_queue_total_agrees_with_review_regions(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
+) -> None:
+    page = guarded_page.page
+    page.goto(
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}')}",
+        wait_until="domcontentloaded",
+    )
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    page.wait_for_function(
+        """
+        () => {
+          const el = document.querySelector('[data-testid="queue-counter"]');
+          return !!el && /total/.test(el.textContent);
+        }
+        """,
+        timeout=15_000,
+    )
+    wait_for_stable_text(page, '[data-testid="queue-counter"]')
+    displayed = _queue_total(page)
+
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, "/review/regions", ("total",), displayed
+    )
+    assert ok, (
+        f"/review?tab={REGION_TAB_URL_ID} queue-counter showed total={displayed}, but "
+        f"GET {{prefix}}/review/regions total was {first} (and, on retry, {second})"
+    )
+
+
+def test_region_queue_total_agrees_with_filtered_region_status(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
+) -> None:
+    page = guarded_page.page
+    page.goto(
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected')}",
+        wait_until="domcontentloaded",
+    )
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    page.wait_for_function(
+        """
+        () => {
+          const el = document.querySelector('[data-testid="queue-counter"]');
+          return !!el && /total/.test(el.textContent);
+        }
+        """,
+        timeout=15_000,
+    )
+    # ?region_status= only takes effect once GET {prefix}/review/tabs's
+    # filter_specs has loaded — the counter briefly shows the *unfiltered*
+    # total first (see CLAUDE.md's "Served per-tab filters"). Wait for it
+    # to settle before reading it.
+    wait_for_stable_text(page, '[data-testid="queue-counter"]')
+    displayed = _queue_total(page)
+
+    ok, first, second = agrees_with_retry(
+        live_url,
+        live_project,
+        "/review/regions?region_status=verify_rejected",
+        ("total",),
+        displayed,
+    )
+    assert ok, (
+        f"/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected queue-counter showed "
+        f"total={displayed}, but GET {{prefix}}/review/regions?"
+        f"region_status=verify_rejected total was {first} (and, on retry, {second})"
+    )
+
+
+def test_region_tab_label_is_the_served_display_name(
+    guarded_page: Any,
+    live_url: str,
+    live_project: dict[str, Any],
+    live_region_profile: dict[str, Any] | None,
+) -> None:
+    """naming-w2: the region tab exists exactly when the project's scoped
+    `/health` serves a region profile, and reads the served label (the
+    `/review/tabs` entry for `regions` when there is one, else the
+    profile's display_name)."""
+    page = guarded_page.page
+    page.goto(f"{live_url}{page_path(live_project, '/review')}", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    # The tab bar first shows its static labels and swaps to the served ones
+    # once the vocabulary loads, so read it only after every label is served.
+    served_labels = [t.get("label") for t in api_get(live_url, live_project, "/review/tabs")["tabs"]]
+    if live_region_profile is not None:
+        served_labels.append(live_region_profile["display_name"])
+    page.wait_for_function(
+        """(served) => {
+          const labels = [...document.querySelectorAll('[data-testid="review-tabs"] button')]
+            .map((b) => b.innerText.trim().replace(/\\s+[\\d,]+$/, ''));
+          return labels.length > 0 && labels.every((l) => served.includes(l));
+        }""",
+        arg=served_labels,
+        timeout=15_000,
+    )
+    labels = [
+        re.sub(r"\s+[\d,]+$", "", t.strip())
+        for t in page.get_by_test_id("review-tabs").locator("button").all_inner_texts()
+    ]
+    if live_region_profile is None:
+        # No region profile: every tab is a core tab the backend serves
+        # (a served `imported` tab included), never a region one.
+        served = {
+            t.get("label")
+            for t in api_get(live_url, live_project, "/review/tabs")["tabs"]
+        }
+        assert labels and set(labels) <= served, (labels, served)
+        return
+    served_tab = next(
+        (t for t in api_get(live_url, live_project, "/review/tabs")["tabs"] if t["id"] == "regions"),
+        None,
+    )
+    expected = (served_tab or {}).get("label") or live_region_profile["display_name"]
+    assert labels[-1] == expected, (labels, expected)
+
+
+def test_regions_filter_spec_select_matches_served_options(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    tabs = api_get(live_url, live_project, "/review/tabs")["tabs"]
+    regions_tab = next((t for t in tabs if t["id"] == "regions"), None)
+    if regions_tab is None or not regions_tab.get("filter_specs"):
+        pytest.skip("backend serves no filter_specs for the regions tab right now")
+    # Only `enum` specs carry options; bool/number/text/class_names/multi_enum
+    # render other controls (checked by their own stubbed tests).
+    specs = [s for s in regions_tab["filter_specs"] if s.get("kind", "enum") == "enum"]
+    if not specs:
+        pytest.skip("backend serves no enum filter_specs for the regions tab right now")
+
+    page = guarded_page.page
+    page.goto(
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}')}",
+        wait_until="domcontentloaded",
+    )
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+
+    for spec in specs:
+        select = page.locator(f'label:has-text("{spec["label"]}") select')
+        select.wait_for(timeout=15_000)
+        rendered_labels = select.locator("option").all_inner_texts()
+        served_labels = [opt["label"] for opt in spec["options"]]
+        # The select renders exactly the served options (the backend serves an
+        # explicit Any option where an unset state exists); nothing is invented.
+        assert rendered_labels == served_labels, (
+            f"filter_specs[{spec['param']}]: rendered options {rendered_labels} != "
+            f"served options {served_labels}"
+        )
+
+
+def _resolve_reason_label(reason_id: str, vocab_entries: list[dict]) -> str | None:
+    """Mirror `regionVocabularyStore.rejectionReasonLabel` (src/lib/
+    stores/regionVocabulary.svelte.ts): exact match first, then
+    longest-prefix among `match: "prefix"` entries, filling
+    `label_template`'s `{detail}`. Returns None (never the raw id) when
+    nothing in the vocabulary matches — a free-text human reason, which
+    this live dataset isn't exercising today.
+    """
+    for entry in vocab_entries:
+        if entry["match"] == "exact" and entry["id"] == reason_id:
+            return entry["label"]
+    best: dict | None = None
+    for entry in vocab_entries:
+        if entry["match"] == "prefix" and reason_id.startswith(entry["id"]):
+            if best is None or len(entry["id"]) > len(best["id"]):
+                best = entry
+    if best is None:
+        return None
+    detail = reason_id[len(best["id"]) :]
+    template = best.get("label_template")
+    return template.format(detail=detail) if template else best["label"]
+
+
+def test_rejection_reason_label_renders_for_a_live_item(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
+) -> None:
+    vocab = api_get(live_url, live_project, "/regions/vocabulary")
+    vocab_entries = vocab.get("rejection_reasons", [])
+    if not vocab_entries:
+        pytest.skip("backend serves no rejection_reasons vocabulary right now")
+
+    rejected = api_get(
+        live_url, live_project, "/review/regions?region_status=verify_rejected&page_size=50"
+    )
+    items = rejected.get("items", [])
+    if not items:
+        pytest.skip("no verify_rejected items in the live dataset right now")
+
+    expected_labels = {
+        _resolve_reason_label(item["region_rejection_reason"], vocab_entries)
+        for item in items
+        if item.get("region_rejection_reason")
+    }
+    expected_labels.discard(None)
+    if not expected_labels:
+        pytest.skip("no verify_rejected item resolves to a served rejection_reasons label")
+
+    page = guarded_page.page
+    page.goto(
+        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected')}",
+        wait_until="domcontentloaded",
+    )
+    page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
+    reason_dd = page.locator(
+        'xpath=//dt[contains(text(),"Needs review") or contains(text(),"Rejection")]'
+        "/following-sibling::dd[1]"
+    )
+    reason_dd.wait_for(timeout=15_000)
+    displayed = reason_dd.inner_text().strip()
+
+    assert displayed, "the reason/needs-review row rendered empty text"
+    assert displayed in expected_labels, (
+        f"displayed rejection/needs-review label {displayed!r} is not one of the "
+        f"labels {sorted(expected_labels)} the served rejection_reasons vocabulary "
+        f"maps this cohort's items to"
+    )
+
+
+def test_ingest_status_agrees(guarded_page: Any, live_url: str, live_project: dict[str, Any]) -> None:
+    """docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.5 —
+    the /ingest status table's total agrees with GET {prefix}/ingest/status."""
+    page = guarded_page.page
+    page.goto(f"{live_url}{page_path(live_project, '/ingest')}", wait_until="domcontentloaded")
+    total_el = page.locator('[data-testid="ingest-status-total"]')
+    total_el.wait_for(timeout=15_000)
+    wait_for_stable_text(page, '[data-testid="ingest-status-total"]')
+    displayed = int(total_el.inner_text().strip().replace(",", ""))
+
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, "/ingest/status", ("total",), displayed
+    )
+    assert ok, (
+        f"/ingest status table showed total={displayed}, but GET "
+        f"{{prefix}}/ingest/status total was {first} (and, on retry, {second})"
+    )
+
+
+def test_region_drain_agrees(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any],
+    require_region_profile: dict[str, Any],
+) -> None:
+    """The /ingest region-drain panel's total_unfinished agrees with GET
+    {prefix}/ingest/region_drain. Uses wait_for_stable_text — the value
+    moves during a live cascade, per the plan."""
+    page = guarded_page.page
+    page.goto(f"{live_url}{page_path(live_project, '/ingest')}", wait_until="domcontentloaded")
+    el = page.locator('[data-testid="region-drain-total-unfinished"]')
+    el.wait_for(timeout=15_000)
+    wait_for_stable_text(page, '[data-testid="region-drain-total-unfinished"]')
+    displayed = int(el.inner_text().strip().replace(",", ""))
+
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, "/ingest/region_drain", ("total_unfinished",), displayed
+    )
+    assert ok, (
+        f"/ingest region-drain panel showed total_unfinished={displayed}, but GET "
+        f"{{prefix}}/ingest/region_drain total_unfinished was {first} (and, on "
+        f"retry, {second})"
+    )

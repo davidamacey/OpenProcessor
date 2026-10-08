@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cropwright — Ingest Upload Run",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "prefilter", "label": "Prefilter + plan", "focus": ["select", "lookup", "plan"], "note": "path_lookup skips already-indexed identifiers before any bytes are chunked." },
+      { "id": "upload-loop", "label": "Bounded-concurrency upload", "focus": ["plan", "upload", "resultok", "resulterr"], "note": "Chunks dispatch with bounded concurrency (default 2); each response maps to a distinct handling path." },
+      { "id": "handoff", "label": "Drain gate + handoff", "focus": ["resultok", "drain", "cluster"], "note": "Clustering only becomes available once the served region-drain verdict says the worklog is stable." }
+    ]
+  },
+  "lanes": [
+    { "id": "operator", "label": "Operator" },
+    { "id": "run", "label": "Upload run controller" },
+    { "id": "backend", "label": "OpenProcessor API" }
+  ],
+  "phases": [
+    { "id": "planPhase", "label": "Prefilter + plan", "fromCol": 0, "toCol": 1, "variant": "emphasis" },
+    { "id": "uploadPhase", "label": "Upload", "fromCol": 2, "toCol": 3, "variant": "default" },
+    { "id": "handoffPhase", "label": "Gate + handoff", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["select", "lookup", "plan", "upload", "resultok", "drain", "cluster"],
+  "nodes": [
+    { "id": "select", "lane": "operator", "col": 0, "type": "frontend", "label": "Select files", "sublabel": "files or drag-drop", "width": 140 },
+    { "id": "lookup", "lane": "run", "col": 0, "type": "backend", "label": "path_lookup", "sublabel": "skip indexed ids", "width": 140 },
+    { "id": "plan", "lane": "run", "col": 1, "type": "backend", "label": "Chunk plan", "sublabel": "image + byte caps", "width": 140 },
+    { "id": "upload", "lane": "run", "col": 2, "type": "backend", "label": "Upload chunks", "sublabel": "concurrency 2", "width": 140 },
+    { "id": "resultok", "lane": "backend", "col": 3, "type": "database", "label": "200 OK", "sublabel": "by source_identifier", "width": 140 },
+    { "id": "resulterr", "lane": "backend", "col": 2, "type": "security", "label": "413 / 422 / 503", "sublabel": "halve+retry, fail, or pause", "width": 140 },
+    { "id": "drain", "lane": "run", "col": 4, "type": "backend", "label": "Region drain", "sublabel": "drained verdict", "width": 140 },
+    { "id": "cluster", "lane": "operator", "col": 5, "type": "frontend", "label": "Clustering handoff", "sublabel": "AutoLabelPanel gate", "width": 140 }
+  ],
+  "edges": [
+    { "id": "selectLookup", "from": "select", "to": "lookup", "variant": "emphasis" },
+    { "id": "lookupPlan", "from": "lookup", "to": "plan", "label": "skip duplicates", "variant": "emphasis" },
+    { "id": "planUpload", "from": "plan", "to": "upload", "variant": "emphasis" },
+    { "id": "uploadOk", "from": "upload", "to": "resultok", "variant": "emphasis" },
+    { "id": "uploadErr", "from": "upload", "to": "resulterr", "variant": "dashed" },
+    { "id": "errRetry", "from": "resulterr", "to": "upload", "label": "backend 413: retry halved; 503: resume", "variant": "dashed" },
+    { "id": "okDrain", "from": "resultok", "to": "drain", "variant": "emphasis" },
+    { "id": "drainCluster", "from": "drain", "to": "cluster", "label": "stable for N polls", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Identifiers, not paths, drive dedup", "items": ["${identifierPrefix}${relPath} is computed client-side and matched exactly server-side against image_path or source_identifier", "Two folders that both contain img001.jpg at their root would otherwise collide without the source-tag prefix"] },
+    { "dot": "rose", "title": "413 has two shapes, one client rule", "items": ["A JSON 413 body (the backend's own limit) halves the chunk and retries once", "An HTML 413 body (nginx's client_max_body_size) stops the run outright — retrying would just repeat the same rejection"] },
+    { "dot": "emerald", "title": "No client-side stability window", "items": ["The drained verdict (drained/stable_for_s/observed_at) is entirely server-computed from consecutive region_drain polls", "The clustering handoff gate reads that served verdict directly rather than reinventing a stability heuristic"] }
+  ]
+}

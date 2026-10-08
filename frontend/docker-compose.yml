@@ -1,0 +1,104 @@
+# Cropwright frontend — PULL-ONLY. Joins the OpenProcessor API's docker
+# network so nginx can proxy ${PUBLIC_API_PREFIX}/* to it by container
+# name — no CORS, and the browser only ever talks to this origin.
+#
+# This file alone (plus a .env from .env.example) is enough to run —
+# nothing in it depends on a repo checkout:
+#
+#   docker compose pull && docker compose up -d
+#
+# Multi-arch images (linux/amd64 + linux/arm64): davidamacey/cropwright and
+# davidamacey/cropwright-docs. Pin a version with CROPWRIGHT_TAG=X.Y.Z;
+# defaults to :latest.
+#
+# Two services: `cropwright` (the app, the only published port) and `docs`
+# (the documentation site, no published port; opt in with `--profile docs`). Both sit on a private compose
+# network, so nginx reaches the docs at http://docs:8080 (DOCS_UPSTREAM) and
+# serves them at /cropwright/ on the app origin. The API's own Swagger UI /
+# ReDoc / openapi.json are proxied at /docs, /redoc and /openapi.json. Only
+# `cropwright` joins the external OpenProcessor network.
+#
+# Building from source instead of pulling is a DEVELOPMENT path — see
+# README's "Development" section for the docker-compose.build.yml overlay.
+#
+# PUBLIC_API_PREFIX must equal the API's OP_API_PREFIX: the API builds
+# some URLs itself (region thumbnails) from its own prefix.
+#
+# Running a second, independent instance alongside this one (e.g. a
+# second dataset/deployment on the same host): give it its own compose
+# project name, container name and host port so nothing collides —
+#
+#   CROPWRIGHT_PORT=5199 CROPWRIGHT_CONTAINER_NAME=cw-second \
+#     OP_DOCKER_NETWORK=some_other_openprocessor_net \
+#     docker compose -p cw-second up -d
+services:
+  cropwright:
+    # CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over
+    # CROPWRIGHT_TAG; the OpenProcessor installer sets it.
+    image: ${CROPWRIGHT_IMAGE:-davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}}
+    container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    environment:
+      - PUBLIC_API_PREFIX=${PUBLIC_API_PREFIX:-/curation}
+      - API_UPSTREAM=${API_UPSTREAM:-http://op-api:8000}
+      # Leave empty to use the nginx proxy; set only to call an API on
+      # a different origin directly from the browser.
+      - PUBLIC_TRITON_API_URL=${PUBLIC_TRITON_API_URL:-}
+      # Deployment-owned nginx upload cap for /ingest, in MB (default 256).
+      - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
+      # nginx upload cap for a dataset archive, in MB (default 2048).
+      - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
+      # Where nginx proxies /cropwright/ (the bundled docs).
+      - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
+    ports:
+      - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
+    healthcheck:
+      # 127.0.0.1, not localhost: localhost resolves to ::1 here and
+      # nginx only listens on IPv4. The image runs nginx as uid 101 on 8080.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - default
+      - api
+
+  docs:
+    # Opt-in: `docker compose --profile docs up -d`. Kept out of the default
+    # set so `docker compose config --images` lists only the app image.
+    profiles: ['docs']
+    image: davidamacey/cropwright-docs:${CROPWRIGHT_TAG:-latest}
+    container_name: ${CROPWRIGHT_DOCS_CONTAINER_NAME:-cropwright-docs}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    # No published port: the docs are reached through the app origin.
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - default
+
+networks:
+  default: {}
+  api:
+    external: true
+    name: ${OP_DOCKER_NETWORK:-openprocessor_triton_net}

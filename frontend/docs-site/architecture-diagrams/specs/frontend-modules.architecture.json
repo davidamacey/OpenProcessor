@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cropwright — Frontend Module Map",
+    "quality_profile": "showcase",
+    "viewBox": [1180, 700],
+    "views": [
+      { "id": "render-path", "label": "A route's render path", "focus": ["routes", "controllers", "stores", "apits"], "note": "Routes hand queue/pager state to controllers by reference; both controllers and stores call api.ts." },
+      { "id": "slot-path", "label": "Slot model", "focus": ["routes", "slots", "regionprofile", "tier2"], "note": "A served region profile synthesizes one built-in slot; a tier-2 profile can add or override slots at deploy time." },
+      { "id": "contract-path", "label": "Contract enforcement", "focus": ["apits", "contract"], "note": "api.ts's wire keys and endpoints are checked against a vendored snapshot of the backend's generated contract." }
+    ]
+  },
+  "components": [
+    { "id": "routes", "type": "frontend", "label": "src/routes/", "sublabel": "/p/<slug>/ dashboard, review, settings...", "pos": [400, 100], "size": [230, 70] },
+    { "id": "controllers", "type": "frontend", "label": "Controllers", "sublabel": "review / cluster / ingestRun controllers", "pos": [60, 260], "size": [220, 76] },
+    { "id": "stores", "type": "backend", "label": "Runes stores", "sublabel": "projectsStore, classesStore, keymapStore", "pos": [400, 260], "size": [210, 76] },
+    { "id": "slots", "type": "backend", "label": "Slot registry", "sublabel": "registeredSlots.ts, readSlot", "pos": [760, 260], "size": [180, 70] },
+    { "id": "regionprofile", "type": "external", "label": "Served region profile", "sublabel": "GET {prefix}/health", "pos": [760, 400], "size": [180, 64] },
+    { "id": "tier2", "type": "cloud", "label": "Tier-2 profile", "sublabel": "annotation-profiles.json", "pos": [990, 400], "size": [180, 64] },
+    { "id": "apits", "type": "backend", "label": "src/lib/api.ts", "sublabel": "apiFetch + wire mapping", "pos": [420, 420], "size": [190, 64] },
+    { "id": "contract", "type": "database", "label": "Vendored contract tests", "sublabel": "src/lib/contract/*.test.ts", "pos": [420, 560], "size": [190, 64] },
+    { "id": "backend_api", "type": "external", "label": "OpenProcessor API", "pos": [100, 560], "size": [180, 64] }
+  ],
+  "connections": [
+    { "id": "routes-controllers", "from": "routes", "to": "controllers", "variant": "emphasis" },
+    { "id": "routes-stores", "from": "routes", "to": "stores", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "id": "routes-slots", "from": "routes", "to": "slots", "variant": "default" },
+    { "id": "controllers-apits", "from": "controllers", "to": "apits", "label": "assign/discard/undo", "variant": "emphasis", "fromSide": "bottom", "toSide": "left" },
+    { "id": "stores-apits", "from": "stores", "to": "apits", "label": "fetch/post", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelDy": 9 },
+    { "id": "slots-apits", "from": "slots", "to": "apits", "variant": "dashed", "fromSide": "bottom", "toSide": "right" },
+    { "id": "regionprofile-slots", "from": "regionprofile", "to": "slots", "label": "synthesizes one slot", "variant": "emphasis" },
+    { "id": "tier2-slots", "from": "tier2", "to": "slots", "label": "merge-by-replace per key", "variant": "dashed" },
+    { "id": "apits-backend", "from": "apits", "to": "backend_api", "variant": "emphasis" },
+    { "id": "apits-contract", "from": "apits", "to": "contract", "label": "checked against", "variant": "dashed", "labelDy": 24 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Thin frontend, one wire-mapping seam", "items": ["Cropwright only displays/sorts — the backend owns decisions and serves them as data", "api.ts is the sole place RawCrop/RawCluster get mapped into the app's types; nothing else parses the wire shape"] },
+    { "dot": "rose", "title": "Controllers own action logic, pages own state", "items": ["A page keeps queue/cursor/handledIds; a controller (factory function, closures over passed-in accessors) does assign/discard/skip/undo against that shared state", "Same convention for /clusters/[id]'s clusterController and /clusters' slotGalleryController"] },
+    { "dot": "emerald", "title": "Region features gate on one served value", "items": ["region_profile: null on GET {prefix}/health means zero region routes are called — no region tab, no gallery, no keymap letters", "A tier-2 slot that touches a region route is kept only when its key matches the served profile's name"] }
+  ]
+}
