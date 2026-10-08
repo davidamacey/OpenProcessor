@@ -256,6 +256,53 @@ services:
           - op-api
 
   # ===================================================================
+  # Cropwright: the labeling frontend, opt-in via `--profile cropwright`.
+  # Source lives in ./frontend; nginx proxies the API prefix to yolo-api by
+  # its op-api alias, so the browser only ever talks to this origin.
+  # ===================================================================
+  cropwright:
+    profiles: ['cropwright']
+    # CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over CROPWRIGHT_TAG.
+    image: ${CROPWRIGHT_IMAGE:-davidamacey/cropwright:${CROPWRIGHT_TAG:-latest}}
+    container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    environment:
+      # Must equal the API's OP_API_PREFIX: the API builds some URLs itself
+      # (region thumbnails) from its own prefix.
+      - PUBLIC_API_PREFIX=${PUBLIC_API_PREFIX:-/curation}
+      - API_UPSTREAM=${API_UPSTREAM:-http://op-api:8000}
+      # Leave empty to use the nginx proxy; set only to call an API on a
+      # different origin directly from the browser.
+      - PUBLIC_TRITON_API_URL=${PUBLIC_TRITON_API_URL:-}
+      # Deployment-owned nginx upload caps: /ingest (MB) and dataset archives (MB).
+      - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
+      - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
+      # Where nginx proxies /cropwright/ (the bundled docs site, when run).
+      - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
+    ports:
+      - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
+    healthcheck:
+      # 127.0.0.1, not localhost: localhost resolves to ::1 and nginx listens on IPv4 only.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      yolo-api:
+        condition: service_started
+    networks:
+      - triton_net
+
+  # ===================================================================
   # Curation subsystem — EXPERIMENTAL, opt-in via `--profile curation`
   # (D7). `docker compose up -d` on its own never starts anything below
   # this point; run `docker compose --profile curation up -d` (or

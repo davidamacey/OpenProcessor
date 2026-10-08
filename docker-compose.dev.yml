@@ -57,6 +57,13 @@ services:
       - ./VERSION:/app/VERSION:ro
       - ./examples:/app/examples:ro
 
+  # The frontend builds from ./frontend (its Dockerfile is a multi-stage static build + nginx).
+  cropwright:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ${CROPWRIGHT_IMAGE:-openprocessor-cropwright:dev}
+
   curation-detection-worker:
     build:
       context: .
