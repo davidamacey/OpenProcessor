@@ -1,7 +1,7 @@
 /**
  * Endpoint catalog: every backend call the frontend makes (path template
  * + method + query params), checked against the vendored OpenAPI
- * snapshot (`contracts/openprocessor/openapi/curation.json`, synced
+ * snapshot (`contracts/openapi/curation.json`, synced
  * from OpenProcessor's `contracts/openapi/curation.json` via `npm run
  * contract:sync`). A path/method that disappears or renames on the
  * backend, or a query param the backend stops declaring, fails here.
@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import openapi from '../../../contracts/openprocessor/openapi/curation.json';
+import openapi from '$contracts/openapi/curation.json';
 import { scanApiCallSites, type ApiCallSite } from './apiCallScanner';
 
 const here = path.dirname(fileURLToPath(import.meta.url));

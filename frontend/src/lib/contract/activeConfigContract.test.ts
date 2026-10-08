@@ -6,7 +6,7 @@
  * served enums so a backend rename fails here, not as a blank control.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type {
   ActivateResponse,
   ActiveConfigResponse,

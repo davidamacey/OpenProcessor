@@ -9,7 +9,7 @@
  * ever carry declared keys.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_vlm';
 import type { ModelChoice, VocabVlmEndpoint } from '$lib/types_profiles';
 import type { ConfigRevision } from '$lib/types_config';

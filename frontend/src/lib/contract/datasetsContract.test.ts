@@ -8,7 +8,7 @@
  * enums, since the backend serves no vocabulary for them.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import { reprocessBatch, reprocessCrop, reprocessImage } from '$lib/api';
 import { REGION_MODES, REPROCESS_SCOPES } from '$lib/datasets/reprocessVocabulary';
 import { ReprocessFlow } from '$lib/datasets/reprocessController.svelte';

@@ -742,7 +742,7 @@
   // fetched per-card, in the operator's actual DISPLAY order (gridItems,
   // just above), not the backend's fixed size-desc order. The `/clusters`
   // endpoint has no batch-by-id representatives param (checked against
-  // contracts/openprocessor/openapi/curation.json) — only a single
+  // contracts/openapi/curation.json) — only a single
   // `cluster_id` filter — so each missing card in the window is fetched
   // individually via that filter, in parallel. See
   // src/lib/clusters/displayOrderRepresentatives.ts for the full

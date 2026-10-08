@@ -4,7 +4,7 @@
  * the frontend reads it from must serve it.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type { ServedRegionProfile } from '$lib/types';
 
 type Schema = { properties?: Record<string, unknown>; required?: string[] };

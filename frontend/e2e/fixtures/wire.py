@@ -1,7 +1,7 @@
 """Wire-payload fixture builder for the stubbed e2e suite.
 
 Fills every key from the vendored OpenProcessor contract snapshot
-(``contracts/openprocessor/json/item_wire.json``) instead of a hand-copied
+(``contracts/json/item_wire.json``) instead of a hand-copied
 shape, so a backend field rename/removal makes ``make_item`` itself go
 stale in an obvious way (missing key in ``item_wire.json`` -> KeyError at
 import time, since ``DEFAULTS`` is built from ``ITEM_KEYS``).
@@ -16,14 +16,14 @@ from pathlib import Path
 from typing import Any
 
 _CONTRACT_PATH = (
-    Path(__file__).resolve().parents[2] / "contracts" / "openprocessor" / "json" / "item_wire.json"
+    Path(__file__).resolve().parents[3] / "contracts" / "json" / "item_wire.json"
 )
 _CONTRACT: dict[str, Any] = json.loads(_CONTRACT_PATH.read_text())
 
 ITEM_KEYS: list[str] = list(_CONTRACT["item_keys"])
 REGION_KEYS: list[str] = list(_CONTRACT["region_keys"])
 
-# Region status values a stub may need (contracts/openprocessor/ts/regionStatus.ts).
+# Region status values a stub may need (contracts/ts/regionStatus.ts).
 REGION_STATUS_VALUES = [
     "pending_detection",
     "pending_verification",
@@ -321,7 +321,7 @@ _missing = [k for k in ITEM_KEYS if k not in _EXPLICIT]
 if _missing:
     raise RuntimeError(
         f"e2e/fixtures/wire.py's make_item() is missing defaults for contract "
-        f"keys: {_missing}. Add them (see contracts/openprocessor/json/item_wire.json)."
+        f"keys: {_missing}. Add them (see contracts/json/item_wire.json)."
     )
 
 DEFAULT_ITEM: dict[str, Any] = {k: _EXPLICIT[k] for k in ITEM_KEYS}

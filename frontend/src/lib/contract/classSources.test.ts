@@ -1,7 +1,7 @@
 /**
  * `class_source` role vocabulary contract. `CLASS_SOURCE_ROLES` is
  * vendored verbatim from OpenProcessor's
- * `contracts/openprocessor/ts/classSources.ts` (`npm run contract:sync`,
+ * `contracts/ts/classSources.ts` (`npm run contract:sync`,
  * source: `src/services/curation/class_sources.py`). Both consumers of
  * `role` — `classSourcesStore` (which just stores/looks up whatever the
  * backend sends, no filtering) and `sourceBadge` (which switches on
@@ -10,7 +10,7 @@
  * cover.
  */
 import { describe, expect, it } from 'vitest';
-import { CLASS_SOURCE_ROLES } from '../../../contracts/openprocessor/ts/classSources';
+import { CLASS_SOURCE_ROLES } from '$contracts/ts/classSources';
 import type { ClassSourceRole } from '../api';
 import { sourceBadge } from '../sourceBadge';
 

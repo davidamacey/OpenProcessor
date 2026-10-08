@@ -12,7 +12,7 @@
  * controller tests instead (plan question P4-6).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import { previewCombine, startCombine } from '$lib/api_combine';
 import type * as T from '$lib/types_combine';
 

@@ -8,7 +8,7 @@
  * parameter of `GET /crops`.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import {
   EMBEDDING_STATES,
   ITEM_ORIGINS,

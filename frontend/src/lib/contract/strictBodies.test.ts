@@ -5,7 +5,7 @@
  * JSON it actually sends only uses keys the served schema declares.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import openapi from '../../../contracts/openprocessor/openapi/curation.json';
+import openapi from '$contracts/openapi/curation.json';
 import { exportYolo, freezeTestHoldout, ingestBatch } from '$lib/api';
 
 type Schema = { properties?: Record<string, unknown>; additionalProperties?: boolean };

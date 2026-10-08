@@ -1,7 +1,7 @@
 /**
  * Wire types for OpenProcessor W9 (VLM endpoint registry, local model
  * catalog and per-project activation), field for field from the vendored
- * contract (`contracts/openprocessor/openapi/curation.json`, f582aa05).
+ * contract (`contracts/openapi/curation.json`, f582aa05).
  * The registry and catalog routes are GLOBAL (`{prefix}/vlm/...`, shared
  * by every project); activation is per project
  * (`{prefix}/projects/{project}/vlm/endpoints/...`).

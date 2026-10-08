@@ -18,6 +18,8 @@ const config = {
       $lib: 'src/lib',
       $components: 'src/lib/components',
       $stores: 'src/lib/stores',
+      // The API contract the backend generates; one copy, in this repository.
+      $contracts: '../contracts',
     },
   },
 };

@@ -1,7 +1,7 @@
 /**
  * Model-comparison (bake-off) wire types, v2 — OpenProcessor #34
  * (`generic_model_comparison_plan.md` §7). Hand-written from the vendored
- * `contracts/openprocessor/openapi/curation.json`; every interface here
+ * `contracts/openapi/curation.json`; every interface here
  * is pinned to its schema's property set by
  * `src/lib/contract/bakeoffContract.test.ts`.
  */

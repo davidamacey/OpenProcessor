@@ -7,7 +7,7 @@
  * enum, and the multipart body's field names.
  */
 import { describe, expect, it } from 'vitest';
-import openapi from '../../../contracts/openprocessor/openapi/curation.json';
+import openapi from '$contracts/openapi/curation.json';
 import { PATH_LOOKUP_MAX } from '$lib/ingest/ingestConfig';
 import type {
   BatchIngestResponse,

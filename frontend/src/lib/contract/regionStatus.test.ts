@@ -1,16 +1,13 @@
 /**
  * Region lifecycle-status contract: every region slot's `lifecycle`
  * capability must speak the backend's actual `RegionStatus` vocabulary
- * (`contracts/openprocessor/ts/regionStatus.ts`, vendored verbatim from
+ * (`contracts/ts/regionStatus.ts`, vendored verbatim from
  * OpenProcessor's `src/config/region_state.py` via `npm run
  * contract:sync`) — not a hand-copied enum that can silently drift from
  * it.
  */
 import { describe, expect, it } from 'vitest';
-import {
-  REGION_STATUS_VALUES,
-  HUMAN_REGION_STATUSES,
-} from '../../../contracts/openprocessor/ts/regionStatus';
+import { REGION_STATUS_VALUES, HUMAN_REGION_STATUSES } from '$contracts/ts/regionStatus';
 import { regionContractSlots } from '$lib/test/fixtures/exampleProfiles';
 
 const regionSlots = regionContractSlots();

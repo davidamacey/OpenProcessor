@@ -5,7 +5,7 @@
  * fails here instead of rendering a blank Resources menu.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type { CurationSettings, ResourceLink } from '$lib/curationSettings';
 import { RESOURCE_KINDS, RESOURCE_STATUSES } from '$lib/curationSettings';
 

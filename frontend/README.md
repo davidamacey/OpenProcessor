@@ -254,11 +254,10 @@ attempted).
 whether the test suite actually notices a deliberately broken line, not
 just that it passes.
 
-**Vendored API contract:** `npm run contract:sync` / `contract:check`
-pull the wire-format snapshot from a local OpenProcessor checkout
-(`OPENPROCESSOR_REPO`, default `../OpenProcessor`; `OPENPROCESSOR_REF`,
-default `main`) and diff it against what's checked in, so a backend
-rename fails a frontend test instead of silently rendering blanks.
+**API contract:** the frontend's tests read the backend's generated wire
+contract from the repository's own `contracts/` directory (`$contracts` alias),
+so a backend rename fails a frontend test instead of silently rendering blanks.
+There is no copy to sync: regenerate with `make contracts` at the repository root.
 
 ## Releasing
 

@@ -6,7 +6,7 @@
  * served rename fails here instead of rendering "—" silently.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_bakeoff';
 
 type Schema = { properties?: Record<string, unknown>; required?: string[] };

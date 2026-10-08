@@ -1,8 +1,8 @@
 /**
  * Item-wire contract tests. Every fact here is read from
- * `contracts/openprocessor/json/item_wire.json` — vendored verbatim
+ * `contracts/json/item_wire.json` — vendored verbatim
  * from OpenProcessor's generated `contracts/json/item_wire.json`
- * (`npm run contract:sync`, `contracts/openprocessor/SOURCE.md`) — never
+ * (`npm run contract:sync`, `contracts/SOURCE.md`) — never
  * hand-copied. Supersedes `src/lib/annotations/regionWireContract.test.ts`,
  * which pinned its own 31-key literal (deleted alongside this file).
  *
@@ -12,9 +12,9 @@
  * old name.
  */
 import { describe, expect, it } from 'vitest';
-import itemWire from '../../../contracts/openprocessor/json/item_wire.json';
+import itemWire from '$contracts/json/item_wire.json';
 import { RAW_CROP_KEYS } from '../api';
-import openapi from '../../../contracts/openprocessor/openapi/curation.json';
+import openapi from '$contracts/openapi/curation.json';
 import { mapRegionBoxWire } from '$lib/annotations/readSlot';
 import { widgetTagServedSlot } from '$lib/test/fixtures/regionSlot';
 import { regionContractSlots } from '$lib/test/fixtures/exampleProfiles';

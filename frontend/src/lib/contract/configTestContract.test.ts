@@ -8,7 +8,7 @@
  * controllers build are checked against the declared keys.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import { createPackTest } from '$lib/packs/packTestController.svelte';
 import { createProfileTest } from '$lib/profiles/profileTestController.svelte';
 import type * as T from '$lib/types_configTest';

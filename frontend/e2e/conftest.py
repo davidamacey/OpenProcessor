@@ -354,7 +354,7 @@ class Stub:
         )
         # W0 naming-sweep finding m9: the deployment-configured detector/
         # segmenter/verifier vocabulary. Shapes lifted from the vendored
-        # OpenAPI description (contracts/openprocessor/openapi/curation.json,
+        # OpenAPI description (contracts/openapi/curation.json,
         # `/curation/regions/vocabulary`) — `{detectors, region_sources,
         # chain_actors}`, each a list of `{id, label, role, filterable?}`.
         # Defaults are the neutral fixture domain's detector ids (a tag
@@ -401,7 +401,7 @@ class Stub:
             },
         )
         # W0 naming-sweep finding m9: every review tab's served
-        # id/label/description (contracts/openprocessor/openapi/curation.json,
+        # id/label/description (contracts/openapi/curation.json,
         # `/curation/review/tabs`). The region tab's label is served (the
         # region profile's display name), so tests find that tab by
         # REGION_TAB_LABEL; every other tab falls back to its static label.

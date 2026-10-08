@@ -65,7 +65,7 @@ export const REGION_TEXT: TextCapability = {
 };
 
 /**
- * The backend's `RegionStatus` values (contracts/openprocessor/ts/
+ * The backend's `RegionStatus` values (contracts/ts/
  * regionStatus.ts) with neutral labels. The served `/regions/statuses`
  * vocabulary is the primary source for labels and human-writable flags
  * (`$lib/review/slotPanel.ts`); this list is the synchronous fallback

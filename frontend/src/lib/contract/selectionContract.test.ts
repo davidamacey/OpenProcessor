@@ -6,7 +6,7 @@
  * `item_filter`, and every region write serves `vector_refresh`.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type {
   SelectionDryRun,
   SelectionExcludeResult,

@@ -3,7 +3,7 @@
  * (docs/design/domain-neutral-audit-2026-09-24.md §5.3, §7.2).
  */
 import { describe, expect, it } from 'vitest';
-import itemWire from '../../../contracts/openprocessor/json/item_wire.json';
+import itemWire from '$contracts/json/item_wire.json';
 import {
   REGION_ENDPOINTS,
   REGION_TAB_ID,

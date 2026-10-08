@@ -1,7 +1,7 @@
 // Owner: Track B (v0.4.0 generic detector, ingest policy, embedding).
 // Wire types for the `IngestPolicy*`, `IngestDetector*`, `SeedFromDetector*`
 // and `DetectionsSummary` schemas of the vendored contract
-// (`contracts/openprocessor/openapi/curation.json`), pinned key for key by
+// (`contracts/openapi/curation.json`), pinned key for key by
 // `contract/detectorContract.test.ts`.
 import type { ReprocessRequest } from '$lib/types_import';
 

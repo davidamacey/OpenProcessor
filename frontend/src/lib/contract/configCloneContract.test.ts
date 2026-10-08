@@ -3,7 +3,7 @@
  * schemas of the vendored OpenAPI, including `from_project`.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type { ConfigCloneRequest } from '$lib/types_config';
 
 type Schema = { properties?: Record<string, unknown> };

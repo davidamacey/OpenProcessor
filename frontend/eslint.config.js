@@ -34,9 +34,6 @@ export default ts.config(
       'artifacts_local/',
       '.stryker-tmp/',
       'reports/',
-      // Vendored, generated verbatim from OpenProcessor's contracts/ — see
-      // contracts/openprocessor/SOURCE.md. Not ours to lint or format.
-      'contracts/openprocessor/',
       // Docusaurus docs site — its own package.json/tsconfig/eslint story
       // (or none), not part of this SvelteKit app's lint surface.
       'docs-site/',

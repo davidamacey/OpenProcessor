@@ -3,7 +3,6 @@ build
 node_modules
 package-lock.json
 static
-contracts/openprocessor
 e2e/.venv
 .claude
 artifacts_local

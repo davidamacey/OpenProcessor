@@ -3,7 +3,7 @@
  * `representatives_offset`/`representatives_limit` window into the card
  * list only ever windows the backend's own size-desc (`_count desc`)
  * order — there is no batch-by-id representatives param (checked against
- * the vendored contract, contracts/openprocessor/openapi/curation.json:
+ * the vendored contract, contracts/openapi/curation.json:
  * `/curation/clusters` and `/curation/clusters/representatives` both only
  * take a numeric `offset`/`limit` into that fixed server order, plus a
  * single `cluster_id` filter — no `cluster_ids` list). The cluster grid

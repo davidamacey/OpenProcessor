@@ -3,7 +3,7 @@
  * `reprocess` block of `ConfigVocabularyResponse` vs the vendored OpenAPI.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type {
   ConfigVocabulary,
   ReprocessVocabulary,

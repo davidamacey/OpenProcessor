@@ -8,7 +8,7 @@
  * to the schema enums.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_openVocab';
 
 type Schema = {

@@ -7,7 +7,7 @@
  * untyped `GET /models/status` response) — see `types_models.ts`.
  */
 import { describe, expect, it } from 'vitest';
-import spec from '../../../contracts/openprocessor/openapi/curation.json';
+import spec from '$contracts/openapi/curation.json';
 import type * as M from '$lib/types_models';
 import type { ConfigErrorDetail } from '$lib/types_config';
 

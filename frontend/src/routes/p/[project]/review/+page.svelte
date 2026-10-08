@@ -1196,7 +1196,7 @@
     try {
       // M1 (2026-09-24 interactive pass): GET {API_PREFIX}/crops's `sort`
       // is a '<field>[:asc|desc]' pair against a closed field list
-      // (contracts/openprocessor/openapi/curation.json) — 'recent' isn't
+      // (contracts/openapi/curation.json) — 'recent' isn't
       // one of them and 400s every time. 'updated_at:desc' is the
       // server's own documented default and matches "most recently
       // dismissed first".
