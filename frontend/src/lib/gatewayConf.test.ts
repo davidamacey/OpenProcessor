@@ -57,7 +57,7 @@ function locations(text: string): Map<string, string> {
 const FORWARD = [
   'proxy_set_header Host $http_host;',
   'proxy_set_header X-Forwarded-Host $http_host;',
-  'proxy_set_header X-Forwarded-Proto $scheme;',
+  'proxy_set_header X-Forwarded-Proto $forwarded_proto;',
   'proxy_set_header X-Real-IP $remote_addr;',
   'proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
 ];
@@ -72,10 +72,15 @@ describe('gateway sub-path locations', () => {
     { OP_GATEWAY_SUBPATHS: 'false' },
     { OP_GATEWAY_SUBPATHS: '' },
   ] as Record<string, string>[]) {
-    it(`renders nothing when disabled (${JSON.stringify(off)})`, () => {
+    it(`answers 404 on the four sub-paths and proxies nothing when disabled (${JSON.stringify(off)})`, () => {
       const r = render(off);
       expect(r.status).toBe(0);
-      expect(r.gateway).toBeNull();
+      const locs = locations(r.gateway ?? '');
+      for (const sub of ['grafana', 'prometheus', 'dashboards', 'mlflow']) {
+        expect(locs.get(`^~ /${sub}/`), sub).toContain('return 404;');
+        expect(locs.get(`= /${sub}`), sub).toContain('return 404;');
+      }
+      expect(r.gateway).not.toContain('proxy_pass');
     });
   }
 
@@ -106,6 +111,14 @@ describe('gateway sub-path locations', () => {
     for (const bare of ['grafana', 'prometheus', 'dashboards', 'mlflow']) {
       expect(locs.get(`= /${bare}`), bare).toContain(`return 301 /${bare}/;`);
     }
+  });
+
+  it('keeps an https X-Forwarded-Proto from an outer TLS proxy instead of overwriting it', () => {
+    expect(nginxConf).toMatch(
+      /map \$http_x_forwarded_proto \$forwarded_proto \{[^}]*default \$scheme;[^}]*http\s+http;[^}]*https\s+https;/,
+    );
+    const g = render({ OP_GATEWAY_SUBPATHS: 'true' }).gateway!;
+    expect(g).not.toContain('X-Forwarded-Proto $scheme');
   });
 
   it('forwards Host and X-Forwarded-* on every UI location', () => {

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/mlflow/` to the compose services (bare service names only, overridable with
   `GRAFANA_UPSTREAM`, `PROMETHEUS_UPSTREAM`, `DASHBOARDS_UPSTREAM`, `MLFLOW_UPSTREAM`),
   with the websocket upgrade for Grafana Live. No ports are hardcoded in the app.
+  With the switch off those four paths answer 404 instead of the app shell, and an
+  `https` `X-Forwarded-Proto` from an outer TLS proxy is kept on the gateway locations.
 
 ### Fixed
 

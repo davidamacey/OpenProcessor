@@ -27,6 +27,11 @@ x-logging: &default-logging
 # Fail closed: gateway mode refuses to start a UI that is published beyond
 # loopback (OP_UI_BIND_ADDRESS / OP_BIND_ADDRESS), and Grafana with the default
 # or an empty admin password.
+# The entrypoints restated next to each use (/run.sh, /bin/prometheus,
+# ./opensearch-dashboards-docker-entrypoint.sh, none for MLflow) must match each
+# image's own ENTRYPOINT. Re-check with
+#   docker image inspect --format '{{json .Config.Entrypoint}}' <image>
+# whenever the grafana, prometheus, opensearch-dashboards or mlflow image is bumped.
 x-gateway-wrap: &gateway_wrap |
   tag="$$1"; shift
   case "$$(printf '%s' "$${OP_GATEWAY_SUBPATHS:-}" | tr 'A-Z' 'a-z')" in

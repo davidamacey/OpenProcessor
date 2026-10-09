@@ -117,7 +117,13 @@ gateway_upstream() {
 
 mkdir -p "$GATEWAY_DIR"
 rm -f "$GATEWAY_DIR/gateway-subpaths.conf"
-if [ "$GATEWAY_ON" = 1 ]; then
+if [ "$GATEWAY_ON" != 1 ]; then
+  # Off: these paths are not the SPA's. Without this, `try_files` would answer a
+  # /grafana/ link with the app shell (200) as if something were served there.
+  for sub in grafana prometheus dashboards mlflow; do
+    printf 'location ^~ /%s/ {\n    return 404;\n}\nlocation = /%s {\n    return 404;\n}\n' "$sub" "$sub"
+  done > "$GATEWAY_DIR/gateway-subpaths.conf"
+else
   GRAFANA_UPSTREAM="$(gateway_upstream GRAFANA_UPSTREAM "${GRAFANA_UPSTREAM:-http://grafana:3000}")"
   PROMETHEUS_UPSTREAM="$(gateway_upstream PROMETHEUS_UPSTREAM "${PROMETHEUS_UPSTREAM:-http://prometheus:9090}")"
   DASHBOARDS_UPSTREAM="$(gateway_upstream DASHBOARDS_UPSTREAM "${DASHBOARDS_UPSTREAM:-http://opensearch-dashboards:5601}")"
