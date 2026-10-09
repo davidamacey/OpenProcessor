@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.labeling.vlm_labeler import format_class_catalog, resolve_class_name
+from src.services.labeling.vlm_class_names import format_class_catalog, resolve_class_name
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
 

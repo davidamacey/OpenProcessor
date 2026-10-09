@@ -21,7 +21,8 @@ from PIL import Image
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.region_overlay import draw_region_overlay
-from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop, VlmCombinedReply, VlmLabeler
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import CombinedCrop, RegionCrop, VlmCombinedReply
 
 from .test_region_cascade_integrity import _chat, _drive_worker, _FakeOpenSearch, _item
 

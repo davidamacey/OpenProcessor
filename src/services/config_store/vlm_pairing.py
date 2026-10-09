@@ -32,7 +32,7 @@ CHARS_PER_TOKEN = 3.5
 
 #: ``(call, system field, user field, max_tokens the labeler sends, which
 #: image cap applies)``. ``max_tokens`` mirrors the constants in
-#: ``vlm_labeler.py``; ``tests/curation/test_vlm_pairing.py`` pins them.
+#: the ``vlm_labeler_*.py`` modules; ``tests/curation/test_vlm_pairing.py`` pins them.
 _CALLS: tuple[tuple[str, str, str, int, str], ...] = (
     ('class_batch', 'class_system', 'class_user_template', 512, 'max'),
     ('open_class_batch', 'open_class_system', 'open_class_user_template', 768, 'open'),

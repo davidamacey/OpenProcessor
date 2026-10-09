@@ -6,7 +6,7 @@ parse failures raise :class:`CombinedParseFailure` so the caller can fall
 back to the separate-call paths.
 
 The upstream VLM's own wire-reply keys (what the reply's JSON object is
-keyed by) are read via ``RegionFields`` in ``vlm_labeler.py`` rather than
+keyed by) are read via ``RegionFields`` in ``vlm_labeler_combined.py`` rather than
 hardcoded — these fixtures use the generic ``RegionFields``
 defaults (``region_visible``, ``region_boxes`` -- W8 list shape, one
 verdict object per candidate box: ``box`` (1-based), ``region_bbox_correct``,
@@ -27,12 +27,12 @@ import httpx
 import pytest
 from PIL import Image
 
-from src.services.labeling.vlm_labeler import (
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import (
     CombinedCrop,
     CombinedParseFailure,
     CombinedTransportError,
     VlmCombinedReply,
-    VlmLabeler,
 )
 
 

@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from src.services.curation.region_boxes import RegionBox
     from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
     from src.services.detection.region_text_rules import RegionTextRules
-    from src.services.labeling.vlm_labeler import VlmCombinedReply
+    from src.services.labeling.vlm_models import VlmCombinedReply
 
 
 # A crop whose class already came from a classifier or a cluster at or above

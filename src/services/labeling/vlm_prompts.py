@@ -13,7 +13,7 @@ carries the same field set with its own domain prose.
 Field-naming note: the *wire* keys a pack's prompts ask the VLM to
 return for the region-of-interest sub-annotation (``region_visible``,
 ``region_bbox_correct``, ``region_text``, ``region_confidence`` below)
-intentionally match ``RegionFields``' defaults — ``vlm_labeler.py``'s
+intentionally match ``RegionFields``' defaults — ``vlm_reply_parse.py``'s
 reply parser reads those same keys via ``RegionFields`` rather
 than hardcoding them, so a pack and the parser agree on vocabulary by
 construction.
@@ -49,7 +49,7 @@ class PromptPack:
     verify prompt (single + batch), and a region-visibility pre-filter
     prompt (batch). ``class_descriptions`` and ``synonyms`` are the two
     small vocabulary tables ``format_class_catalog`` /
-    ``resolve_class_name`` (``vlm_labeler.py``) consult.
+    ``resolve_class_name`` (``vlm_class_names.py``) consult.
     """
 
     name: str

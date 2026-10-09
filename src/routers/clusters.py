@@ -18,7 +18,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Path, Query
 from fastapi.responses import ORJSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.dependencies import VisualSearchDep
 
@@ -140,8 +140,7 @@ class AlbumInfo(BaseModel):
     cluster_id: int = Field(..., alias='key', description='Cluster ID (album ID)')
     count: int = Field(..., alias='doc_count', description='Number of images in album')
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ListAlbumsResponse(BaseModel):

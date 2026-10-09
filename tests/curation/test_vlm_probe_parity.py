@@ -16,13 +16,8 @@ import pytest
 from PIL import Image
 
 from src.services.labeling import vlm_client
-from src.services.labeling.vlm_labeler import (
-    CombinedCrop,
-    ItemCrop,
-    RegionCrop,
-    VlmLabeler,
-    VlmTransportError,
-)
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import CombinedCrop, ItemCrop, RegionCrop, VlmTransportError
 from src.services.labeling.vlm_probe import ProbeCrop, probe
 
 
