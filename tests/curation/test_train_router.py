@@ -438,7 +438,7 @@ def test_preflight_reports_unknown_not_ok_when_disk_unreadable(
 # =============================================================================
 
 
-def testunresolvable_include_classes_flags_unknown_ids(tmp_path: Any) -> None:
+def test_unresolvable_include_classes_flags_unknown_ids(tmp_path: Any) -> None:
     import json
 
     from src.services.training.preflight_checks import unresolvable_include_classes
@@ -451,7 +451,7 @@ def testunresolvable_include_classes_flags_unknown_ids(tmp_path: Any) -> None:
     assert unresolvable_include_classes(str(export_dir), [1, 999]) == [999]
 
 
-def testunresolvable_include_classes_no_export_id_map_flags_all(tmp_path: Any) -> None:
+def test_unresolvable_include_classes_no_export_id_map_flags_all(tmp_path: Any) -> None:
     """A pre-Phase-5 export (no export_id_map) can't resolve any id — every
     requested class is unresolvable, not a silent pass."""
     import json
@@ -465,7 +465,7 @@ def testunresolvable_include_classes_no_export_id_map_flags_all(tmp_path: Any) -
     assert unresolvable_include_classes(str(export_dir), [1, 2]) == [1, 2]
 
 
-def test_preflight_blocksunresolvable_include_classes(
+def test_preflight_blocks_unresolvable_include_classes(
     app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     import json
