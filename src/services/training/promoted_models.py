@@ -18,7 +18,7 @@ from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.training.model_classes import is_model_shared, model_owner_project
-from src.services.training.triton_promote import resolve_triton_models_dir
+from src.services.training.triton_repo import resolve_triton_models_dir
 
 
 if TYPE_CHECKING:

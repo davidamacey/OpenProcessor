@@ -478,7 +478,8 @@ async def _unload_owned_models(record: ProjectRecord) -> list[str]:
     Mirrors :func:`_delete_indexes`: collects (never swallows) failures
     so the caller can leave the record retryable instead of tombstoning
     a project some of whose models are still live in Triton."""
-    from src.services.training.triton_promote import ModelNotPromotedError, unload_triton_model
+    from src.services.training.promote_errors import ModelNotPromotedError
+    from src.services.training.triton_promote import unload_triton_model
 
     failed: list[str] = []
     for name in owned_model_names(record.slug):

@@ -5,7 +5,7 @@ Item 3 (fresh-start E2E findings 2026-09-25, round 2): Triton in
 explicit-control mode only loads its ``--load-model`` list at startup, so
 a bare Triton restart (or any ``docker compose restart``/recreate of the
 Triton service) silently strands every previously-promoted model at
-UNAVAILABLE. ``src.services.training.triton_promote.reload_promoted_models``
+UNAVAILABLE. ``src.services.training.triton_reload.reload_promoted_models``
 already re-loads them by scanning for ``promote.json`` markers; this test
 covers the *wiring* -- that ``src.main``'s lifespan actually calls it once
 at startup and keeps calling it on the same periodic tick the GPU arbiter
@@ -43,7 +43,7 @@ def test_lifespan_reloads_promoted_models_at_startup_and_on_every_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import src.main as main_module
-    from src.services.training import gpu_arbiter, triton_promote
+    from src.services.training import gpu_arbiter, triton_reload
 
     calls: list[str] = []
 
@@ -55,7 +55,7 @@ def test_lifespan_reloads_promoted_models_at_startup_and_on_every_tick(
         return {'status': 'ok', 'reloaded': [], 'failed': []}
 
     monkeypatch.setattr(gpu_arbiter, 'reconcile_on_startup', _fake_reconcile)
-    monkeypatch.setattr(triton_promote, 'reload_promoted_models', _fake_reload)
+    monkeypatch.setattr(triton_reload, 'reload_promoted_models', _fake_reload)
     monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app):
@@ -73,7 +73,7 @@ def test_a_failing_reload_does_not_kill_the_reconcile_loop(
     loop down -- the next tick (GPU reconcile and the next reload
     attempt) still has to run."""
     import src.main as main_module
-    from src.services.training import gpu_arbiter, triton_promote
+    from src.services.training import gpu_arbiter, triton_reload
 
     arbiter_calls: list[str] = []
 
@@ -85,7 +85,7 @@ def test_a_failing_reload_does_not_kill_the_reconcile_loop(
         raise RuntimeError('simulated reload failure')
 
     monkeypatch.setattr(gpu_arbiter, 'reconcile_on_startup', _fake_reconcile)
-    monkeypatch.setattr(triton_promote, 'reload_promoted_models', _boom)
+    monkeypatch.setattr(triton_reload, 'reload_promoted_models', _boom)
     monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app) as client:

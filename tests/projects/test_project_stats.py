@@ -86,7 +86,7 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
         (models / name).mkdir(parents=True)
         (models / name / 'promote.json').write_text(f'{{"project": "{owner}"}}')
     monkeypatch.setattr(
-        'src.services.training.triton_promote.resolve_triton_models_dir', lambda: models
+        'src.services.training.triton_repo.resolve_triton_models_dir', lambda: models
     )
 
     client = _TermAwareClient()

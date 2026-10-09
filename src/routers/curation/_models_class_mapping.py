@@ -28,7 +28,7 @@ from src.services.training.model_classes import (
     model_owner_project,
     model_sharing_revision,
 )
-from src.services.training.triton_promote import resolve_triton_models_dir
+from src.services.training.triton_repo import resolve_triton_models_dir
 
 
 if TYPE_CHECKING:

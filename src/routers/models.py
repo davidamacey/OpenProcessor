@@ -47,7 +47,7 @@ from src.services.model_export import (
 )
 from src.services.model_repository import promoted_owner, resolve_load_dir, resolve_model_dirs
 from src.services.model_unload_guard import UnloadRefusedError, check_unload
-from src.services.training.triton_promote import set_explicitly_unloaded
+from src.services.training.triton_repo import set_explicitly_unloaded
 from src.services.triton_control import TritonControlService
 
 

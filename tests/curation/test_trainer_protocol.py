@@ -25,8 +25,8 @@ from typing import Any
 import pytest
 
 from src.services.training import job_files, jobs as train_jobs
+from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
 from src.services.training.job_models import TrainJobSpec
-from src.services.training.triton_promote import build_class_id_to_name, resolve_class_remap
 
 
 TRAINER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'trainer'
@@ -427,7 +427,7 @@ def test_single_cls_rewrite_collapses_to_one_class(tmp_path: Path, export_dir: P
 
 
 def test_single_cls_collapsing_several_classes_keeps_the_trainer_name() -> None:
-    from src.services.training.triton_promote import ClassRemapResult
+    from src.services.training.class_remap import ClassRemapResult
 
     remap = ClassRemapResult(
         mapping={1: 0, 2: 0},

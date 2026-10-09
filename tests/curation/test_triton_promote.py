@@ -17,15 +17,15 @@ import httpx
 import pytest
 
 from src.services.training.job_models import TrainJobStatus
-from src.services.training.triton_promote import (
-    DEFAULT_TRITON_HTTP_URL,
-    DEFAULT_TRITON_MODELS_DIR,
+from src.services.training.promote_errors import (
     ModelNameConflictError,
     ModelNotPromotedError,
-    PromoteResult,
-    TritonPromoter,
     TritonUnloadError,
-    UnloadResult,
+)
+from src.services.training.triton_promote import PromoteResult, TritonPromoter, UnloadResult
+from src.services.training.triton_repo import (
+    DEFAULT_TRITON_HTTP_URL,
+    DEFAULT_TRITON_MODELS_DIR,
     resolve_triton_http_url,
     resolve_triton_models_dir,
 )
@@ -425,7 +425,8 @@ def test_class_remap_corrupt_weights_dir_file_raises_loudly(tmp_path: Path) -> N
     """P2-7: a *present but corrupt* class_remap.json used to silently fall
     back to "full-class run" — now it's a loud, typed failure instead of a
     quiet None, since a mislabeled labels.txt is a serving-correctness bug."""
-    from src.services.training.triton_promote import ClassRemapUnreadableError, resolve_class_remap
+    from src.services.training.class_remap import resolve_class_remap
+    from src.services.training.promote_errors import ClassRemapUnreadableError
 
     run_dir = tmp_path / 'job-with-bad-remap'
     run_dir.mkdir()
@@ -442,7 +443,7 @@ def test_class_remap_genuinely_absent_is_not_an_error(tmp_path: Path) -> None:
     """A full-class run legitimately has no class_remap anywhere — that
     resolves to the 'none' source, not an error. The caller (promote_run)
     is responsible for refusing to serve that for an actual subset run."""
-    from src.services.training.triton_promote import resolve_class_remap
+    from src.services.training.class_remap import resolve_class_remap
 
     run_dir = tmp_path / 'job-full-class'
     run_dir.mkdir()
@@ -461,7 +462,7 @@ def test_class_remap_real_payload_shape_round_trips(tmp_path: Path) -> None:
     single_cls/names/include_classes) must parse correctly — this is the P2-7
     bug: the old parser only understood a flat {orig: new} dict or a
     {'mapping': {...}} wrapper and silently produced an empty result here."""
-    from src.services.training.triton_promote import resolve_class_remap
+    from src.services.training.class_remap import resolve_class_remap
 
     run_dir = tmp_path / 'job-subset'
     run_dir.mkdir()
@@ -486,7 +487,7 @@ def test_class_remap_real_payload_shape_round_trips(tmp_path: Path) -> None:
 
 
 def test_class_remap_single_cls_payload(tmp_path: Path) -> None:
-    from src.services.training.triton_promote import build_class_id_to_name, resolve_class_remap
+    from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
 
     run_dir = tmp_path / 'job-single-cls'
     run_dir.mkdir()
@@ -513,7 +514,7 @@ def test_class_remap_manifest_lineage_preferred_over_weights_dir(tmp_path: Path)
     """Every already-completed run has lineage.class_remap in its manifest,
     captured before the trainer's /tmp cleanup — this must resolve correctly
     even when there's no weights-dir file at all (older runs, pre-fix)."""
-    from src.services.training.triton_promote import resolve_class_remap
+    from src.services.training.class_remap import resolve_class_remap
 
     run_dir = tmp_path / 'job-old-run'
     run_dir.mkdir()
@@ -545,7 +546,7 @@ async def test_promote_copies_class_remap_into_model_dir(
     """P2-7 step 6: a resolved remap must land in the served model dir too
     (class_remap.json alongside config.pbtxt/labels.txt), and promote.json
     must carry a class_remap provenance block."""
-    from src.services.training.triton_promote import ClassRemapResult
+    from src.services.training.class_remap import ClassRemapResult
 
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = _promoter(scratch_models_dir)
@@ -820,13 +821,13 @@ class _FakeIndexAndLoadClient:
 async def test_reload_promoted_models_skips_already_ready_models(
     scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.training.triton_promote import reload_promoted_models
+    from src.services.training.triton_reload import reload_promoted_models
 
     _make_promoted_model_dir(scratch_models_dir, 'op_ready_v1')
     fake_client = _FakeIndexAndLoadClient(
         index_response=[{'name': 'op_ready_v1', 'state': 'READY'}], load_ok=set()
     )
-    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+    monkeypatch.setattr('src.services.training.triton_reload.httpx.AsyncClient', fake_client)
 
     result = await reload_promoted_models(_promoter(scratch_models_dir))
 
@@ -838,14 +839,14 @@ async def test_reload_promoted_models_skips_already_ready_models(
 async def test_reload_promoted_models_reloads_unavailable_promoted_models(
     scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.training.triton_promote import reload_promoted_models
+    from src.services.training.triton_reload import reload_promoted_models
 
     _make_promoted_model_dir(scratch_models_dir, 'op_stranded_v1')
     fake_client = _FakeIndexAndLoadClient(
         index_response=[{'name': 'op_stranded_v1', 'state': 'UNAVAILABLE'}],
         load_ok={'op_stranded_v1'},
     )
-    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+    monkeypatch.setattr('src.services.training.triton_reload.httpx.AsyncClient', fake_client)
 
     result = await reload_promoted_models(_promoter(scratch_models_dir))
 
@@ -859,7 +860,7 @@ async def test_reload_promoted_models_ignores_non_promoted_model_dirs(
 ) -> None:
     """A model dir with no promote.json (e.g. a core pipeline model) is
     never a reload target, ready or not."""
-    from src.services.training.triton_promote import reload_promoted_models
+    from src.services.training.triton_reload import reload_promoted_models
 
     core_dir = scratch_models_dir / 'core_model'
     (core_dir / '1').mkdir(parents=True)
@@ -868,7 +869,7 @@ async def test_reload_promoted_models_ignores_non_promoted_model_dirs(
     fake_client = _FakeIndexAndLoadClient(
         index_response=[{'name': 'core_model', 'state': 'UNAVAILABLE'}], load_ok=set()
     )
-    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+    monkeypatch.setattr('src.services.training.triton_reload.httpx.AsyncClient', fake_client)
 
     result = await reload_promoted_models(_promoter(scratch_models_dir))
 
@@ -880,7 +881,7 @@ async def test_reload_promoted_models_ignores_non_promoted_model_dirs(
 async def test_reload_promoted_models_is_best_effort_on_unreachable_triton(
     scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.training.triton_promote import reload_promoted_models
+    from src.services.training.triton_reload import reload_promoted_models
 
     _make_promoted_model_dir(scratch_models_dir, 'op_v1')
 
@@ -897,7 +898,7 @@ async def test_reload_promoted_models_is_best_effort_on_unreachable_triton(
         async def post(self, _url: str) -> Any:
             raise httpx.ConnectError('unreachable')
 
-    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', _RaisingClient())
+    monkeypatch.setattr('src.services.training.triton_reload.httpx.AsyncClient', _RaisingClient())
 
     result = await reload_promoted_models(_promoter(scratch_models_dir))
 
@@ -915,7 +916,7 @@ async def test_unloaded_model_is_never_resurrected_by_reload_promoted_models(
     restart) would silently reload something an operator deliberately
     unloaded. unload() rmtree's the whole model dir, which is exactly
     what strands promote.json for the discovery scan below."""
-    from src.services.training.triton_promote import reload_promoted_models
+    from src.services.training.triton_reload import reload_promoted_models
 
     name = 'op_deliberately_unloaded_v1'
     model_dir = _make_promoted_model_dir(scratch_models_dir, name)
@@ -930,7 +931,7 @@ async def test_unloaded_model_is_never_resurrected_by_reload_promoted_models(
     fake_client = _FakeIndexAndLoadClient(
         index_response=[{'name': name, 'state': 'UNAVAILABLE'}], load_ok={name}
     )
-    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+    monkeypatch.setattr('src.services.training.triton_reload.httpx.AsyncClient', fake_client)
 
     result = await reload_promoted_models(promoter)
 

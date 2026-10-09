@@ -152,7 +152,7 @@ def test_default_returns_202_and_walks_the_phases_to_done(client, monkeypatch) -
 
 
 def test_failure_is_a_terminal_state_with_the_sync_status_code(client, monkeypatch) -> None:
-    from src.services.training.triton_promote import ModelNameConflictError
+    from src.services.training.promote_errors import ModelNameConflictError
 
     fake = _FakePromote(monkeypatch, raises=ModelNameConflictError('pj_model'))
     fake.release.set()

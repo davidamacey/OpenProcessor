@@ -1722,7 +1722,7 @@ def test_reload_promoted_route_returns_the_result_shape(
     fake_reload = AsyncMock(
         return_value={'status': 'ok', 'reloaded': ['op_v2'], 'failed': ['op_v3']}
     )
-    monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
+    monkeypatch.setattr('src.services.training.triton_reload.reload_promoted_models', fake_reload)
 
     r = app_client.post('/curation/projects/default/train/reload_promoted')
 
@@ -1736,7 +1736,7 @@ def test_reload_promoted_route_defaults_to_empty_lists(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_reload = AsyncMock(return_value={'status': 'ok'})
-    monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
+    monkeypatch.setattr('src.services.training.triton_reload.reload_promoted_models', fake_reload)
 
     r = app_client.post('/curation/projects/default/train/reload_promoted')
 
