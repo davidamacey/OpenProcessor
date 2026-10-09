@@ -92,7 +92,9 @@ async def test_label_batch_never_overwrites_validated_class(
         identity = VlmIdentity('env@None', 'test-vlm')
         _pack = GENERIC_ITEM_PACK
 
-        async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
+        async def label_or_propose_batch(
+            self, crops: list[Any], _names: list[str], **_k: Any
+        ) -> list[Any]:
             sent.extend(c.img_id for c in crops)
             # A concurrent auto-promote validates 'raced' after it was
             # fetched but before the VLM result is written.

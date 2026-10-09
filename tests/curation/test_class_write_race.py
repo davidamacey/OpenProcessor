@@ -147,7 +147,9 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
         identity = VlmIdentity('env@None', 'test-vlm')
         _pack = GENERIC_ITEM_PACK
 
-        async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
+        async def label_or_propose_batch(
+            self, crops: list[Any], _names: list[str], **_k: Any
+        ) -> list[Any]:
             _restored_by_undo(fake.docs(ITEMS)['undone'])
             return [
                 VlmClassPrediction(img_id=c.img_id, class_name='sportscar', confidence='high')

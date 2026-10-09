@@ -23,6 +23,7 @@ from src.services.labeling.vlm_reply_parse import (
 
 if TYPE_CHECKING:
     from src.config import RegionFields
+    from src.services.labeling.registry_prior import RegistryPrior
 
 
 logger = get_logger(__name__)
@@ -259,6 +260,7 @@ class ClassifyOps(VlmLabelerCore):
         images_per_call: int | None = None,
         class_catalog: str | None = None,
         cluster_hint: str | None = None,
+        registry_prior: RegistryPrior | None = None,
     ) -> list[VlmClassPrediction]:
         """Label crops, but allow the VLM to propose new classes when nothing fits.
 
@@ -274,7 +276,10 @@ class ClassifyOps(VlmLabelerCore):
         replaces the bare CSV in the prompt with grouped + described classes,
         sharply improving accuracy on ambiguous slugs. ``cluster_hint`` adds a
         per-batch bias line — pass it when labeling a single cluster's members
-        to nudge the VLM toward the dominant class hypothesis.
+        to nudge the VLM toward the dominant class hypothesis. ``registry_prior``
+        (built only when the pack's ``registry_prior_top_k`` is set) lists the
+        best-established classes and pending proposals as a hint; replies outside
+        it are still accepted.
         """
 
         if not crops:
@@ -299,6 +304,7 @@ class ClassifyOps(VlmLabelerCore):
                     class_names,
                     class_catalog=class_catalog,
                     cluster_hint=cluster_hint,
+                    registry_prior=registry_prior,
                 )
                 for c in chunks
             ],
@@ -316,6 +322,7 @@ class ClassifyOps(VlmLabelerCore):
         *,
         class_catalog: str | None = None,
         cluster_hint: str | None = None,
+        registry_prior: RegistryPrior | None = None,
     ) -> list[VlmClassPrediction]:
         if class_catalog:
             user_text = (
@@ -331,6 +338,8 @@ class ClassifyOps(VlmLabelerCore):
                 class_names_csv=', '.join(class_names)
             )
             user_text = f'{user_text}\n{_RESULTS_ENVELOPE}'
+        if registry_prior is not None:
+            user_text = f'{registry_prior.prompt_text()}\n\n{user_text}'
         if cluster_hint:
             user_text = (
                 f'Hint: these crops were grouped together by visual similarity; the '

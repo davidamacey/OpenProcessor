@@ -441,9 +441,13 @@ async def _run_auto_label(
     labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision, endpoint=endpoint)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
+    from src.services.curation.registry_prior_source import prior_or_error
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _pack_stamp = prompt_pack_stamp(labeler._pack, revision=_labeler_revision)
+    registry_prior, prior_error = await prior_or_error(opensearch, labeler._pack, class_names)
+    if prior_error:
+        return {**summary, 'stages_error': prior_error}
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
@@ -462,13 +466,9 @@ async def _run_auto_label(
             _force_fit_bypass['attempted'] += 1
         return _resolve_class_name_fn(raw, name_to_id, confidence=confidence)  # type: ignore[arg-type]
 
-    # Prototype-rescue paths are deleted: CLIP-prototype labeling
-    # mis-labeled a large fraction of rows in an earlier phase. The
-    # classifier+VLM agreement two-signal path (`class_source='classifier_vlm_agreement'`)
-    # is a documented follow-up. For this slice, the VLM writes
-    # `class_source='vlm'` (or `vlm_unmatched` / `vlm_new_class_pending`)
-    # WITHOUT auto-validation. Validation requires either a human signal
-    # or the classifier+VLM two-signal path.
+    # The VLM writes `class_source='vlm'` (or `vlm_unmatched` / `vlm_new_class_pending`)
+    # WITHOUT auto-validation; validation needs a human signal or the
+    # classifier+VLM agreement path. CLIP-prototype rescue is deleted (it mislabeled).
 
     from src.clients.occ import occ_skip_on_conflict_bulk as _occ_skip_bulk
     from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
@@ -505,6 +505,7 @@ async def _run_auto_label(
             crops,
             class_names,
             class_catalog=class_catalog,
+            registry_prior=registry_prior,
         )
         # Collect per-doc updates, then dispatch via
         # occ_skip_on_conflict_bulk so a concurrent human edit always

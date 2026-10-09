@@ -21,10 +21,10 @@ import type {
  * A pack body: every `PromptPack` field except `name`, keyed by the
  * schema's `field` ids. `kind: "text"` fields are strings, `kind: "map"`
  * fields (`class_descriptions`, `synonyms`) are string maps, and
- * `kind: "list"` (`proposal_denylist`) is a list of case-insensitive glob strings.
+ * `kind: "list"` (`proposal_denylist`) is a list of case-insensitive glob strings, and `kind: "int"` (`registry_prior_top_k`, 0 = off) is shown read-only.
  * Kept as a record so a field the backend adds renders from the schema alone.
  */
-export type PackFieldValue = string | string[] | Record<string, string>;
+export type PackFieldValue = string | number | string[] | Record<string, string>;
 export type PromptPackBody = Record<string, PackFieldValue>;
 
 /** One `GET /prompt_packs` `packs[]` row. */
@@ -66,7 +66,7 @@ export interface PackSchemaField {
   field: string;
   label: string;
   group: string;
-  kind: 'text' | 'map' | 'list' | (string & {});
+  kind: 'text' | 'map' | 'list' | 'int' | (string & {});
   formatted: boolean;
   required_placeholders: string[];
   allowed_placeholders: string[];

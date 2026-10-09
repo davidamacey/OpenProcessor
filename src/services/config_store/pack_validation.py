@@ -13,6 +13,7 @@ from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any
 
 from src.services.labeling.region_overlay import REPLY_TEXT_KEY
+from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT, PromptPack
 
 
@@ -38,7 +39,8 @@ MAX_DENYLIST_PATTERN_LEN = 200
 _STRING_FIELDS = tuple(
     f.name
     for f in dc_fields(PromptPack)
-    if f.name not in ('name', 'class_descriptions', 'synonyms', 'proposal_denylist')
+    if f.name
+    not in ('name', 'class_descriptions', 'synonyms', 'proposal_denylist', 'registry_prior_top_k')
 )
 _MAP_FIELDS = ('class_descriptions', 'synonyms')
 
@@ -120,6 +122,33 @@ def _check_denylist(deny: Any) -> list[ValidationIssue]:
     return issues
 
 
+def _check_registry_prior(body: dict[str, Any]) -> list[ValidationIssue]:
+    field_name = 'registry_prior_top_k'
+    if field_name not in body:
+        return []
+    top_k = body[field_name]
+    if isinstance(top_k, bool) or not isinstance(top_k, int):
+        return [
+            _issue(
+                'pack_field_missing',
+                'error',
+                f'{field_name} must be an integer',
+                field=field_name,
+            )
+        ]
+    if not 0 <= top_k <= MAX_REGISTRY_PRIOR_TOP_K:
+        return [
+            _issue(
+                'pack_field_out_of_range',
+                'error',
+                f'{field_name} must be between 0 (off) and {MAX_REGISTRY_PRIOR_TOP_K}',
+                field=field_name,
+                detail={'value': top_k, 'max': MAX_REGISTRY_PRIOR_TOP_K},
+            )
+        ]
+    return []
+
+
 def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for field_name in _STRING_FIELDS:
@@ -175,6 +204,7 @@ def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
                 )
             )
     issues.extend(_check_denylist(body.get('proposal_denylist')))
+    issues.extend(_check_registry_prior(body))
     return issues
 
 
