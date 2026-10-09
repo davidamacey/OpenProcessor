@@ -439,14 +439,10 @@ async def _run_auto_label(
     labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision, endpoint=endpoint)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
-    from src.services.curation.registry_prior_source import prior_or_error
     from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _pack_stamp = prompt_pack_stamp(labeler._pack, revision=_labeler_revision)
-    registry_prior, prior_error = await prior_or_error(opensearch, labeler._pack, class_names)
-    if prior_error:
-        return {**summary, 'stages_error': prior_error}
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
@@ -504,7 +500,6 @@ async def _run_auto_label(
             crops,
             class_names,
             class_catalog=class_catalog,
-            registry_prior=registry_prior,
         )
         # Collect per-doc updates, then dispatch via
         # occ_skip_on_conflict_bulk so a concurrent human edit always

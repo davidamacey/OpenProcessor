@@ -50,6 +50,5 @@
     "shadow*",
     "*_shadow"
   ],
-  "registry_prior_top_k": 0,
   "detector_hint_min_confidence_pct": 0
 }

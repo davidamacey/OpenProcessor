@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.region_overlay import REPLY_TEXT_KEY
-from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT, PromptPack
 
 
@@ -46,7 +45,6 @@ _STRING_FIELDS = tuple(
         'class_descriptions',
         'synonyms',
         'proposal_denylist',
-        'registry_prior_top_k',
         'detector_hint_min_confidence_pct',
     )
 )
@@ -213,7 +211,6 @@ def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
                 )
             )
     issues.extend(_check_denylist(body.get('proposal_denylist')))
-    issues.extend(_check_bounded_int(body, 'registry_prior_top_k', MAX_REGISTRY_PRIOR_TOP_K))
     issues.extend(
         _check_bounded_int(body, 'detector_hint_min_confidence_pct', MAX_DETECTOR_HINT_PCT)
     )

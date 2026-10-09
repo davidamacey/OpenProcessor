@@ -51,7 +51,6 @@ from src.services.config_store.packs import (
     save_pack,
 )
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
-from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT
 
 
@@ -82,7 +81,6 @@ _FIELD_GROUP: dict[str, str] = {
     'class_descriptions': 'vocabulary',
     'synonyms': 'vocabulary',
     'proposal_denylist': 'vocabulary',
-    'registry_prior_top_k': 'open_classify',
     'detector_hint_min_confidence_pct': 'open_classify',
 }
 
@@ -90,18 +88,10 @@ _FIELD_KIND: dict[str, Literal['map', 'list', 'int']] = {
     'class_descriptions': 'map',
     'synonyms': 'map',
     'proposal_denylist': 'list',
-    'registry_prior_top_k': 'int',
     'detector_hint_min_confidence_pct': 'int',
 }
 
 _FIELD_HELP: dict[str, str] = {
-    'registry_prior_top_k': (
-        'Optional hint for open-vocabulary labeling: 0 = off; 1 to '
-        f'{MAX_REGISTRY_PRIOR_TOP_K} lists that many registry classes (most validated first) '
-        'and pending proposal names in the prompt. Skipped until a class has a validated item; '
-        'denylisted names are never listed and a pending name needs 3 crops behind it. '
-        'A hint, not a constraint.'
-    ),
     'detector_hint_min_confidence_pct': (
         'Optional hint for open-vocabulary labeling: 0 = off; 1 to '
         f"{MAX_DETECTOR_HINT_PCT} tells the VLM each item's stored detector class name when "

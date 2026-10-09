@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Score the VLM registry prior on/off against an oracle (#61 item 2).
+"""Score the VLM detector hint on/off against an oracle (#61 item 2).
 
 Two steps, run by hand around two labeling runs of the same crops (one with a
-pack whose ``registry_prior_top_k`` is 0, one with it set):
+pack whose ``detector_hint_min_confidence_pct`` is 0, one with it set):
 
     # after each run, dump (crop, oracle name, VLM answer) for that run's pack
-    .venv/bin/python scripts/curation/bakeoff/vlm_prior_oracle.py dump \\
+    .venv/bin/python scripts/curation/bakeoff/vlm_hint_oracle.py dump \\
         --project <slug> --pack <pack-name> --truth-field <field> --out off.jsonl
 
-    .venv/bin/python scripts/curation/bakeoff/vlm_prior_oracle.py compare \\
+    .venv/bin/python scripts/curation/bakeoff/vlm_hint_oracle.py compare \\
         --off off.jsonl --on on.jsonl
 
 ``dump`` reads items whose ``vlm_prompt_pack`` stamp starts with ``--pack`` and

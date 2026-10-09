@@ -15757,13 +15757,6 @@
             "title": "Region Visible User",
             "type": "string"
           },
-          "registry_prior_top_k": {
-            "default": 0,
-            "maximum": 50.0,
-            "minimum": 0.0,
-            "title": "Registry Prior Top K",
-            "type": "integer"
-          },
           "synonyms": {
             "additionalProperties": {
               "type": "string"

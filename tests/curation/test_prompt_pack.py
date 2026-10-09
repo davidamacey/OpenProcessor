@@ -47,7 +47,6 @@ def test_prompt_pack_is_frozen_dataclass() -> None:
         'class_descriptions',
         'synonyms',
         'proposal_denylist',
-        'registry_prior_top_k',
         'detector_hint_min_confidence_pct',
     }
 

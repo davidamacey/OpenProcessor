@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The served pack schema gains a `detector_hint_min_confidence_pct` row with `kind: "int"` (the optional per-item detector-name hint, 0 = off); the pack editor shows it read-only like `registry_prior_top_k`.
-- The served pack schema gains a `registry_prior_top_k` row with `kind: "int"` (the optional VLM registry prior, 0 = off). The pack editor shows an unknown kind read-only and saves it unchanged, so the value round-trips; `PackSchemaField.kind` lists `int`.
+- The served pack schema gains a `detector_hint_min_confidence_pct` row with `kind: "int"` (the optional per-item detector-name hint, 0 = off). The pack editor shows an unknown kind read-only and saves it unchanged, so the value round-trips; `PackSchemaField.kind` lists `int`.
 - Gateway mode: with `OP_GATEWAY_SUBPATHS=true` the entrypoint installs
   `nginx-gateway.conf`, which proxies `/grafana/`, `/prometheus/`, `/dashboards/` and
   `/mlflow/` to the compose services (bare service names only, overridable with

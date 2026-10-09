@@ -103,11 +103,6 @@ class PromptPack:
     # candidate. Empty = no filtering.
     proposal_denylist: list[str] = field(default_factory=list)
 
-    # Registry prior (#61): when > 0, open-vocabulary labeling tells the VLM
-    # the top-k registry classes (by validated count) and pending proposal
-    # names as a hint. 0 = off. Bounded by ``MAX_REGISTRY_PRIOR_TOP_K``.
-    registry_prior_top_k: int = 0
-
     # Detector hint (#193): when > 0, open-vocabulary labeling tells the VLM each
     # item's stored detector class name when the detector confidence is at least
     # this many percent. 0 = off. Bounded by ``MAX_DETECTOR_HINT_PCT`` (100).

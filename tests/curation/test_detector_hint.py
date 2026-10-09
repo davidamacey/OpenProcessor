@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.test_proposal_denylist import _labeler
-from curation.test_registry_prior import _wire_label_batch
 from src.services.labeling.detector_hint import detector_hint_for
 from src.services.labeling.vlm_models import ItemCrop
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
@@ -147,6 +146,56 @@ def test_missing_value_defaults_off(app_client: TestClient) -> None:
 
 
 # --- wiring: POST /vlm/label_batch -------------------------------------------
+
+
+def _wire_label_batch(
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    pack: PromptPack,
+    seen: list[Any],
+    doc_extra: dict[str, Any] | None = None,
+) -> tuple[Any, Any]:
+    import io
+    from types import SimpleNamespace
+
+    from PIL import Image
+
+    import src.routers.curation.vlm as vlm_mod
+    from curation.query_fakes import QueryFakeOpenSearch
+    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.config.curation import base_curation_config
+
+    items = base_curation_config().items_index
+    buf = io.BytesIO()
+    Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
+    (tmp_path / 'c1.jpg').write_bytes(buf.getvalue())
+    monkeypatch.setattr(
+        vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
+    )
+    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
+    reg.add_class('widget')
+    monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
+
+    async def _no_pack(_os: Any) -> None:
+        return None
+
+    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
+    fake = QueryFakeOpenSearch(
+        {
+            items: {
+                'c1': {
+                    'crop_id': 'c1',
+                    'image_path': '/data/c1.jpg',
+                    'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+                    'class_source': 'item_proposal',
+                    'class_validated': False,
+                    **(doc_extra or {}),
+                }
+            }
+        }
+    )
+
+    return vlm_mod, fake
 
 
 class _RecordingLabeler:

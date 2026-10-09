@@ -37,19 +37,13 @@ code. Packs are editable per project, versioned, and can be rolled back.
   stored pack that omits it; the shipped generic packs carry a starter list covering blur,
   quality, empty and scene words plus `abstract*`, `*_background` and `*_object`.
 
-  An optional integer, `registry_prior_top_k` (`0` = off, the default; at most 50), adds a
-  registry prior to open-vocabulary labeling: the prompt lists up to that many registry
-  classes that have validated items (most validated first, ties by name) and the pending
-  new-class proposal names that at least 3 crops carry, built from the project's own state.
-  Names matching `proposal_denylist` are never listed, and the prior is skipped while no class
-  has a validated item. It is a hint, not a constraint: a reply outside the list is still
-  accepted. If the counts cannot be read the run refuses rather than labeling without the
-  prior. Measured on a public COCO oracle (539 crops), the prior gave no
-  accuracy gain, so it is off by default.
-
   An optional integer, `detector_hint_min_confidence_pct` (`0` = off, the default; at most
   100), adds one line per image naming the item's stored detector class when the detector
-  confidence is at least that percent. Also a hint, not a constraint. On the same oracle it raised overall accuracy from 0.775 to 0.853.
+  confidence is at least that percent. It is a hint, not a constraint. On a public COCO oracle
+  (539 crops) it raised overall accuracy from 0.775 to 0.853 (0.7846 to 0.8478 with ten
+  validated classes seeded). The detector is COCO-trained and the oracle is COCO ground truth,
+  so the gain may be optimistic for other domains. A registry-prior variant was measured, gave
+  no gain and was removed.
 - **Placeholders.** Only three fields are formatted with `str.format`:
   `class_user_template` and `open_class_user_template` accept
   `class_names_csv`; `combined_user_template` accepts `class_block` and
@@ -122,9 +116,9 @@ named region profile (default: the active one). The response is
 |---|---|---|
 | `pack_name_invalid`, `pack_name_reserved` | error | Name must match `^[a-z0-9][a-z0-9_.-]{1,63}$`; `off`, `none` and `default` are reserved |
 | `name_conflict` | error | Name already used |
-| `pack_field_missing`, `pack_field_empty` | error | A text field is absent or blank; `proposal_denylist` is not a list of strings, or holds a blank pattern; `registry_prior_top_k` or `detector_hint_min_confidence_pct` is not an integer |
+| `pack_field_missing`, `pack_field_empty` | error | A text field is absent or blank; `proposal_denylist` is not a list of strings, or holds a blank pattern; `detector_hint_min_confidence_pct` is not an integer |
 | `pack_field_too_long` | error | A field over 20000 characters, a map or `proposal_denylist` over 500 entries, or a denylist pattern over 200 characters |
-| `pack_field_out_of_range` | error | `registry_prior_top_k` is outside 0 to 50, or `detector_hint_min_confidence_pct` outside 0 to 100 |
+| `pack_field_out_of_range` | error | `detector_hint_min_confidence_pct` is outside 0 to 100 |
 | `pack_template_format_error` | error | The field cannot be formatted (for example a single brace) |
 | `pack_placeholder_missing`, `pack_placeholder_unknown` | error | A formatted field lacks a required placeholder or uses another |
 | `pack_placeholder_in_verbatim_field` | error | A placeholder in a field that is not formatted |

@@ -1,4 +1,4 @@
-"""Offline scoring of the registry-prior on/off comparison (#61 item 2)."""
+"""Offline scoring of the detector-hint on/off comparison (#61 item 2)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 
-_PATH = Path(__file__).resolve().parents[2] / 'scripts/curation/bakeoff/vlm_prior_oracle.py'
-_spec = importlib.util.spec_from_file_location('vlm_prior_oracle', _PATH)
+_PATH = Path(__file__).resolve().parents[2] / 'scripts/curation/bakeoff/vlm_hint_oracle.py'
+_spec = importlib.util.spec_from_file_location('vlm_hint_oracle', _PATH)
 assert _spec is not None
 assert _spec.loader is not None
 oracle = importlib.util.module_from_spec(_spec)

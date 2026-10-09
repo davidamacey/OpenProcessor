@@ -89,7 +89,7 @@ describe('PackEditor load and draft', () => {
   it('loads schema, doc, active and revisions; the draft starts clean', async () => {
     const { ed, deps } = setup();
     await ed.load();
-    expect(ed.schema?.fields).toHaveLength(7);
+    expect(ed.schema?.fields).toHaveLength(6);
     expect(ed.draftBody).toEqual(docFixture().body);
     expect(ed.expectedRevision).toBe(2);
     expect(ed.report).toEqual(cleanReport());
