@@ -7,6 +7,11 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+    ignore:
+      # requirements-export-y11.txt pins ultralytics==8.3.x on purpose: the vendored
+      # EfficientNMS end2end patch breaks on 8.4. requirements.txt already carries the
+      # 8.4 range for YOLO26. Dependabot cannot ignore per file, so bump the pin by hand.
+      - dependency-name: "ultralytics"
 
   - package-ecosystem: "github-actions"
     directory: "/"
