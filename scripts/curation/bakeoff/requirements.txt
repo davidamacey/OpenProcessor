@@ -12,8 +12,8 @@
 # Already present in the trainer image: ultralytics(git), torch, numpy<2,
 # opencv-python-headless, mlflow, pydantic, opensearch-py.
 
-pycocotools>=2.0.7        # single shared detection metric across all models
+pycocotools>=2.0.11        # single shared detection metric across all models
 onnxruntime-gpu           # ONNX backends + INT8 static quantization (quantize_static)
-onnx>=1.12.0,<2.0.0       # ultralytics ONNX export + QDQ graph inspection (export/quantize.py)
-onnxslim>=0.1.71          # ultralytics ONNX export simplify=True
-tritonclient[all]>=2.40   # score a deployed Triton TRT engine over gRPC
+onnx>=1.23.2,<2.0.0       # ultralytics ONNX export + QDQ graph inspection (export/quantize.py)
+onnxslim>=0.1.97          # ultralytics ONNX export simplify=True
+tritonclient[all]>=2.73.0   # score a deployed Triton TRT engine over gRPC
