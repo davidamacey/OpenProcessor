@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation_train import _count_validated_and_test_per_class
+from src.services.training.preflight_checks import count_validated_and_test_per_class
 
 
 def _agg_response(validated: dict[int, int], test: dict[int, int]) -> dict[str, Any]:
@@ -30,7 +30,7 @@ async def test_issues_exactly_one_search() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value=_agg_response({1: 10, 2: 3}, {1: 5, 2: 1}))
 
-    validated, test = await _count_validated_and_test_per_class(os_client, [1, 2])
+    validated, test = await count_validated_and_test_per_class(os_client, [1, 2])
 
     os_client.search.assert_awaited_once()
     assert validated == {1: 10, 2: 3}
@@ -42,7 +42,7 @@ async def test_query_body_has_two_sibling_filter_aggs_sharing_class_scope() -> N
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value=_agg_response({}, {}))
 
-    await _count_validated_and_test_per_class(os_client, [7, 8])
+    await count_validated_and_test_per_class(os_client, [7, 8])
 
     assert os_client.search.await_args is not None
     body = os_client.search.await_args.kwargs['body']
@@ -63,7 +63,7 @@ async def test_missing_class_defaults_to_zero_in_both_dicts() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value=_agg_response({1: 10}, {}))
 
-    validated, test = await _count_validated_and_test_per_class(os_client, [1, 2])
+    validated, test = await count_validated_and_test_per_class(os_client, [1, 2])
 
     assert validated == {1: 10, 2: 0}
     assert test == {1: 0, 2: 0}
@@ -72,7 +72,7 @@ async def test_missing_class_defaults_to_zero_in_both_dicts() -> None:
 @pytest.mark.asyncio
 async def test_empty_class_ids_short_circuits_without_a_query() -> None:
     os_client = AsyncMock()
-    validated, test = await _count_validated_and_test_per_class(os_client, [])
+    validated, test = await count_validated_and_test_per_class(os_client, [])
     os_client.search.assert_not_awaited()
     assert validated == {}
     assert test == {}
@@ -82,7 +82,7 @@ async def test_empty_class_ids_short_circuits_without_a_query() -> None:
 async def test_opensearch_failure_returns_zeros_for_every_class() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(side_effect=RuntimeError('boom'))
-    validated, test = await _count_validated_and_test_per_class(os_client, [1, 2])
+    validated, test = await count_validated_and_test_per_class(os_client, [1, 2])
     assert validated == {1: 0, 2: 0}
     assert test == {1: 0, 2: 0}
 
@@ -97,8 +97,8 @@ def test_default_target_classes_leave_out_the_region_class(monkeypatch: pytest.M
     samples; requiring them blocked the default preflight."""
     from types import SimpleNamespace
 
-    from src.routers import curation_train
     from src.services.detection.profile_registry import get_active_region_profile
+    from src.services.training import preflight_checks
 
     def entry(class_id: int, name: str) -> SimpleNamespace:
         return SimpleNamespace(
@@ -111,6 +111,6 @@ def test_default_target_classes_leave_out_the_region_class(monkeypatch: pytest.M
     registry = SimpleNamespace(
         load=lambda: SimpleNamespace(classes=[entry(0, region_name), entry(1, 'car')])
     )
-    monkeypatch.setattr(curation_train, 'get_class_registry', lambda: registry)
+    monkeypatch.setattr(preflight_checks, 'get_class_registry', lambda: registry)
     spec: Any = SimpleNamespace(include_classes=None)
-    assert curation_train._resolve_target_classes(spec) == [1]
+    assert preflight_checks.resolve_target_classes(spec) == [1]

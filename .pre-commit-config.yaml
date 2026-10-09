@@ -138,7 +138,6 @@ repos:
               src/clients/curation_opensearch\.py|
               src/services/curation/clustering/orchestrator\.py|
               src/services/training/triton_promote\.py|
-              src/routers/curation_train\.py|
               src/services/training/jobs\.py|
               src/services/detection/cascade_detect\.py
           )
@@ -149,8 +148,7 @@ repos:
         # unreviewable (it also has a documented orchestrator<->auto_promote
         # import-order constraint — see the same doc's §5). Follow-up
         # split tracked by that doc, not silently ignored.
-        # src/services/training/triton_promote.py (803 LOC) and
-        # src/routers/curation_train.py (1460 LOC) — Chunk 6, same §5
+        # src/services/training/triton_promote.py (803 LOC) — Chunk 6, same §5
         # pre-approval. Grandfathered on arrival from the curation port;
         # follow-up split tracked by that doc, not silently ignored.
         # src/services/training/jobs.py (925 LOC) — Chunk 6. NOT in the
