@@ -111,8 +111,8 @@ def test_for_each_project_binds_each_active_project_in_turn() -> None:
 
 
 def test_every_opensearch_client_wrapper_is_guarded_at_construction() -> None:
-    """Re-review R10: ``OpenSearchClient`` (used by face identity and
-    ``create_client`` too) never hands out an unguarded client."""
+    """Re-review R10: ``OpenSearchClient`` (used by face identity) never hands out an
+    unguarded client."""
     from src.clients.opensearch.client import OpenSearchClient
     from src.services.projects.guard import ProjectGuardedTransport
 
