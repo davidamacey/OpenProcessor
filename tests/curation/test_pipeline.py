@@ -130,6 +130,10 @@ class _FakeOpenSearch:
     async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         return {'count': 0}
 
+    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
+        # No settings document: the VLM scope policy is the default (scope all).
+        raise RuntimeError('404 not found: no settings document')
+
     async def mget(self, *, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         # Every doc reports not-found -- _run_chunk's `if not crops` guard
         # short-circuits before ever calling the VLM labeler, so this test

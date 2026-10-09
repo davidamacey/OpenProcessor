@@ -254,7 +254,7 @@ See [Keymaps](../guides/keymaps.mdx).
 | GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, `purity` (geometry), `label_agreement` (label share), validated count, sub-clusters, representatives |
 | GET | `/clusters/representatives` | Representatives only |
 | POST | `/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
-| POST | `/clusters/auto_promote` | Validate items in high-purity clusters |
+| POST | `/clusters/auto_promote` | Validate classifier-labelled items in high-purity clusters. Gated on the accuracy audit: `409 audit_required` / `409 audit_precision_low` (with `classes`) unless `force=true`; `promote_min_precision` defaults to 0.95; `dry_run` is never gated |
 | POST | `/cluster/umap/rebuild` | Rebuild the residual reducer |
 | GET | `/viz/projection` | Cached 2-D coordinates for plotting; never fits inline |
 | POST | `/viz/projection/rebuild` | Start the projection fit job |
@@ -270,7 +270,7 @@ See [Keymaps](../guides/keymaps.mdx).
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/review/tabs` | The tab catalog with each tab's label, filters, defaults and empty-state hints |
-| GET | `/review/{tab}` | One queue. Tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`, `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, `imported` |
+| GET | `/review/{tab}` | One queue. Tabs: `all`, `mismatches`, `vlm_low_conf`, `detector_disagreements`, `outliers`, `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, `imported` |
 | GET | `/review/{tab}/locate` | Position of one item within a queue |
 | GET | `/review/new_class_proposals/summary` | VLM-proposed class names, grouped |
 | POST | `/review/new_class_proposals/resolve` | Accept or reject a proposed name for every item that proposes it |
@@ -278,6 +278,9 @@ See [Keymaps](../guides/keymaps.mdx).
 | GET | `/review/unmatched_terms` | The same answers, aggregated by term |
 | POST | `/test_holdout/freeze` | Freeze a per-class test split before exporting |
 | GET | `/test_holdout/stats` | Per-class test counts |
+| POST | `/audit/start` | Draw a stratified accuracy-audit sample of machine-labelled crops (`min_per_class`, `sample_size`); `409 audit_no_candidates` when none are eligible |
+| GET | `/audit/queue` | Drawn crops still waiting for a human label (`batch_id`, `page`, `page_size`) |
+| GET | `/audit/report` | Detector and VLM precision per class with Wilson 95% intervals, the confusion matrix and `insufficient_sample` flags (`min_per_class`) |
 | POST | `/probe/run` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
 | GET | `/probe/status` | Probe status. `/probe/cancel` stops it |
 
@@ -421,7 +424,9 @@ project with the VLM off is `409 vlm_not_configured`.
 | POST | `/vlm/verify_regions` | Verify, box by box, whether each crop's regions are real |
 | POST | `/vlm/verify_region_batch` | The same in batches per upstream call |
 | POST | `/vlm/region_visible_batch` | "Is a region visible at all?" pre-filter |
-| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `train_clusters`, ...). Clusters only unless `run_vlm=true` |
+| GET | `/vlm/policy` | The VLM scope policy: `scope` (`all`, `uncertain`, `representatives`, `off`), `conf_max`, `per_cluster`, `max_crops_per_day`, `sample_frac`, `revision` |
+| PUT | `/vlm/policy` | Replace it (needs `expected_revision`; `409 revision_conflict` when stale). Limits the VLM worker and the `auto_label` VLM stage; see [VLM selection](../guides/vlm-selection.mdx#scope-and-budget) |
+| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `vlm_scope`, `train_clusters`, ...). Clusters only unless `run_vlm=true` |
 | GET | `/pipeline/auto_label/status` | Current or last job |
 | GET | `/pipeline/auto_label/status/{job_id}` | One job |
 | POST | `/pipeline/auto_label/cancel` | Cancel |

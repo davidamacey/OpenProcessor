@@ -6,7 +6,7 @@ requeue, the label -> export round trip) are only correct if their query
 *selects the right documents*, so this double stores docs per index and
 evaluates the subset of the query DSL those paths use:
 
-- ``term`` / ``terms`` / ``exists`` / ``match_all`` and ``bool`` with
+- ``term`` / ``terms`` / ``exists`` / ``match_all`` / ``match_none`` and ``bool`` with
   ``must`` / ``filter`` / ``must_not`` / ``should`` (``should`` = any-of);
 - ``nested`` (W8c): matches the parent doc when any element of the nested
   list field satisfies the inner query. Elements are re-keyed with the
@@ -38,9 +38,13 @@ from __future__ import annotations
 
 import copy
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import NotFoundError
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class _ConflictError(Exception):
@@ -126,9 +130,24 @@ def _match_phrase_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
     return any(str(v) == str(value) for v in _values(doc, field))
 
 
+#: Painless sources the fake can stand in for: ``source -> predicate(doc)``. A test
+#: registers the Python twin of the one script it exercises (the fake runs no painless).
+SCRIPT_EVALUATORS: dict[str, Callable[[dict[str, Any]], bool]] = {}
+
+
+def _script_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    source = clause['script']['source']
+    evaluator = SCRIPT_EVALUATORS.get(source)
+    if evaluator is None:
+        raise NotImplementedError(f'no Python twin registered for script: {source}')
+    return evaluator(doc)
+
+
 _LEAF_MATCHERS = {
+    'script': _script_matches,
     'match_phrase': _match_phrase_matches,
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
+    'match_none': lambda _doc, _clause: False,
     'wildcard': _wildcard_matches,
     'nested': _nested_matches,
     # Scoring is irrelevant to which docs match.

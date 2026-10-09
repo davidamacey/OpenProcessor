@@ -12,6 +12,7 @@ from fastapi import FastAPI
 # One entry per distinct OpenSearch document (single search per page, or a
 # ranked distinct-id list hydrated by mget), so ``crop_id`` is unique.
 ONE_ENTRY_PER_DOC = {
+    '/audit/queue',
     '/classes/{class_id}/crops',
     '/crops',
     '/crops/{crop_id}/context',

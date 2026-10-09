@@ -110,8 +110,9 @@ async def test_direct_call_with_omitted_args_uses_plain_defaults(pipeline_env: _
     assert summary['cluster_id'] is None
     assert summary['prompt_pack'] is None
     # Global sweep: every unvalidated item minus the cost skips (b is
-    # vlm_unmatched, c classifier-confident): a, h, x, other.
-    assert summary['stages']['unvalidated_after_promote'] == 4
+    # vlm_unmatched, c classifier-confident) and minus the frozen holdout (h) and
+    # excluded (x) items: a, other.
+    assert summary['stages']['unvalidated_after_promote'] == 2
 
 
 @pytest.mark.asyncio

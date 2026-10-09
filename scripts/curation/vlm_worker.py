@@ -43,7 +43,7 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -56,6 +56,8 @@ from scripts.curation._project_worker_utils import (
 from src.config.project_context import bind_project
 from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.ops_metrics import start_worker_metrics_server
+from src.services.curation.vlm_policy import VlmPolicy
+from src.services.curation.vlm_scope import ScopeCache, daily_budget_remaining, vlm_scope_clauses
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import (
@@ -64,6 +66,9 @@ from src.services.projects.script_binding import (
     script_project_registry,
 )
 
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
 DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
@@ -100,11 +105,19 @@ def _warn_classifier_sources_empty_once() -> None:
         )
 
 
-def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | None = None) -> dict:
+def _build_pending_query(
+    classifier_skip_conf: float,
+    exclude_ids: list[str] | None = None,
+    *,
+    policy: VlmPolicy | None = None,
+    representative_ids: Collection[str] | None = None,
+) -> dict:
     """Crops that need the VLM right now.
 
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
     crops the on-demand pipeline would process are picked up by the worker.
+    ``policy`` (default: scope ``all``) narrows them through the same scope
+    function the sweep uses.
 
     ``exclude_ids`` pushes the producer's in-flight set into the
     query server-side (``must_not: {ids: ...}``) instead of over-fetching
@@ -183,9 +196,11 @@ def _build_pending_query(classifier_skip_conf: float, exclude_ids: list[str] | N
     )
     if exclude_ids:
         must_not.append({'ids': {'values': exclude_ids}})
+    scope = vlm_scope_clauses(policy or VlmPolicy(), representative_ids=representative_ids)
+    must_not.extend(scope.must_not)
     return {
         'bool': {
-            'filter': [embedded_clause()],
+            'filter': [embedded_clause(), *scope.filter],
             'must_not': must_not,
         },
     }
@@ -214,11 +229,15 @@ def _filter_fresh_ids[K](
 async def fetch_pending_ids(
     opensearch: Any,
     *,
+    slug: str,
+    scope_cache: ScopeCache,
     batch_size: int,
     classifier_skip_conf: float,
     exclude_ids: list[str] | None = None,
 ) -> list[str]:
-    """Pull up to ``batch_size`` crop IDs of the BOUND project that need the VLM.
+    """Pull up to ``batch_size`` crop IDs of the BOUND project (``slug``) that need
+    the VLM, under its VLM scope policy: none when the scope is ``off`` or today's
+    budget is spent, and at most what is left of the budget.
 
     ``_source: False`` returns ids only. (Not ``stored_fields: '_none_'``:
     OpenSearch drops the ``_id`` metadata field with it too.)
@@ -229,11 +248,21 @@ async def fetch_pending_ids(
     """
     from src.config.curation import items_index
 
+    policy, reps = await scope_cache.get(opensearch, slug)
+    remaining = await daily_budget_remaining(opensearch, policy)
+    limit = batch_size if remaining is None else min(batch_size, remaining)
+    if policy.scope == 'off' or limit <= 0:
+        return []
     body = {
-        'size': batch_size,
+        'size': limit,
         '_source': False,
         'track_total_hits': False,
-        'query': _build_pending_query(classifier_skip_conf, exclude_ids=exclude_ids),
+        'query': _build_pending_query(
+            classifier_skip_conf,
+            exclude_ids=exclude_ids,
+            policy=policy,
+            representative_ids=reps,
+        ),
         # Oldest pending first — fairness across crops added across the
         # run; also avoids head-of-line starvation when new crops keep
         # arriving from ingest. crop_id tiebreaker keeps paging stable
@@ -302,6 +331,7 @@ async def run(args: argparse.Namespace) -> int:
     api_prefix = curation_api_prefix()
     registry = script_project_registry(args.opensearch)
     opensearch = make_script_opensearch([args.opensearch], timeout=30)
+    scope_cache = ScopeCache()
     rotation = 0
 
     stop_event = asyncio.Event()
@@ -358,6 +388,8 @@ async def run(args: argparse.Namespace) -> int:
         with bind_project(record):
             ids = await fetch_pending_ids(
                 opensearch,
+                slug=record.slug,
+                scope_cache=scope_cache,
                 batch_size=n,
                 classifier_skip_conf=args.classifier_conf_skip,
                 exclude_ids=exclude_ids,

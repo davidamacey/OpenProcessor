@@ -20,6 +20,7 @@ from src.routers.curation.pipeline_params import (
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
+    VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
     labeler_resolution_args,
     omitted_pack_is_store_active,
     reject_detection_profile,
@@ -34,6 +35,7 @@ from src.routers.curation.pipeline_vlm import (
 )
 from src.routers.curation.vlm import _resolve_pack
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
+from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
 
 
 _EMBED_MISSING_DESC = (
@@ -72,6 +74,7 @@ async def pipeline_auto_label_start(
     vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
     acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
     embed_missing: Annotated[bool, Query(description=_EMBED_MISSING_DESC)] = False,
+    vlm_scope: Annotated[VlmScope | None, Query(description=_VLM_SCOPE_DESC)] = None,
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -145,6 +148,7 @@ async def pipeline_auto_label_start(
                 'cluster_id': cluster_id,
                 'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),
                 'embed_missing': embed_missing,
+                'vlm_scope': vlm_scope,
                 'prompt_pack': prompt_pack,
                 'prompt_pack_revision': prompt_pack_revision,
                 # R5-2 fix: always set, even for the omitted-pack default

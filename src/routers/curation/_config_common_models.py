@@ -135,6 +135,10 @@ ErrorCode = Literal[
     'profile_invalid',
     'segmenter_error',
     'detector_error',
+    # Accuracy audit.
+    'audit_no_candidates',
+    'audit_required',
+    'audit_precision_low',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
@@ -313,6 +317,12 @@ class ModelSharingUser(BaseModel):
     profile: str | None = None
 
 
+class AuditGateClass(BaseModel):
+    name: str
+    audited: int = Field(description='Human-labelled audited crops of this detector class.')
+    precision: float | None = Field(description='Audited detector precision; null with none.')
+
+
 class ConfigErrorDetail(BaseModel):
     """The ``detail`` body of every project/config-store route's 4xx/5xx.
 
@@ -376,6 +386,10 @@ class ConfigErrorDetail(BaseModel):
     crop_ids: list[str] | None = None
     # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
     used_by: list[ModelSharingUser] | None = None
+    # 409 audit_required / audit_precision_low on POST /clusters/auto_promote: the
+    # classes the accuracy audit does not clear, and the precision they needed.
+    classes: list[AuditGateClass] | None = None
+    promote_min_precision: float | None = None
 
 
 class ApiErrorResponse(BaseModel):

@@ -196,6 +196,11 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             }
         },
         ('POST', '/ingest/policy/preview'): {'json': {'embedding': {'mode': 'lazy'}}},
+        # The sweep checks where the write lands, not the audit gate (its own tests do).
+        ('POST', '/clusters/auto_promote'): {'params': {'force': 'true'}},
+        ('PUT', '/vlm/policy'): {
+            'json': {'expected_revision': 0, 'scope': 'uncertain', 'max_crops_per_day': 7}
+        },
         ('POST', '/ingest/upload'): {
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
@@ -889,6 +894,8 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             class_source='vlm',
             class_validated=False,
             vlm_confidence='high',
+            # the detector's own answer: an eligible accuracy-audit candidate
+            detector_class_name=f'{slug}_detector_class',
             **boxes('proposed'),
         ),
         *(

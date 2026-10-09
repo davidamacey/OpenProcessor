@@ -152,7 +152,7 @@ One document per crop. Field groups:
 | Group | Fields |
 |---|---|
 | Identity and geometry | `crop_id`, `image_id`, `image_path`, `source`, `request_id`, `bbox_norm` (4 floats, the crop in the source image), `crop_area_norm`, `crop_rank_in_image`, blur fields |
-| Class | `class_id`, `class_name`, `class_source`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeler`, `class_labeled_at`, `confidence`, `proposal_name`, `label_source`, `class_id_history` (stored, not indexed) |
+| Class | `class_id`, `class_name`, `class_source`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeler`, `class_labeled_at`, `confidence`, `proposal_name`, `detector_class_name` (keyword), `detector_class_id` (integer), `detector_confidence` (float), `label_source`, `class_id_history` (stored, not indexed) |
 | VLM | `vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`, `vlm_confidence`, `vlm_raw_class`, `vlm_proposed_class`, `needs_new_class`, `vlm_raw_label*`, label-cluster fields |
 | Clusters | `cluster_id`, `cluster_subid`, `cluster_distance`, `cluster_nearest_id`, `cluster_auto_suggest` |
 | Embeddings | `pe_embedding` (1024-d), `backbone_embedding` (1024-d), `embedding_state` (keyword: `embedded`, `not_selected`, `deferred`, `failed`; absent on older items, so "has a vector" is always the `exists` test on the vector field) |

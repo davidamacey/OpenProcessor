@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The item wire carries `detector_class_name`, `detector_class_id` and `detector_confidence` (the detector's own class, kept next to the VLM or human label); `RawCrop` and the test fixtures list them.
+
 ### Changed
 
 - Moved to SvelteKit 3 and `@sveltejs/adapter-static` 4 on TypeScript 6. SvelteKit

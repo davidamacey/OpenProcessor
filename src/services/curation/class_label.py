@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from src.services.curation.audit_math import audit_outcome_fields
 from src.services.curation.ingest_class_sources import (
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
@@ -162,6 +163,8 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     fields = class_label_fields(label)
     fields['class_id_history'] = history
     fields['updated_at'] = _now_iso()
+    if label.source == 'human' and label.validated:
+        fields.update(audit_outcome_fields(current, label.class_name))
     return fields
 
 
@@ -203,6 +206,7 @@ def human_move_class_update(
         'class_id_history': history,
         'cluster_subid': None,
         **human_class_provenance(),
+        **audit_outcome_fields(current, class_name),
         'updated_at': now,
     }
 

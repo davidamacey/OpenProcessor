@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from src.clients.curation_opensearch_items import ITEMS_EXTRA_MAPPING, POLICY_DOC_MAPPING
 from src.clients.optional_doc import get_doc_or_none
 from src.config import (
     BACKBONE_EMBEDDING_FIELD,
@@ -277,7 +278,6 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
     'enabled': False,
 }
 
-# Exclusion plus the other per-item human review decisions.
 # Cluster geometry written by the clustering run
 # (src/services/curation/clustering/cluster_geometry.py): the cluster id a
 # stored cluster_distance was measured against, so a reader can tell a
@@ -462,6 +462,7 @@ def _items_body() -> dict[str, Any]:
                 'cluster_distance': {'type': 'float'},
                 'cluster_subid': {'type': 'keyword'},  # AHC sub-cluster id (e.g. "47a")
                 **CLUSTER_GEOMETRY_MAPPING,
+                **ITEMS_EXTRA_MAPPING,
                 'cluster_auto_suggest': {'type': 'keyword'},
                 # Primary-subject ranking + blur quality (computed at ingest,
                 # backfilled for legacy items). crop_rank_in_image=1 is the
@@ -655,8 +656,7 @@ def _settings_body() -> dict[str, Any]:
         'mappings': {
             'properties': {
                 'defaults': {'type': 'object', 'enabled': False},
-                # The per-project ingest policy (services/curation/ingest_policy_store.py).
-                'ingest_policy': {'type': 'object', 'enabled': False},
+                **POLICY_DOC_MAPPING,
                 'updated_at': {'type': 'date'},
                 'updated_by': {'type': 'keyword'},
             }
@@ -750,7 +750,7 @@ def _configs_body() -> dict[str, Any]:
                 'applied_at': {'type': 'date'},
                 # -- folded SETTINGS (op_curation_settings doc `default`) --
                 'defaults': {'type': 'object', 'enabled': False},
-                'ingest_policy': {'type': 'object', 'enabled': False},
+                **POLICY_DOC_MAPPING,
                 # -- folded UMAP_VIZ_STATE (doc `current`) --
                 'state_id': {'type': 'keyword'},
                 'projection_version': {'type': 'keyword'},
