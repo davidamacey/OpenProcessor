@@ -21,12 +21,10 @@
 # Env vars (all optional; a flag wins over its env var):
 #   OP_GH_REPO             GitHub org/repo to install from (default davidamacey/OpenProcessor)
 #   OP_GH_DEFAULT_REF      default branch for --branch (default main)
-#   CW_GH_REPO             Cropwright GitHub org/repo
 #   OP_IMAGE_NAMESPACE     Docker Hub namespace (default davidamacey)
 #   OP_DOCS_URL            docs-site URL, printed in the summary if set
 #   OP_ARTIFACT_BASE_URL   release-asset base (https only; <base>/<ref>/<asset>)
 #   OP_RAW_BASE_URL        raw-file base (https only; <base>/<ref>/<path>)
-#   CW_ARTIFACT_BASE_URL / CW_RAW_BASE_URL   the same for Cropwright
 #   OP_INSTALL_DIR / --dir           install directory (default ./openprocessor, or . when run inside an install dir)
 #   OP_PROJECT / --project           compose project name + container prefix
 #   OP_VERSION / --version           pinned release tag (vX.Y.Z)
@@ -73,7 +71,6 @@ __op_define() {
 
 OP_GH_REPO="${OP_GH_REPO:-davidamacey/OpenProcessor}"
 OP_GH_DEFAULT_REF="${OP_GH_DEFAULT_REF:-main}"
-CW_GH_REPO="${CW_GH_REPO:-attevon-llc/cropwright}"
 OP_IMAGE_NAMESPACE="${OP_IMAGE_NAMESPACE:-davidamacey}"
 OP_DOCS_URL="${OP_DOCS_URL:-}"
 
@@ -121,7 +118,7 @@ _op_redact() {
 }
 
 # -----------------------------------------------------------------------------
-# 5.1 Compose invocation rule: every compose call goes through dc()/dc_cw().
+# 5.1 Compose invocation rule: every compose call goes through dc().
 # -----------------------------------------------------------------------------
 # _dc_is_readonly ARGS... -> 0 if the compose subcommand never changes state
 _dc_is_readonly() {
@@ -138,7 +135,7 @@ _dc_is_readonly() {
 
 # Shell-level COMPOSE_* variables would silently override the install's
 # .env (project name drives container_name; profiles pick services), so
-# dc() clears them and pins COMPOSE_PROJECT_NAME to the project.
+# dc() clears them (and the Cropwright overrides) and pins COMPOSE_PROJECT_NAME.
 dc() {
     local project="${OP_PROJECT:?OP_PROJECT not set}" dir="${OP_DIR:?OP_DIR not set}"
     local -a cmd=(docker compose -p "$project" --env-file "${dir}/.env"
@@ -149,18 +146,6 @@ dc() {
     cmd+=("$@")
     if [[ "${OP_DRY_RUN:-0}" == "1" ]] && ! _dc_is_readonly "$@"; then
         echo "DRY: ${cmd[*]//"$dir"/"${OP_REAL_DIR:-$dir}"}"
-        return 0
-    fi
-    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES \
-        COMPOSE_PROJECT_NAME="$project" "${cmd[@]}"
-}
-
-dc_cw() {
-    local project="${OP_PROJECT:?OP_PROJECT not set}-cw" dir="${OP_DIR:?OP_DIR not set}/cropwright"
-    local -a cmd=(docker compose -p "$project" --env-file "${dir}/.env"
-        --project-directory "$dir" -f "${dir}/docker-compose.yml" "$@")
-    if [[ "${OP_DRY_RUN:-0}" == "1" ]] && ! _dc_is_readonly "$@"; then
-        echo "DRY: ${cmd[*]//"${OP_DIR}"/"${OP_REAL_DIR:-$OP_DIR}"}"
         return 0
     fi
     env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u CROPWRIGHT_BIND_ADDRESS \
@@ -473,6 +458,12 @@ fetch_release_artifacts() {
         sums="${staging}.SHA256SUMS"
         _dl "$(_asset_url "$ref" SHA256SUMS)" "$sums" \
             || die "could not download SHA256SUMS for ${ref}" "$EXIT_VERIFY"
+        # Running the installer straight out of a release dir: it must match
+        # that release's checksum list too (the piped bootstrap does the same).
+        if [[ -n "${OP_RELEASE_DIR:-}" && "${_OP_SELF_PATH:-}" == "${OP_RELEASE_DIR}/setup-openprocessor.sh" ]]; then
+            verify_against_sums "$sums" "$_OP_SELF_PATH" setup-openprocessor.sh \
+                || die "this setup-openprocessor.sh does not match the ${ref} checksums; nothing was installed" "$EXIT_VERIFY"
+        fi
         tb="${staging}.tar.gz"
         if _dl "$(_asset_url "$ref" "openprocessor-deploy-${ref}.tar.gz")" "$tb"; then
             verify_against_sums "$sums" "$tb" "openprocessor-deploy-${ref}.tar.gz" \
@@ -1397,18 +1388,14 @@ check_project_owner() {
 }
 
 guard_projects() {
-    local p rc
-    for p in "$OP_PROJECT" "${OP_PROJECT}-cw"; do
-        local expected="$OP_REAL_DIR"
-        [[ "$p" == *-cw ]] && expected="${OP_REAL_DIR}/cropwright"
-        if check_project_owner "$p" "$expected"; then
-            continue
-        else
-            rc=$?
-        fi
-        (( rc == 2 )) && die "Docker is unreachable; refusing to continue without the collision check" "$EXIT_DOCKER"
-        die "project name '${p}' is taken by another install: re-run with --project <another-name> (or OP_PROJECT=...)" "$EXIT_COLLISION"
-    done
+    local rc
+    if check_project_owner "$OP_PROJECT" "$OP_REAL_DIR"; then
+        return 0
+    else
+        rc=$?
+    fi
+    (( rc == 2 )) && die "Docker is unreachable; refusing to continue without the collision check" "$EXIT_DOCKER"
+    die "project name '${OP_PROJECT}' is taken by another install: re-run with --project <another-name> (or OP_PROJECT=...)" "$EXIT_COLLISION"
 }
 
 # compose_config_container_names JSON -> container_name values
@@ -1443,7 +1430,7 @@ assert_container_names_free() {
         if [[ -z "$owner" ]]; then
             die "a container named '${n}' already exists and was not created by Compose; remove or rename it" "$EXIT_COLLISION"
         fi
-        if [[ "$owner" != "$OP_PROJECT" && "$owner" != "${OP_PROJECT}-cw" ]]; then
+        if [[ "$owner" != "$OP_PROJECT" ]]; then
             die "a container named '${n}' already exists and belongs to project '${owner}'" "$EXIT_COLLISION"
         fi
     done
@@ -1787,7 +1774,7 @@ state_write() {
 }
 
 # -----------------------------------------------------------------------------
-# 7. Cropwright tier (separate compose project <project>-cw)
+# 7. Cropwright tier (the `cropwright` profile of the main compose project)
 # -----------------------------------------------------------------------------
 _version_ge() {
     [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
@@ -1802,7 +1789,7 @@ _version_ge() {
 # too: never wider than the one the user chose.
 choose_cropwright_bind() {
     local reply prev
-    prev="$(read_env_var "${OP_DIR}/cropwright/.env" CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
+    prev="$(read_env_var "${OP_DIR}/.env" CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
     if [[ "$OP_LOCAL_ONLY" == 1 ]]; then
         CROPWRIGHT_BIND=127.0.0.1
     elif [[ "$OP_BIND_ADDRESS" != 0.0.0.0 ]] && ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
@@ -1818,101 +1805,26 @@ choose_cropwright_bind() {
 }
 
 setup_cropwright() {
-    local lock="${OP_DIR}/cropwright.lock" tag image sums_sha dir="${OP_DIR}/cropwright" f port cw_base
-    tag="$(read_env_var "$lock" tag || true)"
-    image="$(read_env_var "$lock" image || true)"
-    sums_sha="$(read_env_var "$lock" sha256sums_sha256 || true)"
-    [[ "$tag" =~ ^v[0-9A-Za-z._-]+$ ]] \
-        || die "cropwright.lock does not name a Cropwright release tag (got '${tag}'): the cropwright tier cannot be installed from this release" "$EXIT_VERIFY"
-    [[ "$sums_sha" =~ ^[0-9a-f]{64}$ ]] \
-        || die "cropwright.lock has no sha256 for Cropwright's SHA256SUMS; refusing to install unverified files" "$EXIT_VERIFY"
-    if [[ "$IMAGE_MODE" == lock ]] && ! _lock_line_valid "cropwright=${image}"; then
-        die "cropwright.lock image is not digest-pinned: ${image}" "$EXIT_VERIFY"
-    fi
-    mkdir -p "$dir"
-    cw_base="${CW_ARTIFACT_BASE_URL:-https://github.com/${CW_GH_REPO}/releases/download}/${tag}"
-    # Files shipped inside the deploy bundle (cropwright-release/<tag>/, already
-    # verified as part of the tarball) win over any network fetch: the
-    # standalone Cropwright repo is private, so a fetch would fail.
-    local bundled="${OP_DIR}/cropwright-release/${tag}" bundled_ok=0
-    if [[ -f "${bundled}/SHA256SUMS" && -f "${bundled}/docker-compose.yml" && -f "${bundled}/.env.example" ]]; then
-        bundled_ok=1
-        log_info "Cropwright ${tag}: using the files shipped in the deploy bundle"
-    fi
-    if [[ -n "${OP_RELEASE_DIR:-}" ]]; then
-        # build_deploy_bundle.sh stages these when given CW_RELEASE_DIR.
-        if [[ -f "${OP_RELEASE_DIR}/cropwright/${tag}/SHA256SUMS" ]]; then
-            cw_base="file://${OP_RELEASE_DIR}/cropwright/${tag}"
-            log_info "Cropwright ${tag}: using the files from the release dir"
-        elif (( ! bundled_ok )); then
-            log_warn "the release dir has no cropwright/${tag}/: fetching Cropwright from the network (this install is not offline); still verified against cropwright.lock"
-        fi
-    fi
-    # Cropwright's release assets carry the section 3 names; its SHA256SUMS is
-    # itself pinned by cropwright.lock, which this release's checksums cover.
-    for f in SHA256SUMS docker-compose.yml .env.example; do
-        if (( bundled_ok )) && [[ "$cw_base" != file://* ]]; then
-            cp -f -- "${bundled}/${f}" "${dir}/${f}.new" || die "could not copy bundled Cropwright ${f}" "$EXIT_VERIFY"
-        elif ! _dl "${cw_base}/${f}" "${dir}/${f}.new"; then
-            _dl "${CW_RAW_BASE_URL:-https://raw.githubusercontent.com/${CW_GH_REPO}}/${tag}/${f}" "${dir}/${f}.new" \
-                || die "could not download Cropwright ${f} at ${tag}" "$EXIT_VERIFY"
-        fi
-    done
-    if [[ "$(_sha256 "${dir}/SHA256SUMS.new")" != "$sums_sha" ]]; then
-        _cw_discard_downloads "$dir"
-        die "Cropwright SHA256SUMS does not match cropwright.lock" "$EXIT_VERIFY"
-    fi
-    for f in docker-compose.yml .env.example; do
-        if ! verify_against_sums "${dir}/SHA256SUMS.new" "${dir}/${f}.new" "$f"; then
-            _cw_discard_downloads "$dir"
-            die "Cropwright ${f} failed checksum verification" "$EXIT_VERIFY"
-        fi
-    done
-    for f in SHA256SUMS docker-compose.yml .env.example; do
-        mv -f "${dir}/${f}.new" "${dir}/${f}"
-        chmod 644 "${dir}/${f}"
-    done
-
-    port="$(read_env_var "${dir}/.env" CROPWRIGHT_PORT || true)"
+    local port
+    port="$(read_env_var "${OP_DIR}/.env" CROPWRIGHT_PORT || true)"
     [[ "$port" =~ ^[0-9]+$ ]] || port=5184
     port="$(next_free_port "$port" "${TAKEN_PORTS}")" || die "no free port for Cropwright"
     CROPWRIGHT_PORT="$port"
-    [[ -f "${dir}/.env" ]] || install -m 600 "${dir}/.env.example" "${dir}/.env"
-    chmod 600 "${dir}/.env"
-    upsert_env_var "${dir}/.env" CROPWRIGHT_PORT "$port"
-    upsert_env_var "${dir}/.env" CROPWRIGHT_CONTAINER_NAME "${OP_PROJECT}-cropwright"
-    upsert_env_var "${dir}/.env" OP_DOCKER_NETWORK "${OP_PROJECT}_triton_net"
-    upsert_env_var "${dir}/.env" API_UPSTREAM "http://op-api:8000"
-    upsert_env_var "${dir}/.env" CROPWRIGHT_BIND_ADDRESS "$CROPWRIGHT_BIND"
-    if [[ "$IMAGE_MODE" == lock ]]; then
-        upsert_env_var "${dir}/.env" CROPWRIGHT_IMAGE "$image"
-    fi
+    env_set CROPWRIGHT_PORT "$port"
+    env_set CROPWRIGHT_BIND_ADDRESS "$CROPWRIGHT_BIND"
 
-    # Check what Compose will really do with Cropwright's own file: the
+    # Check what Compose will really do with the cropwright service: the
     # published host IP must be the chosen one, and the image the pinned one.
-    local json hosts rendered
-    json="$(dc_cw config --format json)" || die "compose config failed for Cropwright"
-    hosts="$(printf '%s\n' "$json" | sed -n -E 's/^[[:space:]]*"host_ip":[[:space:]]*"([^"]*)".*/\1/p' | sort -u | tr '\n' ' ')"
+    local json hosts
+    json="$(dc config --format json)" || die "compose config failed for Cropwright"
+    hosts="$(printf '%s\n' "$json" | awk '/"cropwright": \{/ {on=1} on && /"host_ip":/ {gsub(/.*"host_ip": *"|".*/, ""); print; exit}')"
     # A port without a host IP is published on every interface.
-    [[ -z "$hosts" ]] && hosts="0.0.0.0 "
-    if [[ "${hosts% }" != "$CROPWRIGHT_BIND" ]]; then
-        die "Cropwright's compose would publish on '${hosts:-0.0.0.0}', not ${CROPWRIGHT_BIND} (its compose must honour CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
-    fi
-    if [[ "$IMAGE_MODE" == lock ]]; then
-        rendered="$(dc_cw config --images)" || die "compose config failed for Cropwright"
-        [[ "$rendered" == "$image" ]] \
-            || die "Cropwright's compose runs '${rendered}', not the pinned ${image} (it must honour CROPWRIGHT_IMAGE)" "$EXIT_VERIFY"
-        PINNED_IMAGES+=("$image")
+    [[ -z "$hosts" ]] && hosts="0.0.0.0"
+    if [[ "$hosts" != "$CROPWRIGHT_BIND" ]]; then
+        die "the cropwright service would publish on '${hosts}', not ${CROPWRIGHT_BIND} (its compose entry must honour CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
     fi
     assert_container_names_free "${OP_PROJECT}-cropwright"
-    log_success "Cropwright ${tag} configured on ${CROPWRIGHT_BIND}:${port}"
-}
-
-_cw_discard_downloads() {
-    local f
-    for f in SHA256SUMS docker-compose.yml .env.example; do
-        rm -f -- "${1:?}/${f}.new"
-    done
+    log_success "Cropwright configured on ${CROPWRIGHT_BIND}:${port}"
 }
 
 # -----------------------------------------------------------------------------
@@ -2225,9 +2137,6 @@ do_uninstall() {
         require_purge_confirmation "$OP_PROJECT" "the purge" OP_CONFIRM_PURGE
     fi
 
-    if [[ -f "${OP_DIR}/cropwright/docker-compose.yml" ]]; then
-        dc_cw down --remove-orphans || die "cropwright down failed"
-    fi
     if [[ "$OP_PURGE_VOLUMES" == 1 ]]; then
         dc down --remove-orphans -v || die "compose down -v failed"
     else
@@ -2431,8 +2340,7 @@ Usage: setup-openprocessor.sh [options]
   --version vX.Y.Z        pinned release (default: latest published release)
   --branch REF            testing install from a branch head (not reproducible)
   --image-tag TAG         run images by tag (OP_IMAGE_REPO prefix) instead of images.lock digests
-  --release-dir DIR       install from locally built release assets (still checksum-verified;
-                          offline for cropwright only if the bundle staged it)
+  --release-dir DIR       install from locally built release assets (still checksum-verified)
   --tiers LIST | --all    core,curation,segmenter,vlm,trainer,cropwright
   --gpu-plan K=V,...      override placement: triton=1,segmenter=0,vlm=2,trainer=0
   --profile NAME          minimal|standard|full (Triton instance profile)
@@ -2593,12 +2501,11 @@ parse_args() {
     b="$(normalize_bind "$OP_BIND_ADDRESS")" || exit "$EXIT_USAGE"
     OP_BIND_ADDRESS="$b"
     local base
-    for base in "${OP_ARTIFACT_BASE_URL:-}" "${OP_RAW_BASE_URL:-}" "${CW_ARTIFACT_BASE_URL:-}" "${CW_RAW_BASE_URL:-}"; do
+    for base in "${OP_ARTIFACT_BASE_URL:-}" "${OP_RAW_BASE_URL:-}"; do
         [[ -z "$base" ]] && continue
         validate_https_base "$base" || die "artifact base URLs must be https:// (got '${base}')" "$EXIT_USAGE"
     done
     [[ "$OP_GH_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "OP_GH_REPO must be owner/repo" "$EXIT_USAGE"
-    [[ "$CW_GH_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "CW_GH_REPO must be owner/repo" "$EXIT_USAGE"
     if [[ "$OP_ACTION" != uninstall ]] && (( OP_PURGE_VOLUMES || OP_PURGE_DATA || OP_REMOVE_IMAGES )); then
         die "--purge-volumes, --purge-data and --remove-images only go with --uninstall" "$EXIT_USAGE"
     fi
@@ -2987,7 +2894,7 @@ do_install() {
     local profiles=() t
     for t in $SELECTED_TIERS; do
         case "$t" in
-            curation|segmenter|vlm) profiles+=("$t") ;;
+            curation|segmenter|vlm|cropwright) profiles+=("$t") ;;
             trainer) profiles+=(training) ;;
         esac
     done
@@ -3109,9 +3016,6 @@ do_install() {
     log_step "Start"
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         dc up -d --remove-orphans || die "compose up failed"
-    fi
-    if _has_tier cropwright; then
-        dc_cw up -d --no-build --remove-orphans || die "cropwright up failed"
     fi
     local health_rc=0
     run_health || health_rc=1

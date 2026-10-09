@@ -112,7 +112,7 @@ pulls and TensorRT export.
 | `segmenter` | SAM 3 segmenter | + ~7 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
 | `vlm` | local vLLM serving a model from the VLM catalog | + ~19 GB | ~23 GB VRAM for the default; implies `curation` |
 | `trainer` | training service + MLflow | + ~9 GB | >= 16 GB free VRAM while training; implies `curation` |
-| `cropwright` | the Cropwright web UI (separate compose project) | + ~65 MB | implies `curation` |
+| `cropwright` | the Cropwright web UI (a profile of the same compose project) | + ~65 MB | implies `curation` |
 
 Monitoring (Prometheus, Grafana, Loki) is not a tier: add `--with-monitoring`.
 Its dashboards are default-open, so it is off unless you ask.
@@ -143,8 +143,8 @@ bash setup-openprocessor.sh --version "$V"
 `SHA256SUMS` comes from the same place as the files it covers. It proves
 **integrity** (the download is complete and uncorrupted), **not authenticity**:
 anyone who could replace the release files could replace `SHA256SUMS` too. The
-same holds for `images.lock` and `cropwright.lock` (they pin exact digests
-and are covered by `SHA256SUMS`). Signed releases are follow-up work.
+same holds for `images.lock` (it pins exact digests
+and is covered by `SHA256SUMS`). Signed releases are follow-up work.
 
 ### Network access: Cropwright on your LAN
 

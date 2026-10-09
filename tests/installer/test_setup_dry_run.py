@@ -122,7 +122,7 @@ def test_every_compose_call_uses_exactly_the_install_project(shimmed: Shimmed) -
     lines = compose_lines(shimmed, result)
     assert lines
     for line in lines:
-        assert f' -p {PROJECT} ' in f'{line} ' or f' -p {PROJECT}-cw ' in f'{line} ', line
+        assert f' -p {PROJECT} ' in f'{line} ', line
         assert ' -p openprocessor ' not in f'{line} ', line
         assert '--env-file' in line
         assert '--project-directory' in line, line
@@ -173,11 +173,6 @@ def test_default_project_owned_by_another_dir_exits_3(shimmed: Shimmed) -> None:
     assert result.returncode == 3, result.stderr
     assert '--project' in result.stderr
     assert shimmed.mutating_docker_calls() == []
-
-
-def test_cropwright_project_owned_elsewhere_exits_3(shimmed: Shimmed) -> None:
-    shimmed.containers([(f'{PROJECT}-cw', '/elsewhere/cropwright', 'x', '')])
-    assert dry(shimmed).returncode == 3
 
 
 def test_docker_unreachable_fails_closed(shimmed: Shimmed) -> None:
@@ -566,7 +561,7 @@ def test_remote_and_local_vlm_are_exclusive(shimmed: Shimmed) -> None:
 
 
 def _cw_env(shimmed: Shimmed) -> str:
-    return (shimmed.root / 'inst' / 'cropwright' / '.env').read_text()
+    return (shimmed.root / 'inst' / '.env').read_text()
 
 
 def test_cropwright_is_reachable_from_the_lan_by_default_with_a_warning(shimmed: Shimmed) -> None:
@@ -576,23 +571,16 @@ def test_cropwright_is_reachable_from_the_lan_by_default_with_a_warning(shimmed:
     cw_env = _cw_env(shimmed)
     assert 'CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in cw_env
     assert f'CROPWRIGHT_IMAGE=davidamacey/cropwright@{fake_digest("cropwright")}' in cw_env
-    assert f'CROPWRIGHT_CONTAINER_NAME={PROJECT}-cropwright' in cw_env
-    assert f'OP_DOCKER_NETWORK={PROJECT}_triton_net' in cw_env
-    assert stat.S_IMODE((shimmed.root / 'inst' / 'cropwright' / '.env').stat().st_mode) == 0o600
-    assert not (shimmed.root / 'inst' / 'cropwright' / 'docker-compose.bind.yml').exists()
+    assert 'cropwright' in env_file(shimmed)['COMPOSE_PROFILES'].split(',')
+    assert stat.S_IMODE((shimmed.root / 'inst' / '.env').stat().st_mode) == 0o600
+    assert not (shimmed.root / 'inst' / 'cropwright').exists()
     # The backend stays on loopback; only Cropwright is on the LAN.
     assert env_file(shimmed)['OP_BIND_ADDRESS'] == '127.0.0.1'
     assert 'reachable from your LAN and has NO login' in result.stderr
     assert 'never port-forward' in result.stderr
     dry_run = dry(shimmed, tiers='cropwright')
     assert dry_run.returncode == 0, dry_run.stderr
-    cw = [
-        ln
-        for ln in dry_run.stdout.splitlines()
-        if ln.startswith(f'DRY: docker compose -p {PROJECT}-cw')
-    ]
-    assert cw
-    assert not [ln for ln in cw if 'bind.yml' in ln]
+    assert not [ln for ln in dry_run.stdout.splitlines() if f'-p {PROJECT}-cw' in ln]
 
 
 def test_local_only_keeps_cropwright_on_this_computer(shimmed: Shimmed) -> None:
@@ -673,28 +661,6 @@ def test_wildcard_bind_keeps_cropwright_on_every_interface(shimmed: Shimmed) -> 
     result = configure(shimmed, '--bind', '0.0.0.0', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1')
     assert result.returncode == 0, result.stderr
     assert 'CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in _cw_env(shimmed)
-
-
-def test_cropwright_file_with_wrong_checksum_is_refused(shimmed: Shimmed, tmp_path: Path) -> None:
-    release = tmp_path / 'rel'
-    shutil.copytree(shimmed.release, release)
-    compose = next(release.glob('cw/*/docker-compose.yml'))
-    compose.write_text(compose.read_text() + '# tampered\n')
-    shimmed.release = release
-    result = dry(shimmed, tiers='cropwright')
-    assert result.returncode == 7
-    assert 'docker-compose.yml failed checksum verification' in result.stderr
-
-
-def test_cropwright_sha256sums_must_match_the_lock(shimmed: Shimmed, tmp_path: Path) -> None:
-    release = tmp_path / 'rel'
-    shutil.copytree(shimmed.release, release)
-    sums = next(release.glob('cw/*/SHA256SUMS'))
-    sums.write_text(sums.read_text() + '# tampered\n')
-    shimmed.release = release
-    result = dry(shimmed, tiers='cropwright')
-    assert result.returncode == 7
-    assert 'SHA256SUMS does not match cropwright.lock' in result.stderr
 
 
 def _release_copy(shimmed: Shimmed, tmp_path: Path) -> Path:
@@ -809,15 +775,6 @@ def test_committed_locks_are_fully_pinned(repo_root: Path) -> None:
     for line in images:
         assert re.fullmatch(r'[a-z0-9_]+=\S+@sha256:[0-9a-f]{64}', line), line
         assert ':latest@' not in line, line
-
-    cw = dict(
-        ln.split('=', 1)
-        for ln in (repo_root / 'cropwright.lock').read_text().splitlines()
-        if '=' in ln and not ln.startswith('#')
-    )
-    assert re.fullmatch(r'v\d+\.\d+\.\d+', cw['tag']), cw['tag']
-    assert re.fullmatch(r'[0-9a-f]{64}', cw['sha256sums_sha256'])
-    assert re.fullmatch(r'\S+@sha256:[0-9a-f]{64}', cw['image']), cw['image']
 
 
 def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:

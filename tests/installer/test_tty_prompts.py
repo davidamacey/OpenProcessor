@@ -166,5 +166,5 @@ def test_answering_no_to_lan_access_keeps_cropwright_local(shimmed: Shimmed) -> 
     rc, tty_out, err = run_with_tty(shimmed, args, 'n', b'open the Cropwright web UI? [Y/n]: ')
     assert b'Let other computers on your LAN' in tty_out
     assert rc == 0, err[-2000:]
-    cw_env = (shimmed.root / 'inst' / 'cropwright' / '.env').read_text()
+    cw_env = (shimmed.root / 'inst' / '.env').read_text()
     assert 'CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in cw_env

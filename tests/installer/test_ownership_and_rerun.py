@@ -209,7 +209,7 @@ def test_rerun_without_tiers_keeps_the_installed_tiers(shimmed: Shimmed) -> None
     )
     inst = shimmed.root / 'inst'
     profiles = env_value(inst / '.env', 'COMPOSE_PROFILES')
-    assert set(profiles.split(',')) == {'curation', 'training', 'monitoring'}
+    assert set(profiles.split(',')) == {'curation', 'training', 'cropwright', 'monitoring'}
     again = install(shimmed, '--no-start', tiers=None)
     assert again.returncode == 0, again.stderr[-2000:]
     assert 'keeping the installed tiers' in again.stdout

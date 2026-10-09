@@ -160,19 +160,6 @@ dc() {
     fi
 }
 
-dc_cw() {
-    resolve_project
-    local dir="${PROJECT_DIR}/cropwright"
-    [[ -f "${dir}/docker-compose.yml" ]] || { log_error "no Cropwright in this install (${dir})"; return 1; }
-    local -a cmd=(docker compose -p "${OP_PROJECT}-cw" --env-file "${dir}/.env"
-        --project-directory "$dir" -f "${dir}/docker-compose.yml" "$@")
-    if ! _dc_is_readonly "$@"; then
-        assert_project_owned "${OP_PROJECT}-cw" "$dir"
-    fi
-    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u CROPWRIGHT_BIND_ADDRESS \
-        -u CROPWRIGHT_IMAGE -u CROPWRIGHT_PORT COMPOSE_PROJECT_NAME="${OP_PROJECT}-cw" "${cmd[@]}"
-}
-
 require_checkout() {
     if [[ "$IS_CHECKOUT" != "1" ]]; then
         log_error "'$1' requires a source checkout"

@@ -121,7 +121,7 @@ cmd_compose() {
             local cpn="${COMPOSE_PROJECT_NAME:-}"
             [[ -z "$cpn" ]] && cpn="$(env_val "$envfile" COMPOSE_PROJECT_NAME)"
             [[ -z "$cpn" ]] && cpn=openprocessor
-            if [[ " ${args[*]:-} " == *" --images "* && "$project" != *-cw ]]; then
+            if [[ " ${args[*]:-} " == *" --images "* ]]; then
                 local k v repo tag
                 repo="$(env_val "$envfile" OP_IMAGE_REPO)"; repo="${repo:-davidamacey}"
                 tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.4.1}"
@@ -131,6 +131,7 @@ cmd_compose() {
                 [[ "$profiles" == *,curation,* ]] && wanted+=" OP_EVALUATOR_IMAGE:openprocessor-evaluator"
                 [[ "$profiles" == *,segmenter,* ]] && wanted+=" OP_SEGMENTER_IMAGE:openprocessor-segmenter"
                 [[ "$profiles" == *,training,* ]] && wanted+=" OP_TRAINER_IMAGE:openprocessor-trainer"
+                [[ "$profiles" == *,cropwright,* ]] && wanted+=" CROPWRIGHT_IMAGE:cropwright"
                 for k in $wanted; do
                     v="$(env_val "$envfile" "${k%%:*}")"
                     [[ -n "$v" ]] || v="${repo}/${k#*:}:${tag}"
@@ -149,24 +150,25 @@ cmd_compose() {
                 done
                 return 0
             fi
-            if [[ "$project" == *-cw ]]; then
-                local cimg cbind cport cname
-                cimg="${CROPWRIGHT_IMAGE:-$(env_val "$envfile" CROPWRIGHT_IMAGE)}"
-                cbind="${CROPWRIGHT_BIND_ADDRESS:-$(env_val "$envfile" CROPWRIGHT_BIND_ADDRESS)}"
-                cport="$(env_val "$envfile" CROPWRIGHT_PORT)"
-                cname="$(env_val "$envfile" CROPWRIGHT_CONTAINER_NAME)"
-                [[ -e "${state}/cw_ignores_bind" ]] && cbind=0.0.0.0
-                if [[ " ${args[*]:-} " == *" --images "* ]]; then
-                    echo "${cimg:-davidamacey/cropwright:1.2.3}"
-                    return 0
-                fi
-                printf '{\n  "name": "%s",\n  "services": {\n    "cropwright": {\n      "container_name": "%s",\n      "ports": [\n        {\n          "host_ip": "%s",\n          "published": "%s",\n          "target": 8080\n        }\n      ]\n    }\n  }\n}\n' \
-                    "$project" "${cname:-cropwright}" "${cbind:-0.0.0.0}" "${cport:-5184}"
-                return 0
-            fi
             if [[ -f "${state}/config.json" ]]; then
                 cat "${state}/config.json"
                 return 0
+            fi
+            local cbind cport cservice=""
+            if [[ ",$(env_val "$envfile" COMPOSE_PROFILES)," == *,cropwright,* ]]; then
+                cbind="${CROPWRIGHT_BIND_ADDRESS:-$(env_val "$envfile" CROPWRIGHT_BIND_ADDRESS)}"
+                cport="$(env_val "$envfile" CROPWRIGHT_PORT)"
+                [[ -e "${state}/cw_ignores_bind" ]] && cbind=0.0.0.0
+                cservice="    \"cropwright\": {
+      \"container_name\": \"${cpn}-cropwright\",
+      \"ports\": [
+        {
+          \"host_ip\": \"${cbind:-0.0.0.0}\",
+          \"published\": \"${cport:-5184}\",
+          \"target\": 8080
+        }
+      ]
+    },"
             fi
             cat <<JSON
 {
@@ -179,6 +181,7 @@ cmd_compose() {
     }
   },
   "services": {
+${cservice}
     "opensearch": {
       "container_name": "${cpn}-opensearch",
       "networks": {
