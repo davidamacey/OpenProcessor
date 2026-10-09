@@ -13,13 +13,6 @@
     "module": "ESNext",
     "target": "ES2022"
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.js",
-    "src/**/*.svelte",
-    "vite.config.ts"
-  ],
-  "exclude": [
-    "src/service-worker"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "vite.config.ts"],
+  "exclude": ["src/service-worker"]
 }

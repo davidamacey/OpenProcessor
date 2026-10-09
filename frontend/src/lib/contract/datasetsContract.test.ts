@@ -530,9 +530,7 @@ describe('Reprocess vocabulary is pinned to the request enums', () => {
     expect([...REGION_MODES].sort()).toEqual(
       enumOf('ReprocessOneRequest', 'region_mode'),
     );
-    expect([...REGION_MODES].sort()).toEqual(
-      enumOf('ReprocessRequest', 'region_mode'),
-    );
+    expect([...REGION_MODES].sort()).toEqual(enumOf('ReprocessRequest', 'region_mode'));
     expect(REGION_MODES.length).toBeGreaterThan(0);
   });
 });
