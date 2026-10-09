@@ -53,7 +53,7 @@ src/
 │   ├── visual_search/           # OpenSearch visual search operations (package)
 │   ├── ocr_service.py           # PP-OCRv5 text extraction
 │   ├── clustering.py            # FAISS clustering
-│   ├── duplicate_detection.py   # Image deduplication
+│   ├── duplicate_detection/     # Image deduplication (package)
 │   └── image.py                 # Image processing utilities
 │
 ├── clients/                     # External service clients

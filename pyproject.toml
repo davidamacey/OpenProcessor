@@ -404,6 +404,7 @@ ignore_missing_imports = true
 module = [
     "src.services.clustering",
     "src.services.duplicate_detection",
+    "src.services.duplicate_detection.*",
     "src.clients.opensearch",
     "src.clients.triton_client",
     "src.services.model_export",
