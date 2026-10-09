@@ -23,7 +23,7 @@
 # OpenAPI contract (contracts/openapi/curation.json) is generated from them and
 # schema naming/shape changes between releases; bump together with
 # `make contracts`.
-fastapi==0.136.1
+fastapi==0.142.2
 pydantic==2.12.5
 uvicorn[standard]
 python-multipart
