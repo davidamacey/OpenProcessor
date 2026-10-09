@@ -21,12 +21,12 @@ from src.services.curation.dataset_thresholds import (
     WARN_MIN_CROPS_PER_CLASS,
     dataset_thresholds,
 )
-from src.services.training import jobs as train_jobs
 from src.services.training.augmentation_presets import unknown_preset_error
+from src.services.training.job_files import trainer_root_dir
 
 
 if TYPE_CHECKING:
-    from src.services.training.jobs import AugmentationSpec, TrainJobSpec
+    from src.services.training.job_models import AugmentationSpec, TrainJobSpec
 
 
 logger = get_logger(__name__)
@@ -264,7 +264,7 @@ def _read_trainer_capabilities() -> dict[str, Any] | None:
     Callers must treat that as "can't verify" (a warning), not "no GPUs
     attached" (which would incorrectly block every request).
     """
-    path = train_jobs.trainer_root_dir() / TRAINER_CAPABILITIES_FILENAME
+    path = trainer_root_dir() / TRAINER_CAPABILITIES_FILENAME
     try:
         return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):

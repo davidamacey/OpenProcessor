@@ -9,7 +9,7 @@ from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 
 from src.services.training import jobs as train_jobs, promote_job
-from src.services.training.jobs import TrainJobStatus
+from src.services.training.job_models import TrainJobStatus
 
 
 router = APIRouter(default_response_class=ORJSONResponse)

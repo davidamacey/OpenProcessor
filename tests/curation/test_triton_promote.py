@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from src.services.training.jobs import TrainJobStatus
+from src.services.training.job_models import TrainJobStatus
 from src.services.training.triton_promote import (
     DEFAULT_TRITON_HTTP_URL,
     DEFAULT_TRITON_MODELS_DIR,

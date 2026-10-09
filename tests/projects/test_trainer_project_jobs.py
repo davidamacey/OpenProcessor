@@ -22,6 +22,7 @@ from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
 from src.services.training import jobs as train_jobs
+from src.services.training.job_models import TrainJobSpec
 
 
 pytestmark = pytest.mark.unbound
@@ -46,9 +47,9 @@ def _record(slug: str) -> ProjectRecord:
     )
 
 
-def _spec(export_dir: Path) -> train_jobs.TrainJobSpec:
+def _spec(export_dir: Path) -> TrainJobSpec:
     export_dir.mkdir(parents=True, exist_ok=True)
-    return train_jobs.TrainJobSpec(dataset_export_dir=str(export_dir))
+    return TrainJobSpec(dataset_export_dir=str(export_dir))
 
 
 def test_write_job_stamps_project_fields(tmp_path, monkeypatch) -> None:

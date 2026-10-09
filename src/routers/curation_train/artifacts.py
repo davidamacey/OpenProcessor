@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam
 from fastapi.responses import FileResponse, ORJSONResponse
 
 from src.services.training import jobs as train_jobs
+from src.services.training.job_wire import artifact_media_type
 
 
 router = APIRouter(default_response_class=ORJSONResponse)
@@ -62,4 +63,4 @@ async def get_run_artifact(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if path is None:
         raise HTTPException(status_code=404, detail=f'no artifact {name!r} for job {job_id!r}')
-    return FileResponse(path, media_type=train_jobs.artifact_media_type(name))
+    return FileResponse(path, media_type=artifact_media_type(name))

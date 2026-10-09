@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 from _project_paths import default_train_jobs_dir
 
-from src.services.training.jobs import TrainJobStatus
+from src.services.training.job_models import TrainJobStatus
 
 
 if TYPE_CHECKING:

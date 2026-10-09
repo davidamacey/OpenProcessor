@@ -24,8 +24,8 @@ from typing import Any
 
 import pytest
 
-from src.services.training import jobs as train_jobs
-from src.services.training.jobs import TrainJobSpec
+from src.services.training import job_files, jobs as train_jobs
+from src.services.training.job_models import TrainJobSpec
 from src.services.training.triton_promote import build_class_id_to_name, resolve_class_remap
 
 
@@ -163,10 +163,10 @@ def test_trainer_sibling_paths_match_the_api_side(jobs_dir: Path, export_dir: Pa
     job_id = _write_job(dataset_export_dir=str(export_dir))
     spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    assert spec.status_path == train_jobs._status_path(job_id)
-    assert spec.cancel_path == train_jobs._cancel_path(job_id)
-    assert spec.run_log_path == train_jobs._log_path(job_id)
-    assert spec.manifest_path == train_jobs._manifest_path(job_id)
+    assert spec.status_path == job_files._status_path(job_id)
+    assert spec.cancel_path == job_files._cancel_path(job_id)
+    assert spec.run_log_path == job_files._log_path(job_id)
+    assert spec.manifest_path == job_files._manifest_path(job_id)
 
 
 def test_concurrent_status_writes_do_not_collide_on_the_tmp_file(tmp_path: Path) -> None:
@@ -369,7 +369,7 @@ def test_pending_list_skips_terminal_jobs_and_is_fifo(jobs_dir: Path, export_dir
     ]
 
     job_protocol.write_status_now(
-        train_jobs._status_path(first), job_protocol.StatusState(job_id=first, state='finished')
+        job_files._status_path(first), job_protocol.StatusState(job_id=first, state='finished')
     )
     assert [p.name for p in job_protocol.list_pending_jobs(jobs_dir)] == [f'{second}.job.json']
 

@@ -56,7 +56,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         json.dumps({'job_id': RUN, 'registry_snapshot_path': str(snapshot)})
     )
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     status = TrainJobStatus(
         job_id=RUN,

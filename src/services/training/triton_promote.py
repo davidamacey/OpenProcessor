@@ -51,7 +51,7 @@ from src.services.training.yolo_triton_config import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
 
 logger = get_logger(__name__)
