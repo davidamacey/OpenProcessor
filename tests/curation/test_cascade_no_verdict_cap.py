@@ -29,12 +29,8 @@ from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_NO_VERDICT
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import (
-    RegionCrop,
-    VlmCombinedReply,
-    VlmLabeler,
-    VlmTransportError,
-)
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import RegionCrop, VlmCombinedReply, VlmTransportError
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item
 
@@ -107,7 +103,7 @@ class TestCombinedNoVerdictIsCapped:
 
         async def _always_fails(crops: Any, **_kw: Any) -> Any:
             msg = 'upstream down'
-            from src.services.labeling.vlm_labeler import CombinedTransportError
+            from src.services.labeling.vlm_models import CombinedTransportError
 
             raise CombinedTransportError(msg)
 
@@ -159,6 +155,6 @@ class TestVerifyPlateTransportSignal:
         assert await lab.verify_region(crop, raise_on_transport=True) is None
 
     def test_combined_transport_failure_is_a_transport_error(self) -> None:
-        from src.services.labeling.vlm_labeler import CombinedTransportError
+        from src.services.labeling.vlm_models import CombinedTransportError
 
         assert issubclass(CombinedTransportError, VlmTransportError)

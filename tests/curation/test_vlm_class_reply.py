@@ -20,12 +20,9 @@ import httpx
 import pytest
 
 from src.config import get_region_fields
-from src.services.labeling.vlm_labeler import (
-    CombinedCrop,
-    ItemCrop,
-    VlmLabeler,
-    _combined_reply_from_entry,
-)
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import CombinedCrop, ItemCrop
+from src.services.labeling.vlm_reply_parse import _combined_reply_from_entry
 
 
 def _labeler(message: dict[str, Any] | None = None, *, fail: bool = False) -> VlmLabeler:
@@ -265,7 +262,7 @@ class TestCombinedNestedEntryUnwrap:
 
 
 def test_batch_entry_failure_is_logged(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.services.labeling.vlm_labeler as mod
+    import src.services.labeling.vlm_labeler_combined as mod
 
     # No region_visible answer: the entry is rejected (fail-closed), and
     # the rejection is now visible in the logs instead of silent.

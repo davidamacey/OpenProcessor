@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.test_proposal_denylist import _entry, _labeler
-from src.services.labeling.vlm_labeler import ItemCrop
+from src.services.labeling.vlm_models import ItemCrop
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, get_prompt_pack
 
 

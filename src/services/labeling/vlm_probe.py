@@ -23,7 +23,7 @@ from src.services.labeling.vlm_client import (
     extract_message_content,
     extract_reasoning_content,
 )
-from src.services.labeling.vlm_labeler import (
+from src.services.labeling.vlm_models import (
     CombinedCrop,
     CombinedParseFailure,
     CombinedTransportError,
@@ -175,7 +175,7 @@ async def probe(
 ) -> ProbeResult:
     """Run ``call`` over ``crops`` through ``labeler``.
 
-    Raises :class:`~src.services.labeling.vlm_labeler.VlmTransportError` when
+    Raises :class:`~src.services.labeling.vlm_models.VlmTransportError` when
     the upstream call itself failed (no reply at all); a reply that could not
     be parsed is a result with ``parse_ok=False``, not an error.
     """

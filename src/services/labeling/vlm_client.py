@@ -1,9 +1,6 @@
 """Transport layer for an OpenAI-compatible vision-language-model endpoint.
 
-Split out of the VLM labeler (see
-``docs/design/curation_design_rationale.md`` §5 for why this split
-exists — vlm_labeler.py is one of the ratchet-exempt oversize files)
-— this half owns
+Split out of the VLM labeler — this half owns
 "how do I reliably POST to a ``/chat/completions`` endpoint", not "what
 do I ask it". Generic: works against any OpenAI-shaped vision chat API.
 
@@ -12,7 +9,7 @@ Design notes
 - Per-process token-bucket rate limit so multiple labeler workers don't
   flood shared upstream capacity.
 - Retry-with-backoff (tenacity) on transient 5xx + connection errors.
-- ``VlmLabeler`` (``vlm_labeler.py``) owns the actual ``httpx.AsyncClient``
+- ``VlmLabeler`` (``vlm_labeler_core.py``) owns the actual ``httpx.AsyncClient``
   instance (tests patch it directly), so ``post_chat_with_retry`` takes
   the client + bucket as arguments rather than owning them itself.
 """

@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _read_version() -> str:
@@ -171,16 +171,16 @@ class Settings(BaseSettings):
     # ==========================================================================
     models: TritonModelConfig = TritonModelConfig()
 
-    class Config:
-        env_prefix = ''  # No prefix for env vars
-        case_sensitive = False
-        extra = 'ignore'
-        # Previously unset -- a bare `.env` in the repo root did
-        # nothing for a locally-run process (docker-compose's own .env
-        # handling is separate and only covered vars explicitly
-        # interpolated into docker-compose.yml, e.g. OP_API_PREFIX).
-        env_file = '.env'
-        env_file_encoding = 'utf-8'
+    # A bare `.env` in the repo root configures a locally-run process;
+    # docker-compose's own .env handling is separate and only covers vars
+    # explicitly interpolated into docker-compose.yml (e.g. OP_API_PREFIX).
+    model_config = SettingsConfigDict(
+        env_prefix='',
+        case_sensitive=False,
+        extra='ignore',
+        env_file='.env',
+        env_file_encoding='utf-8',
+    )
 
 
 @lru_cache

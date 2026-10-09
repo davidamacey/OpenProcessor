@@ -42,7 +42,7 @@ from src.services.detection.cascade_detect import (
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.detection.region_candidates import select_region_candidates
 from src.services.detection.segmenter_gate import RUN
-from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
+from src.services.labeling.vlm_models import CombinedCrop, RegionCrop
 
 
 logger = get_logger('curation_worker')

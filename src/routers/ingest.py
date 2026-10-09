@@ -26,7 +26,7 @@ from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import ORJSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.dependencies import VisualSearchDep
 
@@ -53,8 +53,7 @@ class IndexedCounts(BaseModel):
     people: int = Field(default=0, description='Number of person detections indexed')
     faces: int = Field(default=0, description='Number of faces indexed')
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class NearDuplicateInfo(BaseModel):
@@ -123,8 +122,7 @@ class BatchIndexedCounts(BaseModel):
     faces: int = Field(default=0, description='Number of faces indexed')
     ocr: int = Field(default=0, description='Number of images with OCR indexed')
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class DuplicateDetail(BaseModel):

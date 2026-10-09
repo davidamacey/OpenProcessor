@@ -50,11 +50,14 @@ ROOMY = good_probe(max_model_len=131072, image_tokens=260)
 
 
 def test_the_max_tokens_the_estimate_assumes_are_the_ones_the_labeler_sends() -> None:
-    """``_CALLS`` mirrors ``vlm_labeler.py``; a change on either side that
-    leaves the other behind would make the estimate silently wrong."""
-    tree = ast.parse((ROOT / 'src/services/labeling/vlm_labeler.py').read_text())
+    """``_CALLS`` mirrors the ``vlm_labeler_*.py`` operation modules; a change on
+    either side that leaves the other behind would make the estimate silently wrong."""
+    trees = [
+        ast.parse((ROOT / f'src/services/labeling/vlm_labeler_{part}.py').read_text())
+        for part in ('classify', 'verify', 'visibility', 'combined')
+    ]
     sent: dict[str, int] = {}
-    for node in ast.walk(tree):
+    for node in (n for tree in trees for n in ast.walk(tree)):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             for sub in ast.walk(node):
                 if isinstance(sub, ast.Dict):

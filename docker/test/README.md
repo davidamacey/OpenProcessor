@@ -99,7 +99,7 @@ day they are fixed:
 
 1. **Region verdict key mismatch** — the built-in prompt pack asks the model to
    answer with `is_region`, but both region-verdict parsers in
-   `src/services/labeling/vlm_labeler.py` read `is_plate`. A model that follows
+   `src/services/labeling/vlm_labeler_verify.py` read `is_plate`. A model that follows
    the shipped prompt is parsed as a negative verdict with
    `reason='parse_failure'`. See
    `tests/live/test_live_vlm.py::test_vlm_verdict_key_matches_the_shipped_prompt`.
