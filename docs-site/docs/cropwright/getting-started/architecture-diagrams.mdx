@@ -1,0 +1,74 @@
+---
+title: Architecture diagrams
+sidebar_label: Architecture diagrams
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+Interactive diagrams of how Cropwright is built and how it talks to the OpenProcessor API. Each one is generated from a hand-authored spec under `docs-site/architecture-diagrams/specs/` (regenerate with `scripts/generate-architecture-diagrams.sh`); when the code a diagram describes changes, fix the spec.
+
+## System
+
+<Tabs groupId="cropwright-arch-system">
+  <TabItem value="system-overview" label="System Overview">
+
+The full stack in one diagram: browser, the Cropwright nginx serving the static bundle and proxying one API prefix, the OpenProcessor API, and behind it OpenSearch, Triton, the VLM, the trainer/evaluator and the segmenter. Start here.
+
+<iframe src={useBaseUrl('/architecture/cropwright-system-overview.html')} title="System Overview" style={{width: '100%', height: '900px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+  <TabItem value="frontend-modules" label="Frontend Module Map">
+
+Routes, controllers, runes stores, the slot registry (served region profile + tier-2 annotation profiles), api.ts, and the contract tests that check it against the backend's vendored wire format.
+
+<iframe src={useBaseUrl('/architecture/cropwright-frontend-modules.html')} title="Frontend Module Map" style={{width: '100%', height: '900px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+  <TabItem value="projects-config" label="Projects and Config Store">
+
+The URL as the active project, project-scoped versus global calls, revisioned per-project config (packs, profiles, active VLM, keymap), the shared VLM registry with host-held secrets, and combine and model sharing.
+
+<iframe src={useBaseUrl('/architecture/cropwright-projects-config.html')} title="Projects and Config Store" style={{width: '100%', height: '900px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+</Tabs>
+
+## Workflows
+
+<Tabs groupId="cropwright-arch-workflows">
+  <TabItem value="labeling-loop" label="Labeling Loop">
+
+Ingest, then clustering/VLM assist, clusters, review, classes, export + holdout, train, bake-off, promote, and probe predictions feeding back into review.
+
+<iframe src={useBaseUrl('/architecture/cropwright-labeling-loop.html')} title="Labeling Loop" style={{width: '100%', height: '900px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+  <TabItem value="ingest-upload" label="Ingest Upload Run">
+
+The browser upload run controller: path_lookup prefilter, chunk planning, bounded-concurrency upload, 413/422/503 handling, the region-drain gate, and the clustering handoff.
+
+<iframe src={useBaseUrl('/architecture/cropwright-ingest-upload.html')} title="Ingest Upload Run" style={{width: '100%', height: '900px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+  <TabItem value="config-activation" label="Edit, Test and Activate">
+
+Editing a prompt pack, region profile or VLM endpoint: server-side validation, a revisioned save, test on a crop with an optional VLM pick, then confirmed activation with the external-VLM acknowledgement and the reload notice.
+
+<iframe src={useBaseUrl('/architecture/cropwright-config-activation.html')} title="Edit, Test and Activate" style={{width: '100%', height: '900px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+</Tabs>
+
+## Sequences
+
+<Tabs groupId="cropwright-arch-sequences">
+  <TabItem value="review-assign-undo" label="Review Assign + Undo">
+
+A /review keypress, the optimistic queue update, the API write (with rollback on failure), and the Z undo round trip through undoStore.
+
+<iframe src={useBaseUrl('/architecture/cropwright-review-assign-undo.html')} title="Review Assign + Undo" style={{width: '100%', height: '950px', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}} loading="lazy" />
+
+  </TabItem>
+</Tabs>

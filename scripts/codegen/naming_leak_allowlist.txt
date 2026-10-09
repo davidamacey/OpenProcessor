@@ -187,7 +187,7 @@ frontend/README.md:license plate # names the reference example domains (license 
 frontend/docs/README.md:license plate # index line naming the reference example profiles
 frontend/examples/README.md:license_plate # points at the backend's public license_plate region profile example
 frontend/scripts/docs_screenshot_fixtures.py:license_plate # clones the shipped license_plate region profile for the docs screenshots
-frontend/docs-site/docs/:license[ -]plate # user docs describing the example license-plate profile
+docs-site/docs/cropwright/:license[ -]plate # user docs describing the example license-plate profile
 frontend/src/lib/annotations/builtinDetectors.test.ts:gemma # asserts the public gemma-4-e4b VLM catalog entry (Apache-2.0), not a leak
 frontend/src/lib/annotations/readSlot.test.ts:gemma # fixture uses the public gemma-4-e4b VLM catalog id and its text-source tag
 frontend/src/lib/api.regionVocabulary.test.ts:gemma # fixture uses the public gemma-4-e4b VLM catalog id

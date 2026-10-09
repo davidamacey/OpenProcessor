@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Docs-site screenshot capture — against a REAL Cropwright instance.
 
-Captures full-page screenshots for docs-site/src/data/screenshots.json
-and the `<Screenshot>` slots in docs-site/docs/**, at 1600px and 800px
+Captures full-page screenshots for the `<Screenshot>` slots in docs-site/docs/cropwright/**, at 1600px and 800px
 wide, from a live Cropwright instance pointed at a real OpenProcessor
 backend.
 
@@ -13,7 +12,7 @@ val2017 via `make sample-coco`, Open Images plates via `make
 sample-plates`, both in the OpenProcessor checkout). NEVER point this at
 a real deployment: its imagery, class names and counts are not public,
 and a screenshot captured from one must never be committed. See
-docs-site/docs/developer-guide/screenshots.md.
+docs-site/docs/cropwright/developer-guide/screenshots.md.
 
 This replaces the old stub-backed version (which rendered synthetic SVG
 tiles against a fake `/curation/*` backend) — the docs site now wants
@@ -36,10 +35,10 @@ state only ever opens and looks: nothing is saved, submitted or confirmed.
 Read-only guard: GET/HEAD pass; every other request is aborted EXCEPT the
 small explicit allow-list in READ_ONLY_CALLS (calls the UI makes only to
 render a report/dialog, each of which writes nothing server-side). Keep
-docs-site/docs/developer-guide/screenshots.md's list in step with it.
+docs-site/docs/cropwright/developer-guide/screenshots.md's list in step with it.
 
 The route list is NOT hardcoded here — it's read from
-docs-site/src/data/screenshot_routes.json, the same directory the
+frontend/scripts/screenshot_routes.json, the same directory the
 landing page's ScreenshotShowcase component and doc pages' <Screenshot>
 slots pull filenames from. Add a route there, not in this script, when a
 doc page gains a new screenshot slot.
@@ -59,8 +58,8 @@ from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ROUTES_FILE = REPO_ROOT / "docs-site" / "src" / "data" / "screenshot_routes.json"
-OUT_DIR = REPO_ROOT / "docs-site" / "static" / "img" / "screenshots"
+ROUTES_FILE = REPO_ROOT / "scripts" / "screenshot_routes.json"
+OUT_DIR = REPO_ROOT.parent / "docs-site" / "static" / "img" / "screenshots" / "cropwright"
 
 WIDTHS = (1600, 800)
 VIEWPORT_HEIGHT = 1000
@@ -873,7 +872,7 @@ def main() -> int:
 
     print(
         "\nDone. Review every PNG for leaked hostnames/paths before committing, "
-        "then commit under docs-site/static/img/screenshots/."
+        "then commit under docs-site/static/img/screenshots/cropwright/."
     )
     return 0
 
