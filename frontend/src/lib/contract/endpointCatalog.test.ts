@@ -41,6 +41,7 @@ const SCANNED_FILES = [
   'lib/api_openVocab.ts',
   'lib/api_regionStage.ts',
   'lib/api_detector.ts',
+  'lib/api_labelConfirmation.ts',
 ] as const;
 
 /** Every file that composes a backend URL through `${globalApi()}` — the
