@@ -20,7 +20,7 @@
 # Isolated so neither git nor the clone's history reaches the runtime
 # image. Pin to a known-good upstream SHA for reproducible rebuilds;
 # `main` is the default only because upstream publishes no releases.
-FROM alpine/git:2.47.2 AS sam3-src
+FROM alpine/git:v2.54.0 AS sam3-src
 
 ARG SAM3_SHA=main
 WORKDIR /src
@@ -31,7 +31,7 @@ RUN git checkout "$SAM3_SHA" && rm -rf .git
 # -- Stage 2: runtime --------------------------------------------------------
 # No -slim base is available for a CUDA + cuDNN + PyTorch runtime; this
 # is the smallest official image that carries the stack the model needs.
-FROM pytorch/pytorch:2.7.0-cuda12.6-cudnn9-runtime
+FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime
 
 LABEL org.opencontainers.image.title="OpenProcessor Segmenter" \
       org.opencontainers.image.description="Promptable segmentation (SAM 3) for the detection cascade" \
