@@ -1,7 +1,7 @@
 """W8.6: the numbered-overlay VLM contract for multi-box region verify.
 
-Kept separate from :mod:`src.services.labeling.vlm_labeler` (a ratchet-
-exempt oversize file already) so this module's growth doesn't add to it.
+Kept separate from :mod:`src.services.labeling.vlm_labeler` so this
+module's growth doesn't add to it.
 Self-contained: no import of ``vlm_labeler`` (or vice versa this pass --
 see the W8 handback report for what remains to wire the two together).
 
@@ -189,7 +189,7 @@ def _normalize_confidence(value: Any) -> ConfidenceLevel | None:
 
 
 # M5 fix (W8 pipeline-wiring review, 2026-09-27): the pre-W8 flat parser's
-# full sentinel set (vlm_labeler._TEXT_SENTINELS) -- the W8 rewrite's
+# full sentinel set (vlm_reply_parse._TEXT_SENTINELS) -- the W8 rewrite's
 # ``_clean_text_reply`` only dropped 4 of these 7, silently storing
 # "unreadable"/"-" as if they were real region text.
 _TEXT_SENTINELS = frozenset({'', 'null', 'none', 'unknown', 'unreadable', 'n/a', '-'})

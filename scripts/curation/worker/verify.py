@@ -42,7 +42,7 @@ from src.services.detection.cascade_detect import (
 if TYPE_CHECKING:
     from src.config import DetectionProfile
     from src.services.labeling.region_overlay import VlmBoxVerdict
-    from src.services.labeling.vlm_labeler import VlmCombinedReply
+    from src.services.labeling.vlm_models import VlmCombinedReply
 
 
 logger = get_logger('curation_worker')

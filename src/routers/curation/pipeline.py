@@ -151,7 +151,7 @@ async def _run_auto_label(
     from src.services.curation.autolabel.job import with_elapsed_tick
     from src.services.curation.clustering.auto_promote import auto_promote_clusters
     from src.services.curation.image_serving import THUMBNAIL_CACHE
-    from src.services.labeling.vlm_labeler import ItemCrop
+    from src.services.labeling.vlm_models import ItemCrop
 
     reject_detection_profile(detection_profile)
     if isinstance(vlm, str) and not vlm_resolved and not run_vlm:
@@ -401,7 +401,7 @@ async def _run_auto_label(
     # Reuse the VLM label_batch logic by calling it directly (no HTTP
     # hop). Build ItemCrops here so we can chunk.
     from src.services.curation.region_class import item_classes
-    from src.services.labeling.vlm_labeler import (
+    from src.services.labeling.vlm_class_names import (
         format_class_catalog,
         resolve_class_name as _resolve_class_name_fn,
     )
@@ -455,7 +455,7 @@ async def _run_auto_label(
         """Map a VLM reply to a registry class name (or None).
 
         Skips fuzzy/synonym resolution when ``confidence='low'`` — see
-        :func:`src.services.labeling.vlm_labeler.resolve_class_name`.
+        :func:`src.services.labeling.vlm_class_names.resolve_class_name`.
         """
         if confidence == 'low':
             _force_fit_bypass['low_conf_skipped'] += 1

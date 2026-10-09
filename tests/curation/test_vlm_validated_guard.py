@@ -19,7 +19,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config.curation import base_curation_config
 from src.services.labeling.vlm_client import VlmIdentity
-from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_models import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 

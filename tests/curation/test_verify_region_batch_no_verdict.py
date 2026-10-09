@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from src.services.labeling.vlm_client import VlmIdentity
-from src.services.labeling.vlm_labeler import VlmRegionVerdict
+from src.services.labeling.vlm_models import VlmRegionVerdict
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env')

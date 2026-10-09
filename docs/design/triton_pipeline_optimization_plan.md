@@ -74,7 +74,7 @@ and then processed, encoded, stored and shipped at that full size:
 | 7 | Worker load | `scripts/curation/worker/state.py:345`, `scripts/curation/worker/runner.py:761-768` | Reads the full-size crop JPEG into memory once per task |
 | 8 | Region detector | `src/services/detection/cascade_detect.py:486` (`detect`), `:776` (`_preprocess`) | PIL-decodes the full-size crop JPEG, letterboxes to 640, FP32 over gRPC |
 | 9 | Segmenter | `scripts/curation/worker/client.py:372-389` (`segment_multi`), `runner.py:1192`; `docker/segmenter/main.py:203` | **Base64 of the full-size crop JPEG in a JSON body**; the service decodes it, then the model resizes to 1008 |
-| 10 | VLM | `runner.py:1447-1453` (`CombinedCrop(jpeg_bytes=t.crop_jpeg)`), `src/services/labeling/vlm_labeler.py:1385-1418` (`draw_region_overlay`, `_b64_jpeg`) | Overlay re-decode/re-encode, then **base64 of the full-size JPEG** to the VLM, whose own processor downsizes it |
+| 10 | VLM | `runner.py:1447-1453` (`CombinedCrop(jpeg_bytes=t.crop_jpeg)`), `src/services/labeling/vlm_labeler_combined.py` (`draw_region_overlay`) and `src/services/labeling/vlm_labeler_core.py` (`_b64_jpeg`) | Overlay re-decode/re-encode, then **base64 of the full-size JPEG** to the VLM, whose own processor downsizes it |
 | 11 | OCR | `cascade_detect.py:1122` (`read_lines`), `:1263-1306` (`_preprocess`) | Sends `original_image` as **FP32 at full crop resolution** to the OCR BLS (about 10.6 MB for a 1100x800 crop, about 62 MB for 2700x1900) |
 | 12 | Sub-crop re-pass | `scripts/curation/worker/cascade.py:181-196` (`_crop_region_jpeg`) | Decode the full-size crop again, crop, re-encode |
 
@@ -438,7 +438,7 @@ Goal: remove the redundant full-size copies without changing any output.
   `src/services/curation/source_image_cache.py`, `src/services/curation/crop_bytes.py`
   (`crop_jpeg_from_disk`, `load_item_crop_jpeg`, `load_vlm_item_jpeg`),
   `scripts/curation/worker/client.py`, `scripts/curation/worker/cascade.py`,
-  `src/services/labeling/vlm_labeler.py`, `src/services/detection/cascade_detect.py`
+  `src/services/labeling/vlm_labeler_combined.py`, `src/services/detection/cascade_detect.py`
   (`_preprocess` for the OCR payload), `env.template`, `tests/test_env_surface.py`.
 - Changes:
   1. `crop_sizing` returns the work crop: the ROI resized (cv2 `INTER_AREA`,

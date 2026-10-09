@@ -25,7 +25,7 @@ from src.services.detection.region_text import (
 )
 from src.services.detection.region_text_rules import RegionTextRules, text_key
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import VlmCombinedReply
+from src.services.labeling.vlm_models import VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, prompt_text_examples
 
 from .test_region_cascade_integrity import _FakeOpenSearch, _item
