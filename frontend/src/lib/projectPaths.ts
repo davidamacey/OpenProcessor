@@ -20,6 +20,7 @@ export const PROJECT_SECTIONS = [
   'review',
   'classes',
   'export',
+  'audit',
   'models',
   'train',
   'bakeoff',
