@@ -51,7 +51,7 @@ requests
 # src/core/logging.py (imported by src/main.py)
 structlog>=24.1.0
 
-# src/clients/opensearch.py (imported transitively via src/clients/__init__.py
+# src/clients/opensearch/client.py (imported transitively via src/clients/__init__.py
 # and src/core/dependencies.py, both on the src.main import path)
 # [async] pulls aiohttp: without it opensearch-py does not export
 # AsyncOpenSearch and `import src.main` fails with an ImportError.

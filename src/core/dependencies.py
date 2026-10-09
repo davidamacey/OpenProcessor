@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_pool import TritonClientManager
 from src.config.settings import Settings, get_settings
 
