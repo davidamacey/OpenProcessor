@@ -654,7 +654,12 @@ def save_triton_config(
         output_dtypes=output_dtypes,
     )
 
-    return write_generated_config(model_dir / 'config.pbtxt', config_content, overwrite=overwrite)
+    return write_generated_config(
+        model_dir / 'config.pbtxt',
+        config_content,
+        overwrite=overwrite,
+        output_dtypes=output_dtypes if has_nms else None,
+    )
 
 
 def enable_fp16_if_available(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
