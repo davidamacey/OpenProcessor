@@ -21,7 +21,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / 'setup-openprocessor.sh'
 SHIMS = Path(__file__).resolve().parent / 'shims'
 RELEASE = 'v9.9.9'
-CW_TAG = 'v1.2.3'
 PROJECT = 'opinst-test'
 
 # One 48 GB card with nothing on it.
@@ -32,21 +31,6 @@ GPU_HOST = (
     '1, NVIDIA GeForce RTX 3080 Ti, 12288, 0, 8.6\n'
     '2, NVIDIA RTX A6000, 49140, 0, 8.6\n'
 )
-
-CW_COMPOSE = """services:
-  cropwright:
-    image: ${CROPWRIGHT_IMAGE:-davidamacey/cropwright:1.2.3}
-    container_name: ${CROPWRIGHT_CONTAINER_NAME:-cropwright}
-    ports:
-      - '${CROPWRIGHT_BIND_ADDRESS:-0.0.0.0}:${CROPWRIGHT_PORT:-5184}:8080'
-    networks:
-      - api
-networks:
-  api:
-    external: true
-    name: ${OP_DOCKER_NETWORK:-openprocessor_triton_net}
-"""
-CW_ENV_EXAMPLE = 'CROPWRIGHT_PORT=5184\nPUBLIC_API_PREFIX=/curation\n'
 
 
 def run_bash(
@@ -109,7 +93,7 @@ def image_key_refs() -> list[tuple[str, str]]:
 
 
 def build_fake_release(root: Path, *, lock_override: str | None = None) -> Path:
-    """Build release assets + raw files + a Cropwright release under root."""
+    """Build release assets + raw files under root."""
     src = root / 'src'
     for rel in _manifest_files(REPO_ROOT):
         dest = src / rel
@@ -118,20 +102,6 @@ def build_fake_release(root: Path, *, lock_override: str | None = None) -> Path:
 
     lock_lines = [f'{key}={ref}@{fake_digest(key)}' for key, ref in image_key_refs()]
     (src / 'images.lock').write_text(lock_override or '\n'.join(lock_lines) + '\n')
-
-    cw_dir = root / 'release' / 'cw' / CW_TAG
-    cw_dir.mkdir(parents=True)
-    (cw_dir / 'docker-compose.yml').write_text(CW_COMPOSE)
-    (cw_dir / '.env.example').write_text(CW_ENV_EXAMPLE)
-    (cw_dir / 'SHA256SUMS').write_text(
-        f'{_sha(cw_dir / "docker-compose.yml")}  docker-compose.yml\n'
-        f'{_sha(cw_dir / ".env.example")}  .env.example\n'
-    )
-    (src / 'cropwright.lock').write_text(
-        f'tag={CW_TAG}\n'
-        f'image=davidamacey/cropwright@{fake_digest("cropwright")}\n'
-        f'sha256sums_sha256={_sha(cw_dir / "SHA256SUMS")}\n'
-    )
 
     assets = root / 'release' / 'assets' / RELEASE
     env = {**os.environ, 'ALLOW_UNPINNED_LOCK': '1' if lock_override else '0'}
@@ -213,8 +183,6 @@ class Shimmed:
             'SHIM_LATEST': RELEASE,
             'OP_ARTIFACT_BASE_URL': 'https://release.test/assets',
             'OP_RAW_BASE_URL': 'https://release.test/raw',
-            'CW_ARTIFACT_BASE_URL': 'https://cw.test/assets',
-            'CW_RAW_BASE_URL': 'https://cw.test/raw',
         }
         env.update(extra)
         return env

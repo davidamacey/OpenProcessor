@@ -14,7 +14,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
-from installer_harness import CW_TAG, PROJECT, RELEASE, REPO_ROOT, fake_digest
+from installer_harness import PROJECT, RELEASE, REPO_ROOT, fake_digest
 
 
 if TYPE_CHECKING:
@@ -450,100 +450,24 @@ def test_release_dir_is_still_checksum_verified(shimmed: Shimmed, tmp_path: Path
     assert not (shimmed.root / 'inst' / '.env').exists()
 
 
-def _bundle_with_cropwright(shimmed: Shimmed, out: Path, cw_dir: Path | None) -> None:
+def test_release_dir_install_pins_and_enables_cropwright(shimmed: Shimmed, tmp_path: Path) -> None:
+    out = tmp_path / 'assets'
     env = {**os.environ, 'ALLOW_UNPINNED_LOCK': '0'}
-    if cw_dir is not None:
-        env['CW_RELEASE_DIR'] = str(cw_dir)
-    result = subprocess.run(
+    built = subprocess.run(
         ['bash', str(BUNDLE), RELEASE, str(shimmed.release / 'raw' / RELEASE), str(out)],
         check=False,
         capture_output=True,
         text=True,
         env=env,
     )
-    assert result.returncode == 0, result.stderr
-
-
-def test_release_dir_bundle_carries_cropwright_for_an_offline_install(
-    shimmed: Shimmed, tmp_path: Path
-) -> None:
-    # Review s3: --release-dir must not silently fetch Cropwright from the network.
-    out = tmp_path / 'assets'
-    _bundle_with_cropwright(shimmed, out, shimmed.release / 'cw' / CW_TAG)
-    for f in ('SHA256SUMS', 'docker-compose.yml', '.env.example'):
-        assert (out / 'cropwright' / CW_TAG / f).is_file()
-    result = install(
-        shimmed,
-        '--release-dir',
-        str(out),
-        '--no-start',
-        tiers='cropwright',
-        CW_ARTIFACT_BASE_URL='https://unreachable.invalid/a',
-        CW_RAW_BASE_URL='https://unreachable.invalid/r',
-    )
-    assert result.returncode == 0, result.stderr[-2000:]
-    assert [ln for ln in shimmed.log_lines('curl') if 'unreachable' in ln or 'cw.test' in ln] == []
-    assert 'from the release dir' in result.stderr + result.stdout
-    assert (shimmed.root / 'inst' / 'cropwright' / 'docker-compose.yml').is_file()
-
-
-def test_bundle_refuses_cropwright_assets_that_do_not_match_the_lock(
-    shimmed: Shimmed, tmp_path: Path
-) -> None:
-    cw = tmp_path / 'cw'
-    shutil.copytree(shimmed.release / 'cw' / CW_TAG, cw)
-    (cw / 'SHA256SUMS').write_text((cw / 'SHA256SUMS').read_text() + '# tampered\n')
-    env = {**os.environ, 'ALLOW_UNPINNED_LOCK': '0', 'CW_RELEASE_DIR': str(cw)}
-    result = subprocess.run(
-        ['bash', str(BUNDLE), RELEASE, str(shimmed.release / 'raw' / RELEASE), str(tmp_path / 'o')],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert result.returncode != 0
-    assert 'cropwright.lock' in result.stderr
-
-
-def test_cropwright_ships_inside_the_tarball_for_an_asset_only_install(
-    shimmed: Shimmed, tmp_path: Path
-) -> None:
-    # Cropwright's repo is private, so the four GitHub release assets must be
-    # enough: strip the side-car cropwright/ dir and keep only the tarball.
-    out = tmp_path / 'assets'
-    _bundle_with_cropwright(shimmed, out, shimmed.release / 'cw' / CW_TAG)
-    shutil.rmtree(out / 'cropwright')
-    listing = subprocess.run(
-        ['tar', '-tzf', str(next(out.glob('*.tar.gz')))], capture_output=True, text=True, check=True
-    ).stdout
-    for f in ('SHA256SUMS', 'docker-compose.yml', '.env.example'):
-        assert f'cropwright-release/{CW_TAG}/{f}' in listing
-        assert f'cropwright-release/{CW_TAG}/{f}' in (out / 'SHA256SUMS').read_text()
-    result = install(
-        shimmed,
-        '--release-dir',
-        str(out),
-        '--no-start',
-        tiers='cropwright',
-        CW_ARTIFACT_BASE_URL='https://unreachable.invalid/a',
-        CW_RAW_BASE_URL='https://unreachable.invalid/r',
-    )
-    assert result.returncode == 0, result.stderr[-2000:]
-    assert 'shipped in the deploy bundle' in result.stderr + result.stdout
-    assert 'not offline' not in result.stderr
-    assert [ln for ln in shimmed.log_lines('curl') if 'unreachable' in ln or 'cw.test' in ln] == []
-    assert (shimmed.root / 'inst' / 'cropwright' / 'docker-compose.yml').is_file()
-
-
-def test_release_dir_without_cropwright_warns_it_is_not_offline(
-    shimmed: Shimmed, tmp_path: Path
-) -> None:
-    out = tmp_path / 'assets'
-    _bundle_with_cropwright(shimmed, out, None)
+    assert built.returncode == 0, built.stderr
     result = install(shimmed, '--release-dir', str(out), '--no-start', tiers='cropwright')
     assert result.returncode == 0, result.stderr[-2000:]
-    assert 'not offline' in result.stderr
-    assert [ln for ln in shimmed.log_lines('curl') if 'cw.test' in ln]
+    env_text = (shimmed.root / 'inst' / '.env').read_text()
+    assert 'cropwright' in env_text.split('COMPOSE_PROFILES=')[1].splitlines()[0].split(',')
+    assert f'CROPWRIGHT_IMAGE=davidamacey/cropwright@{fake_digest("cropwright")}' in env_text
+    assert not (shimmed.root / 'inst' / 'cropwright').exists()
+    assert [ln for ln in shimmed.log_lines('curl') if 'cw.test' in ln] == []
 
 
 def test_release_dir_needs_a_version(shimmed: Shimmed) -> None:

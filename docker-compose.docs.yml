@@ -1,6 +1,8 @@
 # Optional overlay: serve the documentation site locally from a source checkout.
 #   docker compose -f docker-compose.yml -f docker-compose.docs.yml up -d --build docs
-# then open http://localhost:4613/OpenProcessor/ (DOCS_PORT). The release bundle
+# then open http://localhost:4613/OpenProcessor/ (DOCS_PORT). The Cropwright frontend proxies the
+# same site at /OpenProcessor/ on its own origin, so its Documentation link works too. Cropwright's
+# docs are a section of this one site (docs/cropwright/). The release bundle
 # does not ship docs-site/; installed stacks read the public GitHub Pages site.
 services:
   docs:

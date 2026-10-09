@@ -342,7 +342,11 @@ def test_retry_gives_up_after_max_attempts_and_returns_fallback():
 
 
 def test_health_returns_unreachable_on_connection_error():
-    """All 3 attempts raise ConnectError → health() returns reachable=False."""
+    """A refused connection → health() returns reachable=False after ONE attempt.
+
+    The probe backs ``GET /health``, which the frontend blocks its first paint on,
+    so it must not spend the labeling path's retry-with-backoff budget (~3 s) on
+    an endpoint that is simply not running."""
 
     def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
         raise httpx.ConnectError('cannot connect')
@@ -363,8 +367,7 @@ def test_health_returns_unreachable_on_connection_error():
     assert h.model == 'fake-vlm'
     assert h.last_error is not None
     assert 'ConnectError' in h.last_error
-    # 3 retry attempts before giving up.
-    assert len(transport.calls) == 3
+    assert len(transport.calls) == 1
 
 
 def test_health_returns_reachable_on_200():

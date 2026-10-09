@@ -132,7 +132,12 @@ exclude = [
     "cache",
     "benchmarks/results",
     "*.egg-info",
+    # The frontend's Playwright e2e suite and docs scripts are their own
+    # Python project (own pytest.ini and conventions), outside the backend lint scope.
+    "frontend",
 ]
+# Apply `exclude` even when pre-commit passes file paths explicitly.
+force-exclude = true
 
 # =============================================================================
 # Ruff Linter Rules

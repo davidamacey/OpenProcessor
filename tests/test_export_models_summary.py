@@ -33,7 +33,12 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import export_models  # noqa: E402
+# export_models exits at import when the pinned ultralytics<8.4 toolchain is missing;
+# SystemExit would abort the whole session, so turn it into a module skip.
+try:
+    import export_models
+except SystemExit as exc:
+    pytest.skip(str(exc), allow_module_level=True)
 
 
 class TestMissingPtFileSurfacesARealError:

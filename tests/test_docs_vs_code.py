@@ -78,3 +78,25 @@ def test_link_check_rejects_missing_file_and_anchor(tmp_path: Path) -> None:
 
 def test_slugify_matches_github_rules() -> None:
     assert checker.slugify('The `lock` rule (v2)') == 'the-lock-rule-v2'
+
+
+def test_doc_files_skip_untracked_local_notes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Untracked local files (private notes, gitignored artifacts) are not published
+    docs, so a bogus route in one must not fail the checks."""
+    import subprocess  # nosec B404 - fixed git invocation in a temp repo
+
+    def git(*args: str) -> None:
+        subprocess.run(['git', *args], cwd=tmp_path, check=True, capture_output=True)  # nosec B603 B607
+
+    git('init', '-q')
+    (tmp_path / 'docs').mkdir()
+    (tmp_path / 'docs' / 'tracked.md').write_text('# tracked\n', encoding='utf-8')
+    (tmp_path / 'docs' / 'local_note.md').write_text('POST /no_such_route\n', encoding='utf-8')
+    git('add', 'docs/tracked.md')
+    monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)
+
+    names = {p.name for p in checker.doc_files()}
+
+    assert names == {'tracked.md'}

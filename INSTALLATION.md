@@ -51,7 +51,7 @@ State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
 ### Verifying the download
 
 See [README: Verify the download yourself](README.md#verify-the-download-yourself).
-`SHA256SUMS`, `images.lock` and `cropwright.lock` are **integrity** checks: they
+`SHA256SUMS` and `images.lock` are **integrity** checks: they
 catch a truncated or corrupted download and a release whose files disagree
 with each other. They come from the same origin as the files they cover, so
 they do not prove **authenticity**. Signing is follow-up work.
@@ -295,19 +295,7 @@ own compose project; a git checkout or another install's dir is refused.
 
 `scripts/release/build_deploy_bundle.sh vX.Y.Z [SRC] [OUT]` builds the release
 assets locally; `--release-dir OUT --version vX.Y.Z` installs from them (still
-checksum-verified). For the `cropwright` tier to be offline too, stage
-Cropwright's release files into the bundle:
-
-```bash
-CW_RELEASE_DIR=/path/to/cropwright-release \
-  scripts/release/build_deploy_bundle.sh vX.Y.Z . dist/release-vX.Y.Z
-```
-
-`CW_RELEASE_DIR` holds Cropwright's `SHA256SUMS`, `docker-compose.yml` and
-`.env.example` for the tag in `cropwright.lock`; the script checks them
-against the lock and copies them to `OUT/cropwright/<tag>/`. Without them the
-installer says so and downloads Cropwright from its GitHub release (verified
-against `cropwright.lock` either way). Images still come from a registry
+checksum-verified). Images still come from a registry
 unless they are already present locally (use `--image-tag` for local builds).
 
 ### Troubleshooting

@@ -23,6 +23,7 @@ IMAGE_KEYS_TABLE=(
     "evaluator|OP_EVALUATOR_IMAGE|build|docker/evaluator/Dockerfile|openprocessor-evaluator"
     "segmenter|OP_SEGMENTER_IMAGE|build|docker/segmenter/Dockerfile|openprocessor-segmenter"
     "trainer|OP_TRAINER_IMAGE|build|docker/trainer/Dockerfile|openprocessor-trainer"
+    "cropwright|CROPWRIGHT_IMAGE|build|frontend/Dockerfile|cropwright"
     "vlm_gemma4|VLM_IMAGE|third|vllm/vllm-openai:gemma4-cu130"
     "vlm_generic|VLM_IMAGE|third|vllm/vllm-openai:gemma4-cu130"
     "opensearch|OPENSEARCH_IMAGE|third|opensearchproject/opensearch:3.6.0"

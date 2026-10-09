@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vite.config.ts"
+  },
+  "reporters": ["clear-text", "progress", "html", "json"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "mutate": [
+    "src/lib/api.ts",
+    "src/lib/stores/undo.svelte.ts",
+    "src/lib/datasetStats.ts",
+    "src/lib/autoLabelRunVlm.ts",
+    "src/lib/sourceBadge.ts",
+    "src/lib/reviewTabs.ts",
+    "src/lib/curationSettings.ts",
+    "src/lib/strategies.ts",
+    "src/lib/classPicker.ts",
+    "src/lib/annotations/readSlot.ts",
+    "src/lib/review/reviewController.svelte.ts",
+    "src/lib/clusters/clusterController.svelte.ts",
+    "src/lib/ingest/uploadPlanner.ts",
+    "src/lib/ingest/ingestRunController.svelte.ts",
+    "src/lib/stores/keymap.svelte.ts",
+    "src/lib/keymapFallback.ts",
+    "src/lib/review/slotKeymap.ts"
+  ],
+  "ignorePatterns": [
+    "e2e/**",
+    "node_modules/**",
+    "build/**",
+    ".svelte-kit/**",
+    "reports/**",
+    "docs/**",
+    ".claude/**",
+    "artifacts_local/**"
+  ],
+  "concurrency": 4,
+  "incremental": true,
+  "incrementalFile": ".stryker-tmp/incremental.json",
+  "tempDirName": ".stryker-tmp",
+  "coverageAnalysis": "perTest",
+  "timeoutMS": 30000,
+  "dryRunTimeoutMinutes": 30,
+  "thresholds": {
+    "high": 90,
+    "low": 70,
+    "break": 62
+  }
+}

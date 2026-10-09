@@ -1,0 +1,16 @@
+node_modules
+build
+.svelte-kit
+.git
+.claude
+.env
+.env.*
+!.env.example
+docs
+e2e
+artifacts_local
+reports
+test-results
+.stryker-tmp
+coverage
+.vscode

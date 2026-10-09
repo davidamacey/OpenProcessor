@@ -10,17 +10,22 @@ conventions this repo uses.
 git clone https://github.com/davidamacey/OpenProcessor.git
 cd OpenProcessor
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt -r requirements-test.txt
+.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.venv/bin/pip install -r requirements-test.txt pre-commit pytest-xdist
 .venv/bin/pre-commit install
 ```
+
+`requirements-test.txt` is the CPU-installable set CI uses. Do not also install
+`requirements.txt` into this venv: it is the container image's list and carries
+`faiss-gpu-cu12`, which overwrites `faiss-cpu` and breaks the faiss tests.
 
 **Always call venv binaries directly — never `source .venv/bin/activate`:**
 
 ```bash
 .venv/bin/python -m pytest tests/ -q
 .venv/bin/pre-commit run --all-files
-.venv/bin/python -m ruff check src/
-.venv/bin/python -m mypy src/
+.venv/bin/pre-commit run ruff --all-files
+.venv/bin/pre-commit run mypy --all-files
 ```
 
 `source .venv/bin/activate && ...` works, but it's not this project's

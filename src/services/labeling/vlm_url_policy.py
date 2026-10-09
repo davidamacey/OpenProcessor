@@ -57,6 +57,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'curation-cluster-refresh',
         'curation-evaluator',
         'curation-mlflow',
+        'cropwright',
         'curation-trainer',
         'mlflow',
         'prometheus',

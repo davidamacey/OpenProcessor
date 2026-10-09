@@ -32,6 +32,8 @@ jobs:
           trivyignores: scripts/release/trivy-allowlist.txt
           format: sarif
           output: trivy-fs.sarif
+          # Without this, a SARIF run ignores `severity` and fails on MEDIUM/LOW findings.
+          limit-severities-for-sarif: true
 
       - name: Upload SARIF
         if: always()

@@ -77,6 +77,7 @@ from src.services.labeling.vlm_client import (
     DEFAULT_MODEL,
     DEFAULT_OPEN_IMAGES_PER_CALL,
     DEFAULT_REQUESTS_PER_SECOND,
+    RETRY_MAX_ATTEMPTS,
     VlmIdentity,
     _TokenBucket,
     build_auth_headers,
@@ -802,8 +803,11 @@ class VlmLabeler:
     def _headers(self) -> dict[str, str]:
         return build_auth_headers(self.api_key)
 
-    async def _post_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _post_chat(
+        self, payload: dict[str, Any], *, attempts: int = RETRY_MAX_ATTEMPTS
+    ) -> dict[str, Any]:
         """POST /chat/completions with retry on 5xx + connection errors.
+
         ``egress_check`` (the factory's) runs first and raises to refuse the
         send: a host's DNS can change after the endpoint was validated."""
 
@@ -813,7 +817,7 @@ class VlmLabeler:
                 await self._egress_check()
             url = f'{self.base_url}/chat/completions'
             response = await post_chat_with_retry(
-                self._client, url, self._headers, payload, self._bucket
+                self._client, url, self._headers, payload, self._bucket, attempts=attempts
             )
         except Exception as exc:
             record_vlm_request(self.model, 'error', time.monotonic() - started)
@@ -839,7 +843,7 @@ class VlmLabeler:
             'temperature': 0.0,
         }
         try:
-            resp = await self._post_chat(payload)
+            resp = await self._post_chat(payload, attempts=1)
             _ = extract_message_content(resp)
             return VlmHealth(reachable=True, model=self.model, last_error=None)
         except Exception as exc:

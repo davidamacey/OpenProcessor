@@ -69,6 +69,8 @@ for _key in $(image_keys build); do
     # with context docker/segmenter); every other image builds from the repo root.
     _ctx="."
     [[ "$_key" == segmenter ]] && _ctx="docker/segmenter"
+    # The Cropwright frontend is its own build context (frontend/), like the segmenter.
+    [[ "$_key" == cropwright ]] && _ctx="frontend"
     IMAGE_SPECS[$_key]="$(image_key_field "$_key" dockerfile)|${_ctx}|$(image_key_field "$_key" image)"
 done
 ALL_SERVICES="$(image_keys build | tr '\n' ' ')"
@@ -207,12 +209,17 @@ build_image() {
     local version_tag="${repo}:${VERSION}${LOCAL_TAG_SUFFIX}"
     local latest_tag="${repo}:latest${LOCAL_TAG_SUFFIX}"
 
+    # The frontend Dockerfile names its build args VERSION and REVISION (OCI labels); the
+    # other Dockerfiles take OP_BUILD_SHA.
+    local -a build_args=(--build-arg "OP_BUILD_SHA=${REVISION}")
+    [[ "$svc" == cropwright ]] && build_args=(--build-arg "VERSION=${VERSION}" --build-arg "REVISION=${REVISION}")
+
     log "building $svc -> $version_tag (cache on, $dockerfile)"
     "$DOCKER_BIN" build \
         --file "$dockerfile" \
         --tag "$version_tag" \
         --tag "$latest_tag" \
-        --build-arg "OP_BUILD_SHA=${REVISION}" \
+        "${build_args[@]}" \
         --label "org.opencontainers.image.revision=${REVISION}" \
         --label "org.opencontainers.image.version=${VERSION}" \
         "$context" || return 1

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#09090b" />
+    <title>Cropwright</title>
+    <!-- __INGEST_MAX_REQUEST_MB__ is substituted at container start
+         (docker-entrypoint.sh) from CROPWRIGHT_INGEST_MAX_REQUEST_MB —
+         the deployment-owned nginx client_max_body_size cap ingestConfig.ts's
+         upload chunk planner needs to know (docs/design/
+         ingest-ui-and-acceptance-plan-2026-09-24.md §A.4). The
+         unresolved literal `__INGEST_MAX_REQUEST_MB__` (local dev, or
+         a skipped entrypoint) is recognized by ingestConfig.ts as
+         "unset" the same way normalizeApiPrefix treats __API_PREFIX__. -->
+    <script>
+      window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__ = '__INGEST_MAX_REQUEST_MB__';
+      // W10 dataset-archive upload cap (CROPWRIGHT_DATASET_UPLOAD_MAX_MB);
+      // the unresolved literal means "unset" (src/lib/datasets/uploadCap.ts).
+      window.__CROPWRIGHT_DATASET_UPLOAD_MAX_MB__ = '__DATASET_UPLOAD_MAX_MB__';
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

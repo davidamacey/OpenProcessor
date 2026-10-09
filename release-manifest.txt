@@ -20,4 +20,3 @@ scripts/lib/opensearch_heap.sh
 examples/vlm/catalog.tsv
 export/build_pe_trt.sh	exec
 monitoring/**	optional
-cropwright.lock

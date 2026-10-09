@@ -249,8 +249,13 @@ async def post_chat_with_retry(
     headers: dict[str, str],
     payload: dict[str, Any],
     bucket: _TokenBucket,
+    *,
+    attempts: int = RETRY_MAX_ATTEMPTS,
 ) -> dict[str, Any]:
-    """POST ``payload`` to ``url`` with rate limiting + retry on 5xx / connection errors."""
+    """POST ``payload`` to ``url`` with rate limiting + retry on 5xx / connection errors.
+
+    ``attempts`` is the total tries; a reachability probe passes 1 so an endpoint
+    that is not running is reported at once instead of after the retry backoff."""
 
     async def _attempt() -> dict[str, Any]:
         await bucket.acquire()
@@ -263,7 +268,7 @@ async def post_chat_with_retry(
 
     try:
         async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(RETRY_MAX_ATTEMPTS),
+            stop=stop_after_attempt(attempts),
             wait=wait_exponential(multiplier=RETRY_WAIT_MIN_S, max=RETRY_WAIT_MAX_S),
             retry=(
                 retry_if_exception_type(_RETRYABLE_HTTPX_EXCEPTIONS)

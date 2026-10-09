@@ -1,0 +1,117 @@
+# Pre-commit hooks for Cropwright.
+# See https://pre-commit.com for more information.
+#
+# Kept deliberately lean: this is a pure SvelteKit/TS frontend with no
+# Python, no Docker builds beyond a single production Dockerfile, and no
+# backend of its own — see OpenProcessor's much larger .pre-commit-config.yaml
+# for the pattern this is scoped down from.
+
+repos:
+  # General file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: ^tsconfig\.json$ # tsconfig.json allows comments; not strict JSON
+      - id: check-added-large-files
+        args: [--maxkb=5120] # docs/screenshots/*.png land here deliberately; 5MB covers them
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Formatting — must match `npm run format` / CI exactly, hence
+  # `language: system` + the repo's own prettier binary rather than the
+  # mirrors-prettier hook's pinned version, which can drift from
+  # package.json's prettier and produce a different diff than CI does.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier --write
+        entry: npx prettier --write --ignore-unknown
+        language: system
+        types_or: [javascript, ts, tsx, svelte, json, yaml, css, markdown]
+
+  # Type-check + lint — same two checks CI runs, so a failing commit here
+  # is a failing commit in CI. Deliberately NOT running the production
+  # build at commit time (that's a push-time/CI cost, not an edit-loop
+  # one) — see .github/workflows/ci.yml for where the build actually gets
+  # verified.
+  - repo: local
+    hooks:
+      - id: svelte-check
+        name: svelte-check (type errors)
+        entry: npm run check
+        language: system
+        pass_filenames: false
+        files: \.(ts|svelte)$
+      - id: eslint
+        name: eslint
+        entry: npx eslint
+        language: system
+        types_or: [javascript, ts, svelte]
+
+  # scripts/ and e2e/ are runbooks and the e2e suite — nothing else lints
+  # or compiles them, so a syntax error would otherwise ship silently
+  # (docs/design/test-audit-2026-09-24.md recommendation 8 / R3 / P2-3).
+  - repo: local
+    hooks:
+      - id: py-compile
+        name: py_compile (scripts/ and e2e/)
+        entry: python3 -m py_compile
+        language: system
+        types: [python]
+        files: ^(scripts|e2e)/.*\.py$
+
+  # Contract drift — only when a commit could plausibly introduce drift
+  # (the vendored snapshot itself, or the one file that composes every
+  # backend URL). Skips harmlessly when no OpenProcessor checkout is found
+  # (see scripts/contract-sync.mjs); a real backend rename that the
+  # snapshot wasn't refreshed for fails loudly instead.
+  - repo: local
+    hooks:
+      - id: contract-check
+        name: contract:check (frontend vs vendored OpenProcessor contracts)
+        entry: npm run contract:check
+        language: system
+        pass_filenames: false
+        files: ^(contracts/|src/lib/api\.ts$)
+      # Full vitest suite before anything leaves the machine: too slow for
+      # every commit, but a red push is what CI would reject anyway.
+      - id: vitest-pre-push
+        name: vitest (full suite)
+        entry: npx vitest run
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+      # Stubbed e2e suite (no live backend needed). A red e2e test once
+      # reached master because only CI ran it.
+      - id: e2e-pre-push
+        name: e2e (stubbed Playwright suite)
+        entry: npm run -s test:e2e
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
+
+  # Secret detection
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: [--verbose, --no-banner]
+
+  # Commit message convention (matches CONTRIBUTING.md / CLAUDE.md)
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--force-scope]
+
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+fail_fast: false

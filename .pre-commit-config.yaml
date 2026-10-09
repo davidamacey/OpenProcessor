@@ -48,7 +48,7 @@ repos:
           - types-tabulate
           - types-tqdm
         args: [--ignore-missing-imports, --check-untyped-defs]
-        exclude: ^(src/ultralytics_patches/|export/|scripts/|reference_repos/)
+        exclude: ^(src/ultralytics_patches/|export/|scripts/|reference_repos/|frontend/)
 
   # Additional Python checks
   - repo: https://github.com/pre-commit/pygrep-hooks
@@ -88,7 +88,7 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
-        exclude: ^(src/ultralytics_patches/|tests/|export/|scripts/)
+        exclude: ^(src/ultralytics_patches/|tests/|export/|scripts/|frontend/)
 
   # Shell script linting with shellcheck
   - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -221,7 +221,9 @@ repos:
       # outputs change. Regenerate with `make contracts`.
       - id: api-contracts-drift
         name: Item wire / class-source / curation OpenAPI contracts are in sync
-        entry: python3 scripts/codegen/export_api_contracts.py --check
+        # Imports the app (src.main), so it needs the project's dependencies: prefer the
+        # venv the repo tells you to use, and fall back to python3 where CI has them installed.
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/export_api_contracts.py --check'
         language: system
         pass_filenames: false
         files: ^(src/.*\.py|contracts/json/item_wire\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime)\.py)$

@@ -1,0 +1,7 @@
+# Pinned deps for the stubbed-backend Playwright/pytest e2e suite.
+# Installed into e2e/.venv only (gitignored) — never on the host.
+# See docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1.
+pytest==8.3.4
+pytest-playwright==0.6.2
+playwright==1.49.1
+pytest-xdist==3.8.0

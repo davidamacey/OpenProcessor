@@ -46,11 +46,6 @@ export const siteConfig = {
   // Cross-links to sibling projects sharing this docs framework / product family.
   siblingProjects: [
     {
-      label: 'Cropwright',
-      href: 'https://github.com/attevon-llc/cropwright',
-      description: 'An optional keyboard-first labeling frontend for the /curation API.',
-    },
-    {
       label: 'OpenTranscribe',
       href: 'https://github.com/attevon-llc/OpenTranscribe',
       description: 'A sibling self-hosted AI project for audio/video transcription.',
@@ -104,6 +99,12 @@ export const siteConfig = {
     title: 'OpenProcessor',
     items: [
       {to: '/docs/getting-started/introduction', position: 'left' as const, label: 'Docs'},
+      {
+        type: 'docSidebar' as const,
+        sidebarId: 'cropwrightSidebar',
+        position: 'left' as const,
+        label: 'Cropwright',
+      },
       {to: '/docs/api-reference/overview', position: 'left' as const, label: 'API'},
       {to: '/architecture', position: 'left' as const, label: 'Architecture'},
       {to: '/roadmap', position: 'left' as const, label: 'Roadmap'},
@@ -119,6 +120,7 @@ export const siteConfig = {
         {label: 'API Reference', to: '/docs/api-reference/overview'},
         {label: 'Configuration', to: '/docs/configuration/basic'},
         {label: 'Operations', to: '/docs/operations/health-and-stalls'},
+        {label: 'Cropwright (labeling UI)', to: '/docs/cropwright/getting-started/introduction'},
       ],
     },
     {
@@ -133,7 +135,6 @@ export const siteConfig = {
     {
       title: 'Related projects',
       items: [
-        {label: 'Cropwright (labeling frontend)', href: 'https://github.com/attevon-llc/cropwright'},
         {label: 'OpenTranscribe', href: 'https://github.com/attevon-llc/OpenTranscribe'},
       ],
     },
