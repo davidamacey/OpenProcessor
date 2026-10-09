@@ -164,6 +164,7 @@ upgrades in place), and browsing MLflow by a DNS name needs `MLFLOW_ALLOWED_HOST
 
 ### Fixed
 
+- A clean install left the default detector `yolov11_small_trt_end2end` UNAVAILABLE: the installer seeds an FP32 output config while the TensorRT 11 NMS engine builds with FP16 `det_boxes` and `det_scores`, and the exporter keeps a differing config. A kept config now takes the built engine's output dtypes (found by the 0.5.0 acceptance run).
 - VLM scope `representatives` is bounded (#192): a labelled representative moving to its class
   cluster no longer pulls in the next-nearest members. Each cluster's reps are claimed once and
   stored (`vlm_scope_reps`), so total attempts stay within `per_cluster` per original cluster
