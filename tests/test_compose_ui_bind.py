@@ -79,6 +79,8 @@ def test_cropwright_variable_moves_only_cropwright(tmp_path: Path) -> None:
 
 
 def test_cropwright_variable_wins_over_the_ui_variable(tmp_path: Path) -> None:
-    hosts = _hosts(tmp_path, {'OP_UI_BIND_ADDRESS': '0.0.0.0', 'CROPWRIGHT_BIND_ADDRESS': '127.0.0.1'})
+    hosts = _hosts(
+        tmp_path, {'OP_UI_BIND_ADDRESS': '0.0.0.0', 'CROPWRIGHT_BIND_ADDRESS': '127.0.0.1'}
+    )
     assert hosts['cropwright'] == {'127.0.0.1'}
     assert hosts['grafana'] == {'0.0.0.0'}

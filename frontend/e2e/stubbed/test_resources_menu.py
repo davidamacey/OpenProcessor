@@ -25,7 +25,7 @@ def test_resources_menu_hrefs(stub, page, app_url):
     links = page.get_by_test_id("resource-link")
     hrefs = [a.get_attribute("href") for a in links.all()]
     # Documentation is the one client-owned entry; docs entries stay relative.
-    assert hrefs == ["/cropwright/", "/docs", "/redoc", "/openapi.json", "http://grafana.example:3000"]
+    assert hrefs == ["/OpenProcessor/docs/cropwright/getting-started/introduction", "/docs", "/redoc", "/openapi.json", "http://grafana.example:3000"]
     for a in links.all():
         assert a.get_attribute("target") == "_blank"
         assert a.get_attribute("rel") == "noopener noreferrer"
