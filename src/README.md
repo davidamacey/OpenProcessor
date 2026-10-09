@@ -50,7 +50,7 @@ src/
 │   ├── embedding.py             # MobileCLIP embedding generation
 │   ├── face_recognition.py      # Face detection and recognition
 │   ├── face_identity.py         # Face identification and verification
-│   ├── visual_search.py         # OpenSearch visual search operations
+│   ├── visual_search/           # OpenSearch visual search operations (package)
 │   ├── ocr_service.py           # PP-OCRv5 text extraction
 │   ├── clustering.py            # FAISS clustering
 │   ├── duplicate_detection.py   # Image deduplication

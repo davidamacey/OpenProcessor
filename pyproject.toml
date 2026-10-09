@@ -408,6 +408,7 @@ module = [
     "src.clients.triton_client",
     "src.services.model_export",
     "src.services.visual_search",
+    "src.services.visual_search.*",
     "src.utils.retry",
     "src.utils.face_alignment",
     "src.utils.image_processing",
