@@ -506,6 +506,11 @@ class Stub:
         self.on("GET", r"/region_stage(\?|$)", (404, {"detail": "Not Found"}))
         self.on("GET", r"/detections/summary(\?|$)", (404, {"detail": "Not Found"}))
         self.on("GET", r"/ingest/policy(\?|$)", (404, {"detail": "Not Found"}))
+        # Label confirmation (#119): /settings reads the VLM scope policy on
+        # mount and /audit its report and queue. Default 404s keep the zero-
+        # unhandled guarantee; test_label_confirmation.py overrides them.
+        self.on("GET", r"/vlm/policy(\?|$)", (404, {"detail": "Not Found"}))
+        self.on("GET", r"/audit/(report|queue)(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)
 

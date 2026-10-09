@@ -16,6 +16,7 @@
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
+  import DetectorClass from './labelConfirmation/DetectorClass.svelte';
 
   interface Props {
     crop: Crop;
@@ -417,6 +418,11 @@
       </span>
     {/if}
   </div>
+
+  <DetectorClass
+    {crop}
+    class="block border-t border-zinc-800 px-2 py-1 text-[10px] text-zinc-500"
+  />
 
   {#if crop.vlm_class_empty_reason}
     <div

@@ -391,6 +391,12 @@ export interface Crop {
   bbox_norm: BBoxNorm;
   class_id: number | null;
   class_name: string | null;
+  /** The detector's own class for this item, kept apart from `class_*`
+   *  (which a VLM or a human may overwrite). Null when the detector gave
+   *  none, and on items stored before it was kept. */
+  detector_class_name?: string | null;
+  detector_class_id?: number | null;
+  detector_confidence?: number | null;
   /** Where the class assignment came from — `human*`, the fixed VLM
    *  writer values (`vlm`, `vlm_unmatched`, …), or an ingest detector's
    *  config-derived value (`{primary}_proposal`, `{secondary}_model`, …).
@@ -801,7 +807,11 @@ export type CoreReviewTab =
   | 'new_class_proposals'
   // Labels written by a W10 dataset import (`GET {prefix}/review/imported`);
   // only offered when `GET /review/tabs` serves an `imported` entry.
-  | 'imported';
+  | 'imported'
+  // Machine labels whose class differs from the detector's own answer
+  // (label confirmation, #119); only offered when `GET /review/tabs`
+  // serves a `detector_disagreements` entry.
+  | 'detector_disagreements';
 
 export type ReviewTab = CoreReviewTab | SlotReviewTab;
 

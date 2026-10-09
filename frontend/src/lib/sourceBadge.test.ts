@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sourceBadge } from './sourceBadge';
+import { confirmationLabel, sourceBadge } from './sourceBadge';
 
 describe('sourceBadge', () => {
   it("labels an ingest proposal by the catalog's label, not its raw id", () => {
@@ -16,6 +16,7 @@ describe('sourceBadge', () => {
     const unconfirmed = sourceBadge('vlm', false, 'vlm', 'VLM');
     expect(unconfirmed.text).not.toContain('?');
     expect(unconfirmed.unvalidated).toBe(true);
+    expect(unconfirmed.text).toBe('VLM suggestion');
 
     const confirmed = sourceBadge('vlm', true, 'vlm', 'VLM');
     expect(confirmed.text).toBe('VLM');
@@ -26,7 +27,9 @@ describe('sourceBadge', () => {
     const a = sourceBadge('det_a_model', true, 'model', 'A');
     const b = sourceBadge('det_b_model', true, 'model', 'B');
     expect(a.cls).toBe(b.cls);
-    expect(sourceBadge('human_move', true, 'human', 'Human move').text).toBe('human');
+    expect(sourceBadge('human_move', true, 'human', 'Human move').text).toBe(
+      'Human-confirmed',
+    );
   });
 
   it('gives the open_vocab role its own sky tone, labelled by the catalog', () => {
@@ -47,5 +50,30 @@ describe('sourceBadge', () => {
     expect(b.text).toBe('vlm_unmatched');
     expect(b.cls).toContain('zinc');
     expect(sourceBadge('', false, null, '').text).toBe('unlabeled');
+  });
+});
+
+describe('confirmation wording (#119)', () => {
+  it('names what a label is worth from the role and the validated flag alone', () => {
+    expect(confirmationLabel('human', true)).toBe('Human-confirmed');
+    expect(confirmationLabel('vlm', false)).toBe('VLM suggestion');
+    expect(confirmationLabel('cluster', true)).toBe('Auto-validated');
+  });
+
+  it('has no wording for a role that is not one of the three', () => {
+    expect(confirmationLabel('vlm', true)).toBeNull();
+    expect(confirmationLabel('cluster', false)).toBeNull();
+    expect(confirmationLabel('model', true)).toBeNull();
+    expect(confirmationLabel('proposal', false)).toBeNull();
+    expect(confirmationLabel(null, true)).toBeNull();
+  });
+
+  it('badges an unvalidated VLM label as a suggestion and a validated cluster label as auto-validated', () => {
+    expect(sourceBadge('vlm', false, 'vlm', 'VLM').text).toBe('VLM suggestion');
+    const auto = sourceBadge('cluster_agree', true, 'cluster', 'Cluster agreement');
+    expect(auto.text).toBe('Auto-validated');
+    expect(sourceBadge('cluster_agree', false, 'cluster', 'Cluster agreement').text).toBe(
+      'Cluster agreement',
+    );
   });
 });

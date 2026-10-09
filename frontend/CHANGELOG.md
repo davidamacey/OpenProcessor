@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the websocket upgrade for Grafana Live. No ports are hardcoded in the app.
   With the switch off those four paths answer 404 instead of the app shell, and an
   `https` `X-Forwarded-Proto` from an outer TLS proxy is kept on the gateway locations.
+- Label confirmation (#119): a VLM label is a suggestion until a human validates it.
+  - `/settings` has a **VLM scope** panel (`GET/PUT /vlm/policy`): the four served scopes
+    (everything, uncertain only, cluster representatives, off), the knobs each scope reads
+    (confidence limit, representatives per cluster, random sample fraction, crops per day),
+    a save that sends the revision it read, and Reload / Keep my edits on a 409.
+  - A crop card, the item detail and `/review` show the detector's own class and score
+    beside a VLM-sourced label, and the label source reads "VLM suggestion",
+    "Human-confirmed" or "Auto-validated" (from the served source role and the validated flag).
+  - `/review` has a **Detector Disagreements** tab, offered only while `GET /review/tabs`
+    serves it (label and description as served); a `?tab=detector_disagreements` link
+    against a backend without it falls back to All with the usual notice.
+  - `/audit` (new route and nav link): draw a stratified sample of machine-labelled crops
+    (`POST /audit/start`), see the served detector and VLM precision per class with Wilson
+    95% intervals and the `insufficient_sample` flag, the confusion matrix, the outcome
+    counts and the queue of crops waiting for a human label (each links to `/review`).
+  - `/export` says how many of the crops are validated and that only validated crops are
+    exported; `/dashboard` says labels are not ground truth and names the VLM row "VLM suggestions".
 - The item wire carries `detector_class_name`, `detector_class_id` and `detector_confidence` (the detector's own class, kept next to the VLM or human label); `RawCrop` and the test fixtures list them.
 
 ### Fixed

@@ -384,6 +384,11 @@
           aria-current={navCurrent('review')}>Review</a
         >
         <a
+          href={resolve(projectHref('/audit'))}
+          class={navLinkClass('audit')}
+          aria-current={navCurrent('audit')}>Audit</a
+        >
+        <a
           href={resolve(projectHref('/classes'))}
           class={navLinkClass('classes')}
           aria-current={navCurrent('classes')}>Classes</a

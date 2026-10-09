@@ -86,13 +86,29 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'imported',
     endpointId: 'imported',
   },
+  // Label confirmation (#119): machine labels (VLM) whose class differs
+  // from the detector's own answer, hardest first. Served-only like
+  // `imported`: the label and description come from `GET /review/tabs`.
+  {
+    id: 'detector_disagreements',
+    label: 'Detector Disagreements',
+    urlId: 'detector_disagreements',
+    endpointId: 'detector_disagreements',
+  },
 ];
 
 /** Tab ids shown only when the served `GET /review/tabs` vocabulary has an
  *  entry for their endpoint id. */
-const SERVED_ONLY_TABS: ReadonlySet<ReviewTab> = new Set(['imported']);
+const SERVED_ONLY_TABS: ReadonlySet<ReviewTab> = new Set([
+  'imported',
+  'detector_disagreements',
+]);
 
-/** `tabs` minus every served-only tab (`imported`) the backend does not
+export function isServedOnlyTab(id: ReviewTab): boolean {
+  return SERVED_ONLY_TABS.has(id);
+}
+
+/** `tabs` minus every served-only tab (`imported`, `detector_disagreements`) the backend does not
  *  serve. `isServed(endpointId)` answers from the served vocabulary. */
 export function visibleReviewTabs(
   tabs: ReviewTabDef[],

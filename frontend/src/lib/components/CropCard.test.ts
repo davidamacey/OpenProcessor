@@ -107,7 +107,9 @@ describe('CropCard — source badge', () => {
         label_validated: true,
       }),
     });
-    expect(chip(el)?.getAttribute('title')).toBe('Label source: VLM — not yet validated');
+    expect(chip(el)?.getAttribute('title')).toBe(
+      'Label source: VLM suggestion — not yet validated',
+    );
     expect(chip(el)?.textContent?.trim()).toBe('VLM·');
   });
 
@@ -445,5 +447,61 @@ describe('CropCard expanded Source-image dialog: keyboard and focus', () => {
     flushSync();
     expect(dialog()).toBeNull();
     expect(document.activeElement).toBe(view);
+  });
+});
+
+describe('CropCard — label confirmation (#119)', () => {
+  const chip = (el: HTMLElement) => el.querySelector('[data-testid="source-chip"]');
+  const detector = (el: HTMLElement) =>
+    el.querySelector('[data-testid="detector-class"]');
+
+  beforeEach(() => {
+    classSourcesStore.list = [
+      { id: 'vlm_write', label: 'VLM', role: 'vlm', short_label: 'VLM' },
+      { id: 'human_label', label: 'Human', role: 'human', short_label: 'H' },
+    ] as never;
+  });
+
+  it('shows the detector class and score beside a VLM-sourced label', () => {
+    const el = renderCard({
+      crop: baseCrop({
+        class_source: 'vlm_write',
+        label_source: 'vlm_write',
+        detector_class_name: 'widget_h',
+        detector_confidence: 0.72,
+      }),
+    });
+    expect(detector(el)?.textContent).toContain('widget_h 72%');
+  });
+
+  it('shows no detector class beside a human label', () => {
+    const el = renderCard({
+      crop: baseCrop({
+        class_source: 'human_label',
+        label_source: 'human_label',
+        class_validated: true,
+        detector_class_name: 'widget_h',
+        detector_confidence: 0.72,
+      }),
+    });
+    expect(detector(el)).toBeNull();
+  });
+
+  it('words an unvalidated VLM label as a suggestion in the chip tooltip', () => {
+    const el = renderCard({
+      crop: baseCrop({ class_source: 'vlm_write', label_source: 'vlm_write' }),
+    });
+    expect(chip(el)?.getAttribute('title')).toContain('VLM suggestion');
+  });
+
+  it('words a human label as human-confirmed', () => {
+    const el = renderCard({
+      crop: baseCrop({
+        class_source: 'human_label',
+        label_source: 'human_label',
+        class_validated: true,
+      }),
+    });
+    expect(chip(el)?.getAttribute('title')).toBe('Label source: Human-confirmed');
   });
 });
