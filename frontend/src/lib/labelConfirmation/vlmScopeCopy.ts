@@ -20,7 +20,7 @@ export const VLM_SCOPE_COPY: Record<VlmScope, { label: string; blurb: string }> 
   representatives: {
     label: 'Cluster representatives',
     blurb:
-      'Only the closest members of each cluster, plus crops with no cluster. Far fewer calls; the rest keep their cluster membership.',
+      'Only the closest members of each cluster, plus crops with no cluster. Far fewer calls: each cluster is asked about only that many crops, and a labeled crop moves to its class cluster without the next ones being picked in its place.',
   },
   off: {
     label: 'Off',

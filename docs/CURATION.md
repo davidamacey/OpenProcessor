@@ -621,6 +621,23 @@ show them with a VRAM fit check. The host CLI changes the served model:
 new model, probes it and unpauses. The API records the desired local model
 (`POST /curation/vlm/local/select`) but never restarts vLLM.
 
+### VLM scope
+
+The per-project VLM policy (`GET/PUT /curation/projects/{project}/vlm/policy`) limits
+which crops the VLM worker and the auto-label VLM stage may label; an explicit request
+for one crop or one cluster is never limited. Scopes: `all`, `uncertain`,
+`representatives` and `off`.
+
+With `representatives` the VLM is asked about at most `per_cluster` crops of each
+cluster (default 5), plus every crop with no cluster. The bound holds even though a
+VLM label moves the crop out of its candidate cluster into its class cluster: the
+representatives of a cluster are claimed once, stored in the project's settings
+document, and are not replaced by the next-nearest members when they are labelled.
+Editing any policy field, restarting the worker, or raising `per_cluster` (which claims
+only the difference) does not re-open the pool. A re-cluster gives each new cluster its
+own claim, except that a reused cluster id whose representatives have all been labelled
+keeps its old claim (it labels less rather than more).
+
 ## Keymaps
 
 Each project has a keymap for its labeling frontend. `GET /curation/projects/{project}/keymap`

@@ -1,6 +1,7 @@
 # Label confirmation: detector vs VLM vs human ground truth
 
-Status: plan only (no code changed). Base: `main` at 5df30815. Audience: a fresh
+Status: plan; `vlm_scope` is implemented. #192 fixed the `representatives` bound (reps are claimed
+once per cluster and stored, so labelling a rep does not pull in the next ones). Base: `main` at 5df30815. Audience: a fresh
 implementation agent. All line numbers are from that commit.
 
 ## 0. Trigger and short answer
@@ -141,7 +142,9 @@ Adopt a layered design, shipped in this order:
      aggregation on every poll), and `*_low_conf` crops already carry a VLM answer.
    - `representatives`: only the top `vlm_per_cluster` (default 5) members per
      cluster by `core_first` distance (representatives already exist,
-     `/clusters`), plus `unassigned`.
+     `/clusters`), plus `unassigned`. The reps are claimed once per cluster and
+     persisted (`vlm_scope_reps` in the settings doc): a VLM write moves the crop to
+     its class cluster, so re-ranking the current members would cascade (#192).
    - Common: `vlm_max_crops_per_day` budget (0 = unlimited) enforced in the
      selector, and `vlm_sample_frac` (0..1) for a random cap.
 2. **Preserve the detector class** (`detector_class_name`,

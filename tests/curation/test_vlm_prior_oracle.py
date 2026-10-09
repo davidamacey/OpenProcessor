@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 from pathlib import Path
@@ -49,3 +50,45 @@ def test_load_records_round_trip(tmp_path: Path) -> None:
     f = tmp_path / 'r.jsonl'
     f.write_text(json.dumps({'crop_id': 'c1', 'truth': 'a', 'answer': None}) + '\n\n')
     assert oracle.load_records(f) == {'c1': _rec('a', '')}
+
+
+def test_dump_binds_the_project_without_a_nested_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``dump`` runs under ``asyncio.run``; the sync binder starts its own loop and
+    crashed there on a real stack. The async binder must be the one used."""
+    from src.services.projects import guard, script_binding
+
+    bound: list[str] = []
+
+    async def _abind(slug: str, *, opensearch_url: str | None = None) -> None:
+        bound.append(slug)
+
+    class _Client:
+        async def search(self, **_kw: object) -> dict[str, object]:
+            return {'hits': {'hits': []}}
+
+        async def close(self) -> None:
+            return None
+
+    def _sync_bind(*_a: object, **_kw: object) -> None:
+        raise AssertionError('sync bind_script_project must not be used inside a loop')
+
+    monkeypatch.setattr(script_binding, 'abind_script_project', _abind)
+    monkeypatch.setattr(script_binding, 'bind_script_project', _sync_bind)
+    monkeypatch.setattr(guard, 'make_script_opensearch', lambda *_a, **_k: _Client())
+    args = oracle.build_parser().parse_args(
+        [
+            'dump',
+            '--project',
+            'p',
+            '--pack',
+            'k',
+            '--truth-field',
+            't',
+            '--out',
+            str(tmp_path / 'o'),
+        ]
+    )
+    assert asyncio.run(oracle._dump(args)) == 1  # no records written
+    assert bound == ['p']

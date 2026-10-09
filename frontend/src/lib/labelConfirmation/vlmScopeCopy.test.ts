@@ -29,6 +29,11 @@ describe('knobsFor', () => {
 });
 
 describe('VLM_SCOPE_COPY', () => {
+  it('does not claim the unlabeled members keep their cluster membership', () => {
+    expect(VLM_SCOPE_COPY.representatives.blurb).not.toMatch(/keep their cluster/);
+    expect(VLM_SCOPE_COPY.representatives.blurb).toMatch(/moves to its class cluster/);
+  });
+
   it('words every served scope', () => {
     for (const s of VLM_SCOPES) {
       expect(VLM_SCOPE_COPY[s].label.length).toBeGreaterThan(0);
