@@ -59,8 +59,7 @@ computer.
 ### Release checksums are integrity, not authenticity
 
 The installer checks every downloaded file against the release's
-`SHA256SUMS`, pins images by digest from `images.lock`, pins Cropwright's
-files through `cropwright.lock`, and cross-checks each `images.lock` entry's
+`SHA256SUMS`, pins images (Cropwright's included) by digest from `images.lock`, and cross-checks each `images.lock` entry's
 image repo against `scripts/lib/image_keys.sh`. These catch truncated or
 corrupted downloads and an internally inconsistent release. They do **not**
 prove who published the release: `SHA256SUMS` comes from the same origin as

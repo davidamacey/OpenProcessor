@@ -15,7 +15,7 @@ RUN npm run build
 # rebuild never silently changes what's shipped; Dependabot bumps this.
 FROM nginxinc/nginx-unprivileged:1.31.2-alpine3.23
 
-ARG VERSION=0.1.1
+ARG VERSION=0.5.0
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="Cropwright" \
       org.opencontainers.image.description="From raw images to a trained detector, without labeling one box at a time. Labeling frontend for OpenProcessor." \

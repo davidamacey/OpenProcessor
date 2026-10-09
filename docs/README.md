@@ -10,7 +10,7 @@ Documentation for OpenProcessor: the inference API and the curation subsystem.
 |---|---|
 | [README.md](../README.md) | Overview, feature list, quick start, first project, the cars and wheels example |
 | [INSTALLATION.md](../INSTALLATION.md) | The one-line installer, every flag, the `openprocessor` CLI, VLM selection, install from source |
-| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.4.1 scope and the standards the code is held to |
+| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.5.0 scope and the standards the code is held to |
 | [SECURITY.md](../SECURITY.md) | No authentication, LAN exposure, VLM URL policy, reporting |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Dev setup, tests, contracts, doc checks, commit conventions |
 | [CLAUDE.md](../CLAUDE.md) | Orientation for AI coding agents working in the repo |

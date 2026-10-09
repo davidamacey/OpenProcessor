@@ -2,7 +2,7 @@
 
 Complete guide for optimizing FastAPI and Triton Inference Server performance.
 
-> **Status (v0.4.1):** this guide covers the API-layer tuning and benchmarks that are in
+> **Status (v0.5.0):** this guide covers the API-layer tuning and benchmarks that are in
 > `main`. The GPU and Triton pipeline optimization (decode once, stay on the GPU) is
 > open work, tracked in #40 and planned in
 > [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md);
@@ -450,7 +450,7 @@ GPU model and the Triton, TensorRT, driver and torch versions. Set B numbers
 stay in private notes, and only an aggregate ratio or pass/fail is stated in
 public text.
 
-### Baseline v0.4.1 (set A, public COCO, 4,000 images; commit 15f7bbb9)
+### Baseline 0.4.1 (set A, public COCO, 4,000 images; commit 15f7bbb9)
 
 Host: single node, Triton + API on one A6000 (GPU 0, 32 API workers, multiprocess metrics on), PE image encoder + YOLO11s via Triton. Region profile off, open_vocab off, VLM/auto-label workers idle. Warmup 100 images excluded. One round per row (not the 3-round median).
 

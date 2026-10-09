@@ -1,6 +1,6 @@
 # Curation and Active Learning
 
-> **Status: experimental for v0.4.1.** This is a working, tested subsystem,
+> **Status: experimental for v0.5.0.** This is a working, tested subsystem,
 > but it is new and its API can still change between releases. It ships
 > opt-in, behind Docker Compose profiles, and is off by default.
 

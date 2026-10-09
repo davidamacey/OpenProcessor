@@ -974,7 +974,7 @@ main() {
             cmd_uninstall "$@"
             ;;
         version)
-            echo "openprocessor CLI ${OP_CLI_VERSION:-0.4.1}"
+            echo "openprocessor CLI ${OP_CLI_VERSION:-0.5.0}"
             ;;
         help|--help|-h)
             show_help
