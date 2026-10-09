@@ -200,7 +200,7 @@ export function tabHonorsPinnedSortDefault(tab: ReviewTab): boolean {
  *  `preset` (m31, 2026-09-24 interactive pass) is only meaningful when
  *  `tab` resolves to `all` — validated against `REVIEW_PRESETS` here so
  *  a garbage/typo'd query value never becomes bogus selected state. */
-export function reviewDeepLink(params: URLSearchParams): {
+export function reviewDeepLink(params: Pick<URLSearchParams, 'get' | 'getAll'>): {
   tab: ReviewTab;
   cropId: string | null;
   preset: ReviewPresetId | null;

@@ -24,7 +24,7 @@ keyboard-first UX built for speed.
 
 ## Architecture
 
-- **Frontend**: SvelteKit 2 + TypeScript + Tailwind CSS + svelte-dnd-action
+- **Frontend**: SvelteKit 3 + TypeScript + Tailwind CSS + svelte-dnd-action
   (pointer-event drag — HTML5 DnD is broken in Tauri WebView and unreliable in
   some browsers)
 - **Backend**: OpenProcessor at `http://localhost:4603/curation/...` — labeler is a

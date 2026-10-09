@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
-import svelteConfig from './svelte.config.js';
+import svelteConfig from './sveltekit.options.js';
 
 /** Svelte 5 rune globals — visible in .svelte.ts modules too. */
 const runes = {
@@ -58,7 +58,7 @@ export default ts.config(
   },
   {
     // eslint-plugin-svelte 3 + typescript-eslint 8's parser needs the
-    // project's own svelte.config.js (for preprocessors) to parse both
+    // project's own sveltekit.options.js (for preprocessors) to parse both
     // .svelte files and .svelte.ts/.svelte.js rune modules — without it,
     // typescript-eslint's parser chokes on Svelte 5 rune syntax in a
     // `.svelte.ts` file ("Parsing error: Unexpected token {").

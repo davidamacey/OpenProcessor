@@ -8,13 +8,18 @@ health envelope, and the class_source values queries filter on.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import pytest
-from fastapi.routing import APIRoute
+from _route_helpers import api_routes
 
 from src.routers.curation.stats import _count_by_proposal, _rollup_class_sources
 from src.services.curation import ingest_class_sources
 from src.services.curation.review_queries import KNOWN_TABS
+
+
+if TYPE_CHECKING:
+    from fastapi.routing import RouteContext
 
 
 _VENDOR_RE = re.compile(r'gemma|(^|_)v6(_|$)', re.IGNORECASE)
@@ -83,29 +88,28 @@ def test_count_by_proposal_sums_proposal_and_low_conf_and_default_sources(
 
 
 @pytest.fixture(scope='module')
-def curation_routes() -> list[APIRoute]:
+def curation_routes() -> list[RouteContext]:
     from src.main import app
     from src.routers.curation._common import config
 
-    return [
-        r for r in app.routes if isinstance(r, APIRoute) and r.path.startswith(config.api_prefix)
-    ]
+    return [r for r in api_routes(app) if r.path.startswith(config.api_prefix)]
 
 
-def test_no_vendor_names_in_curation_params(curation_routes: list[APIRoute]) -> None:
+def test_no_vendor_names_in_curation_params(curation_routes: list[RouteContext]) -> None:
     names: list[str] = []
     for route in curation_routes:
         names.append(route.path)
-        params = route.dependant.query_params + route.dependant.path_params
+        dependant = route.original_route.dependant
+        params = dependant.query_params + dependant.path_params
         names.extend(f'{route.path}?{p.alias}' for p in params)
-        for b in route.dependant.body_params:
+        for b in dependant.body_params:
             model_fields = getattr(b.field_info.annotation, 'model_fields', {})
             names.extend(f'{route.path} body.{name}' for name in model_fields)
     offenders = [n for n in names if _VENDOR_RE.search(n.rsplit('/', 1)[-1])]
     assert offenders == []
 
 
-def test_auto_label_params_renamed(curation_routes: list[APIRoute]) -> None:
+def test_auto_label_params_renamed(curation_routes: list[RouteContext]) -> None:
     start = next(r for r in curation_routes if r.path.endswith('/pipeline/auto_label/start'))
     names = {p.alias for p in start.dependant.query_params}
     assert {

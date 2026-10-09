@@ -40,7 +40,7 @@ CI runs the same four, plus the stubbed Playwright suite
 ## Conventions
 
 See `CLAUDE.md` in the repo for the authoritative reference on
-architecture (SvelteKit 2, Svelte 5 runes only), the route table, keyboard
+architecture (SvelteKit 3, Svelte 5 runes only), the route table, keyboard
 shortcut reservations, and style (2-space indent, dark theme only, no
 emoji, no gradients, Apple system colors only). If you change a route, a
 keyboard shortcut, or add a feature flag, update `CLAUDE.md`'s tables in

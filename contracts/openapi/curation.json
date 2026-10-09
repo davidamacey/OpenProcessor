@@ -209,7 +209,7 @@
           "suggested_reprocess": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReprocessRequest-Output"
+                "$ref": "#/components/schemas/ReprocessRequest"
               },
               {
                 "type": "null"
@@ -4661,7 +4661,7 @@
           "suggested_reprocess": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReprocessRequest-Output"
+                "$ref": "#/components/schemas/ReprocessRequest"
               },
               {
                 "type": "null"
@@ -6609,7 +6609,7 @@
           "suggested_reprocess": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReprocessRequest-Output"
+                "$ref": "#/components/schemas/ReprocessRequest"
               },
               {
                 "type": "null"
@@ -12241,49 +12241,7 @@
         "title": "OpenVocabActivateResponse",
         "type": "object"
       },
-      "OpenVocabBody-Input": {
-        "additionalProperties": true,
-        "properties": {
-          "dedup_iou": {
-            "default": 0.5,
-            "title": "Dedup Iou",
-            "type": "number"
-          },
-          "display_name": {
-            "default": "",
-            "title": "Display Name",
-            "type": "string"
-          },
-          "gating": {
-            "$ref": "#/components/schemas/OpenVocabGatingBody"
-          },
-          "image_max_side": {
-            "default": 1024,
-            "title": "Image Max Side",
-            "type": "integer"
-          },
-          "max_enabled_targets": {
-            "default": 8,
-            "title": "Max Enabled Targets",
-            "type": "integer"
-          },
-          "run_on_ingest": {
-            "default": false,
-            "title": "Run On Ingest",
-            "type": "boolean"
-          },
-          "targets": {
-            "items": {
-              "$ref": "#/components/schemas/OpenVocabTargetBody"
-            },
-            "title": "Targets",
-            "type": "array"
-          }
-        },
-        "title": "OpenVocabBody",
-        "type": "object"
-      },
-      "OpenVocabBody-Output": {
+      "OpenVocabBody": {
         "additionalProperties": true,
         "properties": {
           "dedup_iou": {
@@ -12389,7 +12347,7 @@
       "OpenVocabCreateRequest": {
         "properties": {
           "body": {
-            "$ref": "#/components/schemas/OpenVocabBody-Input"
+            "$ref": "#/components/schemas/OpenVocabBody"
           },
           "description": {
             "default": "",
@@ -12443,7 +12401,7 @@
             "title": "Active Revision"
           },
           "body": {
-            "$ref": "#/components/schemas/OpenVocabBody-Output"
+            "$ref": "#/components/schemas/OpenVocabBody"
           },
           "cloned_from": {
             "anyOf": [
@@ -12779,7 +12737,7 @@
       "OpenVocabSaveRequest": {
         "properties": {
           "body": {
-            "$ref": "#/components/schemas/OpenVocabBody-Input"
+            "$ref": "#/components/schemas/OpenVocabBody"
           },
           "description": {
             "anyOf": [
@@ -13240,7 +13198,7 @@
       "OpenVocabValidateRequest": {
         "properties": {
           "body": {
-            "$ref": "#/components/schemas/OpenVocabBody-Input"
+            "$ref": "#/components/schemas/OpenVocabBody"
           },
           "name": {
             "anyOf": [
@@ -18775,7 +18733,7 @@
             "type": "string"
           },
           "rerun_skipped": {
-            "$ref": "#/components/schemas/ReprocessRequest-Output"
+            "$ref": "#/components/schemas/ReprocessRequest"
           }
         },
         "required": [
@@ -20333,53 +20291,7 @@
         "title": "ReprocessOneRequest",
         "type": "object"
       },
-      "ReprocessRequest-Input": {
-        "additionalProperties": false,
-        "properties": {
-          "dry_run": {
-            "default": true,
-            "title": "Dry Run",
-            "type": "boolean"
-          },
-          "embed": {
-            "$ref": "#/components/schemas/EmbedOptions"
-          },
-          "region_mode": {
-            "default": "redetect",
-            "enum": [
-              "redetect",
-              "reverify"
-            ],
-            "title": "Region Mode",
-            "type": "string"
-          },
-          "scopes": {
-            "items": {
-              "enum": [
-                "detect",
-                "open_vocab",
-                "region",
-                "vlm",
-                "embed"
-              ],
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Scopes",
-            "type": "array"
-          },
-          "targets": {
-            "$ref": "#/components/schemas/ReprocessTargets"
-          }
-        },
-        "required": [
-          "targets",
-          "scopes"
-        ],
-        "title": "ReprocessRequest",
-        "type": "object"
-      },
-      "ReprocessRequest-Output": {
+      "ReprocessRequest": {
         "additionalProperties": false,
         "properties": {
           "dry_run": {
@@ -20965,7 +20877,7 @@
           "suggested_reprocess": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReprocessRequest-Output"
+                "$ref": "#/components/schemas/ReprocessRequest"
               },
               {
                 "type": "null"
@@ -41521,7 +41433,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReprocessRequest-Input"
+                "$ref": "#/components/schemas/ReprocessRequest"
               }
             }
           },

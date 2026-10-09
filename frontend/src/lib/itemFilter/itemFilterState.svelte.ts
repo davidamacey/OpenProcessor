@@ -112,7 +112,7 @@ export class ItemFilterState {
   }
 
   /** Reads the same names `toUrl` writes (repeatable keys). */
-  fromUrl(params: URLSearchParams): void {
+  fromUrl(params: Pick<URLSearchParams, 'get' | 'getAll'>): void {
     const num = (k: string): number | null => {
       const v = params.get(k);
       if (v == null || v === '') return null;

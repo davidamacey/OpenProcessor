@@ -11,7 +11,7 @@ as data. See the [architecture diagrams](./architecture-diagrams.mdx) for the fu
 
 ## Frontend
 
-- **SvelteKit 2 + Svelte 5 runes + TypeScript strict + Tailwind v4.**
+- **SvelteKit 3 + Svelte 5 runes + TypeScript strict + Tailwind v4.**
 - Pointer-event drag-and-drop via `svelte-dnd-action` (HTML5 drag-and-drop
   is unreliable across browsers/webviews and is not used).
 - State lives in Svelte 5 runes (`$state`/`$derived`/`$effect`) — nothing in

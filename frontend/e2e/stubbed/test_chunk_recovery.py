@@ -19,11 +19,12 @@ DASHBOARD = "/p/default/dashboard"
 
 
 def dashboard_node_pattern() -> re.Pattern[str]:
-    """The built chunk of the dashboard page node, from SvelteKit's generated
-    route table (the node index is not stable across route changes)."""
-    app_js = Path(ROOT) / ".svelte-kit" / "generated" / "client" / "app.js"
-    match = re.search(r'"/p/\[project\]/dashboard":\s*\[(\d+)', app_js.read_text())
-    assert match, "dashboard route not found in the generated client route table"
+    """The built chunk of the dashboard page node, from the route table in the
+    built client entry (the node index is not stable across route changes)."""
+    entries = sorted((Path(ROOT) / "build" / "_app" / "immutable" / "entry").glob("app.*.js"))
+    assert len(entries) == 1, f"expected one built app entry, found {entries}"
+    match = re.search(r'"/p/\[project\]/dashboard":\s*\[(\d+)', entries[0].read_text())
+    assert match, "dashboard route not found in the built client route table"
     return re.compile(rf"/_app/immutable/nodes/{match.group(1)}\.[^/]+\.js$")
 
 

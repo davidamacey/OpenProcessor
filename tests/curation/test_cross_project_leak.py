@@ -55,6 +55,7 @@ from urllib.parse import unquote
 import httpx
 import numpy as np
 import pytest
+from _route_helpers import api_routes
 from fastapi.testclient import TestClient
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool, jpeg_bytes
 from opensearchpy import AsyncOpenSearch
@@ -1678,8 +1679,8 @@ def _served_urls(value: Any) -> list[str]:
 def _scoped_routes(app: Any) -> list[tuple[str, str]]:
     """Every (method, path template) mounted under the scoped prefix."""
     out: list[tuple[str, str]] = []
-    for route in app.routes:
-        path = getattr(route, 'path', '')
+    for route in api_routes(app):
+        path = route.path
         if not path.startswith(SCOPED):
             continue
         out.extend((method, path) for method in sorted(route.methods or ()) if method != 'HEAD')
@@ -1705,8 +1706,8 @@ def _fill(path: str, slug: str, key: tuple[str, str] | None = None) -> str:
 
 
 def _is_streaming(app: Any, path: str) -> bool:
-    for route in app.routes:
-        if getattr(route, 'path', '') == path:
+    for route in api_routes(app):
+        if route.path == path:
             annotation = inspect.signature(route.endpoint).return_annotation
             return 'StreamingResponse' in str(annotation)
     return False

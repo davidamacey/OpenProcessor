@@ -208,7 +208,7 @@
   });
   function togglePreset(id: ReviewPresetId): void {
     preset = preset === id ? null : id;
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     if (preset) {
       url.searchParams.set('preset', preset);
     } else {
@@ -519,7 +519,7 @@
     ),
   );
   function persistItemFilter(): void {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     itemFilter.toUrl(url.searchParams);
     replaceState(resolve(projectHref(`/review${url.search}`)), {});
   }
@@ -622,13 +622,13 @@
   function clearUrlFilter(param: 'import_id' | 'combine_conflict'): void {
     if (param === 'import_id') importIdFilter = '';
     else combineConflictFilter = false;
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     url.searchParams.delete(param);
     replaceState(resolve(projectHref(`/review${url.search}`)), {});
   }
   function setEnumFilter(param: string, value: ServedFilterValue): void {
     enumFilterValues = { ...enumFilterValues, [param]: value };
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     url.searchParams.delete(param);
     for (const v of Array.isArray(value) ? value : value ? [value] : []) {
       url.searchParams.append(param, v);
@@ -1803,7 +1803,7 @@
             tab = t.id;
             pendingCropId = null;
             awaitingDeepLink = false;
-            const url = new URL(page.url);
+            const url = new URL(page.url.href);
             url.searchParams.set('tab', t.urlId);
             url.searchParams.delete('crop_id');
             url.searchParams.delete('preset');

@@ -24,7 +24,7 @@ const required = <X>(o: Record<ReqKeys<X>, true>) => Object.keys(o).sort();
 
 const CASES: [string, string[]][] = [
   [
-    'OpenVocabBody-Input',
+    'OpenVocabBody',
     keys({
       display_name: true,
       run_on_ingest: true,

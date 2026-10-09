@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _route_helpers import api_routes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -188,7 +189,7 @@ def test_export_yolo_still_accepts_known_fields(app_client: TestClient) -> None:
 
 
 def test_export_registry_route_is_mounted(app_client: TestClient) -> None:
-    route_paths = {route.path for route in app_client.app.routes}
+    route_paths = {route.path for route in api_routes(app_client.app)}
     assert '/curation/projects/{project}/export/registry/{artifact}' in route_paths
 
     # Point resolution at a directory with nothing in it — the whitelist
@@ -333,7 +334,7 @@ def test_registry_artifact_missing_file_in_valid_export_dir(
 
 
 def test_single_class_routes_are_mounted(app_client: TestClient) -> None:
-    route_paths = {route.path for route in app_client.app.routes}
+    route_paths = {route.path for route in api_routes(app_client.app)}
     assert '/curation/projects/{project}/export/single_class' in route_paths
     assert '/curation/projects/{project}/export/single_class/status' in route_paths
 

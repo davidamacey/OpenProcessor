@@ -6,11 +6,15 @@ routes answer with nothing bound."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from fastapi.routing import APIRoute
+from _route_helpers import api_routes
 from fastapi.testclient import TestClient
+
+
+if TYPE_CHECKING:
+    from fastapi.routing import RouteContext
 
 
 API = '/curation'
@@ -63,10 +67,10 @@ GLOBAL_ROUTES = frozenset(
 )
 
 
-def _curation_routes() -> list[APIRoute]:
+def _curation_routes() -> list[RouteContext]:
     from src.main import app
 
-    return [r for r in app.routes if isinstance(r, APIRoute) and r.path.startswith(f'{API}')]
+    return [r for r in api_routes(app) if r.path.startswith(f'{API}')]
 
 
 def test_every_curation_route_is_scoped_or_global() -> None:
@@ -194,8 +198,8 @@ def test_global_routes_answer_with_nothing_bound(client: TestClient) -> None:
     assert client.get(f'{API}/health').status_code == 200
     from src.main import app
 
-    events = next(r for r in app.routes if isinstance(r, APIRoute) and r.path == f'{API}/events')
-    assert 'project' not in {p.name for p in events.dependant.path_params}
+    events = next(r for r in api_routes(app) if r.path == f'{API}/events')
+    assert 'project' not in {p.name for p in events.original_route.dependant.path_params}
     assert is_project_bound()  # the test's own binding is untouched
 
 

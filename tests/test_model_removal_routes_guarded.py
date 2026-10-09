@@ -7,7 +7,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi.routing import APIRoute
+from _route_helpers import api_routes
 from fastapi.testclient import TestClient
 
 from src.main import create_app
@@ -17,8 +17,8 @@ from src.routers.curation._common import _raw_opensearch_dep
 def _removal_routes() -> list[tuple[str, str]]:
     return sorted(
         (method, route.path)
-        for route in create_app().routes
-        if isinstance(route, APIRoute) and '{model_name}' in route.path
+        for route in api_routes(create_app())
+        if '{model_name}' in route.path
         for method in route.methods
         if method == 'DELETE' or route.path.endswith('/unload')
     )

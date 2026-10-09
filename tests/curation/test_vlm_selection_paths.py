@@ -20,7 +20,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi.routing import APIRoute
+from _route_helpers import api_routes
 
 import src.services.labeling.vlm_url_policy as policy
 from curation.conftest import ACTIVE, GLOBAL_VLM, SCOPED
@@ -205,15 +205,16 @@ def test_every_route_naming_an_endpoint_in_its_body_is_walked() -> None:
     from src.main import app
 
     found: set[tuple[str, str]] = set()
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or '/projects/{project}' not in route.path:
+    for ctx in api_routes(app):
+        route = ctx.original_route
+        if '/projects/{project}' not in ctx.path:
             continue
         field = getattr(route, 'body_field', None)
         model = field.field_info.annotation if field is not None else None
         if 'vlm_name' not in getattr(model, 'model_fields', {}):
             continue
-        for method in route.methods - {'HEAD'}:
-            found.add((method, route.path.split('/projects/{project}', 1)[1]))
+        for method in ctx.methods - {'HEAD'}:
+            found.add((method, ctx.path.split('/projects/{project}', 1)[1]))
     assert found == set(TEST_ROUTES), (
         f'routes naming a VLM endpoint in the body that this walk does not cover: '
         f'{sorted(found - set(TEST_ROUTES))}; walked but gone: {sorted(set(TEST_ROUTES) - found)}'
@@ -340,13 +341,14 @@ def test_every_route_with_a_vlm_parameter_is_walked() -> None:
     from src.main import app
 
     found: set[tuple[str, str]] = set()
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or '/projects/{project}' not in route.path:
+    for ctx in api_routes(app):
+        route = ctx.original_route
+        if '/projects/{project}' not in ctx.path:
             continue
         if 'vlm' not in {p.name for p in route.dependant.query_params}:
             continue
-        for method in route.methods - {'HEAD'}:
-            found.add((method, route.path.split('/projects/{project}', 1)[1]))
+        for method in ctx.methods - {'HEAD'}:
+            found.add((method, ctx.path.split('/projects/{project}', 1)[1]))
     assert found == set(RUN_ROUTES), (
         f'routes taking ?vlm= that this walk does not cover: {sorted(found - set(RUN_ROUTES))}; '
         f'walked but gone: {sorted(set(RUN_ROUTES) - found)}'
