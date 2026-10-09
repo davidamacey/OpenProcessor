@@ -20,7 +20,7 @@
 # Isolated so neither git nor the clone's history reaches the runtime
 # image. Pin to a known-good upstream SHA for reproducible rebuilds;
 # `main` is the default only because upstream publishes no releases.
-FROM alpine/git:2.47.2 AS sam3-src
+FROM alpine/git:v2.54.0 AS sam3-src
 
 ARG SAM3_SHA=main
 WORKDIR /src
@@ -31,7 +31,7 @@ RUN git checkout "$SAM3_SHA" && rm -rf .git
 # -- Stage 2: runtime --------------------------------------------------------
 # No -slim base is available for a CUDA + cuDNN + PyTorch runtime; this
 # is the smallest official image that carries the stack the model needs.
-FROM pytorch/pytorch:2.7.0-cuda12.6-cudnn9-runtime
+FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime
 
 LABEL org.opencontainers.image.title="OpenProcessor Segmenter" \
       org.opencontainers.image.description="Promptable segmentation (SAM 3) for the detection cascade" \
@@ -55,6 +55,12 @@ RUN apt-get update && apt-get upgrade -y \
 
 COPY --from=sam3-src /src/sam3 /opt/sam3
 
+# This base is Ubuntu 24.04 with a PEP 668 system Python (older bases used
+# conda), so pip refuses to install without this. The image is single-purpose
+# and its torch lives in the system site-packages, so a venv would only add
+# python3-venv (not in the base) and a PATH indirection.
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
 # hadolint ignore=DL3013
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir /opt/sam3 \
@@ -70,7 +76,10 @@ RUN pip install --no-cache-dir --upgrade pip \
         'einops>=0.8' \
         'pycocotools>=2.0.7'
 
-RUN groupadd -r appuser && \
+# Ubuntu 24.04 bases ship an `ubuntu` user at uid 1000; appuser must own that
+# uid to read the host-owned HF cache bind mount. No-op on bases without it.
+RUN if getent passwd ubuntu >/dev/null; then userdel -r ubuntu; fi && \
+    groupadd -r appuser && \
     useradd -r -g appuser -G video -u 1000 -m -s /bin/bash appuser && \
     mkdir -p /app /home/appuser/.cache && \
     chown -R appuser:appuser /app /home/appuser/.cache

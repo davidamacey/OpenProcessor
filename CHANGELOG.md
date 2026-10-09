@@ -31,6 +31,11 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ### Changed
 
+- The segmenter image moves to PyTorch 2.14.1 (`pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime`,
+  superseding dependabot #147) and `alpine/git` v2.54.0. The new base is Ubuntu 24.04, so the
+  image now runs Python 3.12 (was 3.11), installs with `PIP_BREAK_SYSTEM_PACKAGES=1` and
+  replaces the base's `ubuntu` user so `appuser` keeps uid 1000. SAM 3 outputs match the
+  previous image. Rebuild the segmenter image to pick this up.
 - The experiment-tracking server and the trainer client move to MLflow 3.17 together
   (#120). The server image is `ghcr.io/mlflow/mlflow:v3.17.0` and the trainer pins
   `mlflow>=3.17,<4`. An existing `mlflow_data` volume upgrades in place on first start:
