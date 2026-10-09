@@ -246,7 +246,7 @@ def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
     entry = next(c for c in listed if c['class_id'] == 0)
     assert entry['deprecated'] is True  # still visible for history
 
-    from src.services.training.jobs import TrainJobSpec
+    from src.services.training.job_models import TrainJobSpec
     from src.services.training.preflight_checks import resolve_target_classes
 
     spec = TrainJobSpec(job_id='j', include_classes=None, dataset_export_dir='/tmp/export')

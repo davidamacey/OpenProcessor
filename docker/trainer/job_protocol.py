@@ -57,7 +57,7 @@ TERMINAL_STATES = {'finished', 'failed', 'cancelled', 'skipped'}
 ACTIVE_STATES = {'queued', 'starting', 'running', 'exporting'}
 
 # Shared job directory. Same default + env var as the API side
-# (``src.services.training.jobs._resolve_jobs_dir``).
+# (``src.services.training.job_files._resolve_jobs_dir``).
 DEFAULT_JOBS_DIR = Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 # Scratch root for per-job subset/augmentation rewrites. Inside the container
@@ -84,7 +84,7 @@ DEFAULT_INPUT_SIZE = 640
 class JobSpec:
     """Parsed + validated ``job.json``.
 
-    Field-for-field a subset of :class:`src.services.training.jobs.TrainJobSpec`
+    Field-for-field a subset of :class:`src.services.training.job_models.TrainJobSpec`
     -- unknown keys are tolerated (kept in :attr:`raw`) so an API that grows a
     field doesn't break an older trainer image.
     """
@@ -188,7 +188,7 @@ class StatusState:
     mlflow_run_id: str | None = None
     mlflow_run_url: str | None = None
     # Needed alongside ``mlflow_run_id`` for the API to rebuild a
-    # browser-reachable deep link (see ``src/services/training/jobs.py``'s
+    # browser-reachable deep link (see ``src/services/training/job_wire.py``'s
     # ``_public_mlflow_url``) -- the run URL's path embeds both ids and the
     # API has no other way to recover the experiment id.
     mlflow_experiment_id: str | None = None
@@ -431,7 +431,7 @@ def _gpu_telemetry() -> list[dict[str, Any]]:
 def build_status_payload(s: StatusState) -> dict[str, Any]:
     """Render the ``status.json`` body.
 
-    Every key here is read by :class:`src.services.training.jobs.TrainJobStatus`
+    Every key here is read by :class:`src.services.training.job_models.TrainJobStatus`
     (which allows extras, so adding a key is safe; removing one is not).
     """
     with s.lock:
@@ -534,7 +534,7 @@ def _capture_mlflow_run_id(spec: JobSpec, state: StatusState) -> None:
             # for operators inspecting status.json/manifest.json directly
             # (e.g. ``docker exec``); the API rewrites this to a public URL
             # (or null) before it ever reaches the wire -- see
-            # ``src/services/training/jobs.py``'s ``_public_mlflow_url``.
+            # ``src/services/training/job_wire.py``'s ``_public_mlflow_url``.
             state.mlflow_run_url = (
                 f'{tracking_uri.rstrip("/")}/#/experiments/'
                 f'{experiment.experiment_id}/runs/{run.info.run_id}'

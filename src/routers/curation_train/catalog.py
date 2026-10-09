@@ -14,7 +14,7 @@ from src.services.training.augmentation_presets import (
     DEFAULT_AUGMENTATION_PRESET,
 )
 from src.services.training.gpu_arbiter import containers_to_stop
-from src.services.training.jobs import Profile
+from src.services.training.job_models import Profile
 from src.services.training.preflight_checks import read_trainer_gpu_order
 from src.services.training.profiles import get_class_subset_presets, get_profiles
 
@@ -147,7 +147,7 @@ async def list_train_gpu_options() -> TrainGpuOptionsResponse:
     selectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a
     physical-attachment fact) says otherwise.
     """
-    from src.services.training.jobs import default_train_gpu_value
+    from src.services.training.job_models import default_train_gpu_value
 
     arbiter_cfg = get_gpu_arbiter_config()
     allowed_ids = sorted(arbiter_cfg.allowed_gpu_ids)

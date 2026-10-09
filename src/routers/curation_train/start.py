@@ -17,7 +17,7 @@ from src.routers.curation_train.preflight import (
 )
 from src.services.training import jobs as train_jobs
 from src.services.training.gpu_arbiter import GpuArbiterStopFailedError
-from src.services.training.jobs import TrainCampaignSpec, TrainJobSpec
+from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec
 from src.services.training.preflight_checks import (
     PreflightReport,  # noqa: TC001 - pydantic field type
 )

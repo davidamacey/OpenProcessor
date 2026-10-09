@@ -53,9 +53,9 @@ class PromoteJobConflictError(Exception):
 
 
 def jobs_root() -> Path:
-    from src.services.training import jobs as train_jobs
+    from src.services.training.job_files import _resolve_jobs_dir
 
-    return train_jobs._resolve_jobs_dir() / 'promote'
+    return _resolve_jobs_dir() / 'promote'
 
 
 def _now() -> str:

@@ -123,7 +123,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
         _renamed_live_registry,
     )
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id=job_id,
@@ -190,7 +190,7 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
         _renamed_live_registry,
     )
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id=job_id,

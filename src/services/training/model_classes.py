@@ -55,7 +55,7 @@ class ModelClassMapping:
 
 
 def _promote_json_path(triton_name: str) -> Any:
-    from src.services.training.triton_promote import resolve_triton_models_dir
+    from src.services.training.triton_repo import resolve_triton_models_dir
 
     return resolve_triton_models_dir() / triton_name / 'promote.json'
 
@@ -85,7 +85,7 @@ def owned_model_names(slug: str) -> list[str]:
     """Every Triton model ``slug`` owns (``promote.json.project == slug``),
     private and shared alike. The one ownership enumeration: project
     delete (unload) and ``/stats`` (``promoted_models``) both read it."""
-    from src.services.training.triton_promote import resolve_triton_models_dir
+    from src.services.training.triton_repo import resolve_triton_models_dir
 
     models_dir = resolve_triton_models_dir()
     if not models_dir.is_dir():

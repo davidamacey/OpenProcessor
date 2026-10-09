@@ -17,8 +17,8 @@ from pathlib import Path  # used at runtime (jobs_dir fixture, registry-pin test
 import pytest
 
 from src.config import GpuArbiterConfig
-from src.services.training import jobs as train_jobs
-from src.services.training.jobs import (
+from src.services.training import job_files, job_models, job_wire, jobs as train_jobs
+from src.services.training.job_models import (
     CampaignRunSpec,
     TrainCampaignSpec,
     TrainJobSpec,
@@ -228,18 +228,18 @@ def test_campaign_spec_rejects_gpu1_when_allowlist_configured() -> None:
 
 
 def test_default_train_gpu_value_unrestricted_is_zero() -> None:
-    assert train_jobs.default_train_gpu_value() == '0'
+    assert job_models.default_train_gpu_value() == '0'
 
 
 def test_default_train_gpu_value_unset_env_var_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_TRAIN_DEFAULT_GPUS', raising=False)
-    assert train_jobs.default_train_gpu_value() == '0'
+    assert job_models.default_train_gpu_value() == '0'
 
 
 @pytest.mark.usefixtures('restricted_gpu_ids')
 def test_default_train_gpu_value_uses_smallest_allowed_id() -> None:
     """OP_GPU_ALLOWED_IDS=0,2 (no OP_TRAIN_DEFAULT_GPUS) -> smallest id, '0'."""
-    assert train_jobs.default_train_gpu_value() == '0'
+    assert job_models.default_train_gpu_value() == '0'
 
 
 def test_default_train_gpu_value_uses_smallest_allowed_id_gpu2_only(
@@ -253,7 +253,7 @@ def test_default_train_gpu_value_uses_smallest_allowed_id_gpu2_only(
         '_default_gpu_arbiter_config',
         GpuArbiterConfig(allowed_gpu_ids=frozenset({2})),
     )
-    assert train_jobs.default_train_gpu_value() == '2'
+    assert job_models.default_train_gpu_value() == '2'
 
 
 def test_default_train_gpu_value_honors_explicit_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -264,7 +264,7 @@ def test_default_train_gpu_value_honors_explicit_env(monkeypatch: pytest.MonkeyP
         '_default_gpu_arbiter_config',
         GpuArbiterConfig(allowed_gpu_ids=frozenset({0, 2}), default_train_gpus='2'),
     )
-    assert train_jobs.default_train_gpu_value() == '2'
+    assert job_models.default_train_gpu_value() == '2'
 
 
 def test_default_train_gpu_value_rejects_env_outside_allowlist(
@@ -281,7 +281,7 @@ def test_default_train_gpu_value_rejects_env_outside_allowlist(
         GpuArbiterConfig(allowed_gpu_ids=frozenset({0, 2}), default_train_gpus='1'),
     )
     with pytest.raises(ValueError, match='allowed GPU id'):
-        train_jobs.default_train_gpu_value()
+        job_models.default_train_gpu_value()
 
 
 def test_spec_default_uses_default_train_gpu_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -727,33 +727,34 @@ def _patch_cfg(monkeypatch: pytest.MonkeyPatch, cfg: _FakeCurationConfig) -> Non
     # train_jobs reads the jobs dir through its own import; the MLflow URL
     # goes through resource_links.service_url, which imports from src.config.
     monkeypatch.setattr(train_jobs, 'get_curation_config', lambda: cfg)
+    monkeypatch.setattr(job_files, 'get_curation_config', lambda: cfg)
     monkeypatch.setattr('src.config.get_curation_config', lambda: cfg)
 
 
 def test_public_mlflow_url_builds_from_configured_base(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
-    url = train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7')
+    url = job_wire._public_mlflow_url(run_id='abc123', experiment_id='7')
     assert url == 'https://mlflow.example.com/#/experiments/7/runs/abc123'
 
 
 def test_public_mlflow_url_none_when_base_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
-    assert train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7') is None
+    assert job_wire._public_mlflow_url(run_id='abc123', experiment_id='7') is None
 
 
 def test_public_mlflow_url_none_when_run_or_experiment_id_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
-    assert train_jobs._public_mlflow_url(run_id=None, experiment_id='7') is None
-    assert train_jobs._public_mlflow_url(run_id='abc123', experiment_id=None) is None
+    assert job_wire._public_mlflow_url(run_id=None, experiment_id='7') is None
+    assert job_wire._public_mlflow_url(run_id='abc123', experiment_id=None) is None
 
 
 def test_public_mlflow_url_never_leaks_the_internal_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """The internal tracking URI (a container hostname) must never be the
     fallback -- unset public base means null, full stop."""
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
-    url = train_jobs._public_mlflow_url(run_id='abc123', experiment_id='7')
+    url = job_wire._public_mlflow_url(run_id='abc123', experiment_id='7')
     assert url is None
     assert url != 'http://curation-mlflow:5000/#/experiments/7/runs/abc123'
 
@@ -1003,9 +1004,9 @@ async def test_read_artifact_rejects_invalid_job_id() -> None:
 
 
 def test_artifact_media_type_png_and_csv() -> None:
-    assert train_jobs.artifact_media_type('confusion_matrix.png') == 'image/png'
-    assert train_jobs.artifact_media_type('results.csv') == 'text/csv'
-    assert train_jobs.artifact_media_type('unknown.bin') == 'application/octet-stream'
+    assert job_wire.artifact_media_type('confusion_matrix.png') == 'image/png'
+    assert job_wire.artifact_media_type('results.csv') == 'text/csv'
+    assert job_wire.artifact_media_type('unknown.bin') == 'application/octet-stream'
 
 
 def test_hyperparameters_reject_top_level_spec_fields() -> None:

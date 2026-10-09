@@ -200,7 +200,7 @@ class GpuArbiterConfig:
         - ``OP_TRAIN_DEFAULT_GPUS`` — the ``cuda_visible_devices`` value a
           new training spec defaults to when the caller omits it. Unset =
           derive from ``allowed_gpu_ids`` (see
-          ``src.services.training.jobs.default_train_gpu_value``).
+          ``src.services.training.job_models.default_train_gpu_value``).
         - ``OP_BAKEOFF_HOST_GPUS`` — comma-separated *host* GPU ids the
           bake-off evaluator container is attached to (e.g. ``0``; distinct
           from ``OP_BAKEOFF_GPUS``, which is the evaluator's *container-local*

@@ -55,7 +55,7 @@ from src.services.training.run_retention import (
     plan_bakeoff_out_prune,
     plan_run_prune,
 )
-from src.services.training.triton_promote import resolve_triton_models_dir
+from src.services.training.triton_repo import resolve_triton_models_dir
 
 
 def _run_one_project(args: argparse.Namespace) -> int:

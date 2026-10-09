@@ -131,21 +131,8 @@ repos:
               src/ultralytics_patches/|
               src/routers/ingest\.py|
               src/routers/search\.py|
-              src/clients/curation_opensearch\.py|
-              src/services/training/triton_promote\.py|
-              src/services/training/jobs\.py
+              src/clients/curation_opensearch\.py
           )
-        # src/services/training/triton_promote.py (803 LOC) — Chunk 6, same §5
-        # pre-approval. Grandfathered on arrival from the curation port;
-        # follow-up split tracked by that doc, not silently ignored.
-        # src/services/training/jobs.py (925 LOC) — Chunk 6. NOT in the
-        # original five-file list (an earlier audit undercounted this
-        # chunk: it flagged only curation_train.py, missing that the
-        # reference train_jobs.py is also over cap). Grandfathered here for
-        # the same reason as the rest of this chunk's oversize files —
-        # splitting a freshly-ported file mid-port makes the diff
-        # unreviewable. Follow-up split tracked alongside the other
-        # Chunk 6 entries.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code

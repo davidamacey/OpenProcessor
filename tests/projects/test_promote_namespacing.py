@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
-from src.services.training.jobs import TrainJobStatus
+from src.services.training.job_models import TrainJobStatus
 from src.services.training.triton_promote import TritonPromoter
 
 

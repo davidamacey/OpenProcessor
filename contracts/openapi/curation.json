@@ -45304,12 +45304,12 @@
             }
           },
           {
-            "description": "Whitelisted artifact filename (see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+            "description": "Whitelisted artifact filename (see src.services.training.job_wire.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "description": "Whitelisted artifact filename (see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+              "description": "Whitelisted artifact filename (see src.services.training.job_wire.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
               "title": "Name",
               "type": "string"
             }
