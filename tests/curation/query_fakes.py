@@ -394,8 +394,13 @@ class QueryFakeOpenSearch:
         if sort:
             first = sort[0]
             sort_field = first if isinstance(first, str) else next(iter(first))
-            pool.sort(key=lambda kv: str(kv[1].get(sort_field, kv[0])))
-            if body.get('search_after') is not None:
+            if sort_field == '_script':
+                # The review rank sort: params.ranks maps a keyword to its rank, 0 when absent.
+                ranks = first['_script']['script']['params']['ranks']
+                pool.sort(key=lambda kv: (ranks.get(kv[1].get('vlm_confidence'), 0), kv[0]))
+            else:
+                pool.sort(key=lambda kv: str(kv[1].get(sort_field, kv[0])))
+            if body.get('search_after') is not None and sort_field != '_script':
                 after = str(body['search_after'][0])
                 pool = [kv for kv in pool if str(kv[1].get(sort_field, kv[0])) > after]
         size = body.get('size', 10) if scroll is None else len(pool)

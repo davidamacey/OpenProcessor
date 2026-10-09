@@ -32,6 +32,10 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 - Cropwright's nginx now answers redirects with relative `Location` headers; the
   `/OpenProcessor` redirect used to name the container port 8080.
+- The `detector_disagreements` review tab lists the least confident VLM answers first (no recorded
+  confidence, then `low`, `medium`, `high`) instead of the keyword order high, low, medium; locate
+  follows the same order. The "Uncertain only" VLM scope description now matches the selector
+  (detector confidence below the limit or not recorded; no cluster-disagreement clause) (#195).
 
 ### Removed
 

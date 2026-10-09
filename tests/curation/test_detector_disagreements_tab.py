@@ -20,6 +20,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
 from src.services.curation import review_queries, review_sorts
 from src.services.curation.review_queries import DETECTOR_DISAGREES_SCRIPT
+from src.services.curation.review_request import ReviewFilters, before_query, build_review_request
 
 
 ITEMS = base_curation_config().items_index
@@ -56,6 +57,7 @@ def _docs() -> dict[str, dict[str, Any]]:
         _doc('disagree_med'),
         _doc('disagree_low', vlm_confidence='low', detector_confidence=0.9, confidence=0.9),
         _doc('disagree_high', vlm_confidence='high'),
+        _doc('disagree_unrated', vlm_confidence=None),
         _doc('reclassified', class_source='vlm_reclassified'),
         _doc('agree', detector_class_name='widget'),
         _doc('validated', class_validated=True, class_source='human'),
@@ -92,8 +94,14 @@ def client(fake: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestCl
 def test_only_unvalidated_vlm_disagreements_are_listed(client: TestClient) -> None:
     body = client.get(URL, params={'page_size': 100}).json()
     ids = {item['crop_id'] for item in body['items']}
-    assert ids == {'disagree_med', 'disagree_low', 'disagree_high', 'reclassified'}
-    assert body['total'] == 4  # the tab count is the listed set, nothing hidden
+    assert ids == {
+        'disagree_med',
+        'disagree_low',
+        'disagree_high',
+        'disagree_unrated',
+        'reclassified',
+    }
+    assert body['total'] == 5  # the tab count is the listed set, nothing hidden
     assert {item['reason'] for item in body['items']} == {
         "VLM's class differs from the detector's class"
     }
@@ -105,7 +113,7 @@ async def test_default_sort_is_vlm_then_detector_confidence() -> None:
     assert applied == 'detector_disagreement_default'
     assert reason is None
     assert clause == [
-        {'vlm_confidence': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'keyword'}},
+        review_sorts.VLM_CONFIDENCE_RANK_SORT,
         {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
     ]
 
@@ -131,3 +139,25 @@ def test_the_query_never_selects_a_validated_or_excluded_item() -> None:
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'class_excluded': True}} in must_not
     assert {'exists': {'field': 'detector_class_name'}} in must
+
+
+def test_queue_lists_hard_cases_first(client: TestClient) -> None:
+    items = client.get(URL, params={'page_size': 100}).json()['items']
+    confidences = [item['vlm_confidence'] for item in items]
+    assert confidences[0] is None
+    assert confidences[1] == 'low'
+    assert sorted(confidences[2:4]) == ['medium', 'medium']
+    assert confidences[4] == 'high'
+
+
+@pytest.mark.asyncio
+async def test_locate_ranks_each_item_by_the_same_order(fake: QueryFakeOpenSearch) -> None:
+    req = await build_review_request('detector_disagreements', ReviewFilters(), None, fake)
+    resp = await fake.search(index=ITEMS, body={'query': req.query, 'sort': req.sort, 'size': 100})
+    served = [hit['_id'] for hit in resp['hits']['hits']]
+    assert len(served) == 5
+    for position, crop_id in enumerate(served):
+        source = {**fake.docs(ITEMS)[crop_id], 'crop_id': crop_id}
+        before = {'bool': {'filter': [req.query, before_query(req.sort, source)]}}
+        counted = await fake.count(index=ITEMS, body={'query': before})
+        assert counted['count'] == position, (crop_id, served)

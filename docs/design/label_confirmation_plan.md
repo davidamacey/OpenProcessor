@@ -134,8 +134,11 @@ Adopt a layered design, shipped in this order:
    size threshold. Semantics:
    - `off`: no worker/pipeline VLM class writes (explicit cluster/crop requests
      still work).
-   - `uncertain`: unlabelled crops plus detector conf below `vlm_conf_max`
-     (default 0.80), `*_low_conf`, or detector class != cluster class.
+   - `uncertain`: crops whose detector conf is below `vlm_conf_max`
+     (default 0.80) or was not recorded. This is what 0.5.0 implements. The
+     earlier draft also named `*_low_conf` and detector class != cluster class;
+     both are dropped: a crop has no stored cluster class (it needs a per-cluster
+     aggregation on every poll), and `*_low_conf` crops already carry a VLM answer.
    - `representatives`: only the top `vlm_per_cluster` (default 5) members per
      cluster by `core_first` distance (representatives already exist,
      `/clusters`), plus `unassigned`.
@@ -148,7 +151,8 @@ Adopt a layered design, shipped in this order:
    `curation_opensearch.py:593-595`, so no new names). Never overwrite them.
 3. **`detector_disagreements` review tab**: `class_source in vlm` and
    `detector_class_name != class_name`, sorted by `vlm_confidence` asc then
-   `confidence` desc (hard cases first).
+   `confidence` desc (hard cases first). `vlm_confidence` is a keyword, so the sort
+   ranks it explicitly (missing, `low`, `medium`, `high`) with a script sort.
 4. **Accuracy audit** (`proposed route `/audit/start` (POST)`, `proposed route `/audit/report` (GET)`): draws a
    stratified sample (per detector class, `min_per_class` default 30, global
    default 300) of machine-labelled, unvalidated, non-holdout crops into a review
