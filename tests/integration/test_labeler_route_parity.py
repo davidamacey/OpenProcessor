@@ -42,6 +42,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from _route_helpers import api_routes
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = REPO_ROOT / 'tests' / 'fixtures' / 'labeler_call_sites.txt'
@@ -103,9 +105,9 @@ def _registered_relative_routes() -> list[list[str]]:
 
     prefix = get_curation_config().api_prefix
     routes: list[list[str]] = []
-    for route in app.routes:
-        path = getattr(route, 'path', None)
-        if path and path.startswith(prefix):
+    for route in api_routes(app):
+        path = route.path
+        if path.startswith(prefix):
             routes.append(_segments(path[len(prefix) :]))
     assert routes, 'sanity: no /curation routes found — app.routes enumeration is broken'
     return routes

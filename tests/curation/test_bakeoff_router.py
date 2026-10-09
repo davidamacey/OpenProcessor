@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 from _project_paths import default_train_jobs_dir
+from _route_helpers import api_routes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -272,17 +273,16 @@ def _live_export(dirs: dict[str, Path], rel: str = '20260924T233203Z', **kw: Any
 def test_bakeoff_router_is_registered() -> None:
     from src.main import app
 
-    assert any(r.path == '/curation/projects/{project}/bakeoff/runs' for r in app.routes)
-    assert any(r.path == '/curation/projects/{project}/bakeoff/eval_datasets' for r in app.routes)
+    paths = {r.path for r in api_routes(app)}
+    assert '/curation/projects/{project}/bakeoff/runs' in paths
+    assert '/curation/projects/{project}/bakeoff/eval_datasets' in paths
 
 
 def test_bakeoff_routes_have_typed_response_models() -> None:
     from src.main import app
 
     routes = [
-        r
-        for r in app.routes
-        if getattr(r, 'path', '').startswith('/curation/projects/{project}/bakeoff/')
+        r for r in api_routes(app) if r.path.startswith('/curation/projects/{project}/bakeoff/')
     ]
     assert len(routes) == 9
     untyped = [r.path for r in routes if getattr(r, 'response_model', None) is None]

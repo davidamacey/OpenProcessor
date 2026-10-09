@@ -140,12 +140,12 @@ def known_routes() -> set[tuple[str, str]]:
                 if method.upper() in _METHODS:
                     routes.add((method.upper(), _norm(path)))
     sys.path.insert(0, str(REPO_ROOT))
-    from fastapi.routing import APIRoute
+    from fastapi.routing import APIRoute, iter_route_contexts
 
     from src.main import app
 
-    for route in app.routes:
-        if isinstance(route, APIRoute) and not route.path.startswith('/curation'):
+    for route in iter_route_contexts(app.routes):
+        if isinstance(route.original_route, APIRoute) and not route.path.startswith('/curation'):
             for method in route.methods & set(_METHODS):
                 routes.add((method, _norm(route.path)))
     return routes
