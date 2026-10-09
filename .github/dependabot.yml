@@ -1,35 +1,37 @@
 version: 2
+# Weekly, grouped: one PR per ecosystem instead of one per package.
+# Every group declares `applies-to` twice. A group defaults to version-updates only,
+# so without the `-security` twin each security advisory opens its own PR.
 updates:
+  # Backend Python: root requirements plus the side-car images and tools, one PR.
   - package-ecosystem: "pip"
-    directory: "/"
+    directories:
+      - "/"
+      - "/docker/trainer"
+      - "/scripts/curation/bakeoff"
+      - "/examples/bakeoff/license_plate"
+      - "/frontend/e2e"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    groups:
+      backend:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      backend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       # requirements-export-y11.txt pins ultralytics==8.3.x on purpose: the vendored
       # EfficientNMS end2end patch breaks on 8.4. requirements.txt already carries the
       # 8.4 range for YOLO26. Dependabot cannot ignore per file, so bump the pin by hand.
       - dependency-name: "ultralytics"
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "ci"
-
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "docker"
-
-  # Cropwright (frontend/): same grouping as the standalone project used, one npm PR a week.
+  # Cropwright frontend: one PR.
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
@@ -39,20 +41,111 @@ updates:
       - "dependencies"
       - "frontend"
     groups:
-      npm-minor-patch:
+      frontend:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        patterns:
+          - "*"
+      frontend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       # TypeScript 7 conflicts with svelte-check and @sveltejs/kit peer ranges (^5 || ^6);
       # un-ignore once svelte-check ships TS 7 support.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
+  # Docusaurus site: one PR.
+  - package-ecosystem: "npm"
+    directory: "/docs-site"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docs"
+    groups:
+      docs:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      docs-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "gomod"
+    directory: "/benchmarks"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+    groups:
+      benchmarks-go:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      benchmarks-go-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # Dockerfile base images and pinned compose images, monthly, one PR per area.
   - package-ecosystem: "docker"
-    directory: "/frontend"
+    directories:
+      - "/"
+      - "/docker/evaluator"
+      - "/docker/segmenter"
+      - "/docker/trainer"
+      - "/docker/hardened/triton"
+      - "/docker/test"
     schedule:
       interval: "monthly"
     labels:
       - "dependencies"
       - "docker"
-      - "frontend"
+    groups:
+      docker:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      docker-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/frontend"
+      - "/docs-site"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "docker"
+    groups:
+      web-docker:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      web-docker-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
