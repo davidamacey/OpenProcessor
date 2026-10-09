@@ -48,7 +48,7 @@ jobs:
           cache-dependency-path: |
             requirements-test.txt
 
-      # pre-commit builds the gitleaks hook from source and setup-go@v6+ sets
+      # pre-commit builds the gitleaks hook from source and newer setup-go majors set
       # GOTOOLCHAIN=local, so this Go must satisfy gitleaks' go.mod (1.22+). A newer Go
       # still builds benchmarks/ (its go.mod declares 1.21 as the minimum).
       - uses: actions/setup-go@v7
