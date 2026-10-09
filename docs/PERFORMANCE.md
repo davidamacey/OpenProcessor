@@ -381,7 +381,7 @@ is not published yet.
 ### Measured VLM labeling speed
 
 One run, repeated once, on a 200-crop public COCO project: `POST /vlm/label_batch`,
-32 crops per request, 8 client threads, the local `gemma-4-e4b` model served by vLLM on
+32 crops per request, 8 client threads, the local default VLM served by vLLM on
 one RTX A6000 (GPU memory utilization 0.4, shared with Triton). 200 crops labeled in
 20.0 s both times: **10.0 crops/s** (0 errors; vLLM saw 69 requests, about 3 crops per
 request). The continuous VLM worker sustained a similar 9.8 crops/s average over a
