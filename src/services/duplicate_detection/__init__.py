@@ -37,7 +37,8 @@ from typing import Any
 
 import numpy as np
 
-from src.clients.opensearch import IndexName, OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import IndexName
 from src.services.duplicate_detection.models import (
     DEFAULT_SIMILARITY_THRESHOLD,
     DuplicateGroup,

@@ -2,7 +2,7 @@
 
 import logging
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 
 
@@ -35,7 +35,7 @@ class ClusterMixin:
 
     def _get_opensearch_index(self, index_name: str):
         """Convert string index name to OpenSearch IndexName enum."""
-        from src.clients.opensearch import IndexName
+        from src.clients.opensearch.names import IndexName
 
         name_map = {
             'global': IndexName.GLOBAL,
@@ -321,7 +321,7 @@ class ClusterMixin:
         Returns:
             List of albums with metadata
         """
-        from src.clients.opensearch import IndexName
+        from src.clients.opensearch.names import IndexName
 
         # Get cluster stats from global index
         clusters = await self.opensearch.get_cluster_stats(IndexName.GLOBAL)

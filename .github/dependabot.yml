@@ -13,6 +13,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Most requirements here are ranges (>=X) that already resolve to the latest release at
+    # build time, so raising the floor on every release only adds install risk. Widen a range
+    # only when the latest release no longer satisfies it; exact pins (==) still get PRs.
+    versioning-strategy: increase-if-necessary
     labels:
       - "dependencies"
     groups:
@@ -29,6 +33,9 @@ updates:
       # EfficientNMS end2end patch breaks on 8.4. requirements.txt already carries the
       # 8.4 range for YOLO26. Dependabot cannot ignore per file, so bump the pin by hand.
       - dependency-name: "ultralytics"
+      # tensorrt-cu13 must equal the TensorRT inside the Triton image (engine compatibility,
+      # asserted at image build in Dockerfile.triton). Bump both together by hand.
+      - dependency-name: "tensorrt-cu13"
       # nvidia-modelopt[onnx] requires onnx~=1.21, so requirements.txt and the export
       # toolchain cap onnx below 1.22. Lift the cap and this rule together when modelopt does.
       - dependency-name: "onnx"

@@ -5,7 +5,8 @@ from typing import Any
 
 import numpy as np
 
-from src.clients.opensearch import DetectionCategory, OpenSearchClient, get_category
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import DetectionCategory, get_category
 from src.services.inference import InferenceService
 
 

@@ -129,7 +129,6 @@ repos:
         exclude: |
           (?x)^(
               src/ultralytics_patches/|
-              src/clients/opensearch\.py|
               src/routers/ingest\.py|
               src/routers/search\.py|
               src/clients/curation_opensearch\.py|

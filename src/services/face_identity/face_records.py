@@ -2,7 +2,7 @@
 
 import logging
 
-from src.clients.opensearch import IndexName
+from src.clients.opensearch.names import IndexName
 from src.config.settings import Settings
 from src.services.inference import InferenceService
 

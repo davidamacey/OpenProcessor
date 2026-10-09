@@ -15,7 +15,7 @@ The service is assembled from per-concern mixins: ``identification``,
 
 from functools import lru_cache
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.config.settings import Settings, get_settings
 from src.services.face_identity.face_records import FaceRecordMixin
 from src.services.face_identity.identification import IdentificationMixin

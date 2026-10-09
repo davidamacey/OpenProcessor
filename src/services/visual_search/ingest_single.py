@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 
 

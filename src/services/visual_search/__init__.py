@@ -32,7 +32,7 @@ The service is assembled from per-concern mixins: ``ingest_single``,
 ``ingest_batch``, ``search``, ``lifecycle`` and ``clusters``.
 """
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.visual_search.clusters import ClusterMixin
 from src.services.visual_search.ingest_batch import IngestBatchMixin

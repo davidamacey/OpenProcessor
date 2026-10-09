@@ -60,7 +60,7 @@ src/
 │   ├── __init__.py              # Client exports
 │   ├── triton_client.py         # Triton gRPC client wrapper
 │   ├── triton_pool.py           # Connection pooling for Triton
-│   └── opensearch.py            # OpenSearch async client
+│   └── opensearch/              # OpenSearch async client (client.py entry point)
 │
 ├── schemas/                     # Pydantic models for validation
 │   ├── __init__.py              # Schema exports
