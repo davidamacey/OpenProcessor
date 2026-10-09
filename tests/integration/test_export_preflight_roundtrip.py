@@ -4,13 +4,13 @@ The single highest-value test in this suite: ``src/services/curation/export.py``
 write ``class_registry.json`` at all, which meant every subset-training
 ``include_classes`` filter both readers apply
 (``src/services/training/preflight_scan.py`` and
-``src/routers/curation_train.py::_unresolvable_include_classes``) was
+``src/services/training/preflight_checks.py::unresolvable_include_classes``) was
 silently checking against nothing. Existing unit tests hid this because
 they hand-wrote the fixture the product itself never produced.
 
 This test runs the REAL :meth:`GenericYoloExportService.export_dataset`,
 then feeds the directory it actually wrote to the REAL
-``scan_export_labels`` and ``_unresolvable_include_classes``, with
+``scan_export_labels`` and ``unresolvable_include_classes``, with
 ``include_classes`` set to a real subset. It must fail against the
 pre-fix code (no ``class_registry.json`` on disk -> every requested class
 unresolvable / the scan's filter is a no-op) and pass after the fix.
@@ -25,9 +25,9 @@ import pytest
 
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import CurationConfig
-from src.routers.curation_train import _unresolvable_include_classes
 from src.services.curation.export import GenericYoloExportService
 from src.services.training import preflight_scan
+from src.services.training.preflight_checks import unresolvable_include_classes
 from src.services.training.preflight_scan import scan_export_labels
 
 
@@ -102,8 +102,8 @@ async def test_include_classes_filter_actually_applies_to_a_real_export(tmp_path
     assert scan_car_only.empty_label_images == 20
     assert scan_car_only.empty_label_images != scan_all.empty_label_images
 
-    # --- curation_train._unresolvable_include_classes ----------------------
-    unresolvable = _unresolvable_include_classes(str(export_dir), [car_id, truck_id])
+    # --- curation_train.unresolvable_include_classes ----------------------
+    unresolvable = unresolvable_include_classes(str(export_dir), [car_id, truck_id])
     assert unresolvable == [], (
         'a real, valid subset of exported classes was reported unresolvable -- '
         'the export produced no usable class_registry.json/export_id_map'
@@ -112,4 +112,4 @@ async def test_include_classes_filter_actually_applies_to_a_real_export(tmp_path
     # A registry id that was never exported (or never registered) IS
     # reported unresolvable -- the check still does real work.
     bogus_id = max(car_id, truck_id, bus_id) + 100
-    assert _unresolvable_include_classes(str(export_dir), [bogus_id]) == [bogus_id]
+    assert unresolvable_include_classes(str(export_dir), [bogus_id]) == [bogus_id]

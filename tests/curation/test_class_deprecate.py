@@ -246,16 +246,16 @@ def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
     entry = next(c for c in listed if c['class_id'] == 0)
     assert entry['deprecated'] is True  # still visible for history
 
-    from src.routers.curation_train import _resolve_target_classes
     from src.services.training.jobs import TrainJobSpec
+    from src.services.training.preflight_checks import resolve_target_classes
 
     spec = TrainJobSpec(job_id='j', include_classes=None, dataset_export_dir='/tmp/export')
-    import src.routers.curation_train as curation_train_mod
+    import src.services.training.preflight_checks as curation_train_mod
 
     orig = curation_train_mod.get_class_registry
     curation_train_mod.get_class_registry = lambda: registry
     try:
-        target_ids = _resolve_target_classes(spec)
+        target_ids = resolve_target_classes(spec)
     finally:
         curation_train_mod.get_class_registry = orig
     assert 0 not in target_ids

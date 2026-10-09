@@ -1,7 +1,7 @@
 /**
  * TypeScript types mirroring the Pydantic models in
  * `OpenProcessor/src/services/training/jobs.py` +
- * `OpenProcessor/src/routers/curation_train.py`.
+ * `OpenProcessor/src/routers/curation_train/` and `src/services/training/`.
  *
  * Kept separate from `types.ts` so the (already large) labeler types
  * file isn't dwarfed by the training surface, and so the eventual

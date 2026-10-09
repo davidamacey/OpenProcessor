@@ -37,7 +37,9 @@ _CURATION_REQUEST_CODE = (
     'src/routers/curation',
     'src/routers/curation_images.py',
     'src/routers/curation_umap.py',
-    'src/routers/curation_train.py',
+    'src/routers/curation_train',
+    'src/services/training/preflight_checks.py',
+    'src/services/training/promote_gate.py',
 )
 
 

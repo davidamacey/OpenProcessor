@@ -51,7 +51,7 @@ FIXTURE_PATH = REPO_ROOT / 'tests' / 'fixtures' / 'labeler_call_sites.txt'
 _CURATION_ROUTER_FILES: list[Path] = [
     *sorted((REPO_ROOT / 'src' / 'routers' / 'curation').glob('*.py')),
     REPO_ROOT / 'src' / 'routers' / 'curation_images.py',
-    REPO_ROOT / 'src' / 'routers' / 'curation_train.py',
+    *sorted((REPO_ROOT / 'src' / 'routers' / 'curation_train').glob('*.py')),
     REPO_ROOT / 'src' / 'routers' / 'curation_umap.py',
 ]
 

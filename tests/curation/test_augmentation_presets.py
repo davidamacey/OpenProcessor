@@ -51,7 +51,9 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr('src.routers.curation_train.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', lambda: _Reg())
+
+    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', lambda: _Reg())
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})

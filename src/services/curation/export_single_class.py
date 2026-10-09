@@ -151,7 +151,7 @@ class SingleClassExportProfile:
 
     # Recorded in the manifest so a consumer can tell a narrowed export
     # from a full multi-class one without inspecting data.yaml. Read by
-    # `src/routers/curation_train.py`'s single-class preflight branch.
+    # `src/services/training/preflight_checks.py`'s single-class preflight branch.
     dataset_kind: str = 'single_class'
 
     # 'keep_imported' honours the split a dataset import filed each frame

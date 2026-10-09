@@ -35,7 +35,7 @@ def fake_opensearch() -> AsyncMock:
             'aggregations': {'by_class': {'buckets': []}},
         }
     )
-    # _count_pending_ingest (curation_train.py) does
+    # count_pending_ingest (preflight_checks.py) does
     # `int(resp.get('count', 0))` on the awaited result — a *sync* dict
     # method call. Left unstubbed, AsyncMock auto-generates `.count` (and
     # then `.get` on its return value) as further AsyncMocks, so `resp`
@@ -83,10 +83,8 @@ def app_client(
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr(
-        'src.routers.curation_train.get_class_registry',
-        lambda: _Reg(),
-    )
+    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', lambda: _Reg())
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation_train import router as curation_train_router
@@ -151,7 +149,7 @@ def test_preflight_blocks_when_trainer_unreachable(
     all, so submitting a job when the trainer container was never started queued
     it forever with no error. Simulate "container not running"."""
     monkeypatch.setattr(
-        'src.routers.curation_train.probe_trainer_reachable',
+        'src.routers.curation_train.preflight.probe_trainer_reachable',
         AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -167,7 +165,7 @@ def test_preflight_ok_when_trainer_reachable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation_train.probe_trainer_reachable',
+        'src.routers.curation_train.preflight.probe_trainer_reachable',
         AsyncMock(return_value=('ok', "'trainer' is running")),
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -280,7 +278,7 @@ def test_start_returns_422_when_trainer_unreachable(
 ) -> None:
     """/start must refuse (not silently queue) when the trainer is down."""
     monkeypatch.setattr(
-        'src.routers.curation_train.probe_trainer_reachable',
+        'src.routers.curation_train.preflight.probe_trainer_reachable',
         AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -316,27 +314,27 @@ def test_free_gb_returns_none_on_oserror(monkeypatch: pytest.MonkeyPatch) -> Non
     """Before the fix, an OSError from shutil.disk_usage() returned
     float('inf') -- 'infinite free space' -- instead of a signal the check
     couldn't run. It must return None so the caller reports 'unknown'."""
-    from src.routers.curation_train import _free_gb
+    from src.services.training.preflight_checks import free_gb
 
     def _raise(_path: str) -> None:
         raise OSError('no such path')
 
-    monkeypatch.setattr('src.routers.curation_train.shutil.disk_usage', _raise)
-    assert _free_gb('/does/not/matter') is None
+    monkeypatch.setattr('src.services.training.preflight_checks.shutil.disk_usage', _raise)
+    assert free_gb('/does/not/matter') is None
 
 
 def test_free_gb_normal_case_returns_sane_number(tmp_path: Any) -> None:
-    from src.routers.curation_train import _free_gb
+    from src.services.training.preflight_checks import free_gb
 
-    free = _free_gb(str(tmp_path))
+    free = free_gb(str(tmp_path))
     assert free is not None
     assert free > 0
 
 
 def test_free_gb_measures_mounted_ancestor_of_missing_dir(tmp_path: Any) -> None:
-    from src.routers.curation_train import _free_gb
+    from src.services.training.preflight_checks import free_gb
 
-    free = _free_gb(str(tmp_path / 'training_staging' / 'not_created'))
+    free = free_gb(str(tmp_path / 'training_staging' / 'not_created'))
     assert free is not None
     assert free > 0
 
@@ -349,7 +347,7 @@ def test_training_volume_mount_sane_false_when_same_device_as_root(
     own root filesystem."""
     from pathlib import Path
 
-    from src.routers.curation_train import _training_volume_mount_sane
+    from src.services.training.preflight_checks import training_volume_mount_sane
 
     class _Stat:
         st_dev = 42
@@ -362,7 +360,7 @@ def test_training_volume_mount_sane_false_when_same_device_as_root(
         return real_stat(self, follow_symlinks=follow_symlinks)
 
     monkeypatch.setattr(Path, 'stat', _fake_stat)
-    assert _training_volume_mount_sane('/data/train_staging') is False
+    assert training_volume_mount_sane('/data/train_staging') is False
 
 
 def test_training_volume_mount_sane_checks_nearest_existing_ancestor(
@@ -372,7 +370,7 @@ def test_training_volume_mount_sane_checks_nearest_existing_ancestor(
     mounted parent, not a stat() OSError read as 'same filesystem as root'."""
     from pathlib import Path
 
-    from src.routers.curation_train import _training_volume_mount_sane
+    from src.services.training.preflight_checks import training_volume_mount_sane
 
     class _Stat:
         def __init__(self, dev: int) -> None:
@@ -386,19 +384,19 @@ def test_training_volume_mount_sane_checks_nearest_existing_ancestor(
         raise FileNotFoundError(str(self))
 
     monkeypatch.setattr(Path, 'stat', _fake_stat)
-    assert _training_volume_mount_sane('/var/lib/app/training_staging') is True
+    assert training_volume_mount_sane('/var/lib/app/training_staging') is True
     devices['/var/lib/app'] = 1
-    assert _training_volume_mount_sane('/var/lib/app/training_staging') is False
+    assert training_volume_mount_sane('/var/lib/app/training_staging') is False
 
 
 def test_training_volume_mount_sane_true_for_distinct_device(tmp_path: Any) -> None:
-    from src.routers.curation_train import _training_volume_mount_sane
+    from src.services.training.preflight_checks import training_volume_mount_sane
 
     # tmp_path and '/' are the same device in most CI sandboxes, so this
     # only asserts the function runs without raising and returns a bool --
     # the real "different device" case is covered by the monkeypatched
     # test above, which is what actually exercises the guard's logic.
-    result = _training_volume_mount_sane(str(tmp_path))
+    result = training_volume_mount_sane(str(tmp_path))
     assert isinstance(result, bool)
 
 
@@ -406,7 +404,7 @@ def test_preflight_blocks_when_mount_not_sane(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation_train._training_volume_mount_sane',
+        'src.routers.curation_train.preflight.training_volume_mount_sane',
         lambda _path: False,
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -423,10 +421,10 @@ def test_preflight_reports_unknown_not_ok_when_disk_unreadable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation_train._training_volume_mount_sane',
+        'src.routers.curation_train.preflight.training_volume_mount_sane',
         lambda _path: True,
     )
-    monkeypatch.setattr('src.routers.curation_train._free_gb', lambda _path: None)
+    monkeypatch.setattr('src.routers.curation_train.preflight.free_gb', lambda _path: None)
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
     r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text
@@ -440,34 +438,34 @@ def test_preflight_reports_unknown_not_ok_when_disk_unreadable(
 # =============================================================================
 
 
-def test_unresolvable_include_classes_flags_unknown_ids(tmp_path: Any) -> None:
+def testunresolvable_include_classes_flags_unknown_ids(tmp_path: Any) -> None:
     import json
 
-    from src.routers.curation_train import _unresolvable_include_classes
+    from src.services.training.preflight_checks import unresolvable_include_classes
 
     export_dir = tmp_path / 'export'
     export_dir.mkdir()
     (export_dir / 'class_registry.json').write_text(json.dumps({'export_id_map': {'1': 0, '2': 1}}))
 
-    assert _unresolvable_include_classes(str(export_dir), [1, 2]) == []
-    assert _unresolvable_include_classes(str(export_dir), [1, 999]) == [999]
+    assert unresolvable_include_classes(str(export_dir), [1, 2]) == []
+    assert unresolvable_include_classes(str(export_dir), [1, 999]) == [999]
 
 
-def test_unresolvable_include_classes_no_export_id_map_flags_all(tmp_path: Any) -> None:
+def testunresolvable_include_classes_no_export_id_map_flags_all(tmp_path: Any) -> None:
     """A pre-Phase-5 export (no export_id_map) can't resolve any id — every
     requested class is unresolvable, not a silent pass."""
     import json
 
-    from src.routers.curation_train import _unresolvable_include_classes
+    from src.services.training.preflight_checks import unresolvable_include_classes
 
     export_dir = tmp_path / 'export_old'
     export_dir.mkdir()
     (export_dir / 'class_registry.json').write_text(json.dumps({'classes': []}))
 
-    assert _unresolvable_include_classes(str(export_dir), [1, 2]) == [1, 2]
+    assert unresolvable_include_classes(str(export_dir), [1, 2]) == [1, 2]
 
 
-def test_preflight_blocks_unresolvable_include_classes(
+def test_preflight_blocksunresolvable_include_classes(
     app_client: TestClient, tmp_path: Any, project_export_root: Path
 ) -> None:
     import json
@@ -659,10 +657,10 @@ def test_start_writes_job(app_client: TestClient, tmp_path: Any, project_export_
         'profile': 'medium',
     }
     with patch(
-        'src.routers.curation_train._run_preflight',
+        'src.routers.curation_train.start.run_preflight',
         new=AsyncMock(
             return_value=__import__(
-                'src.routers.curation_train', fromlist=['PreflightReport']
+                'src.services.training.preflight_checks', fromlist=['PreflightReport']
             ).PreflightReport(blocked=False, checks=[], summary='ok')
         ),
     ):
@@ -762,10 +760,10 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
         'cuda_visible_devices': '0',
     }
     with patch(
-        'src.routers.curation_train._run_preflight',
+        'src.routers.curation_train.start.run_preflight',
         new=AsyncMock(
             return_value=__import__(
-                'src.routers.curation_train', fromlist=['PreflightReport']
+                'src.services.training.preflight_checks', fromlist=['PreflightReport']
             ).PreflightReport(blocked=False, checks=[], summary='ok')
         ),
     ):
@@ -1135,7 +1133,7 @@ def test_train_gpus_mixed_labels_multi_option_lists_ids_only(
 
 
 def test_promote_gate_passes_when_metrics_meet_thresholds() -> None:
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
     eval_block = {
         'map50': 0.91,
@@ -1145,21 +1143,21 @@ def test_promote_gate_passes_when_metrics_meet_thresholds() -> None:
             {'class_id': 81, 'name': 'motorcycle', 'precision': 0.83, 'support': 412},
         ],
     }
-    assert _evaluate_promote_gate(eval_block) == []
+    assert evaluate_promote_gate(eval_block) == []
 
 
 def test_promote_gate_blocks_low_map50() -> None:
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
-    failures = _evaluate_promote_gate({'map50': 0.50, 'per_class': []})
+    failures = evaluate_promote_gate({'map50': 0.50, 'per_class': []})
     assert any('mAP50' in f.message for f in failures)
     assert any(f.code == 'map50_below_floor' for f in failures)
 
 
 def test_promote_gate_blocks_low_class_precision() -> None:
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
-    failures = _evaluate_promote_gate(
+    failures = evaluate_promote_gate(
         {
             'map50': 0.80,
             'per_class': [
@@ -1172,9 +1170,9 @@ def test_promote_gate_blocks_low_class_precision() -> None:
 
 
 def test_promote_gate_blocks_low_support() -> None:
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
-    failures = _evaluate_promote_gate(
+    failures = evaluate_promote_gate(
         {
             'map50': 0.80,
             'per_class': [
@@ -1187,9 +1185,9 @@ def test_promote_gate_blocks_low_support() -> None:
 
 
 def test_promote_gate_blocks_missing_eval_block() -> None:
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
-    failures = _evaluate_promote_gate(None)
+    failures = evaluate_promote_gate(None)
     assert len(failures) == 1
     assert failures[0].code == 'no_eval_block'
     assert failures[0].message == 'no eval block in status.json — trainer never ran val()'
@@ -1351,9 +1349,9 @@ def test_promote_endpoint_force_bypasses_gate(
 def test_gate_blocks_null_precision() -> None:
     """Before the fix: a null precision short-circuits `isinstance(...) and`
     to False, so the row is silently treated as passing."""
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
-    failures = _evaluate_promote_gate(
+    failures = evaluate_promote_gate(
         {
             'map50': 0.80,
             'per_class': [
@@ -1366,9 +1364,9 @@ def test_gate_blocks_null_precision() -> None:
 
 def test_gate_blocks_string_support() -> None:
     """Before the fix: a string support ("n/a") short-circuits the same way."""
-    from src.routers.curation_train import _evaluate_promote_gate
+    from src.services.training.promote_gate import evaluate_promote_gate
 
-    failures = _evaluate_promote_gate(
+    failures = evaluate_promote_gate(
         {
             'map50': 0.80,
             'per_class': [
@@ -1820,7 +1818,7 @@ def test_preflight_still_honors_an_explicit_dataset_export_dir(
 
 
 def _empty_val_report(empty: list[str]) -> Any:
-    from src.routers.curation_train import PreflightCheck, PreflightReport
+    from src.services.training.preflight_checks import PreflightCheck, PreflightReport
 
     return PreflightReport(
         blocked=True,
@@ -1846,7 +1844,7 @@ def test_force_does_not_bypass_empty_val_split(
         else {'dataset_export_dir': export, 'runs': [{'profile': 'nano', 'model_size': 'n'}]}
     )
     with patch(
-        'src.routers.curation_train._run_preflight',
+        'src.routers.curation_train.start.run_preflight',
         new=AsyncMock(return_value=_empty_val_report(['val'])),
     ):
         r = app_client.post(f'/curation/projects/default/train/{route}?force=true', json=body)
@@ -1860,7 +1858,7 @@ def test_force_still_bypasses_an_empty_train_only_block(
     """Only the val split is a hard failure; other blocks stay forceable."""
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
     with patch(
-        'src.routers.curation_train._run_preflight',
+        'src.routers.curation_train.start.run_preflight',
         new=AsyncMock(return_value=_empty_val_report(['train'])),
     ):
         r = app_client.post('/curation/projects/default/train/start?force=true', json=body)
