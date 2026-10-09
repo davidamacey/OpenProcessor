@@ -121,6 +121,17 @@ each project's pool grows.
   detector's own), `outliers`, `uncertainty` and `model_disagreements`
   (both fed by the probe), `primary_low_conf`, `classifier_blind_spots`,
   `new_class_proposals`, `imported` and `regions`.
+- **Accuracy audit.** Nothing else measures how often the detector or the VLM
+  is right. `POST /audit/start` draws a stratified sample of machine-labelled,
+  unvalidated, non-holdout crops that carry the detector's answer
+  (`min_per_class` per detector class, `sample_size` in total), `GET /audit/queue`
+  lists them, and you label them through the normal label routes. Each human
+  label stamps whether the detector, the VLM, both or neither was right.
+  `GET /audit/report` returns per-class precision with Wilson 95% intervals, the
+  `{detector class: {human class: n}}` confusion matrix and an
+  `insufficient_sample` flag for a class with too few audited crops. Audited
+  crops that a human labelled are ordinary human labels, so they are
+  holdout-eligible.
 - **Label writes.** `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`,
   `POST /crops/move`, exclude/discard, and undo for each. Every write is
   recorded in `GET /crops/{crop_id}/history`. A human label is

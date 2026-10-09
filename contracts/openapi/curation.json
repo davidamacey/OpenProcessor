@@ -460,6 +460,244 @@
         "title": "ArchiveRequest",
         "type": "object"
       },
+      "AuditClassStat": {
+        "properties": {
+          "ci_high": {
+            "title": "Ci High",
+            "type": "number"
+          },
+          "ci_low": {
+            "description": "Wilson 95% interval, lower bound.",
+            "title": "Ci Low",
+            "type": "number"
+          },
+          "correct": {
+            "title": "Correct",
+            "type": "integer"
+          },
+          "insufficient_sample": {
+            "description": "n is below min_per_class.",
+            "title": "Insufficient Sample",
+            "type": "boolean"
+          },
+          "n": {
+            "description": "Audited crops.",
+            "title": "N",
+            "type": "integer"
+          },
+          "name": {
+            "description": "The class NAME.",
+            "title": "Name",
+            "type": "string"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          }
+        },
+        "required": [
+          "name",
+          "n",
+          "correct",
+          "precision",
+          "ci_low",
+          "ci_high",
+          "insufficient_sample"
+        ],
+        "title": "AuditClassStat",
+        "type": "object"
+      },
+      "AuditQueueResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "items"
+        ],
+        "title": "AuditQueueResponse",
+        "type": "object"
+      },
+      "AuditReport": {
+        "properties": {
+          "audited": {
+            "description": "Crops a human has labelled.",
+            "title": "Audited",
+            "type": "integer"
+          },
+          "confusion": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "description": "{detector class: {human class: crops}}.",
+            "title": "Confusion",
+            "type": "object"
+          },
+          "detector": {
+            "description": "Detector precision per detector class: the human agreed with its class.",
+            "items": {
+              "$ref": "#/components/schemas/AuditClassStat"
+            },
+            "title": "Detector",
+            "type": "array"
+          },
+          "min_per_class": {
+            "title": "Min Per Class",
+            "type": "integer"
+          },
+          "outcomes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "agree / detector_wrong / vlm_wrong / both_wrong counts.",
+            "title": "Outcomes",
+            "type": "object"
+          },
+          "pending": {
+            "description": "Drawn crops still waiting for a human.",
+            "title": "Pending",
+            "type": "integer"
+          },
+          "vlm": {
+            "description": "VLM precision per VLM class, over the crops whose label came from the VLM.",
+            "items": {
+              "$ref": "#/components/schemas/AuditClassStat"
+            },
+            "title": "Vlm",
+            "type": "array"
+          }
+        },
+        "required": [
+          "audited",
+          "pending",
+          "min_per_class",
+          "detector",
+          "vlm",
+          "confusion",
+          "outcomes"
+        ],
+        "title": "AuditReport",
+        "type": "object"
+      },
+      "AuditStartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "min_per_class": {
+            "default": 30,
+            "description": "Crops to draw per detector class, and the audited count a class needs for the report to call its precision trustworthy.",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Min Per Class",
+            "type": "integer"
+          },
+          "sample_size": {
+            "default": 300,
+            "description": "Total crops to draw (the human-time budget). Strata share it evenly toward min_per_class first.",
+            "maximum": 50000.0,
+            "minimum": 1.0,
+            "title": "Sample Size",
+            "type": "integer"
+          }
+        },
+        "title": "AuditStartRequest",
+        "type": "object"
+      },
+      "AuditStartResponse": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "min_per_class": {
+            "title": "Min Per Class",
+            "type": "integer"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "integer"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "integer"
+          },
+          "strata": {
+            "items": {
+              "$ref": "#/components/schemas/AuditStratum"
+            },
+            "title": "Strata",
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch_id",
+          "sampled",
+          "requested",
+          "min_per_class",
+          "strata"
+        ],
+        "title": "AuditStartResponse",
+        "type": "object"
+      },
+      "AuditStratum": {
+        "properties": {
+          "available": {
+            "description": "Eligible crops the detector gave this class.",
+            "title": "Available",
+            "type": "integer"
+          },
+          "detector_class": {
+            "title": "Detector Class",
+            "type": "string"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "integer"
+          },
+          "short_of_floor": {
+            "description": "True when the budget left this class fewer than min_per_class crops although it has them.",
+            "title": "Short Of Floor",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "detector_class",
+          "available",
+          "sampled",
+          "short_of_floor"
+        ],
+        "title": "AuditStratum",
+        "type": "object"
+      },
       "AugmentationPresetOption": {
         "description": "One selectable ``augmentation.preset``.",
         "properties": {
@@ -3738,7 +3976,8 @@
               "pack_invalid",
               "profile_invalid",
               "segmenter_error",
-              "detector_error"
+              "detector_error",
+              "audit_no_candidates"
             ],
             "title": "Error",
             "type": "string"
@@ -29278,6 +29517,210 @@
         "summary": "Archive Project",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/curation/projects/{project}/audit/queue": {
+      "get": {
+        "description": "Drawn crops still waiting for a human label, in a stable order.",
+        "operationId": "audit_queue_curation_projects__project__audit_queue_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this batch.",
+            "in": "query",
+            "name": "batch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this batch.",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditQueueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Queue",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/audit/report": {
+      "get": {
+        "description": "Per-class precision of the detector and the VLM with Wilson 95% intervals, the\nconfusion matrix and the outcome counts. A class with fewer than ``min_per_class``\naudited crops is flagged ``insufficient_sample``.",
+        "operationId": "audit_report_curation_projects__project__audit_report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Audited crops a class needs.",
+            "in": "query",
+            "name": "min_per_class",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Audited crops a class needs.",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Min Per Class",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Report",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/audit/start": {
+      "post": {
+        "description": "Draw a sample. Eligible crops carry a machine class and the detector's answer\nand are not validated, held out, excluded, dismissed, imported suggestions or\nalready drawn. ``409 audit_no_candidates`` when none are eligible. Marking a crop\nnever changes its class.",
+        "operationId": "audit_start_curation_projects__project__audit_start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Start",
+        "tags": [
+          "Curation"
         ]
       }
     },

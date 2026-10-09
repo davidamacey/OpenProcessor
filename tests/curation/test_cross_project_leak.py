@@ -892,6 +892,8 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             class_source='vlm',
             class_validated=False,
             vlm_confidence='high',
+            # the detector's own answer: an eligible accuracy-audit candidate
+            detector_class_name=f'{slug}_detector_class',
             **boxes('proposed'),
         ),
         *(

@@ -58,6 +58,7 @@ from src.config import (
     index_name,
 )
 from src.core.logging import get_logger
+from src.services.curation.audit_math import AUDIT_FIELDS
 from src.services.curation.item_text import ITEM_TEXT_MAPPING
 from src.services.curation.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
@@ -296,6 +297,10 @@ DETECTOR_MAPPING: dict[str, Any] = {
     'detector_confidence': {'type': 'float'},
 }
 
+# The accuracy audit's sample marker and verdict
+# (src/services/curation/audit_math.py AUDIT_FIELDS).
+AUDIT_MAPPING: dict[str, Any] = dict(AUDIT_FIELDS)
+
 _EXCLUSION_MAPPING: dict[str, Any] = {
     'class_excluded': {'type': 'boolean'},
     'excluded_at': {'type': 'date'},
@@ -471,6 +476,7 @@ def _items_body() -> dict[str, Any]:
                 'cluster_subid': {'type': 'keyword'},  # AHC sub-cluster id (e.g. "47a")
                 **CLUSTER_GEOMETRY_MAPPING,
                 **DETECTOR_MAPPING,
+                **AUDIT_MAPPING,
                 'cluster_auto_suggest': {'type': 'keyword'},
                 # Primary-subject ranking + blur quality (computed at ingest,
                 # backfilled for legacy items). crop_rank_in_image=1 is the
@@ -1334,6 +1340,26 @@ async def ensure_items_detector_fields(
     index = config.items_index
     added: list[str] = []
     for field, spec in DETECTOR_MAPPING.items():
+        try:
+            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
+            added.append(field)
+        except Exception as exc:
+            msg = str(exc)
+            if not _is_recoverable_mapping_conflict(msg):
+                logger.error('curation_mapping_migration_failed', index=index, error=msg)
+                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
+    logger.info('curation_mapping_migration', index=index, fields=added)
+    return {'acknowledged': True, 'index': index, 'fields_added': added}
+
+
+async def ensure_items_audit_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT :data:`AUDIT_MAPPING` onto the items mapping — one ``PUT _mapping``
+    per field, additive and idempotent."""
+    index = config.items_index
+    added: list[str] = []
+    for field, spec in AUDIT_MAPPING.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
@@ -2322,6 +2348,7 @@ __all__ = [
     'ClassRegistryFile',
     'RegistryClassEntry',
     'create_curation_indexes',
+    'ensure_items_audit_fields',
     'ensure_items_class_name_keyword',
     'ensure_items_cluster_geometry_fields',
     'ensure_items_detector_fields',

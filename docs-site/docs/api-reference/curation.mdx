@@ -278,6 +278,9 @@ See [Keymaps](../guides/keymaps.mdx).
 | GET | `/review/unmatched_terms` | The same answers, aggregated by term |
 | POST | `/test_holdout/freeze` | Freeze a per-class test split before exporting |
 | GET | `/test_holdout/stats` | Per-class test counts |
+| POST | `/audit/start` | Draw a stratified accuracy-audit sample of machine-labelled crops (`min_per_class`, `sample_size`); `409 audit_no_candidates` when none are eligible |
+| GET | `/audit/queue` | Drawn crops still waiting for a human label (`batch_id`, `page`, `page_size`) |
+| GET | `/audit/report` | Detector and VLM precision per class with Wilson 95% intervals, the confusion matrix and `insufficient_sample` flags (`min_per_class`) |
 | POST | `/probe/run` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
 | GET | `/probe/status` | Probe status. `/probe/cancel` stops it |
 

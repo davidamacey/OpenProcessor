@@ -40,6 +40,12 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   have no detector fields (no backfill).
 - Review tab `detector_disagreements` (#119): unvalidated items whose VLM class differs
   from the detector's own class, listed by `GET /review/tabs` and `GET /review/{tab}`.
+- Accuracy audit (#119): `POST /audit/start` draws a stratified sample (per detector
+  class, deterministic) of machine-labelled crops, `GET /audit/queue` lists those still
+  waiting for a human, and every human label on a drawn crop stamps `audit_outcome`
+  (`agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`). `GET /audit/report` gives
+  per-class detector and VLM precision with Wilson 95% intervals, the confusion matrix
+  and an `insufficient_sample` flag.
 
 ## [0.4.1] - 2026-10-04
 

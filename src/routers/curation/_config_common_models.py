@@ -135,6 +135,8 @@ ErrorCode = Literal[
     'profile_invalid',
     'segmenter_error',
     'detector_error',
+    # Accuracy audit.
+    'audit_no_candidates',
 ]
 
 # Seeded with the codes W2 raises (none yet -- W2 has no validated
