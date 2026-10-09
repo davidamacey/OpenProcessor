@@ -46,6 +46,13 @@ class ScopeClauses:
 
 MATCH_NONE: dict[str, Any] = {'match_none': {}}
 
+# Never sent to the VLM by the global sweep or the worker, whatever the scope: the frozen
+# test holdout and excluded items are out of the labelling pipeline.
+OUT_OF_PIPELINE: tuple[dict[str, Any], ...] = (
+    {'term': {'test_holdout': True}},
+    {'term': {'class_excluded': True}},
+)
+
 
 def vlm_scope_clauses(
     policy: VlmPolicy, *, representative_ids: Collection[str] | None
@@ -97,7 +104,7 @@ def vlm_scope_clauses(
                 }
             }
         )
-    return ScopeClauses(filter=filters)
+    return ScopeClauses(filter=filters, must_not=list(OUT_OF_PIPELINE))
 
 
 async def representative_ids(opensearch: Any, *, per_cluster: int) -> set[str]:

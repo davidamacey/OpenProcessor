@@ -56,6 +56,9 @@ def _docs() -> dict[str, dict[str, Any]]:
         _doc('u2', cluster_id=-1, confidence=0.3),
         # no detector confidence recorded
         _doc('noconf', cluster_id=-1, confidence=None),
+        # unvalidated but out of the pipeline: never selected under any scope
+        _doc('frozen', cluster_id=1, cluster_distance=0.5, test_holdout=True, confidence=0.1),
+        _doc('shelved', cluster_id=-1, class_excluded=True, confidence=0.1),
         # never selected under any scope
         _doc('human', cluster_id=1, cluster_distance=0.05, class_validated=True),
         _doc(
@@ -172,7 +175,7 @@ async def test_human_validated_and_excluded_are_never_selected(scope: str) -> No
             representative_ids=reps,
         ),
     )
-    assert not {'human', 'excluded'} & (worker | sweep)
+    assert not {'human', 'excluded', 'frozen', 'shelved'} & (worker | sweep)
 
 
 def test_worker_and_sweep_share_one_scope_function() -> None:
@@ -191,7 +194,6 @@ def test_sample_frac_below_one_adds_a_stable_per_crop_hash_filter() -> None:
     full = vlm_scope_clauses(_policy(sample_frac=1.0), representative_ids=None)
     half = vlm_scope_clauses(_policy(sample_frac=0.5), representative_ids=None)
     assert full.filter == []
-    assert full.must_not == []
     (clause,) = half.filter
     script = clause['script']['script']
     assert 'hashCode' in script['source']

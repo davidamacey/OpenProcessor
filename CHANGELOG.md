@@ -53,6 +53,12 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   `force=true` bypasses the gate (logged); a dry run is never gated. Behaviour change:
   `curation-cluster-refresh` promotes nothing until the audit clears a class.
 
+### Fixed
+
+- The VLM worker and the `auto_label` sweep no longer select frozen-holdout or excluded
+  items (#119). Before, only a `cluster_id`-scoped run left them out, so the sweep paid VLM calls
+  for items the label lock then refused or that were meant to be out of the pipeline.
+
 ## [0.4.1] - 2026-10-04
 
 Patch release on 0.4.0: repaired CI, operator metrics and dashboards, promote as a
