@@ -20,7 +20,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.project_context import bind_project
 from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger

@@ -18,7 +18,7 @@ default). k-NN fields use the FAISS HNSW engine with cosine similarity.
 
 ## 1. Global visual-search indexes
 
-Names come from `IndexName` in `src/clients/opensearch.py`. The indexes are
+Names come from `IndexName` in `src/clients/opensearch/names.py`. The indexes are
 created on first use by the API.
 
 | Index | One document per | Embedding | HNSW (`ef_construction`, `m`) |
@@ -128,7 +128,7 @@ Each project owns six indexes named `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`
 `op_prj_cars__classes`, `op_prj_cars__umap_state`, `op_prj_cars__configs`. The
 registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`), and VLM
 endpoints live in `op_global_configs` (`OP_GLOBAL_CONFIGS_INDEX`). Bodies are in
-`src/clients/curation_opensearch.py`.
+`src/clients/curation_opensearch/` (`bodies_core.py` for images and items, `bodies_other.py` for the rest).
 
 Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core),
 `backbone_embedding` 1024. HNSW defaults `ef_construction` 512 and `m` 16

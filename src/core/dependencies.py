@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_pool import TritonClientManager
 from src.config.settings import Settings, get_settings
 
@@ -141,7 +141,7 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
     if bootstrap itself failed.
     """
     try:
-        from src.clients.curation_opensearch import create_curation_indexes
+        from src.clients.curation_opensearch.lifecycle import create_curation_indexes
         from src.routers.curation._common import warm_knn_indexes
         from src.services.projects.bootstrap import for_each_project
 

@@ -247,7 +247,7 @@ async def test_growth_gate_strict_mode_does_not_permanently_fire(
     After the fix: a strict-mode n_trained_on is compared against the
     matching STRICT (narrow) pool count, not the full one.
     """
-    from src.services.curation.clustering import orchestrator
+    from src.services.curation.clustering import retrain_policy
 
     store = _FakeGrowthGateStore(
         {
@@ -271,7 +271,7 @@ async def test_growth_gate_strict_mode_does_not_permanently_fire(
     client = MagicMock()
     client.count = AsyncMock(return_value={'count': narrow_count})
 
-    decision = await orchestrator.should_retrain_centroids(client)
+    decision = await retrain_policy.should_retrain_centroids(client)
 
     # 520 is well under 500 * RETRAIN_GROWTH_FACTOR (750 by default) -- the
     # narrow-pool comparison correctly reports "not grown enough yet".
@@ -290,7 +290,7 @@ async def test_growth_gate_broad_mode_still_fires_on_real_growth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Sanity: a broad-mode-trained store still fires when the pool grows."""
-    from src.services.curation.clustering import orchestrator
+    from src.services.curation.clustering import retrain_policy
 
     store = _FakeGrowthGateStore(
         {
@@ -307,7 +307,7 @@ async def test_growth_gate_broad_mode_still_fires_on_real_growth(
     client = MagicMock()
     client.count = AsyncMock(return_value={'count': 100_000})
 
-    decision = await orchestrator.should_retrain_centroids(client)
+    decision = await retrain_policy.should_retrain_centroids(client)
 
     assert decision['trained_mode'] == 'recluster_unvalidated'
     assert decision['should'] is True
@@ -324,7 +324,7 @@ async def test_growth_gate_defaults_missing_trained_mode_to_broad(
     idle-worker trigger always used broad mode, so absent metadata implies
     that's what was measured.
     """
-    from src.services.curation.clustering import orchestrator
+    from src.services.curation.clustering import retrain_policy
 
     store = _FakeGrowthGateStore({'n_trained_on': 500, 'trained_at': None})
     monkeypatch.setattr(
@@ -335,5 +335,5 @@ async def test_growth_gate_defaults_missing_trained_mode_to_broad(
     client = MagicMock()
     client.count = AsyncMock(return_value={'count': 1000})
 
-    decision = await orchestrator.should_retrain_centroids(client)
+    decision = await retrain_policy.should_retrain_centroids(client)
     assert decision['trained_mode'] == 'recluster_unvalidated'

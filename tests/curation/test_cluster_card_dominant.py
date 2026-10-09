@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.routers.curation.clusters import list_clusters
-from src.services.curation.clustering.orchestrator import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.item_filter import ItemFilter
 
 

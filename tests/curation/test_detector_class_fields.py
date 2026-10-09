@@ -188,7 +188,7 @@ async def test_re_ingest_keeps_a_human_label_and_does_not_drop_detector_fields(
 
 
 def test_the_fields_are_mapped_and_served() -> None:
-    from src.clients.curation_opensearch import _items_body
+    from src.clients.curation_opensearch.bodies_core import _items_body
     from src.services.curation.wire import serialize_item
 
     props = _items_body()['mappings']['properties']
@@ -210,7 +210,7 @@ async def test_mapping_migration_adds_the_fields_to_existing_indexes() -> None:
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
-    from src.clients.curation_opensearch_items import ensure_items_detector_fields
+    from src.clients.curation_opensearch.items_extra import ensure_items_detector_fields
 
     client = SimpleNamespace(indices=SimpleNamespace(put_mapping=AsyncMock(return_value={})))
     result = await ensure_items_detector_fields(client)

@@ -40,7 +40,7 @@ from src.services.curation.region_boxes import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config.region_fields import RegionFields
     from src.services.curation.dataset_import.store import ImportStore
 

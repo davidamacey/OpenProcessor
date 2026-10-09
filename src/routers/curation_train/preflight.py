@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import ORJSONResponse
 
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.config.curation import items_index
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
@@ -35,7 +35,7 @@ from src.services.training.gpu_arbiter import (
     parse_cuda_visible_devices,
     probe_trainer_reachable,
 )
-from src.services.training.jobs import TrainJobSpec  # noqa: TC001 - FastAPI body type
+from src.services.training.job_models import TrainJobSpec  # noqa: TC001 - FastAPI body type
 from src.services.training.preflight_checks import (
     MIN_FREE_DISK_GB,
     SINGLE_CLASS_DATASET_KINDS,
@@ -58,7 +58,7 @@ from src.services.training.profiles import RESERVED_OPTIMIZERS_YOLO26
 
 
 if TYPE_CHECKING:
-    from src.services.training.jobs import AugmentationSpec
+    from src.services.training.job_models import AugmentationSpec
 
 router = APIRouter(default_response_class=ORJSONResponse)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.clients.curation_opensearch import ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.routers.curation._class_models import (
     SeedConflict,
     SeededClass,

@@ -177,7 +177,7 @@ def test_wire_hides_geometry_measured_against_another_cluster() -> None:
 
 
 def test_residual_and_ingest_writers_record_the_reference() -> None:
-    from src.services.curation.clustering.orchestrator import _guarded_class_cluster_write
+    from src.services.curation.clustering.cluster_write_guard import _guarded_class_cluster_write
     from src.services.curation.item_doc import DetectedItem, build_item_doc
 
     script = _guarded_class_cluster_write(10003, 0.2)['script']['source']

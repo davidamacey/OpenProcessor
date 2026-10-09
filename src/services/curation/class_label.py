@@ -27,7 +27,7 @@ from src.services.curation.ingest_class_sources import (
     LABEL_IMPORT_CLASS_SOURCE,
     LABEL_SOURCE_IMPORT,
 )
-from src.services.detection.cascade_detect import class_provenance
+from src.services.detection.cascade_detect.sanity import class_provenance
 
 
 def _now_iso() -> str:

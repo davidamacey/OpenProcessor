@@ -1,8 +1,8 @@
 """Guards against `ensure_items_*` migrations existing but never being
 wired into `_ensure_indexes`.
 
-This test enumerates every `ensure_items_*` name exported from
-`curation_opensearch` and asserts each one is actually invoked inside
+This test enumerates every `ensure_items_*` function defined in
+`curation_opensearch.ensure_fields` and `.ensure_overlay_fields` and asserts each one is actually invoked inside
 `_common._ensure_indexes` — so the next unwired migration fails CI
 instead of silently doing nothing.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import inspect
 import re
 
-from src.clients import curation_opensearch
+from src.clients.curation_opensearch import ensure_fields, ensure_overlay_fields
 from src.routers.curation import _common
 
 
@@ -28,7 +28,10 @@ _INTENTIONALLY_UNWIRED = frozenset({'ensure_items_class_name_keyword'})
 
 def test_every_ensure_migration_is_wired():
     migration_names = sorted(
-        name for name in curation_opensearch.__all__ if name.startswith('ensure_items_')
+        name
+        for module in (ensure_fields, ensure_overlay_fields)
+        for name, obj in vars(module).items()
+        if name.startswith('ensure_items_') and getattr(obj, '__module__', None) == module.__name__
     )
     assert migration_names, 'expected at least one ensure_items_* export'
 

@@ -42,7 +42,7 @@ its other images between train and val only. The exact per-class rules
 are on :func:`~src.services.curation.export_split.stratified_split`.
 
 Dense export ids (``class_registry.json:export_id_map``) are resolved from
-the live :class:`~src.clients.curation_opensearch.ClassRegistry` at export
+the live :class:`~src.clients.curation_opensearch.registry.ClassRegistry` at export
 time and frozen into the export directory, so a subset-training request's
 ``include_classes`` (always expressed in REGISTRY ids) can be translated to
 the dense ids that actually appear in the written label files — see
@@ -59,7 +59,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.clients.curation_opensearch import ClassRegistry, get_class_registry
+from src.clients.curation_opensearch.registry import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.export_images import (

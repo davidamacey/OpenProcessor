@@ -6,7 +6,8 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, status
 
-from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError, RegistryClassEntry
+from src.clients.curation_opensearch import RegistryClassEntry
+from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
 from src.routers.curation._class_hotkeys import (
     project_keymap_overrides,
     project_reserved_hotkeys,

@@ -43,7 +43,8 @@ from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
-from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
+from src.services.detection.cascade_detect.candidate import RegionCandidate
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 
@@ -189,7 +190,7 @@ async def _drive_text_hint_rescue(
     )
     monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.ClassRegistry',
+        'src.clients.curation_opensearch.registry.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)

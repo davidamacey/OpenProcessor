@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from curation._cropwright_action_ids import CROPWRIGHT_ACTION_IDS
 from curation._fake_config_opensearch import FakeConfigOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.curation.keymap import (
     combo_grammar_error,
     effective_keys,

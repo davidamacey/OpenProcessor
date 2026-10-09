@@ -41,18 +41,14 @@ from src.services.model_unload_guard import (
     core_pipeline_models,
     is_region_protected_model,
 )
+from src.services.training.promote_errors import ModelNotPromotedError, PromoteError
 from src.services.training.promoted_models import (
     _core_models,
     discover_promoted_models,
     project_owns_model,
 )
-from src.services.training.triton_promote import (
-    ModelNotPromotedError,
-    PromoteError,
-    UnloadResult,
-    resolve_triton_http_url,
-    unload_triton_model,
-)
+from src.services.training.triton_promote import UnloadResult, unload_triton_model
+from src.services.training.triton_repo import resolve_triton_http_url
 
 
 _TRITON_METRIC_KEYS: dict[str, str] = {

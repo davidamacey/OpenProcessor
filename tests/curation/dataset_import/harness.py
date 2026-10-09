@@ -16,7 +16,7 @@ from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig, DetectionProfile, get_curation_config
 from src.services.curation.dataset_import import runner
 from src.services.curation.dataset_import.context import ImportContext

@@ -16,7 +16,7 @@ import pytest
 from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from src.config import DetectionProfile, get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.region_text import (
     DominantTextConfig,
     OcrLine,

@@ -73,7 +73,7 @@ async def occ_update_bulk(
     """
     if index is None:
         index = items_index()
-    from src.clients.curation_opensearch import mget_crops
+    from src.clients.curation_opensearch.crops import mget_crops
 
     status: dict[str, str] = {}
     pending_ids = list(dict.fromkeys(ids))

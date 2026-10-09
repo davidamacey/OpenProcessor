@@ -176,17 +176,16 @@ async def promote_run(
     # promotes (e.g. a fresh dev box).
     from pathlib import Path
 
-    from src.services.training.triton_promote import (
+    from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
+    from src.services.training.promote_errors import (
         CheckpointNotFoundError,
         ClassRemapMissingError,
         ClassRemapUnreadableError,
         ModelNameConflictError,
         PromoteError,
         TritonLoadError,
-        build_class_id_to_name,
-        promote_yolo26_to_triton,
-        resolve_class_remap,
     )
+    from src.services.training.triton_promote import promote_yolo26_to_triton
 
     # Project namespacing (docs/design/openprocessor_internal/
     # projects_plan.md §5.3): the *requested* (unprefixed) name may not
@@ -543,7 +542,7 @@ async def reload_promoted() -> ReloadPromotedResponse:
     directory, ``promote.json`` included, which is exactly what this
     scan keys off.
     """
-    from src.services.training.triton_promote import reload_promoted_models
+    from src.services.training.triton_reload import reload_promoted_models
 
     result = await reload_promoted_models(honor_unloaded=False)
     return ReloadPromotedResponse(

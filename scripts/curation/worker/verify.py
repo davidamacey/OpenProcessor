@@ -32,7 +32,7 @@ from src.services.curation.vlm_class_attempt import (
     class_attempt_fields,
     empty_answer_reason_for_index,
 )
-from src.services.detection.cascade_detect import (
+from src.services.detection.cascade_detect.sanity import (
     _now_iso,
     class_provenance,
     is_plausible_region_bbox,

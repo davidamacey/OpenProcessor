@@ -98,7 +98,7 @@ logger = get_logger(__name__)
 
 def _registry_class_ids(cfg: CurationConfig) -> dict[str, int]:
     """Active class name -> id from the configured registry ({} when absent)."""
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
 
     try:
         reg = ClassRegistry(path=cfg.class_registry_path).load()

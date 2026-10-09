@@ -25,7 +25,8 @@ from scripts.curation.worker.stage_b import stage_b_combined
 from scripts.curation.worker.stage_sam import stage_a_sam_consumer
 from src.core.logging import get_logger
 from src.services.curation.worker_liveness import heartbeat_loop
-from src.services.detection.cascade_detect import PaddleOcrTextRecognizer, RegionDetector
+from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
+from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.detection.profile_registry import get_active_region_profile
 
 

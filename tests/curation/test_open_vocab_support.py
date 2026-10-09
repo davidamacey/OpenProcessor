@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
-from src.clients.curation_opensearch import ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.services.curation.class_ensure import ensure_class_by_name
 from src.services.curation.ingest_class_sources import (
     OPEN_VOCAB_CLASS_SOURCE,

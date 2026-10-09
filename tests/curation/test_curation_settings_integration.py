@@ -31,11 +31,11 @@ if TYPE_CHECKING:
 @pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
     """See test_curation_settings_router.py's fixture of the same name."""
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import settings_doc
 
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     yield
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
 
 
 @pytest.fixture

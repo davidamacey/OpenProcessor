@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch import _items_body
+from src.clients.curation_opensearch.bodies_core import _items_body
 from src.routers.curation import _common
 from src.services.curation.item_text import (
     ITEM_TEXT_LINES_FIELD,

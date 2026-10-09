@@ -17,7 +17,7 @@ Outputs:
   labels dir, and the renumbered ``names`` list.
 * ``out_dir/class_remap.json`` -- original -> new mapping, consumed by
   ``POST {api_prefix}/train/promote/{job_id}`` (see
-  ``src/services/training/triton_promote.py::resolve_class_remap``) to write
+  ``src/services/training/class_remap.py::resolve_class_remap``) to write
   the right ``labels.txt`` for the promoted Triton model. Its payload shape is
   a contract with that parser: ``{original_to_new, new_to_original, single_cls,
   names, include_classes}``.
@@ -171,7 +171,7 @@ def build_subset_view(
     # Build the original(registry id) -> new map. Order of include_classes
     # drives the new IDs. Kept registry-id-keyed (an API-side contract) since
     # class_remap.json's original_to_new is consumed downstream as registry ids
-    # (triton_promote.py::build_class_id_to_name looks names up in the full
+    # (class_remap.py::build_class_id_to_name looks names up in the full
     # REGISTRY, not the export's dense id space).
     if single_cls:
         class_remap: dict[int, int] = dict.fromkeys(include_classes, 0)
@@ -272,7 +272,7 @@ def build_subset_view(
         yaml.safe_dump(dst_yaml, fh, sort_keys=False)
 
     # Persist class_remap for promote-to-Triton. Shape is a contract with
-    # src/services/training/triton_promote.py::_parse_class_remap_payload.
+    # src/services/training/class_remap.py::_parse_class_remap_payload.
     remap_path = out_dir / 'class_remap.json'
     remap_payload = {
         'original_to_new': {str(k): v for k, v in class_remap.items()},

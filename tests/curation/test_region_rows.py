@@ -16,7 +16,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ensure_items_inner_result_window, inner_result_window
+from src.clients.curation_opensearch.ensure_overlay_fields import (
+    ensure_items_inner_result_window,
+    inner_result_window,
+)
 from src.config import IndexRole, get_region_fields, index_name
 from src.config.curation import base_curation_config
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
@@ -304,14 +307,14 @@ def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation() -
 def test_inner_hits_size_clamps_to_the_window_the_ensure_step_read_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import ensure_overlay_fields
     from src.services.curation.region_rows import inner_hits_size
 
     limit = CFG.region_max_boxes_per_write
     # Never read back (the ensure step failed): OpenSearch's default, so the
     # request can't 400.
     assert inner_hits_size(ITEMS) == 100
-    monkeypatch.setitem(curation_opensearch._INNER_RESULT_WINDOWS, ITEMS, 250)
+    monkeypatch.setitem(ensure_overlay_fields._INNER_RESULT_WINDOWS, ITEMS, 250)
     assert inner_hits_size(ITEMS) == min(limit, 250)
-    monkeypatch.setitem(curation_opensearch._INNER_RESULT_WINDOWS, ITEMS, limit + 1000)
+    monkeypatch.setitem(ensure_overlay_fields._INNER_RESULT_WINDOWS, ITEMS, limit + 1000)
     assert inner_hits_size(ITEMS) == limit

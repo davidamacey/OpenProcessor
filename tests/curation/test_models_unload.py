@@ -26,7 +26,8 @@ from src.services.model_unload_guard import (
     external_service_model_names,
     is_region_protected_model,
 )
-from src.services.training.triton_promote import ModelNotPromotedError, UnloadResult
+from src.services.training.promote_errors import ModelNotPromotedError
+from src.services.training.triton_promote import UnloadResult
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env')

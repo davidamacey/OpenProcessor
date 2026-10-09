@@ -24,7 +24,7 @@ from integration.test_class_identity_e2e import (
     step_real_export,
     step_stub_train_manifest,
 )
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.projects.combine import service
 
 

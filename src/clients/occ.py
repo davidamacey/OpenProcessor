@@ -201,7 +201,7 @@ async def occ_skip_on_conflict_bulk(
     pass. This version pages ``doc_ids`` into chunks of ``page_size``
     (default :data:`OCC_BULK_PAGE_SIZE`) and, per page:
 
-    1. One ``_mget`` (via :func:`src.clients.curation_opensearch.mget_crops`)
+    1. One ``_mget`` (via :func:`src.clients.curation_opensearch.crops.mget_crops`)
        fetching every doc's ``_source`` (minus large embedding fields,
        see :data:`OCC_BULK_MGET_SOURCE_EXCLUDES`) + ``_seq_no``/
        ``_primary_term``.
@@ -239,7 +239,7 @@ async def occ_skip_on_conflict_bulk(
     """
     if index is None:
         index = items_index()
-    from src.clients.curation_opensearch import mget_crops
+    from src.clients.curation_opensearch.crops import mget_crops
 
     updated_ids: list[str] = []
     skipped = 0

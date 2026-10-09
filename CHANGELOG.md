@@ -11,6 +11,24 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ## [Unreleased]
 
+### Added
+
+- Gateway mode (#93): `OP_GATEWAY_SUBPATHS=true` makes Cropwright's nginx serve
+  Grafana, Prometheus, OpenSearch Dashboards and MLflow under `/grafana/`,
+  `/prometheus/`, `/dashboards/` and `/mlflow/` of its one published port, so the UIs
+  stay on `127.0.0.1`. One switch in `docker-compose.yml` starts each UI serving from
+  its sub-path, the API serves the path-relative `resource_links` and MLflow run
+  links (an explicit `OP_*_URL` still wins and a `0` port still hides the link), and
+  nginx upgrades Grafana Live websockets and forwards `Host` and `X-Forwarded-*`.
+  Fail closed: the UIs refuse to start when published beyond loopback, and Grafana
+  refuses the default or an empty admin password. Prometheus and MLflow still have no
+  authentication (`SECURITY.md`). The link audit is in the monitoring guide.
+
+### Fixed
+
+- Cropwright's nginx now answers redirects with relative `Location` headers; the
+  `/OpenProcessor` redirect used to name the container port 8080.
+
 ### Changed
 
 - The experiment-tracking server and the trainer client move to MLflow 3.17 together

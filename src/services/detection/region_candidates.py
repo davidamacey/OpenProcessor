@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.geometry import iou as box_iou
 
 

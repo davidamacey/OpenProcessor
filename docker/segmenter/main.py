@@ -1,7 +1,7 @@
 """OpenProcessor segmenter service — promptable segmentation over HTTP.
 
 The detection cascade's segmenter leg (``scripts/curation/worker/client.py``,
-``src/services/detection/cascade_detect.py``) calls out to an HTTP service
+``src/services/detection/cascade_detect/``) calls out to an HTTP service
 when the primary detector misses a region or a VLM rejects its candidate.
 This is that service: a FastAPI process that loads Meta's Segment Anything
 3 once at startup and answers segment requests with candidate bounding

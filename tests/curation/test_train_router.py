@@ -1197,7 +1197,7 @@ def test_promote_endpoint_returns_422_when_gate_fails(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """End-to-end: gate failure surfaces as 422 with structured detail."""
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id='gate-fail-job',
@@ -1234,7 +1234,7 @@ def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
     422 -- not just the score gate -- must carry {code, message} failures
     and say whether force=true can help. A job that isn't finished/exporting
     yet can't be force-promoted (there's no export to promote)."""
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id='still-running-job',
@@ -1293,7 +1293,7 @@ def test_promote_endpoint_force_bypasses_gate(
     """force=true skips the gate and proceeds to the (mocked) handoff."""
     from pathlib import Path
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id='force-job',
@@ -1389,7 +1389,7 @@ def test_force_promote_returns_gate_report(
     the 200 response carries no evidence the gate ever ran or what it found."""
     from pathlib import Path
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id='force-report-job',
@@ -1437,7 +1437,7 @@ def test_force_promote_records_force_used_in_manifest(
     import json
     from pathlib import Path
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     job_id = 'force-manifest-job'
     (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(
@@ -1510,7 +1510,7 @@ def test_stamp_failure_is_not_swallowed(
 
     from structlog.testing import capture_logs
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     job_id = 'stamp-fail-job'
 
@@ -1722,7 +1722,7 @@ def test_reload_promoted_route_returns_the_result_shape(
     fake_reload = AsyncMock(
         return_value={'status': 'ok', 'reloaded': ['op_v2'], 'failed': ['op_v3']}
     )
-    monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
+    monkeypatch.setattr('src.services.training.triton_reload.reload_promoted_models', fake_reload)
 
     r = app_client.post('/curation/projects/default/train/reload_promoted')
 
@@ -1736,7 +1736,7 @@ def test_reload_promoted_route_defaults_to_empty_lists(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_reload = AsyncMock(return_value={'status': 'ok'})
-    monkeypatch.setattr('src.services.training.triton_promote.reload_promoted_models', fake_reload)
+    monkeypatch.setattr('src.services.training.triton_reload.reload_promoted_models', fake_reload)
 
     r = app_client.post('/curation/projects/default/train/reload_promoted')
 

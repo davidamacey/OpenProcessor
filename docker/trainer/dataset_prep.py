@@ -300,7 +300,7 @@ def copy_class_remap_to_weights_dir(spec: JobSpec, save_dir: Path) -> bool:
     rmtree'd at job end -- leaving promote with a single source (the manifest's
     ``lineage.class_remap``, captured pre-cleanup). Writing it into
     ``<save_dir>/weights/`` gives
-    :func:`src.services.training.triton_promote.resolve_class_remap` its second,
+    :func:`src.services.training.class_remap.resolve_class_remap` its second,
     on-disk source.
 
     Atomic tmp-file-then-rename. Returns ``True`` on success. A failure here is

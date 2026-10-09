@@ -129,44 +129,9 @@ repos:
         exclude: |
           (?x)^(
               src/ultralytics_patches/|
-              src/clients/opensearch\.py|
-              src/services/visual_search\.py|
-              src/services/face_identity\.py|
-              src/services/duplicate_detection\.py|
               src/routers/ingest\.py|
-              src/routers/search\.py|
-              src/clients/curation_opensearch\.py|
-              src/services/curation/clustering/orchestrator\.py|
-              src/services/training/triton_promote\.py|
-              src/services/training/jobs\.py|
-              src/services/detection/cascade_detect\.py
+              src/routers/search\.py
           )
-        # src/services/curation/clustering/orchestrator.py (Chunk 4, see
-        # docs/design/curation_design_rationale.md §5) lands at
-        # ~1770 LOC on arrival — a genuine cohesive orchestrator, not a
-        # grab-bag; splitting it during the port would make the diff
-        # unreviewable (it also has a documented orchestrator<->auto_promote
-        # import-order constraint — see the same doc's §5). Follow-up
-        # split tracked by that doc, not silently ignored.
-        # src/services/training/triton_promote.py (803 LOC) — Chunk 6, same §5
-        # pre-approval. Grandfathered on arrival from the curation port;
-        # follow-up split tracked by that doc, not silently ignored.
-        # src/services/training/jobs.py (925 LOC) — Chunk 6. NOT in the
-        # original five-file list (an earlier audit undercounted this
-        # chunk: it flagged only curation_train.py, missing that the
-        # reference train_jobs.py is also over cap). Grandfathered here for
-        # the same reason as the rest of this chunk's oversize files —
-        # splitting a freshly-ported file mid-port makes the diff
-        # unreviewable. Follow-up split tracked alongside the other
-        # Chunk 6 entries.
-        # src/services/detection/cascade_detect.py (~1100 LOC) — Chunk 8.
-        # NOT in the original five-file list, but the reference cascade
-        # module is 1124 LOC before any port work — that earlier
-        # audit undercounted this chunk too (same gap class as jobs.py
-        # above). Splitting the DetectionProfile-parameterized cascade
-        # mid-port would make the diff unreviewable; grandfathered here for
-        # the same reason as the rest of this chunk's oversize files.
-        # Follow-up split tracked alongside the other oversize entries.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code

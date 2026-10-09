@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.class_ensure import ResolvedClass, ensure_class_by_name
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.open_vocab_fields import OpenVocabStatus
-    from src.services.detection.cascade_detect import RegionCandidate
+    from src.services.detection.cascade_detect.candidate import RegionCandidate
     from src.services.detection.open_vocab_set import OpenVocabSet, OpenVocabTarget
 
 logger = get_logger(__name__)

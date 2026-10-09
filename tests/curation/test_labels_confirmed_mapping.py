@@ -13,11 +13,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.clients.curation_opensearch import (
-    INDEX_BODIES,
-    LABELS_CONFIRMED_EXTRA_MAPPING,
-    ensure_labels_confirmed_fields,
-)
+from src.clients.curation_opensearch.bodies_other import LABELS_CONFIRMED_EXTRA_MAPPING
+from src.clients.curation_opensearch.ensure_fields import ensure_labels_confirmed_fields
+from src.clients.curation_opensearch.lifecycle import INDEX_BODIES
 from src.config import IndexRole, get_curation_config
 
 

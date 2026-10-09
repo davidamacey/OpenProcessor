@@ -212,7 +212,7 @@ async def _batch_write(
     as updated. ``refresh`` is attached only to the final bulk call of
     the final retry round — no forced ``indices.refresh`` per call.
     """
-    from src.clients.curation_opensearch import mget_crops
+    from src.clients.curation_opensearch.crops import mget_crops
     from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
 
     F = get_region_fields()

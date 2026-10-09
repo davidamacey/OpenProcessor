@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 from curation._vlm_test_support import empty_registry_reads
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import DetectionProfile
 from src.services.labeling.vlm_client import VlmIdentity
 
@@ -136,8 +136,8 @@ def test_label_batch_with_only_the_region_class_is_no_classes(
 def test_worker_class_catalog_leaves_out_the_region_class(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.clients.curation_opensearch as client_mod
     from scripts.curation.worker.state import bound_class_catalog
+    from src.clients.curation_opensearch import registry as client_mod
 
     reg = _seed(tmp_path, monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
     reg.add_class('wheel')

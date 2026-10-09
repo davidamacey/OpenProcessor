@@ -74,7 +74,7 @@ class _TermAwareClient(FakeLifecycleOpenSearch):
 
 
 def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, monkeypatch) -> None:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config.curation import items_index
 
     models = tmp_path / 'models'
@@ -86,7 +86,7 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
         (models / name).mkdir(parents=True)
         (models / name / 'promote.json').write_text(f'{{"project": "{owner}"}}')
     monkeypatch.setattr(
-        'src.services.training.triton_promote.resolve_triton_models_dir', lambda: models
+        'src.services.training.triton_repo.resolve_triton_models_dir', lambda: models
     )
 
     client = _TermAwareClient()

@@ -32,7 +32,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from src.clients.opensearch import IndexName, OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import IndexName
 from src.services.clustering import ClusterIndex, get_clustering_service
 
 
@@ -369,7 +370,7 @@ async def check_and_rebalance_all(
     Example:
         # In a scheduled task
         from src.services.cluster_maintenance import check_and_rebalance_all
-        from src.clients.opensearch import OpenSearchClient
+        from src.clients.opensearch.client import OpenSearchClient
 
         client = OpenSearchClient()
         results = await check_and_rebalance_all(client)

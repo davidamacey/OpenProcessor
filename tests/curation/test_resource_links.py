@@ -200,3 +200,99 @@ async def test_schedule_refresh_does_not_block_and_is_ttl_gated(
 @pytest.mark.asyncio
 async def test_probe_failure_is_false_not_raise() -> None:
     assert await rl._probe('http://127.0.0.1:1/x') is False
+
+
+# --- gateway mode (OP_GATEWAY_SUBPATHS): path-relative links ---------------
+
+_GATEWAY_PATHS = {
+    'grafana': '/grafana/',
+    'prometheus': '/prometheus/',
+    'opensearch_dashboards': '/dashboards/',
+    'mlflow': '/mlflow/',
+}
+
+
+def test_gateway_mode_serves_path_relative_links(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cfg(monkeypatch, gateway_subpaths=True)
+    body = _app().get('/links', headers={'Host': '10.10.10.20:5184'}).json()
+    assert {k: body[k] for k in _GATEWAY_PATHS} == _GATEWAY_PATHS
+    assert body['swagger'] == '/docs'
+
+
+def test_gateway_mode_needs_no_request_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cfg(monkeypatch, gateway_subpaths=True)
+    links = _by_id(rl.resource_links_from_config())
+    for id_, path in _GATEWAY_PATHS.items():
+        assert (links[id_].url, links[id_].status) == (path, 'configured')
+    assert rl.service_url('mlflow') == '/mlflow/'
+
+
+def test_gateway_off_keeps_host_port_derivation(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cfg(monkeypatch, gateway_subpaths=False)
+    assert _app().get('/links', headers={'Host': '10.10.10.20:5184'}).json()['grafana'] == (
+        'http://10.10.10.20:4605'
+    )
+    assert rl.service_url('grafana') is None
+
+
+def test_gateway_mode_explicit_override_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cfg(
+        monkeypatch,
+        gateway_subpaths=True,
+        grafana_url='https://grafana.example.com/g',
+        mlflow_public_url='http://m:4',
+    )
+    links = _by_id(rl.resource_links_from_config())
+    assert links['grafana'].url == 'https://grafana.example.com/g'
+    assert links['mlflow'].url == 'http://m:4'
+    assert links['prometheus'].url == '/prometheus/'
+
+
+def test_gateway_mode_port_zero_still_disables(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cfg(monkeypatch, gateway_subpaths=True, grafana_port=0)
+    links = _by_id(rl.resource_links_from_config())
+    assert (links['grafana'].url, links['grafana'].status) == (None, 'not_configured')
+    assert links['mlflow'].url == '/mlflow/'
+
+
+def test_gateway_mode_port_zero_with_explicit_url_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _cfg(monkeypatch, gateway_subpaths=True, mlflow_port=0, mlflow_public_url='http://m:4')
+    assert rl.service_url('mlflow') == 'http://m:4'
+
+
+def test_gateway_mode_hint_names_the_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cfg(monkeypatch, gateway_subpaths=True)
+    assert 'gateway' in _by_id(rl.resource_links_from_config())['grafana'].hint.lower()
+
+
+@pytest.mark.asyncio
+async def test_gateway_mode_still_probes_enabled_services_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _cfg(monkeypatch, gateway_subpaths=True, prometheus_port=0, dashboards_port=0)
+    seen: list[str] = []
+
+    async def fake_probe(url: str) -> bool:
+        seen.append(url)
+        return True
+
+    monkeypatch.setattr(rl, '_probe', fake_probe)
+    await rl.refresh_reachability()
+    assert sorted(seen) == ['http://curation-mlflow:5000/health', 'http://grafana:3000/api/health']
+
+
+def test_mlflow_run_url_follows_the_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services.training.jobs import _public_mlflow_url
+
+    _cfg(monkeypatch, gateway_subpaths=True)
+    assert _public_mlflow_url('run1', '7') == '/mlflow/#/experiments/7/runs/run1'
+
+
+def test_gateway_flag_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert CurationConfig.from_env().gateway_subpaths is False
+    monkeypatch.setenv('OP_GATEWAY_SUBPATHS', 'true')
+    assert CurationConfig.from_env().gateway_subpaths is True
+    monkeypatch.setenv('OP_GATEWAY_SUBPATHS', 'false')
+    assert CurationConfig.from_env().gateway_subpaths is False

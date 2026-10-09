@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.services.curation.class_ensure import ensure_class_by_name
 from src.services.detection.profile_registry import get_active_region_profile
 

@@ -86,7 +86,7 @@ async def test_single_bucket_respects_persist_false(ivf_store_dir: Path) -> None
 async def test_should_retrain_centroids_sees_trained_store_after_single_bucket(
     ivf_store_dir: Path,
 ) -> None:
-    from src.services.curation.clustering.orchestrator import should_retrain_centroids
+    from src.services.curation.clustering.retrain_policy import should_retrain_centroids
 
     embeddings = _small_pool()
     method = IVFMethod()

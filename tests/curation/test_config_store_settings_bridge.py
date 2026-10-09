@@ -21,15 +21,15 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _reset_caches() -> Iterator[None]:
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import settings_doc
     from src.services.config_store.store import reset_config_stores
     from src.services.curation.strategy_registry import _reset_field_coverage_cache
 
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     reset_config_stores()
     _reset_field_coverage_cache()
     yield
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     reset_config_stores()
     _reset_field_coverage_cache()
 
@@ -271,6 +271,6 @@ def test_get_settings_hides_a_stale_config_store_key(
     stale = AsyncMock(
         return_value={'defaults': {'prompt_pack': 'ghost'}, 'updated_at': None, 'updated_by': None}
     )
-    monkeypatch.setattr('src.clients.curation_opensearch.get_curation_settings', stale)
+    monkeypatch.setattr('src.clients.curation_opensearch.settings_doc.get_curation_settings', stale)
     r = app_client.get('/curation/projects/default/settings')
     assert 'ghost' not in r.json()['defaults'].values()

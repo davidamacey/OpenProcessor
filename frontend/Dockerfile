@@ -31,12 +31,14 @@ RUN apk upgrade --no-cache && apk del --no-cache curl && rm -rf /usr/share/nginx
 COPY --from=builder /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY nginx-security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY nginx-gateway.conf /etc/nginx/snippets/gateway-subpaths.conf
 COPY docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
 # The runtime-config script rewrites placeholders in the bundle and in
 # default.conf with `sed -i` at container start, as uid 101.
 RUN chmod 0755 /docker-entrypoint.d/40-runtime-config.sh \
-    && chown -R 101:0 /usr/share/nginx/html /etc/nginx/conf.d \
-    && chmod -R g+w /usr/share/nginx/html /etc/nginx/conf.d
+    && mkdir -p /etc/nginx/gateway.d \
+    && chown -R 101:0 /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d \
+    && chmod -R g+w /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d
 USER 101
 
 EXPOSE 8080
