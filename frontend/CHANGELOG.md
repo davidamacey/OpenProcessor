@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
+Cropwright joins the OpenProcessor repository as `frontend/` and from here on is versioned with
+the monorepo: this release is 0.5.0, not 0.1.2, and requires OpenProcessor 0.5.0 (the earlier
+standalone 0.1.x numbering ends at 0.1.1). Its image is built from `frontend/Dockerfile` by the
+repository's release flow and pinned in `images.lock`.
+
 ### Added
 
 - The served pack schema gains a `registry_prior_top_k` row with `kind: "int"` (the optional VLM registry prior, 0 = off). The pack editor shows an unknown kind read-only and saves it unchanged, so the value round-trips; `PackSchemaField.kind` lists `int`.
@@ -35,11 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/export` says how many of the crops are validated and that only validated crops are
     exported; `/dashboard` says labels are not ground truth and names the VLM row "VLM suggestions".
 - The item wire carries `detector_class_name`, `detector_class_id` and `detector_confidence` (the detector's own class, kept next to the VLM or human label); `RawCrop` and the test fixtures list them.
-
-### Fixed
-
-- No page overflows horizontally at 430px (#184). The project top bar wraps to two rows below 768px (logo, project switcher, Resources and the API chip on the first, the scrolling nav strip on the second; the wordmark and breadcrumb are hidden below 640px). `/review`'s tab strip and queue counter wrap the same way, so the tabs are no longer squeezed. On `/projects` an `sr-only` table header escaped its scroll container and widened the page; the container is now positioned so it clips it. New stubbed e2e `test_narrow_viewport_430.py` asserts no horizontal overflow at 430px on every project route and `/projects`.
-- nginx uses `absolute_redirect off`, so redirects no longer point at container port 8080.
+- The frontend moved into the OpenProcessor repository with its history (OpenProcessor #85). Its tests read the repository's generated `contracts/` directory instead of a vendored copy, and the Cropwright documentation is a section of the one docs site (`docs-site/`).
 
 ### Changed
 
@@ -56,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tsconfig.json` extends `$app/tsconfig` (SvelteKit 3 no longer writes `.svelte-kit/tsconfig.json`) and
   lists its sources explicitly, so root config scripts are not type-checked.
 - Dropped the `cookie` override; SvelteKit 3 depends on the fixed 2.x line.
+
+### Fixed
+
+- No page overflows horizontally at 430px (#184). The project top bar wraps to two rows below 768px (logo, project switcher, Resources and the API chip on the first, the scrolling nav strip on the second; the wordmark and breadcrumb are hidden below 640px). `/review`'s tab strip and queue counter wrap the same way, so the tabs are no longer squeezed. On `/projects` an `sr-only` table header escaped its scroll container and widened the page; the container is now positioned so it clips it. New stubbed e2e `test_narrow_viewport_430.py` asserts no horizontal overflow at 430px on every project route and `/projects`.
+- nginx uses `absolute_redirect off`, so redirects no longer point at container port 8080.
 
 ## [0.1.1] - TBD
 

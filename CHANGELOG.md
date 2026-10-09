@@ -7,105 +7,184 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases 0.2.0, 0.2.1 and 0.3.0 are published on GitHub; their entries below are
 the content of those tags. The entry headed `Pre-release 0.1.0` is the earliest private
-history of this codebase and was never published. This release is `[0.4.1]`.
+history of this codebase and was never published. This release is `[0.5.0]`.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
+The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate
+repository) are now built, tested, pinned and released together from this repository, with one
+documentation site. It also delivers label confirmation (#119), the one-port gateway (#93), the
+registry prior for VLM labeling (#61 item 2), a refreshed dependency set and the file splits of
+#168.
+
+**BREAKING CHANGES.** (1) The compose service `yolo-api` is renamed `api` (#62): every
+`docker compose exec|logs|restart yolo-api`, `./openprocessor logs|restart yolo-api`, custom
+override file, script and dashboard that names the old service must change, and an existing
+install needs `docker compose up -d --remove-orphans` (the CLI, the installer, `make up` and
+`scripts/setup.sh` now pass it themselves). (2) The unread `ocr_det_model`, `ocr_det_version`,
+`ocr_det_input_size` and `ocr_det_prob_floor` region profile fields are removed (#181): a stored
+or submitted profile that still carries one is rejected with `profile_field_unknown`, and
+`region_text_engine_version` is now stamped `<rec model>:<version>`. (3) `POST /clusters/auto_promote`
+and the auto-label auto-promote stage are gated on the accuracy audit (#119), so the
+`curation-cluster-refresh` daemon promotes nothing until the audit clears a class. (4) The
+experiment-tracking server and the trainer move to MLflow 3 (an existing `mlflow_data` volume
+upgrades in place), and browsing MLflow by a DNS name needs `MLFLOW_ALLOWED_HOSTS`.
+
 ### Added
 
-- Registry prior for VLM labeling (#61): a prompt pack's `registry_prior_top_k` (0 = off, max 50)
-  adds the top-k registry classes by validated count and the pending proposal names to the
-  open-vocabulary prompt as a hint. Served in the pack schema as `kind: "int"`; a new
-  `pack_field_out_of_range` validation code; the run refuses when the counts are unreadable.
-- Gateway mode (#93): `OP_GATEWAY_SUBPATHS=true` makes Cropwright's nginx serve
-  Grafana, Prometheus, OpenSearch Dashboards and MLflow under `/grafana/`,
-  `/prometheus/`, `/dashboards/` and `/mlflow/` of its one published port, so the UIs
-  stay on `127.0.0.1`. One switch in `docker-compose.yml` starts each UI serving from
-  its sub-path, the API serves the path-relative `resource_links` and MLflow run
-  links (an explicit `OP_*_URL` still wins and a `0` port still hides the link), and
-  nginx upgrades Grafana Live websockets and forwards `Host` and `X-Forwarded-*`.
-  Fail closed: the UIs refuse to start when published beyond loopback, and Grafana
-  refuses the default or an empty admin password. Prometheus and MLflow still have no
-  authentication (`SECURITY.md`). The link audit is in the monitoring guide.
+- The Cropwright frontend lives in `frontend/` (#85), merged with its scrubbed history (no squash;
+  the `cropwright-v0.1.0` and `cropwright-v0.1.1` tags are kept). It is an opt-in `cropwright`
+  compose profile on the stack's own network (UI bind follows `OP_UI_BIND_ADDRESS`, or
+  `CROPWRIGHT_BIND_ADDRESS` for it alone), built from `frontend/Dockerfile` by
+  `docker-compose.dev.yml`, and its tests read the generated `contracts/` directory through a
+  `$contracts` alias instead of a vendored copy. Frontend checks, tests, e2e and the changelog
+  rule run from the root workflows, path-filtered to `frontend/**` and `contracts/**`, and
+  Dependabot covers `frontend/`. The Cropwright documentation is a section of `docs-site/`.
+- Gateway mode (#93): `OP_GATEWAY_SUBPATHS=true` makes Cropwright's nginx serve Grafana,
+  Prometheus, OpenSearch Dashboards and MLflow under `/grafana/`, `/prometheus/`, `/dashboards/`
+  and `/mlflow/` of its one published port, so the UIs stay on `127.0.0.1`. One switch in
+  `docker-compose.yml` starts each UI serving from its sub-path, the API serves path-relative
+  `resource_links` and MLflow run links (an explicit `OP_*_URL` still wins and a `0` port still
+  hides the link), and nginx upgrades Grafana Live websockets and forwards `Host` and
+  `X-Forwarded-*`. With the switch off the four sub-paths answer 404. Set it in `.env`; there is
+  no installer flag. The link audit is in the monitoring guide.
+- Per-project VLM scope policy (#119): `GET/PUT /vlm/policy` sets which crops the automated VLM
+  class writers (the `curation-vlm-worker` and the `auto_label` VLM stage) may label: `scope`
+  `all` (the default, unchanged behaviour), `uncertain`, `representatives` or `off`, plus
+  `max_crops_per_day` and `sample_frac`. Explicit requests (`/vlm/label_cluster/{id}`, a
+  `cluster_id`-scoped run) are never limited. `auto_label/start` and `POST /pipeline/auto_label`
+  accept a `vlm_scope` override. The policy is cloned with the project.
+- Items keep the detector's own answer (#119): `detector_class_name` (registry-name form),
+  `detector_confidence` and, when the label is a registry class, `detector_class_id`, written at
+  ingest whatever the `class_resolution` and never by a VLM, classifier or human relabel. Served
+  on the item wire; existing indexes get the three fields mapped on the next bootstrap. Items
+  ingested before this change have no detector fields (no backfill).
+- Review tab `detector_disagreements` (#119): unvalidated items whose VLM class differs from the
+  detector's own class, listed by `GET /review/tabs` and `GET /review/{tab}`.
+- Accuracy audit (#119): `POST /audit/start` draws a stratified sample (per detector class,
+  deterministic) of machine-labelled crops, `GET /audit/queue` lists those still waiting for a
+  human, and every human label on a drawn crop stamps `audit_outcome` (`agree`, `detector_wrong`,
+  `vlm_wrong`, `both_wrong`). `GET /audit/report` gives per-class detector and VLM precision with
+  Wilson 95% intervals, the confusion matrix and an `insufficient_sample` flag.
+- Label confirmation in Cropwright (#119): a VLM scope panel on `/settings`; the detector's own
+  class and score beside a VLM-sourced label, with the label source worded "VLM suggestion",
+  "Human-confirmed" or "Auto-validated"; a Detector Disagreements tab on `/review`; a new `/audit`
+  page (draw a sample, per-class precision with intervals, confusion matrix, queue of crops
+  waiting for a human); and `/export` states how many crops are validated and that only validated
+  crops are exported.
+- Registry prior for VLM labeling (#61 item 2): a prompt pack's `registry_prior_top_k` (0 = off,
+  the default, max 50) adds the top-k registry classes by validated count and the pending
+  proposal names to the open-vocabulary prompt as a hint. Served in the pack schema as
+  `kind: "int"`; a new `pack_field_out_of_range` validation code; the run refuses (503 from
+  `label_batch`, a stage error from the pipeline) when the counts are unreadable.
+  `scripts/curation/bakeoff/vlm_prior_oracle.py` compares a run with the prior off and on.
 
-### Fixed
+### Changed
 
-- Cropwright's nginx now answers redirects with relative `Location` headers; the
-  `/OpenProcessor` redirect used to name the container port 8080.
+- **Breaking:** the compose service `yolo-api` is renamed `api` (#62). The Prometheus job and Loki
+  service label are `api` too. The container name (`<project>-api`), the `op-api` network alias
+  and all data volumes are unchanged. An existing install is upgraded by `./openprocessor upgrade`
+  (or `docker compose up -d --remove-orphans`), which replaces the old container; every start
+  path (`start`, `make up`, `scripts/setup.sh`, the installer's control-plane-only path) now
+  passes `--remove-orphans`, because the old container holds the same name and would otherwise
+  make the new one fail to create.
+- **Behaviour change:** `POST /clusters/auto_promote` (and the `auto_label` auto-promote stage) is
+  gated on the audit (#119): a class is promoted only with enough audited crops and an audited
+  detector precision of at least `promote_min_precision` (default 0.95); otherwise `409
+  audit_required` or `409 audit_precision_low` lists the classes and nothing is written.
+  `force=true` bypasses the gate (logged); a dry run is never gated. `curation-cluster-refresh`
+  promotes nothing until the audit clears a class.
+- `region_text_engine_version` is stamped `<rec model>:<version>` (was `<det>:<ver>+<rec>:<ver>`)
+  after the unread detection fields were removed (see Removed).
+- The backend and frontend dependency sets are refreshed (#151 and the Dependabot groups it
+  superseded): FastAPI 0.143 and Pydantic 2.14 (contracts regenerated; the route walks use
+  `iter_route_contexts` because FastAPI wraps included routers), SvelteKit 3 with
+  `@sveltejs/adapter-static` 4 on TypeScript 6 (options now in `sveltekit.options.js`),
+  Playwright 1.63, the backend group (#170: opencv-python-headless, pytest 9.1, pytest-playwright,
+  playwright), `aiohttp>=3.14.4`, `locust>=2.46.7`, nginx-unprivileged 1.31 for the docs and
+  Cropwright images, TypeScript 6.0.3 in `docs-site`, and the GitHub Actions group. Pydantic
+  models use `ConfigDict` and `SettingsConfigDict` (#156). `onnx` (needs `nvidia-modelopt[onnx]`
+  with `onnx~=1.21`) and `huggingface-hub` 2.x (`tokenizers` requires <2) are deliberately held
+  back; Dependabot ignores both with the reason in its config.
+- The experiment-tracking server and the trainer client move to MLflow 3.17 together (#120). The
+  server image is `ghcr.io/mlflow/mlflow:v3.17.0` and the trainer pins `mlflow>=3.17,<4`. An
+  existing `mlflow_data` volume upgrades in place on first start: runs, artifacts and registered
+  models from 2.x stay readable. MLflow 3 answers `403 Invalid Host header` to any `Host` outside
+  its allowed list, so `docker-compose.yml` now sets that list: the in-network service and
+  container names plus the localhost and private-IP defaults. Browsing MLflow by a DNS name needs
+  `MLFLOW_ALLOWED_HOSTS` (it replaces the whole list; see `env.template`).
+- The segmenter image moves to PyTorch 2.14.1 (`pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime`,
+  superseding dependabot #147) and `alpine/git` v2.54.0. The new base is Ubuntu 24.04, so the
+  image now runs Python 3.12 (was 3.11), installs with `PIP_BREAK_SYSTEM_PACKAGES=1` and replaces
+  the base's `ubuntu` user so `appuser` keeps uid 1000. SAM 3 outputs match the previous image.
+  Rebuild the segmenter image to pick this up.
+- The release flow builds Cropwright from `frontend/`: it is the sixth built image in
+  `scripts/lib/image_keys.sh` (`cropwright`, pushed as `davidamacey/cropwright:<version>`), so
+  `make release` pins its digest in `images.lock` with the other images. `cropwright.lock`, the
+  `CW_*` variables, the `<project>-cw` second compose project and the staging of Cropwright files
+  into the deploy bundle are gone; the `cropwright` tier is a profile of the main compose project
+  and its port and bind address go in the install `.env`. `make release-verify` now uses a
+  throwaway compose project (it failed whenever a stack was running), and an installer run from a
+  release directory verifies itself against that release's `SHA256SUMS`.
+- The version is `0.5.0` everywhere the version-consistency test checks, and the Cropwright
+  `package.json` and image build argument follow the monorepo version (its standalone numbering,
+  0.1.x, ends here).
+- No source file under `src/` or `scripts/` is over 700 lines, and the size hook has no
+  exemptions (#168, #62): `opensearch.py`, `curation_opensearch.py`, `end2end_export.py`,
+  `vlm_labeler.py`, the worker runner, the train router, `jobs.py`, `triton_promote.py`, the
+  ingest and search routers, `cascade_detect`, the clustering orchestrator, `visual_search`,
+  `face_identity` and `duplicate_detection` are split into cohesive modules or packages. The job
+  state helpers moved onto `FileJob`. No route, wire name or behaviour changes.
+- The SARIF Trivy scan honours the CRITICAL/HIGH gate (`limit-severities-for-sarif`).
 
 ### Removed
 
 - The region profile fields `ocr_det_model`, `ocr_det_version`, `ocr_det_input_size` and
-  `ocr_det_prob_floor` (#181): nothing read them since `PaddleOcrRegionDetector` was
-  deleted. They leave `DetectionProfile`, the `/region_profiles` body and schema (and the
-  `ocr_det_models` `choices_from` value), `examples/region_profiles/license_plate.json` and
-  the contracts. A stored or submitted profile that still carries one is rejected with a
-  message naming it (`profile_field_unknown`); delete the keys from the document. The
-  `ocr_engine_id` stamped as `region_text_engine_version` is now `<rec model>:<version>`
-  instead of `<det>:<ver>+<rec>:<ver>`. `OCR_DET_MODEL` (the `/ocr` endpoint's Triton
-  model) is unchanged.
-
-### Changed
-
-- **Breaking:** the compose service `yolo-api` is renamed `api` (#62). `docker compose exec yolo-api ...`,
-  `docker compose logs yolo-api` and `./openprocessor logs|restart yolo-api` become
-  `... api`; the Prometheus job and Loki service label are `api` too. Custom overrides, scripts
-  and dashboards that name the old service must change. The container name
-  (`<project>-api`), the `op-api` network alias and all data volumes are unchanged. An existing
-  install is upgraded by `./openprocessor upgrade` (or `docker compose up -d --remove-orphans`),
-  which replaces the old container; every start path (`start`, `make up`, `scripts/setup.sh`,
-  the installer's control-plane-only path) now passes `--remove-orphans`, because the old
-  container holds the same name and would otherwise make the new one fail to create.
-- The segmenter image moves to PyTorch 2.14.1 (`pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime`,
-  superseding dependabot #147) and `alpine/git` v2.54.0. The new base is Ubuntu 24.04, so the
-  image now runs Python 3.12 (was 3.11), installs with `PIP_BREAK_SYSTEM_PACKAGES=1` and
-  replaces the base's `ubuntu` user so `appuser` keeps uid 1000. SAM 3 outputs match the
-  previous image. Rebuild the segmenter image to pick this up.
-- The experiment-tracking server and the trainer client move to MLflow 3.17 together
-  (#120). The server image is `ghcr.io/mlflow/mlflow:v3.17.0` and the trainer pins
-  `mlflow>=3.17,<4`. An existing `mlflow_data` volume upgrades in place on first start:
-  runs, artifacts and registered models from 2.x stay readable. MLflow 3 answers
-  `403 Invalid Host header` to any `Host` outside its allowed list, so
-  `docker-compose.yml` now sets that list: the in-network service and container names
-  plus the localhost and private-IP defaults. Browsing MLflow by a DNS name needs
-  `MLFLOW_ALLOWED_HOSTS` (it replaces the whole list; see `env.template`).
+  `ocr_det_prob_floor` (#181): nothing read them since `PaddleOcrRegionDetector` was deleted
+  (#174). They leave `DetectionProfile`, the `/region_profiles` body and schema (and the
+  `ocr_det_models` `choices_from` value), `examples/region_profiles/license_plate.json`, the
+  contracts and Cropwright's fixtures. A stored or submitted profile that still carries one is
+  rejected with a message naming it (`profile_field_unknown`); delete the keys from the document.
+  `OCR_DET_MODEL` (the `/ocr` endpoint's Triton model) is unchanged.
+- Dead code (#174): `PaddleOcrRegionDetector` (the module `cascade_detect/paddle_det.py`),
+  `ITEMS_CLUSTER_INDEX` and `assign_cluster_to_crop`, with their imports and stale docstrings.
 - The seven mlflow 2.x CVEs are no longer in the Trivy allowlist.
-
-### Added
-
-- Per-project VLM scope policy (#119): `GET/PUT /vlm/policy` sets which crops the
-  automated VLM class writers (the `curation-vlm-worker` and the `auto_label` VLM
-  stage) may label: `scope` `all` (the default, unchanged behaviour), `uncertain`,
-  `representatives` or `off`, plus `max_crops_per_day` and `sample_frac`. Explicit
-  requests (`/vlm/label_cluster/{id}`, a `cluster_id`-scoped run) are never limited.
-  `auto_label/start` and `POST /pipeline/auto_label` accept a `vlm_scope` override.
-  The policy is cloned with the project.
-- Items keep the detector's own answer (#119): `detector_class_name` (registry-name
-  form), `detector_confidence` and, when the label is a registry class,
-  `detector_class_id`, written at ingest whatever the `class_resolution` and never by
-  a VLM, classifier or human relabel. Served on the item wire; existing indexes get
-  the three fields mapped on the next bootstrap. Items ingested before this change
-  have no detector fields (no backfill).
-- Review tab `detector_disagreements` (#119): unvalidated items whose VLM class differs
-  from the detector's own class, listed by `GET /review/tabs` and `GET /review/{tab}`.
-- Accuracy audit (#119): `POST /audit/start` draws a stratified sample (per detector
-  class, deterministic) of machine-labelled crops, `GET /audit/queue` lists those still
-  waiting for a human, and every human label on a drawn crop stamps `audit_outcome`
-  (`agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`). `GET /audit/report` gives
-  per-class detector and VLM precision with Wilson 95% intervals, the confusion matrix
-  and an `insufficient_sample` flag.
-- `POST /clusters/auto_promote` (and the `auto_label` auto-promote stage) is gated on the
-  audit (#119): a class is promoted only with enough audited crops and an audited detector
-  precision of at least `promote_min_precision` (default 0.95); otherwise `409
-  audit_required` or `409 audit_precision_low` lists the classes and nothing is written.
-  `force=true` bypasses the gate (logged); a dry run is never gated. Behaviour change:
-  `curation-cluster-refresh` promotes nothing until the audit clears a class.
+- The standalone `cropwright-docs` service: the docs are a section of the one docs site.
 
 ### Fixed
 
-- The VLM worker and the `auto_label` sweep no longer select frozen-holdout or excluded
-  items (#119). Before, only a `cluster_id`-scoped run left them out, so the sweep paid VLM calls
-  for items the label lock then refused or that were meant to be out of the pipeline.
+- The VLM worker and the `auto_label` sweep no longer select frozen-holdout or excluded items
+  (#119). Before, only a `cluster_id`-scoped run left them out, so the sweep paid VLM calls for
+  items the label lock then refused or that were meant to be out of the pipeline.
+- No Cropwright page overflows horizontally at 430 px (#184): the project top bar wraps to two
+  rows below 768 px, `/review`'s tab strip and queue counter wrap instead of squeezing the tabs,
+  and on `/projects` an `sr-only` table header no longer widens the page. This is covered by the
+  stubbed e2e suite; it has not been checked against a live backend.
+- `scripts/lib/download.sh` and `export_paddleocr.sh` looked for the running container by its bare
+  service name (`api`, `triton-server`) while containers are named `<project>-<service>`, so the
+  check never hit and the temporary-container branch always ran; both now resolve the service
+  through compose with an explicit project (#187).
+- Cropwright's nginx answers redirects with relative `Location` headers (`absolute_redirect
+  off`); the `/OpenProcessor` redirect used to name the container port 8080.
+- `/health` and `/projects/{p}/health` took a constant ~3 s whenever the optional VLM was not
+  running (the probe went through the labeling retry loop), so every UI page waited before
+  painting. The probe makes one attempt: 3.05 s to 0.02 s on a live stack.
+- The documented dev setup installed `faiss-cpu` and `faiss-gpu-cu12` together and broke the
+  faiss tests; `CLAUDE.md` and `CONTRIBUTING.md` now use the CI recipe.
+- The docs-vs-code and link checkers read untracked local files; they now read tracked files only.
+  The `api-contracts-drift` hook ran the system Python and crashed; it now prefers `.venv/bin/python`.
+- The Cropwright clusters page clipped its toolbar at narrow widths; the class sidebar now stacks
+  above the content below `md`.
+
+### Security
+
+- Gateway mode fails closed: with `OP_GATEWAY_SUBPATHS=true` the monitoring UIs refuse to start
+  when published beyond loopback, and Grafana refuses the default or an empty admin password.
+  Prometheus and MLflow still have no authentication (`SECURITY.md`).
+- Unchanged and stated plainly: the API has no authentication, and Grafana keeps the default
+  `admin` password on LAN-only installs (change it before exposing the stack).
 
 ## [0.4.1] - 2026-10-04
 
