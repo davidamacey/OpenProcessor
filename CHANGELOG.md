@@ -30,11 +30,21 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ### Fixed
 
+- The dashboard's "Last clustering" card no longer shows "—" for When and Method
+  while clusters exist (#197). The served `clusters.last_run_at` and `method` came only
+  from the auto-label job's state file, which the cluster-refresh daemon's synchronous
+  `POST /pipeline/auto_label` never writes. Every residual-clustering run now records
+  itself (`clustering/last_run.py`, called by `cluster_residuals` and
+  `assign_only_residuals`) and the stats serve that record.
 - Cropwright's nginx now answers redirects with relative `Location` headers; the
   `/OpenProcessor` redirect used to name the container port 8080.
 - Config-store writes (prompt packs, region profiles, open-vocabulary sets, VLM endpoints,
   activations) now wait for an index refresh, so a clone followed at once by a GET no longer
   answers 404 (#196).
+- VLM scope `representatives` is bounded (#192): a labelled representative moving to its class
+  cluster no longer pulls in the next-nearest members. Each cluster's reps are claimed once and
+  stored, so total attempts stay within `per_cluster` per original cluster across refreshes,
+  restarts and policy edits.
 
 ### Removed
 

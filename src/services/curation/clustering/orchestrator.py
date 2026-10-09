@@ -31,6 +31,7 @@ from src.services.curation.clustering.cluster_write_guard import (
     _guarded_class_cluster_write,
     _log_bulk_write_errors,
 )
+from src.services.curation.clustering.last_run import record_last_run
 from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
 from src.services.curation.clustering.residual_gate import (
     _park_gated_residuals,
@@ -275,7 +276,7 @@ async def cluster_residuals(
     except Exception as exc:
         logger.warning('curation_cluster_save_gate_failed', error=str(exc))
 
-    return {
+    summary = {
         'status': 'success',
         'method': result.method,
         'mode': mode_label,
@@ -293,6 +294,8 @@ async def cluster_residuals(
         'cluster_method_params': result.params,
         'cluster_method_extra': result.extra,
     }
+    record_last_run(summary)
+    return summary
 
 
 async def assign_only_residuals(
@@ -408,7 +411,7 @@ async def assign_only_residuals(
             client, max_rank=gate_max_rank, min_blur_ratio=gate_min_blur_ratio
         )
 
-    return {
+    summary = {
         'status': 'success',
         'method': 'ivf_assign_only',
         'n_assigned': n_written,
@@ -418,3 +421,5 @@ async def assign_only_residuals(
         'cluster_id_offset': RESIDUAL_CLUSTER_ID_OFFSET,
         'centroids_trained_at': store.metadata.get('trained_at'),
     }
+    record_last_run(summary)
+    return summary

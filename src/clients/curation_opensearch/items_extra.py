@@ -37,6 +37,7 @@ ITEMS_EXTRA_MAPPING: dict[str, Any] = {**DETECTOR_MAPPING, **AUDIT_MAPPING}
 POLICY_DOC_MAPPING: dict[str, Any] = {
     'ingest_policy': {'type': 'object', 'enabled': False},
     'vlm_policy': {'type': 'object', 'enabled': False},
+    'vlm_scope_reps': {'type': 'object', 'enabled': False},
 }
 
 
