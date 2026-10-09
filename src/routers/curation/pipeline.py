@@ -150,7 +150,7 @@ async def _run_auto_label(
 
     from src.routers.curation.pipeline_health import pipeline_health_snapshot
     from src.services.curation.autolabel.job import with_elapsed_tick
-    from src.services.curation.clustering.auto_promote import auto_promote_clusters
+    from src.services.curation.clustering.auto_promote import gated_auto_promote
     from src.services.curation.image_serving import THUMBNAIL_CACHE
     from src.services.labeling.vlm_labeler import ItemCrop
 
@@ -329,7 +329,7 @@ async def _run_auto_label(
             logger.warning('pipeline_pre_promote_refresh_failed', error=str(exc))
         promote = await with_elapsed_tick(
             progress,
-            auto_promote_clusters(
+            gated_auto_promote(
                 opensearch,
                 min_purity=promote_min_purity,
                 min_members=promote_min_members,

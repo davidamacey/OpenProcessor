@@ -196,6 +196,8 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             }
         },
         ('POST', '/ingest/policy/preview'): {'json': {'embedding': {'mode': 'lazy'}}},
+        # The sweep checks where the write lands, not the audit gate (its own tests do).
+        ('POST', '/clusters/auto_promote'): {'params': {'force': 'true'}},
         ('PUT', '/vlm/policy'): {
             'json': {'expected_revision': 0, 'scope': 'uncertain', 'max_crops_per_day': 7}
         },

@@ -92,9 +92,16 @@ unassigned/noise, `0..N` mirrors class ids, and ids from 10000 up are
 **candidate** clusters that still need a class. Each card carries
 `cluster_kind`, dominant class, purity, validated count, sub-clusters
 and representatives; `POST /clusters/refine/{cluster_id}` splits one
-further, and `POST /clusters/auto_promote` validates items in
-high-purity clusters. `curation-cluster-refresh` re-runs auto-promote as
-each project's pool grows.
+further, and `POST /clusters/auto_promote` validates classifier-labelled
+items in high-purity clusters. Promotion is gated on the accuracy audit
+([section 5](#5-label-vlm-suggestions-and-review-queues)): every class a run
+would promote needs at least `min_per_class` audited crops and an audited
+detector precision of at least `promote_min_precision` (default 0.95), else
+the call answers `409 audit_required` or `409 audit_precision_low` with the
+classes listed and writes nothing. `force=true` bypasses the gate and is
+logged; a dry run is never gated. `curation-cluster-refresh` calls
+auto-promote as each project's pool grows, so it promotes nothing until the
+audit clears the classes.
 
 ## 5. Label: VLM suggestions and review queues
 

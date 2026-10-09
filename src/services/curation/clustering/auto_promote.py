@@ -20,7 +20,7 @@ skipping this stage.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config.curation import items_index
@@ -29,6 +29,7 @@ from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, C
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
+    PROMOTE_MIN_PRECISION,
     PROMOTE_MIN_PURITY,
     is_promotable,
 )
@@ -292,7 +293,9 @@ async def auto_promote_clusters(
             # touches (which is also gated on class_source and
             # class_validated=false). Count the real query instead.
             count_resp = await client.count(index=items_index(), body={'query': promote_query})
-            total_promoted += int(count_resp.get('count', 0))
+            would_promote = int(count_resp.get('count', 0))
+            summaries[-1]['would_promote'] = would_promote
+            total_promoted += would_promote
             continue
 
         try:
@@ -380,4 +383,115 @@ async def auto_promote_clusters(
     }
 
 
-__all__ = ['auto_promote_clusters']
+AuditGateCode = Literal['audit_required', 'audit_precision_low']
+
+
+class AuditGateError(Exception):
+    """Promotion refused: a class it would promote has no trustworthy audit.
+
+    ``code`` is ``audit_required`` (too few audited crops of the class) or
+    ``audit_precision_low`` (enough, but the detector was right too rarely);
+    ``classes`` lists the offenders as ``{name, audited, precision}``.
+    """
+
+    def __init__(
+        self, code: AuditGateCode, classes: list[dict[str, Any]], threshold: float
+    ) -> None:
+        self.code = code
+        self.classes = classes
+        self.threshold = threshold
+        names = ', '.join(c['name'] for c in classes)
+        super().__init__(f'{code}: {names} (needs audited detector precision >= {threshold})')
+
+
+async def audit_gate_offenders(
+    client: AsyncOpenSearch,
+    classes: set[str],
+    *,
+    promote_min_precision: float,
+    min_per_class: int,
+) -> tuple[AuditGateCode, list[dict[str, Any]]] | None:
+    """``(code, offenders)`` for the classes whose audit does not clear the gate, or
+    ``None``. The audit is the detector's precision per detector class: an
+    auto-promoted label is a classifier label, which agrees with the detector."""
+    from src.services.curation.audit import load_report
+    from src.utils.class_names import normalize_class_name
+
+    report = await load_report(client, min_per_class=min_per_class)
+    stats = {row['name']: row for row in report['detector']}
+    unaudited: list[dict[str, Any]] = []
+    low: list[dict[str, Any]] = []
+    for name in sorted(classes):
+        row = stats.get(normalize_class_name(name))
+        entry = {
+            'name': name,
+            'audited': row['n'] if row else 0,
+            'precision': row['precision'] if row else None,
+        }
+        if row is None or row['insufficient_sample']:
+            unaudited.append(entry)
+        elif row['precision'] < promote_min_precision:
+            low.append(entry)
+    if unaudited:
+        return 'audit_required', unaudited + low
+    if low:
+        return 'audit_precision_low', low
+    return None
+
+
+async def gated_auto_promote(
+    client: AsyncOpenSearch,
+    *,
+    min_purity: float = PROMOTE_MIN_PURITY,
+    min_members: int = PROMOTE_MIN_MEMBERS,
+    dry_run: bool = False,
+    promote_min_precision: float = PROMOTE_MIN_PRECISION,
+    min_per_class: int | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """:func:`auto_promote_clusters` behind the accuracy-audit gate.
+
+    A class is promoted only when the audit holds at least ``min_per_class``
+    human-labelled crops the detector gave that class and its detector precision is
+    at least ``promote_min_precision``; otherwise :class:`AuditGateError`, with
+    nothing written. Only the classes a run would really promote are checked. A dry
+    run only counts, so it is never gated; ``force`` skips the gate (logged).
+    """
+    if dry_run:
+        return await auto_promote_clusters(
+            client, min_purity=min_purity, min_members=min_members, dry_run=True
+        )
+    from src.services.curation.audit import DEFAULT_MIN_PER_CLASS
+
+    floor = min_per_class or DEFAULT_MIN_PER_CLASS
+    preview = await auto_promote_clusters(
+        client, min_purity=min_purity, min_members=min_members, dry_run=True
+    )
+    classes = {
+        str(c['top_class'])
+        for c in preview['clusters']
+        if c.get('promote') and c.get('would_promote')
+    }
+    failed = (
+        await audit_gate_offenders(
+            client, classes, promote_min_precision=promote_min_precision, min_per_class=floor
+        )
+        if classes
+        else None
+    )
+    if failed is not None:
+        code, offenders = failed
+        if not force:
+            raise AuditGateError(code, offenders, promote_min_precision)
+        logger.warning(
+            'auto_promote_audit_gate_bypassed',
+            code=code,
+            classes=[c['name'] for c in offenders],
+            promote_min_precision=promote_min_precision,
+        )
+    return await auto_promote_clusters(
+        client, min_purity=min_purity, min_members=min_members, dry_run=False
+    )
+
+
+__all__ = ['AuditGateError', 'auto_promote_clusters', 'gated_auto_promote']

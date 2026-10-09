@@ -514,6 +514,38 @@
         "title": "AuditClassStat",
         "type": "object"
       },
+      "AuditGateClass": {
+        "properties": {
+          "audited": {
+            "description": "Human-labelled audited crops of this detector class.",
+            "title": "Audited",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Audited detector precision; null with none.",
+            "title": "Precision"
+          }
+        },
+        "required": [
+          "name",
+          "audited",
+          "precision"
+        ],
+        "title": "AuditGateClass",
+        "type": "object"
+      },
       "AuditQueueResponse": {
         "properties": {
           "items": {
@@ -3839,6 +3871,20 @@
             ],
             "title": "Class Name"
           },
+          "classes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AuditGateClass"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classes"
+          },
           "crop_ids": {
             "anyOf": [
               {
@@ -3977,7 +4023,9 @@
               "profile_invalid",
               "segmenter_error",
               "detector_error",
-              "audit_no_candidates"
+              "audit_no_candidates",
+              "audit_required",
+              "audit_precision_low"
             ],
             "title": "Error",
             "type": "string"
@@ -4126,6 +4174,17 @@
               }
             ],
             "title": "Projects"
+          },
+          "promote_min_precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promote Min Precision"
           },
           "reasons": {
             "anyOf": [
@@ -31358,7 +31417,7 @@
     },
     "/curation/projects/{project}/clusters/auto_promote": {
       "post": {
-        "description": "Promote crops in high-purity clusters to ``label_validated=true``.\n\nSets ``label_source='cluster_propagation'`` and copies the dominant\ncluster class to every member that isn't already human-validated.",
+        "description": "Promote classifier-labelled crops that agree with their high-purity cluster.\n\nValidates each such crop (``class_source='cluster_majority_agreement'``).\nGated on the accuracy audit (``POST /audit/start``): every class the run would\npromote needs enough audited crops and an audited detector precision of at\nleast ``promote_min_precision``, else ``409 audit_required`` or\n``409 audit_precision_low`` listing the classes and nothing is written.\n``force=true`` bypasses the gate; a dry run is never gated.",
         "operationId": "auto_promote_clusters_endpoint_curation_projects__project__clusters_auto_promote_post",
         "parameters": [
           {
@@ -31409,6 +31468,32 @@
               "title": "Dry Run",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Audited detector precision a class needs to be promoted",
+            "in": "query",
+            "name": "promote_min_precision",
+            "required": false,
+            "schema": {
+              "default": 0.95,
+              "description": "Audited detector precision a class needs to be promoted",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Promote Min Precision",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Promote without the accuracy-audit gate (logged)",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Promote without the accuracy-audit gate (logged)",
+              "title": "Force",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -31423,6 +31508,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {

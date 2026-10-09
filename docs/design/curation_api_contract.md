@@ -1363,7 +1363,7 @@ Cluster ids partition into ranges:
 |---|---|---|
 | GET | `/clusters` | cluster cards. Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit` |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters`, `class_id`, `offset` |
-| POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`. Validates members of pure clusters |
+| POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`, `promote_min_precision` (default 0.95), `force`. Validates classifier-labelled members of pure clusters. Refused with `409 audit_required` / `audit_precision_low` (and `classes`) unless every class it would promote has enough audited crops at the required detector precision, or `force=true`; a dry run is never gated |
 | POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
 | POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool and re-cluster it. Returns the clustering summary |
 

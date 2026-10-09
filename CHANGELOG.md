@@ -46,6 +46,12 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   (`agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`). `GET /audit/report` gives
   per-class detector and VLM precision with Wilson 95% intervals, the confusion matrix
   and an `insufficient_sample` flag.
+- `POST /clusters/auto_promote` (and the `auto_label` auto-promote stage) is gated on the
+  audit (#119): a class is promoted only with enough audited crops and an audited detector
+  precision of at least `promote_min_precision` (default 0.95); otherwise `409
+  audit_required` or `409 audit_precision_low` lists the classes and nothing is written.
+  `force=true` bypasses the gate (logged); a dry run is never gated. Behaviour change:
+  `curation-cluster-refresh` promotes nothing until the audit clears a class.
 
 ## [0.4.1] - 2026-10-04
 

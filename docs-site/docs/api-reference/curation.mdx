@@ -254,7 +254,7 @@ See [Keymaps](../guides/keymaps.mdx).
 | GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, `purity` (geometry), `label_agreement` (label share), validated count, sub-clusters, representatives |
 | GET | `/clusters/representatives` | Representatives only |
 | POST | `/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
-| POST | `/clusters/auto_promote` | Validate items in high-purity clusters |
+| POST | `/clusters/auto_promote` | Validate classifier-labelled items in high-purity clusters. Gated on the accuracy audit: `409 audit_required` / `409 audit_precision_low` (with `classes`) unless `force=true`; `promote_min_precision` defaults to 0.95; `dry_run` is never gated |
 | POST | `/cluster/umap/rebuild` | Rebuild the residual reducer |
 | GET | `/viz/projection` | Cached 2-D coordinates for plotting; never fits inline |
 | POST | `/viz/projection/rebuild` | Start the projection fit job |
