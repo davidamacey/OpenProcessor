@@ -29,6 +29,16 @@ updates:
       # EfficientNMS end2end patch breaks on 8.4. requirements.txt already carries the
       # 8.4 range for YOLO26. Dependabot cannot ignore per file, so bump the pin by hand.
       - dependency-name: "ultralytics"
+      # nvidia-modelopt[onnx] requires onnx~=1.21, so requirements.txt and the export
+      # toolchain cap onnx below 1.22. Lift the cap and this rule together when modelopt does.
+      - dependency-name: "onnx"
+        versions: [">=1.22.0"]
+      # tokenizers (a transformers dependency) requires huggingface-hub<2, so hub 2.x does not
+      # resolve with the current stack (pip check fails). Lift once tokenizers allows 2.x.
+      - dependency-name: "huggingface-hub"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "huggingface_hub"
+        update-types: ["version-update:semver-major"]
 
   # Cropwright frontend: one PR.
   - package-ecosystem: "npm"
@@ -49,10 +59,10 @@ updates:
         patterns:
           - "*"
     ignore:
-      # TypeScript 7 conflicts with svelte-check and @sveltejs/kit peer ranges (^5 || ^6);
-      # un-ignore once svelte-check ships TS 7 support.
+      # TypeScript 7 conflicts with svelte-check, typescript-eslint and @sveltejs/kit peer
+      # ranges (all stop at 6.x); un-ignore once they ship TS 7 support.
       - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
+        versions: [">=7.0.0"]
 
   # Docusaurus site: one PR.
   - package-ecosystem: "npm"
