@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import Query
 
-from src.clients.curation_opensearch import mget_crops
+from src.clients.curation_opensearch.crops import mget_crops
 from src.config import get_region_fields
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.routers.curation._common import (

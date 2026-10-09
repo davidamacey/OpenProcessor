@@ -61,7 +61,7 @@ def test_clone_settings_copies_defaults() -> None:
     from src.config.project_context import bind_project
 
     with bind_project(source):
-        from src.clients.curation_opensearch import update_curation_settings
+        from src.clients.curation_opensearch.settings_doc import update_curation_settings
 
         asyncio.run(update_curation_settings(client, {'axis_x': 'value_x'}))
 
@@ -72,7 +72,7 @@ def test_clone_settings_copies_defaults() -> None:
     )
 
     with bind_project(target):
-        from src.clients.curation_opensearch import get_curation_settings
+        from src.clients.curation_opensearch.settings_doc import get_curation_settings
 
         cloned = asyncio.run(get_curation_settings(client))
     assert cloned['defaults'].get('axis_x') == 'value_x'

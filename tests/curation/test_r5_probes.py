@@ -23,13 +23,13 @@ pytestmark = pytest.mark.usefixtures('vlm_env')
 
 @pytest.fixture(autouse=True)
 def _reset_caches():
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import settings_doc
     from src.services.config_store.store import reset_config_stores
 
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     reset_config_stores()
     yield
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     reset_config_stores()
 
 

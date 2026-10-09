@@ -144,7 +144,7 @@ design rationale is in
 | Config | `src/config/` | Curation config, region fields, detection profile, project records and context, retired-env guard |
 | Projects | `src/services/projects/` | Registry, lifecycle, the OpenSearch guard, clone, combine, capacity |
 | Config store | `src/services/config_store/` | Prompt packs, region profiles, activations, VLM endpoint registry |
-| OpenSearch client | `src/clients/curation_opensearch.py` | Index bodies, class registry, item helpers |
+| OpenSearch client | `src/clients/curation_opensearch/` | Index bodies, class registry, item helpers |
 | OCC | `src/clients/occ.py`, `occ_locks.py` | Optimistic-concurrency writes, the lock rule |
 | Ingest and import | `src/services/curation/ingest*.py`, `dataset_import/` | Item creation, duplicate detection, labeled-dataset import |
 | Regions | `src/services/curation/region_*.py`, `src/services/detection/` | Box list, edits, verification, text, embeddings, detector and segmenter cascade |

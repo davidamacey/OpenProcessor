@@ -9,7 +9,7 @@ from itertools import permutations
 
 import pytest
 
-from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
 from src.services.curation.class_ensure import ensure_class_by_name
 from src.services.curation.dataset_import.mapping import RegistryClassView, suggest_mapping
 from src.services.curation.detector_vocabulary import DetectorLabel, plan_seed

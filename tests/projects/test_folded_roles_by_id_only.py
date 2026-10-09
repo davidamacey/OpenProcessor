@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 _FOLDED_ID_MODULES = (
-    Path('src/clients/curation_opensearch.py'),
+    *sorted(Path('src/clients/curation_opensearch').glob('*.py')),
     Path('src/services/curation/embedding_viz.py'),
 )
 
@@ -49,7 +49,7 @@ def test_settings_and_umap_viz_state_never_searched() -> None:
 
 
 def test_folded_doc_ids_never_collide_with_config_store_ids() -> None:
-    from src.clients.curation_opensearch import CURATION_SETTINGS_DOC_ID
+    from src.clients.curation_opensearch.settings_doc import CURATION_SETTINGS_DOC_ID
 
     assert ':' not in CURATION_SETTINGS_DOC_ID
     # The visualization-only umap-viz-state doc id ("current") is a

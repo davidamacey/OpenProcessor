@@ -27,7 +27,7 @@ from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_class_update
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation import base_curation_config
 from src.config.project_context import current_project
 from src.services.curation.history import CLASS_STATE_FIELDS
@@ -418,7 +418,7 @@ def test_all_review_tab_surfaces_empty_answers() -> None:
 
 
 def test_fields_are_mapped_and_guarded() -> None:
-    from src.clients.curation_opensearch import _items_body
+    from src.clients.curation_opensearch.bodies_core import _items_body
     from src.clients.occ import CLASS_WRITE_FIELDS
 
     props = _items_body()['mappings']['properties']
@@ -429,7 +429,7 @@ def test_fields_are_mapped_and_guarded() -> None:
 
 @pytest.mark.asyncio
 async def test_mapping_migration_adds_the_fields() -> None:
-    from src.clients.curation_opensearch import ensure_items_vlm_raw_label_fields
+    from src.clients.curation_opensearch.ensure_fields import ensure_items_vlm_raw_label_fields
 
     client = SimpleNamespace(indices=SimpleNamespace(put_mapping=AsyncMock(return_value={})))
     await ensure_items_vlm_raw_label_fields(client)

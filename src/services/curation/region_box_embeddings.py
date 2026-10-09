@@ -155,7 +155,7 @@ async def write_box_embeddings(
     'skipped', 'errors'}`` (``skipped``: item missing or a conflict that
     outlasted the retries).
     """
-    from src.clients.curation_opensearch import mget_crops
+    from src.clients.curation_opensearch.crops import mget_crops
 
     F = get_region_fields()
     pending = dict(by_crop)

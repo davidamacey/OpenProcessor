@@ -37,7 +37,7 @@ def fake_os() -> SettingsFakeOpenSearch:
 def client(
     fake_os: SettingsFakeOpenSearch, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
 
     monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
     registry = ClassRegistry(path=tmp_path / 'class_registry.json')

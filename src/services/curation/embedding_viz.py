@@ -26,7 +26,7 @@ Non-negotiable design rules:
    off the crop doc for the consumer to color by.
 4. **Only writes ``viz_x`` / ``viz_y`` / ``viz_projection_version``**
    (the three fields declared by
-   :func:`src.clients.curation_opensearch.ensure_items_viz_fields`).
+   :func:`src.clients.curation_opensearch.ensure_overlay_fields.ensure_items_viz_fields`).
    Never ``cluster_id`` / ``cluster_subid`` / ``cluster_distance`` (guarded
    by
    ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``).

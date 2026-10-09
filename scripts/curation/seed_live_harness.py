@@ -450,7 +450,7 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
 
 
 async def _seed(args: argparse.Namespace) -> int:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config import get_curation_config, get_region_fields
     from src.routers.curation._common import _ensure_indexes
 

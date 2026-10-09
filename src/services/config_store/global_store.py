@@ -42,7 +42,7 @@ def global_configs_index() -> str:
 
 
 # Same config-store row shapes as a project's folded ``configs`` index
-# (``src.clients.curation_opensearch._configs_body``), minus the folded
+# (``src.clients.curation_opensearch.bodies_other._configs_body``), minus the folded
 # SETTINGS/UMAP_VIZ_STATE properties -- the global store never folds any
 # other role onto it, so it carries only the config-store fields
 # ``src.services.config_store.index``'s primitives read/write (``get``,

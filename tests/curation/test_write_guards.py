@@ -229,7 +229,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
     @pytest.mark.asyncio
     async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
         import src.routers.curation.classes as classes_mod
-        from src.clients.curation_opensearch import ClassRegistry
+        from src.clients.curation_opensearch.registry import ClassRegistry
         from src.routers.curation._class_models import ClassMergeRequest
 
         registry = ClassRegistry(path=tmp_path / 'class_registry.json')

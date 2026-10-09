@@ -74,7 +74,7 @@ class _TermAwareClient(FakeLifecycleOpenSearch):
 
 
 def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, monkeypatch) -> None:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config.curation import items_index
 
     models = tmp_path / 'models'

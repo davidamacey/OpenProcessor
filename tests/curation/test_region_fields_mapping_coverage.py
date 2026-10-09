@@ -17,7 +17,8 @@ config flip, not a code change.
 
 from __future__ import annotations
 
-from src.clients import curation_opensearch as cop
+from src.clients.curation_opensearch import base, bodies_core
+from src.clients.curation_opensearch.lifecycle import INDEX_BODIES
 from src.config import IndexRole, RegionFields
 
 
@@ -25,8 +26,8 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
     """Every region-of-interest key the items mapping declares must equal
     the corresponding attribute on the module's live `F` (RegionFields)
     instance — not a re-typed / stale literal."""
-    F = cop.F
-    props = cop.INDEX_BODIES[IndexRole.ITEMS]['mappings']['properties']
+    F = base.F
+    props = INDEX_BODIES[IndexRole.ITEMS]['mappings']['properties']
 
     region_attrs_declared = (
         'verified',
@@ -75,8 +76,8 @@ def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
         validated='roi_validated',
         visible='roi_visible',
     )
-    monkeypatch.setattr(cop, 'F', custom)
-    rebuilt = cop._items_body()
+    monkeypatch.setattr(bodies_core, 'F', custom)
+    rebuilt = bodies_core._items_body()
     props = rebuilt['mappings']['properties']
 
     for roi_key in (

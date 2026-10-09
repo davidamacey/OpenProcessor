@@ -251,7 +251,7 @@ async def run(
     ranked = rank_clusters(assignments, dict(term_counts))
 
     if not dry_run:
-        from src.clients.curation_opensearch import ensure_items_label_cluster_fields
+        from src.clients.curation_opensearch.ensure_fields import ensure_items_label_cluster_fields
 
         await ensure_items_label_cluster_fields(client)
     write = await write_back(

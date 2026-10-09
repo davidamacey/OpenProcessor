@@ -120,7 +120,7 @@ async def test_r7_omitted_stale_settings_doc_pack_is_ignored_and_echo_matches_la
     from src.routers.curation import pipeline
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.get_curation_settings',
+        'src.clients.curation_opensearch.settings_doc.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     summary = await pipeline._run_auto_label(
@@ -200,7 +200,7 @@ async def test_r7_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_o
 
     monkeypatch.setattr(job, 'start_job', _fake_start)
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.get_curation_settings',
+        'src.clients.curation_opensearch.settings_doc.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())

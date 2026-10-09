@@ -319,7 +319,7 @@ async def _apply_clone(
             dst_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_path, dst_path)
         with bind_project(target_record):
-            from src.clients.curation_opensearch import ClassRegistry
+            from src.clients.curation_opensearch.registry import ClassRegistry
 
             registry = ClassRegistry(dst_path)
             await registry.sync_to_opensearch(client)

@@ -133,10 +133,10 @@ def _new_record(slug: str, tmp_path: Any) -> Any:
 def test_class_registry_is_per_project(tmp_path: Any, monkeypatch: Any) -> None:
     import json
 
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import registry
     from src.config.project_context import bind_project
 
-    monkeypatch.setattr(curation_opensearch, '_registries', {})
+    monkeypatch.setattr(registry, '_registries', {})
     alpha, beta = _new_record('alpha', tmp_path), _new_record('beta', tmp_path)
     for record, name in ((alpha, 'alpha_zebra'), (beta, 'beta_heron')):
         path = record.resources.class_registry_path
@@ -144,10 +144,10 @@ def test_class_registry_is_per_project(tmp_path: Any, monkeypatch: Any) -> None:
         path.write_text(json.dumps({'version': 1, 'classes': [{'id': 1, 'name': name}]}))
 
     with bind_project(alpha):
-        alpha_registry = curation_opensearch.get_class_registry()
+        alpha_registry = registry.get_class_registry()
         assert alpha_registry.path == alpha.resources.class_registry_path
     with bind_project(beta):
-        beta_registry = curation_opensearch.get_class_registry()
+        beta_registry = registry.get_class_registry()
         assert beta_registry.path == beta.resources.class_registry_path
     assert alpha_registry is not beta_registry
 

@@ -15,7 +15,7 @@ The output contract is the set of item fields that
 and the offline writer (``scripts/curation/cluster_raw_labels.py``) use.
 The field *values* predate the generic port and are part of the live
 items-index mapping (see
-:func:`src.clients.curation_opensearch.ensure_items_label_cluster_fields`),
+:func:`src.clients.curation_opensearch.ensure_fields.ensure_items_label_cluster_fields`),
 so they are not renamed here.
 
 Cluster ids are ``blake2b(cluster_name)`` truncated to a positive int32:

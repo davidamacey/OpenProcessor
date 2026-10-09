@@ -406,7 +406,7 @@ async def analyze(
 
 
 def class_names_registry(record: ProjectRecord) -> list[Any]:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
 
     return ClassRegistry(path=record.resources.class_registry_path).load().classes
 

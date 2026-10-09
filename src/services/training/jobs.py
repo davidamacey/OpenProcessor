@@ -229,7 +229,7 @@ def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
     """
     import hashlib
 
-    from src.clients.curation_opensearch import get_class_registry
+    from src.clients.curation_opensearch.registry import get_class_registry
 
     try:
         registry = get_class_registry().load()

@@ -476,7 +476,7 @@ async def test_write_job_pins_registry_snapshot(
             return _FakeRegistrySnapshot()
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.get_class_registry', lambda: _FakeRegistry()
+        'src.clients.curation_opensearch.registry.get_class_registry', lambda: _FakeRegistry()
     )
 
     spec = TrainJobSpec(job_id='pin_test', dataset_export_dir='/data/exports/x')

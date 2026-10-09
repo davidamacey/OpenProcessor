@@ -39,7 +39,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
     cfg = CurationConfig(prompt_pack_path=paths['pallet_v1'], prompt_pack_paths=(paths['food_v2'],))
     monkeypatch.setattr('src.config.curation.get_curation_config', lambda: cfg)
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.get_curation_settings',
+        'src.clients.curation_opensearch.settings_doc.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
 

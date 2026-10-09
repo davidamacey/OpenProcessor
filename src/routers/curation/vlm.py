@@ -202,7 +202,7 @@ async def vlm_label_batch(
     # One mget_crops() call instead of N separate opensearch.get()
     # round trips. The guard's fields are fetched too: its read token must be
     # built from the same class state the write-time re-check compares.
-    from src.clients.curation_opensearch import mget_crops
+    from src.clients.curation_opensearch.crops import mget_crops
 
     docs_by_id = await mget_crops(
         opensearch,
@@ -379,7 +379,7 @@ async def vlm_verify_regions(
     now = _now_iso()
     # One mget_crops() call instead of N separate opensearch.get()
     # round trips.
-    from src.clients.curation_opensearch import mget_crops
+    from src.clients.curation_opensearch.crops import mget_crops
 
     docs_by_id = await mget_crops(
         opensearch,

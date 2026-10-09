@@ -42,7 +42,7 @@ OPEN_VOCAB_IMAGE_MAPPING: dict[str, Any] = {
 
 
 async def _put_each(client: AsyncOpenSearch, index: str, specs: dict[str, Any]) -> None:
-    from src.clients.curation_opensearch import _is_recoverable_mapping_conflict
+    from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict
 
     for field, spec in specs.items():
         try:

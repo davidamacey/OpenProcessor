@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,9 +40,13 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError, RegistryClassEntry
+from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
 from src.config import get_curation_config
 from src.services.projects.script_binding import add_project_argument, bind_script_project
+
+
+if TYPE_CHECKING:
+    from src.clients.curation_opensearch import RegistryClassEntry
 
 
 def find_broken(registry: ClassRegistry) -> list[RegistryClassEntry]:

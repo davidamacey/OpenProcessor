@@ -14,7 +14,7 @@ from curation.test_region_profiles_router import (  # noqa: F401
     _reset_caches,
     app_client,
 )
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 
 
 if TYPE_CHECKING:

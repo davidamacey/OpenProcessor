@@ -53,7 +53,7 @@ at port 4603.
 | `src/main.py` | FastAPI app, router mounting, lifespan |
 | `src/routers/` | Core routers; `src/routers/curation/` holds the curation routers (thin HTTP adapters) |
 | `src/services/` | Logic with no FastAPI dependency: `curation/`, `config_store/`, `projects/`, `labeling/` (VLM), `detection/`, `training/` |
-| `src/clients/` | Triton, OpenSearch (`curation_opensearch.py` has the index bodies), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
+| `src/clients/` | Triton, OpenSearch (`curation_opensearch/` has the index bodies, class registry and mapping migrations), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
 | `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, retired-env guard |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
 | `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/` |

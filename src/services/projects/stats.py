@@ -9,7 +9,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.project_context import current_project
 from src.core.logging import get_logger
 from src.services.curation.embedding_state import embedded_clause

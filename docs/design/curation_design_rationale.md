@@ -176,43 +176,17 @@ entirely and were never in this guard's scope).
 ## 5. The pre-commit ratchet exemptions
 
 `.pre-commit-config.yaml`'s `max-file-size` hook caps source files at
-700 LOC to keep modules reviewable and discourage grab-bag files. Five
-files that arrived with the curation port are grandfathered past that
-cap:
+700 LOC to keep modules reviewable and discourage grab-bag files. The
+files that arrived with the curation port over that cap have been split
+into modules per concern, each under the cap. Three files remain
+exempt while their splits are tracked in #168:
 
-- `src/clients/curation_opensearch.py`
-- `src/services/training/triton_promote.py`
-- `src/routers/curation_train.py`
-- `src/services/training/jobs.py`
-- `scripts/curation/worker/runner.py`
+- `src/ultralytics_patches/` (vendored export patches, behaviour must not change)
+- `src/routers/ingest.py`
+- `src/routers/search.py`
 
-The reasoning is the same for all five and worth stating once instead
-of once per exclude-list comment: each corresponds to a genuinely
-cohesive reference-implementation module that was already over the cap
-*before* any porting work touched it. Splitting a file correctly
-requires understanding its internal seams well enough to draw a
-sensible boundary; doing that split *while simultaneously* genericizing
-the file's contents would have produced a diff that mixed structural
-reorganization with semantic changes in the same commit — exactly the
-kind of diff a reviewer cannot meaningfully check line-by-line. The
-porting decision was: land the file whole (readable, semantically
-diffable against its reference counterpart), grandfather it explicitly
-with an in-file comment naming which port chunk added it, and treat the
-split as separate, tracked follow-up work rather than silently deferring
-it.
-
-Practical consequence for anyone extending one of these five files: add
-functionality to the existing file rather than treating the grandfathering
-as license to keep growing it indefinitely, and do not add an eighth
-undocumented exemption — a genuinely new oversize file should be split
-before it is committed, following the same reasoning that will
-eventually retire these five. Two have already gone, each now split into
-modules per concern that are all under the cap and no longer exempt:
-`src/services/detection/cascade_detect.py` became the
-`src/services/detection/cascade_detect/` package, and
-`src/services/curation/clustering/orchestrator.py` became `orchestrator.py`
-(residual-pool clustering) plus `refine.py`, `retrain_policy.py`,
-`residual_gate.py` and `cluster_write_guard.py` in the same package.
+A genuinely new oversize file is split before it is committed; do not
+add an exemption.
 
 ## 6. Known gaps
 

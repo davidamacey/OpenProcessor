@@ -15,7 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
 
 
 def _entry(registry: ClassRegistry, class_id: int) -> Any:

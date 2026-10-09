@@ -52,7 +52,7 @@ from src.services.curation.next_steps import cluster_regions
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.services.curation.dataset_import.context import ImportContext
     from src.services.curation.dataset_import.options import DatasetImportRequest
     from src.services.curation.dataset_import.paths import PathGuard

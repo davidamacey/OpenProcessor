@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.registry_reclassify import UnmatchedLabelSource, reclassify_unmatched
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
