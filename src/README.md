@@ -49,7 +49,7 @@ src/
 │   ├── inference.py             # Core Triton inference operations
 │   ├── embedding.py             # MobileCLIP embedding generation
 │   ├── face_recognition.py      # Face detection and recognition
-│   ├── face_identity.py         # Face identification and verification
+│   ├── face_identity/           # Face identification and verification (package)
 │   ├── visual_search/           # OpenSearch visual search operations (package)
 │   ├── ocr_service.py           # PP-OCRv5 text extraction
 │   ├── clustering.py            # FAISS clustering

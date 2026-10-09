@@ -414,6 +414,7 @@ module = [
     "src.utils.image_processing",
     "src.services.image",
     "src.services.face_identity",
+    "src.services.face_identity.*",
     "src.routers.detect",
 ]
 disable_error_code = ["attr-defined", "operator", "misc", "assignment", "return-value", "call-overload", "union-attr", "arg-type", "dict-item"]
