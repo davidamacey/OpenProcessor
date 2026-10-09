@@ -16,7 +16,7 @@ from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 from src.services.curation.embedding_state import EMBEDDED
 from src.services.curation.region_scope import in_parent_classes
-from src.services.detection.cascade_detect import class_provenance
+from src.services.detection.cascade_detect.sanity import class_provenance
 from src.services.detection.profile_registry import get_active_region_profile
 
 

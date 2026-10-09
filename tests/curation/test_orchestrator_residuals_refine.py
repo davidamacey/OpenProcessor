@@ -12,6 +12,9 @@ import numpy as np
 import pytest
 
 import src.services.curation.clustering.orchestrator as orch
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
+from src.services.curation.clustering.refine import refine_cluster
 
 
 pytestmark = pytest.mark.asyncio
@@ -71,7 +74,7 @@ async def test_refine_cluster_splits_two_separated_groups() -> None:
     ]
     client = _FakeScrollBulkOS(members)
 
-    result = await orch.refine_cluster(client, 42)
+    result = await refine_cluster(client, 42)
 
     assert result['action'] == 'refined'
     assert result['n_items'] == 6
@@ -94,7 +97,7 @@ async def test_refine_cluster_splits_two_separated_groups() -> None:
 async def test_refine_cluster_skips_too_few_members() -> None:
     client = _FakeScrollBulkOS([_member('only-one', [1.0, 0.0, 0.0])])
 
-    result = await orch.refine_cluster(client, 7)
+    result = await refine_cluster(client, 7)
 
     assert result['action'] == 'skipped_too_small'
     assert result['n_subclusters'] == 0
@@ -110,7 +113,7 @@ async def test_refine_cluster_computes_purity_per_subcluster() -> None:
     ]
     client = _FakeScrollBulkOS(group_a + group_b)
 
-    result = await orch.refine_cluster(client, 9)
+    result = await refine_cluster(client, 9)
 
     assert result['n_subclusters'] == 2
     # group_a is 100% pure sedan, group_b is 2/3 pickup -> weighted mean
@@ -123,7 +126,7 @@ async def test_refine_cluster_computes_purity_per_subcluster() -> None:
 async def test_refine_cluster_too_large_precount_never_fetches_members() -> None:
     client = _FakeScrollBulkOS([_member(f'm{i}', [1.0, 0.0, 0.0]) for i in range(5)])
 
-    result = await orch.refine_cluster(client, 3, max_members=2)
+    result = await refine_cluster(client, 3, max_members=2)
 
     assert result['action'] == 'skipped_too_large'
     assert client.bulk_calls == []
@@ -208,7 +211,7 @@ async def _run_cluster_residuals(
     return result, client.bulk_calls, captured_fetch_kwargs
 
 
-_ABOVE_MIN_POOL = [f'r{i}' for i in range(orch.MIN_RESIDUALS_FOR_CLUSTERING + 4)]
+_ABOVE_MIN_POOL = [f'r{i}' for i in range(MIN_RESIDUALS_FOR_CLUSTERING + 4)]
 
 
 async def test_cluster_residuals_broadened_pool_flag_is_forwarded(
@@ -232,7 +235,7 @@ async def test_cluster_residuals_writes_land_in_the_residual_band(
         monkeypatch, recluster_unvalidated=False, pool_ids=_ABOVE_MIN_POOL
     )
     assert result['status'] == 'success'
-    assert result['cluster_id_offset'] == orch.RESIDUAL_CLUSTER_ID_OFFSET
+    assert result['cluster_id_offset'] == RESIDUAL_CLUSTER_ID_OFFSET
 
     written_cluster_ids = []
     for chunk in bulk_calls:
@@ -241,7 +244,7 @@ async def test_cluster_residuals_writes_land_in_the_residual_band(
             written_cluster_ids.append(doc['script']['params']['cid'])
     assert written_cluster_ids  # something was written
     for cid in written_cluster_ids:
-        assert cid >= orch.RESIDUAL_CLUSTER_ID_OFFSET
+        assert cid >= RESIDUAL_CLUSTER_ID_OFFSET
 
 
 async def test_cluster_residuals_too_few_residuals_short_circuits(

@@ -87,7 +87,7 @@ concurrency, smaller ones don't amortize the per-call overhead.
 image**. When that image is a crop of a larger frame, re-projecting to
 the source frame is the caller's job — the worker does it via
 `crop_norm_to_source_norm()` in
-[`src/services/detection/cascade_detect.py`](../../src/services/detection/cascade_detect.py)
+[`src/services/detection/cascade_detect/`](../../src/services/detection/cascade_detect/)
 before persisting, the same contract the primary-detector path uses.
 
 ## Build and run

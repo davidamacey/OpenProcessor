@@ -18,7 +18,7 @@ from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.review_queries import build_tab_query
 from src.services.curation.wire import serialize_item
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 

@@ -29,7 +29,7 @@ from typing import Any
 import pytest
 
 from src.clients.occ import is_locked_class
-from src.services.curation.clustering import orchestrator as orch
+from src.services.curation.clustering import cluster_write_guard as guard, refine
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ from src.services.curation.clustering import orchestrator as orch
 
 
 def test_guarded_class_cluster_write_builds_a_script_action_not_doc() -> None:
-    action = orch._guarded_class_cluster_write(10042, 0.12)
+    action = guard._guarded_class_cluster_write(10042, 0.12)
     assert 'script' in action
     assert 'doc' not in action
     assert action['script']['lang'] == 'painless'
@@ -46,7 +46,7 @@ def test_guarded_class_cluster_write_builds_a_script_action_not_doc() -> None:
 
 
 def test_guarded_class_cluster_write_script_sets_expected_fields() -> None:
-    src = orch._guarded_class_cluster_write(10042, 0.12)['script']['source']
+    src = guard._guarded_class_cluster_write(10042, 0.12)['script']['source']
     assert "ctx._source['cluster_id'] = params.cid" in src
     assert "ctx._source.remove('cluster_subid')" in src
     assert "ctx._source['cluster_distance'] = params.dist" in src
@@ -72,12 +72,14 @@ def test_class_cluster_write_guard_matches_is_locked_class() -> None:
             source.get('class_validated') or source.get('class_excluded')
         )
         assert human_owned, source  # sanity: the sample really is guarded
-        assert orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, source), source
+        assert guard._guard_condition_matches(guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, source), (
+            source
+        )
 
     # And a normal doc is NOT guarded on either side.
     normal = {'class_source': 'item_model', 'class_validated': False}
     assert not is_locked_class(normal)
-    assert not orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, normal)
+    assert not guard._guard_condition_matches(guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, normal)
 
 
 def test_class_cluster_write_guard_intentionally_diverges_on_test_holdout() -> None:
@@ -95,8 +97,8 @@ def test_class_cluster_write_guard_intentionally_diverges_on_test_holdout() -> N
         'test_holdout': True,
     }
     assert is_locked_class(holdout_unvalidated)
-    assert not orch._guard_condition_matches(
-        orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, holdout_unvalidated
+    assert not guard._guard_condition_matches(
+        guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, holdout_unvalidated
     )
 
     # A validated import IS covered on both sides -- is_locked_class's
@@ -104,7 +106,7 @@ def test_class_cluster_write_guard_intentionally_diverges_on_test_holdout() -> N
     # list already guards generically (not a divergence).
     validated_import = {'class_source': 'external_label', 'class_validated': True}
     assert is_locked_class(validated_import)
-    assert orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, validated_import)
+    assert guard._guard_condition_matches(guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, validated_import)
 
 
 def test_class_cluster_write_guard_script_text_names_same_fields_as_predicate() -> None:
@@ -113,7 +115,7 @@ def test_class_cluster_write_guard_script_text_names_same_fields_as_predicate() 
     clause list is guaranteed to keep the two in sync since the script is
     *rendered from* the list, but this pins the exact field/value
     vocabulary the brief calls out."""
-    src = orch._guard_condition_painless(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES)
+    src = guard._guard_condition_painless(guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES)
     assert "ctx._source['class_validated'] == true" in src
     assert "ctx._source['class_excluded'] == true" in src
     assert "ctx._source['class_source'].contains('human')" in src
@@ -124,12 +126,12 @@ def test_class_cluster_write_guard_noops_a_human_owned_doc() -> None:
     decision is table-driven from CLASS_CLUSTER_WRITE_GUARD_CLAUSES, the
     exact list the script is rendered from)."""
     human_doc = {'cluster_id': 5, 'class_source': 'human', 'class_validated': True}
-    assert orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, human_doc)
+    assert guard._guard_condition_matches(guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, human_doc)
 
 
 def test_class_cluster_write_guard_applies_to_a_normal_doc() -> None:
     normal_doc = {'cluster_id': 5, 'class_source': 'item_model', 'class_validated': False}
-    assert not orch._guard_condition_matches(orch.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, normal_doc)
+    assert not guard._guard_condition_matches(guard.CLASS_CLUSTER_WRITE_GUARD_CLAUSES, normal_doc)
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +163,7 @@ async def test_bulk_update_subids_chunks_at_1000_actions_with_one_final_refresh(
     client = _RecordingBulkOS()
     updates = [(f'crop{i}', f'42{chr(97 + i % 26)}') for i in range(1500)]
 
-    n = await orch._bulk_update_subids(client, updates, expected_cluster_id=42)
+    n = await refine._bulk_update_subids(client, updates, expected_cluster_id=42)
 
     assert n == 1500
     # 1500 updates at chunk_size=1000 -> two bulk() calls.
@@ -171,13 +173,13 @@ async def test_bulk_update_subids_chunks_at_1000_actions_with_one_final_refresh(
     for call in client.bulk_calls:
         assert call['refresh'] is False
     # One explicit refresh at the very end, not per chunk.
-    assert client.refresh_calls == [orch.items_index()]
+    assert client.refresh_calls == [refine.items_index()]
 
 
 @pytest.mark.asyncio
 async def test_bulk_update_subids_script_noops_if_cluster_id_changed() -> None:
     client = _RecordingBulkOS()
-    await orch._bulk_update_subids(client, [('crop1', '42a')], expected_cluster_id=42)
+    await refine._bulk_update_subids(client, [('crop1', '42a')], expected_cluster_id=42)
     action = client.bulk_calls[0]['body'][1]
     assert 'script' in action
     src = action['script']['source']
@@ -204,5 +206,5 @@ async def test_bulk_update_subids_logs_partial_errors_without_raising() -> None:
 
     client = _ErrorBulkOS()
     # Must not raise.
-    n = await orch._bulk_update_subids(client, [('crop1', '42a')], expected_cluster_id=42)
+    n = await refine._bulk_update_subids(client, [('crop1', '42a')], expected_cluster_id=42)
     assert n == 1

@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate, RegionDetector
+from src.services.detection.cascade_detect.candidate import RegionCandidate
+from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 

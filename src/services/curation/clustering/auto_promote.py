@@ -33,13 +33,6 @@ from src.services.curation.cluster_purity import (
     PROMOTE_MIN_PURITY,
     is_promotable,
 )
-
-# Import order matters here — see orchestrator.py's bottom-of-file import.
-# orchestrator.py imports auto_promote_clusters from this
-# module at the bottom of its file, forming an intentional, preserved
-# circular import: importing this module first (in isolation) fails, but
-# the app always imports orchestrator first, so this resolves fine in
-# practice. Do not "fix" this cycle.
 from src.services.curation.history import record_class_history
 from src.services.curation.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,

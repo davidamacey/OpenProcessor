@@ -272,7 +272,7 @@ def test_cascade_parse_drops_sentinel_line_even_with_nonempty_text() -> None:
     """Defense in depth: a sentinel line is dropped by the empty-text check
     in practice (the BLS always pairs -1.0 with ''), but this pins the
     explicit `rec_score < 0` guard for a future BLS build that might not."""
-    from src.services.detection.cascade_detect import _parse_ocr_pipeline_result
+    from src.services.detection.cascade_detect.ocr_recognizer import _parse_ocr_pipeline_result
 
     class _FakeResult:
         def as_numpy(self, name: str) -> np.ndarray:

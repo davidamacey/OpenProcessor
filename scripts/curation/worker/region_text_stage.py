@@ -45,7 +45,7 @@ from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.item_text import item_text_update
 from src.services.curation.region_boxes import has_human_text, new_box_placeholder
-from src.services.detection.cascade_detect import is_plausible_region_bbox
+from src.services.detection.cascade_detect.sanity import is_plausible_region_bbox
 from src.services.detection.region_text import (
     TEXT_CHOICE_OCR_ONLY,
     TEXT_CHOICE_VLM_INVALID,
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from scripts.curation.worker.state import _ItemTask
     from src.config import DetectionProfile
     from src.services.curation.region_boxes import RegionBox
-    from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+    from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
 
 logger = get_logger('curation_worker')
