@@ -24,7 +24,7 @@
 # schema naming/shape changes between releases; bump together with
 # `make contracts`.
 fastapi==0.136.1
-pydantic==2.12.5
+pydantic==2.13.5
 uvicorn[standard]
 python-multipart
 orjson
