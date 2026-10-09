@@ -188,7 +188,7 @@ async def vlm_label_batch(
 
     # Pull image_path + bbox_norm for each crop, then build ItemCrop list
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
-    from src.services.labeling.vlm_labeler import ItemCrop
+    from src.services.labeling.vlm_models import ItemCrop
 
     # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
     # (scripts/curation/worker/state.py) writes into -- this used to read a
@@ -251,7 +251,7 @@ async def vlm_label_batch(
     if not crops:
         return {'predicted': 0, 'updated': 0}
 
-    from src.services.labeling.vlm_labeler import resolve_class_name as _resolve_class_name_fn
+    from src.services.labeling.vlm_class_names import resolve_class_name as _resolve_class_name_fn
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _pack_stamp = prompt_pack_stamp(labeler._pack)
@@ -364,7 +364,7 @@ async def vlm_verify_regions(
         verifiable_boxes,
         verify_regions_update,
     )
-    from src.services.labeling.vlm_labeler import RegionCrop
+    from src.services.labeling.vlm_models import RegionCrop
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     labeler = await request_labeler(opensearch, vlm, acknowledge_external)
@@ -492,7 +492,7 @@ async def vlm_verify_region_batch(
     if len(items) > 64:
         raise HTTPException(status_code=400, detail='maximum 64 items per call')
 
-    from src.services.labeling.vlm_labeler import RegionCrop
+    from src.services.labeling.vlm_models import RegionCrop
 
     crops: list[RegionCrop] = []
     candidate_text_by_id: dict[str, str | None] = {}
@@ -581,7 +581,7 @@ async def vlm_region_visible_batch(
     if len(items) > 64:
         raise HTTPException(status_code=400, detail='maximum 64 items per call')
 
-    from src.services.labeling.vlm_labeler import RegionCrop
+    from src.services.labeling.vlm_models import RegionCrop
 
     crops: list[RegionCrop] = []
     seen: set[str] = set()

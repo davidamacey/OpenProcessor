@@ -34,7 +34,7 @@ from src.services.curation.class_write_guard import (
     class_state_token,
 )
 from src.services.labeling.vlm_client import VlmIdentity
-from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_models import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -200,7 +200,7 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
         lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
     )
     monkeypatch.setattr(
-        'src.services.labeling.vlm_labeler.format_class_catalog', lambda *_a, **_k: ''
+        'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''
     )
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')
     monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _r: p)

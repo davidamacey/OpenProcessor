@@ -18,7 +18,8 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from src.services.labeling.vlm_labeler import RegionCrop, VlmLabeler
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import RegionCrop
 
 
 def _labeler(message: dict[str, Any] | None = None, *, fail: bool = False) -> VlmLabeler:

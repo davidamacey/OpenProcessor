@@ -14,7 +14,7 @@ from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.routers.curation import _raw_opensearch_dep, router as curation_router
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import VlmCombinedReply
+from src.services.labeling.vlm_models import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch
 from .test_region_pending_verification_b1 import ITEM_BBOX, PROPOSED_BBOX, _seed_via_real_put_route

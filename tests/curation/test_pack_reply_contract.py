@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from src.config.region_fields import get_region_fields
 from src.services.labeling.region_overlay import REPLY_BBOX_CORRECT_KEY, REPLY_CONFIDENCE_KEY
-from src.services.labeling.vlm_labeler import _combined_reply_from_entry
 from src.services.labeling.vlm_prompts import REPLY_KEY_CONTRACT
+from src.services.labeling.vlm_reply_parse import _combined_reply_from_entry
 
 
 def _key_present(text: str, key: str) -> bool:

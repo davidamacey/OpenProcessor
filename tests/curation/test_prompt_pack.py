@@ -7,7 +7,7 @@ same wire-key vocabulary ``RegionFields`` defaults to (per the design
 note in ``vlm_prompts.py``). Deliberately has no dependency on
 ``vlm_labeler.py``. The mechanism functions that *consume* a
 ``PromptPack`` (``format_class_catalog`` / ``resolve_class_name``, which
-live in ``vlm_labeler.py``) are tested in ``test_class_synonyms.py``
+live in ``vlm_class_names.py``) are tested in ``test_class_synonyms.py``
 instead, landing with the second commit.
 """
 
@@ -71,7 +71,7 @@ def test_generic_item_pack_templates_are_formattable() -> None:
 
 def test_generic_item_pack_wire_keys_match_region_fields_defaults() -> None:
     """The shipped pack's combined-call prompts ask the VLM for the same
-    key names ``vlm_labeler.py``'s reply parser reads via ``RegionFields``
+    key names ``vlm_reply_parse.py``'s reply parser reads via ``RegionFields``
     — see the design note in ``vlm_prompts.py``. This pins that
     agreement so the two can't silently drift apart."""
     fields = get_region_fields()

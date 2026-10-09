@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from src.services.labeling.vlm_labeler import ItemCrop, VlmLabeler
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import ItemCrop
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, proposal_denied
 
 

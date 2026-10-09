@@ -38,12 +38,12 @@ from src.config.region_rejection import (
 )
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import (
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import (
     CombinedCrop,
     CombinedParseFailure,
     CombinedTransportError,
     VlmCombinedReply,
-    VlmLabeler,
 )
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile

@@ -36,7 +36,7 @@ from src.services.curation.vlm_class_attempt import (
     VLM_CLASS_EMPTY_REASON_FIELD as REASON,
 )
 from src.services.labeling.vlm_client import VlmIdentity
-from src.services.labeling.vlm_labeler import VlmClassPrediction, VlmCombinedReply
+from src.services.labeling.vlm_models import VlmClassPrediction, VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -345,7 +345,7 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
         lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
     )
     monkeypatch.setattr(
-        'src.services.labeling.vlm_labeler.format_class_catalog', lambda *_a, **_k: ''
+        'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''
     )
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')
     monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _r: p)
