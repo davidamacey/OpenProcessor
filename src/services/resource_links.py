@@ -3,11 +3,15 @@ docs and monitoring/service UIs.
 
 URL rule (one function, :func:`service_url`, shared with the MLflow run
 link): a ``kind: 'service'`` URL is (1) the explicit ``OP_<X>_URL`` verbatim
-when set (reverse-proxied deployments); else (2) ``<scheme>://<host the
-client used>:<service host port>`` from the request (``Host`` /
+when set (reverse-proxied deployments); else ``null`` when the service's
+``OP_<X>_PORT`` is 0 (disabled); else (2) with ``OP_GATEWAY_SUBPATHS`` the
+gateway sub-path (``/grafana/``, ``/prometheus/``, ``/dashboards/``,
+``/mlflow/``), which needs no request context because the browser resolves it
+against the origin it already uses; else (3) ``<scheme>://<host the client
+used>:<service host port>`` from the request (``Host`` /
 ``X-Forwarded-Host`` / ``X-Forwarded-Proto``, see
 :mod:`src.core.request_origin`), so a LAN client gets its own host, never
-``localhost``; else ``null`` (no request context, or the port is 0). A
+``localhost``; else ``null`` (no request context). A
 ``kind: 'docs'`` URL is PATH-RELATIVE to the API origin (``/docs``).
 
 ``reachable`` means "the service answers FROM THE SERVER" (probed at its
@@ -47,6 +51,7 @@ class _Service(NamedTuple):
     name: str  # CurationConfig attribute stem: <name>_url / <name>_port
     env: str  # OP_<env>_URL / OP_<env>_PORT
     probe_url: str  # compose-internal address
+    gateway_path: str  # sub-path the frontend nginx serves it under (gateway mode)
 
 
 _DOCS = (
@@ -57,9 +62,16 @@ _DOCS = (
 
 # Probe URLs are the compose service names/container ports.
 _SERVICES = (
-    _Service('grafana', 'Grafana', 'grafana', 'GRAFANA', 'http://grafana:3000/api/health'),
     _Service(
-        'prometheus', 'Prometheus', 'prometheus', 'PROMETHEUS', 'http://prometheus:9090/-/healthy'
+        'grafana', 'Grafana', 'grafana', 'GRAFANA', 'http://grafana:3000/api/health', '/grafana/'
+    ),
+    _Service(
+        'prometheus',
+        'Prometheus',
+        'prometheus',
+        'PROMETHEUS',
+        'http://prometheus:9090/-/healthy',
+        '/prometheus/',
     ),
     _Service(
         'opensearch_dashboards',
@@ -67,8 +79,11 @@ _SERVICES = (
         'dashboards',
         'DASHBOARDS',
         'http://opensearch-dashboards:5601/api/status',
+        '/dashboards/',
     ),
-    _Service('mlflow', 'MLflow', 'mlflow', 'MLFLOW', 'http://curation-mlflow:5000/health'),
+    _Service(
+        'mlflow', 'MLflow', 'mlflow', 'MLFLOW', 'http://curation-mlflow:5000/health', '/mlflow/'
+    ),
 )
 
 
@@ -116,8 +131,12 @@ def service_url(service_id: str) -> str | None:
     if explicit:
         return explicit
     port = getattr(cfg, f'{spec.name}_port')
+    if not port:
+        return None
+    if cfg.gateway_subpaths:
+        return spec.gateway_path
     origin = current_origin()
-    if not port or origin is None:
+    if origin is None:
         return None
     return f'{origin.scheme}://{origin.host}:{port}'
 
@@ -152,6 +171,9 @@ async def wait_for_inflight_refresh() -> None:
 
 
 def resource_links_from_config() -> list[ResourceLink]:
+    from src.config import get_curation_config
+
+    gateway = get_curation_config().gateway_subpaths
     links = [
         ResourceLink(id=id_, label=label, url=path, kind='docs', status='configured', hint=hint)
         for id_, label, path, hint in _DOCS
@@ -166,7 +188,9 @@ def resource_links_from_config() -> list[ResourceLink]:
                 kind='service',
                 status='configured' if url else 'not_configured',
                 hint=(
-                    f'Set {_url_env(s)} to override; default is this host on OP_{s.env}_PORT.'
+                    f'Set {_url_env(s)} to override; served by the gateway at {s.gateway_path}.'
+                    if url == s.gateway_path and gateway
+                    else f'Set {_url_env(s)} to override; default is this host on OP_{s.env}_PORT.'
                     if url
                     else f'Set OP_{s.env}_PORT (0 disables) or {_url_env(s)}.'
                 ),

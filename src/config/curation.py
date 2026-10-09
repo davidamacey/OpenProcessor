@@ -218,6 +218,11 @@ class CurationConfig:
     prometheus_port: int = 4604
     dashboards_port: int = 4608
     mlflow_port: int = 4609
+    # Gateway mode (``OP_GATEWAY_SUBPATHS``): the frontend's nginx serves the
+    # four UIs under /grafana/, /prometheus/, /dashboards/ and /mlflow/ on its
+    # one published port, so their unset URLs are served path-relative instead
+    # of <request host>:<port> (``src.services.resource_links.service_url``).
+    gateway_subpaths: bool = False
 
     # Confidence floor gating the item wire's `probe_actionable` field
     # (see `src.services.curation.wire.serialize_item` and
@@ -391,6 +396,7 @@ class CurationConfig:
             prometheus_port=_int('PROMETHEUS_PORT', defaults.prometheus_port),
             dashboards_port=_int('DASHBOARDS_PORT', defaults.dashboards_port),
             mlflow_port=_int('MLFLOW_PORT', defaults.mlflow_port),
+            gateway_subpaths=_bool('GATEWAY_SUBPATHS', defaults.gateway_subpaths),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
             encoder_embedding_dim=_int('ENCODER_EMBEDDING_DIM', defaults.encoder_embedding_dim),
             backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),
