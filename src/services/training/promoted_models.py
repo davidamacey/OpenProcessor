@@ -93,15 +93,6 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
                 'Promptable segmentation',
             )
         )
-    if region is not None and region.ocr_det_model:
-        entries.append(
-            (
-                region.ocr_det_model,
-                'OCR Text Detector',
-                'Locates text regions inside a crop to seed a re-detection pass.',
-                'TensorRT detection',
-            )
-        )
     if region is not None and region.ocr_rec_model:
         entries.append(
             (

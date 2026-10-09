@@ -22,7 +22,6 @@ def _validate(vlm_api) -> dict:
     body = _body(
         text_reader='vlm',
         ocr_pipeline_model='',
-        ocr_det_model='',
         ocr_rec_model='',
         detector_model='',
         segmenter_text_prompt='thing',

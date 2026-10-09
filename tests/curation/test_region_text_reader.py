@@ -209,7 +209,7 @@ class TestReaderModes:
         assert texts_disagree('--', 'A', REF.normalizer) is None
 
     def test_engine_id(self) -> None:
-        assert ocr_engine_id(NEUTRAL_REGION_PROFILE) == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
+        assert ocr_engine_id(NEUTRAL_REGION_PROFILE) == 'paddleocr_rec_trt:1'
 
 
 class TestTextFreeMode:

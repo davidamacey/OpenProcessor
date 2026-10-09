@@ -54,7 +54,6 @@ _CHOICES: dict[str, tuple[ChoicesFrom, RegionProfileChoice | None]] = {
         'ocr_pipeline_models',
         RegionProfileChoice(id='', label='No OCR pipeline'),
     ),
-    'ocr_det_model': ('ocr_det_models', RegionProfileChoice(id='', label='No OCR detector')),
     'ocr_rec_model': ('ocr_rec_models', RegionProfileChoice(id='', label='No OCR recognizer')),
     'text_reader': ('text_reader_modes', None),
 }

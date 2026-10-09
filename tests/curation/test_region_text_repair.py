@@ -60,7 +60,7 @@ class TestRederive:
         assert target['text'] == 'VWY7977'
         assert target['text_source'] == 'ocr'
         assert target['text_confidence'] is None
-        assert target['text_engine_version'] == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
+        assert target['text_engine_version'] == 'paddleocr_rec_trt:1'
         assert target['text_choice'] == 'vlm_invalid'
         assert target['text_vlm_invalid'] == 'placeholder'
         assert target['text_disagreement'] is None

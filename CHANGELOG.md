@@ -29,6 +29,18 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 - Cropwright's nginx now answers redirects with relative `Location` headers; the
   `/OpenProcessor` redirect used to name the container port 8080.
 
+### Removed
+
+- The region profile fields `ocr_det_model`, `ocr_det_version`, `ocr_det_input_size` and
+  `ocr_det_prob_floor` (#181): nothing read them since `PaddleOcrRegionDetector` was
+  deleted. They leave `DetectionProfile`, the `/region_profiles` body and schema (and the
+  `ocr_det_models` `choices_from` value), `examples/region_profiles/license_plate.json` and
+  the contracts. A stored or submitted profile that still carries one is rejected with a
+  message naming it (`profile_field_unknown`); delete the keys from the document. The
+  `ocr_engine_id` stamped as `region_text_engine_version` is now `<rec model>:<version>`
+  instead of `<det>:<ver>+<rec>:<ver>`. `OCR_DET_MODEL` (the `/ocr` endpoint's Triton
+  model) is unchanged.
+
 ### Changed
 
 - The segmenter image moves to PyTorch 2.14.1 (`pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime`,

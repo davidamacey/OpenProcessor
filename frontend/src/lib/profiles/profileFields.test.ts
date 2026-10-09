@@ -32,7 +32,6 @@ describe('choiceList', () => {
     ['registry_classes', ['widget', 'gadget', 'gizmo']],
     ['text_reader_modes', ['none', 'ocr']],
     ['ocr_pipeline_models', ['ocr_pipeline']],
-    ['ocr_det_models', ['ocr_det_v1', 'ocr_det_v2']],
     ['ocr_rec_models', ['ocr_rec_v1']],
   ])('%s -> the served choice ids', (from, ids) => {
     expect(choiceList(v, from)!.map((c) => c.id)).toEqual(ids);

@@ -170,7 +170,7 @@ def build_model_choices(
             'region_profile',
             profile.ocr_pipeline_model if profile is not None else None,
             settable=True,
-            settable_via='PUT /region_profiles/{name} ocr_pipeline_model / ocr_det_model / ocr_rec_model',
+            settable_via='PUT /region_profiles/{name} ocr_pipeline_model / ocr_rec_model',
             choices=ocr_pipeline_ids,
         ),
         *_vlm_rows(),

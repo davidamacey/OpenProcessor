@@ -23,7 +23,6 @@ def test_defaults_match_reference_constants() -> None:
     assert profile.batch_limit == 16
     assert profile.segmenter_name == 'sam3'
     assert profile.segmenter_version == '1'
-    assert profile.ocr_det_model == 'paddleocr_det_trt'
     assert profile.ocr_pipeline_model == 'ocr_pipeline'
     assert profile.aspect_min == 1.2
     assert profile.aspect_max == 8.0
@@ -102,10 +101,6 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'SEGMENTER_VERSION': '3',
         'HUMAN_DETECTOR_NAME': 'env_human',
         'HUMAN_DETECTOR_VERSION': '4',
-        'OCR_DET_MODEL': 'env_ocr_det',
-        'OCR_DET_VERSION': '5',
-        'OCR_DET_INPUT_SIZE': '480',
-        'OCR_DET_PROB_FLOOR': '0.42',
         'OCR_REC_MODEL': 'env_ocr_rec',
         'OCR_REC_VERSION': '6',
         'OCR_PIPELINE_MODEL': 'env_ocr_pipeline',
@@ -178,10 +173,6 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.segmenter_version == '3'
     assert profile.human_detector_name == 'env_human'
     assert profile.human_detector_version == '4'
-    assert profile.ocr_det_model == 'env_ocr_det'
-    assert profile.ocr_det_version == '5'
-    assert profile.ocr_det_input_size == 480
-    assert profile.ocr_det_prob_floor == 0.42
     assert profile.ocr_rec_model == 'env_ocr_rec'
     assert profile.ocr_rec_version == '6'
     assert profile.ocr_pipeline_model == 'env_ocr_pipeline'

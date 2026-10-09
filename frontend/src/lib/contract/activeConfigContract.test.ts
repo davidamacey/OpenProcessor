@@ -66,7 +66,6 @@ const CHOICES_FROM = [
   'detectors',
   'segmenters',
   'ocr_pipeline_models',
-  'ocr_det_models',
   'ocr_rec_models',
   'registry_classes',
   'text_reader_modes',

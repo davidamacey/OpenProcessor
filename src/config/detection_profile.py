@@ -81,10 +81,6 @@ class DetectionProfile:
     human_detector_version: str = '1'
 
     # OCR wiring.
-    ocr_det_model: str = 'paddleocr_det_trt'
-    ocr_det_version: str = '1'
-    ocr_det_input_size: int = 640
-    ocr_det_prob_floor: float = 0.30
     ocr_rec_model: str = 'paddleocr_rec_trt'
     ocr_rec_version: str = '1'
     ocr_pipeline_model: str = 'ocr_pipeline'

@@ -414,12 +414,9 @@ def _text_choice(
 
 
 def ocr_engine_id(profile: DetectionProfile) -> str:
-    """``region_text_engine_version`` for an OCR reading: the det + rec model
-    ids (and versions) the pipeline ran."""
-    return (
-        f'{profile.ocr_det_model}:{profile.ocr_det_version}'
-        f'+{profile.ocr_rec_model}:{profile.ocr_rec_version}'
-    )
+    """``region_text_engine_version`` for an OCR reading: the rec model id
+    and version the pipeline ran."""
+    return f'{profile.ocr_rec_model}:{profile.ocr_rec_version}'
 
 
 __all__ = [
