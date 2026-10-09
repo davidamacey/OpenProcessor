@@ -335,7 +335,7 @@ async def accept_without_vlm(
     # The box list and its real status are finished at write time against
     # the live doc (``bulk_writer._merge``); ``status`` here is the
     # provisional value ``region_embed_stage`` / ``_publish_region_events``
-    # read from ``update_doc`` before that merge (see ``runner._box_list_doc``).
+    # read from ``update_doc`` before that merge (see ``pipeline._box_list_doc``).
     t.pending_boxes = boxes
     t.update_doc = {
         F.status: status,

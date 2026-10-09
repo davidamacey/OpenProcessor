@@ -1,6 +1,6 @@
 """One combined VLM reply -> the boxes, status and write fields it resolves to.
 
-Extracted from the worker's combined stage (``runner.stage_b_combined``) so
+Extracted from the worker's combined stage (``stage_b.stage_b_combined``) so
 the live pipeline and the test-on-crop preview (``POST /prompt_packs/test``,
 ``POST /region_profiles/test``) resolve a reply through the same code: the
 ``region_visible=False`` branch, the no-verdict outcome, per-box verdicts
