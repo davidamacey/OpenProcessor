@@ -96,13 +96,19 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Compose with an explicit project: a bare `docker compose` takes the project
+# from the directory name, which is not the stack's COMPOSE_PROJECT_NAME.
+dc() {
+    local project="${COMPOSE_PROJECT_NAME:-$(env_port COMPOSE_PROJECT_NAME openprocessor)}"
+    local -a cmd=(docker compose -p "$project")
+    [[ -f "$PROJECT_DIR/.env" ]] && cmd+=(--env-file "$PROJECT_DIR/.env")
+    "${cmd[@]}" --project-directory "$PROJECT_DIR" "$@"
+}
+
+# True when the compose SERVICE has a running container. Container names are
+# ${COMPOSE_PROJECT_NAME}-<service>, so a bare name match never hits.
 check_container() {
-    local container=$1
-    if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-        return 0
-    else
-        return 1
-    fi
+    [[ -n "$(dc ps -q "$1" 2>/dev/null)" ]]
 }
 
 wait_for_triton() {
@@ -163,12 +169,12 @@ download_models() {
     if [ "$download_ok" = false ]; then
         if check_container "api"; then
             log_info "Using running api container for download..."
-            if docker compose exec -T api python /app/export/download_paddleocr.py; then
+            if dc exec -T api python /app/export/download_paddleocr.py; then
                 download_ok=true
             fi
         else
             log_info "Using temporary api container for download..."
-            if docker compose run --rm --no-deps -T api python /app/export/download_paddleocr.py; then
+            if dc run --rm --no-deps -T api python /app/export/download_paddleocr.py; then
                 download_ok=true
             fi
         fi
@@ -220,7 +226,7 @@ export_detection() {
     # --rm: clean up container after exit
     # --no-deps: don't start dependent services
     # -T: disable pseudo-TTY (needed for non-interactive/piped output)
-    docker compose run --rm --no-deps -T triton-server trtexec \
+    dc run --rm --no-deps -T triton-server trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$DET_MIN_SHAPES" \
@@ -273,7 +279,7 @@ export_recognition() {
     log_warn "This may take 10-20 minutes for dynamic width optimization..."
 
     # Use 'docker compose run' instead of 'exec' to avoid chicken-and-egg problem.
-    docker compose run --rm --no-deps -T triton-server trtexec \
+    dc run --rm --no-deps -T triton-server trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$REC_MIN_SHAPES" \
@@ -465,7 +471,7 @@ EOF
 
 restart_triton() {
     log_info "Restarting Triton server..."
-    docker compose restart triton-server
+    dc restart triton-server
     wait_for_triton
 }
 
