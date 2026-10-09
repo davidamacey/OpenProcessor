@@ -293,15 +293,15 @@ def test_autolabel_job_reconciles_orphaned_running_state(
 
     with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
         job._state_dir().mkdir(parents=True, exist_ok=True)
-        job._state_file().write_text(
+        job._job().state_file.write_text(
             json.dumps({'job_id': 'j4', 'status': 'running', 'stage': 'vlm'})
         )
-        job._heartbeat_file().touch()
+        job._job().heartbeat_file.touch()
         old = time.time() - 120
-        os.utime(job._heartbeat_file(), (old, old))
+        os.utime(job._job().heartbeat_file, (old, old))
 
         assert job.reconcile_orphaned_jobs() is True
-        on_disk = json.loads(job._state_file().read_text())
+        on_disk = json.loads(job._job().state_file.read_text())
         assert on_disk['status'] == 'interrupted'
 
 
@@ -316,11 +316,11 @@ def test_autolabel_job_leaves_fresh_running_state_alone(
 
     with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
         job._state_dir().mkdir(parents=True, exist_ok=True)
-        job._state_file().write_text(json.dumps({'job_id': 'j4', 'status': 'running'}))
-        job._heartbeat_file().touch()
+        job._job().state_file.write_text(json.dumps({'job_id': 'j4', 'status': 'running'}))
+        job._job().heartbeat_file.touch()
 
         assert job.reconcile_orphaned_jobs() is False
-        assert json.loads(job._state_file().read_text())['status'] == 'running'
+        assert json.loads(job._job().state_file.read_text())['status'] == 'running'
 
 
 def test_autolabel_job_ignores_pending_unclaimed_trigger(
@@ -337,8 +337,8 @@ def test_autolabel_job_ignores_pending_unclaimed_trigger(
 
     with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
         job._state_dir().mkdir(parents=True, exist_ok=True)
-        job._state_file().write_text(json.dumps({'job_id': 'j5', 'status': 'queued'}))
+        job._job().state_file.write_text(json.dumps({'job_id': 'j5', 'status': 'queued'}))
         job._trigger_file().write_text(json.dumps({'job_id': 'j5'}))
 
         assert job.reconcile_orphaned_jobs() is False
-        assert json.loads(job._state_file().read_text())['status'] == 'queued'
+        assert json.loads(job._job().state_file.read_text())['status'] == 'queued'

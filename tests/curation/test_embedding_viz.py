@@ -209,7 +209,7 @@ async def test_double_start_raises_runtime_error(tmp_path, monkeypatch: pytest.M
     hang_forever = asyncio.Event()
 
     async def _fake_run(job_id, opensearch, *, scope, cluster_id, max_n) -> None:
-        embedding_viz._touch_heartbeat()
+        embedding_viz._job().touch_heartbeat()
         await hang_forever.wait()
 
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run)

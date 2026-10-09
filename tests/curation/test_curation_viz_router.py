@@ -113,7 +113,7 @@ def test_rebuild_then_status_running_then_double_start_409_then_cancel(
     hang_forever = asyncio.Event()
 
     async def _fake_run_projection_job(job_id, opensearch, *, scope, cluster_id, max_n) -> None:
-        embedding_viz._touch_heartbeat()
+        embedding_viz._job().touch_heartbeat()
         await hang_forever.wait()
 
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run_projection_job)
@@ -152,7 +152,7 @@ def test_rebuild_cluster_scope_passes_cluster_id_through(
     hang_forever = asyncio.Event()
 
     async def _fake_run_projection_job(job_id, opensearch, *, scope, cluster_id, max_n) -> None:
-        embedding_viz._touch_heartbeat()
+        embedding_viz._job().touch_heartbeat()
         await hang_forever.wait()
 
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run_projection_job)

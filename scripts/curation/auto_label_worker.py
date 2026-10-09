@@ -82,9 +82,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from scripts.curation._project_worker_utils import unpaused_projects
 from src.services.curation.autolabel.job import (
-    _atomic_write,
-    _cancel_flag,
-    _heartbeat_file,
+    _job,
     _JobState,
     _Progress,
     _running_lock,
@@ -175,7 +173,7 @@ def _touch_heartbeat() -> None:
     just the idle poll loop.
     """
     try:
-        _heartbeat_file().touch()
+        _job().heartbeat_file.touch()
     except OSError as exc:
         logger.warning('heartbeat touch failed: %s', exc)
     _write_container_heartbeat('auto_label_worker', {'poll': True})
@@ -226,7 +224,7 @@ async def _run_one(record: ProjectRecord, trigger: dict[str, Any], opensearch: A
         # Heartbeat first: the API repairs a 'running' state with no heartbeat
         # to 'failed', so the file must exist before that state is visible.
         _touch_heartbeat()
-        _atomic_write(asdict(state))
+        _job().write(asdict(state))
         # running.lock kept for backward-compat with any external tooling
         # that inspects it. cross-container pid is meaningless here, hence
         # the literal 'auto_label_worker' sentinel rather than os.getpid.
@@ -250,7 +248,7 @@ async def _run_one(record: ProjectRecord, trigger: dict[str, Any], opensearch: A
             state.error = f'cannot resolve pipeline {pipeline_path!r}: {exc}'
             state.error_detail = traceback.format_exc()[:4096]
             state.finished_at = time.time()
-            _atomic_write(asdict(state))
+            _job().write(asdict(state))
             logger.exception('project=%s pipeline resolve failed', record.slug)
             return
 
@@ -294,13 +292,10 @@ async def _run_one(record: ProjectRecord, trigger: dict[str, Any], opensearch: A
             with contextlib.suppress(Exception):
                 progress.finalize()
             state.finished_at = time.time()
-            _atomic_write(asdict(state))
+            _job().write(asdict(state))
             with contextlib.suppress(FileNotFoundError):
                 _running_lock().unlink()
-            with contextlib.suppress(FileNotFoundError):
-                _cancel_flag().unlink()
-            with contextlib.suppress(FileNotFoundError):
-                _heartbeat_file().unlink()
+            _job().clear_signals()
 
 
 def _claim_trigger_for(record: ProjectRecord) -> dict[str, Any] | None:

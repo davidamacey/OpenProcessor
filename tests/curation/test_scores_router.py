@@ -57,7 +57,7 @@ def _block_run_scoring_job(monkeypatch: pytest.MonkeyPatch) -> asyncio.Event:
     hang_forever = asyncio.Event()
 
     async def _fake_run_scoring_job(job_id, opensearch, scorer_names) -> None:
-        scores_job._touch_heartbeat()
+        scores_job._job().touch_heartbeat()
         await hang_forever.wait()
 
     monkeypatch.setattr(scores_job, 'run_scoring_job', _fake_run_scoring_job)

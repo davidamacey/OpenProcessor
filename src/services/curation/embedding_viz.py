@@ -55,7 +55,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
-import json
 import os
 import time
 import uuid
@@ -70,6 +69,7 @@ from src.config.curation import items_index, umap_viz_state_index
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.services.curation.embedding_state import embedded_clause
+from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob, heartbeat_ticker
 
 
 if TYPE_CHECKING:
@@ -118,7 +118,7 @@ EMBEDDING_FIELD = 'pe_embedding'
 # max_n *after* the fetch, deterministically (seeded) to avoid shard bias.
 DEFAULT_MAX_N = 20_000
 
-_HEARTBEAT_STALE_S = 30.0
+_ACTIVE = frozenset({'running'})
 
 # See item_scores.job's identical comment: asyncio only holds a weak
 # reference internally, so an unreferenced task can be garbage-collected
@@ -133,16 +133,8 @@ def _jobs_dir() -> Path:
     return project_jobs_dir(Path(os.environ.get('OP_VIZ_JOBS_DIR', '/jobs/viz')))
 
 
-def _state_file() -> Path:
-    return _jobs_dir() / 'state.json'
-
-
-def _cancel_flag() -> Path:
-    return _jobs_dir() / 'cancel.flag'
-
-
-def _heartbeat_file() -> Path:
-    return _jobs_dir() / 'heartbeat'
+def _job() -> FileJob:
+    return FileJob(_jobs_dir())
 
 
 @dataclass
@@ -162,70 +154,20 @@ class _JobState:
         return asdict(self)
 
 
-def _ensure_dir() -> None:
-    _jobs_dir().mkdir(parents=True, exist_ok=True)
-
-
-def _atomic_write(state: _JobState) -> None:
-    _ensure_dir()
-    tmp = _state_file().with_suffix('.tmp')
-    tmp.write_text(json.dumps(state.to_dict(), default=str))
-    tmp.replace(_state_file())
-
-
 def _read_state() -> _JobState:
-    try:
-        raw = json.loads(_state_file().read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return _JobState()
     state = _JobState()
-    for k, v in raw.items():
+    for k, v in _job().read().items():
         if hasattr(state, k):
             setattr(state, k, v)
     return state
 
 
-def _touch_heartbeat() -> None:
-    _ensure_dir()
-    _heartbeat_file().touch()
-
-
-_HEARTBEAT_TICK_S = 10.0
-
-
-async def _heartbeat_ticker() -> None:
-    """Keep the heartbeat fresh across the whole job, not just between
-    phases. The pool fetch (residual scope: no page cap, real measured
-    pace is single-digit-seconds per ~250-crop page — minutes at
-    DEFAULT_MAX_N) and the UMAP fit itself (module docstring: up to
-    ~10-30 min CPU at 128k) can each legitimately run past
-    _HEARTBEAT_STALE_S on their own. Without a ticker, get_state()'s
-    stale-heartbeat repair marks a genuinely-running job 'failed'
-    mid-phase, and _is_busy() (same staleness check) would then let a
-    second job start concurrently against the same state file."""
-    while True:
-        await asyncio.sleep(_HEARTBEAT_TICK_S)
-        _touch_heartbeat()
-
-
-def _heartbeat_age() -> float | None:
-    try:
-        mtime = _heartbeat_file().stat().st_mtime
-    except (FileNotFoundError, OSError):
-        return None
-    return max(0.0, time.time() - mtime)
-
-
 def is_cancelled() -> bool:
-    return _cancel_flag().exists()
+    return _job().cancel_requested()
 
 
 def _is_busy() -> bool:
-    state = _read_state()
-    if state.status != 'running':
-        return False
-    age = _heartbeat_age()
-    return age is None or age <= _HEARTBEAT_STALE_S
+    return _job().is_live(_ACTIVE)
 
 
 def reconcile_orphaned_jobs() -> bool:
@@ -236,14 +178,7 @@ def reconcile_orphaned_jobs() -> bool:
     yet, so a leftover 'running' state.json is necessarily orphaned by a
     prior process. Returns True if the file was rewritten.
     """
-    from src.services.curation.job_reconcile import reconcile_stale_running
-
-    return reconcile_stale_running(
-        _state_file(),
-        _heartbeat_file(),
-        stale_s=_HEARTBEAT_STALE_S,
-        error_prefix='viz projection job',
-    )
+    return _job().reconcile(active_statuses=_ACTIVE, error_prefix='viz projection job')
 
 
 def get_state() -> dict[str, Any]:
@@ -251,12 +186,12 @@ def get_state() -> dict[str, Any]:
     ``item_scores.job.get_state``'s liveness contract)."""
     state = _read_state()
     if state.status == 'running':
-        age = _heartbeat_age()
-        if age is not None and age > _HEARTBEAT_STALE_S:
+        age = _job().heartbeat_age()
+        if age is not None and age > HEARTBEAT_STALE_S:
             state.status = 'failed'
             state.error = state.error or f'viz projection job heartbeat stale ({age:.1f}s ago)'
             state.finished_at = state.finished_at or time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
     return state.to_dict()
 
 
@@ -278,11 +213,7 @@ def start_job(
         raise ValueError("cluster_id is required when scope='cluster'")
     if _is_busy():
         raise RuntimeError('viz projection job already in progress')
-    _ensure_dir()
-    with contextlib.suppress(FileNotFoundError):
-        _cancel_flag().unlink()
-    with contextlib.suppress(FileNotFoundError):
-        _heartbeat_file().unlink()
+    _job().clear_signals()
 
     job_id = uuid.uuid4().hex
     state = _JobState(
@@ -292,7 +223,7 @@ def start_job(
         cluster_id=cluster_id,
         started_at=time.time(),
     )
-    _atomic_write(state)
+    _job().write(state.to_dict())
     _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
         run_projection_job(job_id, opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n)
     )
@@ -302,8 +233,7 @@ def start_job(
 def cancel_job() -> bool:
     if not _is_busy():
         return False
-    _ensure_dir()
-    _cancel_flag().touch()
+    _job().request_cancel()
     return True
 
 
@@ -509,36 +439,36 @@ async def run_projection_job(
     state = _read_state()
     if state.job_id != job_id:
         return
-    _touch_heartbeat()
-    ticker = asyncio.create_task(_heartbeat_ticker())
+    _job().touch_heartbeat()
+    ticker = asyncio.create_task(heartbeat_ticker(_job()))
     try:
         ids, embeddings = await _fetch_pool(
             opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n
         )
         state.n_pool = len(ids)
-        _atomic_write(state)
-        _touch_heartbeat()
+        _job().write(state.to_dict())
+        _job().touch_heartbeat()
 
         if not ids:
             state.status = 'completed'
             state.n_written = 0
             state.finished_at = time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
             return
 
         if is_cancelled():
             state.status = 'cancelled'
             state.finished_at = time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
             return
 
         xy, fitted_at = await fit_projection(embeddings)
-        _touch_heartbeat()
+        _job().touch_heartbeat()
 
         if is_cancelled():
             state.status = 'cancelled'
             state.finished_at = time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
             return
 
         n_written = await _bulk_write_coordinates(opensearch, ids, xy)
@@ -554,18 +484,18 @@ async def run_projection_job(
         state.n_written = n_written
         state.projection_version = VIZ_PROJECTION_VERSION
         state.finished_at = time.time()
-        _atomic_write(state)
+        _job().write(state.to_dict())
     except asyncio.CancelledError:
         state.status = 'cancelled'
         state.finished_at = time.time()
-        _atomic_write(state)
+        _job().write(state.to_dict())
         raise
     except Exception as exc:
         logger.error('curation_viz_projection_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()
-        _atomic_write(state)
+        _job().write(state.to_dict())
     finally:
         ticker.cancel()
         with contextlib.suppress(asyncio.CancelledError):

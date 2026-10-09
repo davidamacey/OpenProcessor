@@ -17,6 +17,7 @@ from scripts.curation import auto_label_worker
 from src.config.curation import base_curation_config, get_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.services.curation.file_job import FileJob
 
 
 pytestmark = pytest.mark.unbound
@@ -200,7 +201,7 @@ def test_state_mtime_is_per_project(two_projects) -> None:
     with bind_project(beta):
         before = job.state_mtime()
     with bind_project(alpha):
-        job._atomic_write({'status': 'running'})
+        job._job().write({'status': 'running'})
         assert job.state_mtime() > 0
     with bind_project(beta):
         assert job.state_mtime() == before
@@ -230,13 +231,13 @@ def test_heartbeat_exists_before_the_running_state_is_visible(
     trigger = auto_label_worker._claim_trigger_for(alpha)
     assert trigger is not None
     seen: list[bool] = []
-    real = auto_label_worker._atomic_write
+    real = FileJob.write
 
-    def _spy(data: dict[str, Any]) -> None:
+    def _spy(self: FileJob, data: dict[str, Any]) -> None:
         if data.get('status') == 'running' and not seen:
-            seen.append(auto_label_worker._heartbeat_file().exists())
-        real(data)
+            seen.append(self.heartbeat_file.exists())
+        real(self, data)
 
-    monkeypatch.setattr(auto_label_worker, '_atomic_write', _spy)
+    monkeypatch.setattr(FileJob, 'write', _spy)
     asyncio.run(auto_label_worker._run_one(alpha, trigger, opensearch=None))
     assert seen == [True]
