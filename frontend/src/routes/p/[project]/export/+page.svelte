@@ -26,6 +26,7 @@
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
   import { formatCount } from '$lib/formatCount';
+  import ValidatedRatioNotice from '$lib/components/labelConfirmation/ValidatedRatioNotice.svelte';
   import ExportItemFilter from '$lib/components/itemFilter/ExportItemFilter.svelte';
   import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
   import { focusOnMount } from '$lib/actions/focusOnMount';
@@ -381,6 +382,10 @@
       {loading ? 'Refreshing…' : 'Refresh'}
     </button>
   </header>
+
+  {#if stats && stats.dataset_error == null}
+    <ValidatedRatioNotice validated={stats.validated_crops} total={stats.total_crops} />
+  {/if}
 
   <!-- Test holdout status card -->
   <section class="surface p-4">

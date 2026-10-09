@@ -400,3 +400,22 @@ describe('DatasetStats', () => {
     expect(target.textContent).toContain('Clusters (total now)');
   });
 });
+
+describe('DatasetStats — labels are not ground truth (#119)', () => {
+  it('names VLM labels suggestions and states how many crops are validated', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+    const stats = goodStats({ total_crops: 14023, validated: 120 });
+    capturedOpts?.onSnapshot?.({}, stats as unknown as Record<string, unknown>);
+    flushSync();
+
+    const note = target.querySelector('[data-testid="labeled-not-ground-truth"]');
+    expect(note?.textContent).toContain('not ground truth until a human validates it');
+    expect(note?.textContent).toContain(
+      `${(120).toLocaleString()} of ${(14023).toLocaleString()} crops are validated`,
+    );
+    expect(target.textContent).toContain('VLM suggestions');
+  });
+});

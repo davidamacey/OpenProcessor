@@ -129,7 +129,7 @@
       },
       {
         key: 'by_vlm',
-        label: 'VLM',
+        label: 'VLM suggestions',
         count: l.by_vlm,
         tone: 'bg-blue-500',
       },
@@ -322,7 +322,7 @@
         </div>
         <dl class="mt-4 space-y-1.5 text-xs">
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Validated (class)</dt>
+            <dt class="text-zinc-400">Validated (ground truth)</dt>
             <dd class="font-mono text-green-300">{fmt(stats.validated)}</dd>
           </div>
           <div class="flex justify-between">
@@ -342,6 +342,11 @@
           <h3 class="text-sm font-semibold text-zinc-300">Labeled by source</h3>
           <span class="text-xs text-zinc-500">{fmt(labeledTotal)} total</span>
         </header>
+        <p class="mb-2 text-xs text-zinc-500" data-testid="labeled-not-ground-truth">
+          A label is not ground truth until a human validates it. Only {fmt(
+            stats.validated,
+          )} of {fmt(stats.total_crops)} crops are validated; VLM and detector labels are suggestions.
+        </p>
         {#if labeledRows.length === 0}
           <p class="text-sm text-zinc-500">No labels yet.</p>
         {:else}
