@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in place of `replaceState` and `keepFocus`.
 - `projectHref` and `switchProjectHref` return `string`, which is what SvelteKit 3's
   `resolve()` accepts for a path built at run time.
+- `tsconfig.json` extends `$app/tsconfig` (SvelteKit 3 no longer writes `.svelte-kit/tsconfig.json`) and
+  lists its sources explicitly, so root config scripts are not type-checked.
 - Dropped the `cookie` override; SvelteKit 3 depends on the fixed 2.x line.
 
 ## [0.1.1] - TBD
