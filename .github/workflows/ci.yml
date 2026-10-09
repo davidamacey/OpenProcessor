@@ -48,9 +48,12 @@ jobs:
           cache-dependency-path: |
             requirements-test.txt
 
+      # pre-commit builds the gitleaks hook from source and setup-go@v6+ sets
+      # GOTOOLCHAIN=local, so this Go must satisfy gitleaks' go.mod (1.22+). A newer Go
+      # still builds benchmarks/ (its go.mod declares 1.21 as the minimum).
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.21"
+          go-version: "1.24"
           cache-dependency-path: benchmarks/go.mod
 
       - name: "Install golangci-lint (benchmarks/*.go hooks are `language: system`)"
