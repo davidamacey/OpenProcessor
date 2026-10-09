@@ -43,10 +43,7 @@ function isSection(s: string): s is ProjectSection {
  * Throws `ProjectNotSelectedError` when there is no active project —
  * only code rendered under `/p/[project]` builds project links.
  */
-export function projectHref<P extends ProjectSubPath>(
-  path: P,
-  slug?: string,
-): `/p/${string}${P}` {
+export function projectHref<P extends ProjectSubPath>(path: P, slug?: string): string {
   const s = slug ?? projectsStore.current?.slug;
   if (!s) throw new ProjectNotSelectedError();
   return `/p/${encodeURIComponent(s)}${path}`;
@@ -65,9 +62,9 @@ const PROJECT_LOCAL_PARAMS = ['crop_id', 'class'];
  * section.
  */
 export function switchProjectHref(
-  url: URL,
+  url: Pick<URL, 'pathname' | 'search'>,
   toSlug: string,
-): `/p/${string}/${ProjectSection}${string}` {
+): string {
   const parts = url.pathname.split('/').filter(Boolean);
   const section = parts[0] === 'p' && parts[2] && isSection(parts[2]) ? parts[2] : null;
   if (!section) return `/p/${encodeURIComponent(toSlug)}/${DEFAULT_SECTION}`;

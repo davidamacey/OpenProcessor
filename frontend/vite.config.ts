@@ -3,8 +3,10 @@ import tailwindcss from '@tailwindcss/vite';
 // vitest/config re-exports vite's defineConfig with the `test` block typed.
 import { defineConfig } from 'vitest/config';
 
+import svelteKitOptions from './sveltekit.options.js';
+
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
+  plugins: [tailwindcss(), sveltekit(svelteKitOptions)],
   // Vite's default envPrefix is 'VITE_' only, which silently drops
   // PUBLIC_TRITON_API_URL (api.ts reads import.meta.env.PUBLIC_TRITON_API_URL
   // directly) even though CLAUDE.md documents it as the way to point local

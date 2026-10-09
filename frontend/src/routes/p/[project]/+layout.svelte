@@ -223,14 +223,12 @@
         const clsName = classesStore.classes.find((c) => c.id === cls.id)?.name;
         if (slotForClassName(clsName) != null) {
           void goto(resolve(projectHref(`/clusters?class=${cls.id}`)), {
-            replaceState: false,
-            keepFocus: true,
+            reset: false,
           });
           return;
         }
         void goto(resolve(projectHref(`/clusters/${cls.id}`)), {
-          replaceState: false,
-          keepFocus: true,
+          reset: false,
         });
         return;
       }
@@ -239,8 +237,7 @@
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
         .join('&');
       void goto(resolve(projectHref(`/clusters${q ? `?${q}` : ''}`)), {
-        replaceState: false,
-        keepFocus: true,
+        reset: false,
       });
     })();
   }

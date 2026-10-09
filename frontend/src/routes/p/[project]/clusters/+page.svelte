@@ -212,13 +212,13 @@
   }
   const gridFilterKey = $derived(JSON.stringify(gridItemFilter()));
   function syncFilterUrl(): void {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     itemFilter.toUrl(url.searchParams);
     if (matchingModeActive) url.searchParams.set('mode', 'matching');
     else url.searchParams.delete('mode');
     void goto(resolve(projectHref(`/clusters${url.search}`)), {
-      replaceState: true,
-      keepFocus: true,
+      replace: true,
+      reset: false,
     });
   }
   function enterMatchingMode(): void {
@@ -392,12 +392,12 @@
   }
 
   function syncSearchUrl(q: string | null): void {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     if (q) url.searchParams.set('q', q);
     else url.searchParams.delete('q');
     void goto(resolve(projectHref(`/clusters${url.search}`)), {
-      replaceState: true,
-      keepFocus: true,
+      replace: true,
+      reset: false,
     });
   }
 

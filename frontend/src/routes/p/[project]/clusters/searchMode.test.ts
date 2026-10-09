@@ -99,8 +99,8 @@ describe('/clusters search mode', () => {
     expect(filterMatch![0]).not.toMatch(/\btab\b/);
   });
 
-  it('syncs the query to the URL as ?q= via replaceState + keepFocus, not a normal navigation', () => {
-    expect(src).toMatch(/replaceState:\s*true,\s*keepFocus:\s*true/);
+  it('syncs the query to the URL as ?q= via replace + reset: false, not a normal navigation', () => {
+    expect(src).toMatch(/replace:\s*true,\s*reset:\s*false/);
   });
 
   it('batches cluster metadata via getClusters() rather than recomputing dominant class client-side (D-4: no representatives needed for badge lookup)', () => {
