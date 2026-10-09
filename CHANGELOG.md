@@ -41,6 +41,42 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   `MLFLOW_ALLOWED_HOSTS` (it replaces the whole list; see `env.template`).
 - The seven mlflow 2.x CVEs are no longer in the Trivy allowlist.
 
+### Added
+
+- Per-project VLM scope policy (#119): `GET/PUT /vlm/policy` sets which crops the
+  automated VLM class writers (the `curation-vlm-worker` and the `auto_label` VLM
+  stage) may label: `scope` `all` (the default, unchanged behaviour), `uncertain`,
+  `representatives` or `off`, plus `max_crops_per_day` and `sample_frac`. Explicit
+  requests (`/vlm/label_cluster/{id}`, a `cluster_id`-scoped run) are never limited.
+  `auto_label/start` and `POST /pipeline/auto_label` accept a `vlm_scope` override.
+  The policy is cloned with the project.
+- Items keep the detector's own answer (#119): `detector_class_name` (registry-name
+  form), `detector_confidence` and, when the label is a registry class,
+  `detector_class_id`, written at ingest whatever the `class_resolution` and never by
+  a VLM, classifier or human relabel. Served on the item wire; existing indexes get
+  the three fields mapped on the next bootstrap. Items ingested before this change
+  have no detector fields (no backfill).
+- Review tab `detector_disagreements` (#119): unvalidated items whose VLM class differs
+  from the detector's own class, listed by `GET /review/tabs` and `GET /review/{tab}`.
+- Accuracy audit (#119): `POST /audit/start` draws a stratified sample (per detector
+  class, deterministic) of machine-labelled crops, `GET /audit/queue` lists those still
+  waiting for a human, and every human label on a drawn crop stamps `audit_outcome`
+  (`agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`). `GET /audit/report` gives
+  per-class detector and VLM precision with Wilson 95% intervals, the confusion matrix
+  and an `insufficient_sample` flag.
+- `POST /clusters/auto_promote` (and the `auto_label` auto-promote stage) is gated on the
+  audit (#119): a class is promoted only with enough audited crops and an audited detector
+  precision of at least `promote_min_precision` (default 0.95); otherwise `409
+  audit_required` or `409 audit_precision_low` lists the classes and nothing is written.
+  `force=true` bypasses the gate (logged); a dry run is never gated. Behaviour change:
+  `curation-cluster-refresh` promotes nothing until the audit clears a class.
+
+### Fixed
+
+- The VLM worker and the `auto_label` sweep no longer select frozen-holdout or excluded
+  items (#119). Before, only a `cluster_id`-scoped run left them out, so the sweep paid VLM calls
+  for items the label lock then refused or that were meant to be out of the pipeline.
+
 ## [0.4.1] - 2026-10-04
 
 Patch release on 0.4.0: repaired CI, operator metrics and dashboards, promote as a

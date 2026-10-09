@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 # id ``occ_upsert_bulk`` logs ingest writes under.
 INGEST_CLASS_LABELER = 'ingest'
 
+# Written by ingest from the detection itself and by no other writer, so the
+# detector's answer stays comparable with whatever class later replaces it.
+DETECTOR_FIELDS = ('detector_class_name', 'detector_class_id', 'detector_confidence')
+
 
 def region_seed_status(item: DetectedItem | None = None) -> RegionStatus | None:
     """Region status a newly created item starts in, or ``None``.
@@ -64,6 +68,12 @@ class DetectedItem:
     class_name: str | None = None
     class_source: str = 'unlabeled_proposal'
     proposal_name: str | None = None
+    # What the primary detector itself said, kept apart from ``class_*`` (which a
+    # later classifier, VLM or human overwrites): the label in registry-name form,
+    # its raw score, and the registry id only when that label is a registry class.
+    detector_class_name: str | None = None
+    detector_class_id: int | None = None
+    detector_confidence: float | None = None
     pe_embedding: Any | None = None  # np.ndarray | None, kept loose to avoid a numpy import here
     backbone_embedding: Any | None = None  # np.ndarray | None — BACKBONE_EMBEDDING_FIELD
     # Why there is no ``pe_embedding``; ignored when the vector is present.
@@ -200,6 +210,9 @@ def build_item_doc(
         # later overrides class_id/class_name, so mismatches stay
         # auditable.
         doc['proposal_name'] = item.proposal_name
+    for name in DETECTOR_FIELDS:
+        if getattr(item, name) is not None:
+            doc[name] = getattr(item, name)
     if item.cluster_id is not None:
         doc['cluster_id'] = item.cluster_id
         doc['cluster_distance'] = item.cluster_distance
@@ -232,6 +245,7 @@ def build_item_doc(
 
 
 __all__ = [
+    'DETECTOR_FIELDS',
     'INGEST_CLASS_LABELER',
     'DetectedItem',
     'build_image_doc',

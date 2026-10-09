@@ -389,3 +389,39 @@ def test_clone_settings_copies_the_ingest_policy_and_leaves_the_source_alone() -
     assert (cloned.embedding.mode, cloned.embedding.classes) == ('selected', ['car'])
     with bind_project(source, read_only=True):
         assert asyncio.run(get_ingest_policy(client)).revision == 1
+
+
+def test_clone_settings_copies_the_vlm_policy_and_leaves_the_source_alone() -> None:
+    from curation.query_fakes import SettingsFakeOpenSearch
+
+    from src.config.project_context import bind_project
+    from src.services.curation.vlm_policy import VlmPolicyBody
+    from src.services.curation.vlm_policy_store import get_vlm_policy, put_vlm_policy
+    from src.services.projects.clone_settings import clone_settings_document
+
+    lifecycle_client = FakeLifecycleOpenSearch()
+    registry = _registry_for(lifecycle_client)
+    asyncio.run(lifecycle.create_project(lifecycle_client, slug='source', display_name='Source'))
+    asyncio.run(lifecycle.create_project(lifecycle_client, slug='target', display_name='Target'))
+    asyncio.run(registry.ensure_fresh())
+    source = registry.get('source')
+    target = registry.get('target')
+    assert source is not None
+    assert target is not None
+
+    client = SettingsFakeOpenSearch()
+    body = VlmPolicyBody(scope='representatives', per_cluster=2, max_crops_per_day=100)
+    with bind_project(source):
+        asyncio.run(put_vlm_policy(client, body, expected_revision=0))
+
+    asyncio.run(clone_settings_document(client, source=source, target_record=target))
+
+    with bind_project(target):
+        cloned = asyncio.run(get_vlm_policy(client))
+    assert (cloned.scope, cloned.per_cluster, cloned.max_crops_per_day) == (
+        'representatives',
+        2,
+        100,
+    )
+    with bind_project(source, read_only=True):
+        assert asyncio.run(get_vlm_policy(client)).revision == 1

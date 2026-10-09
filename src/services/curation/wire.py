@@ -343,6 +343,9 @@ def serialize_item(
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
         'proposal_name': src.get('proposal_name'),
+        'detector_class_name': src.get('detector_class_name'),
+        'detector_class_id': src.get('detector_class_id'),
+        'detector_confidence': src.get('detector_confidence'),
         # Full-image open-vocabulary pass: the prompt that found the item, the
         # set@revision that ran it, and the outline (source frame, normalized).
         # List endpoints send ``mask_polygon`` as null (``item_list_source_excludes``);

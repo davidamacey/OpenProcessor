@@ -225,6 +225,7 @@ def assign_classes_by_name(
         if found is None:
             continue
         item.class_id, item.class_name = found
+        item.detector_class_id = found[0]
         item.class_source = f'{detector_name}_model'
         resolved += 1
     return resolved

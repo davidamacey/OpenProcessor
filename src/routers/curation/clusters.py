@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import HTTPException, Query
 
 from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._config_common_models import ApiErrorResponse, api_error
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.services.curation.cluster_ids import (
     CORE_SIMILARITY_MIN,
@@ -15,11 +16,13 @@ from src.services.curation.cluster_ids import (
 )
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
+    PROMOTE_MIN_PRECISION,
     PROMOTE_MIN_PURITY,
     is_promotable,
     purity_thresholds,
     purity_tier,
 )
+from src.services.curation.cluster_representatives import representatives_msearch_body
 from src.services.curation.clustering.orchestrator import MAX_REFINE_MEMBERS
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import current_cluster_distance
@@ -77,41 +80,6 @@ _MEASURED: dict[str, Any] = {
 _FITS: dict[str, Any] = _script("doc['cluster_nearest_id'].value == doc['cluster_id'].value")
 
 
-_REPS_SORT: list[dict[str, Any]] = [
-    {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
-    {'crop_id': 'asc'},
-]
-_REPS_SOURCE = [
-    'crop_id',
-    'cluster_id',
-    'cluster_distance',
-    'cluster_distance_cluster_id',
-    'class_name',
-    'cluster_subid',
-]
-
-
-def _rep_msearch_body(cluster_id: int, per_cluster: int) -> dict[str, Any]:
-    """One msearch query body: top ``per_cluster`` reps for one cluster.
-
-    Replaces the old per-bucket ``top_hits`` sub-agg (which
-    decompressed stored ``_source`` for every representative across
-    *every* bucket) with one ``_msearch`` request per cluster in the
-    caller's page — issued only for clusters actually on screen.
-    """
-    return {
-        'size': per_cluster,
-        'query': {
-            'bool': {
-                'filter': [{'term': {'cluster_id': cluster_id}}],
-                'must_not': [{'term': {'class_excluded': True}}],
-            }
-        },
-        '_source': _REPS_SOURCE,
-        'sort': _REPS_SORT,
-    }
-
-
 def _reps_from_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reps: list[dict[str, Any]] = []
     for h in hits:
@@ -140,7 +108,7 @@ async def _fill_page_representatives(
     body_lines: list[dict[str, Any]] = []
     for item in page_items:
         body_lines.append({'index': items_index()})
-        body_lines.append(_rep_msearch_body(item['cluster_id'], per_cluster))
+        body_lines.append(representatives_msearch_body(item['cluster_id'], per_cluster))
     try:
         resp = await opensearch.msearch(body=body_lines)
     except Exception as exc:
@@ -486,7 +454,7 @@ async def refine_cluster_endpoint(
     )
 
 
-@router.post('/clusters/auto_promote')
+@router.post('/clusters/auto_promote', responses={409: {'model': ApiErrorResponse}})
 async def auto_promote_clusters_endpoint(
     opensearch: OpenSearchDep,
     min_purity: float = Query(
@@ -496,17 +464,40 @@ async def auto_promote_clusters_endpoint(
         PROMOTE_MIN_MEMBERS, ge=2, le=1000, description='Skip clusters smaller than this'
     ),
     dry_run: bool = Query(False, description='Compute summary without writing'),
+    promote_min_precision: float = Query(
+        PROMOTE_MIN_PRECISION,
+        ge=0.0,
+        le=1.0,
+        description='Audited detector precision a class needs to be promoted',
+    ),
+    force: bool = Query(False, description='Promote without the accuracy-audit gate (logged)'),
 ) -> dict[str, Any]:
-    """Promote crops in high-purity clusters to ``label_validated=true``.
+    """Promote classifier-labelled crops that agree with their high-purity cluster.
 
-    Sets ``label_source='cluster_propagation'`` and copies the dominant
-    cluster class to every member that isn't already human-validated.
+    Validates each such crop (``class_source='cluster_majority_agreement'``).
+    Gated on the accuracy audit (``POST /audit/start``): every class the run would
+    promote needs enough audited crops and an audited detector precision of at
+    least ``promote_min_precision``, else ``409 audit_required`` or
+    ``409 audit_precision_low`` listing the classes and nothing is written.
+    ``force=true`` bypasses the gate; a dry run is never gated.
     """
-    from src.services.curation.clustering.orchestrator import auto_promote_clusters
+    from src.services.curation.clustering.auto_promote import AuditGateError, gated_auto_promote
 
-    return await auto_promote_clusters(
-        opensearch,
-        min_purity=min_purity,
-        min_members=min_members,
-        dry_run=dry_run,
-    )
+    try:
+        return await gated_auto_promote(
+            opensearch,
+            min_purity=min_purity,
+            min_members=min_members,
+            dry_run=dry_run,
+            promote_min_precision=promote_min_precision,
+            force=force,
+        )
+    except AuditGateError as exc:
+        raise api_error(
+            409,
+            exc.code,
+            f'accuracy audit does not clear {len(exc.classes)} class(es) for promotion; '
+            'audit them or pass force=true',
+            classes=exc.classes,
+            promote_min_precision=exc.threshold,
+        ) from exc

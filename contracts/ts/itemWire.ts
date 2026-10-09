@@ -65,6 +65,9 @@ export interface ItemWire {
   crop_area_norm: number | null;
   blur_lap_ratio: number | null;
   proposal_name: string | null;
+  detector_class_name: string | null;
+  detector_class_id: number | null;
+  detector_confidence: number | null;
   source_prompt: string | null;
   open_vocab_set: string | null;
   open_vocab_revision: number | null;
@@ -182,6 +185,9 @@ export const ITEM_WIRE_KEYS = [
   'crop_area_norm',
   'blur_lap_ratio',
   'proposal_name',
+  'detector_class_name',
+  'detector_class_id',
+  'detector_confidence',
   'source_prompt',
   'open_vocab_set',
   'open_vocab_revision',

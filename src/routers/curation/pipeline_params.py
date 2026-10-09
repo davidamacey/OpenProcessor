@@ -27,6 +27,12 @@ RUN_VLM_DESC = (
     'no-region-cohort backfill.'
 )
 
+VLM_SCOPE_DESC = (
+    "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, "
+    'representatives or off. Unset uses the stored policy. Ignored with cluster_id, an '
+    'explicit request that no policy limits.'
+)
+
 REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip retrain.'
 
 # Labeling-assist item selection (task d): scope a run to one registry class.

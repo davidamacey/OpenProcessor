@@ -38,10 +38,20 @@ from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD, EmptyClassReason
 
 
+# Both fields are keyword-mapped (see the model_disagreements note below), so the
+# comparison is plain doc-value equality. ``detector_class_name`` is stored in
+# registry-name form (item_doc.DETECTOR_FIELDS), the same form as ``class_name``.
+DETECTOR_DISAGREES_SCRIPT = (
+    "doc.containsKey('detector_class_name') && doc['detector_class_name'].size() > 0 && "
+    "doc.containsKey('class_name') && doc['class_name'].size() > 0 && "
+    "!doc['detector_class_name'].value.equals(doc['class_name'].value)"
+)
+
 KNOWN_TABS: tuple[str, ...] = (
     'all',
     'mismatches',
     'vlm_low_conf',
+    'detector_disagreements',
     'outliers',
     'uncertainty',
     'model_disagreements',
@@ -62,6 +72,10 @@ TAB_LABELS: dict[str, tuple[str, str]] = {
     'vlm_low_conf': (
         'VLM low confidence',
         "The VLM's own confidence in its label is medium or low",
+    ),
+    'detector_disagreements': (
+        'Detector disagreements',
+        "The VLM's class differs from the class the detector gave the crop",
     ),
     'outliers': ('Outliers', 'Far from cluster centroid'),
     'uncertainty': ('Uncertainty', 'High active-learning probe entropy'),
@@ -371,6 +385,19 @@ def build_tab_query(
         must.append({'terms': {'vlm_confidence': ['medium', 'low']}})
         must.append({'terms': {'class_source': sorted(VLM_CLASS_SOURCES)}})
         reason = 'VLM confidence below high'
+    elif tab == 'detector_disagreements':
+        # The VLM labelled the crop with a class other than the one the detector
+        # gave it. Unvalidated only (the default must_not): a human decision
+        # already settled the rest. A VLM answer outside the registry has no
+        # class_name and belongs to the mismatches tab, not here.
+        must.append({'terms': {'class_source': sorted(VLM_CLASS_SOURCES)}})
+        must.append({'exists': {'field': 'detector_class_name'}})
+        must.append({'exists': {'field': 'class_name'}})
+        must.append(
+            {'script': {'script': {'source': DETECTOR_DISAGREES_SCRIPT, 'lang': 'painless'}}}
+        )
+        # Default sort: 'detector_disagreement_default' — see review_sorts.py.
+        reason = "VLM's class differs from the detector's class"
     elif tab == 'outliers':
         # outlier_flagged is never written anywhere in the
         # repo -- deleted. This queue is cluster_distance >= 0.35 only.
@@ -621,6 +648,7 @@ def build_tab_query(
 
 __all__ = [
     'COMMON_FILTERS',
+    'DETECTOR_DISAGREES_SCRIPT',
     'KNOWN_TABS',
     'TAB_EXTRA_FILTERS',
     'TAB_FILTER_DEFAULTS',

@@ -14,6 +14,7 @@ real module.
 from __future__ import annotations
 
 import src.routers.curation._project_pause
+import src.routers.curation.audit
 import src.routers.curation.bakeoff
 import src.routers.curation.class_seed
 import src.routers.curation.classes
@@ -62,7 +63,8 @@ import src.routers.curation.settings
 import src.routers.curation.stats
 import src.routers.curation.viz
 import src.routers.curation.vlm
-import src.routers.curation.vlm_activation  # noqa: F401 - side-effect import
+import src.routers.curation.vlm_activation
+import src.routers.curation.vlm_policy  # noqa: F401 - side-effect import
 from src.clients.curation_opensearch import get_class_registry
 
 # Side-effect imports: each module registers its endpoints on `router`.
