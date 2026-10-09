@@ -34,6 +34,14 @@ class ItemCrop(BaseModel):
         description='JPEG-encoded crop bytes. Caller is responsible for resizing to a sane size '
         '(e.g. ≤ 768 px on the long edge) before calling.',
     )
+    detector_class: str = Field(
+        '',
+        description="The item's stored detector class name, set only when the pack opts in "
+        '(``detector_hint_min_confidence_pct``); empty = no hint.',
+    )
+    detector_confidence: float | None = Field(
+        None, description='Detector confidence for ``detector_class``.'
+    )
 
 
 class RegionCrop(BaseModel):

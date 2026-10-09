@@ -503,12 +503,23 @@ A prompt pack holds the VLM prompt templates and two vocabulary tables
 glob patterns (`blurry_*`, `*_scene`) whose matching new-class proposals are
 dropped. An optional `registry_prior_top_k` (integer, `0` = off, at most 50)
 turns on a registry prior for open-vocabulary VLM labeling: the prompt then lists
-that many registry classes, most validated items first (ties by name), plus the
-pending new-class proposal names, built server-side from the project's own state
-(never from a client list). It is a hint, not a constraint: a reply outside the
-list is still accepted and resolved as usual. If the counts cannot be read the
+up to that many registry classes that have validated items, most validated first
+(ties by name), plus the pending new-class proposal names that at least 3 crops
+carry, built server-side from the project's own state (never from a client
+list). A name matching the pack's `proposal_denylist` is never listed, and while
+no class has a validated item the prior is skipped entirely (an alphabetical list
+only primes the model with noise). It is a hint, not a constraint: a reply outside
+the list is still accepted and resolved as usual. If the counts cannot be read the
 run refuses (HTTP 503 on `vlm/label_batch`, a stage error in the auto-label
-pipeline) instead of labeling without the prior. It is separate from the region profile:
+pipeline) instead of labeling without the prior. Measured: on a 539-crop public
+COCO oracle with `gemma-4-e4b`, the prior showed no accuracy gain (overall 0.775
+off, 0.774 on; with ten validated classes seeded, 0.785 off, 0.775 on) and
+raised pending proposals when classes were seeded, so it stays off by default. An optional
+`detector_hint_min_confidence_pct` (integer, `0` = off, at most 100) adds, per
+image, the item's stored detector class name when the detector confidence is at
+least that percent; it is also only a hint. Measured on the same oracle it lifted overall accuracy from 0.775 to 0.853 (0.850 to 0.918 when the model answers), because the stored detector name is right far more often than the VLM alone. The shipped default denylist covers
+blur, quality, empty, scene, `abstract*`, `*_background` and `*_object` words.
+It is separate from the region profile:
 a profile says where to look, a pack says what to ask. Either can be used
 without the other.
 

@@ -19,6 +19,7 @@ from src.services.curation.registry_prior_source import (
 )
 from src.services.labeling.registry_prior import (
     MAX_REGISTRY_PRIOR_TOP_K,
+    MIN_PENDING_SUPPORT,
     RegistryPrior,
     rank_registry_prior,
 )
@@ -44,8 +45,49 @@ def test_rank_orders_by_validated_count_then_name_and_bounds() -> None:
 
 
 def test_rank_is_none_when_off_or_empty() -> None:
-    assert rank_registry_prior(['car'], {}, {}, top_k=0) is None
+    assert rank_registry_prior(['car'], {'car': 3}, {}, top_k=0) is None
     assert rank_registry_prior([], {}, {}, top_k=5) is None
+
+
+def test_rank_skips_the_prior_when_nothing_is_validated() -> None:
+    # All counts 0: the only possible order is alphabetical, which is noise.
+    assert rank_registry_prior(['car', 'bus'], {}, {'forklift': 9}, top_k=5) is None
+    assert rank_registry_prior(['car', 'bus'], {'car': 0}, {'forklift': 9}, top_k=5) is None
+
+
+def test_rank_lists_only_classes_with_validated_items() -> None:
+    prior = rank_registry_prior(['bus', 'car', 'van'], {'car': 2}, {}, top_k=3)
+    assert prior == RegistryPrior(classes=('car',), pending=())
+
+
+def test_rank_never_includes_denylisted_names() -> None:
+    prior = rank_registry_prior(
+        ['car', 'abstract_background'],
+        {'car': 2, 'abstract_background': 50},
+        {'street_scene': 40, 'forklift': MIN_PENDING_SUPPORT, 'abstract_object': 99},
+        top_k=5,
+        denylist=['abstract*', '*_scene'],
+    )
+    assert prior == RegistryPrior(classes=('car',), pending=('forklift',))
+
+
+def test_rank_all_validated_names_denied_means_no_prior() -> None:
+    prior = rank_registry_prior(
+        ['abstract_object'], {'abstract_object': 5}, {}, top_k=5, denylist=['abstract*']
+    )
+    assert prior is None
+
+
+def test_pending_needs_the_minimum_support() -> None:
+    prior = rank_registry_prior(
+        ['car'],
+        {'car': 1},
+        {'once': 1, 'almost': MIN_PENDING_SUPPORT - 1, 'enough': MIN_PENDING_SUPPORT},
+        top_k=5,
+    )
+    assert prior is not None
+    assert prior.pending == ('enough',)
+    assert MIN_PENDING_SUPPORT >= 2
 
 
 def test_default_pack_has_prior_off_and_round_trips() -> None:
@@ -77,9 +119,23 @@ def _aggs(validated: dict[str, int], pending: dict[str, int]) -> dict[str, Any]:
 @pytest.mark.asyncio
 async def test_source_ranks_served_counts_and_excludes_holdout() -> None:
     os_ = _Os(_aggs({'bus': 2, 'car': 7}, {'forklift': 4}))
-    prior = await load_registry_prior(os_, top_k=2, registry_names=['bus', 'car', 'van'])
+    prior = await load_registry_prior(
+        os_, top_k=2, registry_names=['bus', 'car', 'van'], denylist=[]
+    )
     assert prior == RegistryPrior(classes=('car', 'bus'), pending=('forklift',))
     assert {'term': {'test_holdout': True}} in os_.bodies[0]['query']['bool']['must_not']
+
+
+@pytest.mark.asyncio
+async def test_prior_for_pack_applies_the_pack_denylist() -> None:
+    from src.services.curation.registry_prior_source import prior_for_pack
+
+    pack = dataclasses.replace(
+        GENERIC_ITEM_PACK, registry_prior_top_k=5, proposal_denylist=['*_scene']
+    )
+    resp = _aggs({'car': 3}, {'street_scene': 40, 'forklift': 40})
+    prior = await prior_for_pack(_Os(resp), pack, ['car'])
+    assert prior == RegistryPrior(classes=('car',), pending=('forklift',))
 
 
 @pytest.mark.asyncio
@@ -100,14 +156,16 @@ async def test_prior_or_error_reports_instead_of_raising() -> None:
 @pytest.mark.asyncio
 async def test_source_off_does_not_query() -> None:
     os_ = _Os(_aggs({}, {}))
-    assert await load_registry_prior(os_, top_k=0, registry_names=['car']) is None
+    assert await load_registry_prior(os_, top_k=0, registry_names=['car'], denylist=[]) is None
     assert os_.bodies == []
 
 
 @pytest.mark.asyncio
 async def test_source_fails_closed_when_counts_unreadable() -> None:
     with pytest.raises(RegistryPriorUnavailableError):
-        await load_registry_prior(_Os(RuntimeError('down')), top_k=3, registry_names=['car'])
+        await load_registry_prior(
+            _Os(RuntimeError('down')), top_k=3, registry_names=['car'], denylist=[]
+        )
 
 
 def _sent_text(labeler: Any) -> str:
@@ -213,7 +271,11 @@ def test_missing_top_k_defaults_off(app_client: TestClient) -> None:
 
 
 def _wire_label_batch(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, pack: PromptPack, seen: list[Any]
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    pack: PromptPack,
+    seen: list[Any],
+    doc_extra: dict[str, Any] | None = None,
 ) -> tuple[Any, Any]:
     import io
     from types import SimpleNamespace
@@ -250,6 +312,7 @@ def _wire_label_batch(
                     'bbox_norm': [0.1, 0.1, 0.5, 0.5],
                     'class_source': 'item_proposal',
                     'class_validated': False,
+                    **(doc_extra or {}),
                 }
             }
         }
@@ -286,6 +349,14 @@ async def test_label_batch_passes_the_served_prior_only_when_the_pack_asks(
     on = dataclasses.replace(GENERIC_ITEM_PACK, registry_prior_top_k=5)
     (tmp_path / 'on').mkdir()
     vlm_mod, fake = _wire_label_batch(tmp_path / 'on', monkeypatch, on, seen)
+    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['c1']), fake)
+    # nothing validated yet: the prior is skipped, not an alphabetical list
+    assert seen == [None]
+
+    seen.clear()
+    (tmp_path / 'validated').mkdir()
+    vlm_mod, fake = _wire_label_batch(tmp_path / 'validated', monkeypatch, on, seen)
+    fake.search = AsyncMock(return_value=_aggs({'widget': 4}, {}))
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['c1']), fake)
     assert seen[0] is not None
     assert seen[0].classes == ('widget',)

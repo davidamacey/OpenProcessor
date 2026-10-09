@@ -26,7 +26,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.services.labeling.region_overlay import (
@@ -35,6 +35,9 @@ from src.services.labeling.region_overlay import (
     REPLY_TEXT_KEY,
 )
 
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = get_logger(__name__)
 
@@ -105,6 +108,11 @@ class PromptPack:
     # names as a hint. 0 = off. Bounded by ``MAX_REGISTRY_PRIOR_TOP_K``.
     registry_prior_top_k: int = 0
 
+    # Detector hint (#193): when > 0, open-vocabulary labeling tells the VLM each
+    # item's stored detector class name when the detector confidence is at least
+    # this many percent. 0 = off. Bounded by ``MAX_DETECTOR_HINT_PCT`` (100).
+    detector_hint_min_confidence_pct: int = 0
+
     def to_dict(self) -> dict[str, Any]:
         """Plain-dict serialization -- every field is a ``str`` or a
         ``dict[str, str]``, so this round-trips through JSON cleanly."""
@@ -141,10 +149,39 @@ class PromptPack:
         return cls.from_dict(data)
 
 
-def proposal_denied(slug: str, patterns: list[str] | tuple[str, ...]) -> bool:
+def proposal_denied(slug: str, patterns: Sequence[str]) -> bool:
     """True when ``slug`` matches any ``patterns`` glob (case-insensitive)."""
     low = slug.lower()
     return any(fnmatch.fnmatchcase(low, str(p).lower()) for p in patterns)
+
+
+#: Shipped proposal-name denylist: scene / image-quality words that are never a
+#: class. A live COCO oracle run (#193) put ``abstract_background`` at 60% of pending
+#: proposals, so the abstract / background / generic-object families are listed beside
+#: the blur and emptiness words. Globs are anchored (``fnmatch``, whole slug) and
+#: tested against the COCO class names so none of them eats a real class.
+DEFAULT_PROPOSAL_DENYLIST: tuple[str, ...] = (
+    'abstract*',
+    'background*',
+    '*_background',
+    'object',
+    'objects',
+    '*_object',
+    'blurry*',
+    'blurred*',
+    '*_blurry',
+    '*_blur',
+    'blur_*',
+    'out_of_focus*',
+    'low_quality*',
+    'low_resolution*',
+    'unclear*',
+    'unidentified*',
+    'scene*',
+    '*_scene',
+    'empty*',
+    'unknown*',
+)
 
 
 # ---------------------------------------------------------------------------
@@ -285,20 +322,7 @@ GENERIC_ITEM_PACK = PromptPack(
     # Deliberately no class_descriptions/synonyms: they name registry classes,
     # and the shipped default must validate with zero warnings on any registry
     # (empty, COCO, ...). Domain vocabulary belongs in a stored pack.
-    proposal_denylist=[
-        'blurry*',
-        '*_blurry',
-        'blur_*',
-        'out_of_focus*',
-        'low_quality*',
-        'low_resolution*',
-        'unclear*',
-        '*_scene',
-        'scene_*',
-        'background*',
-        'empty_*',
-        'unknown*',
-    ],
+    proposal_denylist=list(DEFAULT_PROPOSAL_DENYLIST),
 )
 
 
@@ -407,6 +431,7 @@ GENERIC_REGION_PACK = PromptPack(
         'is an array of per-image verdicts in input order:\n'
         '{"results": [{"img": 1, "visible": true|false}, ...]}'
     ),
+    proposal_denylist=list(DEFAULT_PROPOSAL_DENYLIST),
 )
 
 # A quoted value in a prompt: "..." or '...'. Double-quoted strings are
@@ -542,6 +567,7 @@ from src.services.labeling.vlm_prompt_resolution import (  # noqa: E402
 
 __all__ = [
     'BUILT_IN_PACKS',
+    'DEFAULT_PROPOSAL_DENYLIST',
     'FORMATTED_PLACEHOLDERS',
     'GENERIC_ITEM_PACK',
     'GENERIC_REGION_PACK',

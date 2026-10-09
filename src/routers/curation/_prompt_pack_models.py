@@ -11,6 +11,7 @@ from src.routers.curation._config_common_models import (
     ActiveRef,
     ValidationReport,
 )
+from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
 from src.services.labeling.vlm_prompts import REPLY_KEY_CONTRACT
 
@@ -60,6 +61,18 @@ class PromptPackBody(BaseModel):
                 'type': 'integer',
                 'minimum': 0,
                 'maximum': MAX_REGISTRY_PRIOR_TOP_K,
+            },
+        ),
+    ]
+    # Same reasoning. 0 = off.
+    detector_hint_min_confidence_pct: Annotated[
+        Any,
+        Field(
+            default=0,
+            json_schema_extra={
+                'type': 'integer',
+                'minimum': 0,
+                'maximum': MAX_DETECTOR_HINT_PCT,
             },
         ),
     ]

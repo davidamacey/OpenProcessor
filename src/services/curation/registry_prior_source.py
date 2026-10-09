@@ -9,7 +9,7 @@ from src.services.labeling.registry_prior import RegistryPrior, rank_registry_pr
 
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Sequence
 
 _PENDING_BUCKETS = 200
 
@@ -28,9 +28,13 @@ def _buckets(aggs: dict[str, Any], key: str) -> dict[str, int]:
 
 
 async def load_registry_prior(
-    opensearch: Any, *, top_k: int, registry_names: Collection[str]
+    opensearch: Any,
+    *,
+    top_k: int,
+    registry_names: Collection[str],
+    denylist: Sequence[str],
 ) -> RegistryPrior | None:
-    """The prior for ``top_k`` > 0 (``None`` when off or nothing to rank)."""
+    """The prior for ``top_k`` > 0 (``None`` when off, or nothing validated to rank)."""
     if top_k <= 0 or not registry_names:
         return None
     body = {
@@ -58,7 +62,7 @@ async def load_registry_prior(
         pending = _buckets(aggs, 'pending')
     except Exception as exc:
         raise RegistryPriorUnavailableError(f'registry prior counts unavailable: {exc}') from exc
-    return rank_registry_prior(registry_names, validated, pending, top_k=top_k)
+    return rank_registry_prior(registry_names, validated, pending, top_k=top_k, denylist=denylist)
 
 
 async def prior_for_pack(
@@ -66,7 +70,10 @@ async def prior_for_pack(
 ) -> RegistryPrior | None:
     """The prior the pack asks for (``None`` when its ``registry_prior_top_k`` is 0)."""
     return await load_registry_prior(
-        opensearch, top_k=pack.registry_prior_top_k, registry_names=registry_names
+        opensearch,
+        top_k=pack.registry_prior_top_k,
+        registry_names=registry_names,
+        denylist=pack.proposal_denylist,
     )
 
 

@@ -15703,6 +15703,13 @@
             "title": "Combined User Template",
             "type": "string"
           },
+          "detector_hint_min_confidence_pct": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Detector Hint Min Confidence Pct",
+            "type": "integer"
+          },
           "open_class_system": {
             "default": "",
             "title": "Open Class System",

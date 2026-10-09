@@ -340,6 +340,19 @@ class ClassifyOps(VlmLabelerCore):
             user_text = f'{user_text}\n{_RESULTS_ENVELOPE}'
         if registry_prior is not None:
             user_text = f'{registry_prior.prompt_text()}\n\n{user_text}'
+        if self._pack.detector_hint_min_confidence_pct > 0:
+            hints = [
+                f'image {i}: {c.detector_class} (detector confidence {c.detector_confidence:.2f})'
+                for i, c in enumerate(chunk, start=1)
+                if c.detector_class and c.detector_confidence is not None
+            ]
+            if hints:
+                user_text = (
+                    f'Detector hints, one per image where the detector saw something: '
+                    f'{"; ".join(hints)}. A hint, not a constraint: the detector can be wrong, '
+                    'so answer from what the crop shows.\n\n'
+                    f'{user_text}'
+                )
         if cluster_hint:
             user_text = (
                 f'Hint: these crops were grouped together by visual similarity; the '

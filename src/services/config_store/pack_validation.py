@@ -12,6 +12,7 @@ import string
 from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any
 
+from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.region_overlay import REPLY_TEXT_KEY
 from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT, PromptPack
@@ -40,7 +41,14 @@ _STRING_FIELDS = tuple(
     f.name
     for f in dc_fields(PromptPack)
     if f.name
-    not in ('name', 'class_descriptions', 'synonyms', 'proposal_denylist', 'registry_prior_top_k')
+    not in (
+        'name',
+        'class_descriptions',
+        'synonyms',
+        'proposal_denylist',
+        'registry_prior_top_k',
+        'detector_hint_min_confidence_pct',
+    )
 )
 _MAP_FIELDS = ('class_descriptions', 'synonyms')
 
@@ -122,12 +130,13 @@ def _check_denylist(deny: Any) -> list[ValidationIssue]:
     return issues
 
 
-def _check_registry_prior(body: dict[str, Any]) -> list[ValidationIssue]:
-    field_name = 'registry_prior_top_k'
+def _check_bounded_int(
+    body: dict[str, Any], field_name: str, maximum: int
+) -> list[ValidationIssue]:
     if field_name not in body:
         return []
-    top_k = body[field_name]
-    if isinstance(top_k, bool) or not isinstance(top_k, int):
+    value = body[field_name]
+    if isinstance(value, bool) or not isinstance(value, int):
         return [
             _issue(
                 'pack_field_missing',
@@ -136,14 +145,14 @@ def _check_registry_prior(body: dict[str, Any]) -> list[ValidationIssue]:
                 field=field_name,
             )
         ]
-    if not 0 <= top_k <= MAX_REGISTRY_PRIOR_TOP_K:
+    if not 0 <= value <= maximum:
         return [
             _issue(
                 'pack_field_out_of_range',
                 'error',
-                f'{field_name} must be between 0 (off) and {MAX_REGISTRY_PRIOR_TOP_K}',
+                f'{field_name} must be between 0 (off) and {maximum}',
                 field=field_name,
-                detail={'value': top_k, 'max': MAX_REGISTRY_PRIOR_TOP_K},
+                detail={'value': value, 'max': maximum},
             )
         ]
     return []
@@ -204,7 +213,10 @@ def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
                 )
             )
     issues.extend(_check_denylist(body.get('proposal_denylist')))
-    issues.extend(_check_registry_prior(body))
+    issues.extend(_check_bounded_int(body, 'registry_prior_top_k', MAX_REGISTRY_PRIOR_TOP_K))
+    issues.extend(
+        _check_bounded_int(body, 'detector_hint_min_confidence_pct', MAX_DETECTOR_HINT_PCT)
+    )
     return issues
 
 

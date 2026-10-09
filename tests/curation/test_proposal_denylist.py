@@ -72,3 +72,136 @@ async def test_empty_denylist_keeps_everything() -> None:
     labeler = _labeler([_entry(1, 'blurry_thing')], pack)
     preds = await labeler.label_or_propose_batch([ItemCrop(img_id='c1', jpeg_bytes=b'j')], ['box'])
     assert preds[0].proposed_class == 'blurry_thing'
+
+
+# The shipped default must catch the scene / quality words the live COCO oracle run
+# produced (abstract_background was 60% of pending proposals) and nothing that is a
+# real object class.
+_COCO_NAMES = [
+    'person',
+    'bicycle',
+    'car',
+    'motorcycle',
+    'airplane',
+    'bus',
+    'train',
+    'truck',
+    'boat',
+    'traffic_light',
+    'fire_hydrant',
+    'stop_sign',
+    'parking_meter',
+    'bench',
+    'bird',
+    'cat',
+    'dog',
+    'horse',
+    'sheep',
+    'cow',
+    'elephant',
+    'bear',
+    'zebra',
+    'giraffe',
+    'backpack',
+    'umbrella',
+    'handbag',
+    'tie',
+    'suitcase',
+    'frisbee',
+    'skis',
+    'snowboard',
+    'sports_ball',
+    'kite',
+    'baseball_bat',
+    'baseball_glove',
+    'skateboard',
+    'surfboard',
+    'tennis_racket',
+    'bottle',
+    'wine_glass',
+    'cup',
+    'fork',
+    'knife',
+    'spoon',
+    'bowl',
+    'banana',
+    'apple',
+    'sandwich',
+    'orange',
+    'broccoli',
+    'carrot',
+    'hot_dog',
+    'pizza',
+    'donut',
+    'cake',
+    'chair',
+    'couch',
+    'potted_plant',
+    'bed',
+    'dining_table',
+    'toilet',
+    'tv',
+    'laptop',
+    'mouse',
+    'remote',
+    'keyboard',
+    'cell_phone',
+    'microwave',
+    'oven',
+    'toaster',
+    'sink',
+    'refrigerator',
+    'book',
+    'clock',
+    'vase',
+    'scissors',
+    'teddy_bear',
+    'hair_drier',
+    'toothbrush',
+    'forklift',
+    'crane',
+    'pallet',
+]
+
+
+@pytest.mark.parametrize(
+    'noise',
+    [
+        'abstract_background',
+        'abstract_object',
+        'abstract',
+        'abstract_pattern',
+        'plain_background',
+        'dark_background',
+        'background',
+        'unknown_object',
+        'generic_object',
+        'object',
+        'blurry',
+        'blurry_object',
+        'blurred_image',
+        'out_of_focus',
+        'low_quality_image',
+        'street_scene',
+        'scene',
+        'scene_unclear',
+        'empty',
+        'empty_frame',
+        'unclear',
+        'unidentified',
+    ],
+)
+def test_default_pack_denies_scene_and_quality_words(noise: str) -> None:
+    assert proposal_denied(noise, GENERIC_ITEM_PACK.proposal_denylist), noise
+
+
+@pytest.mark.parametrize('name', _COCO_NAMES)
+def test_default_pack_keeps_real_class_names(name: str) -> None:
+    assert not proposal_denied(name, GENERIC_ITEM_PACK.proposal_denylist), name
+
+
+def test_every_shipped_default_pack_inherits_the_denylist() -> None:
+    from src.services.labeling import vlm_prompts
+
+    for pack in (vlm_prompts.GENERIC_ITEM_PACK, vlm_prompts.GENERIC_REGION_PACK):
+        assert proposal_denied('abstract_background', pack.proposal_denylist), pack.name

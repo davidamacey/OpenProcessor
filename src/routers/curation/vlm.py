@@ -49,6 +49,7 @@ from src.services.curation.registry_prior_source import (
     RegistryPriorUnavailableError,
     prior_for_pack,
 )
+from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 
 
 _F = get_region_fields()
@@ -198,15 +199,13 @@ async def vlm_label_batch(
 
     # Pull image_path + bbox_norm for each crop, then build ItemCrop list
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
-    from src.services.labeling.vlm_models import ItemCrop
-
     # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
     # (scripts/curation/worker/state.py) writes into -- this used to read a
     # different env var with a different default, which meant a 100% cache
     # miss out of the box.
     crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
-    crops: list[ItemCrop] = []
+    crops = []
     cache_hits = 0
     cache_misses = 0
     # One mget_crops() call instead of N separate opensearch.get()
@@ -219,7 +218,7 @@ async def vlm_label_batch(
         list(payload.crop_ids),
         index=items_index(),
         source_includes=sorted(
-            {'class_source', 'class_validated', 'image_path', 'bbox_norm'}
+            {'class_source', 'class_validated', 'image_path', 'bbox_norm', *DETECTOR_HINT_FIELDS}
             | set(CLASS_GUARD_SOURCE_FIELDS)
         ),
     )
@@ -248,7 +247,7 @@ async def vlm_label_batch(
         jpeg = load_vlm_item_jpeg(crop_id, image_path, tuple(bbox), cache_dir=crop_cache_dir)
         if jpeg is None:
             continue
-        crops.append(ItemCrop(img_id=crop_id, jpeg_bytes=jpeg))
+        crops.append(hinted_crop(crop_id, jpeg, src, labeler._pack))
 
     if cache_hits + cache_misses > 0:
         logger.info(
