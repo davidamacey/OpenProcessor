@@ -18,6 +18,7 @@ import {
   tabHonorsPinnedSortDefault,
   visibleReviewTabs,
   type ReviewPresetId,
+  isServedOnlyTab,
 } from './reviewTabs';
 
 // The registered queue slots (whatever this build registers); each gets
@@ -28,12 +29,12 @@ const queueSlots = registeredSlots.filter((s) => s.capabilities.queue);
 afterEach(() => resetDeploymentSlots());
 
 describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
-  it('has the core tabs from the 2026-09 consolidation plus new_class_proposals and imported, then one tab per queue slot', () => {
-    expect(CORE_REVIEW_TABS).toHaveLength(6);
-    expect(REVIEW_TABS).toHaveLength(6 + queueSlots.length);
+  it('has the core tabs from the 2026-09 consolidation plus new_class_proposals, imported and detector_disagreements, then one tab per queue slot', () => {
+    expect(CORE_REVIEW_TABS).toHaveLength(7);
+    expect(REVIEW_TABS).toHaveLength(7 + queueSlots.length);
   });
 
-  it('is exactly all / uncertainty / model_disagreements / classifier_blind_spots / new_class_proposals / imported / slot:<key>...', () => {
+  it('is exactly all / uncertainty / model_disagreements / classifier_blind_spots / new_class_proposals / imported / detector_disagreements / slot:<key>...', () => {
     expect(REVIEW_TABS.map((t) => t.id)).toEqual([
       'all',
       'uncertainty',
@@ -41,6 +42,7 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
       'classifier_blind_spots',
       'new_class_proposals',
       'imported',
+      'detector_disagreements',
       ...queueSlots.map((s) => `slot:${s.key}`),
     ]);
     // urlId is the bookmark contract — each slot tab keeps its own.
@@ -362,12 +364,13 @@ describe('the imported tab (W10): offered only when the backend serves it', () =
     expect(none).not.toContain('imported');
     // Every other tab is untouched by the served-only rule.
     expect(none).toContain('new_class_proposals');
-    expect(none).toHaveLength(REVIEW_TABS.length - 1);
+    expect(none).not.toContain('detector_disagreements');
+    expect(none).toHaveLength(REVIEW_TABS.length - 2);
     const served = visibleReviewTabs(REVIEW_TABS, (id) => id === 'imported').map(
       (t) => t.id,
     );
     expect(served).toContain('imported');
-    expect(served).toHaveLength(REVIEW_TABS.length);
+    expect(served).toHaveLength(REVIEW_TABS.length - 1);
   });
 
   it('asks the served vocabulary by the tab endpoint id', () => {
@@ -376,7 +379,7 @@ describe('the imported tab (W10): offered only when the backend serves it', () =
       asked.push(id);
       return true;
     });
-    expect(asked).toEqual(['imported']);
+    expect(asked).toEqual(['imported', 'detector_disagreements']);
   });
 
   it('resolves ?tab=imported to the imported tab and its backend endpoint', () => {
@@ -423,5 +426,26 @@ describe('unavailable ?tab= (coordinator minor, 2026-09-25)', () => {
     expect(unavailableTabMessage('regions', 'regions', false, true)).toContain(
       "hasn't loaded",
     );
+  });
+});
+
+describe('the detector_disagreements tab (#119): offered only when the backend serves it', () => {
+  it('is absent unless the served vocabulary has it, present when it does', () => {
+    const without = visibleReviewTabs(REVIEW_TABS, (id) => id === 'imported').map(
+      (t) => t.id,
+    );
+    expect(without).not.toContain('detector_disagreements');
+    const served = visibleReviewTabs(
+      REVIEW_TABS,
+      (id) => id === 'detector_disagreements',
+    ).map((t) => t.id);
+    expect(served).toContain('detector_disagreements');
+  });
+
+  it('resolves ?tab=detector_disagreements to the tab and its backend endpoint', () => {
+    expect(tabFromUrlId('detector_disagreements')).toBe('detector_disagreements');
+    expect(endpointForTab('detector_disagreements')).toBe('detector_disagreements');
+    expect(isServedOnlyTab('detector_disagreements')).toBe(true);
+    expect(isServedOnlyTab('all')).toBe(false);
   });
 });

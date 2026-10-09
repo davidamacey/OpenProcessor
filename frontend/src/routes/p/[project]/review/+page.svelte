@@ -26,6 +26,8 @@
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
+  import ConfirmationChip from '$lib/components/labelConfirmation/ConfirmationChip.svelte';
+  import DetectorClass from '$lib/components/labelConfirmation/DetectorClass.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import MultiBoxCanvas from '$lib/components/MultiBoxCanvas.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
@@ -66,6 +68,7 @@
   } from '$lib/classPicker';
   import {
     endpointForTab,
+    isServedOnlyTab,
     isSlotTab,
     REVIEW_PRESETS,
     REVIEW_TABS,
@@ -160,14 +163,16 @@
   $effect(() => {
     if (tab === 'imported') void datasetsAvailability.init();
   });
-  // A `?tab=imported` link against a backend whose vocabulary lacks the tab
+  // A `?tab=` link to a served-only tab (`imported`,
+  // `detector_disagreements`) against a backend whose vocabulary lacks it
   // falls back to All once the vocabulary has loaded.
   $effect(() => {
-    if (!reviewTabsVocabularyStore.loaded || tab !== 'imported') return;
-    if (reviewTabsVocabularyStore.hasEntry('imported')) return;
+    if (!reviewTabsVocabularyStore.loaded || !isServedOnlyTab(tab)) return;
+    if (reviewTabsVocabularyStore.hasEntry(endpointForTab(tab))) return;
+    const missing = endpointForTab(tab);
     tab = 'all';
     unavailableTabNotice = unavailableTabMessage(
-      'imported',
+      missing,
       REGION_TAB_ID,
       regionProfileStore.configured,
       regionProfileStore.unknown,
@@ -2441,6 +2446,11 @@
               {#if current.label_source}
                 <span class="ml-1 text-zinc-500">({current.label_source})</span>
               {/if}
+              <ConfirmationChip
+                source={current.class_source}
+                validated={current.class_validated}
+              />
+              <DetectorClass crop={current} class="ml-1 text-[11px] text-zinc-500" />
               <!-- dq-queues cutover (2026-09-24): vlm_raw_class/
                    vlm_class_empty_reason fold into this row rather than
                    their own — the review panel is height-budgeted

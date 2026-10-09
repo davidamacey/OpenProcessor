@@ -16,6 +16,14 @@ const TONE = {
   openVocab: 'bg-sky-500/20 text-sky-200 border-sky-500/40',
 } as const;
 
+/** The confirmation wording (#119): what a class label is worth as ground
+ *  truth, keyed off the served catalog role and the validated flag only. */
+export const CONFIRMATION = {
+  human: 'Human-confirmed',
+  vlm: 'VLM suggestion',
+  cluster: 'Auto-validated',
+} as const;
+
 export interface SourceBadge {
   text: string;
   cls: string;
@@ -42,16 +50,38 @@ export function sourceBadge(
   }
   const r = role ?? '';
   const text = label || src;
-  if (r === 'human') return { text: 'human', cls: TONE.human, unvalidated: false };
+  if (r === 'human')
+    return { text: CONFIRMATION.human, cls: TONE.human, unvalidated: false };
+  // A VLM label that no human validated is a suggestion, never "labeled".
+  if (r === 'vlm' && !validated)
+    return { text: CONFIRMATION.vlm, cls: TONE.vlm, unvalidated: true };
   if (r.startsWith('vlm')) {
     return validated
       ? { text, cls: TONE.vlm, unvalidated: false }
       : { text: `${text} ·`, cls: TONE.vlm, unvalidated: true };
   }
-  if (r === 'cluster') return { text, cls: TONE.cluster, unvalidated: false };
+  if (r === 'cluster')
+    return {
+      text: validated ? CONFIRMATION.cluster : text,
+      cls: TONE.cluster,
+      unvalidated: false,
+    };
   if (r === 'proposal' || r === 'low_conf')
     return { text, cls: TONE.proposal, unvalidated: false };
   if (r === 'model') return { text, cls: TONE.model, unvalidated: false };
   if (r === 'open_vocab') return { text, cls: TONE.openVocab, unvalidated: false };
   return { text, cls: TONE.proposal, unvalidated: false };
+}
+
+/** The wording for a class label's confirmation state, or null when the
+ *  role has none (a model, a proposal, an import: shown by its served
+ *  label). */
+export function confirmationLabel(
+  role: ClassSourceRole | null | undefined,
+  validated: boolean,
+): string | null {
+  if (role === 'human') return CONFIRMATION.human;
+  if (role === 'vlm' && !validated) return CONFIRMATION.vlm;
+  if (role === 'cluster' && validated) return CONFIRMATION.cluster;
+  return null;
 }

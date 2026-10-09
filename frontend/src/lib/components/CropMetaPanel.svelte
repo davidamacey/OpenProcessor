@@ -8,6 +8,8 @@
   } from '$lib/types';
   import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
+  import ConfirmationChip from './labelConfirmation/ConfirmationChip.svelte';
+  import DetectorClass from './labelConfirmation/DetectorClass.svelte';
   import VlmProvenanceRows from './provenance/VlmProvenanceRows.svelte';
   import ImportProvenanceRows from './provenance/ImportProvenanceRows.svelte';
   import CombineOriginRows from './provenance/CombineOriginRows.svelte';
@@ -198,6 +200,7 @@
     <dt class="text-zinc-500">Label source</dt>
     <dd class="text-zinc-200">
       {crop.label_source ?? '—'}
+      <ConfirmationChip source={crop.class_source} validated={crop.class_validated} />
       {#if crop.class_validated}
         <span
           class="ml-1 rounded border border-green-500/40 bg-green-500/15 px-1 text-[10px] text-green-200"
@@ -218,6 +221,11 @@
        its own row instead of folding it in as a same-row detail. -->
     <dt class="text-zinc-500">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
     <dd class="font-mono">{pct(crop.label_confidence)}</dd>
+
+    {#if isVlmSourced && crop.detector_class_name}
+      <dt class="text-zinc-500">Detector class</dt>
+      <dd class="text-zinc-200"><DetectorClass {crop} bare /></dd>
+    {/if}
 
     {#if vlmConf}
       <dt class="text-zinc-500">VLM confidence</dt>
