@@ -19,7 +19,7 @@ import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_client import VlmIdentity
-from src.services.labeling.vlm_labeler import VlmCombinedReply
+from src.services.labeling.vlm_models import VlmCombinedReply
 
 
 if TYPE_CHECKING:

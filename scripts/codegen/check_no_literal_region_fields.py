@@ -160,7 +160,11 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/labeling/vlm_prompts.py',
     'tests/curation/test_prompt_pack.py',
     # VLM labeler (orchestration) + router.
-    'src/services/labeling/vlm_labeler.py',
+    'src/services/labeling/vlm_labeler_classify.py',
+    'src/services/labeling/vlm_labeler_combined.py',
+    'src/services/labeling/vlm_labeler_visibility.py',
+    'src/services/labeling/vlm_labeler_verify.py',
+    'src/services/labeling/vlm_reply_parse.py',
     'src/routers/curation/vlm.py',
     'tests/curation/test_vlm_labeler.py',
     'tests/curation/test_vlm_combined.py',

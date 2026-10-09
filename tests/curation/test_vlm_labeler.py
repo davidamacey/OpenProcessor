@@ -22,15 +22,15 @@ import json
 import httpx
 import pytest
 
-from src.services.labeling.vlm_labeler import (
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import (
     ItemCrop as _ItemCrop,
     RegionCrop,
     VlmClassPrediction,
     VlmHealth,
-    VlmLabeler,
     VlmRegionVerdict,
-    _strip_markdown_fences,
 )
+from src.services.labeling.vlm_reply_parse import _strip_markdown_fences
 
 
 # ---------------------------------------------------------------------------

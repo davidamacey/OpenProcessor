@@ -71,7 +71,7 @@ from src.services.curation.wire import item_source_excludes
 from src.services.detection.segmenter_http import first_segmenter_url
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
-from src.services.labeling.vlm_labeler import VlmTransportError
+from src.services.labeling.vlm_models import VlmTransportError
 from src.services.labeling.vlm_prompts import PromptPack, active_prompt_pack, prompt_pack_stamp
 
 

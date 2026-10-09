@@ -15,7 +15,7 @@ from src.config import DetectionProfile
 from src.config.region_state import RegionStatus
 from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import VlmCombinedReply
+from src.services.labeling.vlm_models import VlmCombinedReply
 
 
 PROFILE = DetectionProfile(name='wheels', text_reader='none')

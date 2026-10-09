@@ -19,7 +19,7 @@ from src.services.curation.vlm_class_attempt import prediction_class_update, wit
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from src.services.labeling.vlm_labeler import VlmClassPrediction
+    from src.services.labeling.vlm_models import VlmClassPrediction
 
 
 def label_batch_update(
