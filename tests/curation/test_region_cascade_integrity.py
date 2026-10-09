@@ -30,7 +30,7 @@ import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from src.config import get_region_fields
 from src.config.project_context import current_project
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile, register_profile
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmLabeler

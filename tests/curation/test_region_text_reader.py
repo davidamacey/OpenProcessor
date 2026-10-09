@@ -7,7 +7,7 @@ from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 from PIL import Image
 
 from src.config import DetectionProfile
-from src.services.detection.cascade_detect import (
+from src.services.detection.cascade_detect.ocr_recognizer import (
     OCR_DET_MAX_SIDE,
     OCR_DET_MIN_SIDE,
     _unframe_line,

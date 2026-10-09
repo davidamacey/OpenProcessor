@@ -513,7 +513,7 @@ async def _run_auto_label(
         updates_by_id: dict[str, dict[str, Any]] = {}
         proposals: list[dict[str, Any]] = []
         now = _now_iso()
-        from src.services.detection.cascade_detect import class_provenance as _class_prov
+        from src.services.detection.cascade_detect.sanity import class_provenance as _class_prov
 
         _vlm_class_prov = _class_prov(
             detector=labeler.identity.model,

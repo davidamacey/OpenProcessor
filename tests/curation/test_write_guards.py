@@ -188,12 +188,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
 
     @pytest.mark.asyncio
     async def test_auto_promote_scroll_query_has_holdout_must_not(self) -> None:
-        # Import order matters: orchestrator.py imports auto_promote at the
-        # bottom of its own file (an intentional, preserved circular
-        # import — see auto_promote.py's module docstring), so importing
-        # orchestrator first resolves it the same way the app does.
         import src.services.curation.clustering.auto_promote as auto_promote_mod
-        import src.services.curation.clustering.orchestrator  # noqa: F401
 
         fake_client = AsyncMock()
         fake_client.search = AsyncMock(

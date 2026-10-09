@@ -24,7 +24,7 @@ from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_SANIT
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.edit_history import EditKind, restore_edit_state
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 

@@ -85,6 +85,10 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_cluster_id_normalize.py',
     # Clustering orchestrator + cluster/umap/viz routers
     'src/services/curation/clustering/orchestrator.py',
+    'src/services/curation/clustering/cluster_write_guard.py',
+    'src/services/curation/clustering/refine.py',
+    'src/services/curation/clustering/residual_gate.py',
+    'src/services/curation/clustering/retrain_policy.py',
     'src/services/curation/clustering/auto_promote.py',
     'src/services/curation/clustering/embedding_reduce.py',
     'src/services/curation/embedding_viz.py',
@@ -179,7 +183,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_class_synonyms.py',
     # Detection cascade, parameterized by
     # DetectionProfile and renamed to region terms.
-    'src/services/detection/cascade_detect.py',
+    'src/services/detection/cascade_detect/',
     'tests/curation/test_cascade_detect.py',
     'tests/curation/test_region_sanity.py',
     'tests/curation/test_detection_profile_second_profile.py',

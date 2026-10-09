@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from curation.query_fakes import QueryFakeOpenSearch
     from src.services.curation.ingest import CurationIngestService
-    from src.services.detection.cascade_detect import RegionCandidate
+    from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 
 @pytest.fixture

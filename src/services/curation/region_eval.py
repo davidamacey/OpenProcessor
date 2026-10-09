@@ -48,7 +48,7 @@ from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_state import PENDING_STATUSES, RegionStatus
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.region_boxes import RegionBox, read_boxes
-from src.services.detection.cascade_detect import crop_norm_to_source_norm
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 if TYPE_CHECKING:

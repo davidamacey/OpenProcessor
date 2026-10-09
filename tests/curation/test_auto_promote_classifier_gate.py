@@ -13,11 +13,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-# Import order matters (see auto_promote.py's module docstring): the app
-# always imports orchestrator.py first, which imports auto_promote_clusters
-# from this module at the bottom of its file -- importing auto_promote in
-# isolation before orchestrator fails on the intentional circular import.
-import src.services.curation.clustering.orchestrator as _orchestrator  # noqa: F401
 from src.services.curation.clustering import auto_promote
 
 

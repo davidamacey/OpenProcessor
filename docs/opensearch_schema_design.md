@@ -18,7 +18,7 @@ default). k-NN fields use the FAISS HNSW engine with cosine similarity.
 
 ## 1. Global visual-search indexes
 
-Names come from `IndexName` in `src/clients/opensearch.py`. The indexes are
+Names come from `IndexName` in `src/clients/opensearch/names.py`. The indexes are
 created on first use by the API.
 
 | Index | One document per | Embedding | HNSW (`ef_construction`, `m`) |

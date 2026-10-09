@@ -34,7 +34,8 @@ from src.services.curation.region_preview import (
     preview_item,
     select_leg_candidates,
 )
-from src.services.detection.cascade_detect import RegionDetector, crop_norm_to_source_norm
+from src.services.detection.cascade_detect.region_detector import RegionDetector
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.detection.segmenter_http import (
     DEFAULT_MAX_CANDIDATES,
     SegmenterCallError,

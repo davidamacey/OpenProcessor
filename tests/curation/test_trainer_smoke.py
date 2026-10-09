@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 from src.services.training import jobs as train_jobs
-from src.services.training.jobs import TrainJobSpec
+from src.services.training.job_models import TrainJobSpec
 
 
 TRAINER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'trainer'

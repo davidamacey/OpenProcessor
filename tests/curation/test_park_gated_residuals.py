@@ -16,7 +16,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_park_query_excludes_already_parked_docs(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation.clustering import orchestrator as orch_mod
+    from src.services.curation.clustering import residual_gate as orch_mod
 
     captured: dict[str, Any] = {}
 

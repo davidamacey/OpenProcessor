@@ -49,7 +49,7 @@ from src.config.curation import CurationConfig
 from src.services.curation.dataset_import.mapping import ClassMappingEntry
 from src.services.curation.export import GenericYoloExportService
 from src.services.detection.geometry import crop_id as _crop_id
-from src.services.training.triton_promote import resolve_class_remap
+from src.services.training.class_remap import resolve_class_remap
 from src.services.training.yolo_triton_config import render_labels_file
 
 

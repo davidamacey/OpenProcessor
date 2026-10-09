@@ -285,7 +285,7 @@ async def lifespan(app: FastAPI):
         action = await reconcile_on_startup()
         logger.info('gpu_arbiter_reconciled', action=action.action, detail=action.detail)
 
-        from src.services.training.triton_promote import reload_promoted_models_best_effort
+        from src.services.training.triton_reload import reload_promoted_models_best_effort
 
         async def _arbiter_reconcile_loop() -> None:
             """Re-assert the desired GPU-service state on a fixed interval.
@@ -322,7 +322,7 @@ async def lifespan(app: FastAPI):
     # One-shot, best-effort: never blocks API startup. Also re-run on
     # every arbiter reconcile tick above, and available on demand via
     # POST {api_prefix}/train/reload_promoted (make reload-promoted).
-    from src.services.training.triton_promote import reload_promoted_models_best_effort
+    from src.services.training.triton_reload import reload_promoted_models_best_effort
 
     await reload_promoted_models_best_effort(log_event='promoted_models_reload_on_startup')
 

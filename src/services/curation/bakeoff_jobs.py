@@ -43,7 +43,8 @@ from src.routers.curation._bakeoff_models import (
 )
 from src.services.curation import eval_datasets as evd
 from src.services.training import jobs as train_jobs
-from src.services.training.triton_promote import ClassRemapUnreadableError, resolve_class_remap
+from src.services.training.class_remap import resolve_class_remap
+from src.services.training.promote_errors import ClassRemapUnreadableError
 
 
 if TYPE_CHECKING:
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
         RunModelRef,
     )
     from src.services.curation.eval_datasets import EvalDatasetRecord
-    from src.services.training.triton_promote import ClassRemapResult
+    from src.services.training.class_remap import ClassRemapResult
 
 
 logger = get_logger(__name__)

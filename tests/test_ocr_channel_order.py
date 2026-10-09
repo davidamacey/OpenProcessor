@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
 
 @pytest.fixture

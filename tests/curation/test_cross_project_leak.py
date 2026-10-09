@@ -1577,7 +1577,7 @@ def leak_env(
     guard.install_project_guard(raw, registry)
     raw.transport = _RecordingTransport(raw.transport, accesses)  # type: ignore[assignment]
 
-    from src.clients.opensearch import OpenSearchClient
+    from src.clients.opensearch.client import OpenSearchClient
 
     wrapper = OpenSearchClient(hosts=['http://127.0.0.1:9'])
     wrapper.client = raw
