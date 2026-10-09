@@ -71,7 +71,19 @@ the files it covers. Release signing is follow-up work.
 - **Grafana** ships with the default credentials `admin` / `admin`
   (`GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD` in
   `docker-compose.yml`). Change these before exposing Grafana to
-  anyone but yourself.
+  anyone but yourself. In gateway mode (`OP_GATEWAY_SUBPATHS=true`) Grafana
+  refuses to start with the default or an empty password. The variable only
+  sets the password when the `grafana_data` volume is first created; on an
+  existing volume change it with
+  `docker compose exec grafana grafana cli admin reset-admin-password <new>`.
+- **Prometheus and MLflow** have no authentication at all. In gateway mode
+  (see [the monitoring guide](docs-site/docs/operations/monitoring.mdx)) anyone
+  who can reach the gateway port can read Prometheus and read and write MLflow
+  experiments and registered models, exactly as they can already use the API. The
+  gateway moves these from "one port each" to "behind the one gateway port"; it
+  adds no login. Publish the gateway only on a trusted network or behind an
+  authenticating reverse proxy. Gateway mode also refuses to start the four UIs
+  when they are published beyond loopback.
 - **OpenSearch** ships with its security plugin disabled by default
   (`DISABLE_SECURITY_PLUGIN=true` / `DISABLE_SECURITY_DASHBOARDS_PLUGIN=true`
   in `docker-compose.yml`, commented "Disable security for dev (enable

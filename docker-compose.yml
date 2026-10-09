@@ -14,6 +14,49 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "5"
 
+# Gateway mode (OP_GATEWAY_SUBPATHS=true): the Cropwright nginx serves Grafana,
+# Prometheus, OpenSearch Dashboards and MLflow under /grafana/, /prometheus/,
+# /dashboards/ and /mlflow/ of its one published port. Each UI must then serve
+# FROM its sub-path, which Grafana and OpenSearch Dashboards take as env and
+# Prometheus as flags (MLflow is left rooted and the gateway strips /mlflow:
+# --static-prefix would also prefix /health and /api and break the in-network
+# MLFLOW_TRACKING_URI). All four start through this one wrapper so the safety
+# checks below apply to each: `sh -c <script> gateway-wrap <service> <real
+# entrypoint...>`, with the service's `command` appended. Off (the default) it
+# is a plain exec.
+# Fail closed: gateway mode refuses to start a UI that is published beyond
+# loopback (OP_UI_BIND_ADDRESS / OP_BIND_ADDRESS), and Grafana with the default
+# or an empty admin password.
+x-gateway-wrap: &gateway_wrap |
+  tag="$$1"; shift
+  case "$$(printf '%s' "$${OP_GATEWAY_SUBPATHS:-}" | tr 'A-Z' 'a-z')" in
+    1|true|yes|on) ;;
+    ''|0|false|no|off) exec "$$@" ;;
+    *) echo "gateway-wrap: OP_GATEWAY_SUBPATHS must be true or false, got: $$OP_GATEWAY_SUBPATHS" >&2; exit 1 ;;
+  esac
+  case "$${OP_UI_PUBLISH_ADDRESS:-}" in
+    127.*|localhost|::1|'[::1]') ;;
+    *) echo "gateway-wrap: refusing to start $$tag: OP_GATEWAY_SUBPATHS=true but the UI ports are published on '$$OP_UI_PUBLISH_ADDRESS'. Unset OP_UI_BIND_ADDRESS (or set it to 127.0.0.1) and publish only the gateway (CROPWRIGHT_BIND_ADDRESS)." >&2; exit 1 ;;
+  esac
+  case "$$tag" in
+    grafana)
+      case "$${GF_SECURITY_ADMIN_PASSWORD:-}" in
+        ''|admin) echo "gateway-wrap: refusing to start grafana behind the gateway with the default admin password. Set GF_SECURITY_ADMIN_PASSWORD to a non-default value (an existing grafana_data volume keeps its old password: see SECURITY.md)." >&2; exit 1 ;;
+      esac
+      export GF_SERVER_ROOT_URL='%(protocol)s://%(domain)s/grafana/'
+      export GF_SERVER_SERVE_FROM_SUB_PATH=true
+      exec "$$@" ;;
+    prometheus)
+      exec "$$@" --web.external-url=/prometheus/ --web.route-prefix=/prometheus/ ;;
+    dashboards)
+      export SERVER_BASEPATH=/dashboards
+      export SERVER_REWRITEBASEPATH=true
+      exec "$$@" ;;
+    mlflow)
+      exec "$$@" ;;
+  esac
+  echo "gateway-wrap: unknown service tag $$tag" >&2; exit 1
+
 services:
   triton-server:
     image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.4.1}}
@@ -153,6 +196,8 @@ services:
       # builds its prefix at *module import*, so this must be set before
       # src.main is imported; it cannot change at container runtime.
       - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
+      # Gateway mode: served resource_links are path-relative (/grafana/ ...).
+      - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
       # G-06: in-container path the API resolves source-relative item
       # paths against. Must match the bind target above.
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
@@ -256,7 +301,9 @@ services:
           - op-api
 
   # ===================================================================
-  # Cropwright: the labeling frontend, opt-in via `--profile cropwright`.
+  # Cropwright: the labeling frontend, opt-in via `--profile cropwright`. It is
+  # also the gateway (OP_GATEWAY_SUBPATHS=true): the one published port for the
+  # app, the API docs and the monitoring UIs, which then stay on loopback.
   # Source lives in ./frontend; nginx proxies the API prefix to yolo-api by
   # its op-api alias, so the browser only ever talks to this origin.
   # ===================================================================
@@ -290,6 +337,9 @@ services:
       - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
       # Where nginx proxies /OpenProcessor/ (the docs site): the docs service of docker-compose.docs.yml, when run.
       - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
+      # Gateway mode: also serve the monitoring UIs under /grafana/, /prometheus/,
+      # /dashboards/ and /mlflow/ of this one origin (see x-gateway-wrap below).
+      - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
     ports:
       # A UI: CROPWRIGHT_BIND_ADDRESS opens just this one to a LAN (the installer's default for
       # homelabs), OP_UI_BIND_ADDRESS opens it with the other UIs, and the API stays on loopback.
@@ -705,6 +755,7 @@ services:
     profiles:
       - training
     restart: unless-stopped
+    entrypoint: ['/bin/sh', '-c', *gateway_wrap, 'gateway-wrap', 'mlflow']
     command:
       # ML-1: serve artifacts through the tracking server's HTTP proxy
       # instead of a bare local path. The trainer container never mounts
@@ -728,6 +779,8 @@ services:
       # localhost + private-IP default, so those are restated here next to
       # the in-network names the trainer and API use. Add the DNS name you
       # browse to (MLFLOW_ALLOWED_HOSTS replaces the whole list).
+      - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
+      - OP_UI_PUBLISH_ADDRESS=${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}
       - MLFLOW_SERVER_ALLOWED_HOSTS=${MLFLOW_ALLOWED_HOSTS:-curation-mlflow,curation-mlflow:*,${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow,${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,[::1],[[]::1]:*,192.168.*,10.*,172.16.*,172.17.*,172.18.*,172.19.*,172.20.*,172.21.*,172.22.*,172.23.*,172.24.*,172.25.*,172.26.*,172.27.*,172.28.*,172.29.*,172.30.*,172.31.*}
     volumes:
       - mlflow_data:/mlflow
@@ -893,6 +946,10 @@ services:
     restart: always
     profiles:
       - monitoring
+    entrypoint: ['/bin/sh', '-c', *gateway_wrap, 'gateway-wrap', 'prometheus', '/bin/prometheus']
+    environment:
+      - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
+      - OP_UI_PUBLISH_ADDRESS=${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}
     ports:
       - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${PROMETHEUS_PORT:-4604}:9090"  # Prometheus
     volumes:
@@ -918,6 +975,7 @@ services:
     restart: always
     profiles:
       - monitoring
+    entrypoint: ['/bin/sh', '-c', *gateway_wrap, 'gateway-wrap', 'grafana', '/run.sh']
     ports:
       - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${GRAFANA_PORT:-4605}:3000"  # Grafana
     volumes:
@@ -933,6 +991,8 @@ services:
       # Enable unified alerting (Grafana 8+)
       - GF_UNIFIED_ALERTING_ENABLED=true
       - GF_ALERTING_ENABLED=false
+      - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
+      - OP_UI_PUBLISH_ADDRESS=${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}
     networks:
       - triton_net
     depends_on:
@@ -1027,7 +1087,17 @@ services:
     restart: always
     profiles:
       - monitoring
+    entrypoint:
+      - /bin/sh
+      - -c
+      - *gateway_wrap
+      - gateway-wrap
+      - dashboards
+      - ./opensearch-dashboards-docker-entrypoint.sh
+    command: ['opensearch-dashboards']
     environment:
+      - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
+      - OP_UI_PUBLISH_ADDRESS=${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true  # Must match OpenSearch security setting
     ports:
