@@ -90,8 +90,15 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
             captured['body'] = body
             return {'hits': {'hits': [{'_id': 'c1'}, {'_id': 'c2'}]}}
 
+        async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+            raise RuntimeError('404 not found: no settings document (default VLM policy)')
+
+    from src.services.curation.vlm_scope import ScopeCache
+
     ids = await vlm_worker.fetch_pending_ids(
         _FakeOpenSearch(),
+        slug='default',
+        scope_cache=ScopeCache(),
         batch_size=64,
         classifier_skip_conf=0.8,
         exclude_ids=['x1', 'x2'],

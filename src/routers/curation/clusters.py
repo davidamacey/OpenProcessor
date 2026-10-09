@@ -20,6 +20,7 @@ from src.services.curation.cluster_purity import (
     purity_thresholds,
     purity_tier,
 )
+from src.services.curation.cluster_representatives import representatives_msearch_body
 from src.services.curation.clustering.orchestrator import MAX_REFINE_MEMBERS
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import current_cluster_distance
@@ -77,41 +78,6 @@ _MEASURED: dict[str, Any] = {
 _FITS: dict[str, Any] = _script("doc['cluster_nearest_id'].value == doc['cluster_id'].value")
 
 
-_REPS_SORT: list[dict[str, Any]] = [
-    {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
-    {'crop_id': 'asc'},
-]
-_REPS_SOURCE = [
-    'crop_id',
-    'cluster_id',
-    'cluster_distance',
-    'cluster_distance_cluster_id',
-    'class_name',
-    'cluster_subid',
-]
-
-
-def _rep_msearch_body(cluster_id: int, per_cluster: int) -> dict[str, Any]:
-    """One msearch query body: top ``per_cluster`` reps for one cluster.
-
-    Replaces the old per-bucket ``top_hits`` sub-agg (which
-    decompressed stored ``_source`` for every representative across
-    *every* bucket) with one ``_msearch`` request per cluster in the
-    caller's page — issued only for clusters actually on screen.
-    """
-    return {
-        'size': per_cluster,
-        'query': {
-            'bool': {
-                'filter': [{'term': {'cluster_id': cluster_id}}],
-                'must_not': [{'term': {'class_excluded': True}}],
-            }
-        },
-        '_source': _REPS_SOURCE,
-        'sort': _REPS_SORT,
-    }
-
-
 def _reps_from_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reps: list[dict[str, Any]] = []
     for h in hits:
@@ -140,7 +106,7 @@ async def _fill_page_representatives(
     body_lines: list[dict[str, Any]] = []
     for item in page_items:
         body_lines.append({'index': items_index()})
-        body_lines.append(_rep_msearch_body(item['cluster_id'], per_cluster))
+        body_lines.append(representatives_msearch_body(item['cluster_id'], per_cluster))
     try:
         resp = await opensearch.msearch(body=body_lines)
     except Exception as exc:

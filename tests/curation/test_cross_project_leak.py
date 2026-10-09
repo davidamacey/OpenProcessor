@@ -196,6 +196,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             }
         },
         ('POST', '/ingest/policy/preview'): {'json': {'embedding': {'mode': 'lazy'}}},
+        ('PUT', '/vlm/policy'): {
+            'json': {'expected_revision': 0, 'scope': 'uncertain', 'max_crops_per_day': 7}
+        },
         ('POST', '/ingest/upload'): {
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },

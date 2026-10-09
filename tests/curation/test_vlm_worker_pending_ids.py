@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from scripts.curation.vlm_worker import fetch_pending_ids
+from src.services.curation.vlm_scope import ScopeCache
 
 
 class _OpenSearchLike:
@@ -31,10 +32,15 @@ class _OpenSearchLike:
         ]
         return {'hits': {'hits': hits}}
 
+    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+        raise RuntimeError('404 not found: no settings document (default VLM policy)')
+
 
 @pytest.mark.asyncio
 async def test_fetch_pending_ids_returns_ids_without_loading_source() -> None:
     client = _OpenSearchLike(['a', 'b'])
-    ids = await fetch_pending_ids(client, batch_size=2, classifier_skip_conf=0.9)
+    ids = await fetch_pending_ids(
+        client, slug='default', scope_cache=ScopeCache(), batch_size=2, classifier_skip_conf=0.9
+    )
     assert ids == ['a', 'b']
     assert client.bodies[0]['_source'] is False

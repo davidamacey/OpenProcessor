@@ -323,6 +323,44 @@ Validation issue codes start with `vlm_`. Examples: `vlm_url_invalid`,
 `vlm_not_probed`, `vlm_context_too_small`, `vlm_multi_box_unverified` and
 `vlm_reads_text_unverified`.
 
+## Scope and budget
+
+Which VLM is used and which crops it labels are separate choices. Two
+automated writers label crops: the always-on `curation-vlm-worker` and the
+`auto_label` VLM stage (`run_vlm=true`). By default both label every
+eligible crop of the project, which on a large project is a long and, for a
+hosted endpoint, paid run. A per-project scope policy limits them. VLM
+labels stay unvalidated suggestions (`class_source: "vlm"`): they are
+excluded from export and from the test holdout until a human validates them.
+
+```bash
+curl -s "$API/curation/projects/cars/vlm/policy"
+curl -s -X PUT "$API/curation/projects/cars/vlm/policy" \
+  -H 'Content-Type: application/json' \
+  -d '{"expected_revision": 0, "scope": "representatives", "per_cluster": 5,
+       "max_crops_per_day": 2000}'
+```
+
+| Field | Default | Notes |
+|---|---|---|
+| `scope` | `all` | `all`, `uncertain`, `representatives` or `off` |
+| `conf_max` | 0.80 | `uncertain` only: crops with a detector confidence below this, or none recorded |
+| `per_cluster` | 5 | `representatives` only: crops nearest each cluster centre; every unassigned crop is also kept. 1 to 100 |
+| `max_crops_per_day` | 0 | VLM class attempts per UTC day, answered or empty. 0 is unlimited |
+| `sample_frac` | 1.0 | Above 0 up to 1. Keeps a stable hash-chosen fraction of the crops (the same crops on every poll) |
+
+`off` stops both automated writers for the project. The write needs the
+`expected_revision` you read and answers `409 revision_conflict` when it is
+stale. The worker re-reads the policy about every 30 seconds; the next
+`auto_label` run uses it at once, and a run can override the scope with
+`vlm_scope=<scope>`. The policy is cloned with the project.
+
+An explicit request is never limited by the policy: labelling one cluster
+(`POST /vlm/label_cluster/{cluster_id}`), an `auto_label` run with
+`cluster_id`, and labelling named crops. A human-validated crop is never
+selected under any scope. When a run selects nothing because of the policy,
+its VLM stage reports why (`skipped` with the reason).
+
 ## Cropwright
 
 <Screenshot

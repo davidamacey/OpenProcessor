@@ -34,10 +34,10 @@ from src.services.curation.autolabel.embed_stage import run_embed_missing_stage
 from src.services.curation.autolabel.selection import (
     count_unvalidated_remaining,
     explain_empty_vlm_selection,
+    resolve_vlm_selection,
     scroll_unvalidated,
     skipped_vlm_stage,
     unvalidated_count_query,
-    vlm_selection_query,
 )
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
@@ -108,6 +108,7 @@ async def _run_auto_label(
     # Internal (job trigger only): the item filter scoping the embed and VLM stages.
     item_filter: dict[str, Any] | None = None,
     embed_missing: bool = False,
+    vlm_scope: str | None = None,
     # Internal (never an HTTP param; the public route forces the defaults):
     # `/start` resolves `prompt_pack` once at request time and hands the
     # resolved pin here (R4-3). `prompt_pack_revision` is that pin.
@@ -342,17 +343,13 @@ async def _run_auto_label(
         }
 
     # ---- stage 3: VLM over remaining unvalidated ------------------------
-    # Default-OFF: the detection worker's combined call writes ``class_id``
-    # + ``vlm_verify_completed_at`` as a side effect of region
-    # verification, so a parallel auto_label VLM stage just duplicates
-    # work the worker is already doing on every drain pass. Clusters here
-    # remain numeric until the worker eventually labels their members and
-    # stage-1's ``force_cluster_id_equals_class_id`` folds cluster_id ->
-    # class_id.
-    #
-    # Opt-in: pass ``run_vlm=true`` for a one-off backfill of the
-    # no-region cohort (items where the segmenter returned no candidate,
-    # so the combined call never fired and no class label was written).
+    # Default-OFF: the detection worker's combined call already writes
+    # ``class_id`` + ``vlm_verify_completed_at`` during region verification, so
+    # a parallel VLM stage duplicates that work. Clusters stay numeric until the
+    # worker labels their members and stage-1's
+    # ``force_cluster_id_equals_class_id`` folds cluster_id -> class_id.
+    # Opt-in: ``run_vlm=true`` backfills the no-region cohort (the segmenter
+    # returned no candidate, so the combined call never fired).
     if not run_vlm:
         summary['stages']['vlm'] = skipped_vlm_stage()
         summary['stages']['cluster_id_normalize_post_vlm'] = {'skipped': True}
@@ -365,23 +362,24 @@ async def _run_auto_label(
         summary['after'] = await pipeline_health_snapshot(opensearch)
         return summary
 
-    # Selection (global sweep vs cluster scope) lives in
-    # services/curation/autolabel/selection.py. Scroll the FULL scope:
-    # max_vlm_crops == 0 processes everything, > 0 caps the run.
-    unvalidated_query = vlm_selection_query(
-        class_id=class_id,
-        cluster_id=cluster_id,
-        classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
-        item_filter=scope_filter,
-    )
+    # Selection (sweep vs cluster scope, VLM policy, caps): autolabel/selection.py.
     guard = ClassWriteGuard('vlm_pipeline')
     try:
+        selection = await resolve_vlm_selection(
+            opensearch,
+            class_id=class_id,
+            cluster_id=cluster_id,
+            classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
+            item_filter=scope_filter,
+            max_vlm_crops=max_vlm_crops,
+            scope_override=vlm_scope,
+        )
         unvalidated_ids = await scroll_unvalidated(
             opensearch,
             index=items_index(),
-            query=unvalidated_query,
+            query=selection.query,
             source_fields=list(VLM_SWEEP_SOURCE_FIELDS),
-            cap=max_vlm_crops if max_vlm_crops > 0 else None,
+            cap=selection.cap,
             guard=guard,
         )
     except Exception as exc:
@@ -391,7 +389,8 @@ async def _run_auto_label(
 
     if not unvalidated_ids:
         summary['stages']['vlm'] = skipped_vlm_stage(
-            await explain_empty_vlm_selection(
+            selection.empty_reason
+            or await explain_empty_vlm_selection(
                 opensearch, items_index(), class_id, cluster_id, scope_filter
             )
         )

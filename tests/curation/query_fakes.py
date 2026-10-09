@@ -6,7 +6,7 @@ requeue, the label -> export round trip) are only correct if their query
 *selects the right documents*, so this double stores docs per index and
 evaluates the subset of the query DSL those paths use:
 
-- ``term`` / ``terms`` / ``exists`` / ``match_all`` and ``bool`` with
+- ``term`` / ``terms`` / ``exists`` / ``match_all`` / ``match_none`` and ``bool`` with
   ``must`` / ``filter`` / ``must_not`` / ``should`` (``should`` = any-of);
 - ``nested`` (W8c): matches the parent doc when any element of the nested
   list field satisfies the inner query. Elements are re-keyed with the
@@ -129,6 +129,7 @@ def _match_phrase_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
 _LEAF_MATCHERS = {
     'match_phrase': _match_phrase_matches,
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
+    'match_none': lambda _doc, _clause: False,
     'wildcard': _wildcard_matches,
     'nested': _nested_matches,
     # Scoring is irrelevant to which docs match.

@@ -421,7 +421,9 @@ project with the VLM off is `409 vlm_not_configured`.
 | POST | `/vlm/verify_regions` | Verify, box by box, whether each crop's regions are real |
 | POST | `/vlm/verify_region_batch` | The same in batches per upstream call |
 | POST | `/vlm/region_visible_batch` | "Is a region visible at all?" pre-filter |
-| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `train_clusters`, ...). Clusters only unless `run_vlm=true` |
+| GET | `/vlm/policy` | The VLM scope policy: `scope` (`all`, `uncertain`, `representatives`, `off`), `conf_max`, `per_cluster`, `max_crops_per_day`, `sample_frac`, `revision` |
+| PUT | `/vlm/policy` | Replace it (needs `expected_revision`; `409 revision_conflict` when stale). Limits the VLM worker and the `auto_label` VLM stage; see [VLM selection](../guides/vlm-selection.mdx#scope-and-budget) |
+| POST | `/pipeline/auto_label/start` | Queue a job for the auto-label worker (`run_vlm`, `vlm_scope`, `train_clusters`, ...). Clusters only unless `run_vlm=true` |
 | GET | `/pipeline/auto_label/status` | Current or last job |
 | GET | `/pipeline/auto_label/status/{job_id}` | One job |
 | POST | `/pipeline/auto_label/cancel` | Cancel |

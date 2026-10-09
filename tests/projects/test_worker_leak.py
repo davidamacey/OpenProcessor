@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 from opensearchpy import AsyncOpenSearch
+from opensearchpy.exceptions import NotFoundError
 from opensearchpy.serializer import JSONSerializer
 
 from scripts.curation.worker.bulk_writer import _bulk_update
@@ -158,6 +159,11 @@ class _RecordingTransport:
             }
         elif action == '_bulk':
             result = self._bulk(url_index, body, touched)
+        elif method == 'GET' and parts[-2:-1] == ['_doc']:
+            # The project's settings document (its VLM policy): never written, so absent.
+            touched.add(url_index)
+            self.calls.append((bound.record.slug if bound else None, url, touched))
+            raise NotFoundError(404, 'not_found', {'found': False})
         else:
             msg = f'unexpected OpenSearch call {method} {url}'
             raise AssertionError(msg)

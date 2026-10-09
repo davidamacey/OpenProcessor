@@ -36,11 +36,8 @@ from src.services.curation.ingest_policy import (
     embedding_states,
     unknown_names,
 )
-from src.services.curation.ingest_policy_store import (
-    PolicyConflictError,
-    get_ingest_policy,
-    put_ingest_policy,
-)
+from src.services.curation.ingest_policy_store import get_ingest_policy, put_ingest_policy
+from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.reprocess_targets import scan_items
 from src.utils.class_names import normalize_class_name
 

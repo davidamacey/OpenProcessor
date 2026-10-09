@@ -27125,6 +27125,110 @@
         "title": "VlmLocalStatus",
         "type": "object"
       },
+      "VlmPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "conf_max": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Conf Max",
+            "type": "number"
+          },
+          "max_crops_per_day": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Max Crops Per Day",
+            "type": "integer"
+          },
+          "per_cluster": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Per Cluster",
+            "type": "integer"
+          },
+          "revision": {
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sample_frac": {
+            "default": 1.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Sample Frac",
+            "type": "number"
+          },
+          "scope": {
+            "default": "all",
+            "enum": [
+              "all",
+              "uncertain",
+              "representatives",
+              "off"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "title": "VlmPolicy",
+        "type": "object"
+      },
+      "VlmPolicyUpdate": {
+        "additionalProperties": false,
+        "description": "``PUT`` body: the policy plus the revision the caller read.",
+        "properties": {
+          "conf_max": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Conf Max",
+            "type": "number"
+          },
+          "expected_revision": {
+            "minimum": 0.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "max_crops_per_day": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Max Crops Per Day",
+            "type": "integer"
+          },
+          "per_cluster": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Per Cluster",
+            "type": "integer"
+          },
+          "sample_frac": {
+            "default": 1.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Sample Frac",
+            "type": "number"
+          },
+          "scope": {
+            "default": "all",
+            "enum": [
+              "all",
+              "uncertain",
+              "representatives",
+              "off"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "VlmPolicyUpdate",
+        "type": "object"
+      },
       "VlmProbeResult": {
         "properties": {
           "image_tokens": {
@@ -37376,6 +37480,30 @@
               "title": "Acknowledge External",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+            "in": "query",
+            "name": "vlm_scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "uncertain",
+                    "representatives",
+                    "off"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+              "title": "Vlm Scope"
+            }
           }
         ],
         "responses": {
@@ -37757,6 +37885,30 @@
               "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, cluster_id and the item filter.",
               "title": "Embed Missing",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+            "in": "query",
+            "name": "vlm_scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "uncertain",
+                    "representatives",
+                    "off"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+              "title": "Vlm Scope"
             }
           },
           {
@@ -46284,6 +46436,110 @@
           }
         },
         "summary": "Vlm Label Cluster",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/vlm/policy": {
+      "get": {
+        "description": "The project's VLM scope policy; scope ``all`` (every eligible crop) when\nnone was ever written.",
+        "operationId": "get_policy_curation_projects__project__vlm_policy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Policy",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "description": "Replace the policy. ``409`` when ``expected_revision`` is not the stored\nrevision (re-read and retry). Takes effect on the worker's next poll (within\nabout 30 seconds) and on the next ``auto_label`` run; stored labels are untouched.",
+        "operationId": "put_policy_curation_projects__project__vlm_policy_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VlmPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VlmPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Policy",
         "tags": [
           "Curation"
         ]

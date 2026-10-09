@@ -23,6 +23,16 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   `MLFLOW_ALLOWED_HOSTS` (it replaces the whole list; see `env.template`).
 - The seven mlflow 2.x CVEs are no longer in the Trivy allowlist.
 
+### Added
+
+- Per-project VLM scope policy (#119): `GET/PUT /vlm/policy` sets which crops the
+  automated VLM class writers (the `curation-vlm-worker` and the `auto_label` VLM
+  stage) may label: `scope` `all` (the default, unchanged behaviour), `uncertain`,
+  `representatives` or `off`, plus `max_crops_per_day` and `sample_frac`. Explicit
+  requests (`/vlm/label_cluster/{id}`, a `cluster_id`-scoped run) are never limited.
+  `auto_label/start` and `POST /pipeline/auto_label` accept a `vlm_scope` override.
+  The policy is cloned with the project.
+
 ## [0.4.1] - 2026-10-04
 
 Patch release on 0.4.0: repaired CI, operator metrics and dashboards, promote as a
