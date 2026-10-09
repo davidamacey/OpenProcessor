@@ -5,7 +5,7 @@ Industry-standard response format for object detection inference.
 All inference methods use consistent schema with timing and metadata.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Detection(BaseModel):
@@ -23,8 +23,8 @@ class Detection(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0, description='Detection confidence score')
     class_id: int = Field(..., alias='class', description='COCO class ID (0-79)')
 
-    class Config:
-        populate_by_name = True  # Allow both 'class' and 'class_id'
+    # Allow both 'class' and 'class_id'
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ImageMetadata(BaseModel):
