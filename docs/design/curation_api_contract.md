@@ -451,7 +451,7 @@ OCR and text reader, the parent classes it applies to, and
 |---|---|---|---|---|
 | GET | `/region_profiles` | `include_templates` | `RegionProfileList`: `profiles[]`, `templates[]`, `active`, `config_revision`, `stale` | |
 | POST | `/region_profiles` | `{name, body, description}` | `201 RegionProfileDoc` | `409 name_conflict`, `422 validation_failed` |
-| GET | `/region_profiles/schema` | | `RegionProfileSchema`: `fields[]`, `groups[]`. A field `type` is one of `string`, `int`, `float`, `bool`, `enum`, `string_list`, `int_list`, `float_pair`, `rgb`. For `type: enum` the choices are in the sibling `enum[]` (static list); a dynamic list names its source in `choices_from` instead (`detectors`, `segmenters`, `ocr_pipeline_models`, `ocr_det_models`, `ocr_rec_models`, `registry_classes`, `text_reader_modes`) | |
+| GET | `/region_profiles/schema` | | `RegionProfileSchema`: `fields[]`, `groups[]`. A field `type` is one of `string`, `int`, `float`, `bool`, `enum`, `string_list`, `int_list`, `float_pair`, `rgb`. For `type: enum` the choices are in the sibling `enum[]` (static list); a dynamic list names its source in `choices_from` instead (`detectors`, `segmenters`, `ocr_pipeline_models`, `ocr_rec_models`, `registry_classes`, `text_reader_modes`) | |
 | POST | `/region_profiles/validate` | `{body, name}`, query `for_activation` | `ValidationReport` | |
 | POST | `/region_profiles/validate_segmenter_prompt` | `{text_prompt, sole_leg}` | `ValidationReport` | |
 | POST | `/region_profiles/test` | `RegionTestRequest` | `RegionTestResponse` | see [Test on crops](#test-on-crops) |

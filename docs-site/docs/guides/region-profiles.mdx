@@ -96,7 +96,7 @@ whose defaults are in `src/config/detection_profile.py`.
 | Segmenter gating | `gate_hit_rate` (false), `gate_hit_window` (20), `gate_hit_miss_threshold` (15), `gate_hit_sample_floor` (0.1): skip the segmenter for an item class that keeps missing, still sampling it; skipped items are stamped `region_gate_skip` and re-run through the reprocess filter `region_gate_skipped`. Never applies to an item whose class a human owns or validated |
 | Selection | `max_regions_per_item` (1), `region_nms_iou` (0.5), `aspect_min`, `aspect_max`, `auto_confirm_aspect`, `auto_confirm_area_frac` |
 | Text reading | `text_reader` (`vlm_then_ocr`), `text_pattern`, `text_format`, `text_charset`, `text_uppercase`, `text_join`, `text_len_min`, `text_len_max`, `text_stopwords`, `text_min_confidence`, `text_placeholders`, `text_reject_sequences`, `text_crop_margin`, `text_crop_min_height`, `text_min_height_ratio`, `text_border_margin` |
-| OCR models | `ocr_pipeline_model`, `ocr_det_model`, `ocr_rec_model`, versions, `ocr_det_input_size`, `ocr_det_prob_floor` |
+| OCR models | `ocr_pipeline_model`, `ocr_rec_model`, `ocr_rec_version` |
 | OCR text hint | `text_hint_enabled` (true), `text_hint_aspect_min`, `text_hint_aspect_max`, `text_hint_len_min`, `text_hint_len_max`, `text_hint_rec_floor`, `text_hint_require_letters_and_digits` |
 | Other | `human_detector_name`, `human_detector_version`, `feature_output`, `secondary_shape_groups`, `assigns_class`, `labels_path` |
 
@@ -133,7 +133,7 @@ response is `{ok, errors, warnings, force_allowed}`.
 |---|---|---|
 | `profile_name_invalid`, `profile_name_reserved` | error | Name must match `^[a-z0-9][a-z0-9_.-]{1,63}$`; `off`, `none` and `default` are reserved |
 | `name_conflict` | error | Name already used |
-| `profile_field_unknown`, `profile_field_type`, `profile_field_range` | error | Unknown field, wrong type, or value out of range. `input_size` and `ocr_det_input_size` must be multiples of 32 |
+| `profile_field_unknown`, `profile_field_type`, `profile_field_range` | error | Unknown field, wrong type, or value out of range. `input_size` must be a multiple of 32 |
 | `region_class_name_invalid` | error | Not a valid class name |
 | `text_reader_invalid`, `text_regex_invalid` | error | Unknown reader mode, or a bad regular expression |
 | `no_candidate_source` | error | Neither a detector model nor a segmenter prompt |

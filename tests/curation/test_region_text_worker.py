@@ -183,7 +183,7 @@ class TestNoVlmDeployment:
         assert box['text_ocr'] == 'ABC1234'
         assert box['text_raw'] == 'Ohio ABC-1234 Birthplace of Aviation'
         assert box['text_confidence'] == pytest.approx(0.91)
-        assert box['text_engine_version'] == 'paddleocr_det_trt:1+paddleocr_rec_trt:1'
+        assert box['text_engine_version'] == 'paddleocr_rec_trt:1'
         assert box['text_vlm'] is None
         assert box['text_disagreement'] is None
         assert [ln['text'] for ln in doc['item_text_lines']] == ['ABC-1234', 'Smith Motors']

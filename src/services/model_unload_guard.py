@@ -44,11 +44,7 @@ def region_protected_models() -> frozenset[str]:
     primary = ingest_primary_profile()
     secondary = ingest_secondary_profile()
     region = get_active_region_profile()
-    region_models = (
-        (region.detector_model, region.ocr_det_model, region.ocr_rec_model)
-        if region is not None
-        else ()
-    )
+    region_models = (region.detector_model, region.ocr_rec_model) if region is not None else ()
     return frozenset(
         name
         for name in (

@@ -22,7 +22,6 @@ ChoicesFrom = Literal[
     'detectors',
     'segmenters',
     'ocr_pipeline_models',
-    'ocr_det_models',
     'ocr_rec_models',
     'registry_classes',
     'text_reader_modes',
@@ -63,10 +62,6 @@ class RegionProfileBody(BaseModel):
     segmenter_version: str = '1'
     human_detector_name: str = 'human'
     human_detector_version: str = '1'
-    ocr_det_model: str = 'paddleocr_det_trt'
-    ocr_det_version: str = '1'
-    ocr_det_input_size: int = 640
-    ocr_det_prob_floor: float = 0.30
     ocr_rec_model: str = 'paddleocr_rec_trt'
     ocr_rec_version: str = '1'
     ocr_pipeline_model: str = TritonModelConfig.OCR_PIPELINE_MODEL

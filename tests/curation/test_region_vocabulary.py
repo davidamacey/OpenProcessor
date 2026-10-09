@@ -85,10 +85,7 @@ def test_regions_vocabulary_reflects_the_active_profile(
         assert by_id[REFERENCE_REGION_DETECTOR_MODEL]['filterable'] is True
         assert by_id['sam3']['role'] == 'segmenter'
         assert by_id['sam3']['filterable'] is True
-        # OCR text-hint locates text but never sets the region bbox --
-        # never filterable.
-        assert by_id['paddleocr_det_trt']['role'] == 'ocr'
-        assert by_id['paddleocr_det_trt']['filterable'] is False
+        assert 'paddleocr_det_trt' not in by_id
         # The verifier is the resolved model of the registered VLM endpoint
         # (here the env built-in from vlm_env), never a hardcoded default.
         assert by_id['test-vlm']['role'] == 'verifier'

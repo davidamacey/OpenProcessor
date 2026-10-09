@@ -104,6 +104,27 @@ def test_profile_field_unknown() -> None:
     assert any(e.code == 'profile_field_unknown' for e in report.errors)
 
 
+@pytest.mark.parametrize(
+    'key', ['ocr_det_model', 'ocr_det_version', 'ocr_det_input_size', 'ocr_det_prob_floor']
+)
+def test_retired_ocr_det_field_is_rejected_with_a_clear_message(key: str) -> None:
+    body = _body()
+    body[key] = 1
+    report = _run(validate_profile(None, body))
+    errors = [e for e in report.errors if e.code == 'profile_field_unknown']
+    assert errors
+    assert key in errors[0].message
+    assert 'retired' in errors[0].message
+
+
+@pytest.mark.parametrize('key', ['ocr_det_model', 'ocr_det_input_size'])
+def test_stored_profile_with_retired_field_fails_to_load(key: str) -> None:
+    from src.services.detection.profile_registry import region_profile_from_dict
+
+    with pytest.raises(ValueError, match='retired'):
+        region_profile_from_dict({'name': 'old', key: 1}, source='stored')
+
+
 def test_region_class_name_invalid() -> None:
     body = _body(region_class_name='Not Valid!')
     report = _run(validate_profile(None, body))
@@ -277,16 +298,14 @@ def test_segmenter_unreachable_warns_then_errors_on_activation(
 
 
 def test_ocr_model_not_found() -> None:
-    body = _body(
-        text_reader='ocr', ocr_pipeline_model='missing_pipeline', ocr_det_model='', ocr_rec_model=''
-    )
+    body = _body(text_reader='ocr', ocr_pipeline_model='missing_pipeline', ocr_rec_model='')
     report = _run(validate_profile(None, body, get_repository_index=_always_reachable))
     assert any(e.code == 'ocr_model_not_found' for e in report.errors)
 
 
 def test_vlm_not_configured_warning(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_VLM_URL', raising=False)
-    body = _body(text_reader='vlm', ocr_pipeline_model='', ocr_det_model='', ocr_rec_model='')
+    body = _body(text_reader='vlm', ocr_pipeline_model='', ocr_rec_model='')
     report = _run(validate_profile(None, body, get_repository_index=_always_reachable))
     assert any(w.code == 'vlm_not_configured' for w in report.warnings)
 

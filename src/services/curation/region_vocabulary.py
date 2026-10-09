@@ -74,11 +74,6 @@ def _detectors() -> list[dict[str, Any]]:
             filterable=True,
         )
         add(profile.human_detector_name, 'Human', 'human', filterable=True)
-        # The OCR text-detector only *locates* text to seed a segmenter
-        # sub-crop re-pass; it never sets the region bbox itself, so it
-        # never appears in region_detector -- filterable=False.
-        if _text_hint_on(profile):
-            add(profile.ocr_det_model, 'OCR text hint', 'ocr', filterable=False)
     else:
         add('human', 'Human', 'human', filterable=True)
 

@@ -44,7 +44,6 @@ BODY: dict[str, Any] = {
     "input_size": 640,
     "letterbox_fill": [114, 114, 114],
     "auto_confirm_area_frac": [0.1, 0.9],
-    "ocr_det_model": "",
 }
 
 

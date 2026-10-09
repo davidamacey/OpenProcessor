@@ -38,8 +38,6 @@ export function choiceList(
       return vocab.text_reader_modes.map((e) => e.choice);
     case 'ocr_pipeline_models':
       return vocab.ocr.pipeline_models.map((e) => e.choice);
-    case 'ocr_det_models':
-      return vocab.ocr.det_models.map((e) => e.choice);
     case 'ocr_rec_models':
       return vocab.ocr.rec_models.map((e) => e.choice);
     default:

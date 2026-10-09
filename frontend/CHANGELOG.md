@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The region-profile body and schema no longer carry `ocr_det_model`, `ocr_det_version`,
+  `ocr_det_input_size` or `ocr_det_prob_floor` (OpenProcessor #181), and `choices_from`
+  no longer offers `ocr_det_models`; fixtures and the contract pin follow. The
+  read-only OCR detector list in the vocabulary panel is unchanged.
 - Moved to SvelteKit 3 and `@sveltejs/adapter-static` 4 on TypeScript 6. SvelteKit
   options now live in `sveltekit.options.js` and are passed to the `sveltekit()` Vite
   plugin; `svelte.config.js` is gone. `goto` options use `replace` and `reset: false`

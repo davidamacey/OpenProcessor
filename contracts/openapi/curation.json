@@ -16906,26 +16906,6 @@
             "title": "Max Regions Per Item",
             "type": "integer"
           },
-          "ocr_det_input_size": {
-            "default": 640,
-            "title": "Ocr Det Input Size",
-            "type": "integer"
-          },
-          "ocr_det_model": {
-            "default": "paddleocr_det_trt",
-            "title": "Ocr Det Model",
-            "type": "string"
-          },
-          "ocr_det_prob_floor": {
-            "default": 0.3,
-            "title": "Ocr Det Prob Floor",
-            "type": "number"
-          },
-          "ocr_det_version": {
-            "default": "1",
-            "title": "Ocr Det Version",
-            "type": "string"
-          },
           "ocr_pipeline_model": {
             "default": "ocr_pipeline",
             "title": "Ocr Pipeline Model",
@@ -17413,7 +17393,6 @@
                   "detectors",
                   "segmenters",
                   "ocr_pipeline_models",
-                  "ocr_det_models",
                   "ocr_rec_models",
                   "registry_classes",
                   "text_reader_modes"

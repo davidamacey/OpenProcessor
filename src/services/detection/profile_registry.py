@@ -73,6 +73,13 @@ def register_profile(profile: DetectionProfile, *, default: bool = False) -> Non
         _DEFAULT_NAME = profile.name
 
 
+#: Profile keys removed in 0.5.0; a stored or submitted document that still
+#: carries one is rejected with a message naming it, never silently dropped.
+RETIRED_PROFILE_FIELDS = frozenset(
+    {'ocr_det_model', 'ocr_det_version', 'ocr_det_input_size', 'ocr_det_prob_floor'}
+)
+
+
 def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> DetectionProfile:
     """Build a :class:`DetectionProfile` from a flat ``{field_name: value}``
     mapping (the decoded JSON of a profile file).
@@ -99,6 +106,14 @@ def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> D
         # policy): older stored docs still carry it empty. A non-empty value
         # would have been a class filter, so it stays an unknown-field error.
         del values['class_ids']
+    retired = sorted(RETIRED_PROFILE_FIELDS & values.keys())
+    if retired:
+        msg = (
+            f'region profile {source!r}: unknown field {retired[0]!r} (retired: the OCR text '
+            'detector fields were removed because nothing read them; drop '
+            f'{", ".join(retired)} from the profile document)'
+        )
+        raise ValueError(msg)
     if 'name' not in values:
         msg = f'region profile {source!r} is missing the required "name" field'
         raise ValueError(msg)

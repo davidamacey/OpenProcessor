@@ -32,11 +32,9 @@ if TYPE_CHECKING:
 #: ``/region_profiles/schema`` rows' ``min``/``max`` (§7.3) -- one table.
 PROFILE_FIELD_RANGES: dict[str, tuple[float, float]] = {
     'confidence_floor': (0.0, 1.0),
-    'ocr_det_prob_floor': (0.0, 1.0),
     'text_crop_margin': (0.0, 1.0),
     'batch_limit': (1, 256),
     'input_size': (32, 2048),
-    'ocr_det_input_size': (32, 2048),
     'max_regions_per_item': (1, 64),
     # W8.4: (0, 1] -- exclusive 0, checked separately below.
     'region_nms_iou': (0.0, 1.0),
@@ -44,7 +42,7 @@ PROFILE_FIELD_RANGES: dict[str, tuple[float, float]] = {
     'gate_hit_miss_threshold': (1, 1000),
     'gate_hit_sample_floor': (0.0, 1.0),
 }
-_MULTIPLE_OF_32_FIELDS = ('input_size', 'ocr_det_input_size')
+_MULTIPLE_OF_32_FIELDS = ('input_size',)
 
 #: Errors this validator raises that ``force: true`` bypasses on
 #: activation -- unreachable/not-ready dependency checks that are, by
@@ -421,7 +419,7 @@ async def _check_ocr_models(
             )
         )
         return issues
-    for field in ('ocr_pipeline_model', 'ocr_det_model', 'ocr_rec_model'):
+    for field in ('ocr_pipeline_model', 'ocr_rec_model'):
         name = getattr(profile, field)
         if not name:
             continue
