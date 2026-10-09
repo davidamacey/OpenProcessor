@@ -458,7 +458,7 @@ Tools used:
   - Grype: Fast vulnerability scanner
 
 Options:
-    api         Scan only API image (yolo-api/FastAPI)
+    api         Scan only API image (api/FastAPI)
     triton      Scan only Triton image (inference server)
     all         Scan both images (default)
     install     Install all required tools

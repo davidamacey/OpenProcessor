@@ -2,7 +2,7 @@
 
 The actual pipeline now runs in a **dedicated long-lived worker
 container** (``curation-auto-label-worker``, entrypoint
-``scripts/curation/auto_label_worker.py``). yolo-api just drops a
+``scripts/curation/auto_label_worker.py``). api just drops a
 trigger JSON file on the shared ``/jobs`` volume and returns 202.
 The worker picks it up, runs the pipeline, and writes back to the
 same state.json the SSE endpoint already tails.
@@ -193,9 +193,9 @@ def reconcile_orphaned_jobs() -> bool:
     Unlike the other three job modules in this package, the auto-label
     pipeline runs in a *separate* long-lived worker container
     (``curation-auto-label-worker``) with its own restart lifecycle —
-    restarting yolo-api does not kill that worker, so most of the time
+    restarting api does not kill that worker, so most of the time
     there is nothing to reconcile here. This still matters for the case
-    where yolo-api itself was down (and so never got to run this check)
+    where api itself was down (and so never got to run this check)
     while the worker died mid-run: without this, nothing repairs
     ``state.json`` until the next status poll. A pending, not-yet-claimed
     trigger is left alone — the worker container may simply not have

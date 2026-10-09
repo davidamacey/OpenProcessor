@@ -228,7 +228,7 @@ def test_no_duplicate_host_ports() -> None:
 # than a dev checkout's live `git rev-parse HEAD` fallback.
 # =============================================================================
 
-_BUILD_SHA_SERVICES = ('yolo-api', 'curation-trainer', 'curation-evaluator')
+_BUILD_SHA_SERVICES = ('api', 'curation-trainer', 'curation-evaluator')
 
 _BUILD_SHA_DOCKERFILES = (
     REPO_ROOT / 'Dockerfile',
@@ -270,7 +270,7 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     """Bake-off eval datasets are exports: the evaluator must read them at the
     path the API resolved (``./data/projects/<project>/exports`` -> ``/app/data``)."""
     services = _services()
-    api_mounts = services['yolo-api'].get('volumes') or []
+    api_mounts = services['api'].get('volumes') or []
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
@@ -295,20 +295,20 @@ def test_evaluator_gets_the_same_mlflow_tracking_url_as_the_trainer() -> None:
     evaluator_url = _value(evaluator_env, 'MLFLOW_TRACKING_URI')
     assert trainer_url is not None
     assert evaluator_url == trainer_url
-    api_env = services['yolo-api'].get('environment') or []
+    api_env = services['api'].get('environment') or []
     assert _value(api_env, 'MLFLOW_TRACKING_URI') == trainer_url, (
         'project delete cleans the MLflow experiment over REST from the API'
     )
 
 
 def test_api_evaluator_segmenter_gpu_ids_are_env_driven_not_hardcoded() -> None:
-    """F-2 (fresh-start E2E findings 2026-09-25): yolo-api, curation-evaluator
+    """F-2 (fresh-start E2E findings 2026-09-25): api, curation-evaluator
     and segmenter used to hardcode device_ids: ['0'] regardless of
     TRITON_GPU_ID/VLM_GPU_ID, so a host whose free GPU wasn't 0 needed a
     compose edit to run them at all."""
     services = _services()
     expectations = {
-        'yolo-api': 'API_GPU_ID',
+        'api': 'API_GPU_ID',
         'curation-evaluator': 'EVALUATOR_GPU_ID',
         'segmenter': 'SEGMENTER_GPU_ID',
     }
@@ -333,13 +333,13 @@ def test_auto_label_worker_caps_blas_threads() -> None:
 
 
 def test_api_and_detection_worker_share_crop_cache() -> None:
-    """ST-1: yolo-api and curation-detection-worker must mount the SAME
+    """ST-1: api and curation-detection-worker must mount the SAME
     named crop-cache volume at the SAME target, with OP_CROP_CACHE_DIR set
     to that target in both -- otherwise the worker's cache reads never see
     what the API's ingest path wrote."""
     services = _services()
     target = '/var/cache/openprocessor/crops'
-    for name in ('yolo-api', 'curation-detection-worker'):
+    for name in ('api', 'curation-detection-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         matching = [m for m in mounts if m.endswith(f':{target}')]
         assert matching, f'{name} has no crop-cache mount at {target}: {mounts}'
@@ -392,8 +392,8 @@ def test_curation_worker_healthchecks_use_liveness() -> None:
     assert not bad, 'expected worker_liveness-based healthchecks:\n' + '\n'.join(bad)
 
 
-# Workers whose depends_on already names yolo-api directly (main compose
-# doesn't have every curation worker depend on yolo-api — e.g.
+# Workers whose depends_on already names api directly (main compose
+# doesn't have every curation worker depend on api — e.g.
 # curation-detection-worker depends on triton-server/opensearch, and
 # curation-auto-label-worker only on opensearch, both by design, since
 # they're triggered via files, not a direct HTTP call at startup).
@@ -401,26 +401,26 @@ _WORKERS_DEPENDING_ON_API = ('curation-vlm-worker', 'curation-cluster-refresh')
 
 
 def test_curation_workers_depend_on_healthy_api() -> None:
-    """S-7: workers that depend on `yolo-api` wait for it to report healthy,
+    """S-7: workers that depend on `api` wait for it to report healthy,
     not merely started."""
     services = _services()
     bad: list[str] = []
     for name in _WORKERS_DEPENDING_ON_API:
         depends_on = services[name].get('depends_on')
-        if not isinstance(depends_on, dict) or 'yolo-api' not in depends_on:
+        if not isinstance(depends_on, dict) or 'api' not in depends_on:
             bad.append(name)
             continue
-        condition = (depends_on.get('yolo-api') or {}).get('condition')
+        condition = (depends_on.get('api') or {}).get('condition')
         if condition != 'service_healthy':
             bad.append(name)
-    assert not bad, f'expected depends_on.yolo-api.condition == service_healthy: {bad}'
+    assert not bad, f'expected depends_on.api.condition == service_healthy: {bad}'
 
 
-def test_yolo_api_waits_for_a_healthy_opensearch() -> None:
+def test_api_waits_for_a_healthy_opensearch() -> None:
     """Found live: the API boots, fails to create the core kNN indexes
     because OpenSearch is not up yet, and never retries them -- so the first
     /ingest creates them with dynamic mappings."""
-    depends_on = _services()['yolo-api'].get('depends_on')
+    depends_on = _services()['api'].get('depends_on')
     assert isinstance(depends_on, dict), depends_on
     assert (depends_on.get('opensearch') or {}).get('condition') == 'service_healthy'
 
@@ -438,10 +438,10 @@ def test_triton_accepts_the_clients_idle_keepalive_pings() -> None:
     assert interval <= 30_000
 
 
-def test_yolo_api_has_a_healthcheck() -> None:
-    """A `service_healthy` dependency on yolo-api is meaningless without one."""
+def test_api_has_a_healthcheck() -> None:
+    """A `service_healthy` dependency on api is meaningless without one."""
     services = _services()
-    assert services['yolo-api'].get('healthcheck'), 'yolo-api needs a healthcheck'
+    assert services['api'].get('healthcheck'), 'api needs a healthcheck'
 
 
 def test_curation_mlflow_has_a_healthcheck() -> None:
@@ -528,7 +528,7 @@ _FORBIDDEN_BASE_MOUNT_PREFIXES = (
 # override var docker-compose.yml pins it through.
 _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'triton-server': 'OP_TRITON_IMAGE',
-    'yolo-api': 'OP_API_IMAGE',
+    'api': 'OP_API_IMAGE',
     'curation-detection-worker': 'OP_API_IMAGE',
     'curation-vlm-worker': 'OP_API_IMAGE',
     'curation-auto-label-worker': 'OP_API_IMAGE',
@@ -574,10 +574,10 @@ def test_dev_overlay_carries_every_build_block_and_source_mount() -> None:
     for name in _CUSTOM_IMAGE_OVERRIDE_VARS:
         assert name in dev_services, f'{name} missing from docker-compose.dev.yml'
         assert 'build' in dev_services[name], f'{name} missing build: in docker-compose.dev.yml'
-    yolo_api_mounts = [str(v) for v in dev_services['yolo-api'].get('volumes') or []]
+    api_mounts = [str(v) for v in dev_services['api'].get('volumes') or []]
     for prefix in _FORBIDDEN_BASE_MOUNT_PREFIXES:
-        assert any(m.startswith(prefix + ':') for m in yolo_api_mounts), (
-            f'docker-compose.dev.yml/yolo-api missing a mount for {prefix}'
+        assert any(m.startswith(prefix + ':') for m in api_mounts), (
+            f'docker-compose.dev.yml/api missing a mount for {prefix}'
         )
 
 
@@ -636,13 +636,13 @@ def test_no_latest_in_any_custom_image_fallback() -> None:
 
 
 def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> None:
-    """G-06: ingest resolves item paths against OP_SOURCE_ROOT on yolo-api;
+    """G-06: ingest resolves item paths against OP_SOURCE_ROOT on api;
     the detection worker re-reads the same items later. Without the same
     bind on both, every worker read fails with
     detection_failed/reason=image_unavailable."""
     services = _services()
     target = '/data/source'
-    for name in ('yolo-api', 'curation-detection-worker', 'curation-auto-label-worker'):
+    for name in ('api', 'curation-detection-worker', 'curation-auto-label-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         matching = [m for m in mounts if m.endswith((f':{target}:ro', f':{target}'))]
         assert matching, f'{name} has no source-root mount at {target}: {mounts}'
@@ -673,7 +673,7 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
     dev_compose = _load_yaml(REPO_ROOT / 'docker-compose.dev.yml')
     dev_services = dev_compose['services']
     target = '/app/examples'
-    for name in ('yolo-api', 'curation-detection-worker', 'curation-auto-label-worker'):
+    for name in ('api', 'curation-detection-worker', 'curation-auto-label-worker'):
         mounts = [str(v) for v in (dev_services.get(name, {}).get('volumes') or [])]
         assert any(m.endswith(f':{target}:ro') for m in mounts), (
             f'{name} has no ./examples mount at {target} in docker-compose.dev.yml: {mounts}'
@@ -691,7 +691,7 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
 # needs the class registry itself, so ./data is its own, narrower
 # requirement -- see test_class_registry_data_mounted_where_needed below.
 _IN_PROCESS_PIPELINE_SERVICES = (
-    'yolo-api',
+    'api',
     'curation-detection-worker',
     'curation-auto-label-worker',
 )
@@ -704,12 +704,12 @@ def test_class_registry_data_mounted_where_needed() -> None:
     Without ./data mounted, the registry loads empty and any class-aware
     stage (the VLM auto-label stage, training, promote, eval) raises
     'class_names or class_catalog must be supplied' or reads no classes
-    instead of running. yolo-api and curation-auto-label-worker read the
+    instead of running. api and curation-auto-label-worker read the
     registry directly; curation-detection-worker deliberately does not
     (it only ever writes unlabeled `*_proposal` detections)."""
     services = _services()
     target = '/app/data'
-    for name in ('yolo-api', 'curation-auto-label-worker'):
+    for name in ('api', 'curation-auto-label-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         assert any(m.endswith((f':{target}', f':{target}:ro')) for m in mounts), (
             f'{name} has no ./data mount at {target}: {mounts}'
@@ -719,7 +719,7 @@ def test_class_registry_data_mounted_where_needed() -> None:
 def test_http_client_only_curation_services_stay_lightweight() -> None:
     """Documents *why* curation-vlm-worker/curation-cluster-refresh don't
     need the source-root/examples/data mounts above: they only ever talk
-    to yolo-api over HTTP (verified via each entrypoint's own imports, not
+    to api over HTTP (verified via each entrypoint's own imports, not
     inferred from mounts), so adding a heavier mount surface there would be
     unnecessary attack/complexity surface, not a missing-mount bug."""
     services = _services()
@@ -752,27 +752,27 @@ def test_vlm_service_is_opt_in_with_a_pinned_image() -> None:
     assert ':latest' not in image, f'vlm service image must be pinned, not :latest: {image!r}'
 
 
-def test_yolo_api_carries_op_api_network_alias() -> None:
+def test_api_carries_op_api_network_alias() -> None:
     """G-28: Cropwright's default API_UPSTREAM is http://op-api:8000; this
     alias lets that default resolve without every deployer overriding it."""
-    networks = _services()['yolo-api'].get('networks')
-    assert isinstance(networks, dict), 'expected yolo-api networks: to carry aliases (dict form)'
+    networks = _services()['api'].get('networks')
+    assert isinstance(networks, dict), 'expected api networks: to carry aliases (dict form)'
     aliases = (networks.get('triton_net') or {}).get('aliases') or []
-    assert 'op-api' in aliases, f'expected op-api in yolo-api triton_net aliases: {aliases}'
+    assert 'op-api' in aliases, f'expected op-api in api triton_net aliases: {aliases}'
 
 
 def test_gpu_arbiter_overlay_exists_and_mounts_docker_socket() -> None:
     """G-15: the docker socket must be opt-in (a separate overlay file),
-    never a default mount on yolo-api."""
+    never a default mount on api."""
     overlay_path = REPO_ROOT / 'docker-compose.gpu-arbiter.yml'
     assert overlay_path.is_file(), 'expected docker-compose.gpu-arbiter.yml overlay'
     with overlay_path.open() as fh:
         overlay = yaml.safe_load(fh)
-    mounts = [str(v) for v in (overlay['services']['yolo-api'].get('volumes') or [])]
+    mounts = [str(v) for v in (overlay['services']['api'].get('volumes') or [])]
     assert any('/var/run/docker.sock' in m for m in mounts), mounts
     # And the base compose must NOT already mount it (defeats the point of
     # an opt-in overlay).
-    base_mounts = [str(v) for v in (_services()['yolo-api'].get('volumes') or [])]
+    base_mounts = [str(v) for v in (_services()['api'].get('volumes') or [])]
     assert not any('docker.sock' in m for m in base_mounts), base_mounts
 
 
@@ -790,18 +790,18 @@ def test_vlm_image_pinned_by_digest() -> None:
     assert '@sha256:' in image, image
 
 
-def test_yolo_api_default_trainer_container_matches_the_trainer_service_name() -> None:
+def test_api_default_trainer_container_matches_the_trainer_service_name() -> None:
     """F-72: /train/preflight's trainer-reachability probe
     (GpuArbiterConfig.trainer_container, env OP_GPU_ARBITER_TRAINER_CONTAINER)
     used to default to unset -- reporting the misleading "no trainer
     container configured" even while curation-trainer was up and healthy,
     because nothing ever wired the env var to the trainer service's own
-    container_name. yolo-api's environment must default
+    container_name. api's environment must default
     OP_GPU_ARBITER_TRAINER_CONTAINER to that exact value (still
     overridable), so the probe finds it with no extra config on any
     deployment running the `training` profile."""
     services = _services()
-    api_env = services['yolo-api']['environment']
+    api_env = services['api']['environment']
     trainer_container_name = str(services['curation-trainer']['container_name'])
 
     env_map = {}
@@ -810,7 +810,7 @@ def test_yolo_api_default_trainer_container_matches_the_trainer_service_name() -
         env_map[key] = value
 
     assert 'OP_GPU_ARBITER_TRAINER_CONTAINER' in env_map, (
-        'yolo-api must set a default OP_GPU_ARBITER_TRAINER_CONTAINER'
+        'api must set a default OP_GPU_ARBITER_TRAINER_CONTAINER'
     )
     default_expr = env_map['OP_GPU_ARBITER_TRAINER_CONTAINER']
     # The env var's own default value (inside the outer ${VAR:-...}) must
@@ -1054,11 +1054,11 @@ def test_the_catalog_default_matches_the_compose_default() -> None:
 
 def test_the_api_and_workers_get_the_local_endpoint_and_the_read_only_secrets_mount() -> None:
     services = yaml.safe_load(COMPOSE.read_text())['services']
-    for name in ('yolo-api', 'curation-detection-worker'):
+    for name in ('api', 'curation-detection-worker'):
         env = ' '.join(services[name]['environment'])
         assert 'OP_LOCAL_VLM_ENDPOINT=${OP_LOCAL_VLM_ENDPOINT:-}' in env, name
         assert 'OP_LOCAL_VLM_GPU_TOTAL_MIB=${VLM_GPU_TOTAL_MIB:-}' in env, name
-    for name in ('yolo-api', 'curation-detection-worker', 'curation-auto-label-worker'):
+    for name in ('api', 'curation-detection-worker', 'curation-auto-label-worker'):
         assert './secrets/vlm:/run/secrets/op_vlm:ro' in services[name]['volumes'], name
 
 
@@ -1151,7 +1151,7 @@ def test_cluster_make_targets_recreate_only_the_worker() -> None:
 def test_api_service_aggregates_metrics_across_workers() -> None:
     """uvicorn --workers N keeps one registry per process; without a shared
     multiprocess dir a /metrics scrape reflects a single worker."""
-    spec = _services()['yolo-api']
+    spec = _services()['api']
     env = spec['environment']
     entries = dict(e.split('=', 1) for e in env) if isinstance(env, list) else env
     mp_dir = entries['PROMETHEUS_MULTIPROC_DIR']

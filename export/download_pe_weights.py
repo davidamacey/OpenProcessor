@@ -40,7 +40,7 @@ exporters and the API.
 Usage
 -----
     # In the API container (recommended; the cache is mounted there)
-    docker compose exec yolo-api python /app/export/download_pe_weights.py
+    docker compose exec api python /app/export/download_pe_weights.py
 
     # Anywhere with huggingface_hub installed; print only the resolved path
     python export/download_pe_weights.py --print-path

@@ -3,7 +3,7 @@
 
 Replaces the per-request ``subprocess.Popen`` model in
 :mod:`src.services.curation.autolabel.job` with a long-lived worker
-process. The yolo-api just drops a JSON trigger file under
+process. The api just drops a JSON trigger file under
 ``<project's autolabel_dir>/trigger.json`` and returns 202; this
 worker picks it up, runs the pipeline, and writes state.json updates
 the SSE endpoint already streams to the dashboard.
@@ -14,7 +14,7 @@ Why a dedicated container (vs. asyncio task / per-request subprocess):
   OpenSearch error lands in ``docker compose logs
   curation-auto-label-worker`` — no more 'subprocess vanished before
   writing terminal state' opacity.
-* **Survives API restarts**: stop/rm/up yolo-api does not kill an
+* **Survives API restarts**: stop/rm/up api does not kill an
   in-flight recluster; the worker keeps running.
 * **Lifecycle ownership**: docker compose owns restart-on-crash via
   ``restart: unless-stopped`` — the API no longer races to detect a
@@ -31,7 +31,7 @@ owning project's own ``autolabel_dir``:
   ``{job_id, pipeline, args}`` written by ``start_job``. Worker
   claims it via ``unlink`` (atomic on Linux) then runs the pipeline.
 * State file ``state.json`` — worker writes this as it advances
-  stages; each project's SSE stream (yolo-api) polls its mtime.
+  stages; each project's SSE stream (api) polls its mtime.
 * Heartbeat file ``heartbeat`` — worker touches every 5 s while
   running; API uses mtime to detect a dead worker.
 * Cancel flag ``cancel.flag`` — operator writes via

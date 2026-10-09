@@ -11,7 +11,7 @@ checking status, so the *real* "model file not found" message never made it
 to the operator — they saw a bare ``KeyError`` traceback instead.
 
 ``export_models.py`` imports ``tensorrt`` and ``ultralytics_patches`` at
-module level (it's a script meant to run inside the ``yolo-api`` container,
+module level (it's a script meant to run inside the ``api`` container,
 which has both), so these tests skip cleanly wherever that stack isn't
 installed — same convention as ``pytest.importorskip('onnxruntime')`` in
 ``tests/test_pe_image_encoder_export.py``.

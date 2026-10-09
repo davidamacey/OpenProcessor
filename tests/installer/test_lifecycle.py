@@ -85,7 +85,7 @@ def test_install_performs_every_step_in_order(shimmed: Shimmed) -> None:
     preflight = index_of(m, 'python -m export.preflight')
     yolo = index_of(m, 'export/export_models.py')
     up = index_of(m, ' up -d --remove-orphans')
-    probes = index_of(m, ' exec -T yolo-api python -c')
+    probes = index_of(m, ' exec -T api python -c')
     assert pull < probe < triton < preflight < yolo < up < probes
     for line in m:
         if 'docker compose' in line:

@@ -91,14 +91,14 @@ def test_only_this_projects_triton_and_api_are_kept(project: str) -> None:
     blocks = _blocks()
     env = {'OP_LOG_PROJECT': project}
     assert _kept(blocks['triton'], _container(project, 'triton-server'), env)
-    assert _kept(blocks['fastapi'], _container(project, 'yolo-api'), env)
+    assert _kept(blocks['fastapi'], _container(project, 'api'), env)
     for other in ('openprocessor', 'opfinal', 'opinst-other'):
         if other == project:
             continue
         # Same suffixes, another stack: must not be collected.
         assert not _kept(blocks['triton'], _container(other, 'triton-server'), env)
-        assert not _kept(blocks['fastapi'], _container(other, 'yolo-api'), env)
-    assert not _kept(blocks['triton'], _container(project, 'yolo-api'), env)
+        assert not _kept(blocks['fastapi'], _container(other, 'api'), env)
+    assert not _kept(blocks['triton'], _container(project, 'api'), env)
     assert not _kept(blocks['fastapi'], _container(project, 'triton-server'), env)
     assert not _kept(blocks['fastapi'], _container(project, 'curation-detection-worker'), env)
 
@@ -118,7 +118,7 @@ def test_worker_and_segmenter_logs_are_kept_for_this_project_only(project: str) 
     for service in _WORKER_SERVICES:
         assert _kept(block, _container(project, service), env), service
         assert not _kept(block, _container('opfinal', service), env), service
-    for service in ('yolo-api', 'triton-server', 'opensearch', 'curation-cluster-refresh'):
+    for service in ('api', 'triton-server', 'opensearch', 'curation-cluster-refresh'):
         assert not _kept(block, _container(project, service), env), service
     # fullmatch: a look-alike service name must not slip through
     assert not _kept(block, _container(project, 'segmenter-extra'), env)

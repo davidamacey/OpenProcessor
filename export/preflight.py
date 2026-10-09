@@ -4,7 +4,7 @@ Installer plan (docs/design/openprocessor_internal/one_line_installer_plan.md
 section 3.2): a stale ``:latest`` API image once shipped without
 ``perception_models`` importable. This script is invoked as
 
-    docker compose run --rm --no-deps -T yolo-api python -m export.preflight
+    docker compose run --rm --no-deps -T api python -m export.preflight
 
 and exits non-zero with a specific message per failing check, instead of
 failing deep inside the first export step with a confusing traceback.

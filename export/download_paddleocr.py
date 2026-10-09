@@ -12,8 +12,8 @@ Sources:
 - RapidOCR model repository
 
 Usage:
-    # From yolo-api container:
-    docker compose exec yolo-api python /app/export/download_paddleocr.py
+    # From api container:
+    docker compose exec api python /app/export/download_paddleocr.py
 
     # Or from host with venv:
     python export/download_paddleocr.py

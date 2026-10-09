@@ -4,7 +4,7 @@ serving the region-drain stall cause.
 Persisted to a state.json under ``OP_REGION_DRAIN_STATE_DIR`` (same
 shared-``/jobs``-volume convention as ``region_drain.py``'s streak
 state), so the "unavailable since" timestamp is stable across
-``yolo-api --workers`` processes and repeated polls, rather than
+``api --workers`` processes and repeated polls, rather than
 resetting to "just now" every time.
 """
 

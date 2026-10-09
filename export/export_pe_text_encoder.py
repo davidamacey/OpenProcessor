@@ -63,10 +63,10 @@ Serving options
 Usage
 -----
     # ONNX + parity gate (API container: has torch + perception_models)
-    docker compose exec yolo-api python /app/export/export_pe_text_encoder.py
+    docker compose exec api python /app/export/export_pe_text_encoder.py
 
     # Also install as a Triton model
-    docker compose exec yolo-api python /app/export/export_pe_text_encoder.py \\
+    docker compose exec api python /app/export/export_pe_text_encoder.py \\
         --install-triton --models-dir /app/models
 
     # Re-render only the Triton config.pbtxt (no torch needed)

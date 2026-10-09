@@ -57,7 +57,7 @@ _BUILDING_STALE_SECONDS = 120.0
 # 'active'.
 #
 # P3F pass-4 F1 correction: this guard is PER-WORKER-PROCESS ONLY --
-# yolo-api runs `--workers=32` (docker-compose.yml), and each worker has
+# api runs `--workers=32` (docker-compose.yml), and each worker has
 # its own, separate, empty copy of this set. It stops the race only
 # within the one worker process that happens to handle both the
 # original DELETE and its retry. A retried DELETE that a proxy/client

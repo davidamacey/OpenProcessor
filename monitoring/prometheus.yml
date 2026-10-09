@@ -13,10 +13,10 @@ scrape_configs:
         labels:
           group: 'triton_inference_server'
 
-  - job_name: 'yolo-api'
+  - job_name: 'api'
     metrics_path: /metrics
     static_configs:
-      - targets: ['yolo-api:8000']
+      - targets: ['api:8000']
         labels:
           group: 'api'
 

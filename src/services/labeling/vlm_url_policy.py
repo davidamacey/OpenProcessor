@@ -48,7 +48,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'opensearch-dashboards',
         'triton-server',
         'triton-sdk',
-        'yolo-api',
+        'api',
         'op-api',
         'segmenter',
         'curation-detection-worker',

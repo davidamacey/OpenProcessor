@@ -3,7 +3,7 @@
 ``POST /curation/probe/run`` doesn't block the request on a
 potentially-long CPU/GPU inference pass over the whole items index.
 
-Runs in-process (an ``asyncio.Task`` inside the yolo-api process itself,
+Runs in-process (an ``asyncio.Task`` inside the api process itself,
 sharing the same GPU-claim path ``POST /train/start`` uses) -- unlike
 :mod:`src.services.curation.autolabel.job`, there is no separate probe
 worker container, so this mirrors :mod:`src.services.curation.item_scores.job`
@@ -11,7 +11,7 @@ worker container, so this mirrors :mod:`src.services.curation.item_scores.job`
 state.json/heartbeat/cancel.flag convention instead of ``autolabel.job``'s
 trigger-file dispatch to a long-lived worker.
 
-**Multi-worker correctness (2026-09-25 fix).** ``yolo-api`` runs under
+**Multi-worker correctness (2026-09-25 fix).** ``api`` runs under
 ``uvicorn --workers=8`` -- eight separate OS processes. The previous
 module-level ``_ProbeJobState`` dataclass plus ``_task`` handle were
 invisible across workers: ``POST /probe/run`` landing on worker A and a
@@ -24,7 +24,7 @@ busy check and start a parallel run against the same items index. Fixed
 by moving to the same on-disk, atomically-written state.json + heartbeat
 + cancel.flag convention ``item_scores.job``/``embedding_viz`` already
 use, resolved fresh per call from ``OP_PROBE_JOBS_DIR`` (default
-``/jobs/probe`` -- the shared ``/jobs`` volume every yolo-api worker
+``/jobs/probe`` -- the shared ``/jobs`` volume every api worker
 process mounts, consistent with ``item_scores``' ``/jobs/scores`` and
 ``embedding_viz``'s ``/jobs/viz``).
 

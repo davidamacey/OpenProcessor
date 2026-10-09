@@ -63,8 +63,8 @@ async def _probe_triton() -> tuple[bool, str]:
     valid readiness signal: it stays 0 until the first real infer call
     lands on the pool. Combined with ``depends_on: service_healthy`` on
     dependent containers, that produces a startup deadlock — dependents
-    wait for yolo-api to report healthy, but nothing is calling Triton
-    through yolo-api to wake the pool, so the count never moves.
+    wait for api to report healthy, but nothing is calling Triton
+    through api to wake the pool, so the count never moves.
 
     ``is_server_live()`` actively probes Triton via the async client
     (created lazily on first call). The side effect is exactly what we

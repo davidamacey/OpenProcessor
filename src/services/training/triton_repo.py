@@ -30,7 +30,7 @@ def resolve_triton_models_dir() -> Path:
     return Path(override) if override else DEFAULT_TRITON_MODELS_DIR
 
 
-# Triton's HTTP control endpoint. The yolo-api container shares the
+# Triton's HTTP control endpoint. The api container shares the
 # triton_net network so this resolves through Docker DNS.
 DEFAULT_TRITON_HTTP_URL = 'http://triton-server:8000'
 

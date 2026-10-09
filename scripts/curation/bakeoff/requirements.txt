@@ -2,7 +2,7 @@
 #
 # The harness must run in a YOLO26-capable container (the a YOLO-training-capable
 # image installs Ultralytics from a pinned git SHA + torch + GPU + mlflow
-# 2.18 matching the MLflow tracking server). It must NOT run in yolo-api,
+# 2.18 matching the MLflow tracking server). It must NOT run in api,
 # which pins `ultralytics<8.4` and therefore cannot load a YOLO26 model.
 #
 # These are the packages the trainer image does NOT already have. Add them

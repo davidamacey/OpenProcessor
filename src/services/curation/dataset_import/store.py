@@ -2,7 +2,7 @@
 
 One directory per import under the bound project's imports dir
 (``OP_DATASET_IMPORTS_DIR/projects/<slug>/<import_id>/``, on the shared
-jobs volume so every ``yolo-api`` worker process sees it):
+jobs volume so every ``api`` worker process sees it):
 
 ``request.json`` (the request as accepted), ``mapping.json`` (the resolved
 mapping with real class ids, plus the pinned region profile: a resume in

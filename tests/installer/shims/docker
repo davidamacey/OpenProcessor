@@ -191,7 +191,7 @@ ${cservice}
     "triton-server": {
       "container_name": "${cpn}-triton"
     },
-    "yolo-api": {
+    "api": {
       "container_name": "${cpn}-api"
     }
   },

@@ -18,9 +18,9 @@ Key steps:
 4. Convert to TensorRT plan for maximum throughput
 5. Validate output matches PyTorch
 
-Run from: yolo-api container
-    docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py --model S2
-    docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py --model B
+Run from: api container
+    docker compose exec api python /app/export/export_mobileclip_image_encoder.py --model S2
+    docker compose exec api python /app/export/export_mobileclip_image_encoder.py --model B
 """
 
 import argparse
