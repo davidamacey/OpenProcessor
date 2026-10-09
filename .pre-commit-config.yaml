@@ -128,7 +128,6 @@ repos:
         # split tracked by that doc, not silently ignored.
         exclude: |
           (?x)^(
-              src/ultralytics_patches/|
               src/routers/ingest\.py|
               src/routers/search\.py
           )
