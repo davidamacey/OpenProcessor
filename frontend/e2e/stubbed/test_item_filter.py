@@ -294,9 +294,21 @@ def test_export_filter_sends_item_filter_and_shows_the_served_count(stub, page, 
     stub.on("GET", r"/stats/classes(\?|$)", stats_classes)
     stub.on("GET", r"/stats/dataset(\?|$)", dataset_handler)
     stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": [], "min_test_per_class": 5})
-    stub.on("GET", r"/export/status(\?|$)", {"status": "idle", "last_run": None})
-    stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
     posts: list[dict] = []
+
+    def status_handler(_request, _match):
+        # The page adopts GET /export/status after each export resolves. A
+        # real backend serves the finished export there; an "idle" answer would
+        # replace the modal's "Export complete." with "No active export.".
+        if posts:
+            return (
+                200,
+                {"status": "success", "last_run": "2026-01-01T00:00:00Z", "export_dir": "/exports/x"},
+            )
+        return (200, {"status": "idle", "last_run": None})
+
+    stub.on("GET", r"/export/status(\?|$)", status_handler)
+    stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
 
     def export_handler(request, _match):
         posts.append(request.post_data_json or {})

@@ -106,10 +106,27 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
     stub.on("GET", r"/stats/classes(\?|$)", STATS_CLASSES)
     stub.on("GET", r"/stats/dataset(\?|$)", STATS_DATASET)
     stub.on("GET", r"/test_holdout/stats(\?|$)", HOLDOUT_STATS)
-    stub.on("GET", r"/export/status(\?|$)", {"status": "idle", "last_run": None})
-    stub.on("GET", r"/export/datasets(\?|$)", datasets_handler)
-
     post_calls: list[dict] = []
+
+    def status_handler(request, match):
+        # The page re-reads GET /export/status after the POST resolves
+        # (loadAll) and adopts it as the modal's state. A real backend serves
+        # the finished export there; an "idle" answer would replace "Export
+        # complete." with "No active export." and make the wait below depend
+        # on how often the browser happens to poll.
+        if post_calls:
+            return (
+                200,
+                {
+                    "status": "success",
+                    "last_run": EXPORT_RESULT["finished_at"],
+                    "export_dir": EXPORT_RESULT["export_dir"],
+                },
+            )
+        return (200, {"status": "idle", "last_run": None})
+
+    stub.on("GET", r"/export/status(\?|$)", status_handler)
+    stub.on("GET", r"/export/datasets(\?|$)", datasets_handler)
 
     def export_yolo_handler(request, match):
         post_calls.append(request.post_data_json or {})
