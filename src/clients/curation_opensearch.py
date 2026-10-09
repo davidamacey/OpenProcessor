@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from src.clients.curation_opensearch_items import ITEMS_EXTRA_MAPPING, POLICY_DOC_MAPPING
 from src.clients.optional_doc import get_doc_or_none
 from src.config import (
     BACKBONE_EMBEDDING_FIELD,
@@ -58,7 +59,6 @@ from src.config import (
     index_name,
 )
 from src.core.logging import get_logger
-from src.services.curation.audit_math import AUDIT_FIELDS
 from src.services.curation.item_text import ITEM_TEXT_MAPPING
 from src.services.curation.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
@@ -278,7 +278,6 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
     'enabled': False,
 }
 
-# Exclusion plus the other per-item human review decisions.
 # Cluster geometry written by the clustering run
 # (src/services/curation/clustering/cluster_geometry.py): the cluster id a
 # stored cluster_distance was measured against, so a reader can tell a
@@ -288,18 +287,6 @@ CLUSTER_GEOMETRY_MAPPING: dict[str, Any] = {
     # Cluster whose centroid is nearest the item (cluster purity, DQ-M2).
     'cluster_nearest_id': {'type': 'integer'},
 }
-
-# The detector's own answer, written once at ingest
-# (src/services/curation/item_doc.py DETECTOR_FIELDS).
-DETECTOR_MAPPING: dict[str, Any] = {
-    'detector_class_name': {'type': 'keyword'},
-    'detector_class_id': {'type': 'integer'},
-    'detector_confidence': {'type': 'float'},
-}
-
-# The accuracy audit's sample marker and verdict
-# (src/services/curation/audit_math.py AUDIT_FIELDS).
-AUDIT_MAPPING: dict[str, Any] = dict(AUDIT_FIELDS)
 
 _EXCLUSION_MAPPING: dict[str, Any] = {
     'class_excluded': {'type': 'boolean'},
@@ -475,8 +462,7 @@ def _items_body() -> dict[str, Any]:
                 'cluster_distance': {'type': 'float'},
                 'cluster_subid': {'type': 'keyword'},  # AHC sub-cluster id (e.g. "47a")
                 **CLUSTER_GEOMETRY_MAPPING,
-                **DETECTOR_MAPPING,
-                **AUDIT_MAPPING,
+                **ITEMS_EXTRA_MAPPING,
                 'cluster_auto_suggest': {'type': 'keyword'},
                 # Primary-subject ranking + blur quality (computed at ingest,
                 # backfilled for legacy items). crop_rank_in_image=1 is the
@@ -670,10 +656,7 @@ def _settings_body() -> dict[str, Any]:
         'mappings': {
             'properties': {
                 'defaults': {'type': 'object', 'enabled': False},
-                # The per-project ingest policy (services/curation/ingest_policy_store.py).
-                'ingest_policy': {'type': 'object', 'enabled': False},
-                # The per-project VLM scope policy (services/curation/vlm_policy_store.py).
-                'vlm_policy': {'type': 'object', 'enabled': False},
+                **POLICY_DOC_MAPPING,
                 'updated_at': {'type': 'date'},
                 'updated_by': {'type': 'keyword'},
             }
@@ -767,8 +750,7 @@ def _configs_body() -> dict[str, Any]:
                 'applied_at': {'type': 'date'},
                 # -- folded SETTINGS (op_curation_settings doc `default`) --
                 'defaults': {'type': 'object', 'enabled': False},
-                'ingest_policy': {'type': 'object', 'enabled': False},
-                'vlm_policy': {'type': 'object', 'enabled': False},
+                **POLICY_DOC_MAPPING,
                 # -- folded UMAP_VIZ_STATE (doc `current`) --
                 'state_id': {'type': 'keyword'},
                 'projection_version': {'type': 'keyword'},
@@ -1320,46 +1302,6 @@ async def ensure_items_cluster_geometry_fields(
     index = config.items_index
     added: list[str] = []
     for field, spec in CLUSTER_GEOMETRY_MAPPING.items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except Exception as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-    logger.info('curation_mapping_migration', index=index, fields=added)
-    return {'acknowledged': True, 'index': index, 'fields_added': added}
-
-
-async def ensure_items_detector_fields(
-    client: AsyncOpenSearch,
-) -> dict[str, Any]:
-    """PUT :data:`DETECTOR_MAPPING` onto the items mapping — one ``PUT _mapping``
-    per field, additive and idempotent."""
-    index = config.items_index
-    added: list[str] = []
-    for field, spec in DETECTOR_MAPPING.items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except Exception as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-    logger.info('curation_mapping_migration', index=index, fields=added)
-    return {'acknowledged': True, 'index': index, 'fields_added': added}
-
-
-async def ensure_items_audit_fields(
-    client: AsyncOpenSearch,
-) -> dict[str, Any]:
-    """PUT :data:`AUDIT_MAPPING` onto the items mapping — one ``PUT _mapping``
-    per field, additive and idempotent."""
-    index = config.items_index
-    added: list[str] = []
-    for field, spec in AUDIT_MAPPING.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
@@ -2348,10 +2290,8 @@ __all__ = [
     'ClassRegistryFile',
     'RegistryClassEntry',
     'create_curation_indexes',
-    'ensure_items_audit_fields',
     'ensure_items_class_name_keyword',
     'ensure_items_cluster_geometry_fields',
-    'ensure_items_detector_fields',
     'ensure_items_embedding_fields',
     'ensure_items_exclusion_fields',
     'ensure_items_history_fields',

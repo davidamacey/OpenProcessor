@@ -210,7 +210,7 @@ async def test_mapping_migration_adds_the_fields_to_existing_indexes() -> None:
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
-    from src.clients.curation_opensearch import ensure_items_detector_fields
+    from src.clients.curation_opensearch_items import ensure_items_detector_fields
 
     client = SimpleNamespace(indices=SimpleNamespace(put_mapping=AsyncMock(return_value={})))
     result = await ensure_items_detector_fields(client)

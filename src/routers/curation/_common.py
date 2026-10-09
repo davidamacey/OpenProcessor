@@ -18,9 +18,7 @@ from src.clients.curation_opensearch import (
     ClassRegistry,
     create_curation_indexes,
     ensure_images_upload_fields,
-    ensure_items_audit_fields,
     ensure_items_cluster_geometry_fields,
-    ensure_items_detector_fields,
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
     ensure_items_history_fields,
@@ -37,6 +35,10 @@ from src.clients.curation_opensearch import (
     ensure_items_viz_fields,
     ensure_items_vlm_raw_label_fields,
     ensure_labels_confirmed_fields,
+)
+from src.clients.curation_opensearch_items import (
+    ensure_items_audit_fields,
+    ensure_items_detector_fields,
 )
 from src.config import get_curation_config
 from src.config.curation import (  # noqa: F401 - re-exported for the router modules
