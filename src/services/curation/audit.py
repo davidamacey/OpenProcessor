@@ -11,6 +11,7 @@ holdout-eligible like any other.
 from __future__ import annotations
 
 import hashlib
+import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
@@ -94,7 +95,9 @@ async def start_audit(
     fall short of ``min_per_class``."""
     moment = (now or datetime.now(UTC)).astimezone(UTC)
     stamp = moment.isoformat()
-    batch_id = f'audit-{moment:%Y%m%dT%H%M%S}-{hashlib.sha1(stamp.encode(), usedforsecurity=False).hexdigest()[:6]}'
+    # Microsecond timestamp keeps ids sortable by time; the random suffix keeps two
+    # starts in the same instant apart.
+    batch_id = f'audit-{moment:%Y%m%dT%H%M%S%f}-{uuid.uuid4().hex[:6]}'
     found = await scan_items(
         opensearch,
         candidate_query(),

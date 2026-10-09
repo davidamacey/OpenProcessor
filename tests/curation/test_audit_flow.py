@@ -273,3 +273,22 @@ async def test_audited_human_labels_are_holdout_eligible_and_unaudited_vlm_label
     }
     assert unaudited_vlm
     assert not unaudited_vlm & matched
+
+
+def test_two_starts_in_the_same_clock_second_get_different_batch_ids(
+    fake: QueryFakeOpenSearch,
+) -> None:
+    import asyncio
+    from datetime import UTC, datetime
+
+    from src.services.curation.audit import start_audit
+
+    moment = datetime(2026, 10, 9, 12, 0, 0, 500, tzinfo=UTC)
+    first = asyncio.run(start_audit(fake, min_per_class=2, sample_size=2, now=moment))
+    second = asyncio.run(start_audit(fake, min_per_class=2, sample_size=2, now=moment))
+    assert first['batch_id'] != second['batch_id']
+    later = asyncio.run(
+        start_audit(fake, min_per_class=2, sample_size=2, now=moment.replace(second=1))
+    )
+    # still sortable by time: the timestamp leads the id
+    assert sorted([later['batch_id'], first['batch_id']]) == [first['batch_id'], later['batch_id']]

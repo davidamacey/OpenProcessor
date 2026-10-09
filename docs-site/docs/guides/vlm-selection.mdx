@@ -355,6 +355,9 @@ stale. The worker re-reads the policy about every 30 seconds; the next
 `auto_label` run uses it at once, and a run can override the scope with
 `vlm_scope=<scope>`. The policy is cloned with the project.
 
+`sample_frac` hashes the crop id, so the sample is only as uniform as the ids: hash-like ids
+give a proportional sample, sequential or patterned ids may not.
+
 An explicit request is never limited by the policy: labelling one cluster
 (`POST /vlm/label_cluster/{cluster_id}`), an `auto_label` run with
 `cluster_id`, and labelling named crops. A human-validated crop is never
