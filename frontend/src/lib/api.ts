@@ -2139,6 +2139,9 @@ export type RawCrop = {
   blur_lap_ratio?: number | null;
   classifier_raw_confidence?: number | null;
   proposal_name?: string | null;
+  detector_class_name?: string | null;
+  detector_class_id?: number | null;
+  detector_confidence?: number | null;
   vlm_confidence?: string | null;
   vlm_proposed_class_id?: number | null;
   vlm_proposed_class_name?: string | null;
@@ -2236,6 +2239,9 @@ export const RAW_CROP_KEYS = [
   'blur_lap_ratio',
   'classifier_raw_confidence',
   'proposal_name',
+  'detector_class_name',
+  'detector_class_id',
+  'detector_confidence',
   'vlm_confidence',
   'vlm_proposed_class_id',
   'vlm_proposed_class_name',
