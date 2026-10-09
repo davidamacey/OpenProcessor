@@ -101,8 +101,8 @@ export function schemaFixture(): PromptPackSchema {
         help: '',
       },
       {
-        field: 'registry_prior_top_k',
-        label: 'Registry prior top k',
+        field: 'detector_hint_min_confidence_pct',
+        label: 'Detector hint min confidence pct',
         group: 'open_classify',
         kind: 'int',
         formatted: false,

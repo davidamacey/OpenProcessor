@@ -45,10 +45,7 @@ from src.services.curation.class_write_guard import (
 )
 from src.services.curation.crop_bytes import load_region_jpeg, load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
-from src.services.curation.registry_prior_source import (
-    RegistryPriorUnavailableError,
-    prior_for_pack,
-)
+from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 
 
 _F = get_region_fields()
@@ -190,23 +187,15 @@ async def vlm_label_batch(
             },
         )
 
-    # Before any crop is read: a pack that asks for a prior it cannot get refuses the call.
-    try:
-        registry_prior = await prior_for_pack(opensearch, labeler._pack, class_names)
-    except RegistryPriorUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
     # Pull image_path + bbox_norm for each crop, then build ItemCrop list
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
-    from src.services.labeling.vlm_models import ItemCrop
-
     # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
     # (scripts/curation/worker/state.py) writes into -- this used to read a
     # different env var with a different default, which meant a 100% cache
     # miss out of the box.
     crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
-    crops: list[ItemCrop] = []
+    crops = []
     cache_hits = 0
     cache_misses = 0
     # One mget_crops() call instead of N separate opensearch.get()
@@ -219,7 +208,7 @@ async def vlm_label_batch(
         list(payload.crop_ids),
         index=items_index(),
         source_includes=sorted(
-            {'class_source', 'class_validated', 'image_path', 'bbox_norm'}
+            {'class_source', 'class_validated', 'image_path', 'bbox_norm', *DETECTOR_HINT_FIELDS}
             | set(CLASS_GUARD_SOURCE_FIELDS)
         ),
     )
@@ -248,7 +237,7 @@ async def vlm_label_batch(
         jpeg = load_vlm_item_jpeg(crop_id, image_path, tuple(bbox), cache_dir=crop_cache_dir)
         if jpeg is None:
             continue
-        crops.append(ItemCrop(img_id=crop_id, jpeg_bytes=jpeg))
+        crops.append(hinted_crop(crop_id, jpeg, src, labeler._pack))
 
     if cache_hits + cache_misses > 0:
         logger.info(
@@ -267,9 +256,7 @@ async def vlm_label_batch(
     _pack_stamp = prompt_pack_stamp(labeler._pack)
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
-    predictions = await labeler.label_or_propose_batch(
-        crops, class_names, registry_prior=registry_prior
-    )
+    predictions = await labeler.label_or_propose_batch(crops, class_names)
     name_to_id = {c.class_name: c.class_id for c in labelable}
     # Collect per-doc updates, then dispatch via occ_skip_on_conflict_bulk
     # so a concurrent human edit always wins.

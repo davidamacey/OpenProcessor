@@ -33,7 +33,7 @@ Rows marked implemented are merged for v0.4.0; the rest are open.
 | #57, #58, #59, #60, #64, #66 | Implemented in the v0.4.0 hardening merge (regions re-verify safety, config-store hardening, test fakes and dev tooling, silent failures, docs, GPU clustering overlay); the issues stay open until the owner closes them |
 | #53, #55 | Implemented (shard budget `capacity` block, combine preview warnings) |
 | #46 | Implemented (region-stage hit-rate gate, pause and resume) |
-| #61 | VLM proposal noise, optional registry prior, label agreement vs cluster purity |
+| #61 | VLM proposal noise, optional detector hint, label agreement vs cluster purity |
 | #62 | Split oversize files, unify job state files, rename the `api` compose service |
 | #63 | Release decisions (`:latest`, control-plane-only) and remaining local VLM catalog verification |
 | #65 | Roadmap: deferred any-domain features |

@@ -13,10 +13,15 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ### Added
 
-- Registry prior for VLM labeling (#61): a prompt pack's `registry_prior_top_k` (0 = off, max 50)
-  adds the top-k registry classes by validated count and the pending proposal names to the
-  open-vocabulary prompt as a hint. Served in the pack schema as `kind: "int"`; a new
-  `pack_field_out_of_range` validation code; the run refuses when the counts are unreadable.
+- Detector hint for VLM labeling (#61): a prompt pack's `detector_hint_min_confidence_pct`
+  (0 = off, max 100) tells the VLM each item's stored detector class name, per image, when the
+  detector confidence is at least that percent. Served in the pack schema as `kind: "int"`; a new
+  `pack_field_out_of_range` validation code. Measured on a public COCO oracle (539 crops, local
+  VLM) it raised overall accuracy from 0.775 to 0.853 (0.7846 to 0.8478 in an arm with ten
+  validated classes seeded) and accuracy when answered from 0.850 to 0.918. Caveat: the detector
+  is COCO-trained and the oracle is COCO ground truth, so the gain may be optimistic for other
+  domains. A registry-prior variant (top validated classes plus pending proposals in the prompt)
+  was measured, showed no gain (and about -1 point with seeded classes) and was removed.
 - Gateway mode (#93): `OP_GATEWAY_SUBPATHS=true` makes Cropwright's nginx serve
   Grafana, Prometheus, OpenSearch Dashboards and MLflow under `/grafana/`,
   `/prometheus/`, `/dashboards/` and `/mlflow/` of its one published port, so the UIs
@@ -36,6 +41,11 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   `POST /pipeline/auto_label` never writes. Every residual-clustering run now records
   itself (`clustering/last_run.py`, called by `cluster_residuals` and
   `assign_only_residuals`) and the stats serve that record.
+- The shipped proposal-name denylist now also covers the scene and quality words a live COCO
+  oracle run produced (#193): `abstract*`, `*_background`, `*_object`, `scene*`, `empty*`,
+  `blank_*`, `*_image`, `shadow*`, `outdoors` and similar. The text-free generic pack and
+  `examples/prompt_packs/vehicle_wheel.json` carry it too, tested against the COCO class names so
+  no glob eats a real class.
 - Cropwright's nginx now answers redirects with relative `Location` headers; the
   `/OpenProcessor` redirect used to name the container port 8080.
 - The `detector_disagreements` review tab lists the least confident VLM answers first (no recorded

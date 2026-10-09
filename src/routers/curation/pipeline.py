@@ -152,7 +152,6 @@ async def _run_auto_label(
     from src.services.curation.autolabel.job import with_elapsed_tick
     from src.services.curation.clustering.auto_promote import gated_auto_promote
     from src.services.curation.image_serving import THUMBNAIL_CACHE
-    from src.services.labeling.vlm_models import ItemCrop
 
     reject_detection_profile(detection_profile)
     if isinstance(vlm, str) and not vlm_resolved and not run_vlm:
@@ -397,8 +396,7 @@ async def _run_auto_label(
         summary['final'] = {'unvalidated': 0, 'human_required': 0}
         return summary
 
-    # Reuse the VLM label_batch logic by calling it directly (no HTTP
-    # hop). Build ItemCrops here so we can chunk.
+    # Calls the labeler directly (no HTTP hop); ItemCrops are built here to chunk.
     from src.services.curation.region_class import item_classes
     from src.services.labeling.vlm_class_names import (
         format_class_catalog,
@@ -441,13 +439,10 @@ async def _run_auto_label(
     labeler = _get_vlm_labeler(_labeler_pack, _labeler_revision, endpoint=endpoint)
     class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
-    from src.services.curation.registry_prior_source import prior_or_error
+    from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _pack_stamp = prompt_pack_stamp(labeler._pack, revision=_labeler_revision)
-    registry_prior, prior_error = await prior_or_error(opensearch, labeler._pack, class_names)
-    if prior_error:
-        return {**summary, 'stages_error': prior_error}
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
@@ -479,9 +474,9 @@ async def _run_auto_label(
         docs = await mget_crops(
             opensearch,
             ids,
-            source_includes=['image_path', 'bbox_norm'],
+            source_includes=['image_path', 'bbox_norm', *DETECTOR_HINT_FIELDS],
         )
-        crops: list[ItemCrop] = []
+        crops = []
         for crop_id, doc in docs.items():
             src = doc.get('_source') or {}
             image_path = src.get('image_path', '')
@@ -496,7 +491,7 @@ async def _run_auto_label(
             except Exception as exc:
                 logger.warning('pipeline_thumb_failed', crop_id=crop_id, error=str(exc))
                 continue
-            crops.append(ItemCrop(img_id=crop_id, jpeg_bytes=jpeg))
+            crops.append(hinted_crop(crop_id, jpeg, src, labeler._pack))
         # No item classes yet (a fresh project, or only the region class):
         # nothing to label items as.
         if not crops or not class_names:
@@ -505,7 +500,6 @@ async def _run_auto_label(
             crops,
             class_names,
             class_catalog=class_catalog,
-            registry_prior=registry_prior,
         )
         # Collect per-doc updates, then dispatch via
         # occ_skip_on_conflict_bulk so a concurrent human edit always
