@@ -9,32 +9,32 @@
 # - Host: Testing client that sends images to the endpoints via HTTP
 
 # HTTP client for sending requests to FastAPI endpoints
-requests>=2.32.0
+requests>=2.34.2
 aiohttp>=3.14.4
 
 # Load testing framework (sends concurrent requests)
 locust>=2.46.7
 
 # Data analysis and visualization (for benchmark results)
-pandas>=2.2.0
-numpy>=1.26.0
-matplotlib>=3.9.0
+pandas>=3.0.6
+numpy>=2.5.3
+matplotlib>=3.11.2
 
 # Image handling (for client-side image manipulation if needed)
-opencv-python>=4.8.0
-Pillow>=10.0.0
+opencv-python>=5.0.0.93
+Pillow>=12.3.0
 
 # ONNX Runtime for local model testing (requires >=1.19 for IR version 12)
-onnxruntime>=1.19.0
+onnxruntime>=1.30.0
 
 # Benchmark result formatting
-tabulate>=0.9.0
+tabulate>=0.10.0
 
 # Performance profiling tools
-py-spy>=0.3.14  # CPU profiler with flamegraph visualization (use inside container)
+py-spy>=0.4.2  # CPU profiler with flamegraph visualization (use inside container)
 
 # Host-side setup (download MobileCLIP checkpoint)
-huggingface_hub>=0.20.0
+huggingface_hub>=0.36.2
 
 # Optional development tools (linting, formatting)
 # black>=24.0.0

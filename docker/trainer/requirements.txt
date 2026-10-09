@@ -9,33 +9,33 @@
 # --extra-index-url at build time (TORCH_CUDA_INDEX); those wheels bundle the
 # CUDA runtime, which is why the image can stay on a python:*-slim base.
 
-torch>=2.6,<3
-torchvision>=0.21,<1
+torch>=2.14.1,<3
+torchvision>=0.29.1,<1
 
 # Ultralytics runtime deps we want resolved up front rather than auto-installed
 # mid-run (see the ONNX note below).
-numpy>=1.26,<3
-opencv-python-headless>=4.10,<5
-Pillow>=10.4
-PyYAML>=6.0
-requests>=2.32
-scipy>=1.13
-pandas>=2.2
-matplotlib>=3.9
-psutil>=6.0
-tqdm>=4.66
+numpy>=2.5.3,<3
+opencv-python-headless>=5.0.0.93,<6
+Pillow>=12.3.0
+PyYAML>=6.0.3
+requests>=2.34.2
+scipy>=1.18.1
+pandas>=3.0.6
+matplotlib>=3.11.2
+psutil>=7.2.2
+tqdm>=4.70.1
 
 # ONNX export toolchain. Without these pre-installed, Ultralytics'
 # `model.export(format='onnx')` attempts its own pip install *inside the
 # running container* at export time -- which fails on a non-root user with no
 # network policy and silently drops every run back to "ONNX export failed",
 # leaving nothing for POST {api_prefix}/train/promote/{job_id} to pick up.
-onnx>=1.16,<2
-onnxslim>=0.1.71
-onnxruntime-gpu>=1.19
+onnx>=1.21.0,<2
+onnxslim>=0.1.97
+onnxruntime-gpu>=1.30.0
 
 # Stage-1 on-disk augmentation (docker/trainer/augment.py).
-albumentations>=2.0,<3
+albumentations>=2.0.8,<3
 
 # Experiment tracking (docker/trainer/mlflow_callbacks.py). Optional at
 # runtime -- every hook degrades to a warning when the server is unreachable.
@@ -44,10 +44,10 @@ albumentations>=2.0,<3
 # / `transition_model_version_stage` (on_train_end) and the model-registry
 # REST surface are not guaranteed compatible across the 2.x/3.x boundary --
 # bump this only in lockstep with the server image.
-mlflow>=2.18,<3
+mlflow>=3.16.1,<4
 
 # GPU telemetry published on status.json's `gpu` block.
-pynvml>=11.5
+pynvml>=13.0.1
 
 # Structured logs, matching the API's logging style.
-structlog>=24.1
+structlog>=26.1.0
