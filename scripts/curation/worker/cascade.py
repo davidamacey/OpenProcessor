@@ -56,7 +56,7 @@ def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]
     would silently starve them of region detection too, violating the
     region-fields-stay-unconditional rule. The test_holdout guard for
     this worker is scoped to the class-field write path only — see
-    ``runner.py:_should_classify`` (checks ``task.test_holdout``).
+    ``pipeline._should_classify`` (checks ``task.test_holdout``).
 
     None of these clauses score, so they belong in filter context
     (cacheable, no scoring pass) rather than ``must``. ``exclude_ids`` —

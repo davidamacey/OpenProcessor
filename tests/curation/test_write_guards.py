@@ -33,7 +33,7 @@ from fastapi import HTTPException
 
 from curation._vlm_test_support import empty_registry_reads
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
-from scripts.curation.worker.runner import _should_classify
+from scripts.curation.worker.pipeline import _should_classify
 from scripts.curation.worker.state import _ItemTask
 from scripts.curation.worker.verify import _combined_class_update
 from src.config import get_region_fields

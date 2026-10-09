@@ -15,6 +15,11 @@ Sub-modules:
                    multi-box pipeline; the pre-W8 single-candidate
                    ``_process_crop``/``combined.py`` cohort path was
                    deleted once this became the only production cascade)
+    pipeline     — ``PipelineContext`` (shared queues/counters) + stage helpers
+    flow         — producer, writer and metrics reporter tasks
+    stage_a      — Stage A.primary (detector routing) + A.vlm_visible
+    stage_sam    — Stage A.secondary (segmenter + text-hint fallback)
+    stage_b      — Stage B (batched combined VLM call)
     __main__     — ``parse_args`` + ``main`` for ``python -m`` invocation
 
 The shim file uses ``from scripts.curation.worker import *`` to pull

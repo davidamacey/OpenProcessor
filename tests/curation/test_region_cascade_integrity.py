@@ -27,7 +27,7 @@ from _fake_project_registry import install_static_project_registry
 from PIL import Image
 
 import scripts.curation.region_worker_main as worker
-from scripts.curation.worker import runner as runner_mod
+from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.detection.cascade_detect import RegionCandidate
@@ -550,7 +550,7 @@ async def _drive_worker(
     ocr.detect_regions = AsyncMock(return_value=[])
     ocr.pick_best_text_region = MagicMock(return_value=None)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))
-    monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
+    monkeypatch.setattr(stage_a_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
     seg.segment = AsyncMock(return_value=segmenter_list[0] if segmenter_list else None)

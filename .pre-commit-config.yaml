@@ -139,8 +139,7 @@ repos:
               src/services/curation/clustering/orchestrator\.py|
               src/services/training/triton_promote\.py|
               src/services/training/jobs\.py|
-              src/services/detection/cascade_detect\.py|
-              scripts/curation/worker/runner\.py
+              src/services/detection/cascade_detect\.py
           )
         # src/services/curation/clustering/orchestrator.py (Chunk 4, see
         # docs/design/curation_design_rationale.md §5) lands at
@@ -168,10 +167,6 @@ repos:
         # mid-port would make the diff unreviewable; grandfathered here for
         # the same reason as the rest of this chunk's oversize files.
         # Follow-up split tracked alongside the other oversize entries.
-        # scripts/curation/worker/runner.py (~1300 LOC) — Chunk 8, ~1264
-        # LOC on arrival, explicitly grandfathered rather than split inside
-        # Chunk 8. Separate follow-up split, tracked in
-        # docs/design/curation_design_rationale.md §5, not tracked as a gap.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code
