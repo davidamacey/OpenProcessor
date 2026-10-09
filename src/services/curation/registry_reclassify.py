@@ -6,7 +6,7 @@ under ``<prefix>_raw_label`` (``GET /curation/review/unmatched_terms``
 aggregates those). Once an operator grows the registry — new classes, or new
 synonyms in the active :class:`~src.services.labeling.vlm_prompts.PromptPack`
 — this pass re-resolves every unmatched raw label with the same
-:func:`~src.services.labeling.vlm_labeler.resolve_class_name` the live
+:func:`~src.services.labeling.vlm_class_names.resolve_class_name` the live
 labeler uses and promotes the hits to::
 
     class_id / class_name = <resolved class>
@@ -162,7 +162,7 @@ async def reclassify_unmatched(
         A :class:`ReclassifyResult` summary (``last_cursor`` is the resume
         point).
     """
-    from src.services.labeling.vlm_labeler import resolve_class_name
+    from src.services.labeling.vlm_class_names import resolve_class_name
     from src.services.labeling.vlm_prompts import active_prompt_pack
 
     cfg = config or get_curation_config()

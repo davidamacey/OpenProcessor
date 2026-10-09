@@ -176,7 +176,7 @@ def test_vlm_verdict_key_matches_the_shipped_prompt(
 ) -> None:
     """The built-in prompt pack asks the model to answer with `is_region`
     (vlm_prompts.GENERIC_ITEM_PACK.region_user / region_batch_user), and
-    both region parsers in vlm_labeler.py now read `is_region` too — a
+    both region parsers in vlm_labeler_verify.py now read `is_region` too — a
     model that follows the shipped prompt exactly is parsed correctly.
 
     The fake defaults to `is_region` already; setting it explicitly here

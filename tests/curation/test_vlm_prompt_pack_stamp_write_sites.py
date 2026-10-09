@@ -20,7 +20,7 @@ from src.config.curation import base_curation_config
 from src.services.curation import image_serving
 from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.labeling.vlm_client import VlmIdentity
-from src.services.labeling.vlm_labeler import VlmClassPrediction
+from src.services.labeling.vlm_models import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
 
 

@@ -28,7 +28,7 @@ IMAGE_KEYS_TABLE=(
     "vlm_generic|VLM_IMAGE|third|vllm/vllm-openai:gemma4-cu130"
     "opensearch|OPENSEARCH_IMAGE|third|opensearchproject/opensearch:3.6.0"
     "opensearch_dashboards|OPENSEARCH_DASHBOARDS_IMAGE|third|opensearchproject/opensearch-dashboards:3.6.0"
-    "mlflow|MLFLOW_IMAGE|third|ghcr.io/mlflow/mlflow:v2.19.0"
+    "mlflow|MLFLOW_IMAGE|third|ghcr.io/mlflow/mlflow:v3.17.0"
     "prometheus|PROMETHEUS_IMAGE|third|prom/prometheus:v3.12.0"
     "grafana|GRAFANA_IMAGE|third|grafana/grafana:13.1.0"
     "loki|LOKI_IMAGE|third|grafana/loki:3.6.12"

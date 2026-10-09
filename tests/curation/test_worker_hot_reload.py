@@ -27,7 +27,7 @@ from src.services.detection import profile_registry
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 pytestmark = pytest.mark.usefixtures('reference_region_profile')
@@ -635,6 +635,19 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
 # =============================================================================
 
 
+async def _eventually(check: Callable[[], bool], *, timeout: float = 15.0) -> None:
+    """Poll until ``check()`` holds, or ``timeout`` passes.
+
+    The real ``worker.run()`` builds its runtimes on the event loop, and fixed sleeps
+    made this test fail whenever the host was busy. On timeout this returns and the
+    caller's own assertion reports the state it actually saw.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while not check() and loop.time() < deadline:
+        await asyncio.sleep(0.02)
+
+
 @pytest.mark.asyncio
 async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     """B1, through the real worker (not a RuntimeHolder unit test):
@@ -734,9 +747,8 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
         )
         run_task = asyncio.create_task(worker.run(args))
         try:
-            # Two producer cycles' worth of settle time: both projects
-            # get their first runtime built.
-            await asyncio.sleep(0.2)
+            # Both projects get their first runtime built.
+            await _eventually(lambda: detector_calls == {'alpha': 1, 'beta': 1})
             assert detector_calls == {'alpha': 1, 'beta': 1}
 
             # M1: runtime:detection_worker:<host> was written for both
@@ -777,7 +789,9 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
                     expected_active=None,
                 )
 
-            await asyncio.sleep(0.3)
+            await _eventually(lambda: detector_calls['alpha'] >= 2)
+            # A short settle so a spurious extra rebuild would still be caught.
+            await asyncio.sleep(0.1)
             assert detector_calls['alpha'] == 2
             assert detector_calls['beta'] == 1
         finally:

@@ -33,7 +33,7 @@ from src.utils.class_names import normalize_class_name
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from src.services.labeling.vlm_labeler import VlmClassPrediction
+    from src.services.labeling.vlm_models import VlmClassPrediction
 
 
 VLM_CLASS_ATTEMPTED_AT_FIELD = 'vlm_class_attempted_at'

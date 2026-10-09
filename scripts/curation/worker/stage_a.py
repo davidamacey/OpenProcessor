@@ -41,7 +41,7 @@ from src.services.curation.metrics import (
     OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS,
     OP_STAGE_REGION_DETECTOR_DURATION_SECONDS,
 )
-from src.services.labeling.vlm_labeler import RegionCrop
+from src.services.labeling.vlm_models import RegionCrop
 
 
 logger = get_logger('curation_worker')

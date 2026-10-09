@@ -134,7 +134,6 @@ src/services/curation/strategy_registry.py # docstring example value (also has t
 src/services/detection/cascade_detect.py # docstring example value; the reference license_plate example profile is this module's worked example
 src/services/detection/profile_registry.py # docstring example value for region_profile_from_file
 src/services/detection/region_lean.py # docstring example value
-src/services/labeling/vlm_labeler.py # docstring example value
 src/services/training/preflight_scan.py # docstring example value
 tests/conftest.py # reference_region_profile fixture: loads the public example profile
 tests/curation/test_example_profiles.py # validates the shipped example region profiles (incl. the public license_plate one) load and keep their explicit flags
@@ -196,3 +195,11 @@ frontend/src/lib/api.trainGpus.test.ts:gemma # fixture names the shipped vllm-ge
 frontend/src/lib/components/ProvenanceChip.test.ts:gemma|Gemma # fixture uses the public gemma-4-e4b VLM catalog id and its label
 frontend/src/lib/components/DatasetStats.test.ts:Gemma # asserts the retired model names no longer appear in the dashboard text
 frontend/src/lib/stores/regionVocabulary.svelte.test.ts:gemma|Gemma # fixture uses the public gemma-4-e4b VLM catalog id and its label
+
+# ---------------------------------------------------------------------------
+# GitHub Actions version tags
+# ---------------------------------------------------------------------------
+.github/workflows/ci.yml:uses: actions/[a-z-]+@v6 # action version tag (for example actions/cache@v6) matches the v6 pattern; not vocabulary
+.github/workflows/docs.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
+.github/workflows/frontend-mutation.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
+.github/workflows/frontend.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary

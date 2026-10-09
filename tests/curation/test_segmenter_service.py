@@ -410,7 +410,7 @@ def _detector_mock(candidates):
 def _vlm_mock(*, is_region: bool):
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.services.labeling.vlm_labeler import VlmRegionVerdict
+    from src.services.labeling.vlm_models import VlmRegionVerdict
 
     g = MagicMock()
     g.verify_region = AsyncMock(

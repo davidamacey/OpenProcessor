@@ -698,7 +698,7 @@ services:
   # docker/trainer/mlflow_callbacks.py degrades to a warning when this is
   # unreachable, so a deployment that doesn't want it can leave it stopped.
   curation-mlflow:
-    image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v2.19.0}
+    image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v3.17.0}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow
     logging: *default-logging
     mem_reservation: 512m
@@ -722,6 +722,13 @@ services:
       - --serve-artifacts
       - --artifacts-destination=/mlflow/artifacts
       - --default-artifact-root=mlflow-artifacts:/
+    environment:
+      # MLflow 3 answers 403 "Invalid Host header" to any Host outside this
+      # list (DNS-rebinding guard), and setting it replaces the built-in
+      # localhost + private-IP default, so those are restated here next to
+      # the in-network names the trainer and API use. Add the DNS name you
+      # browse to (MLFLOW_ALLOWED_HOSTS replaces the whole list).
+      - MLFLOW_SERVER_ALLOWED_HOSTS=${MLFLOW_ALLOWED_HOSTS:-curation-mlflow,curation-mlflow:*,${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow,${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,[::1],[[]::1]:*,192.168.*,10.*,172.16.*,172.17.*,172.18.*,172.19.*,172.20.*,172.21.*,172.22.*,172.23.*,172.24.*,172.25.*,172.26.*,172.27.*,172.28.*,172.29.*,172.30.*,172.31.*}
     volumes:
       - mlflow_data:/mlflow
     ports:

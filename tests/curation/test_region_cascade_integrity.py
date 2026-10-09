@@ -33,15 +33,15 @@ from src.config.project_context import current_project
 from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile, register_profile
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import (
+from src.services.labeling.vlm_labeler import VlmLabeler
+from src.services.labeling.vlm_models import (
     CombinedCrop,
     CombinedParseFailure,
     RegionCrop,
     VlmCombinedReply,
-    VlmLabeler,
-    _align_batch_entries,
 )
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
+from src.services.labeling.vlm_reply_parse import _align_batch_entries
 
 
 if TYPE_CHECKING:

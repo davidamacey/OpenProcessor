@@ -22,7 +22,7 @@ import pytest
 
 from src.config import get_region_fields
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import VlmCombinedReply
+from src.services.labeling.vlm_models import VlmCombinedReply
 
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch
 from .test_region_pending_verification_b1 import SIBLING_BBOX, _seed_via_real_put_route

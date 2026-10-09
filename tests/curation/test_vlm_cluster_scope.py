@@ -93,7 +93,7 @@ def pipeline_env(monkeypatch: pytest.MonkeyPatch) -> _Labeler:
         lambda: _FakeRegistry([_FakeClassEntry(3, 'thing')]),
     )
     monkeypatch.setattr(
-        'src.services.labeling.vlm_labeler.format_class_catalog', lambda *_a, **_k: ''
+        'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''
     )
     return labeler
 

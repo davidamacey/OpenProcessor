@@ -35,7 +35,7 @@ from src.services.curation.region_box_pass import (
 from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_preview import preview_item
 from src.services.curation.region_verify import BoxVerdict, verifiable_boxes, verify_regions_update
-from src.services.labeling.vlm_labeler import resolve_class_name
+from src.services.labeling.vlm_class_names import resolve_class_name
 from src.services.labeling.vlm_probe import ProbeCrop, probe
 
 

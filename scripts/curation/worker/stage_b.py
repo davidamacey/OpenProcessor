@@ -26,7 +26,7 @@ from scripts.curation.worker.state import (
 from scripts.curation.worker.verify import candidate_actor, chain_entry
 from src.core.logging import get_logger
 from src.services.curation.metrics import OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS
-from src.services.labeling.vlm_labeler import CombinedCrop
+from src.services.labeling.vlm_models import CombinedCrop
 
 
 logger = get_logger('curation_worker')

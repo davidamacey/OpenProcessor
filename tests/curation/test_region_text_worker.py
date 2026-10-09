@@ -24,7 +24,7 @@ from src.services.detection.cascade_detect import RegionCandidate
 from src.services.detection.profile_registry import register_profile
 from src.services.detection.region_text import OcrLine
 from src.services.labeling.region_overlay import VlmBoxVerdict
-from src.services.labeling.vlm_labeler import VlmCombinedReply
+from src.services.labeling.vlm_models import VlmCombinedReply
 
 from .test_region_cascade_integrity import (
     _capture_signal_handler,

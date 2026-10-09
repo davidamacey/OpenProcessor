@@ -176,7 +176,7 @@ entirely and were never in this guard's scope).
 ## 5. The pre-commit ratchet exemptions
 
 `.pre-commit-config.yaml`'s `max-file-size` hook caps source files at
-700 LOC to keep modules reviewable and discourage grab-bag files. Eight
+700 LOC to keep modules reviewable and discourage grab-bag files. Seven
 files that arrived with the curation port are grandfathered past that
 cap:
 
@@ -185,11 +185,10 @@ cap:
 - `src/services/training/triton_promote.py`
 - `src/routers/curation_train.py`
 - `src/services/training/jobs.py`
-- `src/services/labeling/vlm_labeler.py`
 - `src/services/detection/cascade_detect.py`
 - `scripts/curation/worker/runner.py`
 
-The reasoning is the same for all eight and worth stating once instead
+The reasoning is the same for all seven and worth stating once instead
 of once per exclude-list comment: each corresponds to a genuinely
 cohesive reference-implementation module that was already over the cap
 *before* any porting work touched it. Splitting a file correctly
@@ -204,12 +203,12 @@ with an in-file comment naming which port chunk added it, and treat the
 split as separate, tracked follow-up work rather than silently deferring
 it.
 
-Practical consequence for anyone extending one of these eight files: add
+Practical consequence for anyone extending one of these seven files: add
 functionality to the existing file rather than treating the grandfathering
-as license to keep growing it indefinitely, and do not add a ninth
+as license to keep growing it indefinitely, and do not add an eighth
 undocumented exemption — a genuinely new oversize file should be split
 before it is committed, following the same reasoning that will
-eventually retire these eight.
+eventually retire these seven.
 
 ## 6. Known gaps
 
