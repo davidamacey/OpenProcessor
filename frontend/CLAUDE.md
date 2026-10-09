@@ -2712,6 +2712,16 @@ resets and re-reads on a project switch). Tests: `resourceLinks.test.ts`,
 `contract/curationSettingsContract.test.ts`, the nginx cases in
 `entrypoint.test.ts`, e2e `test_resources_menu.py`.
 
+### Gateway mode (OpenProcessor #93)
+
+`OP_GATEWAY_SUBPATHS=true` (read by `docker-entrypoint.sh`, same spelling as the
+API's) copies `nginx-gateway.conf` into `/etc/nginx/gateway.d/`, which `nginx.conf`
+includes; off, the directory is empty. It proxies `/grafana/`, `/prometheus/`,
+`/dashboards/` and `/mlflow/` (MLflow with `/mlflow` stripped and its own service
+name as `Host`; Grafana Live upgraded) to bare compose service names, validated by
+the entrypoint. The app needs no code for it: the served `resource_links` become
+path-relative and `safeHref` already accepts them. Tests: `gatewayConf.test.ts`.
+
 ### Projects — `/p/[project]` routes, switcher, `/projects`
 
 **OWNER DECISION: a fresh build, no backward compatibility.** The
