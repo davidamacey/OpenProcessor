@@ -274,6 +274,28 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             ),
         ),
         ReviewSort(
+            id='detector_disagreement_default',
+            label='VLM confidence, then detector confidence',
+            clause=[
+                # A keyword field: this orders by the stored value (high, low,
+                # medium), which keeps the sort locatable (no script sort).
+                {
+                    'vlm_confidence': {
+                        'order': 'asc',
+                        'missing': '_last',
+                        'unmapped_type': 'keyword',
+                    }
+                },
+                {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
+            ],
+            requires_field='vlm_confidence',
+            status='stable',
+            description=(
+                "Grouped by the VLM's own confidence value, then the detector's confidence "
+                'high to low. Default for the detector_disagreements tab.'
+            ),
+        ),
+        ReviewSort(
             id='primary_low_conf_default',
             label='Largest subject, least confident',
             clause=[
@@ -345,6 +367,7 @@ _TAB_DEFAULTS: dict[str, str] = {
     'all': 'atypicality',
     'mismatches': 'recent',
     'vlm_low_conf': 'recent',
+    'detector_disagreements': 'detector_disagreement_default',
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
     'regions': 'region_score',

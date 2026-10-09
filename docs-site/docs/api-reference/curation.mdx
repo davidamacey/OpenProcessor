@@ -270,7 +270,7 @@ See [Keymaps](../guides/keymaps.mdx).
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/review/tabs` | The tab catalog with each tab's label, filters, defaults and empty-state hints |
-| GET | `/review/{tab}` | One queue. Tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`, `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, `imported` |
+| GET | `/review/{tab}` | One queue. Tabs: `all`, `mismatches`, `vlm_low_conf`, `detector_disagreements`, `outliers`, `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, `imported` |
 | GET | `/review/{tab}/locate` | Position of one item within a queue |
 | GET | `/review/new_class_proposals/summary` | VLM-proposed class names, grouped |
 | POST | `/review/new_class_proposals/resolve` | Accept or reject a proposed name for every item that proposes it |

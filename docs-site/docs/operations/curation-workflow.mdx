@@ -117,7 +117,8 @@ each project's pool grows.
   activate it ([Test on a crop](../guides/test-on-crop.mdx)).
 - **Review queues.** `GET /review/tabs` lists them; the main ones are
   `all`, `mismatches` (VLM answer didn't match the registry),
-  `vlm_low_conf`, `outliers`, `uncertainty` and `model_disagreements`
+  `vlm_low_conf`, `detector_disagreements` (the VLM's class differs from the
+  detector's own), `outliers`, `uncertainty` and `model_disagreements`
   (both fed by the probe), `primary_low_conf`, `classifier_blind_spots`,
   `new_class_proposals`, `imported` and `regions`.
 - **Label writes.** `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`,
