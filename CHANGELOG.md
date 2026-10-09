@@ -42,6 +42,9 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   confidence, then `low`, `medium`, `high`) instead of the keyword order high, low, medium; locate
   follows the same order. The "Uncertain only" VLM scope description now matches the selector
   (detector confidence below the limit or not recorded; no cluster-disagreement clause) (#195).
+- Config-store writes (prompt packs, region profiles, open-vocabulary sets, VLM endpoints,
+  activations) now wait for an index refresh, so a clone followed at once by a GET no longer
+  answers 404 (#196).
 - VLM scope `representatives` is bounded (#192): a labelled representative moving to its class
   cluster no longer pulls in the next-nearest members. Each cluster's reps are claimed once and
   stored, so total attempts stay within `per_cluster` per original cluster across refreshes,

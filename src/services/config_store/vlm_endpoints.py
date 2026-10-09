@@ -22,6 +22,7 @@ from opensearchpy.exceptions import NotFoundError
 
 from src.services.config_store.global_store import get_global_config_store
 from src.services.config_store.index import (
+    WRITE_REFRESH,
     RevisionConflictError,
     bump_config_revision,
     delete_config as _delete_config,
@@ -115,7 +116,9 @@ async def delete_endpoint(client: Any, *, name: str, expected_revision: int) -> 
     for doc in await list_revisions(client, name):
         with contextlib.suppress(NotFoundError):
             await client.delete(
-                index=store.index, id=probe_doc_id(probe_key(name, int(doc['revision'])))
+                index=store.index,
+                id=probe_doc_id(probe_key(name, int(doc['revision']))),
+                refresh=WRITE_REFRESH,
             )
     await bump_config_revision(client, store.index)
     await _reload(client)
@@ -142,6 +145,7 @@ async def record_probe(
             'probed_at': record.probed_at,
             'body': payload,
         },
+        refresh=WRITE_REFRESH,
     )
     await bump_config_revision(client, store.index)
     await _reload(client)
@@ -150,7 +154,7 @@ async def record_probe(
 async def set_local_desired(client: Any, *, catalog_id: str) -> dict[str, Any]:
     store = get_global_config_store()
     doc = {'doc_type': 'local_vlm', 'catalog_id': catalog_id, 'requested_at': _now()}
-    await client.index(index=store.index, id=LOCAL_DESIRED_DOC_ID, body=doc)
+    await client.index(index=store.index, id=LOCAL_DESIRED_DOC_ID, body=doc, refresh=WRITE_REFRESH)
     await bump_config_revision(client, store.index)
     await _reload(client, 'local_vlm')
     return doc
@@ -159,7 +163,7 @@ async def set_local_desired(client: Any, *, catalog_id: str) -> dict[str, Any]:
 async def clear_local_desired(client: Any) -> None:
     store = get_global_config_store()
     with contextlib.suppress(NotFoundError):
-        await client.delete(index=store.index, id=LOCAL_DESIRED_DOC_ID)
+        await client.delete(index=store.index, id=LOCAL_DESIRED_DOC_ID, refresh=WRITE_REFRESH)
     await bump_config_revision(client, store.index)
     await _reload(client, 'local_vlm')
 
