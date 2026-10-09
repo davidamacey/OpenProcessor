@@ -279,7 +279,8 @@ download_paddleocr_models() {
     fi
 
     # Try running container, fall back to temporary container
-    if docker ps --format '{{.Names}}' | grep -q "^api$"; then
+    # Resolve through compose: the container is named ${COMPOSE_PROJECT_NAME}-api.
+    if [[ -n "$(dc ps -q api 2>/dev/null)" ]]; then
         if dc exec -T api python /app/export/download_paddleocr.py; then
             log_success "PaddleOCR models downloaded"
             return 0
