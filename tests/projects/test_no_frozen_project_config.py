@@ -30,7 +30,9 @@ _INDEX_CONST_NAMES = {
 # The only places allowed to construct an OpenSearch client: the shared
 # API client wrapper (guarded by make_curation_opensearch) and the guard
 # module's own factories.
-_CLIENT_FACTORIES = frozenset({'src/clients/opensearch.py', 'src/services/projects/guard.py'})
+_CLIENT_FACTORIES = frozenset(
+    {'src/clients/opensearch/client.py', 'src/services/projects/guard.py'}
+)
 
 _CURATION_REQUEST_CODE = (
     'src/services/curation',

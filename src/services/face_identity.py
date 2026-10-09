@@ -20,7 +20,8 @@ from functools import lru_cache
 import numpy as np
 from PIL import Image
 
-from src.clients.opensearch import IndexName, OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import IndexName
 from src.config.settings import Settings, get_settings
 from src.services.inference import InferenceService
 

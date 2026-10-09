@@ -38,7 +38,8 @@ from typing import Any
 
 import numpy as np
 
-from src.clients.opensearch import IndexName, OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import IndexName
 
 
 logger = logging.getLogger(__name__)

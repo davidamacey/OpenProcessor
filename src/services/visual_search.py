@@ -34,7 +34,8 @@ from typing import Any
 
 import numpy as np
 
-from src.clients.opensearch import DetectionCategory, OpenSearchClient, get_category
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import DetectionCategory, get_category
 from src.services.inference import InferenceService
 
 
@@ -1402,7 +1403,7 @@ class VisualSearchService:
 
     def _get_opensearch_index(self, index_name: str):
         """Convert string index name to OpenSearch IndexName enum."""
-        from src.clients.opensearch import IndexName
+        from src.clients.opensearch.names import IndexName
 
         name_map = {
             'global': IndexName.GLOBAL,
@@ -1688,7 +1689,7 @@ class VisualSearchService:
         Returns:
             List of albums with metadata
         """
-        from src.clients.opensearch import IndexName
+        from src.clients.opensearch.names import IndexName
 
         # Get cluster stats from global index
         clusters = await self.opensearch.get_cluster_stats(IndexName.GLOBAL)
