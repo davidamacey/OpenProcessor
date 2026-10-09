@@ -20,7 +20,7 @@ from PIL import Image
 
 from curation.conftest import SCOPED, HybridOpenSearch, VlmApi, good_probe
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation import base_curation_config
 
 

@@ -24,7 +24,7 @@ import pytest
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig, get_region_fields
 from src.config.curation import base_curation_config
 from src.config.project_context import current_project

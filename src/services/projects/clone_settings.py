@@ -21,7 +21,10 @@ async def clone_settings_document(
 ) -> None:
     """Copy the source's strategy defaults, ingest policy and VLM policy into the
     target (a source that never wrote a policy leaves the target on the defaults)."""
-    from src.clients.curation_opensearch import get_curation_settings, update_curation_settings
+    from src.clients.curation_opensearch.settings_doc import (
+        get_curation_settings,
+        update_curation_settings,
+    )
 
     with bind_project(source, read_only=True):
         source_settings = await get_curation_settings(client)

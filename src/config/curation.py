@@ -113,7 +113,7 @@ class CurationConfig:
     classes_index: str = _FROM_DEFAULT_PROJECT
     # Single shared-defaults document (curation-strategy settings) — one
     # doc, not a full index of many rows. See
-    # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
+    # ``src.clients.curation_opensearch.settings_doc.CURATION_SETTINGS_DOC_ID`` for the
     # fixed doc id this index always addresses.
     # Shard folding (owner D4, projects_plan.md §2.3): SETTINGS folds onto
     # CONFIGS's name for every project, ``default`` included --

@@ -67,7 +67,7 @@ from src.services.curation.ingest_policy_store import get_ingest_policy
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.services.curation.dataset_import.store import ImportStore
     from src.services.curation.ingest_policy import IngestPolicy
 

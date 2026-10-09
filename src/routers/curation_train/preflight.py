@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import ORJSONResponse
 
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.config.curation import items_index
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI

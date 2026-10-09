@@ -40,7 +40,7 @@ from src.utils.class_names import resolve_class_by_name
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.services.curation.dataset_import.options import DatasetPreviewRequest
     from src.services.curation.dataset_import.paths import PathGuard
     from src.services.curation.dataset_import.scan import DatasetScan

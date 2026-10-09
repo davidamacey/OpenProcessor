@@ -2,7 +2,7 @@
 snapshots must be gitignored.
 
 Every class-registry write (``ClassRegistry._write`` in
-``src/clients/curation_opensearch.py``) leaves a timestamped backup
+``src/clients/curation_opensearch/registry.py``) leaves a timestamped backup
 snapshot next to the live file:
 ``data/class_registry.<%Y%m%dT%H%M%S%fZ>.json``, e.g.
 ``data/class_registry.20260925T180317679132Z.json``. A prior attempt at

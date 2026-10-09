@@ -109,7 +109,7 @@ def test_settings_defaults_source_bind_blocks_planted_write(monkeypatch) -> None
         return {'defaults': {}}
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.get_curation_settings', _probing_get_settings
+        'src.clients.curation_opensearch.settings_doc.get_curation_settings', _probing_get_settings
     )
     with pytest.raises(ProjectReadOnly):
         asyncio.run(

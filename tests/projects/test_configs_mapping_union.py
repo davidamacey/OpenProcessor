@@ -6,7 +6,11 @@ P1F made it an ordinary project (D-A) -- resolves 6 distinct index names via
 
 from __future__ import annotations
 
-from src.clients.curation_opensearch import _configs_body, _settings_body, _umap_viz_state_body
+from src.clients.curation_opensearch.bodies_other import (
+    _configs_body,
+    _settings_body,
+    _umap_viz_state_body,
+)
 from src.config.curation import IndexRole, base_curation_config
 from src.config.projects import resources_for_new
 

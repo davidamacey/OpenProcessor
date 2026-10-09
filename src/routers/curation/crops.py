@@ -87,7 +87,7 @@ async def _occ_bulk_human_relabel(
 
     conflicts: list[dict[str, Any]] = []
     if conflict_ids:
-        from src.clients.curation_opensearch import mget_crops
+        from src.clients.curation_opensearch.crops import mget_crops
 
         docs = await mget_crops(
             opensearch,

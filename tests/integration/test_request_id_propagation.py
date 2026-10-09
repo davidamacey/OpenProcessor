@@ -79,7 +79,7 @@ async def test_items_request_id_field_migration_is_idempotent() -> None:
     ``tests/curation/test_ensure_indexes.py``'s other migration-helper
     tests).
     """
-    from src.clients.curation_opensearch import ensure_items_request_id_field
+    from src.clients.curation_opensearch.ensure_overlay_fields import ensure_items_request_id_field
     from src.config import get_curation_config
 
     fake_client = AsyncMock()

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.clients import curation_opensearch as cop
+from src.clients.curation_opensearch.lifecycle import INDEX_BODIES
 from src.config.region_fields import get_region_fields
 from src.services.curation.region_box_embeddings import box_vector_source_includes
 
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 _ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('role', list(cop.INDEX_BODIES))
+@pytest.mark.parametrize('role', list(INDEX_BODIES))
 def test_every_knn_index_keeps_derived_source_on(role: IndexRole) -> None:
-    index = cop.INDEX_BODIES[role]['settings']['index']
+    index = INDEX_BODIES[role]['settings']['index']
     if not index.get('knn'):
         pytest.skip('not a kNN index')
     assert index.get('knn.derived_source.enabled', True) is True

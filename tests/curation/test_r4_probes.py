@@ -20,13 +20,13 @@ pytestmark = pytest.mark.usefixtures('vlm_env')
 
 @pytest.fixture(autouse=True)
 def _reset_caches():
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import settings_doc
     from src.services.config_store.store import reset_config_stores
 
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     reset_config_stores()
     yield
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     reset_config_stores()
 
 
@@ -433,7 +433,7 @@ def test_r4_activate_route_after_deactivate_with_served_etag(app_client):
 def test_r4_legacy_settings_doc_prompt_pack_overrides_activation(app_client):
     """A pre-W2 settings doc still carrying defaults.prompt_pack (no startup
     migration strips it) vs. a pack activated through the store."""
-    from src.clients.curation_opensearch import update_curation_settings
+    from src.clients.curation_opensearch.settings_doc import update_curation_settings
     from src.routers.curation.vlm import _default_pack_name, _get_vlm_labeler
 
     c = app_client

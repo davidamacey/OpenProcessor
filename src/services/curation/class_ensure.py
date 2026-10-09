@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from typing import Any, NamedTuple, Protocol
 
-from src.clients.curation_opensearch import ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.utils.class_names import normalize_class_name, resolve_class_by_name
 
 
 class NamedClassRegistry(Protocol):
     """What :func:`ensure_class_by_name` needs of a registry (the real
-    :class:`~src.clients.curation_opensearch.ClassRegistry` provides it)."""
+    :class:`~src.clients.curation_opensearch.registry.ClassRegistry` provides it)."""
 
     def load(self) -> Any: ...
 

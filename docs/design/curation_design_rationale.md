@@ -180,7 +180,6 @@ entirely and were never in this guard's scope).
 files that arrived with the curation port are grandfathered past that
 cap:
 
-- `src/clients/curation_opensearch.py`
 - `src/services/curation/clustering/orchestrator.py`
 - `src/services/training/triton_promote.py`
 - `src/routers/curation_train.py`

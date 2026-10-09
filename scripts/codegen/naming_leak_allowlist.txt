@@ -122,7 +122,6 @@ scripts/create_ocr_test_images.py # public OCR sample image filename
 scripts/curation/eval_regions_vs_gt.py # docstring YAML example (license_plate class), matches the bakeoff example domain
 export/export_pe_text_encoder.py # public PE-Core text-encoder calibration prompt example
 tests/curation/test_pe_text_backends.py # exercises the same public calibration prompt example
-src/clients/curation_opensearch.py # docstring example value
 src/config/detection_profile.py # DetectionProfile docstring example value
 src/config/region_fields.py # RegionFields docstring example value
 src/config/region_state.py # RegionStatus docstring example value

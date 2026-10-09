@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.core.logging import get_logger
 from src.services.training import jobs as train_jobs
 

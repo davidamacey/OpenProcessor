@@ -12,17 +12,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.clients.curation_opensearch import (
-    INDEX_BODIES,
-    ClassRegistry,
-    ClassRegistryError,
-    ClassRegistryFile,
-    RegistryClassEntry,
-    create_curation_indexes,
+from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
+from src.clients.curation_opensearch.ensure_overlay_fields import (
     ensure_items_probe_fields,
     ensure_items_score_fields,
+)
+from src.clients.curation_opensearch.lifecycle import (
+    INDEX_BODIES,
+    create_curation_indexes,
     get_curation_index_settings,
 )
+from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
 from src.config import IndexRole, get_curation_config
 
 
@@ -117,7 +117,7 @@ def test_items_has_required_fields() -> None:
 def test_items_has_region_of_interest_fields_via_region_fields() -> None:
     """The region-of-interest sub-annotation fields are keyed by the
     module's RegionFields instance, not hardcoded 'plate_...' literals."""
-    from src.clients.curation_opensearch import F
+    from src.clients.curation_opensearch.base import F
 
     props = INDEX_BODIES[IndexRole.ITEMS]['mappings']['properties']
     for attr in ('verified', 'reason', 'detector_chain', 'detected_at', 'boxes', 'box_embeddings'):

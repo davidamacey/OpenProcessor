@@ -7,7 +7,7 @@ grandfathered onto that file — this is a genuinely separate concern:
 axis's entries, status, field coverage); this module answers one narrow
 question, "what id should axis X resolve to right now," backed by the
 single shared curation-settings document
-(``src.clients.curation_opensearch.get_curation_settings``).
+(``src.clients.curation_opensearch.settings_doc.get_curation_settings``).
 
 :func:`resolve_effective_default` is re-exported from
 ``strategy_registry`` (and imported directly from here by
@@ -172,7 +172,7 @@ async def resolve_effective_default(
 
     if settings_doc is None:
         try:
-            from src.clients.curation_opensearch import get_curation_settings
+            from src.clients.curation_opensearch.settings_doc import get_curation_settings
 
             settings_doc = await get_curation_settings(opensearch)
         except Exception as exc:

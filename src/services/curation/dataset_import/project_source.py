@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import IndexRole
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.config.project_context import bind_project

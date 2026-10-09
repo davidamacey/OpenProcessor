@@ -125,7 +125,7 @@ async def test_scorer_skips_items_outside_the_probe_classes(
 ) -> None:
     """An item whose stored class the probe cannot predict (null
     ``probe_disagreement``) gets no mistakenness score, not a high one."""
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import crops
     from src.services.curation.item_scores.mistakenness import MistakennessScorer
 
     docs = {
@@ -160,7 +160,7 @@ async def test_scorer_skips_items_outside_the_probe_classes(
     async def fake_mget(_opensearch: object, ids: list[str], **_kwargs: object) -> dict:
         return {i: docs[i] for i in ids}
 
-    monkeypatch.setattr(curation_opensearch, 'mget_crops', fake_mget)
+    monkeypatch.setattr(crops, 'mget_crops', fake_mget)
 
     result = await MistakennessScorer().score(
         ['in', 'out', 'legacy'], np.zeros((3, 1), dtype=np.float32), opensearch=object()

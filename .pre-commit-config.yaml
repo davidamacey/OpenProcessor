@@ -135,7 +135,6 @@ repos:
               src/services/duplicate_detection\.py|
               src/routers/ingest\.py|
               src/routers/search\.py|
-              src/clients/curation_opensearch\.py|
               src/services/curation/clustering/orchestrator\.py|
               src/services/training/triton_promote\.py|
               src/services/training/jobs\.py|

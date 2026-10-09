@@ -56,7 +56,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
 from src.services.curation.registry_reclassify import (
     UnmatchedLabelSource,

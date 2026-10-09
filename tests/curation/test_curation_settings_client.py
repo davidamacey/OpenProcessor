@@ -1,5 +1,5 @@
 """Tests for the shared curation-settings document client
-(``src.clients.curation_opensearch.get_curation_settings`` /
+(``src.clients.curation_opensearch.settings_doc.get_curation_settings`` /
 ``update_curation_settings``).
 
 A tiny in-memory fake stands in for OpenSearch's ``get``/``update``
@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from src.clients import curation_opensearch
-from src.clients.curation_opensearch import (
+from src.clients.curation_opensearch import settings_doc
+from src.clients.curation_opensearch.settings_doc import (
     CURATION_SETTINGS_DOC_ID,
     get_curation_settings,
     update_curation_settings,
@@ -36,9 +36,9 @@ def _reset_settings_cache() -> Iterator[None]:
     """The module-level settings cache is keyed by index name and
     persists across tests -- every test here uses the same default index,
     so a stale entry from another test would otherwise leak in."""
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     yield
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
 
 
 class _NotFoundError(Exception):

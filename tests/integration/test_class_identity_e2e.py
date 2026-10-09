@@ -54,7 +54,7 @@ from src.services.training.yolo_triton_config import render_labels_file
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
 
 
 # =============================================================================

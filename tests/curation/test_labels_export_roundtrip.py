@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation import base_curation_config
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 

@@ -18,7 +18,7 @@ Freezing is high blast radius and permanent (crops never return to the
 trainable pool), so every freeze also persists a durable, auditable record
 via :func:`persist_freeze_record` — mirrors the snapshot-then-atomic-replace
 convention used by ``ClassRegistry._atomic_write`` in
-``src/clients/curation_opensearch.py`` so a bad freeze can be diagnosed and
+``src/clients/curation_opensearch/registry.py`` so a bad freeze can be diagnosed and
 reverted from the recorded crop-id list.
 """
 

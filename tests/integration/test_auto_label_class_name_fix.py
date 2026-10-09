@@ -7,7 +7,7 @@ optimised for operations that require per-document field data like
 aggregations and sorting... Please use a keyword field instead").
 
 The fix is structural rather than query-level: the
-curation items index mapping (``src/clients/curation_opensearch.py``)
+curation items index mapping (``src/clients/curation_opensearch/bodies_core.py``)
 declares ``class_name`` as ``keyword`` from the start, so the bug class
 cannot reproduce regardless of which aggregation targets it. This test
 pins both halves of that invariant — the mapping type and the
@@ -39,9 +39,9 @@ def test_items_index_maps_class_name_as_keyword() -> None:
     """The items index body must map class_name as keyword, never text —
     this is what makes the same bug class structurally impossible
     here regardless of which aggregation targets the field."""
-    import src.clients.curation_opensearch as curation_opensearch_mod
+    from src.clients.curation_opensearch import bodies_core
 
-    src = inspect.getsource(curation_opensearch_mod)
+    src = inspect.getsource(bodies_core)
     # Every occurrence of a class_name mapping declares it keyword.
     assert "'class_name': {'type': 'keyword'}" in src
 

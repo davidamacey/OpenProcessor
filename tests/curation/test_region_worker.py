@@ -189,7 +189,7 @@ async def _drive_text_hint_rescue(
     )
     monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.ClassRegistry',
+        'src.clients.curation_opensearch.registry.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)

@@ -570,7 +570,7 @@ async def _drive_worker(
     monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
     # Registry load is best-effort; keep it out of the test.
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.ClassRegistry',
+        'src.clients.curation_opensearch.registry.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
     # Stage A resolves the class group through the process-wide registry

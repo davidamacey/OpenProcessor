@@ -65,7 +65,7 @@ import src.routers.curation.viz
 import src.routers.curation.vlm
 import src.routers.curation.vlm_activation
 import src.routers.curation.vlm_policy  # noqa: F401 - side-effect import
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 
 # Side-effect imports: each module registers its endpoints on `router`.
 # `curation_images` (two routers: `router`, `crops_router`), the

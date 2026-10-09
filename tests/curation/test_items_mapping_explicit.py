@@ -12,7 +12,7 @@ import dataclasses
 
 import pytest
 
-from src.clients.curation_opensearch import _items_body
+from src.clients.curation_opensearch.bodies_core import _items_body
 from src.config.region_fields import RegionFields
 
 

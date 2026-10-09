@@ -606,7 +606,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     settings_doc: dict[str, Any] | None = None
     if opensearch is not None:
         try:
-            from src.clients.curation_opensearch import get_curation_settings
+            from src.clients.curation_opensearch.settings_doc import get_curation_settings
 
             settings_doc = await get_curation_settings(opensearch)
         except Exception as exc:

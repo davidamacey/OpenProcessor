@@ -63,7 +63,7 @@ def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
 
 
 def _class_names(record) -> list[str]:
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
 
     return [
         c.class_name for c in ClassRegistry(record.resources.class_registry_path).load().classes
@@ -87,7 +87,7 @@ def test_clone_settings_without_classes_axis_still_seeds_region_class() -> None:
     # alpha already has 'wheel' seeded by its own create_project call;
     # add a second class so a full-classes clone would differ from a
     # settings-only clone.
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
 
     ClassRegistry(source.resources.class_registry_path).add_class('extra')
 

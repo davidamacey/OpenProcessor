@@ -63,7 +63,7 @@ from pathlib import Path
 # so they never needed a guard exemption in the first place.
 PORTED_PATHS: tuple[str, ...] = (
     # commit (a) — OpenSearch client
-    'src/clients/curation_opensearch.py',
+    'src/clients/curation_opensearch/',
     'tests/curation/test_curation_opensearch.py',
     # commit (b) — router `_common` foundations
     'src/routers/curation/_common.py',

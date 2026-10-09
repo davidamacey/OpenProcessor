@@ -162,7 +162,7 @@ def build_item_doc(
 ) -> dict[str, Any]:
     """Build one items-index document for a single detected object.
 
-    Field names match the mapping in ``src/clients/curation_opensearch.py``
+    Field names match the mapping in ``src/clients/curation_opensearch/bodies_core.py``
     and the router queries in ``src/routers/curation/{crops,clusters,regions}.py``
     exactly — this is the first production writer of ``crop_area_norm``,
     ``crop_rank_in_image``, ``blur_lap_var``, ``blur_lap_ratio`` and
