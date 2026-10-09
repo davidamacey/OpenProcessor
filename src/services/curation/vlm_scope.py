@@ -14,9 +14,17 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation import items_index
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET, cluster_kind
 from src.services.curation.cluster_representatives import representatives_msearch_body
+from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
 from src.services.curation.vlm_policy_store import get_vlm_policy
+from src.services.curation.vlm_rep_claims import (
+    RepClaim,
+    RepClaims,
+    read_rep_claims,
+    write_rep_claims,
+)
 
 
 if TYPE_CHECKING:
@@ -34,6 +42,8 @@ _SAMPLE_SOURCE = (
 
 _MAX_CLUSTERS = 5000
 _MSEARCH_CHUNK = 200
+_LOOKUP_CHUNK = 1000
+_CLAIM_WRITE_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -107,11 +117,9 @@ def vlm_scope_clauses(
     return ScopeClauses(filter=filters, must_not=list(OUT_OF_PIPELINE))
 
 
-async def representative_ids(opensearch: Any, *, per_cluster: int) -> set[str]:
-    """The ``per_cluster`` crops nearest each assigned cluster's centre (the same
-    ranking the cluster cards show), excluded items left out. Validated crops
-    count toward the K so an already-labelled representative is not replaced by
-    the next-nearest one."""
+async def _ranked_by_cluster(opensearch: Any, per_cluster: int) -> dict[int, list[str]]:
+    """Each assigned cluster's ``per_cluster`` nearest members, nearest first
+    (the ranking the cluster cards show), excluded items left out."""
     resp = await opensearch.search(
         index=items_index(),
         body={
@@ -128,19 +136,97 @@ async def representative_ids(opensearch: Any, *, per_cluster: int) -> set[str]:
     cluster_ids = [
         int(b['key']) for b in resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
     ]
-    ids: set[str] = set()
+    ranked: dict[int, list[str]] = {}
     for start in range(0, len(cluster_ids), _MSEARCH_CHUNK):
+        chunk = cluster_ids[start : start + _MSEARCH_CHUNK]
         lines: list[dict[str, Any]] = []
-        for cid in cluster_ids[start : start + _MSEARCH_CHUNK]:
+        for cid in chunk:
             lines.append({'index': items_index()})
             lines.append(representatives_msearch_body(cid, per_cluster))
         out = await opensearch.msearch(body=lines)
-        for sub in out.get('responses', []):
-            for hit in ((sub or {}).get('hits') or {}).get('hits') or []:
-                crop_id = (hit.get('_source') or {}).get('crop_id') or hit.get('_id')
-                if crop_id:
-                    ids.add(crop_id)
-    return ids
+        for cid, sub in zip(chunk, out.get('responses', []), strict=True):
+            hits = ((sub or {}).get('hits') or {}).get('hits') or []
+            ranked[cid] = [h.get('_source', {}).get('crop_id') or h['_id'] for h in hits]
+    return ranked
+
+
+async def _current_cluster_of(opensearch: Any, crop_ids: list[str]) -> dict[str, Any]:
+    """``crop_id -> cluster_id`` for the crops that still exist."""
+    found: dict[str, Any] = {}
+    for start in range(0, len(crop_ids), _LOOKUP_CHUNK):
+        chunk = crop_ids[start : start + _LOOKUP_CHUNK]
+        resp = await opensearch.search(
+            index=items_index(),
+            body={
+                'size': len(chunk),
+                '_source': ['crop_id', 'cluster_id'],
+                'query': {'terms': {'crop_id': chunk}},
+            },
+        )
+        for hit in resp.get('hits', {}).get('hits', []):
+            src = hit.get('_source') or {}
+            found[src.get('crop_id') or hit['_id']] = src.get('cluster_id')
+    return found
+
+
+async def _reconcile_claims(
+    opensearch: Any, stored: RepClaims, ranked: dict[int, list[str]], per_cluster: int
+) -> RepClaims:
+    """``stored`` brought up to date with the current clusters.
+
+    A cluster keeps the reps it claimed (topped up to ``per_cluster`` from its
+    current ranking when it claimed fewer); only a cluster with no valid claim is
+    ranked afresh. A claim is stale, and its cluster id taken to be a different
+    cluster after a re-cluster reused the id, when a claimed crop now sits in
+    another candidate cluster. If every claimed crop has left for a class cluster
+    (labelled) nothing contradicts the claim, so it stands: a reused id then
+    under-labels rather than re-opening the pool. Claims of clusters that no
+    longer exist are dropped.
+    """
+    by_cluster = {c.cluster_id: c.crop_ids for c in stored.claims}
+    candidate_claimed = sorted(
+        {
+            i
+            for cid, ids in by_cluster.items()
+            if cid in ranked and cid >= RESIDUAL_CLUSTER_ID_OFFSET
+            for i in ids
+        }
+    )
+    now_in = await _current_cluster_of(opensearch, candidate_claimed)
+    claims: list[RepClaim] = []
+    for cid, fresh in ranked.items():
+        ids = by_cluster.get(cid)
+        if ids is not None and any(
+            cluster_kind(now_in.get(i)) == 'candidate' and now_in[i] != cid for i in ids
+        ):
+            ids = None
+        if ids is None:
+            ids = list(fresh)
+        elif len(ids) < per_cluster:
+            ids = [*ids, *(i for i in fresh if i not in ids)][:per_cluster]
+        claims.append(RepClaim(cluster_id=cid, crop_ids=ids))
+    return RepClaims(revision=stored.revision, claims=claims)
+
+
+async def representative_ids(opensearch: Any, *, per_cluster: int) -> set[str]:
+    """The crops the ``representatives`` scope may send to the VLM: each assigned
+    cluster's ``per_cluster`` claimed reps (see :mod:`vlm_rep_claims`), excluded
+    items left out. Claims are persisted, so the set is stable across refreshes
+    and restarts; a concurrent writer is re-read, never overwritten."""
+    ranked = await _ranked_by_cluster(opensearch, per_cluster)
+    for _ in range(_CLAIM_WRITE_ATTEMPTS):
+        stored, resp = await read_rep_claims(opensearch)
+        updated = await _reconcile_claims(opensearch, stored, ranked, per_cluster)
+        if updated.claims != stored.claims:
+            try:
+                await write_rep_claims(
+                    opensearch, updated.model_copy(update={'revision': stored.revision + 1}), resp
+                )
+            except PolicyConflictError:
+                continue
+        return {i for c in updated.claims for i in c.crop_ids[:per_cluster]}
+    msg = 'could not store the VLM representative claims (concurrent writers)'
+    raise RuntimeError(msg)
 
 
 class ScopeCache:

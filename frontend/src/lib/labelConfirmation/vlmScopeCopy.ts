@@ -15,12 +15,12 @@ export const VLM_SCOPE_COPY: Record<VlmScope, { label: string; blurb: string }> 
   uncertain: {
     label: 'Uncertain only',
     blurb:
-      'Only unlabeled crops, crops whose detector confidence is below the limit, low-confidence VLM answers, and crops whose class disagrees with their cluster.',
+      'Only crops whose detector confidence is below the limit, or was not recorded. Crops the detector was confident about are skipped.',
   },
   representatives: {
     label: 'Cluster representatives',
     blurb:
-      'Only the closest members of each cluster, plus crops with no cluster. Far fewer calls; the rest keep their cluster membership.',
+      'Only the closest members of each cluster, plus crops with no cluster. Far fewer calls: each cluster is asked about only that many crops, and a labeled crop moves to its class cluster without the next ones being picked in its place.',
   },
   off: {
     label: 'Off',

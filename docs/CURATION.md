@@ -501,14 +501,17 @@ Browse and cluster at box level:
 A prompt pack holds the VLM prompt templates and two vocabulary tables
 (`class_descriptions`, `synonyms`) and an optional `proposal_denylist` of
 glob patterns (`blurry_*`, `*_scene`) whose matching new-class proposals are
-dropped. An optional `registry_prior_top_k` (integer, `0` = off, at most 50)
-turns on a registry prior for open-vocabulary VLM labeling: the prompt then lists
-that many registry classes, most validated items first (ties by name), plus the
-pending new-class proposal names, built server-side from the project's own state
-(never from a client list). It is a hint, not a constraint: a reply outside the
-list is still accepted and resolved as usual. If the counts cannot be read the
-run refuses (HTTP 503 on `vlm/label_batch`, a stage error in the auto-label
-pipeline) instead of labeling without the prior. It is separate from the region profile:
+dropped. The shipped default denylist covers blur, quality, empty and scene words plus
+`abstract*`, `*_background` and `*_object`. An optional
+`detector_hint_min_confidence_pct` (integer, `0` = off, at most 100) adds, per
+image, the item's stored detector class name to the open-vocabulary prompt when the
+detector confidence is at least that percent; it is a hint, not a constraint (a reply
+outside it is still accepted). Measured on a 539-crop public COCO oracle with a local
+VLM it raised overall accuracy from 0.775 to 0.853 (0.7846 to 0.8478 with ten validated
+classes seeded). The detector is COCO-trained and the oracle is COCO ground truth, so the
+gain may be optimistic for other domains. A registry-prior variant (top validated
+classes plus pending proposals in the prompt) was measured, gave no gain and was
+removed. It is separate from the region profile:
 a profile says where to look, a pack says what to ask. Either can be used
 without the other.
 
@@ -620,6 +623,23 @@ show them with a VRAM fit check. The host CLI changes the served model:
 `use` checks fit, rewrites `.env` (restoring it on failure), waits for the
 new model, probes it and unpauses. The API records the desired local model
 (`POST /curation/vlm/local/select`) but never restarts vLLM.
+
+### VLM scope
+
+The per-project VLM policy (`GET/PUT /curation/projects/{project}/vlm/policy`) limits
+which crops the VLM worker and the auto-label VLM stage may label; an explicit request
+for one crop or one cluster is never limited. Scopes: `all`, `uncertain`,
+`representatives` and `off`.
+
+With `representatives` the VLM is asked about at most `per_cluster` crops of each
+cluster (default 5), plus every crop with no cluster. The bound holds even though a
+VLM label moves the crop out of its candidate cluster into its class cluster: the
+representatives of a cluster are claimed once, stored in the project's settings
+document, and are not replaced by the next-nearest members when they are labelled.
+Editing any policy field, restarting the worker, or raising `per_cluster` (which claims
+only the difference) does not re-open the pool. A re-cluster gives each new cluster its
+own claim, except that a reused cluster id whose representatives have all been labelled
+keeps its old claim (it labels less rather than more).
 
 ## Keymaps
 

@@ -252,6 +252,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         id: str,  # noqa: A002
         body: dict[str, Any],
         retry_on_conflict: int = 0,  # noqa: ARG002
+        refresh: str | bool | None = None,  # noqa: ARG002
     ) -> dict[str, Any]:
         # M6 (W2b Opus review): teach this fake W2's atomic
         # ``bump_config_revision`` (painless script + ``upsert``), the

@@ -16,7 +16,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate
 repository) are now built, tested, pinned and released together from this repository, with one
 documentation site. It also delivers label confirmation (#119), the one-port gateway (#93), the
-registry prior for VLM labeling (#61 item 2), a refreshed dependency set and the file splits of
+detector hint for VLM labeling (#61 item 2), a refreshed dependency set and the file splits of
 #168.
 
 **BREAKING CHANGES.** (1) The compose service `yolo-api` is renamed `api` (#62): every
@@ -74,15 +74,24 @@ upgrades in place), and browsing MLflow by a DNS name needs `MLFLOW_ALLOWED_HOST
   page (draw a sample, per-class precision with intervals, confusion matrix, queue of crops
   waiting for a human); and `/export` states how many crops are validated and that only validated
   crops are exported.
-- Registry prior for VLM labeling (#61 item 2): a prompt pack's `registry_prior_top_k` (0 = off,
-  the default, max 50) adds the top-k registry classes by validated count and the pending
-  proposal names to the open-vocabulary prompt as a hint. Served in the pack schema as
-  `kind: "int"`; a new `pack_field_out_of_range` validation code; the run refuses (503 from
-  `label_batch`, a stage error from the pipeline) when the counts are unreadable.
-  `scripts/curation/bakeoff/vlm_prior_oracle.py` compares a run with the prior off and on.
+- Detector hint for VLM labeling (#61 item 2): a prompt pack's `detector_hint_min_confidence_pct`
+  (int 0-100, 0 = off, the default) adds each item's stored detector class name and confidence to
+  the VLM prompt as a one-line hint when the detector confidence is at least that percent. Served
+  in the pack schema as `kind: "int"`; a new `pack_field_out_of_range` validation code. Measured
+  on a public COCO oracle (gemma-4-e4b, 200 images, 539 scored crops) it raised overall accuracy
+  from 0.7755 to 0.8534 and accuracy when answered from 0.8496 to 0.9182 (0.7846 to 0.8478 in a
+  second project seeded with validated classes); run-to-run noise is about 0.5 point. Caveat: the
+  detector is COCO-trained and the oracle is COCO ground truth, so the gain may be optimistic for
+  other domains.
 
 ### Changed
 
+- The shipped proposal-name denylist also covers the scene and quality words a live COCO oracle
+  run produced (#193): `abstract*`, `*_background`, `*_object`, `scene*`, `empty*`, `blank_*`,
+  `*_image`, `shadow*`, `outdoors` and similar. The text-free generic pack and
+  `examples/prompt_packs/vehicle_wheel.json` carry it too, tested against the COCO class names so
+  no glob eats a real class. Strict-glob proposal noise measured 1-3% on the main arms and 4.9%
+  on the seeded arm with the hint on.
 - **Breaking:** the compose service `yolo-api` is renamed `api` (#62). The Prometheus job and Loki
   service label are `api` too. The container name (`<project>-api`), the `op-api` network alias
   and all data volumes are unchanged. An existing install is upgraded by `./openprocessor upgrade`
@@ -155,6 +164,22 @@ upgrades in place), and browsing MLflow by a DNS name needs `MLFLOW_ALLOWED_HOST
 
 ### Fixed
 
+- VLM scope `representatives` is bounded (#192): a labelled representative moving to its class
+  cluster no longer pulls in the next-nearest members. Each cluster's reps are claimed once and
+  stored (`vlm_scope_reps`), so total attempts stay within `per_cluster` per original cluster
+  across refreshes, restarts and policy edits.
+- The `detector_disagreements` review tab lists the least confident VLM answers first (no recorded
+  confidence, then `low`, `medium`, `high`) instead of the keyword order high, low, medium; locate
+  follows the same order. The "Uncertain only" VLM scope description now matches the selector
+  (detector confidence below the limit or not recorded; no cluster-disagreement clause) (#195).
+- Config-store writes (prompt packs, region profiles, open-vocabulary sets, VLM endpoints,
+  activations) now wait for an index refresh (`refresh=wait_for`), so a clone followed at once by
+  a GET no longer answers 404 (#196).
+- The dashboard's "Last clustering" card no longer shows "-" for When and Method while clusters
+  exist (#197). The served `clusters.last_run_at` and `method` came only from the auto-label
+  job's state file, which the cluster-refresh daemon's synchronous `POST /pipeline/auto_label`
+  never writes. Every residual-clustering run now records itself (`clustering/last_run.py`) and
+  the stats serve that record.
 - The VLM worker and the `auto_label` sweep no longer select frozen-holdout or excluded items
   (#119). Before, only a `cluster_id`-scoped run left them out, so the sweep paid VLM calls for
   items the label lock then refused or that were meant to be out of the pipeline.

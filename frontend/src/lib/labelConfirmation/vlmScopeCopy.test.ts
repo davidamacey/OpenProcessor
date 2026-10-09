@@ -29,10 +29,22 @@ describe('knobsFor', () => {
 });
 
 describe('VLM_SCOPE_COPY', () => {
+  it('does not claim the unlabeled members keep their cluster membership', () => {
+    expect(VLM_SCOPE_COPY.representatives.blurb).not.toMatch(/keep their cluster/);
+    expect(VLM_SCOPE_COPY.representatives.blurb).toMatch(/moves to its class cluster/);
+  });
+
   it('words every served scope', () => {
     for (const s of VLM_SCOPES) {
       expect(VLM_SCOPE_COPY[s].label.length).toBeGreaterThan(0);
       expect(VLM_SCOPE_COPY[s].blurb.length).toBeGreaterThan(0);
     }
+  });
+
+  it('words uncertain as exactly the confidence rule the selector applies', () => {
+    const blurb = VLM_SCOPE_COPY.uncertain.blurb;
+    expect(blurb).toContain('detector confidence is below the limit');
+    expect(blurb).toContain('not recorded');
+    expect(blurb).not.toMatch(/cluster|low-confidence VLM/i);
   });
 });

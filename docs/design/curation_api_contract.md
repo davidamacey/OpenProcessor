@@ -1233,7 +1233,7 @@ Tabs:
 | `all` | the unified queue, most uncertain first. Includes `combine_conflict` items |
 | `mismatches` | the VLM's reply did not match any registry class. `reason` says why: no match, a named registry class at low confidence that was not applied, or no class answer |
 | `vlm_low_conf` | a VLM-sourced label whose `vlm_confidence` is `medium` or `low` |
-| `detector_disagreements` | unvalidated items whose VLM class differs from the class the detector gave them (`detector_class_name`); sorted by `vlm_confidence`, then detector `confidence` high to low |
+| `detector_disagreements` | unvalidated items whose VLM class differs from the class the detector gave them (`detector_class_name`); sorted by `vlm_confidence` from least to most confident (no recorded confidence first), then detector `confidence` high to low |
 | `outliers` | far from the cluster centroid |
 | `uncertainty` | high probe entropy |
 | `model_disagreements` | validated items where the probe disagrees with the human label |

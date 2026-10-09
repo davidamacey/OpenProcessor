@@ -11,7 +11,7 @@ from src.routers.curation._config_common_models import (
     ActiveRef,
     ValidationReport,
 )
-from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
+from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.vlm_prompts import REPLY_KEY_CONTRACT
 
 
@@ -52,14 +52,14 @@ class PromptPackBody(BaseModel):
     ]
     # Typed ``Any`` for the same reason: a bool/str/out-of-range value must come
     # back as a validation issue. 0 = off.
-    registry_prior_top_k: Annotated[
+    detector_hint_min_confidence_pct: Annotated[
         Any,
         Field(
             default=0,
             json_schema_extra={
                 'type': 'integer',
                 'minimum': 0,
-                'maximum': MAX_REGISTRY_PRIOR_TOP_K,
+                'maximum': MAX_DETECTOR_HINT_PCT,
             },
         ),
     ]

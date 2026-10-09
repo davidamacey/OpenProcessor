@@ -243,88 +243,24 @@ def _count_by_proposal(buckets: list[dict[str, Any]]) -> int:
     )
 
 
-def _read_auto_label_clusters_meta(
+def _read_last_clustering_meta(
     fallback_residual: int,
     fallback_noise: int,
 ) -> dict[str, Any]:
-    """Best-effort read of the auto_label_job persisted state file.
+    """The last residual-clustering run, from the record every run writes
+    (``clustering.last_run``) whichever path started it. ``cluster_count`` is
+    the run's own count (the caller replaces it with the index total and moves
+    this to ``last_run_cluster_count``). With no record the time and method
+    are ``None`` and the counts fall back to the index aggregates."""
+    from src.services.curation.clustering.last_run import read_last_run
 
-    Returns a dict with ``last_run_at``, ``cluster_count`` (the run's own
-    count; the caller replaces it with the index total and moves this to
-    ``last_run_cluster_count``), ``residual_count``, ``noise_count``,
-    ``method``. Any read / parse
-    failure falls back to (None, 0, fallback_residual, fallback_noise,
-    None) — the stats endpoint must never 500 because the on-disk
-    state file is missing or malformed.
-    """
-    last_run_at: str | None = None
-    cluster_count = 0
-    residual_count = fallback_residual
-    noise_count = fallback_noise
-    method: str | None = None
-    try:
-        from src.services.curation.autolabel.job import get_state as _get_state
-    except ImportError:
-        # auto_label_job module not importable — surface no meta.
-        return {
-            'last_run_at': last_run_at,
-            'cluster_count': cluster_count,
-            'residual_count': residual_count,
-            'noise_count': noise_count,
-            'method': method,
-        }
-    try:
-        st = _get_state() or {}
-    except Exception:
-        # Disk read / JSON parse error — leave defaults.
-        return {
-            'last_run_at': last_run_at,
-            'cluster_count': cluster_count,
-            'residual_count': residual_count,
-            'noise_count': noise_count,
-            'method': method,
-        }
-
-    finished_at = st.get('finished_at') or 0
-    if finished_at:
-        try:
-            from datetime import UTC, datetime
-
-            last_run_at = datetime.fromtimestamp(float(finished_at), UTC).isoformat()
-        except (TypeError, ValueError, OSError):
-            last_run_at = None
-
-    stages = ((st.get('result') or {}).get('stages')) or {}
-    # ``cluster_residuals`` is the canonical stage name; the AHC handler
-    # writes ``method='ahc'`` + ``linkage`` / ``metric`` /
-    # ``distance_threshold`` / ``n_residuals`` / ``n_clusters`` /
-    # ``n_noise``. ``auto_promote`` may carry ``cluster_count`` as a
-    # secondary signal (number of clusters touched during propagation).
-    for stage_name in ('cluster_residuals', 'auto_promote'):
-        sd = stages.get(stage_name) or {}
-        if not isinstance(sd, dict):
-            continue
-        if method is None and sd.get('method'):
-            method = str(sd['method'])
-        if cluster_count == 0 and 'n_clusters' in sd:
-            cluster_count = int(sd.get('n_clusters') or 0)
-        elif cluster_count == 0 and 'cluster_count' in sd:
-            cluster_count = int(sd.get('cluster_count') or 0)
-        if 'n_residuals' in sd:
-            residual_count = int(sd.get('n_residuals') or residual_count)
-        elif 'residual_count' in sd:
-            residual_count = int(sd.get('residual_count') or residual_count)
-        if 'n_noise' in sd:
-            noise_count = int(sd.get('n_noise') or noise_count)
-        elif 'noise_count' in sd:
-            noise_count = int(sd.get('noise_count') or noise_count)
-
+    rec = read_last_run() or {}
     return {
-        'last_run_at': last_run_at,
-        'cluster_count': cluster_count,
-        'residual_count': residual_count,
-        'noise_count': noise_count,
-        'method': method,
+        'last_run_at': rec.get('finished_at'),
+        'cluster_count': int(rec.get('n_clusters') or 0),
+        'residual_count': int(rec.get('n_residuals') or fallback_residual),
+        'noise_count': int(rec.get('n_noise') or fallback_noise),
+        'method': rec.get('method'),
     }
 
 
@@ -364,7 +300,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
     - ``in_progress.region_drain_total_unfinished`` — matches the value
       returned by ``/curation/ingest/region_drain``.
     - ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —
-      sourced from the persisted ``auto_label_job`` state when present;
+      sourced from the record each clustering run writes (``clustering.last_run``);
       ``cluster_count`` falls back to live ``cluster_id`` cardinality.
     """
     fields = get_region_fields()
@@ -471,7 +407,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
 
     no_label_source = int((aggs.get('no_label_source') or {}).get('doc_count', 0))
 
-    cluster_meta = _read_auto_label_clusters_meta(
+    cluster_meta = _read_last_clustering_meta(
         fallback_residual=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
         fallback_noise=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
     )

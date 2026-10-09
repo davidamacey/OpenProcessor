@@ -1,6 +1,7 @@
 # Label confirmation: detector vs VLM vs human ground truth
 
-Status: plan only (no code changed). Base: `main` at 5df30815. Audience: a fresh
+Status: plan; `vlm_scope` is implemented. #192 fixed the `representatives` bound (reps are claimed
+once per cluster and stored, so labelling a rep does not pull in the next ones). Base: `main` at 5df30815. Audience: a fresh
 implementation agent. All line numbers are from that commit.
 
 ## 0. Trigger and short answer
@@ -134,11 +135,16 @@ Adopt a layered design, shipped in this order:
    size threshold. Semantics:
    - `off`: no worker/pipeline VLM class writes (explicit cluster/crop requests
      still work).
-   - `uncertain`: unlabelled crops plus detector conf below `vlm_conf_max`
-     (default 0.80), `*_low_conf`, or detector class != cluster class.
+   - `uncertain`: crops whose detector conf is below `vlm_conf_max`
+     (default 0.80) or was not recorded. This is what 0.5.0 implements. The
+     earlier draft also named `*_low_conf` and detector class != cluster class;
+     both are dropped: a crop has no stored cluster class (it needs a per-cluster
+     aggregation on every poll), and `*_low_conf` crops already carry a VLM answer.
    - `representatives`: only the top `vlm_per_cluster` (default 5) members per
      cluster by `core_first` distance (representatives already exist,
-     `/clusters`), plus `unassigned`.
+     `/clusters`), plus `unassigned`. The reps are claimed once per cluster and
+     persisted (`vlm_scope_reps` in the settings doc): a VLM write moves the crop to
+     its class cluster, so re-ranking the current members would cascade (#192).
    - Common: `vlm_max_crops_per_day` budget (0 = unlimited) enforced in the
      selector, and `vlm_sample_frac` (0..1) for a random cap.
 2. **Preserve the detector class** (`detector_class_name`,
@@ -148,7 +154,8 @@ Adopt a layered design, shipped in this order:
    `curation_opensearch.py:593-595`, so no new names). Never overwrite them.
 3. **`detector_disagreements` review tab**: `class_source in vlm` and
    `detector_class_name != class_name`, sorted by `vlm_confidence` asc then
-   `confidence` desc (hard cases first).
+   `confidence` desc (hard cases first). `vlm_confidence` is a keyword, so the sort
+   ranks it explicitly (missing, `low`, `medium`, `high`) with a script sort.
 4. **Accuracy audit** (`proposed route `/audit/start` (POST)`, `proposed route `/audit/report` (GET)`): draws a
    stratified sample (per detector class, `min_per_class` default 30, global
    default 300) of machine-labelled, unvalidated, non-holdout crops into a review

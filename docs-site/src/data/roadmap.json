@@ -10,7 +10,7 @@
       "items": [
         "Backend and the Cropwright web UI in one repository, built and pinned together; one docs site",
         "Label confirmation: per-project VLM scope policy, the detector's own class kept beside VLM labels, a detector_disagreements review tab, an accuracy audit with Wilson 95% intervals, and an audit gate on auto-promote",
-        "Optional registry prior for VLM prompt packs (registry_prior_top_k, off by default)",
+        "Optional detector hint for VLM prompt packs (detector_hint_min_confidence_pct, off by default; +7.8 points overall accuracy on a COCO oracle)",
         "Gateway: Grafana, Prometheus, OpenSearch Dashboards and MLflow on sub-paths of the single Cropwright port (OP_GATEWAY_SUBPATHS)",
         "Breaking: the compose service yolo-api is now api; the unread ocr_det_* region profile fields are removed",
         "/curation: 266 method routes in the generated OpenAPI contract",

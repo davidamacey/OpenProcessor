@@ -16,7 +16,7 @@ repository's release flow and pinned in `images.lock`.
 
 ### Added
 
-- The served pack schema gains a `registry_prior_top_k` row with `kind: "int"` (the optional VLM registry prior, 0 = off). The pack editor shows an unknown kind read-only and saves it unchanged, so the value round-trips; `PackSchemaField.kind` lists `int`.
+- The served pack schema gains a `detector_hint_min_confidence_pct` row with `kind: "int"` (the optional per-item detector-name hint, 0 = off). The pack editor shows an unknown kind read-only and saves it unchanged, so the value round-trips; `PackSchemaField.kind` lists `int`.
 - Gateway mode: with `OP_GATEWAY_SUBPATHS=true` the entrypoint installs
   `nginx-gateway.conf`, which proxies `/grafana/`, `/prometheus/`, `/dashboards/` and
   `/mlflow/` to the compose services (bare service names only, overridable with
@@ -62,6 +62,8 @@ repository's release flow and pinned in `images.lock`.
 
 ### Fixed
 
+- The VLM scope panel's "Cluster representatives" text no longer says the rest keep their cluster membership: a labeled representative moves to its class cluster, and the next members are not picked in its place (#192).
+- The VLM scope panel's "Uncertain only" copy says what the selector does: crops whose detector confidence is below the limit or was not recorded (OpenProcessor #195).
 - No page overflows horizontally at 430px (#184). The project top bar wraps to two rows below 768px (logo, project switcher, Resources and the API chip on the first, the scrolling nav strip on the second; the wordmark and breadcrumb are hidden below 640px). `/review`'s tab strip and queue counter wrap the same way, so the tabs are no longer squeezed. On `/projects` an `sr-only` table header escaped its scroll container and widened the page; the container is now positioned so it clips it. New stubbed e2e `test_narrow_viewport_430.py` asserts no horizontal overflow at 430px on every project route and `/projects`.
 - nginx uses `absolute_redirect off`, so redirects no longer point at container port 8080.
 
