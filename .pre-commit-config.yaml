@@ -138,8 +138,7 @@ repos:
               src/clients/curation_opensearch\.py|
               src/services/curation/clustering/orchestrator\.py|
               src/services/training/triton_promote\.py|
-              src/services/training/jobs\.py|
-              src/services/detection/cascade_detect\.py
+              src/services/training/jobs\.py
           )
         # src/services/curation/clustering/orchestrator.py (Chunk 4, see
         # docs/design/curation_design_rationale.md §5) lands at
@@ -159,14 +158,6 @@ repos:
         # splitting a freshly-ported file mid-port makes the diff
         # unreviewable. Follow-up split tracked alongside the other
         # Chunk 6 entries.
-        # src/services/detection/cascade_detect.py (~1100 LOC) — Chunk 8.
-        # NOT in the original five-file list, but the reference cascade
-        # module is 1124 LOC before any port work — that earlier
-        # audit undercounted this chunk too (same gap class as jobs.py
-        # above). Splitting the DetectionProfile-parameterized cascade
-        # mid-port would make the diff unreviewable; grandfathered here for
-        # the same reason as the rest of this chunk's oversize files.
-        # Follow-up split tracked alongside the other oversize entries.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code

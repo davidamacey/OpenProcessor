@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.open_vocab_fields import OpenVocabStatus
-    from src.services.detection.cascade_detect import RegionCandidate
+    from src.services.detection.cascade_detect.candidate import RegionCandidate
     from src.services.detection.open_vocab_set import OpenVocabSet, OpenVocabTarget
 
 logger = get_logger(__name__)

@@ -36,7 +36,7 @@ from src.services.curation.region_boxes import (
     read_boxes,
 )
 from src.services.curation.wire import serialize_item
-from src.services.detection.cascade_detect import crop_norm_to_source_norm
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 if TYPE_CHECKING:

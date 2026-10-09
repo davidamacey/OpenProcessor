@@ -16,7 +16,7 @@ from curation.reprocess_fixtures import (
     make_service,
     servable_root,
 )
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.open_vocab_set import decode_open_vocab_set
 from src.services.detection.segmenter_http import SegmenterCallError
 

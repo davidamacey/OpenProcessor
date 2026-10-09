@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.region_candidates import select_region_candidates
 
 

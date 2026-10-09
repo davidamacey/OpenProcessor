@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.services.curation.dataset_import.scan import LabelBox
-from src.services.detection.cascade_detect import crop_norm_to_source_norm
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 if TYPE_CHECKING:

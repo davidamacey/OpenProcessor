@@ -17,7 +17,7 @@ import math
 
 import pytest
 
-from src.services.detection.cascade_detect import class_provenance, is_plausible_region_bbox
+from src.services.detection.cascade_detect.sanity import class_provenance, is_plausible_region_bbox
 
 
 class TestIsPlausibleRegionBbox:

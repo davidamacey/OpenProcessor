@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
     from src.services.curation.region_boxes import RegionBox
-    from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+    from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
     from src.services.detection.region_text_rules import RegionTextRules
     from src.services.labeling.vlm_models import VlmCombinedReply
 

@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 from .test_region_cascade_integrity import _accept, _drive_worker, _FakeOpenSearch, _item
 

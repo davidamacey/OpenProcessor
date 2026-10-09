@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.curation.region_boxes import RegionBox
 from src.services.curation.wire import region_box_to_wire, serialize_item
-from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
+from src.services.detection.cascade_detect.candidate import RegionCandidate
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.detection.region_candidates import select_region_candidates
 
 

@@ -53,7 +53,7 @@ from src.services.curation.metrics import (
     OP_SEGMENTER_REQUEST_RETRIES_TOTAL,
     OP_SEGMENTER_REQUEST_WAIT_SECONDS,
 )
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.segmenter_http import DEFAULT_MAX_CANDIDATES
 
 
