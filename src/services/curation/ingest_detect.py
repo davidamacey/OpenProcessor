@@ -54,6 +54,7 @@ from src.services.detection.geometry import (
     roi_pool_sppf,
     undo_letterbox,
 )
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -246,7 +247,9 @@ class WholeImageDetector:
                         bbox_pixel=full,
                         score=conf,
                         class_source=f'{self.profile.name}_proposal',
-                        proposal_name=proposer_label(self.profile, cls_id),
+                        proposal_name=(label := proposer_label(self.profile, cls_id)),
+                        detector_class_name=normalize_class_name(label) or None,
+                        detector_confidence=conf,
                         class_detector=self.profile.detector_model or self.profile.name,
                         class_detector_version=self.profile.detector_version,
                     )
@@ -267,6 +270,9 @@ class WholeImageDetector:
                         else f'{self.profile.name}_low_conf'
                     ),
                     proposal_name=class_name,
+                    detector_class_name=normalize_class_name(class_name or '') or None,
+                    detector_class_id=cls_id if entry is not None else None,
+                    detector_confidence=conf,
                     class_detector=self.profile.detector_model or self.profile.name,
                     class_detector_version=self.profile.detector_version,
                 )

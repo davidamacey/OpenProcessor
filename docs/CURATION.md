@@ -670,7 +670,11 @@ policy changes nothing: every detection is stored and embedded.
   active classes only, never the region class). The class is written like a
   classifier's label (`class_source` `<detector>_model`, not validated), so the
   VLM stage skips it, the item sits in its class cluster and the detector's own
-  label stays on the item as `proposal_name`.
+  label stays on the item as `proposal_name`. Whatever the resolution, ingest also
+  records the detector's answer in fields no later writer touches:
+  `detector_class_name` (its label in registry-name form), `detector_confidence`
+  (its raw score) and `detector_class_id` (only when that label is a registry
+  class). A VLM or human relabel therefore never erases what the detector said.
 - `detector`: this project's own ingest detector (`model`, optional `version`,
   `input_size`, `labels_path`), replacing the deployment's primary model for
   this project only. `PUT` refuses it (422) unless the model is loaded on

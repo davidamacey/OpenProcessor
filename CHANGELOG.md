@@ -32,6 +32,12 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   requests (`/vlm/label_cluster/{id}`, a `cluster_id`-scoped run) are never limited.
   `auto_label/start` and `POST /pipeline/auto_label` accept a `vlm_scope` override.
   The policy is cloned with the project.
+- Items keep the detector's own answer (#119): `detector_class_name` (registry-name
+  form), `detector_confidence` and, when the label is a registry class,
+  `detector_class_id`, written at ingest whatever the `class_resolution` and never by
+  a VLM, classifier or human relabel. Served on the item wire; existing indexes get
+  the three fields mapped on the next bootstrap. Items ingested before this change
+  have no detector fields (no backfill).
 
 ## [0.4.1] - 2026-10-04
 

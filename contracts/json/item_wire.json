@@ -64,6 +64,9 @@
     "crop_area_norm",
     "blur_lap_ratio",
     "proposal_name",
+    "detector_class_name",
+    "detector_class_id",
+    "detector_confidence",
     "source_prompt",
     "open_vocab_set",
     "open_vocab_revision",
@@ -483,6 +486,42 @@
         ],
         "default": null,
         "title": "Dataset Split"
+      },
+      "detector_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Detector Class Id"
+      },
+      "detector_class_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Detector Class Name"
+      },
+      "detector_confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Detector Confidence"
       },
       "dup_group_id": {
         "default": null,

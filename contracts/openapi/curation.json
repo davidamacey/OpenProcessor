@@ -9084,6 +9084,39 @@
             ],
             "title": "Dataset Split"
           },
+          "detector_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Id"
+          },
+          "detector_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Name"
+          },
+          "detector_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Confidence"
+          },
           "dup_group_id": {
             "title": "Dup Group Id"
           },
@@ -17775,6 +17808,39 @@
             ],
             "title": "Dataset Split"
           },
+          "detector_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Id"
+          },
+          "detector_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Name"
+          },
+          "detector_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Confidence"
+          },
           "dup_group_id": {
             "title": "Dup Group Id"
           },
@@ -21277,6 +21343,39 @@
             ],
             "title": "Dataset Split"
           },
+          "detector_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Id"
+          },
+          "detector_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Name"
+          },
+          "detector_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Confidence"
+          },
           "dup_group_id": {
             "title": "Dup Group Id"
           },
@@ -22713,6 +22812,39 @@
               }
             ],
             "title": "Dataset Split"
+          },
+          "detector_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Id"
+          },
+          "detector_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Class Name"
+          },
+          "detector_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Confidence"
           },
           "dup_group_id": {
             "title": "Dup Group Id"

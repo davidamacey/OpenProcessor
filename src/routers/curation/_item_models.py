@@ -114,6 +114,12 @@ class ItemDoc(BaseModel):
     crop_area_norm: float | None = None
     blur_lap_ratio: float | None = None
     proposal_name: str | None = None
+    # The detector's own answer (set at ingest, never overwritten by a relabel):
+    # its label in registry-name form, its raw score, and its registry id when the
+    # label is a registry class.
+    detector_class_name: str | None = None
+    detector_class_id: int | None = None
+    detector_confidence: float | None = None
     # Full-image open-vocabulary pass provenance: the target prompt that found
     # the item, the prompt set and revision that ran it, and the outline
     # (normalized (x, y) points in the source frame; null in list responses,
