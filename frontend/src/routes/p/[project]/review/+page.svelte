@@ -1782,12 +1782,19 @@
 <div class="flex h-full flex-col">
   <!-- Tabs — horizontally scrollable on narrow viewports so all tabs stay reachable
        without colliding with the loaded-count chip on the right. -->
-  <div class="flex items-center gap-1 border-b border-zinc-800 px-4">
+  <div
+    class="flex flex-wrap items-center gap-1 border-b border-zinc-800 px-4 md:flex-nowrap"
+  >
     <!-- R2 (visual audit 2026-09-24): at 800px the plain overflow row
          clipped "New class proposals"/"Regions" with no hint, and an
          active tab past the edge was invisible — ScrollStrip shows a
          chevron where tabs are hidden and scrolls the active one in. -->
-    <ScrollStrip class="gap-1" activeKey={tab} testId="review-tabs">
+    <ScrollStrip
+      class="gap-1"
+      navClass="basis-full md:basis-auto"
+      activeKey={tab}
+      testId="review-tabs"
+    >
       {#each visibleTabs as t (t.id)}
         {@const knownEmpty = emptyTabEndpoints[t.endpointId] === true}
         <button
@@ -1854,7 +1861,7 @@
     {/if}
     <span
       data-testid="queue-counter"
-      class="shrink-0 pl-2 font-mono text-xs text-zinc-500"
+      class="shrink-0 py-1.5 pl-0 font-mono text-xs text-zinc-500 md:py-0 md:pl-2"
     >
       {queue.items.length > 0 ? `#${currentPosition}` : '—'} · {queue.items.length} loaded ·
       {queue.total}

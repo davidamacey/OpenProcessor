@@ -20,12 +20,21 @@
     navLabel?: string;
     /** Changing this re-centres the active child. */
     activeKey?: unknown;
+    /** Extra classes for the wrapping `<nav>` (flex-item placement); only used with `navLabel`. */
+    navClass?: string;
     /** Extra classes for the scrolling row (gap, text size, …). */
     class?: string;
     testId?: string;
   }
 
-  let { children, navLabel, activeKey, class: klass = '', testId }: Props = $props();
+  let {
+    children,
+    navLabel,
+    navClass = '',
+    activeKey,
+    class: klass = '',
+    testId,
+  }: Props = $props();
 
   let scroller = $state<HTMLDivElement | null>(null);
   let canLeft = $state(false);
@@ -132,7 +141,7 @@
 {/snippet}
 
 {#if navLabel}
-  <nav class="flex min-w-0 shrink items-center" aria-label={navLabel}>
+  <nav class="flex min-w-0 shrink items-center {navClass}" aria-label={navLabel}>
     {@render strip()}
   </nav>
 {:else}
