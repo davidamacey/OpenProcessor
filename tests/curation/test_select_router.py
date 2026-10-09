@@ -391,7 +391,7 @@ def test_select_diverse_job_path_for_large_pool(
     hang_forever = asyncio.Event()
 
     async def _fake_run_selection_job(job_id, opensearch, index, query, k, seed_crop_id, max_n):
-        select_job._touch_heartbeat()
+        select_job._job().touch_heartbeat()
         await hang_forever.wait()
 
     monkeypatch.setattr(select_job, 'run_selection_job', _fake_run_selection_job)

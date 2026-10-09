@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
 import time
 import uuid
@@ -41,11 +40,12 @@ from pathlib import Path
 from src.config.curation import get_curation_config
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
+from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
 
 
 logger = get_logger(__name__)
 
-_HEARTBEAT_STALE_S = 30.0
+_ACTIVE = frozenset({'running'})
 
 # See crop_scores.job's identical module-level comment: asyncio only holds
 # a weak reference internally, so an unreferenced task can be
@@ -58,16 +58,8 @@ def _jobs_dir() -> Path:
     return project_jobs_dir(Path(os.environ.get('OP_SELECT_JOBS_DIR', '/jobs/select')))
 
 
-def _state_file() -> Path:
-    return _jobs_dir() / 'state.json'
-
-
-def _cancel_flag() -> Path:
-    return _jobs_dir() / 'cancel.flag'
-
-
-def _heartbeat_file() -> Path:
-    return _jobs_dir() / 'heartbeat'
+def _job() -> FileJob:
+    return FileJob(_jobs_dir())
 
 
 @dataclass
@@ -86,52 +78,20 @@ class _JobState:
         return asdict(self)
 
 
-def _ensure_dir() -> None:
-    _jobs_dir().mkdir(parents=True, exist_ok=True)
-
-
-def _atomic_write(state: _JobState) -> None:
-    _ensure_dir()
-    tmp = _state_file().with_suffix('.tmp')
-    tmp.write_text(json.dumps(state.to_dict(), default=str))
-    tmp.replace(_state_file())
-
-
 def _read_state() -> _JobState:
-    try:
-        raw = json.loads(_state_file().read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return _JobState()
     state = _JobState()
-    for k, v in raw.items():
+    for k, v in _job().read().items():
         if hasattr(state, k):
             setattr(state, k, v)
     return state
 
 
-def _touch_heartbeat() -> None:
-    _ensure_dir()
-    _heartbeat_file().touch()
-
-
-def _heartbeat_age() -> float | None:
-    try:
-        mtime = _heartbeat_file().stat().st_mtime
-    except (FileNotFoundError, OSError):
-        return None
-    return max(0.0, time.time() - mtime)
-
-
 def is_cancelled() -> bool:
-    return _cancel_flag().exists()
+    return _job().cancel_requested()
 
 
 def _is_busy() -> bool:
-    state = _read_state()
-    if state.status != 'running':
-        return False
-    age = _heartbeat_age()
-    return age is None or age <= _HEARTBEAT_STALE_S
+    return _job().is_live(_ACTIVE)
 
 
 def reconcile_orphaned_jobs() -> bool:
@@ -142,14 +102,7 @@ def reconcile_orphaned_jobs() -> bool:
     yet, so a leftover 'running' state.json is necessarily orphaned by a
     prior process. Returns True if the file was rewritten.
     """
-    from src.services.curation.job_reconcile import reconcile_stale_running
-
-    return reconcile_stale_running(
-        _state_file(),
-        _heartbeat_file(),
-        stale_s=_HEARTBEAT_STALE_S,
-        error_prefix='selection job',
-    )
+    return _job().reconcile(active_statuses=_ACTIVE, error_prefix='selection job')
 
 
 def get_state() -> dict[str, Any]:
@@ -157,12 +110,12 @@ def get_state() -> dict[str, Any]:
     ``crop_scores.job.get_state``'s liveness contract)."""
     state = _read_state()
     if state.status == 'running':
-        age = _heartbeat_age()
-        if age is not None and age > _HEARTBEAT_STALE_S:
+        age = _job().heartbeat_age()
+        if age is not None and age > HEARTBEAT_STALE_S:
             state.status = 'failed'
             state.error = state.error or f'selection job heartbeat stale ({age:.1f}s ago)'
             state.finished_at = state.finished_at or time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
     return state.to_dict()
 
 
@@ -183,15 +136,11 @@ def start_job(
     """
     if _is_busy():
         raise RuntimeError('selection job already in progress')
-    _ensure_dir()
-    with contextlib.suppress(FileNotFoundError):
-        _cancel_flag().unlink()
-    with contextlib.suppress(FileNotFoundError):
-        _heartbeat_file().unlink()
+    _job().clear_signals()
 
     job_id = uuid.uuid4().hex
     state = _JobState(job_id=job_id, status='running', k=k, scope=scope, started_at=time.time())
-    _atomic_write(state)
+    _job().write(state.to_dict())
     _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
         run_selection_job(job_id, opensearch, index, query, k, seed_crop_id, max_n)
     )
@@ -201,8 +150,7 @@ def start_job(
 def cancel_job() -> bool:
     if not _is_busy():
         return False
-    _ensure_dir()
-    _cancel_flag().touch()
+    _job().request_cancel()
     return True
 
 
@@ -234,20 +182,20 @@ async def run_selection_job(
     state = _read_state()
     if state.job_id != job_id:
         return
-    _touch_heartbeat()
+    _job().touch_heartbeat()
     try:
         if is_cancelled():
             state.status = 'cancelled'
             state.finished_at = time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
             return
 
         ids, embeddings, _truncated = await fetch_pool_embeddings(
             opensearch, index, query, cap=max_n
         )
         state.n_pool = len(ids)
-        _atomic_write(state)
-        _touch_heartbeat()
+        _job().write(state.to_dict())
+        _job().touch_heartbeat()
 
         if not ids:
             state.status = 'completed'
@@ -258,7 +206,7 @@ async def run_selection_job(
                 'n_pool': 0,
             }
             state.finished_at = time.time()
-            _atomic_write(state)
+            _job().write(state.to_dict())
             return
 
         seed_idx: int | None = None
@@ -277,18 +225,18 @@ async def run_selection_job(
             'n_pool': len(ids),
         }
         state.finished_at = time.time()
-        _atomic_write(state)
+        _job().write(state.to_dict())
     except asyncio.CancelledError:
         state.status = 'cancelled'
         state.finished_at = time.time()
-        _atomic_write(state)
+        _job().write(state.to_dict())
         raise
     except Exception as exc:
         logger.error('curation_select_job_failed', job_id=job_id, error=str(exc))
         state.status = 'failed'
         state.error = str(exc)
         state.finished_at = time.time()
-        _atomic_write(state)
+        _job().write(state.to_dict())
 
 
 __all__ = [
