@@ -196,3 +196,11 @@ frontend/src/lib/api.trainGpus.test.ts:gemma # fixture names the shipped vllm-ge
 frontend/src/lib/components/ProvenanceChip.test.ts:gemma|Gemma # fixture uses the public gemma-4-e4b VLM catalog id and its label
 frontend/src/lib/components/DatasetStats.test.ts:Gemma # asserts the retired model names no longer appear in the dashboard text
 frontend/src/lib/stores/regionVocabulary.svelte.test.ts:gemma|Gemma # fixture uses the public gemma-4-e4b VLM catalog id and its label
+
+# ---------------------------------------------------------------------------
+# GitHub Actions version tags
+# ---------------------------------------------------------------------------
+.github/workflows/ci.yml:uses: actions/[a-z-]+@v6 # action version tag (for example actions/cache@v6) matches the v6 pattern; not vocabulary
+.github/workflows/docs.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
+.github/workflows/frontend-mutation.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
+.github/workflows/frontend.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
