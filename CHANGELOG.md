@@ -32,6 +32,9 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 - Cropwright's nginx now answers redirects with relative `Location` headers; the
   `/OpenProcessor` redirect used to name the container port 8080.
+- Config-store writes (prompt packs, region profiles, open-vocabulary sets, VLM endpoints,
+  activations) now wait for an index refresh, so a clone followed at once by a GET no longer
+  answers 404 (#196).
 
 ### Removed
 
