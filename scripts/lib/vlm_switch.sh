@@ -122,7 +122,7 @@ _vlm_own_mib() {
 # _vlm_in_api SUBCOMMAND -> runs one of the three fixed state-volume actions
 # inside the API container (the state volume is not visible from the host)
 _vlm_in_api() {
-    dc exec -T yolo-api sh -c '
+    dc exec -T api sh -c '
         d="'"${_VLM_STATE_IN_CONTAINER}"'"
         s="$d/vlm_worker/pause.sentinel"
         case "$1" in
@@ -185,7 +185,7 @@ _vlm_recreate_targets() {
     echo vlm
     [[ "$clients" == 1 ]] || return 0
     running="$(dc ps --services --status running 2>/dev/null || true)"
-    for svc in yolo-api curation-detection-worker curation-vlm-worker curation-auto-label-worker; do
+    for svc in api curation-detection-worker curation-vlm-worker curation-auto-label-worker; do
         [[ $'\n'"$running"$'\n' == *$'\n'"$svc"$'\n'* ]] && echo "$svc"
     done
     return 0
@@ -349,7 +349,7 @@ _vlm_switch() {
     local created_pause=0 paused
     paused="$(_vlm_in_api pause-create 2>/dev/null || true)"
     if [[ "$paused" != created && "$paused" != present ]]; then
-        log_error "cannot reach the yolo-api container to pause the workers; is the stack running?"
+        log_error "cannot reach the api container to pause the workers; is the stack running?"
         return 1
     fi
     [[ "$paused" == created ]] && created_pause=1

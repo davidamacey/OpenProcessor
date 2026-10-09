@@ -145,7 +145,7 @@ run_security_scan() {
 # =============================================================================
 
 build_api() {
-    print_header "Building API Image (yolo-api)"
+    print_header "Building API Image (api)"
     print_info "Platforms: ${PLATFORMS}"
     print_info "Version: ${VERSION_FULL}"
     print_info "Tags: latest, ${VERSION_FULL}"
@@ -311,7 +311,7 @@ Usage: $0 [OPTION]
 Build and push Docker images to Docker Hub for OpenProcessor
 
 Options:
-    api         Build and push only API image (yolo-api/FastAPI)
+    api         Build and push only API image (api/FastAPI)
     triton      Build and push only Triton image (inference server)
     all         Build and push both images (default)
     local       Build locally without pushing

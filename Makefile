@@ -21,7 +21,7 @@ V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
-API_SERVICE := yolo-api
+API_SERVICE := api
 AUTO_LABEL_SERVICE := curation-auto-label-worker
 TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
@@ -96,7 +96,7 @@ ensure-host-bind-mount-dirs: ## F-29/F-71: pre-create bind-mount source dirs as 
 .PHONY: up
 up: ensure-host-bind-mount-dirs ## Start the core stack (Triton + API + OpenSearch) -- see 'make up-monitoring' for Prometheus/Grafana/Loki/dcgm
 	@echo "Starting core services..."
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --remove-orphans
 	@echo ""
 	@echo "Services starting. Check status with: make status"
 	@echo "API available at: http://localhost:$(API_PORT)"
@@ -115,7 +115,7 @@ cluster-cpu: ## Recreate the auto-label worker without GPU passthrough (sklearn 
 .PHONY: up-monitoring
 up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitoring (F-3: opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)
 	@echo "Starting core + monitoring services..."
-	$(COMPOSE) --profile monitoring up -d
+	$(COMPOSE) --profile monitoring up -d --remove-orphans
 	@echo ""
 	@echo "Services starting. Check status with: make status"
 	@echo "API available at: http://localhost:$(API_PORT)"
@@ -123,11 +123,11 @@ up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitori
 
 .PHONY: dev-up
 dev-up: ensure-host-bind-mount-dirs ## Single canonical dev deployment: dev overlay + GPU arbiter overlay + curation/segmenter/vlm/training profiles
-	$(DEV_COMPOSE) up -d --build
+	$(DEV_COMPOSE) up -d --build --remove-orphans
 
 .PHONY: dev-monitoring-up
 dev-monitoring-up: ensure-host-bind-mount-dirs ## 'make dev-up' PLUS the monitoring profile (Prometheus/Grafana/Loki/Alloy/DCGM + Dashboards); opt-in as in up-monitoring
-	$(DEV_COMPOSE) --profile monitoring up -d --build
+	$(DEV_COMPOSE) --profile monitoring up -d --build --remove-orphans
 
 .PHONY: dev-down
 dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
@@ -135,7 +135,7 @@ dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
 
 .PHONY: dev-restart
 dev-restart: ## Restart the code-mounting containers (api + workers) after pulling/merging code; does not recreate or re-read .env
-	$(DEV_COMPOSE) restart yolo-api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh
+	$(DEV_COMPOSE) restart api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh
 
 .PHONY: dev-ps
 dev-ps: ## Show the dev deployment's containers

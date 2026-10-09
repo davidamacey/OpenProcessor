@@ -250,16 +250,16 @@ API container.
    set with `--target /opt/op-export/site` + a `.pth`, so the layer is the
    delta, not a second copy of `.local`; `COPY venv-y11`) → `evaluator`
    (FROM `runtime-base`) → `api` (FROM `runtime-base`, last).
-3. **Which service uses which image**: `yolo-api` and all curation workers
+3. **Which service uses which image**: `api` and all curation workers
    → `openprocessor`; new compose service `model-export` (profile
    `setup`, image `.../openprocessor-export:<ver>` (overridable like the other images), same
-   volumes/GPU reservation as `yolo-api`, no ports) → `openprocessor-export`;
+   volumes/GPU reservation as `api`, no ports) → `openprocessor-export`;
    `curation-evaluator` → `openprocessor-evaluator`.
 4. **Installer model setup** (`scripts/lib/model_setup.sh`, installer plan
-   §4.1): replace `dc run --rm --no-deps -T yolo-api python /app/export/...`
+   §4.1): replace `dc run --rm --no-deps -T api python /app/export/...`
    with `dc run --rm --no-deps -T model-export python /app/export/...`
    for groups 0–6 (preflight, weights, YOLO11, MobileCLIP, faces, OCR, PE);
-   the seed `cp -rn` and the profile-config step can stay on `yolo-api`.
+   the seed `cp -rn` and the profile-config step can stay on `api`.
    `export/preflight.py`'s `import tensorrt` check moves to the export image;
    the API preflight checks `import core` and `torch.cuda` only. Add
    an export-image override variable to `images.lock`, the `IMAGE_SPECS` table and the

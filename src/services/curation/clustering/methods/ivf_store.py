@@ -6,7 +6,7 @@ two very different callers can use the same centroids:
 
 * the **auto-label worker** trains them (periodic recluster) and writes
   them here;
-* the **ingest path** (yolo-api) loads them once and assigns every new
+* the **ingest path** (api) loads them once and assigns every new
   residual crop to its nearest centroid at ingest time — no batch wait.
 
 Both processes resolve the store directory from the currently bound

@@ -21,7 +21,7 @@
 #   the export root                      -> frozen dataset exports (read-only)
 #
 # IMPORTANT: the runs dir must be mounted at the SAME absolute path in this
-# container and in yolo-api. The trainer records `checkpoint_path` verbatim in
+# container and in api. The trainer records `checkpoint_path` verbatim in
 # status.json, and promote resolves that exact string from the API container.
 #
 # Build:

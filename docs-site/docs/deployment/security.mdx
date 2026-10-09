@@ -91,7 +91,7 @@ cover.
 ## The Docker socket overlay
 
 `docker-compose.gpu-arbiter.yml` mounts `/var/run/docker.sock` into
-`yolo-api` so training jobs can stop and restart named containers around a
+`api` so training jobs can stop and restart named containers around a
 run (`OP_GPU_ARBITER_CONTAINERS`). Mounting the socket gives that
 container's processes **root-equivalent control of the whole Docker
 host**, not just this project. Only enable it on a host where you trust

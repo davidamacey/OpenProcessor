@@ -41,18 +41,18 @@ Loaders
 Usage
 -----
     # ONNX only (no GPU needed)
-    docker compose exec yolo-api python /app/export/export_detector_dual_head.py \\
+    docker compose exec api python /app/export/export_detector_dual_head.py \\
         --weights /app/pytorch_models/my_detector.pt \\
         --triton-name my_detector_dual_head
 
     # ONNX + TensorRT engine + config.pbtxt written into the model repo
-    docker compose exec yolo-api python /app/export/export_detector_dual_head.py \\
+    docker compose exec api python /app/export/export_detector_dual_head.py \\
         --weights /app/pytorch_models/my_detector.pt \\
         --triton-name my_detector_dual_head \\
         --imgsz 1280 --max-batch 16 --formats onnx trt
 
     # A YOLOv5-fork checkpoint
-    docker compose exec yolo-api python /app/export/export_detector_dual_head.py \\
+    docker compose exec api python /app/export/export_detector_dual_head.py \\
         --weights /app/pytorch_models/legacy_v5.pt --loader yolov5 \\
         --yolov5-fork /app/external/yolov5 --imgsz 1280 \\
         --triton-name legacy_v5_dual_head

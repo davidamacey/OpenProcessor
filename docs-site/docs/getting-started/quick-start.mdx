@@ -55,7 +55,7 @@ cd openprocessor
 curl http://127.0.0.1:4603/health          # readiness: Triton + OpenSearch reachable
 curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
 ./openprocessor status                     # service health
-./openprocessor logs yolo-api -f           # live logs
+./openprocessor logs api -f           # live logs
 ./openprocessor sample coco                # public COCO sample (200 images)
 ```
 
@@ -142,7 +142,7 @@ cat >> .env <<'EOF'
 OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
 OP_SOURCE_ROOT_HOST=./data/samples
 EOF
-docker compose up -d --force-recreate yolo-api
+docker compose up -d --force-recreate api
 
 # 3. Create a project, then its classes (the registry starts empty)
 API=http://localhost:4603
@@ -158,7 +158,7 @@ curl -s -X POST "$API/curation/projects/$P/classes/seed_from_detector" \
 
 # 4. Ingest into the project. --root is a container path under the
 #    /data/source mount
-docker compose exec yolo-api python scripts/curation/ingest_walker.py \
+docker compose exec api python scripts/curation/ingest_walker.py \
   --project $P --root /data/source/coco_va_readme/images \
   --api-base http://localhost:8000/curation
 
@@ -184,14 +184,14 @@ Things that trip people up:
   `docs/PERFORMANCE.md`).
 - **Switching detectors.** Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and
   `OP_INGEST_PRIMARY_LABELS_PATH` if the model directory has no `labels.txt`)
-  in `.env`, then recreate `yolo-api`. The model must be loaded in Triton and
+  in `.env`, then recreate `api`. The model must be loaded in Triton and
   serve the end2end four-tensor output. The detector is deployment-wide.
 - **Ingest returns `503`** until `OP_INGEST_PRIMARY_DETECTOR_MODEL` is set
   and that model is loaded in Triton.
 - **`OP_SOURCE_ROOT_HOST`** is the host side of a fixed `/data/source`
   mount. The walker's `--root` must be a *container* path under it,
   otherwise every image fails as `unservable_path`.
-- **`OP_*` variables are read at process start**: recreate `yolo-api`
+- **`OP_*` variables are read at process start**: recreate `api`
   after changing them.
 - **`auto_label` clusters only by default** (`run_vlm=false`); the VLM
   labels nothing unless you pass `run_vlm=true` and a VLM is configured
@@ -220,7 +220,7 @@ import can be resumed or undone:
 
 ```bash
 make sample-coco-import        # public COCO fixture, four layouts under data/samples/import_fixture
-docker compose exec yolo-api python scripts/curation/import_labeled_dataset.py \
+docker compose exec api python scripts/curation/import_labeled_dataset.py \
   --project $P --dataset /data/source/import_fixture/yolo \
   --accept-suggestions --dry-run
 ```

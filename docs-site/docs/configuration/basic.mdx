@@ -29,7 +29,7 @@ another.
 :::warning[`OP_*` variables are read at process start]
 Curation routers build their prefix when `src.main` is imported, and
 workers read their settings once at startup. Changing any `OP_*` variable
-needs a container recreate (`docker compose up -d --force-recreate yolo-api`),
+needs a container recreate (`docker compose up -d --force-recreate api`),
 not just a reload.
 :::
 
@@ -70,7 +70,7 @@ values by hand.
 | `OPENSEARCH_HEAP` | `2g` | OpenSearch JVM heap. The installer sets it from host RAM (RAM/8, 1-8 GB) and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 
 If a generated `docker-compose.override.yml` exists, its GPU pinning for
-`triton-server` and `yolo-api` wins over the `*_GPU_ID` variables below.
+`triton-server` and `api` wins over the `*_GPU_ID` variables below.
 
 ## GPU ids
 
@@ -80,7 +80,7 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 | Variable | Default | Service |
 |---|---|---|
 | `TRITON_GPU_ID` | `0` | `triton-server` |
-| `API_GPU_ID` | `0` | `yolo-api` (torch fallbacks, CUDA-side preprocessing) |
+| `API_GPU_ID` | `0` | `api` (torch fallbacks, CUDA-side preprocessing) |
 | `EVALUATOR_GPU_ID` | `0` | `curation-evaluator` |
 | `SEGMENTER_GPU_ID` | `0` | `segmenter` |
 | `VLM_GPU_ID` | `0` | `vlm` |
@@ -139,7 +139,7 @@ curation deployment actually sets:
 | `OP_INGEST_PRIMARY_DETECTOR_MODEL` | **Required for ingest** (it `503`s without one): the Triton end2end model that proposes items, e.g. `yolov11_small_trt_end2end` |
 | `OP_INGEST_PRIMARY_CLASS_IDS` | Retired and ignored with a warning. Narrow ingest per project with the ingest policy instead |
 | `OP_INGEST_PRIMARY_ASSIGNS_CLASS` | `false` (default): detections are unlabeled proposals. `true` only if the detector was trained on your class registry |
-| `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in `yolo-api` and the detection worker (default `./data/source`) |
+| `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in `api` and the detection worker (default `./data/source`) |
 | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | An OpenAI-compatible `/v1/chat/completions` endpoint. This defines the built-in `env` VLM endpoint; `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. More endpoints are registered through the API; see [VLM selection](../guides/vlm-selection.mdx) |
 | `OP_SEGMENTER_URL` | e.g. `http://segmenter:8000`; empty makes the cascade's segmenter leg a clean no-op |
 | `HF_TOKEN` | Needed by the segmenter (gated SAM 3 weights) and for gated VLM weights |

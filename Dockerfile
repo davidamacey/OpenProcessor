@@ -2,7 +2,7 @@
 # OpenProcessor FastAPI Service
 # Multi-stage build with non-root user and production defaults
 # =============================================================================
-# Builds the yolo-api FastAPI service for visual AI inference.
+# Builds the api FastAPI service for visual AI inference.
 # docker-compose.yml overrides CMD with environment-specific worker counts.
 #
 # VOLUME MOUNTS (for development):
@@ -85,7 +85,7 @@ LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
 # Debian point-release security fixes.
 # procps -> pgrep, used by the curation worker services' healthchecks
 # (docker-compose.yml `profiles: [curation]`) — this image is shared
-# between yolo-api and those long-running worker processes.
+# between api and those long-running worker processes.
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
@@ -163,7 +163,7 @@ EXPOSE 8000
 
 # /live = process liveness only. /health now probes dependencies (Triton,
 # OpenSearch) and returns 503 while any is down — gating the container's
-# health on it would mark yolo-api unhealthy (and cascade via
+# health on it would mark api unhealthy (and cascade via
 # depends_on: service_healthy) whenever a *downstream* dep degrades.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/live || exit 1

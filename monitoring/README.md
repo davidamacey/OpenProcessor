@@ -32,7 +32,7 @@ docker compose logs -f grafana
 | Loki | http://localhost:4606 | - |
 | Triton Metrics | http://localhost:4602/metrics | - |
 
-The API job (`yolo-api:8000/metrics`) is scraped once and already aggregates every API worker (multiprocess mode, `PROMETHEUS_MULTIPROC_DIR` on a tmpfs in compose).
+The API job (`api:8000/metrics`) is scraped once and already aggregates every API worker (multiprocess mode, `PROMETHEUS_MULTIPROC_DIR` on a tmpfs in compose).
 
 ## Dashboard
 
@@ -173,7 +173,7 @@ grafana:
 {container="/triton-server"}
 
 # FastAPI logs
-{container=~"/(yolo-api|pytorch-api)"}
+{container=~"/(api|pytorch-api)"}
 
 # Error logs only
 {container="/triton-server"} |= "error" or "ERROR"

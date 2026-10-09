@@ -34,7 +34,7 @@ validation is never silently rendered broken.
 
 | Group     | id                  | Type         | What it shows |
 | --------- | ------------------- | ------------ | ------------- |
-| System    | `system-overview`   | architecture | Every compose service and profile: clients, yolo-api, Triton, OpenSearch, the job volumes, the multi-project curation workers, segmenter, VLM endpoints, the host CLI, trainer, evaluator, MLflow and monitoring. |
+| System    | `system-overview`   | architecture | Every compose service and profile: clients, api, Triton, OpenSearch, the job volumes, the multi-project curation workers, segmenter, VLM endpoints, the host CLI, trainer, evaluator, MLflow and monitoring. |
 | System    | `backend-modules`   | architecture | `src/main.py`, core and project-scoped curation routers, the core/curation/detection/labeling/training/projects services, the config store, clients, `src/config/`, and the workers that import the services. |
 | System    | `data-model`        | architecture | A project's six indexes (items carry `region_boxes`) and its class registry and exports, the global `op_projects` and `op_global_configs` indexes, and the separate visual-search indexes. |
 | Workflows | `core-inference`    | workflow     | `/detect`, `/faces`, `/embed` and `/ocr`: CPU preprocessing in the API, TensorRT models in Triton, and the OCR BLS pipeline. |

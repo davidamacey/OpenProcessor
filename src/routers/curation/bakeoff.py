@@ -1,6 +1,6 @@
 """Model comparison (bake-off) API: enqueue comparison jobs and serve their results.
 
-yolo-api pins an older Ultralytics release and cannot load every model
+api pins an older Ultralytics release and cannot load every model
 family the harness scores, so it does NOT run the comparison itself. It
 resolves the request (eval datasets, training runs, class mappings; see
 ``src/services/curation/bakeoff_jobs.py``) into a ``<job_id>.job.json`` in

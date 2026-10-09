@@ -169,7 +169,7 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
 ) -> None:
     """P3F pass-4 F1 -- the P3 review's pass-3 confirmation found the
     prior pass's ``test_second_finish_cannot_delete_a_project_...`` test
-    (above) proves nothing about the ACTUAL production topology: yolo-api
+    (above) proves nothing about the ACTUAL production topology: api
     runs ``--workers=32``, and ``delete._FINISH_IN_PROGRESS`` is a
     per-worker-process set. A re-DELETE that lands on a DIFFERENT worker
     (31 times out of 32) has its own, separate, empty copy of that guard

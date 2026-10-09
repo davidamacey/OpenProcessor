@@ -1,6 +1,6 @@
 """The import job: claim, run in chunks, resume, cancel (W10.11).
 
-Runs in-process as an ``asyncio.Task`` in one ``yolo-api`` worker; every
+Runs in-process as an ``asyncio.Task`` in one ``api`` worker; every
 fact another process needs lives on disk (:mod:`.store`), so status, cancel
 and resume work from whichever worker a request lands on.
 

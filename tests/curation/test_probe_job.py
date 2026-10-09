@@ -1,7 +1,7 @@
 """The file-backed probe job wrapper (src.services.curation.probe_job).
 
 Multi-worker correctness is the point of this module (2026-09-25 fix):
-``yolo-api`` runs under ``--workers=N`` -- separate OS processes that
+``api`` runs under ``--workers=N`` -- separate OS processes that
 don't share Python objects. Every test here points ``OP_PROBE_JOBS_DIR``
 at a fresh ``tmp_path`` and, wherever a test claims to simulate "a second
 process", it deliberately avoids relying on any module-level Python

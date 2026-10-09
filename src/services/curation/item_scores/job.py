@@ -3,7 +3,7 @@
 Mirrors :mod:`src.services.curation.auto_label_job`'s state.json / heartbeat /
 cancel.flag file-backed conventions, simplified for in-process execution —
 there is no separate scores worker container; the job runs as an
-``asyncio`` background task inside the yolo-api process itself, started
+``asyncio`` background task inside the api process itself, started
 by the router handler and polled via the same state-file pattern the
 labeler already knows how to render.
 
@@ -164,7 +164,7 @@ def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str,
     'running' happens before any ``await`` point, so a second call issued
     immediately after (even from a concurrent request) sees the 'running'
     state without racing the background task's own progress. That
-    in-process ordering isn't enough on its own though — ``yolo-api`` runs
+    in-process ordering isn't enough on its own though — ``api`` runs
     under ``--workers=N``, so two calls landing on *different* worker
     processes at nearly the same instant could both pass ``_is_busy()``
     before either has written ``'running'``. The

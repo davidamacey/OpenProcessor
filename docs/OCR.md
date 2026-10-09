@@ -120,8 +120,8 @@ The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
 #### Option A: Use Pre-converted ONNX Models
 
 ```bash
-# From the yolo-api container:
-docker compose exec yolo-api python /app/export/download_paddleocr.py
+# From the api container:
+docker compose exec api python /app/export/download_paddleocr.py
 
 # Or run the convenience script:
 ./scripts/export_paddleocr.sh download

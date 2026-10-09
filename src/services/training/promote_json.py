@@ -3,7 +3,7 @@
 
 Two writers touch the file: ``PUT .../models/{name}/sharing`` (the owner's
 opt-in, with optimistic concurrency on ``sharing_revision``) and a
-re-promote (a new version of the same model). ``yolo-api`` runs several
+re-promote (a new version of the same model). ``api`` runs several
 worker processes, so every read-compare-write holds a per-model ``flock``
 (:func:`~src.services.curation.job_lock.exclusive_file_lock`) and every
 write is a temp file plus rename, so a crash never leaves a torn

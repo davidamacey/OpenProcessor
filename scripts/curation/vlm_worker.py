@@ -29,7 +29,7 @@ restricts the worker to one project.
 Or as the long-lived compose service (G-10: there is no
 ``make curation-vlm-worker`` target -- use one of these instead):
     docker compose --profile curation up -d curation-vlm-worker
-    docker compose exec yolo-api python scripts/curation/vlm_worker.py --until-empty
+    docker compose exec api python scripts/curation/vlm_worker.py --until-empty
 """
 
 from __future__ import annotations

@@ -35,7 +35,7 @@ wire contract see [design/curation_api_contract.md](design/curation_api_contract
         |
         v  :4603
   +-----------+  gRPC   +----------------+
-  | yolo-api  |-------->| triton-server  |  TensorRT engines (GPU)
+  | api  |-------->| triton-server  |  TensorRT engines (GPU)
   | (FastAPI) |         +----------------+
   |           |  HTTP   +----------------+
   |           |-------->| opensearch     |  k-NN + curation datastore
@@ -76,7 +76,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | Serves the TensorRT models. Explicit model control; loads the list in the compose command; a missing engine leaves that model unloaded instead of killing the server |
-| `yolo-api` | none | 4603 | FastAPI, uvicorn with 32 worker processes |
+| `api` | none | 4603 | FastAPI, uvicorn with 32 worker processes |
 | `opensearch` | none | 4607 | k-NN indexes and every curation document |
 | `curation-detection-worker` | `curation` | | Region cascade over pending items, every active project in turn |
 | `curation-vlm-worker` | `curation` | | VLM class and verification loop |
@@ -96,7 +96,7 @@ Per-project class registries, exports and bake-off data live under
 `./data/projects/<slug>/`.
 
 `docker-compose.gpu-arbiter.yml` is an opt-in overlay that mounts the Docker
-socket into `yolo-api` so the GPU arbiter can stop and restart sibling
+socket into `api` so the GPU arbiter can stop and restart sibling
 containers around a training run. It gives that container control of the Docker
 host; read its header before using it.
 

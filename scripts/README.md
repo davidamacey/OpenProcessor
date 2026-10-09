@@ -4,7 +4,7 @@ Setup and management scripts, release tooling, dataset fetchers, code
 generators and the curation workers and tools.
 
 Run Python scripts with the project venv binary (`.venv/bin/python`), or inside
-the `yolo-api` container where the script says so.
+the `api` container where the script says so.
 
 ## Root-level scripts
 
@@ -24,8 +24,8 @@ most:
 
 ```bash
 ./openprocessor status                 # containers, health, GPU memory
-./openprocessor logs yolo-api -f       # follow one service
-./openprocessor restart yolo-api
+./openprocessor logs api -f       # follow one service
+./openprocessor restart api
 ./openprocessor models                 # Triton model states
 ./openprocessor models install --only pe   # export and load one model group
 ./openprocessor curation up            # start the curation workers
@@ -147,7 +147,7 @@ before touching OpenSearch.
 
 | Path | What it is |
 |---|---|
-| `ingest_walker.py`, `_fast_walk.py` | Parallel bulk-directory ingest. Walks a directory the API container can see and posts paths to `POST /curation/projects/{project}/ingest/batch`, with a resumable progress file. Run it inside `yolo-api`: `--root /data/source/...` |
+| `ingest_walker.py`, `_fast_walk.py` | Parallel bulk-directory ingest. Walks a directory the API container can see and posts paths to `POST /curation/projects/{project}/ingest/batch`, with a resumable progress file. Run it inside `api`: `--root /data/source/...` |
 | `ingest_upload.py` | Byte-upload ingest for storage the API cannot mount: reads files locally and posts them to `POST /curation/projects/{project}/ingest/upload`; resumes with `POST /curation/projects/{project}/ingest/path_lookup` and server-side content-hash dedup |
 | `import_labeled_dataset.py` | Client of `POST /curation/projects/{project}/datasets/imports`. Previews a dataset (YOLO, COCO, OpenProcessor export), builds the by-name mapping from `--map CLASS=ID`, `--create CLASS[=NAME]`, `--skip`, `--region`, `--accept-suggestions` (`--images-only` skips every class), starts or resumes (`--resume IMPORT_ID`) and polls. `--dry-run` previews only; `--state-dir` writes the per-split cohort `eval_regions_vs_gt.py` reads |
 | `yolo_dataset.py` | Shared YOLO dataset discovery for the two tools above |

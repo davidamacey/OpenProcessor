@@ -22,8 +22,8 @@ Key steps:
 5. Create Triton configuration
 
 Usage:
-    # From yolo-api container:
-    docker compose exec yolo-api python /app/export/export_scrfd.py
+    # From api container:
+    docker compose exec api python /app/export/export_scrfd.py
 
     # From host with venv:
     python export/export_scrfd.py
@@ -510,7 +510,7 @@ def convert_to_tensorrt(
         return True
 
     except ImportError:
-        logger.error('TensorRT not available. Run inside yolo-api container.')
+        logger.error('TensorRT not available. Run inside api container.')
         return False
     except Exception as e:
         logger.error(f'TensorRT conversion failed: {e}')

@@ -208,7 +208,7 @@ def _nearest_existing(path: str) -> Path:
 def resolve_disk_check_path(spec: TrainJobSpec) -> str:
     """Pick the path to stat for the free-disk check.
 
-    Previously hardcoded to a host data-volume root — inside the yolo-api
+    Previously hardcoded to a host data-volume root — inside the api
     container, only specific subpaths under that root (e.g. a
     deployment-specific training-data mount, see the deployment's own
     compose overlay) are bind-mounted from the real training-data volume;

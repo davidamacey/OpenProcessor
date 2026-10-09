@@ -188,17 +188,17 @@ def test_bulk_writer_event_api_url_falls_back_to_api_base_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """OP_EVENT_API_URL is the explicit override; with only OP_API_BASE_URL
-    set (the trainer/campaign convention for "where yolo-api lives"), the
+    set (the trainer/campaign convention for "where api lives"), the
     detection worker's publish path should still resolve a URL instead of
     silently going dark."""
     monkeypatch.delenv('OP_EVENT_API_URL', raising=False)
-    monkeypatch.setenv('OP_API_BASE_URL', 'http://yolo-api:8000/')
+    monkeypatch.setenv('OP_API_BASE_URL', 'http://api:8000/')
     monkeypatch.delenv('OP_API', raising=False)
 
     from scripts.curation.worker import bulk_writer
 
     importlib.reload(bulk_writer)
-    assert bulk_writer._EVENT_API_URL == 'http://yolo-api:8000'
+    assert bulk_writer._EVENT_API_URL == 'http://api:8000'
 
 
 @pytest.mark.usefixtures('_reload_bulk_writer_after_env_restored')

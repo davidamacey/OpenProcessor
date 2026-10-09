@@ -90,7 +90,7 @@ Pre-commit rejects a commit that leaves a contract stale. See
 
 The api and the workers bind-mount the source. Python modules already imported by a
 running container go stale, which shows up as transient 500 `ImportError`s. After a pull
-or merge run `make dev-restart` (restarts `yolo-api` and the detection, VLM, auto-label
+or merge run `make dev-restart` (restarts `api` and the detection, VLM, auto-label
 and cluster-refresh workers without recreating them). Restart does not re-read `.env`:
 after editing it run `make dev-up` instead (plain `docker restart` or `make dev-restart`
 keep the old values).

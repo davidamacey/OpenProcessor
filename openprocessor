@@ -198,7 +198,7 @@ cmd_start() {
     log_step "Starting OpenProcessor services..."
     cd "$PROJECT_DIR"
     ensure_bind_mount_dirs "$PROJECT_DIR"
-    dc up -d
+    dc up -d --remove-orphans
     log_success "Services started"
     echo ""
     cmd_status
@@ -389,7 +389,7 @@ cmd_models_install() {
         return 1
     fi
     if [[ -z "$only" || "$only" == pe ]] && [[ "$tiers" == *curation* ]]; then
-        dc restart yolo-api
+        dc restart api
     fi
 }
 
@@ -733,7 +733,7 @@ Setup:
 
 Examples:
   ./scripts/openprocessor.sh status
-  ./scripts/openprocessor.sh logs yolo-api -f
+  ./scripts/openprocessor.sh logs api -f
   ./scripts/openprocessor.sh export all
   ./scripts/openprocessor.sh profile standard
   ./scripts/openprocessor.sh test full

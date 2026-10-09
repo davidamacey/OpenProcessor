@@ -13,8 +13,8 @@ Two concrete breakages fixed here:
    ``OP_SOURCE_ROOT_HOST=./data/samples`` and pass a ``--root`` under
    ``/data/source/...``.
 2. **F-31: the "Docker-only" pytest path doesn't exist.** The production
-   ``yolo-api`` image installs only ``requirements.txt`` -- no pytest, no
-   ``requirements-test.txt`` -- so ``docker compose exec yolo-api pytest
+   ``api`` image installs only ``requirements.txt`` -- no pytest, no
+   ``requirements-test.txt`` -- so ``docker compose exec api pytest
    ...`` fails with "executable file not found". README must install
    ``requirements-test.txt`` into the running container first.
 
@@ -38,7 +38,7 @@ README = (REPO_ROOT / 'README.md').read_text()
 def _compose_source_root_mount() -> str:
     with (REPO_ROOT / 'docker-compose.yml').open() as fh:
         compose = yaml.safe_load(fh)
-    volumes = compose['services']['yolo-api']['volumes']
+    volumes = compose['services']['api']['volumes']
     match = next(v for v in volumes if 'OP_SOURCE_ROOT_HOST' in str(v))
     return str(match)
 

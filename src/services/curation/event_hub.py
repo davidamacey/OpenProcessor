@@ -9,7 +9,7 @@ own per-subscriber queue.
 
 Design (S-3, file-backed bus):
 
-- ``yolo-api`` runs 8 uvicorn *worker processes*; an in-process-only hub
+- ``api`` runs 8 uvicorn *worker processes*; an in-process-only hub
   (the original design) means an SSE client connected to worker 3 never
   sees an event published by worker 7. The bus fixes that with one
   shared append-only JSONL log per state dir

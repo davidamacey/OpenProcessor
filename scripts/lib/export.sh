@@ -49,11 +49,11 @@ declare -gA EXPORT_TIMES=(
 # Container Helpers
 # =============================================================================
 
-# Run a command in a temporary yolo-api container (no dependencies needed).
+# Run a command in a temporary api container (no dependencies needed).
 # Uses 'docker compose run --rm --no-deps -T' so the export works without
-# Triton running and without the yolo-api container already up.
+# Triton running and without the api container already up.
 run_in_api_container() {
-    dc run --rm --no-deps -T yolo-api "$@"
+    dc run --rm --no-deps -T api "$@"
 }
 
 check_triton_container() {

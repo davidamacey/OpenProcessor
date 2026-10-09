@@ -120,23 +120,21 @@ def test_use_rewrites_env_recreates_the_vlm_probes_and_unpauses(
 def test_the_first_use_migrates_to_the_stable_alias_and_recreates_the_running_services(
     shimmed: Shimmed, stack: Path
 ) -> None:
-    (shimmed.state / 'running_services').write_text(
-        'yolo-api\ncuration-detection-worker\nsegmenter\n'
-    )
+    (shimmed.state / 'running_services').write_text('api\ncuration-detection-worker\nsegmenter\n')
     result = use(shimmed, stack)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'this one time the API and workers are recreated too' in result.stdout + result.stderr
     assert env_value(stack, 'VLM_SERVED_MODEL_NAME') == 'local-vlm'
     assert env_value(stack, 'OP_VLM_MODEL') == 'local-vlm'
     ups = [c for c in compose_calls(shimmed) if 'up -d' in c]
-    assert ups == ['up -d vlm yolo-api curation-detection-worker']  # never the segmenter
+    assert ups == ['up -d vlm api curation-detection-worker']  # never the segmenter
 
 
 def test_once_on_the_alias_only_the_vlm_container_is_recreated(
     shimmed: Shimmed, stack: Path
 ) -> None:
     set_env(stack, VLM_SERVED_MODEL_NAME='local-vlm', OP_VLM_MODEL='local-vlm')
-    (shimmed.state / 'running_services').write_text('yolo-api\ncurie\n')
+    (shimmed.state / 'running_services').write_text('api\ncurie\n')
     assert use(shimmed, stack).returncode == 0
     assert [c for c in compose_calls(shimmed) if 'up -d' in c] == ['up -d vlm']
 
@@ -253,7 +251,7 @@ def test_an_unreachable_api_container_aborts_before_touching_env(
     before = (stack / '.env').read_text()
     result = use(shimmed, stack)
     assert result.returncode == 1
-    assert 'cannot reach the yolo-api container' in result.stdout + result.stderr
+    assert 'cannot reach the api container' in result.stdout + result.stderr
     assert (stack / '.env').read_text() == before
 
 
@@ -416,11 +414,11 @@ def test_a_changed_image_cap_recreates_the_running_clients(shimmed: Shimmed, sta
         OP_VLM_MODEL='local-vlm',
         OP_VLM_MAX_IMAGES_PER_CALL='4',
     )
-    (shimmed.state / 'running_services').write_text('yolo-api\ncuration-vlm-worker\nsegmenter\n')
+    (shimmed.state / 'running_services').write_text('api\ncuration-vlm-worker\nsegmenter\n')
     assert use(shimmed, stack).returncode == 0
     assert env_value(stack, 'OP_VLM_MAX_IMAGES_PER_CALL') == '8'
     assert [c for c in compose_calls(shimmed) if 'up -d' in c] == [
-        'up -d vlm yolo-api curation-vlm-worker'
+        'up -d vlm api curation-vlm-worker'
     ]
 
 

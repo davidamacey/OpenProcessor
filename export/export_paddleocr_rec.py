@@ -187,13 +187,13 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
     """Build the TensorRT engine in-process with the TensorRT Python API.
 
     F-17 (fresh-start E2E findings 2026-09-25): this script runs inside
-    ``yolo-api`` (see the module docstring's ``Usage``), which has no
+    ``api`` (see the module docstring's ``Usage``), which has no
     docker CLI or docker.sock, and shelling out to
     ``docker exec <TRITON_CONTAINER> trtexec ...`` also hardcoded the
     pre-G-01 container name ``triton-server`` -- after the project-name
     rename it's ``${COMPOSE_PROJECT_NAME}-triton``, so this always
     printed "triton-server container is not running" even with Triton
-    up. yolo-api already depends on ``tensorrt-cu13`` directly (see
+    up. api already depends on ``tensorrt-cu13`` directly (see
     requirements.txt; ``export/export_models.py`` builds YOLO engines
     the same way), so there's no need for Triton to be running, or even
     exist, at export time -- only the ONNX file and a GPU.

@@ -273,7 +273,7 @@ def test_the_deny_policy_refuses_external_even_with_the_flag(
         ('http://2852039166/v1', 'vlm_url_denied_address'),
         ('http://[::ffff:169.254.169.254]/v1', 'vlm_url_denied_address'),
         ('http://opensearch:9200/v1', 'vlm_url_denied_internal_service'),
-        ('http://yolo-api:4603/v1', 'vlm_url_denied_internal_service'),
+        ('http://api:4603/v1', 'vlm_url_denied_internal_service'),
     ],
 )
 def test_forbidden_targets_cannot_be_created_validated_or_probed(

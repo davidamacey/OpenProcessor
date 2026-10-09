@@ -2,7 +2,7 @@
 must exist, host-user-owned, before compose ever runs -- without
 breaking `git pull`.
 
-``yolo-api`` bind-mounts ``./test_images``. On a fresh clone that host
+``api`` bind-mounts ``./test_images``. On a fresh clone that host
 directory doesn't exist, so Docker auto-creates it **root-owned** on the
 very first ``docker compose up``, and ``make download-test-images``
 (running as the host user) then fails to write into it.

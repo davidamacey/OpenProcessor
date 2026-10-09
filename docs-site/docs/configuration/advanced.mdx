@@ -83,7 +83,7 @@ checkout rarely needs them.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on `yolo-api` and the detection worker |
+| `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on `api` and the detection worker |
 | `OP_SOURCE_ROOT_HOST` | `./data/source` | Host side of that mount |
 | `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /curation/projects/{project}/images/root/{alias}` |
 | `OP_EXPORT_KEEP_LAST` | `5` | Keep-last retention for auto-named exports under each project's exports directory; `0` keeps all |
@@ -242,7 +242,7 @@ See [Dataset import](../guides/dataset-import.mdx) and
 | `OP_TRAIN_COMPARE_MAX_IMAGES` / `OP_TRAIN_COMPARE_INPUT_SIZE` | `200` / `640` | |
 | `OP_TRITON_MODEL_REPO` | `/models` | Must match the directory Triton serves, or a promoted model lands where Triton never looks |
 | `OP_TRITON_HTTP_URL` | `http://triton-server:8000` | |
-| `OP_API_BASE_URL` | `http://yolo-api:8000` | Where the trainer posts a campaign's auto-promote |
+| `OP_API_BASE_URL` | `http://api:8000` | Where the trainer posts a campaign's auto-promote |
 | `OP_TRAIN_LOG_LEVEL` | `INFO` | |
 | `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME`, `OP_MLFLOW_MODEL_NAME`, `OP_MLFLOW_CONFUSION_MATRIX_EVERY` | | MLflow; every hook degrades to a warning when unreachable. A project's runs use the experiment `openprocessor-{slug}` |
 | `OP_MLFLOW_PUBLIC_URL` | unset | Browser-reachable MLflow base for served `mlflow_run_url` |

@@ -263,7 +263,7 @@ model_setup_group_outputs() {
 }
 
 # One-shot API-image and Triton-image containers (never need a running API).
-_ms_api() { dc run --rm --no-deps -T -w /app yolo-api "$@"; }
+_ms_api() { dc run --rm --no-deps -T -w /app api "$@"; }
 _ms_triton() { dc run --rm --no-deps -T triton-server "$@"; }
 
 _ms_pe_trtexec() {
@@ -306,7 +306,7 @@ _ms_run_group_steps() {
     case "$group" in
         preflight)
             "$runner" preflight_image _ms_api python -m export.preflight || return 1
-            "$runner" preflight_seed dc run --rm --no-deps -T --entrypoint cp yolo-api \
+            "$runner" preflight_seed dc run --rm --no-deps -T --entrypoint cp api \
                 -rn /opt/openprocessor/model_repo_seed/. /app/models/ || return 1
             "$runner" preflight_profile _ms_api bash -c \
                 'PROJECT_DIR=/app; source /app/scripts/lib/config.sh && generate_all_configs "$1" 0' \

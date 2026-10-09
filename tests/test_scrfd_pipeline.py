@@ -13,7 +13,7 @@ Run:
 
 Prerequisites:
     - Triton server running with scrfd_10g_bnkps and arcface_w600k_r50 loaded
-    - yolo-api running on port 4603
+    - api running on port 4603
 """
 
 import os

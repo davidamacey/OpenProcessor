@@ -161,14 +161,14 @@ download_models() {
 
     # Fall back to Docker container if host .venv didn't work
     if [ "$download_ok" = false ]; then
-        if check_container "yolo-api"; then
-            log_info "Using running yolo-api container for download..."
-            if docker compose exec -T yolo-api python /app/export/download_paddleocr.py; then
+        if check_container "api"; then
+            log_info "Using running api container for download..."
+            if docker compose exec -T api python /app/export/download_paddleocr.py; then
                 download_ok=true
             fi
         else
-            log_info "Using temporary yolo-api container for download..."
-            if docker compose run --rm --no-deps -T yolo-api python /app/export/download_paddleocr.py; then
+            log_info "Using temporary api container for download..."
+            if docker compose run --rm --no-deps -T api python /app/export/download_paddleocr.py; then
                 download_ok=true
             fi
         fi
@@ -178,7 +178,7 @@ download_models() {
         log_success "ONNX models downloaded (detection + multilingual recognition)"
     else
         log_error "Model download failed"
-        log_info "Ensure either .venv or yolo-api container image is built"
+        log_info "Ensure either .venv or api container image is built"
         return 1
     fi
 }

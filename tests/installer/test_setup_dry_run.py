@@ -103,8 +103,8 @@ def test_dry_run_makes_no_mutating_docker_call_and_plans_every_step(shimmed: Shi
         'docker pull davidamacey/openprocessor-triton@sha256:',
         'docker run --rm --gpus device=0',
         'up -d triton-server',
-        'yolo-api python -m export.preflight',
-        '--entrypoint cp yolo-api -rn /opt/openprocessor/model_repo_seed/. /app/models/',
+        'api python -m export.preflight',
+        '--entrypoint cp api -rn /opt/openprocessor/model_repo_seed/. /app/models/',
         'export/export_models.py',
         'export_paddleocr_rec.py',
         'up -d --remove-orphans',
@@ -200,7 +200,7 @@ def test_unprefixed_container_names_exit_3(shimmed: Shimmed) -> None:
     shimmed.flag(
         'config.json',
         '{\n  "networks": {\n    "triton_net": {\n      "name": "opinst-test_triton_net"\n    }\n  },\n'
-        '  "services": {\n    "yolo-api": {\n      "container_name": "openprocessor-api"\n    }\n  }\n}\n',
+        '  "services": {\n    "api": {\n      "container_name": "openprocessor-api"\n    }\n  }\n}\n',
     )
     result = dry(shimmed)
     assert result.returncode == 3
@@ -211,7 +211,7 @@ def test_wrong_network_name_exits_3(shimmed: Shimmed) -> None:
     shimmed.flag(
         'config.json',
         '{\n  "networks": {\n    "triton_net": {\n      "name": "openprocessor_triton_net"\n    }\n  },\n'
-        '  "services": {\n    "yolo-api": {\n      "container_name": "opinst-test-api"\n    }\n  }\n}\n',
+        '  "services": {\n    "api": {\n      "container_name": "opinst-test-api"\n    }\n  }\n}\n',
     )
     assert dry(shimmed).returncode == 3
 
@@ -483,8 +483,8 @@ def test_control_plane_only_starts_api_and_opensearch_only(shimmed: Shimmed) -> 
     result = dry(shimmed, '--cpu', '--control-plane-only')
     assert result.returncode == 0, result.stderr
     dry_compose = [ln for ln in result.stdout.splitlines() if ln.startswith('DRY: docker compose')]
-    assert any(ln.endswith(' up -d opensearch') for ln in dry_compose)
-    assert any(ln.endswith(' up -d --no-deps yolo-api') for ln in dry_compose)
+    assert any(ln.endswith(' up -d --remove-orphans opensearch') for ln in dry_compose)
+    assert any(ln.endswith(' up -d --no-deps api') for ln in dry_compose)
     assert not any('triton-server' in ln for ln in dry_compose)
     assert all('docker-compose.cpu.yml' in ln for ln in dry_compose)
     assert configure(shimmed, '--cpu', '--control-plane-only').returncode == 0

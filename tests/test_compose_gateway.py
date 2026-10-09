@@ -80,13 +80,13 @@ def _wrap(
 
 def test_gateway_switch_defaults_off_everywhere(tmp_path: Path) -> None:
     services = _services(tmp_path, {})
-    for name in (*UI_SERVICES, 'cropwright', 'yolo-api'):
+    for name in (*UI_SERVICES, 'cropwright', 'api'):
         assert services[name]['environment']['OP_GATEWAY_SUBPATHS'] == 'false', name
 
 
 def test_gateway_switch_reaches_the_api_the_gateway_and_each_ui(tmp_path: Path) -> None:
     services = _services(tmp_path, {'OP_GATEWAY_SUBPATHS': 'true'})
-    for name in (*UI_SERVICES, 'cropwright', 'yolo-api'):
+    for name in (*UI_SERVICES, 'cropwright', 'api'):
         assert services[name]['environment']['OP_GATEWAY_SUBPATHS'] == 'true', name
 
 

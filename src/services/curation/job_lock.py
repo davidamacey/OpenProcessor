@@ -4,7 +4,7 @@ which handles startup repair rather than the start-time race).
 
 Every file-backed job module here (``item_scores.job``, ``probe_job``, ...)
 guards "start a new run" with a read-state / write-``'running'``-state
-pair. That pair is only atomic *within one process*: ``yolo-api`` runs
+pair. That pair is only atomic *within one process*: ``api`` runs
 under ``--workers=N``, i.e. N separate OS processes, so two concurrent
 ``start_job()`` calls landing on different worker processes at nearly the
 same instant can both read ``status != 'running'`` before either has

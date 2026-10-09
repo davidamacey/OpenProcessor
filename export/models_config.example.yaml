@@ -7,7 +7,7 @@
 # Usage:
 #   make export-config CONFIG=/app/export/models_config.yaml
 #   # or
-#   docker compose exec yolo-api python /app/export/export_models.py \
+#   docker compose exec api python /app/export/export_models.py \
 #       --config-file /app/export/models_config.yaml \
 #       --formats trt trt_end2end \
 #       --normalize-boxes \

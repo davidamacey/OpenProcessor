@@ -581,7 +581,7 @@ async def startup_bootstrap_config_store_safe() -> Any:
     a broad ``except`` that returned ``None`` on any failure there --
     including a plain unreachable-OpenSearch startup or a lost
     index-create race, both realistic at cold-stack-start (production
-    ``yolo-api`` has no ``opensearch: service_healthy`` gate and runs 32
+    ``api`` has no ``opensearch: service_healthy`` gate and runs 32
     workers). Nothing then ever retried, so that worker had no poll task
     for its entire lifetime (M4 inert), contrary to what this docstring
     used to claim. Fixed by mirroring
