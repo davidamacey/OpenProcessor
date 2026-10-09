@@ -512,7 +512,7 @@ only primes the model with noise). It is a hint, not a constraint: a reply outsi
 the list is still accepted and resolved as usual. If the counts cannot be read the
 run refuses (HTTP 503 on `vlm/label_batch`, a stage error in the auto-label
 pipeline) instead of labeling without the prior. Measured: on a 539-crop public
-COCO oracle with `gemma-4-e4b`, the prior showed no accuracy gain (overall 0.775
+COCO oracle with a local VLM, the prior showed no accuracy gain (overall 0.775
 off, 0.774 on; with ten validated classes seeded, 0.785 off, 0.775 on) and
 raised pending proposals when classes were seeded, so it stays off by default. An optional
 `detector_hint_min_confidence_pct` (integer, `0` = off, at most 100) adds, per

@@ -44,7 +44,7 @@ code. Packs are editable per project, versioned, and can be rolled back.
   Names matching `proposal_denylist` are never listed, and the prior is skipped while no class
   has a validated item. It is a hint, not a constraint: a reply outside the list is still
   accepted. If the counts cannot be read the run refuses rather than labeling without the
-  prior. Measured on a public COCO oracle (539 crops, `gemma-4-e4b`), the prior gave no
+  prior. Measured on a public COCO oracle (539 crops), the prior gave no
   accuracy gain, so it is off by default.
 
   An optional integer, `detector_hint_min_confidence_pct` (`0` = off, the default; at most

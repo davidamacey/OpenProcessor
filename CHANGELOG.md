@@ -44,7 +44,9 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   `abstract*`, `*_background`, `*_object`, `scene*`, `empty*`, `blank_*`, `*_image`, `shadow*`,
   `outdoors` and similar scene and quality words, and the text-free generic pack and `examples/prompt_packs/vehicle_wheel.json`
   carry it too. New optional pack setting `detector_hint_min_confidence_pct` (0 = off) tells the VLM
-  each item's stored detector class name.
+  each item's stored detector class name. Measured on a 539-crop public COCO oracle with a local VLM:
+  the fixed prior shows no gain (overall 0.775 off, 0.774 on), so it stays off by default; the
+  detector hint lifts overall accuracy from 0.775 to 0.853.
 - Cropwright's nginx now answers redirects with relative `Location` headers; the
   `/OpenProcessor` redirect used to name the container port 8080.
 - Config-store writes (prompt packs, region profiles, open-vocabulary sets, VLM endpoints,
