@@ -53,7 +53,9 @@ class _Labeler:
     identity = VlmIdentity('env@None', 'test-vlm')
     _pack = GENERIC_ITEM_PACK
 
-    async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
+    async def label_or_propose_batch(
+        self, crops: list[Any], _names: list[str], **_k: Any
+    ) -> list[Any]:
         return [
             VlmClassPrediction(img_id=c.img_id, class_name='widget', confidence='high')
             for c in crops

@@ -501,7 +501,14 @@ Browse and cluster at box level:
 A prompt pack holds the VLM prompt templates and two vocabulary tables
 (`class_descriptions`, `synonyms`) and an optional `proposal_denylist` of
 glob patterns (`blurry_*`, `*_scene`) whose matching new-class proposals are
-dropped. It is separate from the region profile:
+dropped. An optional `registry_prior_top_k` (integer, `0` = off, at most 50)
+turns on a registry prior for open-vocabulary VLM labeling: the prompt then lists
+that many registry classes, most validated items first (ties by name), plus the
+pending new-class proposal names, built server-side from the project's own state
+(never from a client list). It is a hint, not a constraint: a reply outside the
+list is still accepted and resolved as usual. If the counts cannot be read the
+run refuses (HTTP 503 on `vlm/label_batch`, a stage error in the auto-label
+pipeline) instead of labeling without the prior. It is separate from the region profile:
 a profile says where to look, a pack says what to ask. Either can be used
 without the other.
 

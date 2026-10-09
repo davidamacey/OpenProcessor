@@ -100,6 +100,11 @@ class PromptPack:
     # candidate. Empty = no filtering.
     proposal_denylist: list[str] = field(default_factory=list)
 
+    # Registry prior (#61): when > 0, open-vocabulary labeling tells the VLM
+    # the top-k registry classes (by validated count) and pending proposal
+    # names as a hint. 0 = off. Bounded by ``MAX_REGISTRY_PRIOR_TOP_K``.
+    registry_prior_top_k: int = 0
+
     def to_dict(self) -> dict[str, Any]:
         """Plain-dict serialization -- every field is a ``str`` or a
         ``dict[str, str]``, so this round-trips through JSON cleanly."""

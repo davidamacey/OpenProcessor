@@ -225,7 +225,9 @@ async def _run_label_batch(
         identity = VlmIdentity('env@None', 'test-vlm')
         _pack = GENERIC_ITEM_PACK
 
-        async def label_or_propose_batch(self, crops: list[Any], _names: list[str]) -> list[Any]:
+        async def label_or_propose_batch(
+            self, crops: list[Any], _names: list[str], **_k: Any
+        ) -> list[Any]:
             return [preds[c.img_id] for c in crops]
 
     monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())

@@ -50,6 +50,7 @@ from src.services.config_store.packs import (
     rollback_pack,
     save_pack,
 )
+from src.services.labeling.registry_prior import MAX_REGISTRY_PRIOR_TOP_K
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT
 
 
@@ -80,12 +81,22 @@ _FIELD_GROUP: dict[str, str] = {
     'class_descriptions': 'vocabulary',
     'synonyms': 'vocabulary',
     'proposal_denylist': 'vocabulary',
+    'registry_prior_top_k': 'open_classify',
 }
 
-_FIELD_KIND: dict[str, Literal['map', 'list']] = {
+_FIELD_KIND: dict[str, Literal['map', 'list', 'int']] = {
     'class_descriptions': 'map',
     'synonyms': 'map',
     'proposal_denylist': 'list',
+    'registry_prior_top_k': 'int',
+}
+
+_FIELD_HELP: dict[str, str] = {
+    'registry_prior_top_k': (
+        'Optional hint for open-vocabulary labeling: 0 = off; 1 to '
+        f'{MAX_REGISTRY_PRIOR_TOP_K} lists that many registry classes (most validated first) '
+        'and pending proposal names in the prompt. A hint, not a constraint.'
+    ),
 }
 
 _CALL_LABELS: dict[str, str] = {
@@ -181,7 +192,10 @@ async def get_prompt_pack_schema() -> PromptPackSchema:
                 expected_reply_keys=list(contract['required']) if contract else [],
                 optional_reply_keys=list(contract['optional']) if contract else [],
                 used_by=_FIELD_USED_BY.get(call_id, []),
-                help=f'Example (first classes): {", ".join(class_names)}' if formatted else '',
+                help=_FIELD_HELP.get(
+                    f,
+                    f'Example (first classes): {", ".join(class_names)}' if formatted else '',
+                ),
             )
         )
     placeholders = [

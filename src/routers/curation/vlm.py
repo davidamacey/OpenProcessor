@@ -45,6 +45,10 @@ from src.services.curation.class_write_guard import (
 )
 from src.services.curation.crop_bytes import load_region_jpeg, load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
+from src.services.curation.registry_prior_source import (
+    RegistryPriorUnavailableError,
+    prior_for_pack,
+)
 
 
 _F = get_region_fields()
@@ -186,6 +190,12 @@ async def vlm_label_batch(
             },
         )
 
+    # Before any crop is read: a pack that asks for a prior it cannot get refuses the call.
+    try:
+        registry_prior = await prior_for_pack(opensearch, labeler._pack, class_names)
+    except RegistryPriorUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     # Pull image_path + bbox_norm for each crop, then build ItemCrop list
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
     from src.services.labeling.vlm_models import ItemCrop
@@ -257,7 +267,9 @@ async def vlm_label_batch(
     _pack_stamp = prompt_pack_stamp(labeler._pack)
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
-    predictions = await labeler.label_or_propose_batch(crops, class_names)
+    predictions = await labeler.label_or_propose_batch(
+        crops, class_names, registry_prior=registry_prior
+    )
     name_to_id = {c.class_name: c.class_id for c in labelable}
     # Collect per-doc updates, then dispatch via occ_skip_on_conflict_bulk
     # so a concurrent human edit always wins.

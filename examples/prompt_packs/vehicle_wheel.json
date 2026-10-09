@@ -17,5 +17,6 @@
   "region_visible_user": "For each numbered crop, answer: is a wheel (tire plus rim) of the car visible anywhere in the image? Count partial, angled, or small wheels as visible; count fully hidden wheels as not visible. Respond as a JSON object whose ``results`` field is an array of per-image verdicts in input order:\n{\"results\": [{\"img\": 1, \"visible\": true|false}, ...]}",
   "class_descriptions": {},
   "synonyms": {},
-  "proposal_denylist": []
+  "proposal_denylist": [],
+  "registry_prior_top_k": 0
 }

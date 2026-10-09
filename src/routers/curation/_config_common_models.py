@@ -165,6 +165,7 @@ ValidationCode = Literal[
     'pack_field_missing',
     'pack_field_empty',
     'pack_field_too_long',
+    'pack_field_out_of_range',
     'pack_placeholder_missing',
     'pack_placeholder_unknown',
     'pack_template_format_error',

@@ -15750,6 +15750,13 @@
             "title": "Region Visible User",
             "type": "string"
           },
+          "registry_prior_top_k": {
+            "default": 0,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Registry Prior Top K",
+            "type": "integer"
+          },
           "synonyms": {
             "additionalProperties": {
               "type": "string"
@@ -16056,7 +16063,8 @@
             "enum": [
               "text",
               "map",
-              "list"
+              "list",
+              "int"
             ],
             "title": "Kind",
             "type": "string"
@@ -25925,6 +25933,7 @@
               "pack_field_missing",
               "pack_field_empty",
               "pack_field_too_long",
+              "pack_field_out_of_range",
               "pack_placeholder_missing",
               "pack_placeholder_unknown",
               "pack_template_format_error",

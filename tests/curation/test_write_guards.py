@@ -41,6 +41,7 @@ from src.config.project_context import current_project
 from src.services.curation.class_write_guard import class_state_token
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmCombinedReply
+from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 def _make_task(
@@ -393,6 +394,7 @@ class TestVlmLabelBatchHumanGuard:
 
         fake_labeler = AsyncMock()
         fake_labeler.identity = VlmIdentity('env@None', 'test-vlm')
+        fake_labeler._pack = GENERIC_ITEM_PACK
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])
         monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: fake_labeler)
 

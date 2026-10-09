@@ -13,6 +13,10 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ### Added
 
+- Registry prior for VLM labeling (#61): a prompt pack's `registry_prior_top_k` (0 = off, max 50)
+  adds the top-k registry classes by validated count and the pending proposal names to the
+  open-vocabulary prompt as a hint. Served in the pack schema as `kind: "int"`; a new
+  `pack_field_out_of_range` validation code; the run refuses when the counts are unreadable.
 - Gateway mode (#93): `OP_GATEWAY_SUBPATHS=true` makes Cropwright's nginx serve
   Grafana, Prometheus, OpenSearch Dashboards and MLflow under `/grafana/`,
   `/prometheus/`, `/dashboards/` and `/mlflow/` of its one published port, so the UIs
