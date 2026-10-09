@@ -44,12 +44,12 @@ def test_aug_target(n: int, target: int) -> None:
 
 
 def test_preflight_uses_the_same_constants() -> None:
-    from src.routers import curation_train
+    from src.routers.curation_train import preflight
     from src.services.curation import holdout
 
-    assert curation_train.HARD_MIN_CROPS_PER_CLASS == T.HARD_MIN_CROPS_PER_CLASS
-    assert curation_train.WARN_MIN_CROPS_PER_CLASS == T.WARN_MIN_CROPS_PER_CLASS
-    assert curation_train.MIN_TEST_CROPS_PER_CLASS == T.MIN_TEST_CROPS_PER_CLASS
+    assert preflight.HARD_MIN_CROPS_PER_CLASS == T.HARD_MIN_CROPS_PER_CLASS
+    assert preflight.WARN_MIN_CROPS_PER_CLASS == T.WARN_MIN_CROPS_PER_CLASS
+    assert preflight.MIN_TEST_CROPS_PER_CLASS == T.MIN_TEST_CROPS_PER_CLASS
     assert holdout.MIN_TEST_PER_CLASS == T.MIN_TEST_CROPS_PER_CLASS
     assert T.dataset_thresholds() == EXPECTED
 

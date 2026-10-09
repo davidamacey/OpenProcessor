@@ -119,7 +119,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
     # 3. The LIVE registry has since been renamed — class_id=5 is now
     #    'suv_renamed'. Before the fix, promote would follow this rename.
     monkeypatch.setattr(
-        'src.routers.curation_train.get_class_registry',
+        'src.services.training.promote_gate.get_class_registry',
         _renamed_live_registry,
     )
 
@@ -186,7 +186,7 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     )
 
     monkeypatch.setattr(
-        'src.routers.curation_train.get_class_registry',
+        'src.services.training.promote_gate.get_class_registry',
         _renamed_live_registry,
     )
 

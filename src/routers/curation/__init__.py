@@ -68,7 +68,7 @@ from src.clients.curation_opensearch import get_class_registry
 # Side-effect imports: each module registers its endpoints on `router`.
 # `curation_images` (two routers: `router`, `crops_router`), the
 # UMAP-rebuild operator router (`src/routers/curation_umap.py`), and the
-# training router (`src/routers/curation_train.py`) all live outside this
+# training router (`src/routers/curation_train/`) all live outside this
 # package and are registered directly in src/main.py. `vlm` re-exports
 # `_get_vlm_labeler` because tests patch it by string. `regions_fp`
 # imports helpers from `regions` directly (not through this package's

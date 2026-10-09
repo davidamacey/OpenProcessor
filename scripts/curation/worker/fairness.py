@@ -1,5 +1,5 @@
 """Multi-project fairness scheduling for the detection worker
-(``scripts/curation/worker/runner.py``).
+(``scripts/curation/worker/runner.py`` and its stage modules).
 
 See ``docs/design/openprocessor_internal/projects_plan.md`` §5.1.
 

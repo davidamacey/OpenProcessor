@@ -69,7 +69,7 @@ _SAFE_METHODS = {"GET", "HEAD"}
 # tail rather than a fixed absolute path). Keep this minimal: every entry
 # needs a citation to the backend's own docstring/contract saying it
 # doesn't write.
-#   /train/preflight: OpenProcessor curation_train.py `preflight` — "no side
+#   /train/preflight: OpenProcessor curation_train/preflight.py `preflight` — "no side
 #   effects"; /train fires it on mount whenever an export exists.
 _READ_ONLY_POST_SUFFIXES = ("/train/preflight",)
 

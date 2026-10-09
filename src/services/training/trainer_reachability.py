@@ -37,7 +37,7 @@ from src.services.training.gpu_arbiter import _container_status_sync, _docker_cl
 # Filename the trainer's watch loop refreshes every HEARTBEAT_INTERVAL_S
 # (docker/trainer/trainer.py) via write_trainer_capabilities(), next to
 # job.json in the shared /jobs volume. Duplicated (not imported) from
-# src/routers/curation_train.py's own TRAINER_CAPABILITIES_FILENAME and
+# src/services/training/preflight_checks.py's own TRAINER_CAPABILITIES_FILENAME and
 # the trainer image's copy -- same reasoning as those two: the trainer
 # ships as its own image with no src/ dependency, so there is nothing to
 # share an import with. tests/curation/test_trainer_protocol.py

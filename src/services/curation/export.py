@@ -47,7 +47,7 @@ time and frozen into the export directory, so a subset-training request's
 ``include_classes`` (always expressed in REGISTRY ids) can be translated to
 the dense ids that actually appear in the written label files — see
 ``src/services/training/preflight_scan.py`` and
-``src/routers/curation_train.py``, both of which read this file back.
+``src/services/training/preflight_checks.py``, both of which read this file back.
 """
 
 from __future__ import annotations

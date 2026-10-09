@@ -73,7 +73,7 @@ tests/curation/test_candidate_source_values.py # negative test: asserts retired 
 tests/curation/test_methods_router.py # negative test: asserts the retired 'lpr' export id is omitted from served entries
 tests/curation/test_curation_opensearch.py # negative tests: assert v6_embedding / hardcoded plate_* literals are absent from the mapping
 tests/curation/test_train_router.py:lpr # negative test: the retired lpr_single_class alias must be rejected, by name
-src/routers/curation_train.py:lpr_single_class # comment explaining the retired alias by name, for the reader's benefit
+src/services/training/preflight_checks.py:lpr_single_class # comment explaining the retired alias by name, for the reader's benefit
 
 # Historical/provenance docstrings describing what a field or alias used to
 # be (not a live hardcoded value).

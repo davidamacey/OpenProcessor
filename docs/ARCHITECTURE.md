@@ -154,7 +154,7 @@ design rationale is in
 | VLM | `src/services/labeling/` | Transport, endpoints and probes, prompts, class and region labelers |
 | Reprocess | `src/services/curation/reprocess*.py` | One selection and lock rule behind every re-run |
 | Export and training | `src/services/curation/export*.py`, `src/services/training/` | YOLO export, job lifecycle, preflight, promotion |
-| Routers | `src/routers/curation/`, `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface |
+| Routers | `src/routers/curation/`, `curation_images.py`, `curation_train/`, `curation_umap.py` | HTTP surface |
 | Workers | `scripts/curation/` | Detection, VLM, auto-label, cluster refresh, evaluator |
 
 The wire uses one vocabulary (`region_*`, `vlm_*`, ...) that does not change

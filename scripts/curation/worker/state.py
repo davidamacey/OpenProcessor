@@ -179,7 +179,7 @@ class _ItemTask:
     # with any concurrently-stored siblings, ids not yet finalized) plus
     # the status to fall back to once the write-time merge is empty.
     # ``None`` means this write doesn't touch the box list at all (e.g.
-    # ``unreadable_crop_update``). Set by ``runner._box_list_doc`` and
+    # ``unreadable_crop_update``). Set by ``pipeline._box_list_doc`` and
     # ``region_text_stage.accept_without_vlm``; consumed by
     # ``bulk_writer._merge``, which re-reads the live doc immediately
     # before the write and merges/mints ids/derives the final status
@@ -209,9 +209,9 @@ class _ItemTask:
     # pass's derived status (M1).
     pending_merge: bool = False
     # W8c B1 fix (2026-09-28 re-review): True ONLY for Path 1
-    # (`runner.py`'s pending-verification branch, re-verifying a stored
+    # (`stage_a.py`'s pending-verification branch, re-verifying a stored
     # `proposed` box). Read at the VLM `region_visible=False` branch
-    # (`runner.py`, combined-verify handling) to pick "resolve the
+    # (`stage_b.py`, combined-verify handling) to pick "resolve the
     # re-verified candidate(s) as `rejected`, keeping their stored ids"
     # instead of the fresh-detection "no box, terminal `no_region_visible`"
     # branch. Before this flag existed, that decision was (incorrectly)
