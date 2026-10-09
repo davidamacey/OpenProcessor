@@ -136,17 +136,9 @@ repos:
               src/routers/ingest\.py|
               src/routers/search\.py|
               src/clients/curation_opensearch\.py|
-              src/services/curation/clustering/orchestrator\.py|
               src/services/training/triton_promote\.py|
               src/services/training/jobs\.py
           )
-        # src/services/curation/clustering/orchestrator.py (Chunk 4, see
-        # docs/design/curation_design_rationale.md §5) lands at
-        # ~1770 LOC on arrival — a genuine cohesive orchestrator, not a
-        # grab-bag; splitting it during the port would make the diff
-        # unreviewable (it also has a documented orchestrator<->auto_promote
-        # import-order constraint — see the same doc's §5). Follow-up
-        # split tracked by that doc, not silently ignored.
         # src/services/training/triton_promote.py (803 LOC) — Chunk 6, same §5
         # pre-approval. Grandfathered on arrival from the curation port;
         # follow-up split tracked by that doc, not silently ignored.

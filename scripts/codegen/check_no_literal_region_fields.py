@@ -85,6 +85,10 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_cluster_id_normalize.py',
     # Clustering orchestrator + cluster/umap/viz routers
     'src/services/curation/clustering/orchestrator.py',
+    'src/services/curation/clustering/cluster_write_guard.py',
+    'src/services/curation/clustering/refine.py',
+    'src/services/curation/clustering/residual_gate.py',
+    'src/services/curation/clustering/retrain_policy.py',
     'src/services/curation/clustering/auto_promote.py',
     'src/services/curation/clustering/embedding_reduce.py',
     'src/services/curation/embedding_viz.py',

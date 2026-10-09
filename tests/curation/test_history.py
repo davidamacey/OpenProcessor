@@ -319,13 +319,7 @@ _AUTO_PROMOTE_SOURCE: dict[str, Any] = {
 
 
 async def _run_auto_promote_case() -> list[dict[str, Any]]:
-    # Import via orchestrator's re-export, matching every real caller
-    # (the pipeline router, the clusters router) — importing
-    # auto_promote directly as the first cluster-related module in the
-    # process can hit the pre-existing orchestrator<->auto_promote
-    # circular import (see docs/design/curation_design_rationale.md §5
-    # for why orchestrator.py is a large, ratchet-exempt file).
-    from src.services.curation.clustering.orchestrator import auto_promote_clusters
+    from src.services.curation.clustering.auto_promote import auto_promote_clusters
 
     fake_os = _FakeAutoPromoteOS()
     result = await auto_promote_clusters(fake_os, min_purity=0.85, min_members=4, dry_run=False)

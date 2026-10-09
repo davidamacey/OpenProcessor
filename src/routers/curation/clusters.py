@@ -23,7 +23,7 @@ from src.services.curation.cluster_purity import (
     purity_tier,
 )
 from src.services.curation.cluster_representatives import representatives_msearch_body
-from src.services.curation.clustering.orchestrator import MAX_REFINE_MEMBERS
+from src.services.curation.clustering.refine import MAX_REFINE_MEMBERS
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import current_cluster_distance
 
@@ -444,7 +444,7 @@ async def refine_cluster_endpoint(
     (the pairwise matrix grows ~8*n^2 bytes). Re-running on the same
     cluster overwrites prior subids, so refinement is idempotent.
     """
-    from src.services.curation.clustering.orchestrator import refine_cluster
+    from src.services.curation.clustering.refine import refine_cluster
 
     return await refine_cluster(
         opensearch,

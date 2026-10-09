@@ -29,23 +29,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
-from src.services.curation.clustering import orchestrator as _orchestrator
-
-
-# Import order matters here: orchestrator.py's bottom-of-file
-# import of auto_promote.py only resolves cleanly if orchestrator is
-# the FIRST of the two modules loaded in this process — a consequence
-# of orchestrator.py being one of the ratchet-exempt oversize files
-# documented in docs/design/curation_design_rationale.md §5. The assignment
-# below (rather than a plain `from orchestrator import items_index`)
-# is deliberate: it's a real statement that breaks ruff/isort's import
-# block so it can't silently re-alphabetize auto_promote's import back
-# above orchestrator's, which reintroduces the ImportError this file
-# exists to avoid.
-_ = _orchestrator.items_index
-
-from src.config.curation import base_curation_config  # noqa: E402
-from src.services.curation.clustering.auto_promote import auto_promote_clusters  # noqa: E402
+from src.config.curation import base_curation_config
+from src.services.curation.clustering.auto_promote import auto_promote_clusters
 
 
 # The default project's items index (the autouse fixture binds `default`).

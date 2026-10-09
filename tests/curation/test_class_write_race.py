@@ -266,9 +266,6 @@ async def test_registry_reclassify_skips_item_touched_after_read(tmp_path: Path)
 async def test_auto_promote_skips_item_restored_to_another_class(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.services.curation.clustering import orchestrator
-
-    _ = orchestrator.items_index
     from src.services.curation.clustering import auto_promote as ap
 
     monkeypatch.setattr(ap, 'classifier_class_sources', lambda: frozenset({'det_model'}))
