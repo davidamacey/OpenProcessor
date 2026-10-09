@@ -27,7 +27,7 @@ from PIL import Image
 
 from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_NO_VERDICT
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmLabeler
 from src.services.labeling.vlm_models import RegionCrop, VlmCombinedReply, VlmTransportError

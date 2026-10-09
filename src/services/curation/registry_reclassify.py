@@ -47,7 +47,7 @@ from src.services.curation.history import record_class_history
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.services.labeling.vlm_prompts import PromptPack
 
 

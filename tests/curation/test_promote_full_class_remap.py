@@ -144,7 +144,7 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
 
     monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _gapped_registry)
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id=job_id,
@@ -182,7 +182,7 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     )
     monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _gapped_registry)
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id=job_id,
@@ -238,7 +238,7 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
 
     monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', lambda: _Reg())
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id=job_id,
@@ -273,7 +273,7 @@ def test_promote_force_is_accepted_as_a_query_parameter_too(
     )
     monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _gapped_registry)
 
-    from src.services.training.jobs import TrainJobStatus
+    from src.services.training.job_models import TrainJobStatus
 
     fake_status = TrainJobStatus(
         job_id=job_id,

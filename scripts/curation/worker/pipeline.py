@@ -14,7 +14,7 @@ from scripts.curation.worker.combined_resolve import should_classify
 from scripts.curation.worker.state import RegionProfileNotConfiguredError, _ItemTask
 from scripts.curation.worker.verify import TaskBoxInput
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import crop_norm_to_source_norm
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.detection.region_candidates import select_region_candidates
 
 

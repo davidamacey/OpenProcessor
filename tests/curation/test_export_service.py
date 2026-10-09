@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.export import (
     GenericYoloExportService,

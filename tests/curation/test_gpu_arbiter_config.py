@@ -297,7 +297,7 @@ def test_env_allowlist_rejects_disallowed_gpu_on_training_start(
     """End to end through the real consumer: a training job spec (what
     POST /train/start validates) targeting a GPU outside
     OP_GPU_ALLOWED_IDS is rejected; one inside it is accepted."""
-    from src.services.training.jobs import TrainJobSpec
+    from src.services.training.job_models import TrainJobSpec
 
     clean_arbiter_env.setenv('OP_GPU_ALLOWED_IDS', '0,2')
     with pytest.raises(ValueError, match='allowed GPU id'):

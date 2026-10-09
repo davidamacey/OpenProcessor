@@ -18,25 +18,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.curation.clustering import orchestrator as _orchestrator
-
-
-_ = _orchestrator.items_index  # orchestrator must load before auto_promote
-
-from src.routers.curation.clusters import list_clusters  # noqa: E402
-from src.services.curation.cluster_ids import (  # noqa: E402
-    CORE_SIMILARITY_MIN,
-    RESIDUAL_CLUSTER_ID_OFFSET,
-)
-from src.services.curation.cluster_purity import (  # noqa: E402
+from src.routers.curation.clusters import list_clusters
+from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
     PROMOTE_MIN_PURITY,
     PURITY_MIXED_MIN,
     is_promotable,
     purity_tier,
 )
-from src.services.curation.clustering.auto_promote import auto_promote_clusters  # noqa: E402
-from src.services.curation.item_filter import ItemFilter  # noqa: E402
+from src.services.curation.clustering.auto_promote import auto_promote_clusters
+from src.services.curation.item_filter import ItemFilter
 
 
 @pytest.mark.asyncio

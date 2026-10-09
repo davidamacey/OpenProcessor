@@ -309,7 +309,7 @@ def bound_class_catalog() -> tuple[list[str], dict[str, int]]:
     An unreadable registry yields an empty catalog, which every caller
     already treats as "do not classify".
     """
-    from src.clients.curation_opensearch import get_class_registry
+    from src.clients.curation_opensearch.registry import get_class_registry
 
     try:
         registry = get_class_registry().load()
@@ -380,7 +380,7 @@ def _is_secondary_shape(task: _ItemTask) -> bool:
 def _class_group(class_name: str) -> str | None:
     """``class_name -> group`` via the class registry, or ``None`` if the
     class isn't registered."""
-    from src.clients.curation_opensearch import get_class_registry
+    from src.clients.curation_opensearch.registry import get_class_registry
 
     if not class_name:
         return None

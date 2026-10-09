@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     import pytest
 
     from src.config.projects import ProjectRecord
-    from src.services.detection.cascade_detect import RegionCandidate
+    from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 
 def _capture_signal_handler(monkeypatch: pytest.MonkeyPatch) -> list[Any]:

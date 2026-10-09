@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields
 from src.services.curation.export import GenericYoloExportService

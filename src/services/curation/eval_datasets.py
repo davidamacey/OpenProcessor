@@ -32,7 +32,7 @@ from typing import Any
 
 from scripts.curation.bakeoff.class_map import read_export_id_map, read_names
 from scripts.curation.bakeoff.freeze import LOCK_NAME, test_sha as freeze_test_sha
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.services.curation.export_support import frozen_test_sha_of
 

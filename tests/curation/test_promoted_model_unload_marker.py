@@ -11,12 +11,9 @@ import httpx
 import pytest
 
 from src.services.training import triton_promote
-from src.services.training.triton_promote import (
-    UNLOADED_MARKER,
-    TritonPromoter,
-    reload_promoted_models,
-    set_explicitly_unloaded,
-)
+from src.services.training.triton_promote import TritonPromoter
+from src.services.training.triton_reload import reload_promoted_models
+from src.services.training.triton_repo import UNLOADED_MARKER, set_explicitly_unloaded
 
 
 if TYPE_CHECKING:

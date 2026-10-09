@@ -9,7 +9,8 @@ import onnx
 import pytest
 from onnx import TensorProto, helper
 
-from src.clients.curation_opensearch import ClassRegistry, ClassRegistryFile, RegistryClassEntry
+from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
+from src.clients.curation_opensearch.registry import ClassRegistry
 
 
 if TYPE_CHECKING:

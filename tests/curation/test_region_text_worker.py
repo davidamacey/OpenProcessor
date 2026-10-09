@@ -20,7 +20,7 @@ from _fake_project_registry import install_static_project_registry
 import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import register_profile
 from src.services.detection.region_text import OcrLine
 from src.services.labeling.region_overlay import VlmBoxVerdict
@@ -113,7 +113,7 @@ async def _drive(
     vlm_cls = MagicMock(return_value=vlm)
     monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.ClassRegistry',
+        'src.clients.curation_opensearch.registry.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
     # Stage A resolves the class group through the process-wide registry

@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-# Mirrors src.services.training.triton_promote.resolve_triton_models_dir --
+# Mirrors src.services.training.triton_repo.resolve_triton_models_dir --
 # duplicated (not imported) so this module has no dependency on the
 # training subsystem, which pulls in a much heavier import chain.
 _DEFAULT_TRITON_MODELS_DIR = Path('/app/models')

@@ -5,7 +5,7 @@ should append an entry to the nested ``class_id_history`` array so we
 can answer "who labeled this and when" after a model-drift investigation.
 
 The mapping for ``class_id_history`` lives in
-``src/clients/curation_opensearch.py``. Writers use the helpers here.
+``src/clients/curation_opensearch/bodies_core.py``. Writers use the helpers here.
 
 For region-of-interest writes, the ``RegionFields.detector_chain``
 keyword-array field already captures per-event provenance; this module

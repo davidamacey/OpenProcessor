@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation import base_curation_config
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
@@ -143,7 +143,7 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     test uses.
     """
     from curation.dataset_import.harness import Harness, write_yolo
-    from src.services.curation.clustering.orchestrator import auto_promote_clusters
+    from src.services.curation.clustering.auto_promote import auto_promote_clusters
     from src.services.curation.dataset_import.mapping import ClassMappingEntry
     from src.services.curation.ingest import CurationIngestService
 

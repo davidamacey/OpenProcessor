@@ -167,7 +167,7 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     store's activation (W2), not this settings document -- see
     :func:`_config_store_axis_defaults`.
     """
-    from src.clients.curation_opensearch import get_curation_settings
+    from src.clients.curation_opensearch.settings_doc import get_curation_settings
 
     schedule_reachability_refresh()
     await _ensure_indexes(opensearch)
@@ -201,7 +201,7 @@ async def update_curation_settings_route(
     leaves the earlier axes applied, and two concurrent single-axis
     activations each validate against the other's old state.
     """
-    from src.clients.curation_opensearch import update_curation_settings
+    from src.clients.curation_opensearch.settings_doc import update_curation_settings
 
     await _ensure_indexes(opensearch)
     config_store_defaults = {k: v for k, v in body.defaults.items() if k in _CONFIG_STORE_AXES}

@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from curation.test_curation_settings_client import FakeSettingsOpenSearch
-from src.clients import curation_opensearch
-from src.clients.curation_opensearch import update_curation_settings
+from src.clients.curation_opensearch import settings_doc
+from src.clients.curation_opensearch.settings_doc import update_curation_settings
 from src.services.curation.strategy_defaults import resolve_effective_default
 
 
@@ -39,9 +39,9 @@ def fake_os() -> FakeSettingsOpenSearch:
 def _reset_settings_cache() -> Iterator[None]:
     """See test_curation_settings_client.py's fixture of the same name --
     every test here shares the same default settings index key."""
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
     yield
-    curation_opensearch._settings_cache.clear()
+    settings_doc._settings_cache.clear()
 
 
 @pytest.mark.asyncio

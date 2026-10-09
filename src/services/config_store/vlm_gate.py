@@ -100,7 +100,7 @@ def current_pack_and_profile() -> tuple[PromptPack | None, DetectionProfile | No
 
 
 def _registry_class_names() -> list[str]:
-    from src.clients.curation_opensearch import get_class_registry
+    from src.clients.curation_opensearch.registry import get_class_registry
 
     try:
         return sorted(c.class_name for c in get_class_registry().load().classes if not c.deprecated)

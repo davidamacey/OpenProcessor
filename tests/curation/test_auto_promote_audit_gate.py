@@ -10,8 +10,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-# Import order matters (see auto_promote.py's module docstring).
-import src.services.curation.clustering.orchestrator as _orchestrator  # noqa: F401
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
 from src.services.curation.audit_math import (

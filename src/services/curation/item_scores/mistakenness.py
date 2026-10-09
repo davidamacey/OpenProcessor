@@ -127,7 +127,7 @@ class MistakennessScorer:
             now = _now_iso()
             return ScoreResult(scorer=self.name, version=self.version, scored_at=now, fields={})
 
-        from src.clients.curation_opensearch import mget_crops
+        from src.clients.curation_opensearch.crops import mget_crops
 
         docs = await mget_crops(
             opensearch,

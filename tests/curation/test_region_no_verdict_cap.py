@@ -36,7 +36,7 @@ from src.config.region_rejection import (
     REJECT_REASON_VERIFIER,
     rejection_reason_catalog,
 )
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmLabeler
 from src.services.labeling.vlm_models import (

@@ -60,7 +60,7 @@ from src.utils.class_names import normalize_class_name
 if TYPE_CHECKING:
     from PIL import Image
 
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.clients.triton_pool import AsyncTritonPool
     from src.config import DetectionProfile
 

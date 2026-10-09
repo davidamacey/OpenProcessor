@@ -56,7 +56,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.clients.curation_opensearch import ClassRegistry, get_class_registry
+from src.clients.curation_opensearch.registry import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.config.project_context import run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields

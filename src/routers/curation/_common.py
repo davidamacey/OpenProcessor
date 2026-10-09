@@ -14,32 +14,34 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import ORJSONResponse
 
-from src.clients.curation_opensearch import (
-    ClassRegistry,
-    create_curation_indexes,
-    ensure_images_upload_fields,
+from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_cluster_geometry_fields,
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
     ensure_items_history_fields,
-    ensure_items_inner_result_window,
     ensure_items_label_cluster_fields,
-    ensure_items_probe_fields,
     ensure_items_provenance_fields,
-    ensure_items_quality_fields,
     ensure_items_region_boxes_fields,
-    ensure_items_request_id_field,
-    ensure_items_score_fields,
     ensure_items_text_fields,
     ensure_items_validation_split_fields,
-    ensure_items_viz_fields,
     ensure_items_vlm_raw_label_fields,
     ensure_labels_confirmed_fields,
 )
-from src.clients.curation_opensearch_items import (
+from src.clients.curation_opensearch.ensure_overlay_fields import (
+    ensure_images_upload_fields,
+    ensure_items_inner_result_window,
+    ensure_items_probe_fields,
+    ensure_items_quality_fields,
+    ensure_items_request_id_field,
+    ensure_items_score_fields,
+    ensure_items_viz_fields,
+)
+from src.clients.curation_opensearch.items_extra import (
     ensure_items_audit_fields,
     ensure_items_detector_fields,
 )
+from src.clients.curation_opensearch.lifecycle import create_curation_indexes
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
 from src.config.curation import (  # noqa: F401 - re-exported for the router modules
     classes_index,

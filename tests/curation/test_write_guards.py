@@ -188,12 +188,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
 
     @pytest.mark.asyncio
     async def test_auto_promote_scroll_query_has_holdout_must_not(self) -> None:
-        # Import order matters: orchestrator.py imports auto_promote at the
-        # bottom of its own file (an intentional, preserved circular
-        # import — see auto_promote.py's module docstring), so importing
-        # orchestrator first resolves it the same way the app does.
         import src.services.curation.clustering.auto_promote as auto_promote_mod
-        import src.services.curation.clustering.orchestrator  # noqa: F401
 
         fake_client = AsyncMock()
         fake_client.search = AsyncMock(
@@ -234,7 +229,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
     @pytest.mark.asyncio
     async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
         import src.routers.curation.classes as classes_mod
-        from src.clients.curation_opensearch import ClassRegistry
+        from src.clients.curation_opensearch.registry import ClassRegistry
         from src.routers.curation._class_models import ClassMergeRequest
 
         registry = ClassRegistry(path=tmp_path / 'class_registry.json')

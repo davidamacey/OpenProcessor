@@ -21,7 +21,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
+from src.services.detection.cascade_detect.candidate import RegionCandidate
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 

@@ -150,7 +150,7 @@ async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
 
     monkeypatch.setattr(job, 'start_job', _fake_start)
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.get_curation_settings',
+        'src.clients.curation_opensearch.settings_doc.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())

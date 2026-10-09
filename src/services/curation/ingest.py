@@ -105,7 +105,7 @@ from src.utils.stage_timing import stage_timer
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.clients.curation_opensearch import ClassRegistry
+    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile

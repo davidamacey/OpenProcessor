@@ -24,7 +24,7 @@ import pytest
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig, get_region_fields
 from src.config.curation import base_curation_config
 from src.config.project_context import current_project
@@ -266,9 +266,6 @@ async def test_registry_reclassify_skips_item_touched_after_read(tmp_path: Path)
 async def test_auto_promote_skips_item_restored_to_another_class(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.services.curation.clustering import orchestrator
-
-    _ = orchestrator.items_index
     from src.services.curation.clustering import auto_promote as ap
 
     monkeypatch.setattr(ap, 'classifier_class_sources', lambda: frozenset({'det_model'}))

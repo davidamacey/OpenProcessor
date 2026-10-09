@@ -37,7 +37,7 @@ def _resolve_train_jobs_dir() -> Path:
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG, new_project_record
     from src.services.projects.registry import get_project_registry
-    from src.services.training.jobs import _resolve_jobs_dir
+    from src.services.training.job_files import _resolve_jobs_dir
 
     record = get_project_registry().get(DEFAULT_SLUG) or new_project_record(
         DEFAULT_SLUG, base_curation_config()

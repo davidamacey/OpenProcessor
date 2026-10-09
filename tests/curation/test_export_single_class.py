@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 from PIL import Image
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields
 from src.config.region_state import RegionStatus

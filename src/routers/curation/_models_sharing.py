@@ -21,7 +21,7 @@ from src.services.training.promote_json import SharingRevisionConflictError, upd
 
 
 def _promote_json_path(model_name: str) -> Any:
-    from src.services.training.triton_promote import resolve_triton_models_dir
+    from src.services.training.triton_repo import resolve_triton_models_dir
 
     return resolve_triton_models_dir() / model_name / 'promote.json'
 

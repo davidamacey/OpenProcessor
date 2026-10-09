@@ -374,7 +374,7 @@ async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
     transient OpenSearch hiccup never crashes the idle loop.
     """
     try:
-        from src.services.curation.clustering.orchestrator import should_retrain_centroids
+        from src.services.curation.clustering.retrain_policy import should_retrain_centroids
 
         decision = await should_retrain_centroids(opensearch)
         if decision.get('should'):

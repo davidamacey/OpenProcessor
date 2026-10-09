@@ -23,7 +23,7 @@ Public API:
 
 Preset names are deliberately domain-neutral scene/condition descriptors: the
 job spec (``job.json``'s ``augmentation.preset``, see
-``src.services.training.jobs.AugmentationSpec``) picks one, and a deployment
+``src.services.training.job_models.AugmentationSpec``) picks one, and a deployment
 that needs a different mix supplies ``augmentation.albumentations`` overrides
 rather than forking this file.
 """

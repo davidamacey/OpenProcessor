@@ -1430,7 +1430,7 @@ def leak_env(
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
     import src.config.curation as curation_config_mod
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import registry as curation_registry, settings_doc
     from src.config.curation import IndexRole, base_curation_config
     from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
@@ -1488,11 +1488,11 @@ def leak_env(
     # those routes' bodies exercise (force=true on activate bypasses it).
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter-disabled-in-leak-test:8000')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-    monkeypatch.setattr(curation_opensearch, '_registries', {})
+    monkeypatch.setattr(curation_registry, '_registries', {})
     monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
     # change which index roles a route reaches between the two passes.
-    monkeypatch.setattr(curation_opensearch, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
+    monkeypatch.setattr(settings_doc, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
     from src.services.curation.clustering import embedding_reduce
@@ -2029,17 +2029,17 @@ def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(
     while beta is bound. opensearch-py sends ``mget``'s body as a dict; the
     guard must still read it and refuse, so alpha's documents never leave
     OpenSearch."""
-    from src.clients import curation_opensearch
+    from src.clients.curation_opensearch import crops
     from src.config.curation import IndexRole
 
     alpha_items = leak_env.records['alpha'].resources.indexes[IndexRole.ITEMS]
-    real_mget_crops = curation_opensearch.mget_crops
+    real_mget_crops = crops.mget_crops
 
     async def _misrouted(client: Any, crop_ids: Any, **kwargs: Any) -> Any:
         kwargs['index'] = alpha_items
         return await real_mget_crops(client, crop_ids, **kwargs)
 
-    monkeypatch.setattr(curation_opensearch, 'mget_crops', _misrouted)
+    monkeypatch.setattr(crops, 'mget_crops', _misrouted)
     before = len(leak_env.transport.received)
     client = TestClient(leak_env.app, raise_server_exceptions=False)
     response = client.put(

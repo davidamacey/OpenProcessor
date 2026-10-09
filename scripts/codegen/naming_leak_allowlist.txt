@@ -122,16 +122,13 @@ scripts/create_ocr_test_images.py # public OCR sample image filename
 scripts/curation/eval_regions_vs_gt.py # docstring YAML example (license_plate class), matches the bakeoff example domain
 export/export_pe_text_encoder.py # public PE-Core text-encoder calibration prompt example
 tests/curation/test_pe_text_backends.py # exercises the same public calibration prompt example
-src/clients/curation_opensearch.py # docstring example value
 src/config/detection_profile.py # DetectionProfile docstring example value
 src/config/region_fields.py # RegionFields docstring example value
 src/config/region_state.py # RegionStatus docstring example value
 src/routers/curation/classes.py # comment naming the example profile's region_class_name value
 src/routers/curation/vlm.py # docstring example value
-src/services/curation/clustering/orchestrator.py # docstring example value
 src/services/curation/region_eval.py # docstring example value
 src/services/curation/strategy_registry.py # docstring example value (also has the "no lpr id"/"/export/lpr" prose already reworded to avoid literals)
-src/services/detection/cascade_detect.py # docstring example value; the reference license_plate example profile is this module's worked example
 src/services/detection/profile_registry.py # docstring example value for region_profile_from_file
 src/services/detection/region_lean.py # docstring example value
 src/services/training/preflight_scan.py # docstring example value

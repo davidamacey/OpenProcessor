@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
-from src.clients.curation_opensearch import ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._class_models import (
     ResolveConflict,

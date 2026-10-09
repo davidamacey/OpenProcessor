@@ -1,15 +1,16 @@
-"""Items-index mapping fields added for label confirmation (#119), split out of
-``curation_opensearch.py`` (a grandfathered file that must not grow).
+"""Items-index mapping fields added for label confirmation (#119), plus the
+``ensure_*`` helpers that add the same fields to indexes created before they
+existed (one ``PUT _mapping`` per field, additive and idempotent).
 
-The constants are spread into the index bodies there; the ``ensure_*`` helpers
-add the same fields to indexes created before they existed (one ``PUT _mapping``
-per field, additive and idempotent).
+The constants are spread into the index bodies in ``bodies_core.py`` and
+``bodies_other.py``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
 from src.services.curation.audit_math import AUDIT_FIELDS
 
 
@@ -40,8 +41,6 @@ POLICY_DOC_MAPPING: dict[str, Any] = {
 
 
 async def _put_fields(client: AsyncOpenSearch, mapping: dict[str, Any]) -> dict[str, Any]:
-    from src.clients.curation_opensearch import _is_recoverable_mapping_conflict, config, logger
-
     index = config.items_index
     added: list[str] = []
     for field, spec in mapping.items():

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 
-from src.clients.curation_opensearch import mget_crops
+from src.clients.curation_opensearch.crops import mget_crops
 from src.routers.curation._common import (
     OpenSearchDep,
     bound_project_slug,

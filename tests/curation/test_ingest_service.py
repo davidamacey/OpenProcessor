@@ -31,7 +31,7 @@ class _FakeRegistryFile:
 
 
 class FakeClassRegistry:
-    """Minimal stand-in for src.clients.curation_opensearch.ClassRegistry."""
+    """Minimal stand-in for src.clients.curation_opensearch.registry.ClassRegistry."""
 
     def __init__(self, entries: list[_FakeClassEntry] | None = None) -> None:
         self._file = _FakeRegistryFile(entries or [])

@@ -48,7 +48,7 @@ from typing import Any, Literal, NoReturn
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 
-from src.clients.curation_opensearch import get_class_registry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.routers.curation._bakeoff_models import (

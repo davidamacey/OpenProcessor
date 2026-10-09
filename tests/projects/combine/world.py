@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from curation.query_fakes import QueryFakeOpenSearch
 from PIL import Image
 
-from src.clients.curation_opensearch import ClassRegistry
+from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation import IndexRole, base_curation_config
 from src.config.projects import ProjectRecord, new_project_record
 from src.services.curation.ingest_index import image_id_for
