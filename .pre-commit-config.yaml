@@ -119,18 +119,8 @@ repos:
         entry: python3 scripts/codegen/check_file_size.py --max 700
         language: system
         files: ^(src|scripts)/.*\.py$
-        # Ratchet: modules already over the cap are grandfathered until
-        # they get split. Do NOT add new entries here — split the module.
-        # Exception: docs/design/curation_design_rationale.md §5
-        # pre-approves eight specific curation-port files that arrive over
-        # the cap on day one (porting them pre-split would make the diffs
-        # unreviewable); each is grandfathered on arrival with a follow-up
-        # split tracked by that doc, not silently ignored.
-        exclude: |
-          (?x)^(
-              src/routers/ingest\.py|
-              src/routers/search\.py
-          )
+        # No exemptions: every source file is under the cap. Split a new
+        # oversize module before committing it; do not add an exclude.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code

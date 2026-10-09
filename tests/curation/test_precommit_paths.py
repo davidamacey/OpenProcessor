@@ -2,21 +2,16 @@
 renamed out from under it and nobody notices. This test converts that
 into a loud test failure instead of a silent no-op.
 
-Scope (see ``docs/design/curation_design_rationale.md`` §5 for the
-ratchet-exemption rationale): the hooks this repo actually
-authors/extends for curation-path ratcheting — the ``max-file-size``
-exclude list (oversize ports get an entry each, in the commit that adds
-the file) and ``check_no_literal_region_fields.py``'s ``PORTED_PATHS``
-allowlist (see the same doc's §4). The repo's pre-existing top-level
-``exclude:`` block (cache
-dirs, ``.venv/``, etc.) is intentionally out of scope — those name
-runtime artifacts that legitimately don't exist in a fresh checkout,
-so "must exist on disk" is the wrong assertion for them.
+Scope (see ``docs/design/curation_design_rationale.md`` §4 and §5): the
+``max-file-size`` hook, which carries no exemptions, and
+``check_no_literal_region_fields.py``'s ``PORTED_PATHS`` allowlist. The
+repo's top-level ``exclude:`` block (cache dirs, ``.venv/``, etc.) is out
+of scope — those name runtime artifacts that legitimately don't exist in a
+fresh checkout, so "must exist on disk" is the wrong assertion for them.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import yaml
@@ -35,38 +30,13 @@ def _iter_hooks(config: dict):
         yield from repo.get('hooks', [])
 
 
-def _extract_path_fragments(exclude_regex: str) -> list[str]:
-    """Pull literal-ish path fragments out of a `(?x)^(a|b|c)` style
-    alternation block, as used by the max-file-size ratchet exclude.
-    """
-    # Strip the `(?x)^(` verbose-mode/anchor wrapper and trailing `)`.
-    body = re.sub(r'^\s*\(\?x\)\s*', '', exclude_regex.strip())
-    body = body.strip()
-    body = re.sub(r'^\^?\(', '', body)
-    body = re.sub(r'\)\s*$', '', body)
-
-    fragments = []
-    for raw in body.split('|'):
-        frag = raw.strip()
-        frag = frag.replace('\\.', '.')
-        frag = frag.strip()
-        if frag:
-            fragments.append(frag.rstrip('/'))
-    return fragments
-
-
-def test_max_file_size_exclude_paths_exist_on_disk() -> None:
+def test_max_file_size_hook_has_no_exemptions() -> None:
+    """Every source file is under the cap, so the hook carries no exclude.
+    An exclude with an empty alternation (``^()``) would match every path and
+    silently disable the ratchet, so any exclude at all fails here."""
     config = _load_precommit_config()
     hook = next(h for h in _iter_hooks(config) if h.get('id') == 'max-file-size')
-    exclude = hook.get('exclude', '')
-    fragments = _extract_path_fragments(exclude)
-    assert fragments, 'expected at least one excluded path in max-file-size'
-
-    missing = [f for f in fragments if not (REPO_ROOT / f).exists()]
-    assert not missing, (
-        f'max-file-size exclude list names paths that no longer exist '
-        f'on disk (renamed without updating the hook?): {missing}'
-    )
+    assert 'exclude' not in hook, 'split the oversize module instead of excluding it'
 
 
 def test_check_no_literal_region_fields_hook_is_registered() -> None:
