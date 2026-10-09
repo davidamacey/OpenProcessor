@@ -67,8 +67,9 @@ class FakeConfigOpenSearch:
         body: dict[str, Any],
         if_seq_no: int | None = None,
         if_primary_term: int | None = None,
+        refresh: str | bool | None = None,
     ) -> dict[str, Any]:
-        del if_primary_term
+        del if_primary_term, refresh
         docs = self._docs.setdefault(index, {})
         entry = docs.get(id)
         if if_seq_no is not None and (entry is None or entry['_seq_no'] != if_seq_no):
@@ -82,7 +83,7 @@ class FakeConfigOpenSearch:
         id: str,  # noqa: A002
         body: dict[str, Any],
         retry_on_conflict: int = 0,
-        refresh: bool = False,
+        refresh: str | bool | None = None,
     ) -> dict[str, Any]:
         del retry_on_conflict, refresh
         docs = self._docs.setdefault(index, {})
@@ -119,8 +120,9 @@ class FakeConfigOpenSearch:
         id: str,  # noqa: A002
         if_seq_no: int | None = None,
         if_primary_term: int | None = None,
+        refresh: str | bool | None = None,
     ) -> dict[str, Any]:
-        del if_primary_term
+        del if_primary_term, refresh
         docs = self._docs.get(index, {})
         entry = docs.get(id)
         if entry is None:

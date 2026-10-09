@@ -42,6 +42,10 @@ logger = get_logger(__name__)
 ConfigKind = Literal['prompt_pack', 'region_profile', 'vlm_endpoint', 'open_vocab_set']
 ConfigAxis = Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab']
 
+# Every config write blocks until a search can see it, so a write answered to the
+# caller is readable by the next request on any worker (#196).
+WRITE_REFRESH = 'wait_for'
+
 KIND_TO_PREFIX: dict[str, str] = {
     'prompt_pack': 'pack',
     'region_profile': 'profile',
@@ -111,6 +115,7 @@ async def bump_config_revision(client: Any, index: str) -> int:
             'upsert': {'config_revision': 1, 'doc_type': 'meta'},
         },
         retry_on_conflict=5,
+        refresh=WRITE_REFRESH,
     )
     _absent_until.pop((id(client), index), None)
     doc = await client.get(index=index, id=META_CONFIG_REVISION_DOC_ID)
@@ -226,7 +231,12 @@ async def save_config(
         'updated_by': None,
         'cloned_from': cloned_from,
     }
-    index_kwargs: dict[str, Any] = {'index': index, 'id': doc_id, 'body': doc}
+    index_kwargs: dict[str, Any] = {
+        'index': index,
+        'id': doc_id,
+        'body': doc,
+        'refresh': WRITE_REFRESH,
+    }
     if seq_no is not None:
         index_kwargs['if_seq_no'] = seq_no
         index_kwargs['if_primary_term'] = primary_term
@@ -238,6 +248,7 @@ async def save_config(
         index=index,
         id=config_doc_id(kind, name, next_revision),
         body={**doc, 'doc_type': 'revision'},
+        refresh=WRITE_REFRESH,
     )
     await bump_config_revision(client, index)
     return doc
@@ -263,6 +274,7 @@ async def delete_config(
             id=doc_id,
             if_seq_no=current['_seq_no'],
             if_primary_term=current['_primary_term'],
+            refresh=WRITE_REFRESH,
         )
     except ConflictError as exc:
         raise RevisionConflictError(None) from exc
@@ -332,7 +344,12 @@ async def activate(
         'previous': previous,
         **(doc_fields(current_source) if callable(doc_fields) else (doc_fields or {})),
     }
-    index_kwargs: dict[str, Any] = {'index': index, 'id': doc_id, 'body': doc}
+    index_kwargs: dict[str, Any] = {
+        'index': index,
+        'id': doc_id,
+        'body': doc,
+        'refresh': WRITE_REFRESH,
+    }
     if seq_no is not None:
         index_kwargs['if_seq_no'] = seq_no
         index_kwargs['if_primary_term'] = primary_term
@@ -352,6 +369,7 @@ async def activate(
             'previous': previous,
             'activated_at': now,
         },
+        refresh=WRITE_REFRESH,
     )
     new_revision = await bump_config_revision(client, index)
     return {**doc, 'config_revision': new_revision}
