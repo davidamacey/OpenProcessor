@@ -4,8 +4,7 @@ Status: **living reference doc**, owned by this backend. This is the
 canonical answer to "why is it built this way" for the `curation`
 subsystem: the configuration dataclasses, the storage/wire split, the
 project and config-store model, multi-box regions, the lock rule, class
-identity by name, the pre-commit ratchet exemptions carried by the files
-that introduced them, and the gaps that are known and tracked rather than
+identity by name, the pre-commit size ratchet, and the gaps that are known and tracked rather than
 accidental. It complements, and deliberately does not duplicate,
 [`curation_api_contract.md`](curation_api_contract.md) (the HTTP wire
 contract itself) and [`../ARCHITECTURE.md`](../ARCHITECTURE.md#curation-subsystem)
@@ -173,20 +172,14 @@ illustrative override example) and the frozen Pydantic wire-model
 attribute declarations from §3 (which are a different naming system
 entirely and were never in this guard's scope).
 
-## 5. The pre-commit ratchet exemptions
+## 5. The pre-commit size ratchet
 
 `.pre-commit-config.yaml`'s `max-file-size` hook caps source files at
 700 LOC to keep modules reviewable and discourage grab-bag files. The
-files that arrived with the curation port over that cap have been split
-into modules per concern, each under the cap. Three files remain
-exempt while their splits are tracked in #168:
-
-- `src/ultralytics_patches/` (vendored export patches, behaviour must not change)
-- `src/routers/ingest.py`
-- `src/routers/search.py`
-
-A genuinely new oversize file is split before it is committed; do not
-add an exemption.
+files that arrived with the curation port over that cap were split into
+modules per concern, each under the cap, and the hook has no exemptions.
+A new oversize file is split before it is committed; do not add an
+exclude.
 
 ## 6. Known gaps
 

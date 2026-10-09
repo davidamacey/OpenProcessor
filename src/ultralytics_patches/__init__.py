@@ -16,20 +16,20 @@ Usage:
     model.export(format="onnx_trt", topk_all=100, iou_thres=0.45, conf_thres=0.25)
 """
 
-from .end2end_export import (
-    apply_end2end_patch,
-    is_patch_applied,
-    export_onnx_trt,
+from .end2end_export import __version__, apply_end2end_patch, is_patch_applied
+from .export_method import export_onnx_trt
+from .onnx_wrappers import (
     End2End_TRT,
     ONNX_EfficientNMS_TRT,
     ONNX_EfficientNMSX_TRT,
     ONNX_End2End_MASK_TRT,
+)
+from .trt_ops import (
     TRT_EfficientNMS,
     TRT_EfficientNMS_85,
     TRT_EfficientNMSX,
     TRT_EfficientNMSX_85,
     TRT_ROIAlign,
-    __version__,
 )
 
 __all__ = [
