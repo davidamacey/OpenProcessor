@@ -37,7 +37,18 @@
     "scene*",
     "*_scene",
     "empty*",
-    "unknown*"
+    "unknown*",
+    "*_image",
+    "*_photo",
+    "*_abstract",
+    "blank",
+    "blank_*",
+    "indoor",
+    "indoors",
+    "outdoor",
+    "outdoors",
+    "shadow*",
+    "*_shadow"
   ],
   "registry_prior_top_k": 0,
   "detector_hint_min_confidence_pct": 0

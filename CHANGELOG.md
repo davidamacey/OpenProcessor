@@ -41,8 +41,8 @@ history of this codebase and was never published. This release is `[0.4.1]`.
   alphabetical top-k, and pending names fed back into the prompt. Now a denylisted name is never
   listed, only classes with validated items are ranked (the prior is skipped while none has one),
   and a pending proposal is listed only when at least 3 crops carry it. The shipped denylist adds
-  `abstract*`, `*_background`, `*_object`, `object`, `scene*`, `empty*`, `blurred*`, `*_blur` and
-  `unidentified*`, and the text-free generic pack and `examples/prompt_packs/vehicle_wheel.json`
+  `abstract*`, `*_background`, `*_object`, `scene*`, `empty*`, `blank_*`, `*_image`, `shadow*`,
+  `outdoors` and similar scene and quality words, and the text-free generic pack and `examples/prompt_packs/vehicle_wheel.json`
   carry it too. New optional pack setting `detector_hint_min_confidence_pct` (0 = off) tells the VLM
   each item's stored detector class name.
 - Cropwright's nginx now answers redirects with relative `Location` headers; the

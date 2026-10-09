@@ -161,6 +161,13 @@ _COCO_NAMES = [
     'forklift',
     'crane',
     'pallet',
+    'x_ray_scanner',
+    'photo_booth',
+    'image_sensor',
+    'blanket',
+    'dark_chocolate',
+    'indoor_plant',
+    'outdoor_grill',
 ]
 
 
@@ -189,6 +196,17 @@ _COCO_NAMES = [
         'empty_frame',
         'unclear',
         'unidentified',
+        # residual noise left after the first live run (#193)
+        'blank_image',
+        'dark_image',
+        'dark_abstract',
+        'outdoors',
+        'indoors',
+        'outdoor',
+        'blank',
+        'shadow',
+        'long_shadow',
+        'street_photo',
     ],
 )
 def test_default_pack_denies_scene_and_quality_words(noise: str) -> None:

@@ -181,6 +181,17 @@ DEFAULT_PROPOSAL_DENYLIST: tuple[str, ...] = (
     '*_scene',
     'empty*',
     'unknown*',
+    '*_image',
+    '*_photo',
+    '*_abstract',
+    'blank',
+    'blank_*',
+    'indoor',
+    'indoors',
+    'outdoor',
+    'outdoors',
+    'shadow*',
+    '*_shadow',
 )
 
 
