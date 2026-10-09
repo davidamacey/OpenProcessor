@@ -11,6 +11,18 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ## [Unreleased]
 
+### Changed
+
+- The experiment-tracking server and the trainer client move to MLflow 3.17 together
+  (#120). The server image is `ghcr.io/mlflow/mlflow:v3.17.0` and the trainer pins
+  `mlflow>=3.17,<4`. An existing `mlflow_data` volume upgrades in place on first start:
+  runs, artifacts and registered models from 2.x stay readable. MLflow 3 answers
+  `403 Invalid Host header` to any `Host` outside its allowed list, so
+  `docker-compose.yml` now sets that list: the in-network service and container names
+  plus the localhost and private-IP defaults. Browsing MLflow by a DNS name needs
+  `MLFLOW_ALLOWED_HOSTS` (it replaces the whole list; see `env.template`).
+- The seven mlflow 2.x CVEs are no longer in the Trivy allowlist.
+
 ## [0.4.1] - 2026-10-04
 
 Patch release on 0.4.0: repaired CI, operator metrics and dashboards, promote as a
