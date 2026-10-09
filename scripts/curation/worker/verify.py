@@ -248,7 +248,7 @@ async def _auto_confirm_or_pending(
 # W8.5: verdict -> box-list storage (verdicts_to_boxes)
 # =============================================================================
 #
-# Wired into the streaming runner's stage_b_combined (runner.py): the
+# Wired into the streaming runner's stage_b_combined (stage_b.py): the
 # live pipeline calls select_region_candidates() to build the candidate
 # list, then this module's verdicts_to_boxes() to resolve the VLM's
 # per-box verdicts into RegionBox entries, written via

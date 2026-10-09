@@ -37,7 +37,7 @@ from _fake_project_registry import install_static_project_registry
 import scripts.curation.region_worker_main as worker
 import scripts.curation.worker.state as worker_state
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
-from scripts.curation.worker import runner as runner_mod
+from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.client import SegmenterRequestFailed
 from src.config import get_region_fields
 from src.config.project_context import current_project
@@ -168,7 +168,7 @@ async def _drive_text_hint_rescue(
     ocr.detect_regions = AsyncMock(return_value=[ocr_pick])
     ocr.pick_best_text_region = MagicMock(return_value=ocr_pick)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))
-    monkeypatch.setattr(runner_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
+    monkeypatch.setattr(stage_a_mod, '_crop_jpeg_for_task', lambda *_a: _jpeg())
 
     seg = MagicMock(aclose=AsyncMock())
     seg.segment_multi = AsyncMock(return_value=[])  # global attempt always misses

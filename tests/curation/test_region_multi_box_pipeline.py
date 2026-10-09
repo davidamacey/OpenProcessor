@@ -20,9 +20,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.curation.worker import runner as runner_mod
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
@@ -187,9 +186,9 @@ class TestCombinedVerdictAlignment:
         )
         doc = fake_os.live['c1']
         boxes = {tuple(b['bbox_norm']): b for b in doc[F.boxes]}
-        source_a = tuple(runner_mod.crop_norm_to_source_norm(BOX_A, _item()['bbox_norm']))
-        source_b = tuple(runner_mod.crop_norm_to_source_norm(BOX_B, _item()['bbox_norm']))
-        source_c = tuple(runner_mod.crop_norm_to_source_norm(BOX_C, _item()['bbox_norm']))
+        source_a = tuple(crop_norm_to_source_norm(BOX_A, _item()['bbox_norm']))
+        source_b = tuple(crop_norm_to_source_norm(BOX_B, _item()['bbox_norm']))
+        source_c = tuple(crop_norm_to_source_norm(BOX_C, _item()['bbox_norm']))
         assert boxes[source_a]['state'] == 'accepted'
         assert boxes[source_a]['text'] == 'DNV20'
         assert boxes[source_b]['state'] == 'rejected'
@@ -276,7 +275,7 @@ class TestPerBoxEmbeddings:
         # The real written per-box embedding -- absent entirely under R-M1.
         assert doc.get(F.box_embeddings), 'no box embedding was written (R-M1 regression)'
         by_geometry = {tuple(b['bbox_norm']): b for b in doc[F.boxes]}
-        source_b = tuple(runner_mod.crop_norm_to_source_norm(BOX_B, _item()['bbox_norm']))
+        source_b = tuple(crop_norm_to_source_norm(BOX_B, _item()['bbox_norm']))
         accepted_box = by_geometry[source_b]
         assert accepted_box['state'] == 'accepted'
         (entry,) = doc[F.box_embeddings]

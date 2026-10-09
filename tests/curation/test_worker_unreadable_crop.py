@@ -38,8 +38,11 @@ def test_unreadable_crop_is_detection_failed_with_reason() -> None:
     assert update[F.detector_chain] == ['earlier:step', 'worker:image_unavailable']
 
 
-def test_runner_never_maps_a_missing_crop_to_no_region_box() -> None:
-    src = Path('scripts/curation/worker/runner.py').read_text()
+def test_stages_never_maps_a_missing_crop_to_no_region_box() -> None:
+    worker_dir = Path('scripts/curation/worker')
+    src = ''.join(
+        (worker_dir / name).read_text() for name in ('stage_a.py', 'stage_sam.py', 'stage_b.py')
+    )
     # Every branch that handles a missing crop must route through the helper.
     for m in re.finditer(r'(t\.crop_jpeg is None|i in bad_indices):\n((?:[ \t]+.*\n){1,4})', src):
         body = m.group(2)
