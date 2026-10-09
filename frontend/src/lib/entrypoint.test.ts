@@ -69,10 +69,23 @@ describe('docker-entrypoint.sh input validation', () => {
       '= /openapi.json',
       '= /docs/oauth2-redirect',
       '^~ /docs-assets/',
-      '^~ /cropwright/',
+      '^~ /OpenProcessor/',
     ]) {
       expect(conf).toContain(`location ${loc} {`);
     }
+  });
+
+  // The docs embed their own architecture diagrams in same-origin iframes, so the proxied docs
+  // location must allow same-origin framing; the app and API locations keep the strict DENY.
+  it('lets the proxied docs frame their own diagrams (SAMEORIGIN) and denies framing elsewhere', () => {
+    const conf = readFileSync(path.resolve(process.cwd(), 'nginx.conf'), 'utf-8');
+    const docs = conf.match(/location \^~ \/OpenProcessor\/ \{([^}]*)\}/);
+    expect(docs).not.toBeNull();
+    expect(docs![1]).toContain('add_header X-Frame-Options "SAMEORIGIN" always;');
+    expect(docs![1]).toContain('add_header X-Content-Type-Options "nosniff" always;');
+    expect(
+      readFileSync(path.resolve(process.cwd(), 'nginx-security-headers.conf'), 'utf-8'),
+    ).toContain('add_header X-Frame-Options "DENY" always;');
   });
 
   // The backend builds service links from the host the client used, so every

@@ -43,14 +43,6 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
-  - package-ecosystem: "npm"
-    directory: "/frontend/docs-site"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "docs"
-
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:

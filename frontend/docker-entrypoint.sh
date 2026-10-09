@@ -50,7 +50,7 @@ if printf '%s' "$API_UPSTREAM" | grep -q '[^A-Za-z0-9.:/_-]'; then
   exit 1
 fi
 
-# Where nginx proxies /cropwright/ (the bundled docs site) to. Same shape
+# Where nginx proxies /OpenProcessor/ (the one docs site) to. Same shape
 # and validation as API_UPSTREAM.
 DOCS_UPSTREAM="${DOCS_UPSTREAM:-http://docs:8080}"
 case "$DOCS_UPSTREAM" in

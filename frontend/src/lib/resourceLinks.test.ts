@@ -45,7 +45,7 @@ describe('resourceViews', () => {
       link({}),
     ]);
     expect(v.map((x) => [x.id, x.href])).toEqual([
-      [DOCS_ENTRY.id, '/cropwright/'],
+      [DOCS_ENTRY.id, '/OpenProcessor/docs/cropwright/getting-started/introduction'],
       ['swagger', '/docs'],
       ['grafana', 'http://h:3000'],
     ]);

@@ -288,8 +288,8 @@ services:
       # Deployment-owned nginx upload caps: /ingest (MB) and dataset archives (MB).
       - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
       - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
-      # Where nginx proxies /cropwright/: the cropwright-docs service of docker-compose.docs.yml, when run.
-      - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://cropwright-docs:8080}
+      # Where nginx proxies /OpenProcessor/ (the docs site): the docs service of docker-compose.docs.yml, when run.
+      - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
     ports:
       # A UI like Grafana: OP_UI_BIND_ADDRESS opens it (and the other UIs) to a LAN while the API stays on loopback.
       - '${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${CROPWRIGHT_PORT:-5184}:8080'

@@ -63,7 +63,9 @@ describe('ResourcesMenu', () => {
   it('with nothing served lists only Documentation', () => {
     render();
     open();
-    expect(hrefs()).toEqual(['/cropwright/']);
+    expect(hrefs()).toEqual([
+      '/OpenProcessor/docs/cropwright/getting-started/introduction',
+    ]);
   });
 
   it('lists exactly the served entries in the served order after Documentation', () => {
@@ -74,7 +76,12 @@ describe('ResourcesMenu', () => {
     ]);
     render();
     open();
-    expect(hrefs()).toEqual(['/cropwright/', '/docs', 'http://g:3000', 'http://m:5000']);
+    expect(hrefs()).toEqual([
+      '/OpenProcessor/docs/cropwright/getting-started/introduction',
+      '/docs',
+      'http://g:3000',
+      'http://m:5000',
+    ]);
     for (const a of target.querySelectorAll<HTMLAnchorElement>(
       '[data-testid="resource-link"]',
     )) {
@@ -87,7 +94,9 @@ describe('ResourcesMenu', () => {
     serve([L({ url: null, status: 'not_configured', hint: 'set OP_GRAFANA_URL' })]);
     render();
     open();
-    expect(hrefs()).toEqual(['/cropwright/']);
+    expect(hrefs()).toEqual([
+      '/OpenProcessor/docs/cropwright/getting-started/introduction',
+    ]);
     const row = target.querySelector<HTMLElement>('[data-testid="resource-muted"]')!;
     expect(row.textContent).toContain('Grafana: not configured');
     expect(row.getAttribute('title')).toBe('set OP_GRAFANA_URL');
@@ -111,7 +120,9 @@ describe('ResourcesMenu', () => {
     serve([L({ url: 'javascript:alert(1)' })]);
     render();
     open();
-    expect(hrefs()).toEqual(['/cropwright/']);
+    expect(hrefs()).toEqual([
+      '/OpenProcessor/docs/cropwright/getting-started/introduction',
+    ]);
     expect(target.innerHTML).not.toContain('javascript:');
   });
 

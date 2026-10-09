@@ -7,13 +7,13 @@
 import { externalHref } from '$lib/mlflowLink';
 import type { ResourceLink } from '$lib/curationSettings';
 
-/** The one client-owned entry: the bundled documentation is this repo's own
- *  docs container, proxied same-origin by nginx.conf (`^~ /cropwright/`),
+/** The one client-owned entry: the documentation is this repository's one docs site
+ *  (its Cropwright section), proxied same-origin by nginx.conf (`^~ /OpenProcessor/`),
  *  so the backend knows nothing of it and never serves it. */
 export const DOCS_ENTRY = {
   id: 'docs',
   label: 'Documentation',
-  href: '/cropwright/',
+  href: '/OpenProcessor/docs/cropwright/getting-started/introduction',
 } as const;
 
 /** A served URL as an `href`: an absolute http(s) URL, or a root-relative
