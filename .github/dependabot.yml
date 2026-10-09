@@ -9,7 +9,6 @@ updates:
       - "/"
       - "/docker/trainer"
       - "/scripts/curation/bakeoff"
-      - "/examples/bakeoff/license_plate"
       - "/frontend/e2e"
     schedule:
       interval: "weekly"
