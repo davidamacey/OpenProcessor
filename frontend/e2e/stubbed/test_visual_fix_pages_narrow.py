@@ -102,7 +102,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
 
     chip = page.locator('[data-testid="source-chip"]').first
     assert "Labeled by" not in chip.inner_text()
-    assert chip.get_attribute("title") == "Label source: Labeled by the VLM — not yet validated"
+    assert chip.get_attribute("title") == "Label source: VLM suggestion — not yet validated"
 
     card_width = page.locator('[data-testid="class-name"]').first.evaluate(
         "el => el.closest('[aria-pressed]').getBoundingClientRect().width"

@@ -304,6 +304,71 @@ number, list and request is served, and a refusal shows the served
   `test_ingest_policy.py`, `test_detector_seed.py`, `test_embedding_state.py`
   and the detector case in `test_ingest.py`.
 
+## Label confirmation (`/audit`, VLM scope, OpenProcessor #119)
+
+A VLM label is a suggestion until a human validates it; the detector's own class is
+kept beside it so the two can be compared, and the audit measures how often each is
+right. Backend: `docs/design/label_confirmation_plan.md` (repo root), contract in
+`contracts/openapi/curation.json` (`/vlm/policy`, `/audit/*`, the `detector_disagreements`
+tab, the item wire's `detector_class_name` / `_id` / `_confidence`). Nothing here counts,
+averages or decides: precision, intervals, the confusion matrix and `insufficient_sample`
+are served.
+
+- **Wrappers and types.** `src/lib/api_labelConfirmation.ts` (`getVlmPolicy`,
+  `putVlmPolicy`, `startAudit`, `getAuditReport`, `getAuditQueue`; imported directly,
+  scanned by `endpointCatalog.test.ts`) and `src/lib/types_labelConfirmation.ts`, pinned
+  key for key by `contract/labelConfirmationContract.test.ts`. Refusals show the served
+  message through `detectorErrorLines`.
+- **VLM scope panel** (`components/settings/VlmScopePanel.svelte` on `/settings`, state in
+  `labelConfirmation/vlmPolicyController.svelte.ts`, `VlmPolicyEditor`). The scope is the
+  contract enum (`all` / `uncertain` / `representatives` / `off`); `vlmScopeCopy.ts` holds
+  the plan's wording and which knob a scope reads (`knobsFor`: `uncertain` reads the
+  confidence limit, `representatives` the per-cluster count, both and `all` the sample
+  fraction and the per-day budget, `off` none). Save sends `expected_revision`; a 409
+  `revision_conflict` offers Reload (drop edits) or Keep my edits. No client validation.
+  The plan's estimated-crop-count preview and cost line are NOT built: the contract serves
+  no `/vlm/policy/preview` route.
+- **Wording and the detector class.** `confirmationLabel(role, validated)`
+  (`sourceBadge.ts`): `human` is "Human-confirmed", an unvalidated `vlm` is "VLM
+  suggestion", a validated `cluster` is "Auto-validated", anything else prints its served
+  label. `sourceBadge` uses it for the `CropCard` chip tooltip; `ConfirmationChip` shows it
+  in the item detail (`CropMetaPanel`) and on `/review`'s Current label row.
+  `DetectorClass` ("Detector: widget_h 72%") shows beside a `vlm`-role label only, on
+  `CropCard`, `CropMetaPanel` (a "Detector class" row) and `/review`;
+  `Crop.detector_class_name` / `_id` / `_confidence` come from `mapRawCrop`.
+- **`detector_disagreements` tab.** A served-only core tab like `imported`
+  (`SERVED_ONLY_TABS`, `isServedOnlyTab`): offered only while `GET /review/tabs` serves
+  it, its label and description are the served ones, and `/review` falls back to All with
+  the "no such tab" notice for a link when it is not served.
+- **`/audit`** (`routes/p/[project]/audit/+page.svelte`, `AuditController` in
+  `labelConfirmation/auditController.svelte.ts`, components under `components/audit/`;
+  `audit` is in `PROJECT_SECTIONS` and the primary nav). `AuditStartForm` draws a sample
+  (`POST /audit/start`; only the typed `sample_size` / `min_per_class` are sent, the
+  served strata are listed, a `short_of_floor` stratum is amber, `409 audit_no_candidates`
+  shows its served message). `AuditClassTable` renders the served detector and VLM
+  precision with the Wilson interval; a class flagged `insufficient_sample` is dimmed and
+  says so. `ConfusionMatrix` renders `{detector class: {human class: crops}}` as served
+  (rows and columns are the keys, only sorted). `AuditQueueList` pages
+  `GET /audit/queue` and links each crop to `/review?tab=all&crop_id=`, where a human
+  label is what measures it.
+- **Export and dashboard.** `ValidatedRatioNotice` on `/export` shows the served
+  validated and total counts (`GET /stats/dataset`) and warns that only validated crops
+  are exported (a "nothing exportable" line at zero). The contract serves no total floor,
+  so the warning tone is the plain fact `validated < total`, not a threshold.
+  `DatasetStats` names the VLM row "VLM suggestions" and says how many crops are validated.
+  The contract serves no per-source validated split, so there is no unvalidated-by-source
+  count.
+- **Not built.** The `auto_promote` 409 (`audit_required` / `audit_precision_low`) has no
+  frontend surface (no caller of `auto_promote` exists; the pipeline stage runs
+  server-side); the plan's `cropwright.lock` pin no longer exists in this monorepo.
+- **Tests:** `labelConfirmation.test.ts`, `api_labelConfirmation.test.ts`,
+  `labelConfirmation/*.test.ts`, `components/labelConfirmation/labelConfirmation.test.ts`,
+  `components/audit/audit.test.ts`, `components/settings/VlmScopePanel.test.ts`,
+  `routes/p/[project]/{audit/auditPage,export/validatedRatio}.test.ts`, the cases in
+  `sourceBadge` / `reviewTabs` / `CropCard` / `DatasetStats` tests,
+  `contract/labelConfirmationContract.test.ts`; e2e `test_label_confirmation.py`
+  (conftest serves `/vlm/policy` and `/audit/report|queue` 404 by default).
+
 ## Dataset import and Reprocess (`/datasets`, OpenProcessor W10, 2026-09-27)
 
 Import an already-labeled dataset (YOLO, COCO, or an OpenProcessor export)

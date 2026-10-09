@@ -542,5 +542,7 @@ def test_absent_when_the_registry_404s(stub, page, app_url):
     expect(page.get_by_test_id("vlm-unavailable")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.goto(f"{app_url}/p/default/settings/models/new-endpoint")
     expect(page.get_by_test_id("vlm-unavailable")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    vlm_calls = [p for _m, p in stub.handled if "/vlm/" in p]
+    # The per-project VLM scope policy (`/vlm/policy`, #119) is not part of the
+    # registry: /settings reads it whether or not the registry is served.
+    vlm_calls = [p for _m, p in stub.handled if "/vlm/" in p and not p.endswith("/vlm/policy")]
     assert vlm_calls and all(p.endswith("/vlm/endpoints") for p in vlm_calls), vlm_calls
