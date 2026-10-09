@@ -10,7 +10,7 @@ RUN npm run build
 
 # nginx-unprivileged: listens on 8080 as a non-root user out of the box,
 # same base family as the other project images.
-FROM nginxinc/nginx-unprivileged:1.30-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 LABEL org.opencontainers.image.title="OpenProcessor Documentation" \
       org.opencontainers.image.description="Docusaurus documentation site for OpenProcessor" \
