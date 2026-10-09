@@ -185,6 +185,29 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
     assert clusters.get('method') is None or isinstance(clusters['method'], str)
 
 
+def test_stats_clusters_serve_the_recorded_last_run(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A clustering run recorded by the clustering code (no auto-label job
+    state, as with the cluster-refresh daemon's synchronous call) is served
+    as the last run's time and method."""
+    from types import SimpleNamespace
+
+    from src.services.curation.clustering import last_run
+
+    monkeypatch.setattr(
+        last_run, 'get_curation_config', lambda: SimpleNamespace(autolabel_dir=tmp_path)
+    )
+    last_run.record_last_run({'method': 'ivf', 'n_clusters': 7, 'n_residuals': 90, 'n_noise': 2})
+
+    resp = app_client.get('/curation/projects/default/stats/dataset')
+    assert resp.status_code == 200, resp.text[:500]
+    clusters = resp.json()['clusters']
+    assert clusters['method'] == 'ivf'
+    assert clusters['last_run_at'] == last_run.read_last_run()['finished_at']  # type: ignore[index]
+    assert clusters['last_run_cluster_count'] == 7
+
+
 def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None:
     """Roll-up math is internally consistent.
 
@@ -249,22 +272,20 @@ def test_stats_dataset_legacy_keys_preserved(app_client: TestClient) -> None:
 
 
 def test_cluster_count_is_the_current_total_not_the_last_run(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``clusters.cluster_count`` is how many (non-noise) clusters the index
-    holds now. The last auto-label run's own count -- often a residual pass
+    holds now. The last clustering run's own count -- often a residual pass
     that made a single cluster -- is served separately as
     ``last_run_cluster_count`` so a dashboard never shows it as the total."""
-    from src.services.curation.autolabel import job
+    from types import SimpleNamespace
+
+    from src.services.curation.clustering import last_run
 
     monkeypatch.setattr(
-        job,
-        'get_state',
-        lambda: {
-            'finished_at': 1_790_000_000,
-            'result': {'stages': {'cluster_residuals': {'method': 'ivf', 'n_clusters': 1}}},
-        },
+        last_run, 'get_curation_config', lambda: SimpleNamespace(autolabel_dir=tmp_path)
     )
+    last_run.record_last_run({'method': 'ivf', 'n_clusters': 1})
     body = app_client.get('/curation/projects/default/stats/dataset').json()
     clusters = body['clusters']
     assert clusters['cluster_count'] == 5
