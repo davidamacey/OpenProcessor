@@ -7,7 +7,7 @@ counts. This computes the same verdict server-side so every client
 agrees, and so the parameters (``poll_interval_s`` / ``stable_polls``)
 are served, not hardcoded twice.
 
-**Multi-worker correctness (2026-09-25 fix).** ``yolo-api`` runs under
+**Multi-worker correctness (2026-09-25 fix).** ``api`` runs under
 ``--workers=N`` -- separate OS processes. This used to keep the streak
 counter (``_StreakState``) in module memory: an ingest walker polling
 this endpoint every ``poll_interval_s`` lands on essentially a random

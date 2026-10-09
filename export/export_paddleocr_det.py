@@ -10,8 +10,8 @@ Model: PP-OCRv5 Detection (DB++ architecture)
 - Output: [B, 1, H, W] probability map for text regions
 - Preprocessing: (x / 255 - 0.5) / 0.5 = x / 127.5 - 1, BGR format
 
-Run from: yolo-api container
-    docker compose exec yolo-api python /app/export/export_paddleocr_det.py
+Run from: api container
+    docker compose exec api python /app/export/export_paddleocr_det.py
 """
 
 import argparse
@@ -310,7 +310,7 @@ def main():
     if not args.onnx_path.exists():
         print(f'\nERROR: ONNX model not found: {args.onnx_path}')
         print('\nTo download, run:')
-        print('  docker compose exec yolo-api python /app/export/download_paddleocr.py')
+        print('  docker compose exec api python /app/export/download_paddleocr.py')
         return 1
 
     # Verify ONNX

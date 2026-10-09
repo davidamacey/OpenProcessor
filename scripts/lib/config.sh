@@ -768,7 +768,7 @@ services:
               capabilities:
                 - gpu
 
-  yolo-api:
+  api:
     shm_size: ${PROFILE_SHM_SIZE}
     command:
       - uvicorn

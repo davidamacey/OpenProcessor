@@ -165,7 +165,7 @@ address also narrows Cropwright to that interface. See
 ```bash
 cd openprocessor
 ./openprocessor status            # services and health
-./openprocessor logs yolo-api -f  # live logs
+./openprocessor logs api -f  # live logs
 ./openprocessor sample coco       # fetch a public COCO sample (200 images)
 ./openprocessor vlm list          # the local VLM catalog
 ./openprocessor upgrade           # to the latest release (backs up first)
@@ -271,14 +271,14 @@ Government Work"; never NonCommercial or NoDerivs). Then:
 #    (PUT /curation/projects/{project}/ingest/policy); the old
 #    OP_INGEST_PRIMARY_CLASS_IDS env var is retired and ignored.
 #    OP_INGEST_PRIMARY_DETECTOR_MODEL picks the detector; to use another
-#    model set it in .env and recreate yolo-api (see docs/CURATION.md).
+#    model set it in .env and recreate api (see docs/CURATION.md).
 # 3. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount
 #    target is fixed at /data/source):
 echo 'OP_SOURCE_ROOT_HOST=./data/samples' >> .env
-docker compose up -d --force-recreate yolo-api
+docker compose up -d --force-recreate api
 # 4. --root is a container path under the /data/source mount, not a
 #    host-relative one:
-docker compose exec yolo-api python scripts/curation/ingest_walker.py \
+docker compose exec api python scripts/curation/ingest_walker.py \
   --root /data/source/coco_va_readme/images --project cars \
   --api-base http://localhost:8000/curation
 ```
@@ -291,7 +291,7 @@ to stop (volumes are kept). Set `COMPOSE_PROJECT_NAME`, `OP_IMAGE_REPO` and
 published ones.
 
 In a source checkout use `make up` and `make` targets, which add the dev
-overlay; in an installed directory run `./openprocessor restart yolo-api` after
+overlay; in an installed directory run `./openprocessor restart api` after
 editing `.env`. `make sample-coco` (800 images plus side sets),
 `make sample-plates` (300 Open Images V7 images) and `make sample-clean` use
 the same tool. See
@@ -432,7 +432,7 @@ YOLO26.
   (`export/export_yolo26.py`, natively NMS-free engines):
 
   ```bash
-  docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+  docker compose exec api python /app/export/export_yolo26.py --models small
   curl -X POST http://localhost:4603/models/yolo26_small_trt/load
   ```
 
@@ -750,7 +750,7 @@ Client (Port 4603)
        |
        v
   +----------+     +-----------------------------+
-  | yolo-api |---->| curation workers (profile)  |
+  | api |---->| curation workers (profile)  |
   +----------+     | detection, VLM, auto-label, |
        |           | cluster refresh, evaluator  |
        v           +-----------------------------+
@@ -762,7 +762,7 @@ Client (Port 4603)
 
 **Services** (compose profile in brackets):
 
-- `yolo-api` (4603): FastAPI service handling all requests.
+- `api` (4603): FastAPI service handling all requests.
 - `triton-server` (4600-4602): Triton with TensorRT models.
 - `opensearch` (4607): vector database and the curation datastore.
 - `curation-detection-worker`, `curation-vlm-worker`,
@@ -864,15 +864,15 @@ running stack over HTTP, so they read their target ports from the environment
 .venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
 ```
 
-**Docker-only path.** The production `yolo-api` image installs only
+**Docker-only path.** The production `api` image installs only
 `requirements.txt` (no `pytest`, no `requirements-test.txt`), so a bare
-`docker compose exec yolo-api pytest ...` fails with `executable file not
+`docker compose exec api pytest ...` fails with `executable file not
 found`. Install the test deps into the running container first (not persisted
 across a recreate):
 
 ```bash
-docker compose exec yolo-api pip install -r requirements-test.txt
-docker compose exec yolo-api python -m pytest tests/ -q --ignore=tests/live
+docker compose exec api pip install -r requirements-test.txt
+docker compose exec api python -m pytest tests/ -q --ignore=tests/live
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the live write-path harness and the

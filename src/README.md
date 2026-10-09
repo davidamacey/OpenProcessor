@@ -420,7 +420,7 @@ Settings managed via `config/settings.py` with environment variables:
 docker compose up -d
 
 # View logs
-docker compose logs -f yolo-api
+docker compose logs -f api
 
 # Stop services
 docker compose down

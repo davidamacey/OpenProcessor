@@ -11,7 +11,7 @@ highlight one part of it.
 
 | Group | Diagram | What it shows |
 | --- | --- | --- |
-| System | System overview | Every compose service and profile: clients, `yolo-api`, Triton, OpenSearch, the shared job volumes, the multi-project curation workers, segmenter, VLM endpoints, trainer, evaluator, MLflow and monitoring. |
+| System | System overview | Every compose service and profile: clients, `api`, Triton, OpenSearch, the shared job volumes, the multi-project curation workers, segmenter, VLM endpoints, trainer, evaluator, MLflow and monitoring. |
 | System | Backend modules | `src/main.py`, the core and curation routers (project-scoped), the FastAPI-free services under `src/services/` (projects, config store, dataset import, reprocess, combine), the clients, `src/config/`, and the workers that import the same services. |
 | System | Data model | The per-project curation indexes (images, items with their `region_boxes`, classes, UMAP state and the `configs` store), the global project and config indexes, the project's files, and the separate visual-search indexes. |
 | Workflows | Core inference | `/detect`, `/faces`, `/embed` and `/ocr`: CPU preprocessing in the API, TensorRT models in Triton, and the `ocr_pipeline` BLS model. |

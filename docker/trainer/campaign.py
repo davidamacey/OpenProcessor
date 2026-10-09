@@ -44,7 +44,7 @@ logger = get_logger('trainer.campaign')
 
 # API base + prefix for the campaign auto-promote and auto-quantize callbacks. The trainer and the
 # API share a compose network, so the service name resolves via Docker DNS.
-API_BASE_URL = os.environ.get('OP_API_BASE_URL', 'http://yolo-api:8000')
+API_BASE_URL = os.environ.get('OP_API_BASE_URL', 'http://api:8000')
 API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation')
 
 

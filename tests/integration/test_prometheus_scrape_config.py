@@ -37,7 +37,7 @@ def _jobs(prometheus_config: dict) -> dict[str, dict]:
 
 def test_expected_scrape_jobs_present(prometheus_config: dict) -> None:
     jobs = _jobs(prometheus_config)
-    for expected in ('triton', 'yolo-api', 'node', 'dcgm', 'loki'):
+    for expected in ('triton', 'api', 'node', 'dcgm', 'loki'):
         assert expected in jobs, f'scrape job {expected!r} missing from prometheus.yml'
 
 

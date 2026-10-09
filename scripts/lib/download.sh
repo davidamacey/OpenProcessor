@@ -279,13 +279,13 @@ download_paddleocr_models() {
     fi
 
     # Try running container, fall back to temporary container
-    if docker ps --format '{{.Names}}' | grep -q "^yolo-api$"; then
-        if dc exec -T yolo-api python /app/export/download_paddleocr.py; then
+    if docker ps --format '{{.Names}}' | grep -q "^api$"; then
+        if dc exec -T api python /app/export/download_paddleocr.py; then
             log_success "PaddleOCR models downloaded"
             return 0
         fi
     else
-        if dc run --rm --no-deps -T yolo-api python /app/export/download_paddleocr.py; then
+        if dc run --rm --no-deps -T api python /app/export/download_paddleocr.py; then
             log_success "PaddleOCR models downloaded"
             return 0
         fi

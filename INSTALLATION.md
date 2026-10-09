@@ -522,7 +522,7 @@ Or generate automatically:
 ### 5. Start Containers (for export)
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d triton-server yolo-api
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d triton-server api
 ```
 
 `make up` and `./openprocessor start` add the dev overlay for you and start

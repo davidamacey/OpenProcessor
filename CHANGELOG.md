@@ -47,6 +47,15 @@ history of this codebase and was never published. This release is `[0.4.1]`.
 
 ### Changed
 
+- **Breaking:** the compose service `yolo-api` is renamed `api` (#62). `docker compose exec yolo-api ...`,
+  `docker compose logs yolo-api` and `./openprocessor logs|restart yolo-api` become
+  `... api`; the Prometheus job and Loki service label are `api` too. Custom overrides, scripts
+  and dashboards that name the old service must change. The container name
+  (`<project>-api`), the `op-api` network alias and all data volumes are unchanged. An existing
+  install is upgraded by `./openprocessor upgrade` (or `docker compose up -d --remove-orphans`),
+  which replaces the old container; every start path (`start`, `make up`, `scripts/setup.sh`,
+  the installer's control-plane-only path) now passes `--remove-orphans`, because the old
+  container holds the same name and would otherwise make the new one fail to create.
 - The segmenter image moves to PyTorch 2.14.1 (`pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime`,
   superseding dependabot #147) and `alpine/git` v2.54.0. The new base is Ubuntu 24.04, so the
   image now runs Python 3.12 (was 3.11), installs with `PIP_BREAK_SYSTEM_PACKAGES=1` and

@@ -11,8 +11,8 @@ Sources:
 - InsightFace HuggingFace model hub
 
 Usage:
-    # From yolo-api container:
-    docker compose exec yolo-api python /app/export/download_face_models.py
+    # From api container:
+    docker compose exec api python /app/export/download_face_models.py
 
     # Or from host with venv:
     python export/download_face_models.py

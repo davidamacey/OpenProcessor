@@ -50,7 +50,7 @@ logger = get_logger(__name__)
 # Refinement thresholds.
 # > this — refinement is skipped. The refine path runs sklearn AHC with NO
 # connectivity graph, so it builds a FULL pairwise distance matrix: ~8*n^2
-# bytes (float64). Rough transient RAM in the yolo-api process:
+# bytes (float64). Rough transient RAM in the api process:
 #   2000 -> ~32 MB    5000 -> ~200 MB    8000 -> ~512 MB    12000 -> ~1.15 GB
 # Plus ~4 KB/member to fetch embeddings. It's fast (AHC fit is seconds even
 # at 8k) and off-loaded to a worker thread, so the binding constraint is RAM,
@@ -309,7 +309,7 @@ async def refine_members(
     )
     # Off-load to a worker thread so a large cluster (close to
     # MAX_REFINE_MEMBERS) doesn't block the FastAPI event loop -- refine runs
-    # in the yolo-api process, so a sync fit here would starve every other
+    # in the api process, so a sync fit here would starve every other
     # request.
     sub_labels = await asyncio.to_thread(clusterer.fit_predict, embeddings)
     n_subclusters = int(sub_labels.max() + 1) if len(sub_labels) > 0 else 0

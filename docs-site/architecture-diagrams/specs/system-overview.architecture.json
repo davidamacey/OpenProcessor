@@ -99,7 +99,7 @@
     {
       "id": "api",
       "type": "backend",
-      "label": "yolo-api",
+      "label": "api",
       "sublabel": "FastAPI :4603",
       "pos": [
         280,
@@ -359,7 +359,7 @@
       "dot": "cyan",
       "title": "Core (always on)",
       "items": [
-        "yolo-api, triton-server and opensearch are the only services without a compose profile",
+        "api, triton-server and opensearch are the only services without a compose profile",
         "One shared Triton gRPC client lets Triton's dynamic batcher form batches",
         "No authentication on any route: run behind your own proxy"
       ]

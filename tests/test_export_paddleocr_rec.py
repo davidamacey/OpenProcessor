@@ -2,11 +2,11 @@
 ``export/export_paddleocr_rec.py``.
 
 F-17 (fresh-start E2E findings 2026-09-25): this script runs inside
-``yolo-api``, which has no docker CLI or docker.sock, and the old
+``api``, which has no docker CLI or docker.sock, and the old
 ``convert_to_tensorrt_via_trtexec`` shelled out to
 ``docker exec <TRITON_CONTAINER> trtexec ...`` -- always failing with
 "triton-server container is not running" (the container is renamed
-``${COMPOSE_PROJECT_NAME}-triton`` post-G-01, and yolo-api can't run
+``${COMPOSE_PROJECT_NAME}-triton`` post-G-01, and api can't run
 docker commands regardless). ``convert_to_tensorrt_via_python_api``
 replaces it with the TensorRT Python API directly (same dependency
 ``export/export_models.py`` already uses in-process), so these tests

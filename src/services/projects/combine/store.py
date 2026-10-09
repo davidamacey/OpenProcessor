@@ -1,7 +1,7 @@
 """The on-disk record of combine jobs.
 
 One directory per job under ``OP_COMBINE_JOBS_DIR`` (shared jobs volume, so
-every ``yolo-api`` worker process sees it): the W10 import store's layout
+every ``api`` worker process sees it): the W10 import store's layout
 (``request.json``, ``mapping.json``, ``state.json`` / ``heartbeat`` /
 ``cancel.flag``, the write-ahead ledger, ``chunks_done.jsonl``), reused as is.
 A combine is global (it acts on several projects), so its directory is not

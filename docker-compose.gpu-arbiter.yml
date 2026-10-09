@@ -1,4 +1,4 @@
-# Opt-in overlay: mounts the host Docker socket into yolo-api so the GPU
+# Opt-in overlay: mounts the host Docker socket into api so the GPU
 # arbiter (src/services/training/gpu_arbiter.py) can stop/restart
 # GPU-resident sibling containers around a training run
 # (OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER -- see
@@ -11,10 +11,10 @@
 # /var/run/docker.sock into any container gives that container's process
 # root-equivalent control over the whole Docker host -- it can start,
 # stop or inspect *any* container, not just the ones this project owns,
-# and a container-escape bug in yolo-api's dependency stack becomes a
+# and a container-escape bug in api's dependency stack becomes a
 # host-level compromise. This is why it's a separate, explicitly opt-in
 # file instead of a default mount. Only enable it on a host you trust
-# yolo-api's dependency stack on, and prefer scoping
+# api's dependency stack on, and prefer scoping
 # OP_GPU_ARBITER_CONTAINERS to the smallest container list a deployment
 # actually needs coordinated.
 #
@@ -27,7 +27,7 @@
 #   OP_GPU_ARBITER_TRAINER_CONTAINER=<container-name>
 
 services:
-  yolo-api:
+  api:
     volumes:
       # NOT :ro -- stop/start calls over the socket need write access;
       # a read-only bind only restricts the mount point, not what the

@@ -38,7 +38,7 @@ matches an item's `class_name`, or the detector's own label
   accept the segmenter's boxes unverified. See
   [VLM selection](./vlm-selection.mdx). Without an active endpoint the boxes
   stay unverified.
-- The image folder is mounted read-only at the same path in `yolo-api` and
+- The image folder is mounted read-only at the same path in `api` and
   in the detection worker. By default `OP_SOURCE_ROOT_HOST` (default
   `./data/source`) is mounted at `/data/source`. If only the API has the
   mount, ingest succeeds but every later worker read fails.

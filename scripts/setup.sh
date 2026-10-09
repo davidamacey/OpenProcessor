@@ -414,7 +414,7 @@ build_docker_images() {
     # Fall back to building from Dockerfiles if pull fails (e.g., first release,
     # no internet, or user wants a custom build).
     log_step "Pulling pre-built images from Docker Hub..."
-    if dc pull yolo-api triton-server 2>/dev/null; then
+    if dc pull api triton-server 2>/dev/null; then
         log_success "Pre-built images pulled from Docker Hub"
         return 0
     else
@@ -424,13 +424,13 @@ build_docker_images() {
     fi
 
     # Build from Dockerfiles
-    log_step "Building yolo-api image..."
-    if ! dc build yolo-api; then
-        log_error "Failed to build yolo-api image"
+    log_step "Building api image..."
+    if ! dc build api; then
+        log_error "Failed to build api image"
         log_info "Check your internet connection and disk space (need ~5GB free)"
         return 1
     fi
-    log_success "yolo-api image ready"
+    log_success "api image ready"
 
     log_step "Building triton-server image..."
     if ! dc build triton-server; then
@@ -485,7 +485,7 @@ export_models_step() {
 
     # All exports use 'docker compose run --rm --no-deps -T' to create temporary
     # containers. This avoids the chicken-and-egg problem where triton-server
-    # crashes because model.plan files don't exist yet, and yolo-api crash-loops
+    # crashes because model.plan files don't exist yet, and api crash-loops
     # because it can't connect to triton-server.
 
     # Export based on profile
@@ -559,7 +559,7 @@ start_services_step() {
 
     # Start all services (now that model.plan files exist, triton-server will load them)
     log_info "Starting all services..."
-    dc up -d
+    dc up -d --remove-orphans
 
     # Wait for services to be ready
     wait_for_services

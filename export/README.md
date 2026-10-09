@@ -89,7 +89,7 @@ models/
 make export-models
 
 # Or directly:
-docker compose exec yolo-api python /app/export/export_models.py \
+docker compose exec api python /app/export/export_models.py \
     --models small \
     --formats trt trt_end2end \
     --normalize-boxes
@@ -114,18 +114,18 @@ output:
 
 ```bash
 # ONNX only (CPU-friendly; validates via onnxruntime round-trip)
-docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
+docker compose exec api python /app/export/export_detector_dual_head.py \
     --weights /app/pytorch_models/my_detector.pt \
     --triton-name my_detector_dual_head --imgsz 640
 
 # ONNX + TensorRT engine + config.pbtxt + labels.txt into the model repo
-docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
+docker compose exec api python /app/export/export_detector_dual_head.py \
     --weights /app/pytorch_models/my_detector.pt \
     --triton-name my_detector_dual_head \
     --imgsz 1280 --max-batch 16 --formats onnx trt
 
 # Legacy YOLOv5-fork checkpoint (the fork is only needed to load its checkpoints)
-docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
+docker compose exec api python /app/export/export_detector_dual_head.py \
     --weights /app/pytorch_models/legacy_v5.pt --loader yolov5 \
     --yolov5-fork /app/external/yolov5 \
     --imgsz 1280 --triton-name legacy_v5_dual_head
@@ -155,17 +155,17 @@ engine produces it. `--formats trt` writes that file for you.
 ### SCRFD Face Detection
 
 ```bash
-docker compose exec yolo-api python /app/export/export_scrfd.py
+docker compose exec api python /app/export/export_scrfd.py
 ```
 
 ### Face Recognition (ArcFace)
 
 ```bash
 # Download pre-trained model
-docker compose exec yolo-api python /app/export/download_face_models.py
+docker compose exec api python /app/export/download_face_models.py
 
 # Export to TensorRT
-docker compose exec yolo-api python /app/export/export_face_recognition.py
+docker compose exec api python /app/export/export_face_recognition.py
 ```
 
 ### MobileCLIP (Visual Search)
@@ -175,8 +175,8 @@ docker compose exec yolo-api python /app/export/export_face_recognition.py
 make export-mobileclip
 
 # Or individually:
-docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py
-docker compose exec yolo-api python /app/export/export_mobileclip_text_encoder.py
+docker compose exec api python /app/export/export_mobileclip_image_encoder.py
+docker compose exec api python /app/export/export_mobileclip_text_encoder.py
 ```
 
 ### PE-Core Encoders (Curation Embeddings)
@@ -193,7 +193,7 @@ Both embeddings come out L2-normalized. See
 [`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
 depends on them.
 
-**Fresh deployment, end to end** (API container = `yolo-api`; it has torch,
+**Fresh deployment, end to end** (API container = `api`; it has torch,
 `perception_models` and the HF cache mounted from `./cache/huggingface`):
 
 ```bash
@@ -234,7 +234,7 @@ The ONNX export runs in the API container, the TensorRT build in the Triton
 image (that's where `trtexec` lives):
 
 ```bash
-docker compose exec yolo-api python /app/export/export_pe_image_encoder.py
+docker compose exec api python /app/export/export_pe_image_encoder.py
 ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh          # Path 1
 ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_ort_fallback.sh # Path 2
 ```
@@ -264,7 +264,7 @@ is the rendered default (TensorRT, max batch 32).
 #### 3. Text tower — `export_pe_text_encoder.py`
 
 ```bash
-docker compose exec yolo-api python /app/export/export_pe_text_encoder.py [--benchmark]
+docker compose exec api python /app/export/export_pe_text_encoder.py [--benchmark]
 ```
 
 Exports `clip.encode_text(tokens, normalize=True)` — causal transformer,
@@ -324,7 +324,7 @@ Optional Triton serving (onnxruntime backend, CPU instances by default so it
 takes no VRAM; `--kind gpu --gpus N` for GPU):
 
 ```bash
-docker compose exec yolo-api python /app/export/export_pe_text_encoder.py \
+docker compose exec api python /app/export/export_pe_text_encoder.py \
     --install-triton --models-dir /app/models      # = make pe-export-text-triton
 # pe_text_encoder is already in the default --load-model list of docker-compose.yml
 ```
@@ -367,11 +367,11 @@ configured or `OP_PE_TEXT_BACKEND=triton`.
 
 ```bash
 # Download PP-OCRv5 models
-docker compose exec yolo-api python /app/export/download_paddleocr.py
+docker compose exec api python /app/export/download_paddleocr.py
 
 # Export detection and recognition
-docker compose exec yolo-api python /app/export/export_paddleocr_det.py
-docker compose exec yolo-api python /app/export/export_paddleocr_rec.py
+docker compose exec api python /app/export/export_paddleocr_det.py
+docker compose exec api python /app/export/export_paddleocr_rec.py
 ```
 
 ## Model Specifications
@@ -447,7 +447,7 @@ make download-models
 ### "Failed to build TensorRT engine"
 Check GPU memory and reduce batch size if needed:
 ```bash
-docker compose exec yolo-api nvidia-smi
+docker compose exec api nvidia-smi
 ```
 
 ### Triton fails to load model

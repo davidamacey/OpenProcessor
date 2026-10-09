@@ -33,7 +33,7 @@ services:
       context: .
       dockerfile: Dockerfile.triton
 
-  yolo-api:
+  api:
     build:
       context: .
       dockerfile: Dockerfile

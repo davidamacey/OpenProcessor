@@ -33,7 +33,7 @@ Run this on the **host** (e.g. via ``make sample-coco`` /
 ``make sample-coco-readme``, or directly with the project venv), never
 via ``docker compose exec``. ``--out`` is resolved relative to the
 current working directory, and ``docker-compose.yml`` mounts
-``${OP_SOURCE_ROOT_HOST:-./data/source}`` into the ``yolo-api`` /
+``${OP_SOURCE_ROOT_HOST:-./data/source}`` into the ``api`` /
 ``curation-detection-worker`` containers **read-only** at
 ``/data/source``: a container path under that mount raises
 ``OSError: Read-only filesystem``. The host filesystem itself has no

@@ -40,7 +40,7 @@ and OpenSearch Dashboards run without authentication, like the API.
 | Job | Target | Metrics |
 | --- | --- | --- |
 | `triton` | `triton-server:8002` | Triton's `nv_*` series: per-model request, queue and compute time, batch execution, pending requests, GPU utilization and memory. |
-| `yolo-api` | `yolo-api:8000` | The API's own `/metrics`. |
+| `api` | `api:8000` | The API's own `/metrics`. |
 | `node` | `node-exporter:9100` | Host CPU, memory, load. |
 | `dcgm` | `dcgm-exporter:9400` | Per-GPU `DCGM_FI_DEV_*` series. |
 | `loki` | `loki:3100` | Loki's own health. |
@@ -56,7 +56,7 @@ change a port, change the matching job in `prometheus.yml`).
 
 <Screenshot
   name="backend-prometheus-targets.png"
-  alt="Prometheus target health page with the triton, yolo-api, node, dcgm and loki scrape targets all up"
+  alt="Prometheus target health page with the triton, api, node, dcgm and loki scrape targets all up"
   caption="Prometheus target health on a public-sample-data stack: all five jobs up"
 />
 
@@ -135,7 +135,7 @@ filter on those labels. Loki keeps its data in the `loki_data` volume.
 
 :::caution[Check the container filter]
 Alloy's keep rules match container names that start with `triton-server`
-or `yolo-api`, while the compose file names containers
+or `api`, while the compose file names containers
 `<project>-triton` and `<project>-api`. Because Alloy reads the host's
 Docker socket, it also sees containers from other compose projects on
 the same host. Run `curl -s localhost:4606/loki/api/v1/label/container/values`

@@ -131,7 +131,7 @@ services:
     networks:
       - triton_net
 
-  yolo-api:
+  api:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.4.1}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     logging: *default-logging
@@ -156,7 +156,7 @@ services:
       # / OP_VIZ_JOBS_DIR / OP_PROBE_JOBS_DIR / OP_REGION_DRAIN_STATE_DIR
       # (all default under /jobs — see env.template). This same shared
       # mount is what makes state.json/heartbeat/cancel.flag visible to
-      # every yolo-api --workers process, not just whichever one handled
+      # every api --workers process, not just whichever one handled
       # a given request.
       - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
@@ -297,7 +297,7 @@ services:
         condition: service_healthy
     networks:
       # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
-      # public compose's service is named yolo-api; this alias lets
+      # public compose's service is named api; this alias lets
       # Cropwright's out-of-the-box default resolve without every deployer
       # having to override API_UPSTREAM. See docs/CURATION.md "Wiring up
       # Cropwright".
@@ -309,7 +309,7 @@ services:
   # Cropwright: the labeling frontend, opt-in via `--profile cropwright`. It is
   # also the gateway (OP_GATEWAY_SUBPATHS=true): the one published port for the
   # app, the API docs and the monitoring UIs, which then stay on loopback.
-  # Source lives in ./frontend; nginx proxies the API prefix to yolo-api by
+  # Source lives in ./frontend; nginx proxies the API prefix to api by
   # its op-api alias, so the browser only ever talks to this origin.
   # ===================================================================
   cropwright:
@@ -356,7 +356,7 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      yolo-api:
+      api:
         condition: service_started
     networks:
       - triton_net
@@ -369,7 +369,7 @@ services:
   # workers. See docs/design/curation_design_rationale.md.
   #
   # Every worker below mounts ./src and ./scripts read-only (:ro) —
-  # unlike yolo-api's writable hot-reload mounts, these are long-running
+  # unlike api's writable hot-reload mounts, these are long-running
   # background processes with no request/response cycle to redeploy
   # against; a `docker compose --profile curation up -d --force-recreate
   # <service>` picks up code changes.
@@ -388,13 +388,13 @@ services:
         required: false
     volumes:
       - openprocessor-state:/var/lib/openprocessor
-      # ST-1: shared with yolo-api -- see that service's mount comment.
+      # ST-1: shared with api -- see that service's mount comment.
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
-      # G-06: same source root, same container path, as yolo-api -- the
+      # G-06: same source root, same container path, as api -- the
       # worker resolves item source paths written at ingest time against
       # this mount. See docs/CURATION.md "Mounting your image source".
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
-      # W9.9: VLM API keys by reference (see yolo-api's mount).
+      # W9.9: VLM API keys by reference (see api's mount).
       - ./secrets/vlm:/run/secrets/op_vlm:ro
       # G-08: region profile examples (OP_REGION_PROFILE_PATH) ship baked
       # into the image (see Dockerfile); docker-compose.dev.yml overrides
@@ -420,7 +420,7 @@ services:
       # S-3: lets the worker publish crop.region_verified events to every
       # subscribed SSE client via POST {api_prefix}/events/publish, not
       # just whichever uvicorn worker happened to handle a given POST.
-      - OP_EVENT_API_URL=http://yolo-api:8000
+      - OP_EVENT_API_URL=http://api:8000
     command:
       - python
       - -m
@@ -455,9 +455,9 @@ services:
     volumes:
       - openprocessor-state:/var/lib/openprocessor
     environment:
-      - OP_API=http://yolo-api:8000
+      - OP_API=http://api:8000
       - OPENSEARCH_URL=http://opensearch:9200
-    # G-10: matches yolo-api's extra_hosts -- lets OP_VLM_URL point at
+    # G-10: matches api's extra_hosts -- lets OP_VLM_URL point at
     # http://host.docker.internal:PORT/v1 for an external VLM on Linux.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -473,7 +473,7 @@ services:
       start_period: 60s
       retries: 3
     depends_on:
-      yolo-api:
+      api:
         condition: service_healthy
       opensearch:
         condition: service_started
@@ -492,7 +492,7 @@ services:
       - path: ./.env
         required: false
     volumes:
-      # Shared with yolo-api: this is the trigger/state/heartbeat file
+      # Shared with api: this is the trigger/state/heartbeat file
       # protocol POST /curation/pipeline/auto_label writes into (see
       # OP_AUTO_LABEL_STATE_DIR, default /jobs/auto_label).
       - openprocessor-jobs:/jobs
@@ -500,7 +500,7 @@ services:
       # in-process (pipeline -> _common -> cascade_detect ->
       # profile_registry / class registry / source-image serving), not a
       # thin HTTP client like vlm-worker/cluster-refresh -- it needs the
-      # same three mounts as curation-detection-worker and yolo-api, at
+      # same three mounts as curation-detection-worker and api, at
       # the same container paths, or it 404s/FileNotFoundErrors on its
       # first claimed job while its idle healthcheck stays green.
       # Source images (OP_SOURCE_ROOT): without this every thumbnail
@@ -511,7 +511,7 @@ services:
       # without this the registry loads empty and the stage raises
       # "class_names or class_catalog must be supplied".
       - ./data:/app/data
-      # W9.9: VLM API keys by reference (see yolo-api's mount): this worker
+      # W9.9: VLM API keys by reference (see api's mount): this worker
       # builds the VLM labeler in-process for the auto-label VLM stage.
       - ./secrets/vlm:/run/secrets/op_vlm:ro
       # Region profiles (OP_REGION_PROFILE_PATH): without this the worker
@@ -558,7 +558,7 @@ services:
     command:
       - python
       - scripts/curation/cluster_refresh_daemon.py
-      - --api=http://yolo-api:8000
+      - --api=http://api:8000
       - --opensearch=http://opensearch:9200
     healthcheck:
       test:
@@ -571,7 +571,7 @@ services:
       start_period: 60s
       retries: 3
     depends_on:
-      yolo-api:
+      api:
         condition: service_healthy
       opensearch:
         condition: service_started
@@ -598,7 +598,7 @@ services:
       - MLFLOW_TRACKING_URI=http://curation-mlflow:5000
       - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-openprocessor}
     volumes:
-      # Exports are eval datasets: same /app/data path as yolo-api, where
+      # Exports are eval datasets: same /app/data path as api, where
       # the API resolved them (per project, under ./data/projects/<project>/exports).
       - ./data:/app/data:ro
       - openprocessor-state:/var/lib/openprocessor
@@ -635,7 +635,7 @@ services:
     ports:
       - "${OP_BIND_ADDRESS:-127.0.0.1}:${SEGMENTER_PORT:-4611}:8000"  # Segmentation HTTP API
     volumes:
-      - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches yolo-api)
+      - ./cache/huggingface:/home/appuser/.cache/huggingface  # ST-2: nvme-backed HF cache (appuser, matches api)
     environment:
       # SEGMENTER_LISTEN_PORT is the container's own uvicorn bind port and
       # is intentionally NOT the same name as SEGMENTER_PORT (the host-side
@@ -702,14 +702,14 @@ services:
       - path: ./.env
         required: false
     volumes:
-      # Shared job-file protocol with yolo-api (OP_TRAIN_JOBS_DIR).
+      # Shared job-file protocol with api (OP_TRAIN_JOBS_DIR).
       - openprocessor-jobs:/jobs
       # Run outputs (OP_TRAIN_RUNS_ROOT) + bake-off job drop. This MUST be
-      # mounted at the same absolute path here and in yolo-api: the trainer
+      # mounted at the same absolute path here and in api: the trainer
       # records `checkpoint_path` verbatim and promote resolves that exact
       # string from the API container.
       - openprocessor-state:/var/lib/openprocessor
-      # Frozen dataset exports. Mounted at the same path yolo-api uses so the
+      # Frozen dataset exports. Mounted at the same path api uses so the
       # absolute `dataset_export_dir` in job.json resolves identically.
       - ./data:/app/data:ro
       # Triton model repo, read-only — only so the incumbent comparison can
@@ -722,7 +722,7 @@ services:
       # names HOST gpu ids, which appear inside the container as positional
       # local indices. See docker/trainer/trainer.py::resolve_local_device.
       - OP_TRAIN_GPU_ORDER=${OP_TRAIN_GPU_ORDER:-0}
-      - OP_API_BASE_URL=http://yolo-api:8000
+      - OP_API_BASE_URL=http://api:8000
       - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
       - OP_TRITON_HTTP_URL=http://triton-server:8000
       - OP_TRITON_MODEL_REPO=/models
@@ -745,7 +745,7 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      - yolo-api
+      - api
     networks:
       - triton_net
 
@@ -803,7 +803,7 @@ services:
   # G-10: optional in-compose VLM (Gemma 4 E4B) for the labeling/verify
   # legs (OP_VLM_URL). Off by default -- most deployments either have no
   # VLM yet or already run one elsewhere (set OP_VLM_URL to point at it;
-  # see the host.docker.internal extra_hosts on yolo-api /
+  # see the host.docker.internal extra_hosts on api /
   # curation-vlm-worker for "VLM runs on the host, not in this compose
   # project"). Enable with `docker compose --profile vlm up -d vlm` and
   # set OP_VLM_URL=http://vlm:8000/v1 in .env.
@@ -1133,7 +1133,7 @@ volumes:
   openprocessor-state:
   openprocessor-jobs:
   mlflow_data:
-  # ST-1: shared tmpfs item-crop cache (yolo-api + curation-detection-worker).
+  # ST-1: shared tmpfs item-crop cache (api + curation-detection-worker).
   # Size is the OS-level ceiling; OP_CROP_CACHE_MAX_BYTES (default 3 GiB,
   # see CurationConfig.crop_cache_max_bytes) prunes the *content* down
   # before this fills.

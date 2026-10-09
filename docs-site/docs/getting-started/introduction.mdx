@@ -6,7 +6,7 @@ title: Introduction
 # Introduction
 
 OpenProcessor is a **self-hosted visual AI backend built on NVIDIA Triton
-Inference Server**. One FastAPI service (`yolo-api`, port `4603`) puts
+Inference Server**. One FastAPI service (`api`, port `4603`) puts
 TensorRT-accelerated detection, face recognition, image/text embeddings,
 OCR and vector search behind a single REST API. An optional, experimental
 **curation subsystem** adds an active-learning dataset backend on top of
@@ -36,7 +36,7 @@ The `/curation` surface has a single, unversioned prefix. See the
 
 - **`triton-server`** serves every model from `models/` in explicit
   model-control mode, so models load, unload and get promoted at runtime.
-- **`yolo-api`** does request validation, preprocessing, orchestration and
+- **`api`** does request validation, preprocessing, orchestration and
   response shaping, and talks to Triton over one shared gRPC client so
   concurrent requests reach Triton's dynamic batcher together.
 - **`opensearch`** stores vectors and metadata for search, and each

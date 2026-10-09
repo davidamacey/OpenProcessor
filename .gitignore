@@ -82,7 +82,7 @@ faiss_indexes/
 
 # Test images and videos (use external paths or download separately).
 #
-# F-29/F-71 (fresh-start E2E findings 2026-09-25): yolo-api bind-mounts
+# F-29/F-71 (fresh-start E2E findings 2026-09-25): api bind-mounts
 # ./test_images. On a fresh clone that host dir doesn't exist, so Docker
 # auto-creates it root-owned on the first `up`, and `make
 # download-test-images` (running as the host user) can't write into it.

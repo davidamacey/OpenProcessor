@@ -69,7 +69,7 @@ F1. Which detector ingest uses, and why it looked vehicle-only. Ingest has NO
     `_get_ingest_service`, ~L90-L110). The profile is read from env on every
     call (`src/config/ingest_profiles.py:34` `ingest_primary_profile`), i.e. one
     detector for the whole deployment, shared by all projects, changed only by
-    editing `.env` and recreating the `yolo-api` container. The core pipeline
+    editing `.env` and recreating the `api` container. The core pipeline
     list loads `yolov11_small_trt_end2end` into Triton
     (`docker-compose.yml:40`), 80 classes (`models/yolov11_small_trt_end2end/labels.txt`),
     end2end four-tensor response with max 300 detections and the engine's baked
@@ -349,7 +349,7 @@ The ingest walker prints them.
 
 - Switching the detector (documented in W1): set
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and `OP_INGEST_PRIMARY_LABELS_PATH` if the
-  model dir has no `labels.txt`) in `.env`, recreate the `yolo-api` container;
+  model dir has no `labels.txt`) in `.env`, recreate the `api` container;
   the model must serve the end2end four-tensor contract (`ingest_detect.py`
   docstring; a promoted YOLO26 fused output is NOT drop-in,
   `docs/CURATION.md` L826-L830). It is deployment-wide. Per-project detector
@@ -706,7 +706,7 @@ the dirty runtime files in the repo (`models/yolov11_small_trt_end2end/config.pb
 Baseline (W0, before any code change): with the current stack, throwaway
 project `gen-base`, ingest the 4,000-image COCO set (manifest from #45; if only
 200 are available use those and say so). Run once with the vehicle env set and
-once with `OP_INGEST_PRIMARY_CLASS_IDS` unset (recreate `yolo-api`). Record per
+once with `OP_INGEST_PRIMARY_CLASS_IDS` unset (recreate `api`). Record per
 run: wall time, images/s, detections/image, items store bytes (`GET
 _stats` of the project items index, `size_in_bytes` / docs), images store
 bytes/image, crop cache growth, embed forwards (Triton metrics), VLM items/s on

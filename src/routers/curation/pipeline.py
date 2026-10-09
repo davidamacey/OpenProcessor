@@ -162,7 +162,7 @@ async def _run_auto_label(
         # R6-1a fix (Blocker, W3/W4 round-6 review): auto_label_worker runs
         # this in its OWN container/process, with its own config-store
         # snapshot that starts empty and was refreshed nowhere on the job
-        # path -- `/start`'s own `ensure_fresh` runs in the yolo-api
+        # path -- `/start`'s own `ensure_fresh` runs in the api
         # process, and a different process's in-memory snapshot does not
         # inherit that. Without this, a `(name, revision)` pin resolved at
         # `/start` time 404s here every time ("unknown prompt pack") the

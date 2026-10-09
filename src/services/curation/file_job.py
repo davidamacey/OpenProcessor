@@ -2,7 +2,7 @@
 
 ``state.json`` (atomic temp+rename), ``heartbeat``, ``cancel.flag`` and a
 cross-process start lock under one directory, on the shared ``/jobs``
-volume: every ``yolo-api`` worker process sees the same files, so status,
+volume: every ``api`` worker process sees the same files, so status,
 cancel and singleton start are correct whichever process a request lands
 on (the multi-worker fix ``probe_job`` documents).
 

@@ -1938,14 +1938,14 @@ run_health() {
         if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] && wait_http "http://${h}:${p}/health" 5; then
             log_warn "API is up but not ready (expected without Triton in control-plane-only mode)"
         else
-            fails+=("API /health not ready: ./openprocessor logs yolo-api")
+            fails+=("API /health not ready: ./openprocessor logs api")
         fi
     elif [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         local cur=0 vlm_on=0
         _has_tier curation && cur=1
         { _has_tier vlm || [[ -n "${OP_VLM_URL:-}" ]]; } && vlm_on=1
-        if ! dc exec -T yolo-api python -c "$_API_PROBE_PY" "$cur" "$vlm_on"; then
-            fails+=("API functional probes failed: ./openprocessor logs yolo-api")
+        if ! dc exec -T api python -c "$_API_PROBE_PY" "$cur" "$vlm_on"; then
+            fails+=("API functional probes failed: ./openprocessor logs api")
         fi
     fi
     if _has_tier segmenter; then
@@ -2786,13 +2786,13 @@ do_install() {
         done
         SELECTED_TIERS="core"
         if [[ ",${OP_TIERS}," == *",cropwright,"* ]]; then SELECTED_TIERS="core cropwright"; fi
-        # yolo-api reserves a GPU in the base compose; without one it could
+        # api reserves a GPU in the base compose; without one it could
         # never start, so the control-plane install drops that reservation.
         local cver
         cver="$(dc version --short 2>/dev/null || true)"
         _version_ge "${cver#v}" "$COMPOSE_MIN_OVERRIDE" \
             || die "Docker Compose ${COMPOSE_MIN_OVERRIDE}+ is needed for --control-plane-only (found '${cver:-unknown}')"
-        ( umask 022; printf 'services:\n  yolo-api:\n    deploy: !reset {}\n' > "${OP_DIR}/docker-compose.cpu.yml" )
+        ( umask 022; printf 'services:\n  api:\n    deploy: !reset {}\n' > "${OP_DIR}/docker-compose.cpu.yml" )
         GPU_PLAN_SUMMARY="none (control-plane-only)"
     else
         if [[ -n "$OP_TIERS" ]]; then
@@ -2994,8 +2994,8 @@ do_install() {
     MODEL_SETUP_LOGDIR="${OP_DIR}/.install/logs"
     local group_rc=0
     if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        dc up -d opensearch || die "compose up opensearch failed"
-        dc up -d --no-deps yolo-api || die "compose up yolo-api failed"
+        dc up -d --remove-orphans opensearch || die "compose up opensearch failed"
+        dc up -d --no-deps api || die "compose up api failed"
     elif [[ "$OP_SKIP_MODELS" == 1 ]]; then
         log_info "--skip-models: engines are not exported; run ./openprocessor models install later"
     else
