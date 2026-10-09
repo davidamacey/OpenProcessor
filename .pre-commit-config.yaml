@@ -129,30 +129,10 @@ repos:
         exclude: |
           (?x)^(
               src/ultralytics_patches/|
-              src/clients/opensearch\.py|
-              src/services/visual_search\.py|
-              src/services/face_identity\.py|
-              src/services/duplicate_detection\.py|
               src/routers/ingest\.py|
               src/routers/search\.py|
-              src/clients/curation_opensearch\.py|
-              src/services/curation/clustering/orchestrator\.py|
-              src/services/detection/cascade_detect\.py
+              src/clients/curation_opensearch\.py
           )
-        # src/services/curation/clustering/orchestrator.py (Chunk 4, see
-        # docs/design/curation_design_rationale.md §5) lands at
-        # ~1770 LOC on arrival — a genuine cohesive orchestrator, not a
-        # grab-bag; splitting it during the port would make the diff
-        # unreviewable (it also has a documented orchestrator<->auto_promote
-        # import-order constraint — see the same doc's §5). Follow-up
-        # split tracked by that doc, not silently ignored.
-        # src/services/detection/cascade_detect.py (~1100 LOC) — Chunk 8.
-        # NOT in the original five-file list, but the reference cascade
-        # module is 1124 LOC before any port work — an earlier
-        # audit undercounted this chunk. Splitting the DetectionProfile-parameterized cascade
-        # mid-port would make the diff unreviewable; grandfathered here for
-        # the same reason as the rest of this chunk's oversize files.
-        # Follow-up split tracked alongside the other oversize entries.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code

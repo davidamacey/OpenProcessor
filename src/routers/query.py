@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Path, Query
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
-from src.clients.opensearch import IndexName
+from src.clients.opensearch.names import IndexName
 from src.core.dependencies import VisualSearchDep
 
 

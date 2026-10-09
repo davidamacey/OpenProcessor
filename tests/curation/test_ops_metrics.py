@@ -337,7 +337,7 @@ class TestWorkerPipelineMetrics:
     ) -> None:
         from curation.test_region_cascade_integrity import _accept, _drive_worker, _FakeOpenSearch
         from curation.test_region_worker import _item_with
-        from src.services.detection.cascade_detect import RegionCandidate
+        from src.services.detection.cascade_detect.candidate import RegionCandidate
 
         hit = _sample('op_region_segmenter_requests_total', outcome='hit')
         hit_n = _sample('op_region_segmenter_request_seconds_count', outcome='hit')

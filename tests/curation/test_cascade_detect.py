@@ -28,13 +28,13 @@ from _region_profile_fixture import (
 )
 from PIL import Image
 
-from src.services.detection.cascade_detect import (
-    RegionCandidate,
+from src.services.detection.cascade_detect.candidate import RegionCandidate
+from src.services.detection.cascade_detect.preprocess import _letterbox
+from src.services.detection.cascade_detect.region_detector import (
     RegionDetector,
     _decode_yolo_output,
-    _letterbox,
-    crop_norm_to_source_norm,
 )
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 # =============================================================================
@@ -546,7 +546,7 @@ LETTERS_AND_DIGITS_PROFILE = dataclasses.replace(
 
 
 def _text_region(text: str, profile: Any) -> Any:
-    from src.services.detection.cascade_detect import OcrRegion
+    from src.services.detection.cascade_detect.ocr_recognizer import OcrRegion
 
     return OcrRegion(
         bbox_norm=(0.10, 0.40, 0.45, 0.50),
@@ -574,7 +574,7 @@ class TestTextHintLettersAndDigitsRule:
 class TestPaddleOcrTextRecognizer:
     @pytest.mark.asyncio
     async def test_canonicalizes_and_filters(self) -> None:
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -603,7 +603,7 @@ class TestPaddleOcrTextRecognizer:
 
     @pytest.mark.asyncio
     async def test_pick_best_plate_region(self) -> None:
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -628,7 +628,7 @@ class TestPaddleOcrTextRecognizer:
     @pytest.mark.asyncio
     async def test_f4_rejects_letters_only_text(self) -> None:
         """With the letters+digits rule on, lettering-only text must not promote."""
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -655,7 +655,7 @@ class TestPaddleOcrTextRecognizer:
     @pytest.mark.asyncio
     async def test_f4_rejects_low_rec_score(self) -> None:
         """Even a perfect-looking plate text below the rec-score floor is rejected."""
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -676,7 +676,7 @@ class TestPaddleOcrTextRecognizer:
     @pytest.mark.asyncio
     async def test_f4_accepts_vanity_plate(self) -> None:
         """Vanity plates with letter+digit mix promote (e.g. 'LUV2DRV')."""
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -695,7 +695,7 @@ class TestPaddleOcrTextRecognizer:
 
     @pytest.mark.asyncio
     async def test_rejects_non_plate_shaped_region(self) -> None:
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -716,7 +716,7 @@ class TestPaddleOcrTextRecognizer:
 
     @pytest.mark.asyncio
     async def test_read_plate_region_joins_lines(self) -> None:
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(
@@ -741,7 +741,7 @@ class TestPaddleOcrTextRecognizer:
 
     @pytest.mark.asyncio
     async def test_infer_failure_returns_empty(self) -> None:
-        from src.services.detection.cascade_detect import PaddleOcrTextRecognizer
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
         pool.infer = AsyncMock(side_effect=RuntimeError('triton down'))

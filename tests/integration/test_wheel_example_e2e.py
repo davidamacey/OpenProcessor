@@ -42,7 +42,7 @@ from scripts.datasets import build_import_fixture as fx
 from src.config.curation import IndexRole, base_curation_config
 from src.config.projects import new_project_record
 from src.routers.curation import projects as projects_router
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.projects.registry import (
     ProjectRegistry,
     get_project_registry,

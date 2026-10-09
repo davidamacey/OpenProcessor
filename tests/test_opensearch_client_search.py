@@ -27,7 +27,8 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 
-from src.clients.opensearch import IndexMappingError, IndexName, OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import IndexMappingError, IndexName
 
 
 @pytest.fixture

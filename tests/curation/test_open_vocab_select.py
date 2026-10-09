@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.open_vocab_select import (
     ExistingBox,
     TargetRules,

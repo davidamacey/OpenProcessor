@@ -30,8 +30,8 @@ from src.config.curation import items_index
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
-from src.services.curation.clustering.orchestrator import (
-    AHC_DISTANCE_THRESHOLD,
+from src.services.curation.clustering.methods.ahc import AHC_DISTANCE_THRESHOLD
+from src.services.curation.clustering.refine import (
     MAX_REFINE_MEMBERS,
     refine_members,
     subcluster_label,

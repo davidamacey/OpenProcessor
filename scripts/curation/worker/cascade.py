@@ -27,7 +27,7 @@ from src.core.logging import get_logger
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
 from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_scope import parent_classes_clause
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile
 
 

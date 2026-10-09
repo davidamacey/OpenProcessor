@@ -20,7 +20,7 @@ from _fake_project_registry import install_static_project_registry
 import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from src.config import get_region_fields
-from src.services.detection.cascade_detect import RegionCandidate
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import register_profile
 from src.services.detection.region_text import OcrLine
 from src.services.labeling.region_overlay import VlmBoxVerdict

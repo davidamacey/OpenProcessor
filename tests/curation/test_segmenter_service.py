@@ -34,7 +34,7 @@ import pytest
 from PIL import Image
 
 from scripts.curation.worker.client import SegmenterClient, SegmenterRequestFailed
-from src.services.detection.cascade_detect import crop_norm_to_source_norm
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 _SEGMENTER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'segmenter'

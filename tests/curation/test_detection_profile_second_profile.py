@@ -23,12 +23,10 @@ from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_L
 from PIL import Image
 
 from src.config import DetectionProfile
-from src.services.detection.cascade_detect import (
-    OcrRegion,
-    RegionCandidate,
-    RegionDetector,
-    _letterbox,
-)
+from src.services.detection.cascade_detect.candidate import RegionCandidate
+from src.services.detection.cascade_detect.ocr_recognizer import OcrRegion
+from src.services.detection.cascade_detect.preprocess import _letterbox
+from src.services.detection.cascade_detect.region_detector import RegionDetector
 
 
 BOX_PROFILE = DetectionProfile(

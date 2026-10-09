@@ -31,7 +31,7 @@ from src.services.curation.region_eval import (
     to_source_frame,
     yolo_to_xyxy,
 )
-from src.services.detection.cascade_detect import crop_norm_to_source_norm
+from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 if TYPE_CHECKING:

@@ -38,7 +38,7 @@ from src.utils.class_names import normalize_class_name
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from src.services.detection.cascade_detect import RegionCandidate
+    from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 #: A locked box this much covered by a hit blocks the hit, whatever its class.
 LOCKED_OVERLAP_IOU = 0.8
