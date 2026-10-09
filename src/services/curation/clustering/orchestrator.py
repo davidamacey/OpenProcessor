@@ -1,6 +1,5 @@
 """
-Curation clustering orchestrator — registers the item-level "vehicles"
-cluster index and runs the residual-pool clusterer.
+Curation clustering orchestrator — runs the residual-pool clusterer.
 
 The residual-pool algorithm implementations live in
 :py:mod:`src.services.curation.clustering.methods` behind a small registry
@@ -11,10 +10,9 @@ to retrain IVF centroids), ``residual_gate`` (primary-subject gate) and
 
 Public surface:
 
-1. :py:data:`ITEMS_CLUSTER_INDEX` — FAISS cluster-index handle.
-2. :py:func:`cluster_residuals` — residual-pool clusterer; dispatches
+1. :py:func:`cluster_residuals` — residual-pool clusterer; dispatches
    through :py:func:`cluster_methods.get_method`.
-3. :py:func:`assign_only_residuals` — re-sort against persisted centroids.
+2. :py:func:`assign_only_residuals` — re-sort against persisted centroids.
 
 Skip-rule: residual pool < 32 residuals → no-op (return empty summary).
 """
@@ -28,7 +26,6 @@ import numpy as np
 
 from src.config.curation import items_index
 from src.core.logging import get_logger
-from src.services.clustering import ClusterIndex
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.cluster_write_guard import (
     _guarded_class_cluster_write,
@@ -45,30 +42,8 @@ from src.services.curation.clustering.residual_gate import (
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.services.clustering import ClusteringService
-
 
 logger = get_logger(__name__)
-
-
-ITEMS_CLUSTER_INDEX: ClusterIndex = ClusterIndex.VEHICLES
-"""FAISS cluster-index role for the curation item tenant.
-
-Deliberately reuses the pre-existing, unrelated visual-search
-``ClusterIndex.VEHICLES`` role rather than adding a curation-specific
-member to ``src/services/clustering.py`` — a naming leftover from the
-reference deployment, tracked as a documented gap in
-``docs/design/curation_design_rationale.md`` §6.
-"""
-
-
-async def assign_cluster_to_crop(
-    service: ClusteringService,
-    embedding: np.ndarray,
-) -> tuple[int, float]:
-    """Convenience wrapper: assign a single embedding to its items cluster."""
-    out = service.assign_cluster(ITEMS_CLUSTER_INDEX, embedding)
-    return int(out.cluster_id), float(out.distance)
 
 
 async def cluster_residuals(
