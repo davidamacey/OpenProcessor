@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.services.curation import probe_job
+from src.services.curation.file_job import HEARTBEAT_STALE_S
 
 
 if TYPE_CHECKING:
@@ -176,7 +177,7 @@ def test_stale_heartbeat_is_repaired_to_failed_on_status_read(jobs_dir: Path) ->
     )
     heartbeat = jobs_dir / 'heartbeat'
     heartbeat.touch()
-    old = time.time() - (probe_job._HEARTBEAT_STALE_S + 30)
+    old = time.time() - (HEARTBEAT_STALE_S + 30)
     os.utime(heartbeat, (old, old))
 
     status = probe_job.get_status()
@@ -199,7 +200,7 @@ async def test_start_succeeds_after_stale_heartbeat_repair(
     )
     heartbeat = jobs_dir / 'heartbeat'
     heartbeat.touch()
-    old = time.time() - (probe_job._HEARTBEAT_STALE_S + 30)
+    old = time.time() - (HEARTBEAT_STALE_S + 30)
     os.utime(heartbeat, (old, old))
 
     async def _fake_run_probe_inference(model_path, opensearch, **kwargs):

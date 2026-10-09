@@ -6,9 +6,8 @@ volume: every ``yolo-api`` worker process sees the same files, so status,
 cancel and singleton start are correct whichever process a request lands
 on (the multi-worker fix ``probe_job`` documents).
 
-Used by the dataset-import and reprocess jobs. ``probe_job``,
-``item_scores.job``, ``selection.job`` and ``embedding_viz`` keep their own
-copies of this convention; they are not migrated here.
+Used by the dataset-import, reprocess, probe, item-score, embedding-viz and
+auto-label jobs. ``selection.job`` still keeps its own copy of this convention.
 """
 
 from __future__ import annotations

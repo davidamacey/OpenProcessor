@@ -187,7 +187,7 @@ def _job_state_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _seed_running_job(job_id: str, scorer_names: list[str]) -> None:
     state = scores_job._JobState(job_id=job_id, status='running', scorers=list(scorer_names))
-    scores_job._atomic_write(state)
+    scores_job._job().write(state.to_dict())
 
 
 async def _run_with_spies(

@@ -62,6 +62,8 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -85,12 +87,8 @@ def _state_dir() -> Path:
     return get_curation_config().autolabel_dir
 
 
-def _state_file() -> Path:
-    return _state_dir() / 'state.json'
-
-
-def _cancel_flag() -> Path:
-    return _state_dir() / 'cancel.flag'
+def _job() -> FileJob:
+    return FileJob(_state_dir())
 
 
 def _running_lock() -> Path:
@@ -105,15 +103,9 @@ def _trigger_file() -> Path:
     return _state_dir() / 'trigger.json'
 
 
-def _heartbeat_file() -> Path:
-    return _state_dir() / 'heartbeat'
-
-
-# How stale the worker's heartbeat must be before we declare the worker
-# dead and stamp 'vanished' on a 'running' state. The worker touches
-# heartbeat every 5 s; 30 s leaves room for a long blocking call inside
-# a stage without false-positives.
-_HEARTBEAT_STALE_S = 30.0
+# The worker touches the heartbeat every 5 s; file_job.HEARTBEAT_STALE_S (30 s)
+# leaves room for a long blocking call inside a stage without false-positives.
+_ACTIVE = frozenset({'running'})
 
 
 @dataclass
@@ -152,45 +144,15 @@ class _JobState:
         return d
 
 
-def _ensure_dir() -> None:
-    _state_dir().mkdir(parents=True, exist_ok=True)
-
-
-def _atomic_write(payload: dict[str, Any]) -> None:
-    """Write state.json via temp + rename so readers never see a partial file."""
-    _ensure_dir()
-    tmp = _state_file().with_suffix('.tmp')
-    tmp.write_text(json.dumps(payload, default=str))
-    tmp.replace(_state_file())
-
-
 def _read_state() -> _JobState:
     """Load the on-disk state. Returns a default idle state if missing."""
-    try:
-        raw = json.loads(_state_file().read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return _JobState()
     state = _JobState()
-    for k, v in raw.items():
+    for k, v in _job().read().items():
         if k in {'eta_seconds', 'elapsed_seconds'}:
             continue  # derived in to_dict
         if hasattr(state, k):
             setattr(state, k, v)
     return state
-
-
-def _heartbeat_age() -> float | None:
-    """Seconds since the worker last touched HEARTBEAT_FILE.
-
-    Returns None if the file does not exist (worker is idle / no run in
-    flight). Callers compare against ``_HEARTBEAT_STALE_S`` to decide if
-    a 'running' state should be repaired to 'failed'.
-    """
-    try:
-        mtime = _heartbeat_file().stat().st_mtime
-    except (FileNotFoundError, PermissionError, OSError):
-        return None
-    return max(0.0, time.time() - mtime)
 
 
 def _is_busy() -> bool:
@@ -200,7 +162,7 @@ def _is_busy() -> bool:
     ``/proc/<pid>/stat`` (which is namespaced and so was meaningless
     when the API and the worker were in different containers). The
     worker container touches HEARTBEAT_FILE every 5 s; if the mtime is
-    less than ``_HEARTBEAT_STALE_S`` old we consider the run alive.
+    less than ``HEARTBEAT_STALE_S`` old we consider the run alive.
 
     A pending trigger that hasn't been picked up yet also counts as
     'busy' — a second :func:`start_job` while a trigger sits unread
@@ -208,10 +170,10 @@ def _is_busy() -> bool:
     """
     if _trigger_file().exists():
         return True
-    age = _heartbeat_age()
+    age = _job().heartbeat_age()
     if age is None:
         return False
-    return age <= _HEARTBEAT_STALE_S
+    return age <= HEARTBEAT_STALE_S
 
 
 def _reap_stale_artifacts() -> None:
@@ -222,10 +184,7 @@ def _reap_stale_artifacts() -> None:
     """
     with contextlib.suppress(FileNotFoundError):
         _running_lock().unlink()
-    with contextlib.suppress(FileNotFoundError):
-        _cancel_flag().unlink()
-    with contextlib.suppress(FileNotFoundError):
-        _heartbeat_file().unlink()
+    _job().clear_signals()
 
 
 def reconcile_orphaned_jobs() -> bool:
@@ -250,14 +209,7 @@ def reconcile_orphaned_jobs() -> bool:
     """
     if _trigger_file().exists():
         return False
-    from src.services.curation.job_reconcile import reconcile_stale_running
-
-    return reconcile_stale_running(
-        _state_file(),
-        _heartbeat_file(),
-        stale_s=_HEARTBEAT_STALE_S,
-        error_prefix='auto_label worker',
-    )
+    return _job().reconcile(active_statuses=_ACTIVE, error_prefix='auto_label worker')
 
 
 def failed_stages(result: Any) -> list[str]:
@@ -275,7 +227,7 @@ def get_state() -> dict[str, Any]:
     """Read-only snapshot from the on-disk state file.
 
     Repair logic: if state says 'running' but the worker's heartbeat is
-    stale (> ``_HEARTBEAT_STALE_S``) AND there's no pending trigger,
+    stale (> ``HEARTBEAT_STALE_S``) AND there's no pending trigger,
     the worker container died mid-run without writing terminal state.
     Stamp the file failed with a heartbeat-staleness reason so
     operators see an actionable message instead of stale 'running'.
@@ -286,8 +238,8 @@ def get_state() -> dict[str, Any]:
     """
     state = _read_state()
     if state.status == 'running':
-        age = _heartbeat_age()
-        if not _trigger_file().exists() and (age is None or age > _HEARTBEAT_STALE_S):
+        age = _job().heartbeat_age()
+        if not _trigger_file().exists() and (age is None or age > HEARTBEAT_STALE_S):
             stale_msg = (
                 f'auto_label worker heartbeat stale ({age:.1f}s ago)'
                 if age is not None
@@ -296,7 +248,7 @@ def get_state() -> dict[str, Any]:
             state.status = 'failed'
             state.error = state.error or stale_msg
             state.finished_at = state.finished_at or time.time()
-            _atomic_write(asdict(state))
+            _job().write(asdict(state))
             _reap_stale_artifacts()
     return state.to_dict()
 
@@ -343,14 +295,14 @@ class _Progress:
         self._state.processed = 0
         self._state.total = int(total)
         self._stage_started_at = time.time()
-        _atomic_write(asdict(self._state))
+        _job().write(asdict(self._state))
 
     def advance(self, n: int = 1) -> None:
         self._state.processed = min(
             self._state.processed + int(n),
             self._state.total or self._state.processed + int(n),
         )
-        _atomic_write(asdict(self._state))
+        _job().write(asdict(self._state))
 
     def update(self, processed: int, total: int | None = None) -> None:
         """Set absolute progress. Used by scroll-loop checkpoints and
@@ -361,7 +313,7 @@ class _Progress:
         self._state.processed = max(0, int(processed))
         if total is not None:
             self._state.total = max(0, int(total))
-        _atomic_write(asdict(self._state))
+        _job().write(asdict(self._state))
 
     def set_backend(
         self,
@@ -378,7 +330,7 @@ class _Progress:
         self._state.backend = name
         self._state.backend_detail = detail
         self._state.free_vram_mb = free_vram_mb
-        _atomic_write(asdict(self._state))
+        _job().write(asdict(self._state))
 
     def record_peak_vram(self, mb: int | None) -> None:
         """Keep the maximum VRAM observed during the run."""
@@ -387,7 +339,7 @@ class _Progress:
         current = self._state.peak_vram_mb or 0
         if mb > current:
             self._state.peak_vram_mb = int(mb)
-            _atomic_write(asdict(self._state))
+            _job().write(asdict(self._state))
 
     def finalize(self) -> None:
         """Flush the final stage's duration. Called by the worker when
@@ -395,14 +347,14 @@ class _Progress:
         their per-stage timings)."""
         self._flush_current_stage_duration()
         self._stage_started_at = 0.0
-        _atomic_write(asdict(self._state))
+        _job().write(asdict(self._state))
 
     @property
     def cancelled(self) -> bool:
-        return _cancel_flag().exists()
+        return _job().cancel_requested()
 
     def raise_if_cancelled(self) -> None:
-        if _cancel_flag().exists():
+        if _job().cancel_requested():
             raise asyncio.CancelledError('auto_label run cancelled by operator')
 
 
@@ -477,19 +429,15 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
     Raises ``RuntimeError`` if a run is already in flight; the caller
     surfaces this as HTTP 409.
     """
-    _ensure_dir()
     if _is_busy():
         raise RuntimeError('auto_label run already in progress')
 
     # Clean up any leftover sentinels from a prior aborted run so
     # operators get a clean slate. (cancel.flag would otherwise short-
     # circuit the next run at its first stage boundary.)
-    with contextlib.suppress(FileNotFoundError):
-        _cancel_flag().unlink()
+    _job().clear_signals()
     with contextlib.suppress(FileNotFoundError):
         _exit_code_file().unlink()
-    with contextlib.suppress(FileNotFoundError):
-        _heartbeat_file().unlink()
 
     # Keep the outgoing job answerable by id (GET .../status/{job_id}).
     # get_state() first so a dead run is archived with its repaired status.
@@ -512,7 +460,7 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
         args=serializable_args,
         pipeline=pipeline_path,
     )
-    _atomic_write(asdict(state))
+    _job().write(asdict(state))
 
     # Drop the trigger. The worker watches for this file every
     # POLL_INTERVAL_S and claims it atomically via unlink.
@@ -546,8 +494,7 @@ def cancel_job() -> bool:
     """
     if not _is_busy():
         return False
-    _ensure_dir()
-    _cancel_flag().touch()
+    _job().request_cancel()
     return True
 
 
@@ -556,6 +503,6 @@ def state_mtime() -> float:
     SSE stream polls this per connection: it only ever sees its own
     project's job, and a stat per second per open dashboard is cheap."""
     try:
-        return _state_file().stat().st_mtime
+        return _job().state_file.stat().st_mtime
     except FileNotFoundError:
         return 0.0
