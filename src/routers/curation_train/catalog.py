@@ -141,7 +141,7 @@ async def list_train_gpu_options() -> TrainGpuOptionsResponse:
     deployment's GPU topology. Unrestricted installs (no
     ``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.
 
-    When the trainer's published ``gpu_order`` (see ``_trainer_gpu_order``)
+    When the trainer's published ``gpu_order`` (see ``read_trainer_gpu_order``)
     is known and non-empty, the option list is intersected with it -- a
     trainer physically attached to only host GPU 2 must not offer GPU 0 as
     selectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a
