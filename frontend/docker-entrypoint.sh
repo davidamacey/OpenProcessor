@@ -88,6 +88,50 @@ case "$DATASET_UPLOAD_MAX_MB" in
     ;;
 esac
 
+# Gateway mode: serve the monitoring UIs under sub-paths of this one origin.
+# Same spelling as the API's OP_GATEWAY_SUBPATHS (CurationConfig._bool), plus an
+# explicit refusal of anything else so a typo cannot silently leave it off.
+GATEWAY_DIR=/etc/nginx/gateway.d
+GATEWAY_SNIPPET=/etc/nginx/snippets/gateway-subpaths.conf
+GATEWAY_ON=0
+case "$(printf '%s' "${OP_GATEWAY_SUBPATHS:-}" | tr 'A-Z' 'a-z')" in
+  1|true|yes|on) GATEWAY_ON=1 ;;
+  ''|0|false|no|off) ;;
+  *)
+    echo "[entrypoint] OP_GATEWAY_SUBPATHS must be true/false (1, true, yes, on / 0, false, no, off), got: ${OP_GATEWAY_SUBPATHS}" >&2
+    exit 1
+    ;;
+esac
+
+# A UI upstream is a bare compose service name over plain http: no IP, no
+# dotted name, no path. That is what keeps the gateway from proxying to
+# anything outside the compose network.
+gateway_upstream() {
+  var="$1"; value="$2"
+  if ! printf '%s' "$value" | grep -Eq '^http://[a-z][a-z0-9-]*:[0-9]{1,5}$'; then
+    echo "[entrypoint] $var must be http://<compose-service-name>:<port> (single-label name, no IP or path), got: $value" >&2
+    exit 1
+  fi
+  printf '%s' "$value"
+}
+
+mkdir -p "$GATEWAY_DIR"
+rm -f "$GATEWAY_DIR/gateway-subpaths.conf"
+if [ "$GATEWAY_ON" != 1 ]; then
+  # Off: these paths are not the SPA's. Without this, `try_files` would answer a
+  # /grafana/ link with the app shell (200) as if something were served there.
+  for sub in grafana prometheus dashboards mlflow; do
+    printf 'location ^~ /%s/ {\n    return 404;\n}\nlocation = /%s {\n    return 404;\n}\n' "$sub" "$sub"
+  done > "$GATEWAY_DIR/gateway-subpaths.conf"
+else
+  GRAFANA_UPSTREAM="$(gateway_upstream GRAFANA_UPSTREAM "${GRAFANA_UPSTREAM:-http://grafana:3000}")"
+  PROMETHEUS_UPSTREAM="$(gateway_upstream PROMETHEUS_UPSTREAM "${PROMETHEUS_UPSTREAM:-http://prometheus:9090}")"
+  DASHBOARDS_UPSTREAM="$(gateway_upstream DASHBOARDS_UPSTREAM "${DASHBOARDS_UPSTREAM:-http://opensearch-dashboards:5601}")"
+  MLFLOW_UPSTREAM="$(gateway_upstream MLFLOW_UPSTREAM "${MLFLOW_UPSTREAM:-http://curation-mlflow:5000}")"
+  sed "s|__GRAFANA_UPSTREAM__|${GRAFANA_UPSTREAM}|g; s|__PROMETHEUS_UPSTREAM__|${PROMETHEUS_UPSTREAM}|g; s|__DASHBOARDS_UPSTREAM__|${DASHBOARDS_UPSTREAM}|g; s|__MLFLOW_UPSTREAM__|${MLFLOW_UPSTREAM}|g" \
+    "$GATEWAY_SNIPPET" > "$GATEWAY_DIR/gateway-subpaths.conf"
+fi
+
 find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.html' \) \
     -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g; s|__DATASET_UPLOAD_MAX_MB__|${DATASET_UPLOAD_MAX_MB}|g" {} +
 
@@ -102,3 +146,4 @@ echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"
 echo "[entrypoint] DOCS_UPSTREAM=${DOCS_UPSTREAM}"
 echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"
 echo "[entrypoint] CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${DATASET_UPLOAD_MAX_MB}"
+echo "[entrypoint] OP_GATEWAY_SUBPATHS=${GATEWAY_ON} (1 = monitoring UIs proxied under /grafana/, /prometheus/, /dashboards/, /mlflow/)"

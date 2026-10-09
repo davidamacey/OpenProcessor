@@ -129,6 +129,10 @@ everything on 127.0.0.1.**
   `0.0.0.0`, so LAN browsers can follow resource links while the datastore and
   model APIs stay local. Change `GF_SECURITY_ADMIN_PASSWORD` first; MLflow and
   Prometheus have no auth.
+- `OP_GATEWAY_SUBPATHS=true` (in `.env`, with the `cropwright` profile) serves the
+  four monitoring UIs under `/grafana/`, `/prometheus/`, `/dashboards/` and
+  `/mlflow/` on Cropwright's one port, so the UIs can stay on loopback; it needs a
+  non-default `GF_SECURITY_ADMIN_PASSWORD`. See the monitoring guide.
 - A re-run keeps the Cropwright bind you chose last time.
 
 Details: [SECURITY.md](SECURITY.md).

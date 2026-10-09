@@ -9,7 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Gateway mode: with `OP_GATEWAY_SUBPATHS=true` the entrypoint installs
+  `nginx-gateway.conf`, which proxies `/grafana/`, `/prometheus/`, `/dashboards/` and
+  `/mlflow/` to the compose services (bare service names only, overridable with
+  `GRAFANA_UPSTREAM`, `PROMETHEUS_UPSTREAM`, `DASHBOARDS_UPSTREAM`, `MLFLOW_UPSTREAM`),
+  with the websocket upgrade for Grafana Live. No ports are hardcoded in the app.
+  With the switch off those four paths answer 404 instead of the app shell, and an
+  `https` `X-Forwarded-Proto` from an outer TLS proxy is kept on the gateway locations.
 - The item wire carries `detector_class_name`, `detector_class_id` and `detector_confidence` (the detector's own class, kept next to the VLM or human label); `RawCrop` and the test fixtures list them.
+
+### Fixed
+
+- nginx uses `absolute_redirect off`, so redirects no longer point at container port 8080.
 
 ### Changed
 
