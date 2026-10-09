@@ -3,17 +3,19 @@
   "note": "Hand-maintained, not derived from an issue tracker. 'Shipped' means it is on main today; 'Planned' items are design work that has not landed and may change after measurement. Update this file when scope actually changes; never describe work that isn't planned.",
   "releases": [
     {
-      "version": "v0.4.1",
-      "headline": "Core inference API plus an experimental curation backend",
+      "version": "v0.5.0",
+      "headline": "The monorepo release: backend and Cropwright in one repository, label confirmation, one-port gateway",
       "stage": "shipped",
-      "summary": "The Triton-backed core API (detection, faces, embeddings, OCR, search, ingest, analyze) and the opt-in /curation active-learning subsystem with its reference workers, trainer, evaluator, segmenter and VLM compose profiles.",
+      "summary": "The Triton-backed core API and the opt-in /curation active-learning subsystem, now released together with the Cropwright frontend (frontend/) from one repository and one docs site. Adds label confirmation (VLM scope policy, detector class kept beside VLM labels, accuracy audit, audit-gated auto-promote), the gateway, and a refreshed dependency set.",
       "items": [
-        "YOLO11 (end2end, GPU NMS) and YOLO26 (NMS-free) served side by side; per-request model selection and runtime load/unload",
-        "SCRFD + ArcFace faces, MobileCLIP embeddings, PP-OCRv5 OCR pipeline, OpenSearch k-NN search",
-        "/curation: 145 method routes in the generated OpenAPI contract, covering ingest, clustering, review queues, VLM labeling, region cascade, export, training, bake-off and promote",
-        "Opt-in compose profiles: curation, segmenter, vlm, training, monitoring, benchmark",
-        "Generated OpenAPI contract for /curation under contracts/, checked for drift in pre-commit",
-        "Public, license-filtered sample data (make sample-coco, make sample-plates); nothing proprietary bundled"
+        "Backend and the Cropwright web UI in one repository, built and pinned together; one docs site",
+        "Label confirmation: per-project VLM scope policy, the detector's own class kept beside VLM labels, a detector_disagreements review tab, an accuracy audit with Wilson 95% intervals, and an audit gate on auto-promote",
+        "Optional registry prior for VLM prompt packs (registry_prior_top_k, off by default)",
+        "Gateway: Grafana, Prometheus, OpenSearch Dashboards and MLflow on sub-paths of the single Cropwright port (OP_GATEWAY_SUBPATHS)",
+        "Breaking: the compose service yolo-api is now api; the unread ocr_det_* region profile fields are removed",
+        "/curation: 266 method routes in the generated OpenAPI contract",
+        "Refreshed dependencies: FastAPI 0.143 and Pydantic 2.14, SvelteKit 3 and TypeScript 6, MLflow 3.17, PyTorch 2.14.1 segmenter base, Playwright 1.63",
+        "Opt-in compose profiles: curation, segmenter, vlm, training, monitoring, benchmark, cropwright"
       ]
     },
     {
