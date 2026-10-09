@@ -151,16 +151,43 @@ def _strictly_before(field: str, order: str, value: Any) -> dict[str, Any] | Non
     return {'range': {field: {'lt' if order == 'asc' else 'gt': value}}}
 
 
+def _rank_clause(ranks: set[int]) -> dict[str, Any]:
+    """Items whose ``vlm_confidence`` ranks (see ``VLM_CONFIDENCE_RANK_SORT``) are in ``ranks``."""
+    known = list(review_sorts.VLM_CONFIDENCE_ORDER)
+    should: list[dict[str, Any]] = []
+    if 0 in ranks:
+        should.append({'bool': {'must_not': [{'terms': {'vlm_confidence': known}}]}})
+    present = [known[r - 1] for r in sorted(ranks) if r > 0]
+    if present:
+        should.append({'terms': {'vlm_confidence': present}})
+    return {'bool': {'should': should, 'minimum_should_match': 1}}
+
+
+def _source_rank(source: dict[str, Any]) -> int:
+    value = source.get('vlm_confidence')
+    order = review_sorts.VLM_CONFIDENCE_ORDER
+    return order.index(value) + 1 if value in order else 0
+
+
 def before_query(sort: list[dict[str, Any]], source: dict[str, Any]) -> dict[str, Any]:
     """Query for items sorting strictly before the doc ``source`` under ``sort``."""
-    keys = [_sort_key(e) for e in sort]
-    alternatives: list[dict[str, Any]] = []
-    for i, (field, order) in enumerate(keys):
+    # Per sort key: (items equal to source, items strictly before source).
+    keys: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
+    for entry in sort:
+        if entry == review_sorts.VLM_CONFIDENCE_RANK_SORT:
+            rank = _source_rank(source)
+            keys.append((_rank_clause({rank}), _rank_clause(set(range(rank))) if rank else None))
+            continue
+        field, order = _sort_key(entry)
         value = source.get(field)
         if isinstance(value, list):
             raise UnlocatableSortError(f'cannot locate by multi-valued field {field}')
-        prior = [_equal(f, source.get(f)) for f, _o in keys[:i]]
-        alternatives.append({'bool': {'filter': [*prior, _strictly_before(field, order, value)]}})
+        keys.append((_equal(field, value), _strictly_before(field, order, value)))
+    alternatives: list[dict[str, Any]] = [
+        {'bool': {'filter': [*(eq for eq, _b in keys[:i]), before]}}
+        for i, (_eq, before) in enumerate(keys)
+        if before is not None
+    ]
     return {'bool': {'should': alternatives, 'minimum_should_match': 1}}
 
 

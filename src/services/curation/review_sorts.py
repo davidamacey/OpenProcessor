@@ -39,6 +39,26 @@ if TYPE_CHECKING:
     from src.services.curation.strategy_registry import StrategyStatus
 
 
+# ``vlm_confidence`` is a keyword, so sorting the field would order its words
+# (high, low, medium). Hard cases come first: a missing or unrecognised value
+# ranks 0, then low, medium, high.
+VLM_CONFIDENCE_ORDER: tuple[str, ...] = ('low', 'medium', 'high')
+VLM_CONFIDENCE_RANK_SORT: dict[str, Any] = {
+    '_script': {
+        'type': 'number',
+        'order': 'asc',
+        'script': {
+            'lang': 'painless',
+            'source': (
+                "doc.containsKey('vlm_confidence') && doc['vlm_confidence'].size() > 0 "
+                "? params.ranks.getOrDefault(doc['vlm_confidence'].value, 0) : 0"
+            ),
+            'params': {'ranks': {v: i + 1 for i, v in enumerate(VLM_CONFIDENCE_ORDER)}},
+        },
+    }
+}
+
+
 @dataclass(frozen=True)
 class ReviewSort:
     """One selectable (or not-yet-selectable) review-queue sort strategy."""
@@ -275,24 +295,17 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
         ),
         ReviewSort(
             id='detector_disagreement_default',
-            label='VLM confidence, then detector confidence',
+            label='Least VLM confidence first, then detector confidence',
             clause=[
-                # A keyword field: this orders by the stored value (high, low,
-                # medium), which keeps the sort locatable (no script sort).
-                {
-                    'vlm_confidence': {
-                        'order': 'asc',
-                        'missing': '_last',
-                        'unmapped_type': 'keyword',
-                    }
-                },
+                VLM_CONFIDENCE_RANK_SORT,
                 {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
             ],
             requires_field='vlm_confidence',
             status='stable',
             description=(
-                "Grouped by the VLM's own confidence value, then the detector's confidence "
-                'high to low. Default for the detector_disagreements tab.'
+                "The VLM's own confidence from low to high (an answer with no recorded "
+                "confidence first), then the detector's confidence high to low. Default for "
+                'the detector_disagreements tab.'
             ),
         ),
         ReviewSort(
