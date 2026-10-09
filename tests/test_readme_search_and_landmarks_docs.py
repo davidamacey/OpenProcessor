@@ -5,7 +5,7 @@ Two mismatches:
 
 1. README's Python and cURL ``POST /search/text`` examples posted a JSON
    body (``{"query": ..., "top_k": ...}``). The route
-   (``src.routers.search.search_by_text``) only ever read ``text`` and
+   (``src.routers.search.image_text.search_by_text``) only ever read ``text`` and
    ``top_k`` as *query* parameters -- following the README verbatim 422s
    with ``loc: ['query', 'text'], msg: 'Field required'``.
 2. README's and CLAUDE.md's Face Recognition Response example showed
@@ -35,7 +35,7 @@ CLAUDE_MD = (REPO_ROOT / 'CLAUDE.md').read_text()
 def _search_text_query_param_names() -> set[str]:
     from fastapi import Query
 
-    from src.routers.search import search_by_text
+    from src.routers.search.image_text import search_by_text
 
     names = set()
     for name, param in inspect.signature(search_by_text).parameters.items():
