@@ -82,6 +82,10 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
+    ignore:
+      # Docusaurus and its TypeScript tooling stop at TypeScript 6.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
