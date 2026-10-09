@@ -289,7 +289,7 @@
   <div class="flex h-screen flex-col bg-zinc-950 text-zinc-100">
     <!-- Top bar -->
     <header
-      class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
+      class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-800 bg-zinc-950 px-4 py-1.5 md:h-12 md:flex-nowrap md:py-0"
     >
       <div class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
         <button
@@ -315,7 +315,9 @@
             />
           </svg>
         </button>
-        <a href={resolve(projectHref('/dashboard'))} class="hover:text-white">{appName}</a
+        <a
+          href={resolve(projectHref('/dashboard'))}
+          class="hidden hover:text-white sm:inline">{appName}</a
         >
       </div>
 
@@ -327,7 +329,7 @@
          "classe" at 800px); the primary nav strip to its right scrolls
          with a chevron instead. -->
       <nav
-        class="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm"
+        class="hidden shrink-0 items-center gap-1 whitespace-nowrap text-sm sm:flex"
         aria-label="Breadcrumb"
         data-testid="breadcrumb"
       >
@@ -359,6 +361,7 @@
          into view. -->
       <ScrollStrip
         navLabel="Primary"
+        navClass="order-last basis-full md:order-none md:basis-auto"
         activeKey={path}
         class="gap-3 text-sm text-zinc-300"
         testId="primary-nav"

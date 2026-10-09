@@ -69,10 +69,10 @@
 
 <svelte:window onpointerdown={onWindowPointer} />
 
-<div class="relative shrink-0" bind:this={root} data-testid="project-switcher">
+<div class="relative min-w-0 shrink" bind:this={root} data-testid="project-switcher">
   <button
     type="button"
-    class="flex max-w-[16rem] items-center gap-1.5 rounded border border-zinc-800 px-2 py-1 text-sm text-zinc-200 hover:border-zinc-600"
+    class="flex max-w-[16rem] min-w-0 items-center gap-1.5 rounded border border-zinc-800 px-2 py-1 text-sm text-zinc-200 hover:border-zinc-600"
     aria-haspopup="listbox"
     aria-expanded={open}
     title="Switch project"

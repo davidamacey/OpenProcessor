@@ -176,7 +176,7 @@
       </p>
     {/if}
 
-    <div class="overflow-x-auto rounded border border-zinc-800">
+    <div class="relative overflow-x-auto rounded border border-zinc-800">
       <table class="w-full text-sm" data-testid="projects-table">
         <thead class="bg-zinc-900 text-left text-xs text-zinc-400">
           <tr>
