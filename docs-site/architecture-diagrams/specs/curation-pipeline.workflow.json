@@ -67,7 +67,7 @@
   "lanes": [
     {
       "id": "ingest",
-      "label": "Ingest (yolo-api)"
+      "label": "Ingest (api)"
     },
     {
       "id": "workers",

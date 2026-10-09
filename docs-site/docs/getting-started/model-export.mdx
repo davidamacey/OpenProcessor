@@ -12,8 +12,8 @@ Triton loads the cached `.plan` files on every later start.
 it by hand with the Makefile targets, and the models `setup.sh` does not
 build (PE-Core for curation).
 
-Every target below runs inside the running `yolo-api` container
-(`docker compose exec yolo-api ...`), so start the core stack first
+Every target below runs inside the running `api` container
+(`docker compose exec api ...`), so start the core stack first
 (`make up`). Weights you download land in `pytorch_models/`, which the
 API container mounts.
 
@@ -71,7 +71,7 @@ both families; the API reads each model's output format from Triton
 metadata.
 
 ```bash
-docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+docker compose exec api python /app/export/export_yolo26.py --models small
 curl -X POST http://localhost:4603/models/yolo26_small_trt/load
 curl -X POST "http://localhost:4603/detect?model_name=yolo26_small_trt" -F "image=@photo.jpg"
 ```
@@ -103,7 +103,7 @@ make export-pe
 | `make pe-build-trt` | Build the TensorRT plan in `models/pe_image_encoder` |
 | `make pe-export-text-triton` | Export the text tower (parity-gated against PyTorch) and install it as Triton's `pe_text_encoder` |
 
-It then restarts Triton; restart `yolo-api` afterwards. If the TensorRT
+It then restarts Triton; restart `api` afterwards. If the TensorRT
 build fails on PE's attention-pool ops, run `make pe-build-ort` to serve
 the image ONNX through Triton's ONNX Runtime backend instead.
 `make pe-text-status` (`GET /health/pe_text`) shows which text backend

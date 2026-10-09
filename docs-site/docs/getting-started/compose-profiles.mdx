@@ -11,7 +11,7 @@ exactly Triton, the API and OpenSearch. Everything else is opt-in.
 
 | Profile | Services | Needs a GPU | Start with |
 |---|---|---|---|
-| *(none)* | `triton-server`, `yolo-api`, `opensearch` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
+| *(none)* | `triton-server`, `api`, `opensearch` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
 | `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh`, `curation-evaluator` | only the evaluator | `docker compose --profile curation up -d` / `make curation-up` |
 | `segmenter` | `segmenter` (SAM 3 behind the generic segment protocol) | yes, plus `HF_TOKEN` for the gated weights | `docker compose --profile curation --profile segmenter up -d` |
 | `vlm` | `vlm` (vLLM, OpenAI-compatible) | yes | `docker compose --profile vlm up -d` |
@@ -34,7 +34,7 @@ Notes:
 - **The `vlm` profile serves one model at a time**, chosen from a catalog
   with `openprocessor vlm use <id>`; see
   [VLM selection](../guides/vlm-selection.mdx). `./secrets/vlm` is mounted
-  read-only into `yolo-api` and the workers so endpoints can reference keys
+  read-only into `api` and the workers so endpoints can reference keys
   as `secret:<slug>`.
 - **`curation-evaluator` is a long-lived watcher**, not a one-shot job.
   Start it with `up -d`; `docker compose run --rm curation-evaluator`
@@ -47,15 +47,15 @@ Notes:
 - **Docker socket for the GPU arbiter** is a separate overlay file,
   `docker-compose.gpu-arbiter.yml`, not a profile. It lets training jobs
   stop and restart named sibling containers around a run, at the cost of
-  giving `yolo-api` root-equivalent control of the Docker host. See
+  giving `api` root-equivalent control of the Docker host. See
   [Security](../deployment/security.mdx).
 
 ## Wiring a frontend to the stack
 
 The compose project creates one network,
-`${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net`. `yolo-api` carries
+`${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net`. `api` carries
 the network alias `op-api`, so a frontend on that network reaches the API
-at `http://op-api:8000` (or `http://yolo-api:8000`). For Cropwright:
+at `http://op-api:8000` (or `http://api:8000`). For Cropwright:
 
 | Cropwright variable | Value |
 |---|---|

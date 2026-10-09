@@ -78,7 +78,7 @@ Docker socket (read its header first).
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
-| `yolo-api` | none | 4603 | FastAPI, all routes |
+| `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store and the curation datastore |
 | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh`, `curation-evaluator` | `curation` | | Region cascade, VLM loop, auto-label driver, clustering refresh, bake-off runner |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt |
@@ -121,8 +121,8 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `bench` and `setup` need a checkout. Details:
 [INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
-Python source is mounted into `yolo-api` in a checkout, so most edits are live;
-restart `yolo-api` after route changes. Rebuild images only when a Dockerfile or
+Python source is mounted into `api` in a checkout, so most edits are live;
+restart `api` after route changes. Rebuild images only when a Dockerfile or
 `requirements.txt` changes.
 
 ## Core API shape

@@ -560,7 +560,7 @@ Ways to get a server behind an endpoint:
    with `OP_VLM_URL=http://vlm:8000/v1` and the served model name in
    `OP_VLM_MODEL`.
 2. **A server on this host outside compose**:
-   `OP_VLM_URL=http://host.docker.internal:<port>/v1`. `yolo-api` and the VLM
+   `OP_VLM_URL=http://host.docker.internal:<port>/v1`. `api` and the VLM
    worker carry `extra_hosts: host.docker.internal:host-gateway` for this.
 3. **A server elsewhere on the network**: `OP_VLM_URL=http://<host>:<port>/v1`.
 
@@ -1189,11 +1189,11 @@ curl -s -X POST $API/train/start -H 'content-type: application/json' -d '{
 
 Nothing here ships a pretrained region detector, VLM or trainer weights.
 
-**Rebuild `yolo-api` before exporting any model.** A pulled image can predate
+**Rebuild `api` before exporting any model.** A pulled image can predate
 the source tree. If `make export-pe` fails with
 `ModuleNotFoundError: No module named 'core'`, the `perception_models` package
-is missing from a stale image: run `docker compose build yolo-api && docker
-compose up -d --force-recreate yolo-api`, then re-run the export.
+is missing from a stale image: run `docker compose build api && docker
+compose up -d --force-recreate api`, then re-run the export.
 
 - **PE-Core-L14-336 encoders.** The image tower `pe_image_encoder` is
   required and its Triton name is fixed (`src/clients/pe_encoder.py`: input
@@ -1215,7 +1215,7 @@ compose up -d --force-recreate yolo-api`, then re-run the export.
   an env var (`OP_INGEST_PRIMARY_CLASS_IDS` is retired and ignored with a
   warning). To switch detectors set
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and `OP_INGEST_PRIMARY_LABELS_PATH` when
-  the model directory has no `labels.txt`) and recreate `yolo-api`; the model
+  the model directory has no `labels.txt`) and recreate `api`; the model
   must serve the end2end four-tensor output. The choice is deployment-wide.
   `OP_INGEST_PRIMARY_CONFIDENCE_FLOOR` only applies when the primary assigns
   classes; a proposer stores every detection the engine emits. A region profile
@@ -1301,7 +1301,7 @@ logs one `arbiter_docker_unavailable` warning per outage.
 ## Mounting your image source
 
 Ingest resolves paths under `OP_SOURCE_ROOT` (container default
-`/data/source`). Both `yolo-api` and `curation-detection-worker` must mount the
+`/data/source`). Both `api` and `curation-detection-worker` must mount the
 same host directory at the same container path:
 
 ```yaml
@@ -1309,7 +1309,7 @@ volumes:
   - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
 ```
 
-Set `OP_SOURCE_ROOT_HOST` in `.env`. If only `yolo-api` has the mount, ingest
+Set `OP_SOURCE_ROOT_HOST` in `.env`. If only `api` has the mount, ingest
 succeeds but every later worker read fails with
 `detection_failed` / `reason=image_unavailable`. `GET
 /curation/projects/{project}/ingest/config` lists the accepted source roots.
@@ -1322,7 +1322,7 @@ Cropwright, or any frontend that consumes `/curation`, needs:
 
 | Cropwright env var | Value | Why |
 |---|---|---|
-| `API_UPSTREAM` | `http://op-api:8000` | `yolo-api` has the network alias `op-api`; `http://yolo-api:8000` works too. |
+| `API_UPSTREAM` | `http://op-api:8000` | `api` has the network alias `op-api`; `http://api:8000` works too. |
 | `PUBLIC_API_PREFIX` | `/curation` | Must equal `OP_API_PREFIX`. |
 | `PUBLIC_TRITON_API_URL` | empty in Docker | The frontend talks to Triton only through the API. |
 | Docker network | `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` | Join it as an external network. |

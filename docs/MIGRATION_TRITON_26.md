@@ -15,16 +15,16 @@ on 26.06 (TRT 11.x) with a serialization-version error.
 docker compose build
 
 # Start only what exports need
-docker compose up -d triton-server yolo-api
+docker compose up -d triton-server api
 
 # Re-export every model (runs inside the API container)
-docker compose exec yolo-api python /app/export/export_models.py --formats onnx_end2end trt_end2end
-docker compose exec yolo-api python /app/export/export_scrfd.py
-docker compose exec yolo-api python /app/export/export_face_recognition.py
-docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py
-docker compose exec yolo-api python /app/export/export_mobileclip_text_encoder.py
-docker compose exec yolo-api python /app/export/export_paddleocr_det.py
-docker compose exec yolo-api python /app/export/export_paddleocr_rec.py
+docker compose exec api python /app/export/export_models.py --formats onnx_end2end trt_end2end
+docker compose exec api python /app/export/export_scrfd.py
+docker compose exec api python /app/export/export_face_recognition.py
+docker compose exec api python /app/export/export_mobileclip_image_encoder.py
+docker compose exec api python /app/export/export_mobileclip_text_encoder.py
+docker compose exec api python /app/export/export_paddleocr_det.py
+docker compose exec api python /app/export/export_paddleocr_rec.py
 
 # Restart Triton to load the new engines
 docker compose restart triton-server
@@ -76,12 +76,12 @@ automatically, so existing export commands are unchanged.
 To serve YOLO26 alongside YOLO11:
 
 ```bash
-docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+docker compose exec api python /app/export/export_yolo26.py --models small
 curl -X POST http://localhost:4603/models/yolo26_small_trt/load
 curl -F image=@test.jpg 'http://localhost:4603/detect?model_name=yolo26_small_trt'
 ```
 
-Set `YOLO_MODEL=yolo26_small_trt` on the yolo-api service to make it the
+Set `YOLO_MODEL=yolo26_small_trt` on the api service to make it the
 default detector. Output-format differences between the families are
 handled transparently (adapter resolved from Triton model metadata).
 

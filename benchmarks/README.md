@@ -69,7 +69,7 @@ For custom benchmarks with detailed metrics:
 
 ```bash
 # Run inside container
-docker compose exec yolo-api python /app/benchmarks/scripts/benchmark.py
+docker compose exec api python /app/benchmarks/scripts/benchmark.py
 
 # Or use make target
 make bench-python

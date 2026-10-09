@@ -21,7 +21,7 @@
   },
   {
     "name": "backend-prometheus-targets.png",
-    "alt": "Prometheus target health page with the triton, yolo-api, node, dcgm and loki scrape targets all up",
+    "alt": "Prometheus target health page with the triton, api, node, dcgm and loki scrape targets all up",
     "caption": "Prometheus: Triton, API, node, GPU (DCGM) and Loki targets, all up"
   },
   {

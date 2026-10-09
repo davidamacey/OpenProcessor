@@ -55,7 +55,7 @@
     {
       "id": "api",
       "type": "backend",
-      "label": "yolo-api",
+      "label": "api",
       "sublabel": "{project}/train/*"
     },
     {

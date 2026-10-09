@@ -6,7 +6,7 @@
       {
         "id": "system-overview",
         "title": "System Overview",
-        "description": "Every service in docker-compose.yml and how they talk: clients reach yolo-api, which calls Triton over gRPC and OpenSearch; the opt-in profiles add the multi-project curation workers, segmenter, VLM endpoints, trainer, evaluator, MLflow and monitoring. Start here.",
+        "description": "Every service in docker-compose.yml and how they talk: clients reach api, which calls Triton over gRPC and OpenSearch; the opt-in profiles add the multi-project curation workers, segmenter, VLM endpoints, trainer, evaluator, MLflow and monitoring. Start here.",
         "height": 1000
       },
       {

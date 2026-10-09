@@ -36,7 +36,7 @@ make curation-down
 | `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls each project's items index (every 2 minutes by default) and calls that project's `POST /curation/projects/{project}/clusters/auto_promote` once it has grown by the threshold (1000 new items by default); optional incremental auto-label. |
 | `curation-evaluator` | its own image | Watches each project's `bakeoff_jobs` directory and runs model comparisons. Long-lived: start with `up -d`, not `run --rm`. |
 
-The detection worker and `yolo-api` must mount the **same** source
+The detection worker and `api` must mount the **same** source
 directory at the same container path (`OP_SOURCE_ROOT_HOST` →
 `/data/source`). If only the API has it, ingest succeeds but every worker
 read fails with `detection_failed` / `image_unavailable`.
@@ -89,7 +89,7 @@ There are two independent pauses.
 
 ## Multi-process state
 
-`yolo-api` runs many uvicorn worker processes, and any of them can answer
+`api` runs many uvicorn worker processes, and any of them can answer
 a given request. Every piece of job state that must look the same from
 all of them lives in files on the shared `/jobs` volume, not in process
 memory:

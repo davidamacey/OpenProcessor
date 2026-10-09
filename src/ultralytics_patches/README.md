@@ -78,7 +78,7 @@ See `export/export_models.py` for complete export script.
 
 ```bash
 # Export all YOLOv11 models with end2end NMS
-docker compose exec yolo-api python /app/export/export_models.py --formats trt_end2end
+docker compose exec api python /app/export/export_models.py --formats trt_end2end
 ```
 
 ## Output Format

@@ -277,7 +277,7 @@ class TritonConnectionPool:
 
 ```bash
 # Monitor active connections
-watch -n 1 'docker compose exec yolo-api netstat -an | grep 8001 | grep ESTABLISHED'
+watch -n 1 'docker compose exec api netstat -an | grep 8001 | grep ESTABLISHED'
 
 # Monitor latency percentiles
 # If P99 >1000ms with <5000 RPS = possible connection bottleneck
@@ -490,7 +490,7 @@ go run triton_bench.go \
 ```bash
 # Rebuild containers with new requirements
 docker compose down
-docker compose build --no-cache yolo-api
+docker compose build --no-cache api
 docker compose up -d
 
 # Wait for warmup (~30 seconds)
@@ -560,7 +560,7 @@ py-spy>=0.3.14
 
 Rebuild:
 ```bash
-docker compose build yolo-api
+docker compose build api
 docker compose up -d
 ```
 
@@ -626,7 +626,7 @@ Current: **32 workers** (assumes 16-core CPU)
 
 1. Check CPU cores:
 ```bash
-docker exec yolo-api nproc
+docker exec api nproc
 ```
 
 2. Calculate optimal workers:
@@ -641,7 +641,7 @@ Workers = (2 × CPU cores) + 1
 
 4. Restart:
 ```bash
-docker compose restart yolo-api
+docker compose restart api
 ```
 
 **Signs you need fewer workers**:
@@ -667,7 +667,7 @@ MAX_FILE_SIZE_MB = 100  # Increase to 100MB
 
 Restart:
 ```bash
-docker compose restart yolo-api
+docker compose restart api
 ```
 
 ### Slow Request Threshold
@@ -700,10 +700,10 @@ SLOW_REQUEST_THRESHOLD_MS = 50  # More aggressive logging
 2. **Not using optimized libraries**
    ```bash
    # Verify orjson is installed
-   docker exec yolo-api python -c "import orjson; print('orjson OK')"
+   docker exec api python -c "import orjson; print('orjson OK')"
 
    # Verify pillow-simd is installed
-   docker exec yolo-api python -c "from PIL import features; print(features.check_feature('libjpeg_turbo'))"
+   docker exec api python -c "from PIL import features; print(features.check_feature('libjpeg_turbo'))"
    ```
 
 ### Issue: Increased Memory Usage
@@ -719,7 +719,7 @@ SLOW_REQUEST_THRESHOLD_MS = 50  # More aggressive logging
 **Monitor**:
 ```bash
 # Check memory usage
-docker stats yolo-api
+docker stats api
 
 # Should see periodic drops as workers recycle
 ```
@@ -730,7 +730,7 @@ docker stats yolo-api
 
 1. Check logs for slow request warnings:
 ```bash
-docker compose logs -f yolo-api | grep "Slow request"
+docker compose logs -f api | grep "Slow request"
 ```
 
 2. Profile during slow requests:
@@ -797,9 +797,9 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 
 2. Add to Prometheus config:
 ```yaml
-- job_name: 'yolo-api'
+- job_name: 'api'
   static_configs:
-    - targets: ['yolo-api:4603']
+    - targets: ['api:4603']
 ```
 
 ---
