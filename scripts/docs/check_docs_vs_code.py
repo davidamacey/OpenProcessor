@@ -192,7 +192,10 @@ def _env_corpus() -> str:
                 parts.append(p.read_text(encoding='utf-8', errors='replace'))
     parts.extend(
         p.read_text(encoding='utf-8', errors='replace')
-        for p in REPO_ROOT.glob('docker-compose*.yml')
+        for p in (
+            *REPO_ROOT.glob('docker-compose*.yml'),
+            *REPO_ROOT.glob('frontend/docker-compose*.yml'),
+        )
     )
     return '\n'.join(parts)
 

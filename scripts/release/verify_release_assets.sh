@@ -31,7 +31,7 @@ install_dry_run() {
     mkdir -p "${tmp}/home"
     HOME="${tmp}/home" bash "${assets}/setup-openprocessor.sh" --dry-run --unattended \
         --release-dir "$assets" --version "$ref" --image-tag "${ref#v}" \
-        --dir "${tmp}/inst" --skip-models --no-start 2>&1
+        --dir "${tmp}/inst" --project "opverify-$$" --skip-models --no-start 2>&1
 }
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
