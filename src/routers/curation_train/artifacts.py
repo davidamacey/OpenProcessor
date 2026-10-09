@@ -42,7 +42,7 @@ async def get_run_artifact(
         PathParam(
             description=(
                 'Whitelisted artifact filename '
-                '(see src.services.training.jobs.RUN_ARTIFACT_WHITELIST), '
+                '(see src.services.training.job_wire.RUN_ARTIFACT_WHITELIST), '
                 'e.g. confusion_matrix.png'
             )
         ),
