@@ -8,7 +8,7 @@ Triton Clients:
 - TritonClientManager: Connection pool manager (from triton_pool)
 """
 
-from src.clients.opensearch import OpenSearchClient
+from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_client import TritonClient, get_triton_client
 from src.clients.triton_pool import TritonClientManager
 

@@ -49,18 +49,18 @@ src/
 │   ├── inference.py             # Core Triton inference operations
 │   ├── embedding.py             # MobileCLIP embedding generation
 │   ├── face_recognition.py      # Face detection and recognition
-│   ├── face_identity.py         # Face identification and verification
-│   ├── visual_search.py         # OpenSearch visual search operations
+│   ├── face_identity/           # Face identification and verification (package)
+│   ├── visual_search/           # OpenSearch visual search operations (package)
 │   ├── ocr_service.py           # PP-OCRv5 text extraction
 │   ├── clustering.py            # FAISS clustering
-│   ├── duplicate_detection.py   # Image deduplication
+│   ├── duplicate_detection/     # Image deduplication (package)
 │   └── image.py                 # Image processing utilities
 │
 ├── clients/                     # External service clients
 │   ├── __init__.py              # Client exports
 │   ├── triton_client.py         # Triton gRPC client wrapper
 │   ├── triton_pool.py           # Connection pooling for Triton
-│   └── opensearch.py            # OpenSearch async client
+│   └── opensearch/              # OpenSearch async client (client.py entry point)
 │
 ├── schemas/                     # Pydantic models for validation
 │   ├── __init__.py              # Schema exports
