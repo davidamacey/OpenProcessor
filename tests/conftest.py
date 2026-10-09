@@ -232,6 +232,14 @@ def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(policy, '_resolve', lambda _host: [])
 
 
+@pytest.fixture(autouse=True)
+def _ephemeral_worker_metrics_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests that run ``worker.run()`` start its real /metrics HTTP server. On the
+    default fixed port, two of them running at once (xdist workers, or two suites on
+    one host) fail with "address already in use". Port 0 asks the OS for a free one."""
+    monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
+
+
 @pytest.fixture
 def vlm_env(monkeypatch: pytest.MonkeyPatch) -> str:
     """An ``env`` built-in VLM endpoint (``OP_VLM_URL``), i.e. a project
