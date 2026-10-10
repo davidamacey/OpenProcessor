@@ -825,6 +825,53 @@ changed. Raw numbers: `docs/benchmarks/v060_fp16_pe.json` and
   parses but the build fails in TensorRT (`Could not find any implementation` for a reparam conv), so
   its exporter still falls back to FP32 (#224).
 
+### 11.3 Wave 0 result: where the time goes at full speed (v0.6.0, one A6000, sets A and B)
+
+Same host and FP16 stack as section 11.2, GPU 2 (idle, no foreign load), with the client depth
+raised so the GPU can fill, and a 500-image public photo set (set B, 12 to 24 MP, median 17 MP)
+added. Tables, method and raw JSON: `docs/PERFORMANCE.md` ("0.6.0 Wave 0: full-pipeline
+throughput") and `docs/benchmarks/v060_wave0_*.json`. Medians of 3 repetitions.
+
+Per image at the plateau (set A, 16 clients, 32 images per request, `/ingest/upload`, 22.7 images/s):
+
+| Where | Per image | Share of the 44 ms wall per image | Evidence |
+|---|---:|---:|---|
+| PE image encoder GPU compute | 7.4 x 5.5 ms = 41 ms | 94 % GPU busy | Triton batch statistics, mean batch 26.6; isolated `perf_analyzer` 195 embeddings/s |
+| Detector GPU compute | 5 ms | | batch statistics (it time-slices against PE) |
+| API CPU, all of it | 0.175 s on 4 of 48 cores | 8 % of host | cgroup; 90 % in the event-loop thread of the workers |
+| of which timed stages | 32 ms | | decode 4.8, `resize` 23.8, jpeg_encode 3.2, crop 0.5 |
+| of which named primitives (single thread) | 31 ms | | micro-profile: decode 3.3, letterbox 4.6, whole-frame preprocess 5.5, 6.4 crop resizes and encodes |
+| unattributed | about 150 ms | | tensor serialization, documents and bulk bodies, gRPC, 32 busy workers: WP-1.2 (#210) |
+
+The GPU, not the host, is the limit on small images: at 16 clients it is 94 percent busy at
+22.7 images/s (97 percent of the 23.5 ceiling), at the 300 W power cap (SM clock 1.42 to 1.50 GHz,
+not the boost clock). At the baseline's 4 clients it is 80 percent busy and 18.7 images/s: the
+idle share of section 11.2 was request depth. Triton instance counts, queue delay and
+`preferred_batch_size` change nothing beyond the 3 percent noise.
+
+Revisions to the ranked list of section 11.1:
+
+- Item 1 (PE) stands, with its ceiling confirmed. Item 6 (batching, instances) stands: no arm helps.
+- **Item 2 (API CPU outside the timed stages) is the first real binder on large images.** On 12 to
+  24 MP photos the API spends 1.0 to 1.3 CPU-s per image (decode 316 ms, letterbox 80 ms,
+  whole-frame preprocess 137 ms and the file hash 28 ms alone are 0.56 s), 98.5 percent of it on the
+  event-loop thread, so throughput is 3 to 11 images/s with the GPU 5 to 15 percent busy; past 32
+  clients it falls (#241). This replaces the note of item 7 that GPU decode is not worth doing:
+  that held for COCO frames (4.8 ms decode) and does not hold for photos.
+- Item 3 (FP32 on the wire): the host-to-device copy phase of a PE execution is 0.4 ms of 145 ms;
+  the cost is host serialization (inside the unattributed 150 ms), not PCIe.
+- Item 5 (OpenSearch writes) is not close to binding: 1,011 documents/s from one writer (137
+  images/s equivalent), 6,987 from sixteen; `ef_construction` 128 cuts index CPU per document by
+  38 percent (recall not measured).
+- New: `ocr_pipeline` runs one instance and caps OCR at 21 images/s (42 with two, 80 with four,
+  #240). Ingest does not call faces or OCR; through their routes faces cost 44 to 54 ms of API CPU
+  per COCO image, OCR on 16 MP photos is 1.2 images/s (full FP32 frames to Triton, plan WP-2.5).
+- New: a request over `MAX_FILE_SIZE_MB` (50 MB of the whole request) answers 500, not 413, and 8
+  photos in one request exceed it (#239).
+
+Open: the region stage (the segmenter weights are gated) and scaling across GPUs (the other GPUs
+host other projects) were not measured; the cluster pass was skipped.
+
 ## 12. References
 
 - `docs/design/generic_detector_and_selective_embedding_plan.md` (#52) and
