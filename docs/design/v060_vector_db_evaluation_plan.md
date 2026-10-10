@@ -187,10 +187,15 @@ plan (kNN overlap@10 against the float32 reference >= 0.95 on the review-default
 
 Empty until V.3. Record the hardware, versions and digests with every table.
 
-## 11. Open questions for the owner
+## 11. Owner decisions and open questions
+
+Decided (2026-10-10):
+- **V1:** committed and published runs use public datasets only (COCO, Open Images, ImageNet); aggregate numbers only, never images or per-image rows. The owner runs a private-data benchmark himself on his own non-public data and does not commit it. One million vectors is the destination, reached by scale points (100k first), not the first run.
+- A second datastore service is acceptable if it wins on the criteria in section 9; Milvus is a candidate the owner favours. The metadata store stays OpenSearch either way.
+
+Still open (recommendations stand until the owner answers):
 
 | ID | Question | Recommendation |
 |---|---|---|
-| V1 | May D1M use all COCO train2017 images locally (only aggregate numbers published), or only licence-filtered images? | All locally, aggregates only; otherwise state the smaller size |
 | V2 | Is pgvector as a full replacement for OpenSearch (metadata too) in scope for a later milestone? | Not in v0.6.0; reconsider only if the split wins and the owner wants one datastore |
 | V3 | Should the OS-tuned winner (for example a set `ef_search`) ship in v0.6.0 if it passes the gates? | Yes, as its own small WP |

@@ -542,13 +542,16 @@ WP-0.1's capture of `ref-v050` first (the FP32-sized plan must be captured befor
 8. **Benchmark contamination** by the live stack on the same host: load-average guard, GPU 0 only,
    foreign-SM sampling (already in the suite).
 
-## 12. Open questions for the owner
+## 12. Owner decisions (2026-10-10)
 
-| ID | Question | Recommendation |
-|---|---|---|
-| O1 | If the measured plan is FP32 and FP16 passes the gates, publish a note that existing installs should run `openprocessor models install` to rebuild? | Yes, with the stamp the rebuild is automatic on the next install; release note in CHANGELOG |
-| O2 | Equivalence gate for GPU k-means (WP-3.1): bit-identity or the agreement gate of section 6? | Agreement gate; bit-identity would rule out any GPU k-means |
-| O3 | May benchmarks use GPU 1 (the 12 GB card) for WP-1.6 and WP-5.2? | Yes for short, isolated runs, scheduled by the owner |
-| O4 | INT8 as a shipped option if it passes? | Option per deployment, default FP16 |
-| O5 | Should the cluster-refresh daemon's 200-crop threshold scale with pool size once retrains are off the ingest path? | Keep 200 during v0.6.0; revisit with WP-3.1 numbers |
-| O6 | Vector store: is a second datastore service acceptable at all if it wins? | Decide after the evaluation's numbers; the plan keeps metadata in OpenSearch either way |
+| ID | Decision |
+|---|---|
+| O1 | Existing installs are told in the release notes to rebuild models once the FP16 fix lands; with the build stamp the rebuild is automatic on the next install. |
+| O2 | GPU k-means (WP-3.1) is gated by agreement (cluster purity and label agreement against the CPU result on the public set), not bit-identity. Cluster training keeps its full work; methods stay pluggable because the owner is comparing semi-supervised and self-clustering methods. |
+| O3 | Benchmarks may use any GPU that is free, including GPU 1 (the 12 GB card) for WP-1.6 and WP-5.2. Check `nvidia-smi` first and coordinate with the other repositories' agents (cloud, transcribe); never touch other projects' containers. |
+| O4 | INT8 ships, if it passes its gates, as a per-deployment option; FP16 stays the default. |
+| O5 | The 200-crop retrain threshold stays during v0.6.0 and is revisited with WP-3.1 numbers. |
+| O6 | A second datastore service is acceptable if it wins on the criteria of the vector store plan; Milvus is a candidate the owner favours. Metadata stays in OpenSearch either way. |
+| O7 | Public runs use public datasets only (COCO, Open Images, ImageNet). The owner runs private-data benchmarks separately on his own non-public data; none of it is committed. |
+| O8 | One million images is the destination, not the first step: the work builds up the optimisation levers in order, measuring how fast this server can process a 1M-image batch with industry-standard practice. Scale points (2k, 10k, 100k, then 1M) are reached as levers land. |
+| O9 | Embed-all must be fast: some datasets (vehicles) need every crop embedded to cluster and label, so the selective policy stays configurable and is never the only way to be fast. |
