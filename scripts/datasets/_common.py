@@ -112,10 +112,15 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
 
-def write_csv(path: Path, rows: Iterable[dict[str, Any]], fieldnames: Sequence[str]) -> None:
+def write_csv(
+    path: Path,
+    rows: Iterable[dict[str, Any]],
+    fieldnames: Sequence[str],
+    extrasaction: str = 'raise',
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=list(fieldnames))
+        writer = csv.DictWriter(f, fieldnames=list(fieldnames), extrasaction=extrasaction)
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
