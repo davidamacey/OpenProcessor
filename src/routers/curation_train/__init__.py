@@ -35,7 +35,6 @@ the 422 body so the UI can render it inline.
 from __future__ import annotations
 
 from fastapi import APIRouter
-from fastapi.responses import ORJSONResponse
 
 from src.config import get_curation_config
 from src.routers.curation_train import artifacts, catalog, preflight, promote, runs, start
@@ -46,7 +45,6 @@ config = get_curation_config()
 router = APIRouter(
     prefix='/train',
     tags=[f'{config.api_tag} - Train'],
-    default_response_class=ORJSONResponse,
 )
 for _sub in (
     preflight.router,

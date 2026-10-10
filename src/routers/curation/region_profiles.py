@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import Query
 
+from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import (
     OpenSearchDep,
     bound_project_slug,
@@ -339,10 +340,8 @@ async def get_region_profile_route(name: str, opensearch: OpenSearchDep) -> Any:
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
-    from fastapi.responses import ORJSONResponse
-
     payload = _to_doc(record).model_dump()
-    return ORJSONResponse(content=payload, headers={'ETag': f'"{record.etag}"'})
+    return WireJSONResponse(content=payload, headers={'ETag': f'"{record.etag}"'})
 
 
 @router.get('/region_profiles/{name}/revisions', response_model=RegionProfileRevisionsResponse)
