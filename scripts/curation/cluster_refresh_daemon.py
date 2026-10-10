@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """Cluster refresh daemon — Task #92 Part C.
 
-Polls the curation items index total every N minutes and triggers
-``/curation/clusters/auto_promote`` (and optionally ``/curation/pipeline/auto_label``
-on the new crops) once the count grows by a configurable threshold
-since the last refresh. The result is that periodic clustering happens
-"organically" while ingest is running, so the labeler /clusters page
-keeps surfacing fresh clusters without the user remembering to kick
-the pipeline by hand.
+Polls each project's items index and, once the count has grown by a
+configurable threshold since the last retrain, runs ``auto_promote`` and
+queues the full cluster retrain as the background ``auto_label`` job (it
+runs in the auto-label worker, never inside an API process). The retrain
+waits for ingest to go quiet (item count flat since the previous poll and
+no region work unfinished) for at most ``--max-deferral-seconds``; repeated
+requests coalesce into one, and a project never has two retrains in flight.
+Pausing a project cancels the job this daemon started for it. The schedule
+is ``src/services/curation/clustering/refresh_schedule.py``; the work is
+unchanged.
 
-Defaults match the design discussion in Task #92:
+Defaults:
 
 * poll interval: 120 seconds (2 minutes)
-* growth threshold: 1000 new crops
-* incremental auto-label: off (turn on with ``--auto-label``)
+* growth threshold: 200 new crops
+* maximum deferral: 1800 seconds
+* incremental auto-label: on (turn off with ``--no-auto-label``)
 
 Designed to run as a long-lived process (``python -m
 scripts.curation.cluster_refresh_daemon``) or as a cron job invoking
@@ -53,6 +57,15 @@ from scripts.curation._project_worker_utils import (
     unpaused_projects,
 )
 from src.config.project_context import bind_project
+from src.services.curation.clustering.refresh_schedule import (
+    ACTIVE_JOB_STATUSES,
+    Action,
+    Observation,
+    Policy,
+    ProjectSchedule,
+    ScheduleBook,
+    step,
+)
 from src.services.curation.worker_liveness import write_heartbeat
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import (
@@ -90,10 +103,22 @@ def _parse_args() -> argparse.Namespace:
         help='Trigger refresh once the items index grows by this many docs since the last refresh.',
     )
     p.add_argument(
+        '--max-deferral-seconds',
+        type=int,
+        default=1800,
+        help='Longest a due retrain waits for ingest to go quiet before it starts anyway.',
+    )
+    p.add_argument(
+        '--retry-backoff-seconds',
+        type=int,
+        default=600,
+        help='Wait before retrying a retrain job that failed, was cancelled or was lost.',
+    )
+    p.add_argument(
         '--auto-label',
         action=argparse.BooleanOptionalAction,
         default=True,
-        help='POST /curation/pipeline/auto_label after auto_promote so freshly-'
+        help='Queue the auto_label background job (the full retrain) after auto_promote so freshly-'
         'CNN-labeled crops get assigned to their named class clusters '
         '(force_cluster_id_equals_class_id) and unlabeled residuals are '
         'fed through the VLM/segmenter. Default on; pass --no-auto-label to '
@@ -117,6 +142,28 @@ async def _crop_count(opensearch: Any) -> int:
     return int(resp.get('count', 0))
 
 
+async def _unfinished_region_count(opensearch: Any) -> int:
+    """Items still waiting for the region stage (the ``region_drain`` facts)."""
+    from src.config import get_region_fields
+    from src.config.curation import items_index
+    from src.config.region_state import RegionStatus
+
+    resp = await opensearch.count(
+        index=items_index(),
+        body={
+            'query': {
+                'terms': {
+                    get_region_fields().status: [
+                        RegionStatus.PENDING_DETECTION,
+                        RegionStatus.PENDING_VERIFICATION,
+                    ]
+                }
+            }
+        },
+    )
+    return int(resp.get('count', 0))
+
+
 async def _trigger_auto_promote(
     client: httpx.AsyncClient, api: str, api_prefix: str, slug: str
 ) -> dict[str, Any]:
@@ -126,26 +173,71 @@ async def _trigger_auto_promote(
         # A cold-start pass (daemon restart resets in-process last_count to
         # 0, so the very next poll always re-triggers over the *full* pool,
         # not just recent growth) synchronously OCC-checks/writes every
-        # crop and has been observed taking >600s over a 347k-doc pool —
+        # crop and has been observed taking >600s over a 347k-doc pool --
         # 600s wasn't enough, causing a perpetual timeout/retry loop.
-        # Matches the 900s timeout already used for the equally-slow
-        # /pipeline/auto_label full-pool call.
         timeout=900.0,
     )
     r.raise_for_status()
     return r.json()
 
 
-async def _trigger_auto_label(
+async def _start_auto_label_job(
     client: httpx.AsyncClient, api: str, api_prefix: str, slug: str
+) -> str | None:
+    """Queue the retrain as the background auto-label job (it runs in the
+    auto-label worker, not in an API process). No query: the job route's
+    defaults are the synchronous route's defaults. ``None`` when a job is
+    already in flight (409): the request stays pending."""
+    r = await client.post(scoped_url(api, api_prefix, slug, '/pipeline/auto_label/start'), json={})
+    if r.status_code == httpx.codes.CONFLICT:
+        return None
+    r.raise_for_status()
+    return str(r.json().get('job_id') or '') or None
+
+
+async def _job_status(
+    client: httpx.AsyncClient, api: str, api_prefix: str, slug: str, job_id: str | None = None
 ) -> dict[str, Any]:
-    r = await client.post(
-        scoped_url(api, api_prefix, slug, '/pipeline/auto_label'),
-        json={},
-        timeout=900.0,
-    )
+    """The project's current auto-label state, or one job's by id. The route
+    repairs a run whose worker died (stale heartbeat) to ``interrupted``."""
+    path = '/pipeline/auto_label/status' + (f'/{job_id}' if job_id else '')
+    r = await client.get(scoped_url(api, api_prefix, slug, path))
+    if r.status_code == httpx.codes.NOT_FOUND:
+        return {'status': 'unknown'}
     r.raise_for_status()
     return r.json()
+
+
+async def _cancel_job(client: httpx.AsyncClient, api: str, api_prefix: str, slug: str) -> None:
+    r = await client.post(scoped_url(api, api_prefix, slug, '/pipeline/auto_label/cancel'))
+    r.raise_for_status()
+
+
+async def _release_inactive(
+    client: httpx.AsyncClient,
+    *,
+    api: str,
+    api_prefix: str,
+    book: ScheduleBook,
+    active: set[str],
+    paused: set[str],
+) -> None:
+    """Projects that left the active set: a paused one has its retrain
+    cancelled (the cooperative cancel flag) and the request re-raised on
+    resume; a deleted one (the delete removes its job directory) is dropped."""
+    for slug in book.slugs():
+        if slug in active:
+            continue
+        sched = book.get(slug)
+        if slug in paused and sched.job_id is not None:
+            try:
+                await _cancel_job(client, api, api_prefix, slug)
+                print(f'[cluster-refresh] project={slug} paused: retrain cancelled', flush=True)
+            except httpx.HTTPError as exc:
+                print(f'[cluster-refresh] project={slug} cancel failed: {exc}', flush=True)
+            sched.on_cancelled()
+        elif slug not in paused:
+            book.forget(slug)
 
 
 async def _iteration(
@@ -155,44 +247,66 @@ async def _iteration(
     api_prefix: str,
     record: Any,
     opensearch: Any,
-    last_count: int,
-    threshold: int,
+    sched: ProjectSchedule,
+    policy: Policy,
     auto_label: bool,
-) -> int:
-    """One poll + (maybe) refresh of ``record``. Returns its new ``last_count``."""
+    now: float,
+) -> None:
+    """One poll + (maybe) refresh of ``record``."""
     slug = record.slug
     try:
         with bind_project(record):
             count = await _crop_count(opensearch)
+            unfinished = await _unfinished_region_count(opensearch)
+        busy = False
+        tracked = None
+        if auto_label:
+            busy = (await _job_status(client, api, api_prefix, slug)).get(
+                'status'
+            ) in ACTIVE_JOB_STATUSES
+            if sched.job_id is not None:
+                tracked = (await _job_status(client, api, api_prefix, slug, sched.job_id)).get(
+                    'status'
+                )
     except Exception as exc:
-        print(f'[cluster-refresh] project={slug} crop_count failed: {exc}', flush=True)
-        return last_count
-    growth = count - last_count
+        print(f'[cluster-refresh] project={slug} observation failed: {exc}', flush=True)
+        return
+    action = step(
+        sched,
+        Observation(count=count, unfinished=unfinished, tracked_status=tracked, busy=busy),
+        now,
+        policy,
+    )
     print(
-        f'[cluster-refresh] project={slug} crops={count} growth_since_last={growth} '
-        f'threshold={threshold}',
+        f'[cluster-refresh] project={slug} crops={count} unfinished_regions={unfinished} '
+        f'trained_at={sched.last_trained_count} threshold={policy.threshold} action={action.value}',
         flush=True,
     )
-    if last_count > 0 and growth < threshold:
-        return last_count
-    # First iteration (last_count == 0) always triggers — we want a
-    # fresh promote on daemon startup so the user sees the current
-    # state reflected in /clusters.
+    if action is not Action.START:
+        return
     print(f'[cluster-refresh] project={slug} triggering auto_promote', flush=True)
     try:
         promo = await _trigger_auto_promote(client, api, api_prefix, slug)
         print(f'[cluster-refresh] project={slug} auto_promote result: {promo}', flush=True)
     except httpx.HTTPError as exc:
         print(f'[cluster-refresh] project={slug} auto_promote failed: {exc}', flush=True)
-        return last_count
-    if auto_label:
-        print(f'[cluster-refresh] project={slug} triggering auto_label', flush=True)
-        try:
-            lab = await _trigger_auto_label(client, api, api_prefix, slug)
-            print(f'[cluster-refresh] project={slug} auto_label result: {lab}', flush=True)
-        except httpx.HTTPError as exc:
-            print(f'[cluster-refresh] project={slug} auto_label failed: {exc}', flush=True)
-    return count
+        return
+    previous = sched.last_trained_count
+    if not auto_label:
+        sched.on_started(count, None, previous_trained=previous)
+        return
+    try:
+        job_id = await _start_auto_label_job(client, api, api_prefix, slug)
+    except httpx.HTTPError as exc:
+        print(f'[cluster-refresh] project={slug} auto_label start failed: {exc}', flush=True)
+        return
+    if job_id is None:
+        print(
+            f'[cluster-refresh] project={slug} auto_label already running; kept pending', flush=True
+        )
+        return
+    sched.on_started(count, job_id, previous_trained=previous)
+    print(f'[cluster-refresh] project={slug} auto_label job {job_id} queued', flush=True)
 
 
 def _make_signal_stop() -> tuple[asyncio.Event, None]:
@@ -226,28 +340,46 @@ async def run(args: argparse.Namespace) -> int:
     registry = script_project_registry(args.opensearch)
     opensearch = make_script_opensearch([args.opensearch], timeout=30)
     api_prefix = curation_api_prefix()
-    last_counts: dict[str, int] = {}
+    book = ScheduleBook()
+    policy = Policy(
+        threshold=args.growth_threshold,
+        max_deferral_s=args.max_deferral_seconds,
+        retry_backoff_s=args.retry_backoff_seconds,
+    )
     rotation = 0
     write_heartbeat('cluster_refresh', {'loop': True})
     async with httpx.AsyncClient(timeout=30.0) as client:
         while not stop.is_set():
             t0 = time.monotonic()
             try:
-                projects = rotated(await unpaused_projects(registry, args.project), rotation)
+                everyone = await unpaused_projects(registry, None)
+                projects = rotated(
+                    [r for r in everyone if args.project in (None, r.slug)], rotation
+                )
+                active = {r.slug for r in everyone}
+                paused = {
+                    r.slug
+                    for r in registry.active_projects()
+                    if r.slug not in active and args.project in (None, r.slug)
+                }
             except Exception as exc:
                 print(f'[cluster-refresh] registry unavailable: {exc}', flush=True)
-                projects = []
+                projects, active, paused = [], set(book.slugs()), set()
             rotation += 1
+            await _release_inactive(
+                client, api=args.api, api_prefix=api_prefix, book=book, active=active, paused=paused
+            )
             for record in projects:
-                last_counts[record.slug] = await _iteration(
+                await _iteration(
                     client,
                     api=args.api,
                     api_prefix=api_prefix,
                     record=record,
                     opensearch=opensearch,
-                    last_count=last_counts.get(record.slug, 0),
-                    threshold=args.growth_threshold,
+                    sched=book.get(record.slug),
+                    policy=policy,
                     auto_label=args.auto_label,
+                    now=time.monotonic(),
                 )
                 write_heartbeat('cluster_refresh', {'loop': True})
             write_heartbeat('cluster_refresh', {'loop': True})
