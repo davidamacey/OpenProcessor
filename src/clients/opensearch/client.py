@@ -60,7 +60,7 @@ from src.clients.opensearch.indexes import IndexesMixin
 from src.clients.opensearch.ingest import IngestMixin
 from src.clients.opensearch.ocr import OcrMixin
 from src.clients.opensearch.search import SearchMixin
-from src.clients.opensearch.serializer import TimedJSONSerializer
+from src.clients.opensearch.serializer import OrjsonSerializer
 
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ class OpenSearchClient(IndexesMixin, IngestMixin, BulkMixin, SearchMixin, Cluste
         if http_auth:
             client_kwargs['http_auth'] = http_auth
 
-        self.client = AsyncOpenSearch(serializer=TimedJSONSerializer(), **client_kwargs)
+        self.client = AsyncOpenSearch(serializer=OrjsonSerializer(), **client_kwargs)
         # Every OpenSearch client carries the project guard from birth
         # (projects_plan.md §2.4); unbound visual-search calls reach only
         # indexes no project owns.

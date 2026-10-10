@@ -121,11 +121,11 @@ def test_detector_request_build_is_timed() -> None:
 def test_opensearch_serializer_is_timed_and_encodes_like_the_stock_one() -> None:
     from opensearchpy.serializer import JSONSerializer
 
-    from src.clients.opensearch.serializer import TimedJSONSerializer
+    from src.clients.opensearch.serializer import OrjsonSerializer
 
     doc = {'a': [1.5, 2.0], 'b': 'text', 'c': None}
     before = _count('bulk_serialize')
-    assert TimedJSONSerializer().dumps(doc) == JSONSerializer().dumps(doc)
+    assert OrjsonSerializer().dumps(doc) == JSONSerializer().dumps(doc)
     assert _count('bulk_serialize') - before == 1
 
 

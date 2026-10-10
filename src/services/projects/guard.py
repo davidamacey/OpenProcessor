@@ -588,11 +588,11 @@ def make_script_opensearch(hosts: list[str], **kwargs: Any) -> Any:
     learns about projects created after it started."""
     from opensearchpy import AsyncOpenSearch
 
-    from src.clients.opensearch.serializer import TimedJSONSerializer
+    from src.clients.opensearch.serializer import OrjsonSerializer
     from src.services.projects.registry import ProjectRegistry
 
     kwargs.setdefault('use_ssl', False)
-    kwargs.setdefault('serializer', TimedJSONSerializer())
+    kwargs.setdefault('serializer', OrjsonSerializer())
     client = AsyncOpenSearch(hosts=hosts, **kwargs)
     reader = _RegistryReader(client.transport)
     registry = ProjectRegistry(lambda: reader)

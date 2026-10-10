@@ -37,6 +37,7 @@ from src.services.curation.region_box_embeddings import (
 )
 from src.services.curation.region_boxes import read_boxes
 from src.services.detection.region_embed import embed_region_crops
+from src.utils.vectors import float_list
 
 
 if TYPE_CHECKING:
@@ -183,7 +184,7 @@ async def reembed_items(
         if 'frame' in parts:
             frame = await pe.embed_whole_frame(target.image_path)
             if frame is not None:
-                image_updates.append((target.image_id, {'pe_embedding': [float(v) for v in frame]}))
+                image_updates.append((target.image_id, {'pe_embedding': float_list(frame)}))
                 counts['frame_written'] += 1
         if 'crop' in parts:
             boxed = [
@@ -198,7 +199,7 @@ async def reembed_items(
                 vectors = await pe.embed_crops(crops, max_batch=_BATCH)
                 for (cid, src), vec in zip(boxed, vectors, strict=True):
                     update = item_updates.setdefault(cid, {})
-                    update.update(pe_embedding=[float(v) for v in vec], embedding_state=EMBEDDED)
+                    update.update(pe_embedding=float_list(vec), embedding_state=EMBEDDED)
                     update.update(_placement(ivf_store, src, vec))
                     counts['crop_written'] += 1
         if 'region' in parts:

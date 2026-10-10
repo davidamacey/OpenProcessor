@@ -28,6 +28,7 @@ from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_boxes import RegionBox, read_boxes
+from src.utils.vectors import float_list
 
 
 if TYPE_CHECKING:
@@ -63,7 +64,7 @@ def entry_for(box: RegionBox, vector: Sequence[float]) -> dict[str, Any]:
     """The stored entry for ``box``'s vector. It records the geometry the
     vector was computed from, so a box a human later moves is recognised as
     having a stale vector (:func:`current_vectors`)."""
-    return {'box_id': box.box_id, 'bbox_norm': list(box.bbox_norm), 'embedding': list(vector)}
+    return {'box_id': box.box_id, 'bbox_norm': list(box.bbox_norm), 'embedding': float_list(vector)}
 
 
 def is_current(entry: dict[str, Any], box: RegionBox) -> bool:
