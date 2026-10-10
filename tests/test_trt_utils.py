@@ -287,7 +287,9 @@ def _einsum_rope_onnx(path: Path) -> Path:
             helper.make_node('Add', ['x', 'x'], ['pos']),
             helper.make_node('Cast', ['pos'], ['pos_f32'], to=TensorProto.FLOAT),
             helper.make_node('Constant', [], ['freqs'], value=freqs),
-            helper.make_node('Einsum', ['pos_f32', 'freqs'], ['angles'], equation='..., f -> ... f'),
+            helper.make_node(
+                'Einsum', ['pos_f32', 'freqs'], ['angles'], equation='..., f -> ... f'
+            ),
             helper.make_node('Cos', ['angles'], ['y']),
         ],
         'rope',
@@ -319,11 +321,11 @@ def _mixed_float_inputs(model, ops: frozenset[str]) -> list[str]:
     for init in inferred.graph.initializer:
         types[init.name] = init.data_type
     floats = {onnx.TensorProto.FLOAT, onnx.TensorProto.FLOAT16}
-    bad = []
-    for node in inferred.graph.node:
-        if node.op_type in ops and len({types.get(n) for n in node.input} & floats) > 1:
-            bad.append(node.name or node.output[0])
-    return bad
+    return [
+        node.name or node.output[0]
+        for node in inferred.graph.node
+        if node.op_type in ops and len({types.get(n) for n in node.input} & floats) > 1
+    ]
 
 
 def _install_trt11(monkeypatch: pytest.MonkeyPatch) -> None:

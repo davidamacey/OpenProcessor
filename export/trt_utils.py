@@ -174,9 +174,7 @@ def _reconcile_float_types(model, fp32_ops: set[str]) -> int:
                 slots = _same_type_input_indices(node)
                 present = {types.get(node.input[i]) for i in slots if node.input[i]} & float_types
                 if len(present) == 2:
-                    target = (
-                        TensorProto.FLOAT if node.op_type in fp32_ops else TensorProto.FLOAT16
-                    )
+                    target = TensorProto.FLOAT if node.op_type in fp32_ops else TensorProto.FLOAT16
                     for i in slots:
                         name = node.input[i]
                         if types.get(name) not in float_types or types[name] == target:

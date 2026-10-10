@@ -334,7 +334,9 @@ def test_pe_fp32_fallback_warns_loudly_and_is_recorded_as_degraded(tmp_path: Pat
         ln.split('\t')[:2] for ln in (tmp_path / '.install' / 'groups.tsv').read_text().splitlines()
     )
     assert statuses['pe'] == 'degraded'
-    model, precision, reason = (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+    model, precision, reason = (
+        (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+    )
     assert (model, precision) == ('pe_image_encoder', 'fp32_fallback')
     assert 'IEinsumLayer' in reason
 
