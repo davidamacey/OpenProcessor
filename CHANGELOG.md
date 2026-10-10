@@ -115,6 +115,12 @@ upgrades in place), and browsing MLflow by a DNS name needs `MLFLOW_ALLOWED_HOST
 
 ### Changed
 
+- The cluster-refresh daemon no longer runs the full cluster retrain inside an API request every
+  200 new crops. It queues the retrain as the background auto-label job (run by the auto-label
+  worker) once ingest is quiet, waits at most `--max-deferral-seconds` (default 1800), merges
+  repeated requests into one, never starts a second retrain for a project, retries a lost job
+  after `--retry-backoff-seconds`, and cancels its job when the project is paused. The method,
+  parameters, seed and pool are unchanged, so the cluster assignment is identical (#212).
 - The shipped proposal-name denylist also covers the scene and quality words a live COCO oracle
   run produced (#193): `abstract*`, `*_background`, `*_object`, `scene*`, `empty*`, `blank_*`,
   `*_image`, `shadow*`, `outdoors` and similar. The text-free generic pack and

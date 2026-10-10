@@ -1054,6 +1054,17 @@ a failed or unwanted target is a complete undo. Jobs live under
   clusters by default; pass `run_vlm=true` to label with the VLM, and
   `class_id` to scope the run to one class. Poll
   `GET /curation/projects/{project}/pipeline/auto_label/status`.
+- When clustering runs: ingest assigns each new item to the persisted centroids
+  as it arrives. The full retrain is scheduled by `curation-cluster-refresh`:
+  once the item count has grown by `--growth-threshold` (200) since the last
+  retrain, it queues the auto-label job (so the retrain runs in
+  `curation-auto-label-worker`, not in the API) as soon as ingest is quiet: the
+  item count did not change since the previous poll and no item is waiting for
+  the region stage. A due retrain waits at most `--max-deferral-seconds` (1800)
+  for that. Repeated requests merge into one, a project never has two in flight,
+  a job lost to a dead worker is retried after `--retry-backoff-seconds` (600),
+  and pausing a project cancels the retrain the daemon started for it. The
+  method, parameters, seed and pool are those of a manual run.
 - Scores, diverse selection and the projection:
   `POST /curation/projects/{project}/scores/compute`,
   `POST /curation/projects/{project}/select/diverse`,
@@ -1281,7 +1292,7 @@ docker compose --profile curation up -d
 | `curation-detection-worker` | Runs the region cascade over `pending_detection` items for every active project. |
 | `curation-vlm-worker` | Verifies and labels items through each project's active VLM endpoint. |
 | `curation-auto-label-worker` | Drives the auto-label protocol. Clusters only unless a caller passes `run_vlm=true`. |
-| `curation-cluster-refresh` | Periodically refreshes the clustering. |
+| `curation-cluster-refresh` | Schedules the full cluster retrain as the auto-label job once 200 new items exist and ingest is quiet. |
 | `curation-evaluator` | Long-lived bake-off watcher; mounts `./data` read-only. |
 
 None needs Triton or a GPU to start; they idle or error per call until a
