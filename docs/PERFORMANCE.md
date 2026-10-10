@@ -812,10 +812,13 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
   labelled data (plan section 7) are open.
 - The fix bakes FP16 for every model that calls `bake_fp16_onnx`. On TensorRT 11.1 the MobileCLIP
   image encoder's v0.5.0 bake also failed at parse (`ElementWiseOperation DIV must have same input
-  types`); with the reconcile pass it parses, but `trtexec` then stops at
-  `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)`, so its exporter
-  still falls back to FP32 (its existing, printed fallback). That is a separate TensorRT-side
-  failure, tracked in #224; no other baked model has a mixed-type op.
+  types`); with the reconcile pass it parses, but the build stopped at
+  `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)` (#224). The failing
+  layers are the depthwise 7x7 stride-2 convs with a channel multiplier of 2 (the three
+  `downsample/proj/proj.0/reparam_conv` convs) and the final 3x3 conv (640 groups, 1280 outputs):
+  TensorRT 11.1 has no FP16 kernel for a grouped conv with one input channel per group and more
+  outputs than groups. `bake_fp16_onnx` now leaves those four convs in FP32 and the engine builds as
+  FP16 (see "MobileCLIP image encoder FP16" below). No other baked model has such a conv.
 - The installer's FP32 fallback is kept (an FP32 engine beats none) but is no longer silent: it
   prints a warning naming the model, the FP16 failure reason and the consequence, writes the model
   to `.install/precision.tsv`, records the group as `degraded` in `groups.tsv` (a re-run retries FP16
@@ -970,6 +973,23 @@ cd benchmarks
 ```
 
 ---
+
+### MobileCLIP image encoder FP16
+
+One RTX 3080 Ti (12 GB, no foreign load during the runs), TensorRT 11.1, dynamic batch 1/8/32 at
+256 x 256, engine-only `trtexec` timings (no Triton, no preprocessing):
+
+| Engine | Size | Build | Batch 8 GPU compute | Batch 8 images/s | Batch 32 GPU compute | Batch 32 images/s |
+|---|---:|---:|---:|---:|---:|---:|
+| FP32 | 146.6 MB | 62 s | 12.7 ms | 627 | 41.5 ms | 771 |
+| FP16 (4 convs FP32) | 75.1 MB | 65 s | 8.3 ms | 966 | 19.9 ms | 1604 |
+
+Parity of the FP16 engine against the FP32 engine on the first 200 images of the pinned COCO
+benchmark set (hashes verified): cosine similarity min 0.99986, mean 0.99998; top-1 nearest
+neighbour agrees for 98.5 percent of images and the top-5 neighbour overlap is 99.1 percent. The
+engine built by `export_mobileclip_image_encoder.py` itself (71.5 MB, 72 s, no fallback) measures
+cosine min 0.99984, mean 0.99998, top-1 99.5 percent, top-5 99.3 percent. Per-model Triton
+`perf_analyzer` runs were not made; the engine-only figures above are the speedup bound.
 
 ## Tuning Parameters
 

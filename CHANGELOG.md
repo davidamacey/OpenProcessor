@@ -33,6 +33,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- The MobileCLIP image encoder now builds as an FP16 engine on TensorRT 11.1 instead of falling
+  back to FP32. The build stopped at `Could not find any implementation for node
+  .../reparam_conv/Conv + PWN(...)`: TensorRT 11.1 has no FP16 kernel for a depthwise conv with a
+  channel multiplier, so `bake_fp16_onnx` keeps those four convs in FP32. The engine is 75 MB
+  against 147 MB, 1.5x (batch 8) to 2.1x (batch 32) faster per image, cosine similarity to the FP32
+  engine at least 0.9998 on 200 COCO images (#224).
 - The `curation-vlm-worker` no longer polls every project each cycle and takes a 409
   `vlm_not_configured` from the ones with no VLM (#207, about 2.7 idle cores at 18 projects). Each
   cycle it asks the registry and each project's activation which projects have an active VLM,

@@ -821,9 +821,9 @@ changed. Raw numbers: `docs/benchmarks/v060_fp16_pe.json` and
   limit: it is 74 percent busy, and the host-side item 2 of section 11.1 is the next to measure.
 - [ ] Accuracy gates of section 7 (retrieval, clustering) on labelled sets: not run; only a 200-image
   engine parity check is recorded.
-- [ ] MobileCLIP image encoder: its FP16 bake also failed at parse on TensorRT 11.1; after this fix it
-  parses but the build fails in TensorRT (`Could not find any implementation` for a reparam conv), so
-  its exporter still falls back to FP32 (#224).
+- [x] MobileCLIP image encoder FP16 (#224): the build failed on four depthwise convs with a channel
+  multiplier (no FP16 kernel in TensorRT 11.1); `bake_fp16_onnx` keeps them FP32 and the engine is
+  FP16 (cosine min 0.99984 against FP32 on 200 COCO images).
 
 ## 12. References
 
