@@ -37,11 +37,14 @@ half-batched hybrid would be harder to reason about than either path.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
+from src.utils.cpu_pool import ingest_gate, run_cpu
+from src.utils.stage_timing import observe_stage
 
 
 if TYPE_CHECKING:
@@ -83,15 +86,19 @@ async def _prefill_detections(
 
     valid_imgs: list[Image.Image] = []
     valid_indices: list[int] = []
-    for idx in indices:
-        try:
-            img, _w, _h = _decode_image(images[idx])
-        except Exception as exc:
+    decoded = await asyncio.gather(
+        *(run_cpu(_decode_image, images[idx]) for idx in indices), return_exceptions=True
+    )
+    for idx, outcome in zip(indices, decoded, strict=True):
+        if isinstance(outcome, BaseException):
             # Broad catch: ingest_one re-decodes this byte slice and
             # produces a structured IngestResult with the right
             # error_kind, so just skip prefilling it here.
-            logger.warning('ingest_batch_decode_failed', path=image_paths[idx], error=str(exc))
+            if not isinstance(outcome, Exception):
+                raise outcome
+            logger.warning('ingest_batch_decode_failed', path=image_paths[idx], error=str(outcome))
             continue
+        img = outcome[0]
         prefilled_imgs[idx] = img
         valid_imgs.append(img)
         valid_indices.append(idx)
@@ -171,79 +178,84 @@ async def run_ingest_batch(
         else:
             batch_dup_of[i] = rep
 
-    # Only pay the (expensive) batched decode + inference for images that
-    # dedup did not already resolve to an existing document or an
-    # earlier-in-batch representative.
-    prefilled_imgs, prefilled_items, prefilled_secondary = await _prefill_detections(
-        service, images, image_paths, non_dup
-    )
+    # Hold the images this request will decode against the process's in-flight cap, so
+    # more clients queue here instead of all decoding at once (#241).
+    wait_start = time.perf_counter()
+    async with ingest_gate().hold(len(non_dup)):
+        observe_stage('admission_wait', time.perf_counter() - wait_start)
+        # Only pay the (expensive) batched decode + inference for images that
+        # dedup did not already resolve to an existing document or an
+        # earlier-in-batch representative.
+        prefilled_imgs, prefilled_items, prefilled_secondary = await _prefill_detections(
+            service, images, image_paths, non_dup
+        )
 
-    sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
+        sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
 
-    # Representatives with an in-batch follower publish their finished
-    # IngestResult here so the follower can report the same image_id
-    # (the same wire field the cross-batch duplicate path uses) instead of
-    # re-ingesting byte-identical content.
-    rep_futures: dict[int, asyncio.Future[IngestResult]] = {
-        rep: asyncio.get_running_loop().create_future() for rep in set(batch_dup_of.values())
-    }
+        # Representatives with an in-batch follower publish their finished
+        # IngestResult here so the follower can report the same image_id
+        # (the same wire field the cross-batch duplicate path uses) instead of
+        # re-ingesting byte-identical content.
+        rep_futures: dict[int, asyncio.Future[IngestResult]] = {
+            rep: asyncio.get_running_loop().create_future() for rep in set(batch_dup_of.values())
+        }
 
-    async def _one(i: int, image_bytes: bytes, image_path: str, image_hash: str) -> IngestResult:
-        # Clients match results to request entries by source_identifier, so
-        # every duplicate carries its own, even though image_id is shared.
-        source_identifier = source_identifiers[i] if source_identifiers else None
-        existing_id = hash_to_existing.get(image_hash)
-        if existing_id:
-            return record_ingest_result(
-                IngestResult(
-                    status='duplicate',
-                    image_id=existing_id,
-                    image_path=image_path,
-                    imohash=image_hash,
-                    source_identifier=source_identifier,
-                )
-            )
-        rep = batch_dup_of.get(i)
-        if rep is not None:
-            rep_result = await rep_futures[rep]
-            if rep_result.status == 'success':
+        async def _one(i: int, image_bytes: bytes, image_path: str, image_hash: str) -> IngestResult:
+            # Clients match results to request entries by source_identifier, so
+            # every duplicate carries its own, even though image_id is shared.
+            source_identifier = source_identifiers[i] if source_identifiers else None
+            existing_id = hash_to_existing.get(image_hash)
+            if existing_id:
                 return record_ingest_result(
                     IngestResult(
                         status='duplicate',
-                        image_id=rep_result.image_id,
+                        image_id=existing_id,
                         image_path=image_path,
                         imohash=image_hash,
                         source_identifier=source_identifier,
                     )
                 )
-            # The representative failed (e.g. undecodable bytes) — don't
-            # guess a duplicate-of relationship against a failed ingest;
-            # give this copy its own real attempt instead (falls back to
-            # ingest_one's own decode/detect since it wasn't prefilled).
-        async with sem:
-            result = await service.ingest_one(
-                image_bytes,
-                image_path,
-                source=source,
-                prefilled_image=prefilled_imgs.get(i),
-                prefilled_items=prefilled_items.get(i),
-                prefilled_secondary=prefilled_secondary.get(i),
-                whole_frame_from_bytes=whole_frame_from_bytes,
-                source_identifier=source_identifier,
-                ingest_run_id=ingest_run_id,
-            )
-        if i in rep_futures:
-            rep_futures[i].set_result(result)
-        return result
+            rep = batch_dup_of.get(i)
+            if rep is not None:
+                rep_result = await rep_futures[rep]
+                if rep_result.status == 'success':
+                    return record_ingest_result(
+                        IngestResult(
+                            status='duplicate',
+                            image_id=rep_result.image_id,
+                            image_path=image_path,
+                            imohash=image_hash,
+                            source_identifier=source_identifier,
+                        )
+                    )
+                # The representative failed (e.g. undecodable bytes) — don't
+                # guess a duplicate-of relationship against a failed ingest;
+                # give this copy its own real attempt instead (falls back to
+                # ingest_one's own decode/detect since it wasn't prefilled).
+            async with sem:
+                result = await service.ingest_one(
+                    image_bytes,
+                    image_path,
+                    source=source,
+                    prefilled_image=prefilled_imgs.get(i),
+                    prefilled_items=prefilled_items.get(i),
+                    prefilled_secondary=prefilled_secondary.get(i),
+                    whole_frame_from_bytes=whole_frame_from_bytes,
+                    source_identifier=source_identifier,
+                    ingest_run_id=ingest_run_id,
+                )
+            if i in rep_futures:
+                rep_futures[i].set_result(result)
+            return result
 
-    results = list(
-        await asyncio.gather(
-            *[
-                _one(i, b, p, h)
-                for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
-            ]
+        results = list(
+            await asyncio.gather(
+                *[
+                    _one(i, b, p, h)
+                    for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
+                ]
+            )
         )
-    )
 
     await service.refresh_indexes()
 

@@ -41,6 +41,7 @@ STAGES: tuple[str, ...] = (
     'blur',
     'doc_build',
     'bulk_serialize',
+    'admission_wait',
 )
 
 _SECONDS = Histogram(
@@ -90,6 +91,13 @@ def add_stage_bytes(stage: str, nbytes: int) -> None:
         raise ValueError(f'unknown stage {stage!r}; expected one of {STAGES}')
     if nbytes > 0:
         _BYTES_BY_STAGE[stage].inc(nbytes)
+
+
+def observe_stage(stage: str, seconds: float) -> None:
+    """Record ``seconds`` for ``stage`` when the span is not a ``with`` block (a wait on a gate)."""
+    if stage not in _SECONDS_BY_STAGE:
+        raise ValueError(f'unknown stage {stage!r}; expected one of {STAGES}')
+    _SECONDS_BY_STAGE[stage].observe(seconds)
 
 
 def stage_timer(stage: str, *, nbytes: int = 0) -> _StageTimer:

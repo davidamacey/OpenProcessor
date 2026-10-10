@@ -36,6 +36,7 @@ from src.services.curation.item_doc import (
 from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
+from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
 
@@ -95,6 +96,24 @@ def crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) ->
     y2i = max(y1i + 1, round(y2))
     with stage_timer('crop'):
         return img.crop((x1i, y1i, x2i, y2i))
+
+
+def _crop_all(img: Image.Image, items: list[DetectedItem]) -> list[Image.Image]:
+    return [crop_pil(img, item.bbox_pixel) for item in items]
+
+
+def _full_frame_blur(img: Image.Image) -> tuple[np.ndarray, float]:
+    """The BGR frame and its Laplacian variance (the denominator of every box's ratio)."""
+    with stage_timer('blur'):
+        img_bgr = np.ascontiguousarray(np.asarray(img.convert('RGB'))[:, :, ::-1])
+        return img_bgr, image_lap_var(img_bgr)
+
+
+def _box_blurs(
+    img_bgr: np.ndarray, boxes: list[tuple[float, float, float, float]]
+) -> list[float | None]:
+    with stage_timer('blur'):
+        return [crop_lap_var(img_bgr, box) for box in boxes]
 
 
 def residual_placement(
@@ -167,7 +186,7 @@ async def index_items(
     img = ctx.pil
     full_w, full_h = ctx.width, ctx.height
     image_path = ctx.image_path
-    crops_pil = [crop_pil(img, item.bbox_pixel) for item in items]
+    crops_pil = await run_cpu(_crop_all, img, items)
     await embed_items(service, items, crops_pil, full_w, full_h, image_path)
 
     now = datetime.now(UTC).isoformat()
@@ -199,9 +218,7 @@ async def index_items(
             image_doc.update(ctx.image_extra)
 
     try:
-        with stage_timer('blur'):
-            img_bgr = np.ascontiguousarray(np.asarray(img.convert('RGB'))[:, :, ::-1])
-            full_var = image_lap_var(img_bgr)
+        img_bgr, full_var = await run_cpu(_full_frame_blur, img)
     except Exception as exc:
         logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
         img_bgr = None
@@ -221,15 +238,24 @@ async def index_items(
     if any(it.class_id is None and it.pe_embedding is not None for it in items):
         store = get_ivf_ingest_store()
 
+    box_vars: list[float | None] = (
+        await run_cpu(_box_blurs, img_bgr, [item.bbox_pixel for item in items])
+        if img_bgr is not None
+        else [None] * len(items)
+    )
+    await asyncio.gather(
+        *(
+            run_cpu(write_crop_cache, cid, crop, service.config.crop_cache_dir)
+            for cid, crop in zip(cids, crops_pil, strict=True)
+        )
+    )
+
     crop_docs: list[dict[str, Any]] = []
     for idx, item in enumerate(items):
         bn = bnorms[idx]
         cid = cids[idx]
-        with stage_timer('blur'):
-            box_var = crop_lap_var(img_bgr, item.bbox_pixel) if img_bgr is not None else None
-            ratio = blur_ratio(box_var, full_var)
-
-        write_crop_cache(cid, crops_pil[idx], service.config.crop_cache_dir)
+        box_var = box_vars[idx]
+        ratio = blur_ratio(box_var, full_var)
 
         if item.class_id is not None:
             item.cluster_id = int(item.class_id)

@@ -39,12 +39,14 @@ calls would, so a caller cannot tell which path produced a result.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from src.clients.model_adapters import END2END_OUTPUTS
+from src.clients.triton_pool import fp32_images_input
 from src.config.ingest_profiles import proposer_label
 from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
@@ -55,6 +57,7 @@ from src.services.detection.geometry import (
     undo_letterbox,
 )
 from src.utils.class_names import normalize_class_name
+from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
 
@@ -125,14 +128,15 @@ class WholeImageDetector:
         TensorRT end2end export shape this repo's own ``/detect`` endpoint
         serves from.
         """
-        from tritonclient.grpc import InferInput, InferRequestedOutput
+        from tritonclient.grpc import InferRequestedOutput
 
-        chw, scale, pad = letterbox_to_square(
-            img, target=self.profile.input_size, fill=self.profile.letterbox_fill
+        chw, scale, pad = await run_cpu(
+            letterbox_to_square,
+            img,
+            target=self.profile.input_size,
+            fill=self.profile.letterbox_fill,
         )
-        with stage_timer('triton_request', nbytes=chw.nbytes):
-            inp = InferInput('images', list(chw.shape), 'FP32')
-            inp.set_data_from_numpy(chw)
+        inp = await run_cpu(fp32_images_input, chw)
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
         return self.decode_primary_row(
@@ -156,21 +160,21 @@ class WholeImageDetector:
         """
         if not imgs:
             return []
-        from tritonclient.grpc import InferInput, InferRequestedOutput
+        from tritonclient.grpc import InferRequestedOutput
 
         net_size = self.profile.input_size
-        chws: list[np.ndarray] = []
-        scales: list[float] = []
-        pads: list[tuple[float, float]] = []
-        for img in imgs:
-            chw, scale, pad = letterbox_to_square(
-                img, target=net_size, fill=self.profile.letterbox_fill
+        letterboxed = await asyncio.gather(
+            *(
+                run_cpu(
+                    letterbox_to_square, img, target=net_size, fill=self.profile.letterbox_fill
+                )
+                for img in imgs
             )
-            # ``letterbox_to_square`` returns (1, 3, S, S); strip the leading dim.
-            chws.append(chw[0])
-            scales.append(scale)
-            pads.append(pad)
-        full_batch = np.stack(chws, axis=0)
+        )
+        # ``letterbox_to_square`` returns (1, 3, S, S); strip the leading dim.
+        scales = [scale for _chw, scale, _pad in letterboxed]
+        pads = [pad for _chw, _scale, pad in letterboxed]
+        full_batch = await run_cpu(np.stack, [chw[0] for chw, _scale, _pad in letterboxed], axis=0)
 
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         # Per-chunk rows are collected individually rather than
@@ -181,9 +185,7 @@ class WholeImageDetector:
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            with stage_timer('triton_request', nbytes=chunk.nbytes):
-                inp = InferInput('images', list(chunk.shape), 'FP32')
-                inp.set_data_from_numpy(chunk)
+            inp = await run_cpu(fp32_images_input, chunk)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
             for name in END2END_OUTPUTS:
                 rows[name].extend(result.as_numpy(name))
@@ -325,16 +327,13 @@ class WholeImageDetector:
 
     async def run_secondary_raw(self, img: Image.Image) -> SecondaryOutput:
         """Run the secondary (raw-output) ensemble detector on one image."""
-        from tritonclient.grpc import InferInput
-
         profile = self.secondary_profile
         assert profile is not None
         feature = await self.secondary_feature_output()
-        chw, _scale, _pad = letterbox_to_square(
-            img, target=profile.input_size, fill=profile.letterbox_fill
+        chw, _scale, _pad = await run_cpu(
+            letterbox_to_square, img, target=profile.input_size, fill=profile.letterbox_fill
         )
-        inp = InferInput('images', list(chw.shape), 'FP32')
-        inp.set_data_from_numpy(chw)
+        inp = await run_cpu(fp32_images_input, chw)
         result = await self.triton_pool.infer(
             profile.detector_model, [inp], outputs=self._secondary_outputs(feature)
         )
@@ -355,27 +354,26 @@ class WholeImageDetector:
         """
         if not imgs:
             return []
-        from tritonclient.grpc import InferInput
-
         profile = self.secondary_profile
         assert profile is not None
         feature = await self.secondary_feature_output()
         outs = self._secondary_outputs(feature)
 
-        chws: list[np.ndarray] = []
-        for img in imgs:
-            chw, _scale, _pad = letterbox_to_square(
-                img, target=profile.input_size, fill=profile.letterbox_fill
+        letterboxed = await asyncio.gather(
+            *(
+                run_cpu(
+                    letterbox_to_square, img, target=profile.input_size, fill=profile.letterbox_fill
+                )
+                for img in imgs
             )
-            chws.append(chw[0])
-        full_batch = np.stack(chws, axis=0)
+        )
+        full_batch = await run_cpu(np.stack, [chw[0] for chw, _scale, _pad in letterboxed], axis=0)
 
         rows: list[SecondaryOutput] = []
         step = max(1, profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = InferInput('images', list(chunk.shape), 'FP32')
-            inp.set_data_from_numpy(chunk)
+            inp = await run_cpu(fp32_images_input, chunk)
             result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
             raws = result.as_numpy(_RAW_OUTPUT)
             fmaps = result.as_numpy(feature) if feature is not None else None
