@@ -15,7 +15,6 @@ from io import BytesIO
 
 import numpy as np
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
-from fastapi.responses import ORJSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -28,7 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/embed',
     tags=['CLIP Embeddings'],
-    default_response_class=ORJSONResponse,
 )
 
 

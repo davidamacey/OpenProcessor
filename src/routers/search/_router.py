@@ -5,11 +5,9 @@ without importing the package ``__init__``.
 """
 
 from fastapi import APIRouter
-from fastapi.responses import ORJSONResponse
 
 
 router = APIRouter(
     prefix='/search',
     tags=['Visual Search'],
-    default_response_class=ORJSONResponse,
 )

@@ -28,6 +28,18 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `wave0_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
   12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
   per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
+
+### Changed
+
+- Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
+  routers, the error handlers and four routes that built it directly). Routes with a response
+  model serialize through Pydantic straight to bytes; the curation routes that return a
+  hand-built wire dict (review, crops, regions, search and others) render with orjson directly
+  (`src/core/wire_json.py`) and skip `jsonable_encoder`, so a 100-item review page serializes in
+  about 4 ms instead of about 69 ms and the acceptance log no longer repeats the deprecation
+  warning. Response bytes are unchanged; the one contract change is that
+  `POST .../datasets/imports/{import_id}/undo` now documents its response schema (#153).
+
 ### Fixed
 
 - The `curation-vlm-worker` no longer polls every project each cycle and takes a 409
@@ -123,6 +135,12 @@ upgrades in place), and browsing MLflow by a DNS name needs `MLFLOW_ALLOWED_HOST
 
 ### Changed
 
+- The cluster-refresh daemon no longer runs the full cluster retrain inside an API request every
+  200 new crops. It queues the retrain as the background auto-label job (run by the auto-label
+  worker) once ingest is quiet, waits at most `--max-deferral-seconds` (default 1800), merges
+  repeated requests into one, never starts a second retrain for a project, retries a lost job
+  after `--retry-backoff-seconds`, and cancels its job when the project is paused. The method,
+  parameters, seed and pool are unchanged, so the cluster assignment is identical (#212).
 - The shipped proposal-name denylist also covers the scene and quality words a live COCO oracle
   run produced (#193): `abstract*`, `*_background`, `*_object`, `scene*`, `empty*`, `blank_*`,
   `*_image`, `shadow*`, `outdoors` and similar. The text-free generic pack and

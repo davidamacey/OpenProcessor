@@ -128,10 +128,10 @@ async def test_cluster_refresh_daemon_uses_configured_prefix() -> None:
     mod = importlib.import_module('scripts.curation.cluster_refresh_daemon')
     client = _RecordingClient()
     await mod._trigger_auto_promote(client, 'http://api', '/custom-mount', 'alpha')
-    await mod._trigger_auto_label(client, 'http://api', '/custom-mount', 'alpha')
+    await mod._start_auto_label_job(client, 'http://api', '/custom-mount', 'alpha')
     assert client.urls == [
         'http://api/custom-mount/projects/alpha/clusters/auto_promote',
-        'http://api/custom-mount/projects/alpha/pipeline/auto_label',
+        'http://api/custom-mount/projects/alpha/pipeline/auto_label/start',
     ]
 
 

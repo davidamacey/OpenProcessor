@@ -14,7 +14,6 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import ORJSONResponse
 
 from src.config.settings import TritonModelConfig
 from src.schemas.detection import BatchInferenceResult, InferenceResult
@@ -27,7 +26,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/detect',
     tags=['Object Detection'],
-    default_response_class=ORJSONResponse,
 )
 
 # Service instance
