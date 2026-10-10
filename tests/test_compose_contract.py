@@ -438,6 +438,14 @@ def test_triton_accepts_the_clients_idle_keepalive_pings() -> None:
     assert interval <= 30_000
 
 
+def test_triton_does_not_log_every_pinned_memory_allocation() -> None:
+    """`--log-verbose=1` printed an allocation and a free line for every tensor of every
+    request (12,038 lines in one 2,000-image window) and bought nothing in production."""
+    command = _services()['triton-server']['command']
+    assert '--log-verbose=0' in command
+    assert not any(a.startswith('--log-verbose=') and a != '--log-verbose=0' for a in command)
+
+
 def test_api_has_a_healthcheck() -> None:
     """A `service_healthy` dependency on api is meaningless without one."""
     services = _services()

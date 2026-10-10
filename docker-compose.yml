@@ -113,7 +113,7 @@ services:
       # over the in-process path whenever Triton reports it ready.
       - --load-model=pe_text_encoder
       # ===================================================================
-      - --log-verbose=1
+      - --log-verbose=0
       - --log-info=true
     shm_size: 8g
     ulimits:
