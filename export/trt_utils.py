@@ -93,6 +93,112 @@ def engine_output_dtypes(plan_path: str | Path) -> dict[str, str]:
     return outputs
 
 
+# Ops whose float inputs must all share one element type; TensorRT rejects
+# a mix at ONNX parse (IEinsumLayer, ElementWiseOperation, ...).
+_SAME_FLOAT_TYPE_OPS = frozenset(
+    {
+        'Add',
+        'Concat',
+        'Div',
+        'Einsum',
+        'Equal',
+        'Gemm',
+        'Greater',
+        'GreaterOrEqual',
+        'Less',
+        'LessOrEqual',
+        'MatMul',
+        'Max',
+        'Mean',
+        'Min',
+        'Mul',
+        'PRelu',
+        'Sub',
+        'Sum',
+        'Where',
+    }
+)
+_MAX_RECONCILE_PASSES = 8
+
+
+def _same_type_input_indices(node) -> range:
+    """Input slots that must share a type (Where's condition is a bool)."""
+    return range(1, 3) if node.op_type == 'Where' else range(len(node.input))
+
+
+def _tensor_types(model) -> dict[str, int]:
+    """Element type of every tensor, re-derived from the nodes.
+
+    The graph's ``value_info`` is dropped first: onnxconverter-common
+    rewrites those entries to FP16 even where an explicit ``Cast(to=FLOAT)``
+    keeps the tensor FP32, and shape inference trusts existing entries.
+    """
+    import onnx
+
+    del model.graph.value_info[:]
+    inferred = onnx.shape_inference.infer_shapes(model)
+    types = {
+        vi.name: vi.type.tensor_type.elem_type
+        for vi in [*inferred.graph.value_info, *inferred.graph.input, *inferred.graph.output]
+    }
+    types.update({init.name: init.data_type for init in inferred.graph.initializer})
+    return types
+
+
+def _reconcile_float_types(model, fp32_ops: set[str]) -> int:
+    """Insert Casts until every same-type op sees one float element type.
+
+    onnxconverter-common retypes ``value_info`` and initializers but never
+    the ``to`` of a Cast already in the graph, so an explicit
+    ``Cast(to=FLOAT)`` (PyTorch's ``.float()``, e.g. a rotary-embedding
+    table) leaves an FP32 island whose consumers mix FP32 with FP16 weights
+    and fail TensorRT's ONNX parse. Mixed inputs are cast to FP16, or to FP32
+    for ops in ``fp32_ops`` (the converter's block list, which must stay FP32).
+    Only the top-level graph is reconciled. Returns the Casts inserted;
+    raises ``ValueError`` when the graph does not settle.
+    """
+    import onnx
+    from onnx import TensorProto, helper
+
+    float_types = {TensorProto.FLOAT, TensorProto.FLOAT16}
+    graph = model.graph
+    inserted = 0
+    for _ in range(_MAX_RECONCILE_PASSES):
+        types = _tensor_types(model)
+        rebuilt: list = []
+        casts: dict[tuple[str, int], str] = {}
+        for node in graph.node:
+            node_copy = onnx.NodeProto()
+            node_copy.CopyFrom(node)
+            if node.op_type in _SAME_FLOAT_TYPE_OPS:
+                slots = _same_type_input_indices(node)
+                present = {types.get(node.input[i]) for i in slots if node.input[i]} & float_types
+                if len(present) == 2:
+                    target = (
+                        TensorProto.FLOAT if node.op_type in fp32_ops else TensorProto.FLOAT16
+                    )
+                    for i in slots:
+                        name = node.input[i]
+                        if types.get(name) not in float_types or types[name] == target:
+                            continue
+                        if (name, target) not in casts:
+                            out = f'{name}__reconciled_{target}'
+                            rebuilt.append(
+                                helper.make_node(
+                                    'Cast', [name], [out], to=target, name=f'{out}_cast'
+                                )
+                            )
+                            casts[name, target] = out
+                        node_copy.input[i] = casts[name, target]
+            rebuilt.append(node_copy)
+        if not casts:
+            return inserted
+        del graph.node[:]
+        graph.node.extend(rebuilt)
+        inserted += len(casts)
+    raise ValueError(f'float types did not settle after {_MAX_RECONCILE_PASSES} passes')
+
+
 def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None) -> Path:
     """Bake FP16 mixed precision into an ONNX for TRT >= 11 typed builds.
 
@@ -103,6 +209,11 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     which ORT-based tools cannot type-infer). ``keep_io_types=True`` keeps
     graph inputs/outputs FP32, so Triton config dtypes (TYPE_FP32) remain
     valid and clients are unaffected.
+
+    The rewrite does not retype explicit ``Cast(to=FLOAT)`` nodes, so its
+    output can mix FP32 and FP16 operands at one op, which TensorRT 11
+    rejects at parse. :func:`_reconcile_float_types` repairs that, and
+    raises (callers fall back to FP32) if the graph does not settle.
 
     On older TRT (classic FP16 flag still present) this is a no-op and
     returns the input path — :func:`enable_fp16` handles precision there.
@@ -115,26 +226,22 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     import onnx
     from onnxconverter_common import float16
 
+    # Numerically sensitive defaults plus ops TRT executes outside the FP16
+    # path anyway (plugins, index math). Einsum stays FP32: it multiplies
+    # position by frequency for the rotary angle table, where FP16 loses
+    # angle precision.
+    fp32_ops = {
+        *float16.DEFAULT_OP_BLOCK_LIST,
+        'EfficientNMS_TRT',
+        'Einsum',
+        'NonMaxSuppression',
+        'Range',
+    }
     model = onnx.load(str(onnx_path))
     fp16_model = float16.convert_float_to_float16(
-        model,
-        keep_io_types=True,
-        # Numerically sensitive defaults plus ops TRT executes outside the
-        # FP16 path anyway (plugins, index math). Einsum is kept FP32 so the
-        # converter casts every input back to FP32: left unblocked it
-        # converts a Constant operand to FP16 while an explicit FP32 Cast
-        # feeds the other, and TensorRT's IEinsumLayer rejects mixed input
-        # types at ONNX parse (the PE image encoder's rotary-embedding
-        # angle table, where FP32 is also the right precision for
-        # position x frequency).
-        op_block_list=[
-            *float16.DEFAULT_OP_BLOCK_LIST,
-            'EfficientNMS_TRT',
-            'Einsum',
-            'NonMaxSuppression',
-            'Range',
-        ],
+        model, keep_io_types=True, op_block_list=sorted(fp32_ops)
     )
+    _reconcile_float_types(fp16_model, fp32_ops)
     out = Path(output_path) if output_path else Path(onnx_path).with_suffix('.fp16.onnx')
     onnx.save(fp16_model, str(out))
     return out

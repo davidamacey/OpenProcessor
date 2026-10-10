@@ -300,14 +300,14 @@ def _einsum_rope_onnx(path: Path) -> Path:
     return path
 
 
-def _mixed_type_einsum_inputs(model) -> list[str]:
-    """Names of Einsum nodes whose inputs do not all share one element type
-    (the condition TensorRT's IEinsumLayer rejects at ONNX parse)."""
+def _mixed_float_inputs(model, ops: frozenset[str]) -> list[str]:
+    """Names of ``ops`` nodes whose float inputs are not all one element type
+    (the condition TensorRT's IEinsumLayer / ElementWiseOperation reject at
+    ONNX parse). Types are re-derived from the nodes, not from ``value_info``:
+    the converter rewrites those entries to FP16 even where an explicit Cast
+    keeps the tensor FP32, and inference trusts existing entries."""
     import onnx
 
-    # The converter rewrites value_info entries to FP16 even where an explicit
-    # Cast keeps the tensor FP32, and inference trusts existing entries: drop
-    # them so every type is re-derived from the nodes.
     stripped = onnx.ModelProto()
     stripped.CopyFrom(model)
     del stripped.graph.value_info[:]
@@ -318,14 +318,21 @@ def _mixed_type_einsum_inputs(model) -> list[str]:
     }
     for init in inferred.graph.initializer:
         types[init.name] = init.data_type
+    floats = {onnx.TensorProto.FLOAT, onnx.TensorProto.FLOAT16}
     bad = []
     for node in inferred.graph.node:
-        if node.op_type != 'Einsum':
-            continue
-        in_types = {types.get(name) for name in node.input}
-        if len(in_types) != 1:
+        if node.op_type in ops and len({types.get(n) for n in node.input} & floats) > 1:
             bad.append(node.name or node.output[0])
     return bad
+
+
+def _install_trt11(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_tensorrt(
+        monkeypatch,
+        explicit_batch_flag_exists=False,
+        deserializes_ok=True,
+        fp16_builder_flag_exists=False,
+    )
 
 
 class TestBakeFp16OnnxEinsum:
@@ -337,22 +344,92 @@ class TestBakeFp16OnnxEinsum:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         pytest.importorskip('onnxconverter_common')
-        _install_fake_tensorrt(
-            monkeypatch,
-            explicit_batch_flag_exists=False,
-            deserializes_ok=True,
-            fp16_builder_flag_exists=False,
-        )
+        _install_trt11(monkeypatch)
         import onnx
         import trt_utils
 
         src = _einsum_rope_onnx(tmp_path / 'rope.onnx')
-        assert _mixed_type_einsum_inputs(onnx.load(str(src))) == []
+        assert _mixed_float_inputs(onnx.load(str(src)), frozenset({'Einsum'})) == []
 
         baked = trt_utils.bake_fp16_onnx(src, tmp_path / 'rope.fp16.onnx')
 
         model = onnx.load(str(baked))
         onnx.checker.check_model(model)
-        assert _mixed_type_einsum_inputs(model) == []
+        assert _mixed_float_inputs(model, frozenset({'Einsum'})) == []
         # keep_io_types=True: the graph boundary stays FP32.
         assert model.graph.output[0].type.tensor_type.elem_type == onnx.TensorProto.FLOAT
+
+
+def _fp32_cast_island_onnx(path: Path) -> Path:
+    """FP32 graph where an explicit ``Cast(to=FLOAT)`` (PyTorch's ``.float()``)
+    produces a table that is multiplied with, and concatenated to, the
+    FP16-converted activations -- the pattern behind the PE encoder's
+    ElementWiseOperation parse error."""
+    import numpy as np
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    x = helper.make_tensor_value_info('x', TensorProto.FLOAT, [4, 8])
+    y = helper.make_tensor_value_info('y', TensorProto.FLOAT, [4, 16])
+    weight = numpy_helper.from_array(np.ones((8, 8), dtype=np.float32), name='w')
+    table = numpy_helper.from_array(np.full((4, 8), 0.5, dtype=np.float32), name='table')
+    graph = helper.make_graph(
+        [
+            helper.make_node('MatMul', ['x', 'w'], ['h']),
+            helper.make_node('Cast', ['table'], ['table_f32'], to=TensorProto.FLOAT),
+            helper.make_node('Cos', ['table_f32'], ['cos']),
+            helper.make_node('Mul', ['h', 'cos'], ['rotated']),
+            helper.make_node('Concat', ['rotated', 'cos'], ['y'], axis=1),
+        ],
+        'island',
+        [x],
+        [y],
+        initializer=[weight, table],
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 17)], ir_version=8)
+    onnx.checker.check_model(model)
+    onnx.save(model, str(path))
+    return path
+
+
+class TestBakeFp16OnnxReconcilesFloatTypes:
+    SAME_TYPE_OPS = frozenset({'Mul', 'Concat', 'MatMul', 'Einsum', 'Add'})
+
+    def test_an_explicit_fp32_cast_does_not_leave_mixed_operands(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pytest.importorskip('onnxconverter_common')
+        _install_trt11(monkeypatch)
+        import onnx
+        import trt_utils
+
+        src = _fp32_cast_island_onnx(tmp_path / 'island.onnx')
+        assert _mixed_float_inputs(onnx.load(str(src)), self.SAME_TYPE_OPS) == []
+
+        baked = trt_utils.bake_fp16_onnx(src, tmp_path / 'island.fp16.onnx')
+
+        model = onnx.load(str(baked))
+        onnx.checker.check_model(model)
+        assert _mixed_float_inputs(model, self.SAME_TYPE_OPS) == []
+        weight = next(i for i in model.graph.initializer if i.name == 'w')
+        assert weight.data_type == onnx.TensorProto.FLOAT16  # still a real FP16 graph
+        assert model.graph.output[0].type.tensor_type.elem_type == onnx.TensorProto.FLOAT
+
+    def test_the_baked_graph_computes_the_same_values(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ort = pytest.importorskip('onnxruntime')
+        pytest.importorskip('onnxconverter_common')
+        import numpy as np
+        import trt_utils
+
+        _install_trt11(monkeypatch)
+        src = _fp32_cast_island_onnx(tmp_path / 'island.onnx')
+        baked = trt_utils.bake_fp16_onnx(src, tmp_path / 'island.fp16.onnx')
+        x = np.random.default_rng(0).normal(size=(4, 8)).astype(np.float32)
+
+        def run(path: Path) -> np.ndarray:
+            session = ort.InferenceSession(str(path), providers=['CPUExecutionProvider'])
+            return session.run(None, {'x': x})[0]
+
+        np.testing.assert_allclose(run(baked), run(src), rtol=2e-2, atol=2e-2)
