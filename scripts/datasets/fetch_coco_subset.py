@@ -29,6 +29,17 @@ Pipeline:
    ``coco_gt.json`` (a COCO-format ground-truth subset), and
    ``SELECTION.json`` alongside ``images/``.
 
+Throughput benchmark sets (``--bench-set N``) use a different draw: uniform over
+every class, val2017 first, then train2017. They are pinned with per-image
+SHA-256 and byte counts (``scripts/datasets/bench_set.py``)::
+
+    python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_bench_2000 \\
+        --bench-set 2000 --seed 20261009 \\
+        --manifest scripts/datasets/manifests/coco_bench_2000.json
+    # re-check files later, offline
+    python scripts/datasets/fetch_coco_subset.py --verify-only --out data/samples/coco_bench_2000 \\
+        --manifest scripts/datasets/manifests/coco_bench_2000.json
+
 Run this on the **host** (e.g. via ``make sample-coco`` /
 ``make sample-coco-readme``, or directly with the project venv), never
 via ``docker compose exec``. ``--out`` is resolved relative to the
@@ -77,6 +88,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.datasets import bench_set
 from scripts.datasets._common import (
     FetchError,
     download,
@@ -122,10 +134,7 @@ LICENSE_ALIASES = {
 DEFAULT_LICENSES = ('by', 'by-sa', 'no-known', 'usgov')
 
 MIN_BOX_AREA_FRACTION = 0.01
-IMAGE_URL_TMPL = {
-    'val2017': 'http://images.cocodataset.org/val2017/{file_name}',
-    'train2017': 'http://images.cocodataset.org/train2017/{file_name}',
-}
+IMAGE_URL_TMPL = bench_set.IMAGE_URL_TMPL
 
 
 # =============================================================================
@@ -421,6 +430,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help='Also select N val2017 images with no box of any --classes class (full annotations kept)',
     )
+    p.add_argument(
+        '--bench-set',
+        type=int,
+        default=None,
+        metavar='N',
+        help=(
+            'Throughput benchmark set: N images drawn uniformly over all classes (val2017 first, '
+            'train2017 for the rest), written as a checksum pin (--manifest, required)'
+        ),
+    )
+    p.add_argument(
+        '--verify-only',
+        action='store_true',
+        help='Re-hash <out>/images against the --manifest pin; no network, no annotations',
+    )
     p.add_argument('--cache-dir', type=Path, default=Path('cache/datasets'))
     p.add_argument(
         '--skip-download', action='store_true', help='Compute selection/manifests only, no images'
@@ -440,7 +464,55 @@ def parse_side_sets(spec: str) -> dict[str, int]:
     return out
 
 
+def run_bench_set(args: argparse.Namespace) -> dict[str, Any]:
+    """``--bench-set N``: select, download, checksum and pin a throughput set."""
+    if args.manifest is None:
+        raise FetchError('--bench-set needs --manifest (the pin to write or verify)')
+    names = sorted(
+        resolve_license_names([t.strip() for t in args.licenses.split(',') if t.strip()])
+    )
+    val_data, train_data = ensure_annotations(args.cache_dir)
+    lic = {x['id']: x['name'] for x in val_data['licenses']}
+    val_pool = bench_set.pool_rows(val_data['images'], lic, set(names), 'val2017')
+    train_pool = (
+        []
+        if args.val_only
+        else bench_set.pool_rows(train_data['images'], lic, set(names), 'train2017')
+    )
+    rows = bench_set.select_uniform(val_pool, train_pool, args.bench_set, args.seed)
+    pin = bench_set.write_or_check_pin(
+        args.manifest,
+        rows,
+        {'seed': args.seed, 'licenses': names, 'annotations_sha256': ANNOTATIONS_SHA256},
+        args.out / 'images',
+    )
+    write_csv(
+        args.out / 'ATTRIBUTION.csv',
+        pin['images'],
+        ('image_id', 'file_name', 'split', 'license_name', 'flickr_url'),
+        extrasaction='ignore',
+    )
+    summary = {k: pin[k] for k in ('seed', 'count', 'licenses', 'manifest_sha256')}
+    summary['splits'] = {s: sum(r['split'] == s for r in pin['images']) for s in IMAGE_URL_TMPL}
+    write_json(args.out / 'SELECTION.json', summary)
+    logger.info('done: %s', json.dumps(summary))
+    return summary
+
+
+def run_verify(args: argparse.Namespace) -> int:
+    if args.manifest is None:
+        raise FetchError('--verify-only needs --manifest')
+    pin = bench_set.load_pin(args.manifest)
+    problems = bench_set.verify_images(pin, args.out / 'images')
+    for line in problems[:20]:
+        logger.error('%s', line)
+    logger.info('%d images checked, %d problem(s)', pin['count'], len(problems))
+    return 1 if problems else 0
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
+    if args.bench_set is not None:
+        return run_bench_set(args)
     classes = [c.strip() for c in args.classes.split(',') if c.strip()]
     allowed_licenses = resolve_license_names(
         [t.strip() for t in args.licenses.split(',') if t.strip()]
@@ -582,6 +654,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.verify_only:
+            return run_verify(args)
         run(args)
     except FetchError as exc:
         logger.error('%s', exc)

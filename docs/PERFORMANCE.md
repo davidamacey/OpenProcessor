@@ -375,8 +375,8 @@ ingested at **13.39 images/s** (0 failed, 1.37 crops per image, batch p50 10.0 s
 4,000-image mixed set that is half 12 to 20 MP JPEGs ingested at 4.90 images/s
 (about 15 for the small photos, about 2.5 for the large ones; decode and resize
 dominate). Those runs used the narrow vehicle detector; the full-vocabulary
-policy rows above are computed, not measured. The larger public baseline set (#45)
-is not published yet.
+policy rows above are computed, not measured. The v0.5.0 re-measurement on the pinned
+2,000-image set is in "v0.5.0 baseline" below.
 
 ### Measured VLM labeling speed
 
@@ -474,6 +474,240 @@ Per-stage totals, A all (op_pipeline_stage_*; seconds are summed across concurre
 Triton compute_infer, A all: pe_image_encoder 1,590 s total for 33,388 inferences (3,120 execs, queue 1,680 s); yolov11_small 2.5 s for 3,900. Lazy policy still embeds one whole-image vector per image (900 embed calls on 900 images).
 
 A second baseline on a set of real high-resolution (about 20 MP) photos was measured privately; its numbers are not published. It showed the same pipeline is decode and I/O bound at that image size (the GPU was mostly idle), which is what the GPU decode and crop-at-model-size waves in the optimization plan target. Single run per row; a 3-round median is planned before the optimization work starts.
+
+### v0.5.0 baseline (set A, public COCO, 2,000 images)
+
+The Wave 0 baseline of `docs/design/triton_pipeline_optimization_plan.md`, measured on the
+published v0.5.0 images before any optimization (issues #45 and #40). Raw JSON:
+`docs/benchmarks/v050_baseline.json` (environment, ingest, Triton statistics,
+perf_analyzer points, endpoints, VLM) and `docs/benchmarks/v050_storage.json` (the
+storage run); idle-CPU readings in `docs/benchmarks/v050_idle_background.json`. (The VLM model label in the raw JSON metrics is replaced by `catalog-default`.) Every
+number below is a median with the minimum and maximum of 3 repetitions in parentheses,
+unless stated.
+
+**Headline.** A 2,000-image public COCO set goes through detector plus embeddings at
+**8.9 images/s** through `POST /curation/projects/{project}/ingest/upload` and
+**9.2 images/s** through `.../ingest/batch`, with the
+GPU 91 percent busy. The run-to-run spread is under 6 percent. 90 percent of the GPU time is
+the PE image encoder (7.4 embeddings per image). That engine is FP32, and a fresh v0.5.0
+install builds the same FP32 engine (see Caveats), so this is the true "before" for the
+default install.
+
+#### Environment
+
+| Item | Value |
+|---|---:|
+| GPU (index 0) | NVIDIA RTX A6000, driver 615.71.09, CUDA 13.4 |
+| CPU | Intel(R) Xeon(R) CPU E5-2680 v3 @ 2.50GHz, 48 logical cores |
+| RAM | 504 GB |
+| Stack | OpenProcessor 0.5.0, Triton 2.70.0, OpenSearch 3.6.0, libnvinfer.so.11 |
+| Harness commit | 877f62c9 |
+| Dataset | 2000 images, 333 MB, seed 20261009, manifest edde8ae3d8cecfb2 |
+| Foreign GPU 0 load before the runs | 0.0 % SM mean over 30 samples |
+| Started | 2026-10-10T02:10:58.768502+00:00 |
+
+Software under test: the images pinned by `images.lock` (API `openprocessor:0.5.0`
+`sha256:b0af838e...`, Triton `openprocessor-triton:0.5.0` `sha256:1ac56ac9...`,
+OpenSearch `3.6.0`), installed with `setup-openprocessor.sh --version v0.5.0 --tiers
+core,curation --local-only --bind 127.0.0.1 --skip-models` into an isolated compose project on its own
+ports, GPU 0 only. The VLM worker was stopped for the measured ingest runs. OpenSearch
+heap 8 GB, no replicas, one node. Models: TensorRT engines built on 2026-09-26 and copied
+from an earlier v0.5.0 install on the same host. The PE image encoder engine is FP32
+(1.27 GB); every other engine is consistent with FP16 by file size.
+
+#### Method
+
+```bash
+# 1. the pinned set (checksum-verified; 2,000 images, 333 MB, in data/samples/, gitignored)
+python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_bench_2000 \
+  --bench-set 2000 --seed 20261009 --manifest scripts/datasets/manifests/coco_bench_2000.json
+python scripts/datasets/fetch_coco_subset.py --verify-only --out data/samples/coco_bench_2000 \
+  --manifest scripts/datasets/manifests/coco_bench_2000.json
+# 2. everything else, one entry point; the JSON is merged per phase
+python scripts/bench/baseline_suite.py --manifest scripts/datasets/manifests/coco_bench_2000.json \
+  --images data/samples/coco_bench_2000/images --out artifacts_local/bench/v050_baseline.json \
+  --project <compose project> --api-url http://127.0.0.1:<api> --triton-url http://127.0.0.1:<triton> \
+  --opensearch-url http://127.0.0.1:<opensearch> --source-map <host images dir>=<same dir in the API container> \
+  --phases env,ingest,triton,endpoints
+python scripts/bench/suite_report.py artifacts_local/bench/v050_baseline.json   # the tables below
+```
+
+- The pin draws 1,279 images from val2017 (all that carry an allowed license: Attribution,
+  Attribution-ShareAlike, no known restrictions, US Government Work) and 721 from
+  train2017. 10,000 and larger sets come from the same command with a larger `--bench-set`
+  (only train2017 can supply 50k and 100k); only the 2,000-image pin is committed.
+- Ingest: 32 images per request, 4 client threads, ingest policy `all` (the default: whole-image
+  vector, all 80 detector classes, one vector per detection). A 100-image warm-up project is ingested and
+  deleted first. Each repetition uses a fresh project, runs `train_clusters` auto-label
+  afterwards (its wall time is in the table), then settles OpenSearch and deletes the
+  project. Upload and batch repetitions are interleaved (upload, batch, upload, ...).
+- Triton: `/v2/models/stats` read before and after each repetition; per-execution times come from
+  the batch statistics (Triton's per-request compute figures credit every request in a batch with
+  the whole execution and overcount). Wire bytes are inference counts times the tensor sizes
+  in the model config. perf_analyzer runs from the 26.06 SDK container on the stack network,
+  gRPC, `--measurement-interval 5000 --stability-percentage 10`, concurrency 1, 6, 11, 16.
+- GPU: `nvidia-smi` utilization and memory once a second, plus `nvidia-smi pmon` SM share
+  split into the stack's processes and everyone else's (foreign) by pid.
+- CPU seconds are cgroup `usage_usec` deltas of the API and Triton containers around the
+  ingest window.
+
+#### Ingest, end to end
+
+| Route | images/s | wall s | items/image | request p50 s | API CPU s/image | Triton CPU s/image | cluster training s | failed |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `/ingest/upload` | 8.93 (8.89-9.13) | 224 (219-225) | 6.39 (6.39-6.39) | 14.1 (13.7-14.8) | 0.490 (0.299-0.954) | 0.031 (0.030-0.032) | 88 (68-125) | 0 |
+| `/ingest/batch` | 9.19 (8.94-9.45) | 218 (212-224) | 6.39 (6.39-6.40) | 14.1 (13.5-14.7) | 0.358 (0.270-0.360) | 0.031 (0.030-0.032) | 78 (68-80) | 0 |
+
+Per-stage timers of the API (`op_pipeline_stage_*`, `/ingest/upload`; seconds are summed
+across concurrent requests, so they are not wall time):
+
+| Stage | calls/image | mean ms/call | summed ms/image | KiB/image |
+|---|---:|---:|---:|---:|
+| crop | 6.39 (6.39-6.39) | 0.1 (0.1-0.1) | 0.6 (0.6-0.6) | n/a |
+| decode | 1.00 (1.00-1.00) | 4.6 (4.5-4.7) | 4.6 (4.5-4.7) | 163 (163-163) |
+| embed | 2.07 (2.07-2.07) | 2304.0 (1954.2-2332.0) | 4763.5 (4040.2-4821.4) | 9783 (9783-9783) |
+| jpeg_encode | 6.39 (6.39-6.39) | 0.5 (0.5-0.5) | 3.3 (3.1-3.4) | 58 (58-58) |
+| opensearch_write | 1.99 (1.99-1.99) | 203.4 (199.7-276.3) | 404.5 (397.1-549.5) | n/a |
+| resize | 0.99 (0.99-0.99) | 24.4 (23.5-24.9) | 24.1 (23.2-24.6) | n/a |
+
+Triton per model, `/ingest/upload` (`infer ms/image` = execution infer time x executions / images, the
+GPU time one image costs; the three exec columns are per execution and overlap):
+
+| Model | inferences/image | mean batch | queue ms/request | exec input ms | exec infer ms | exec output ms | infer ms/image | request KiB/image |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `pe_image_encoder` | 7.39 (7.39-7.39) | 21.3 (20.8-22.4) | 1514 (1139-1523) | 0.1 (0.1-0.2) | 292.0 (285.3-307.2) | 285.8 (279.8-302.3) | 101.3 (101.2-101.4) | 9783 (9783-9783) |
+| `yolov11_small_trt_end2end` | 1.00 (1.00-1.00) | 16.0 (16.0-16.1) | 1 (0-1) | 20.8 (19.9-21.0) | 78.0 (72.3-104.9) | 0.4 (0.4-0.7) | 4.9 (4.5-6.6) | 4800 (4800-4800) |
+
+PE executions run at a mean batch of 21.3 (15 percent at the maximum of 32); the detector always runs at 16.
+Estimated bytes on the wire per image: client to API 166,684 B for `/ingest/upload` (the JPEG plus
+multipart framing) and 91 B for `/ingest/batch` (paths only; the API reads the file); API to Triton 10.0 MB
+(PE) + 4.9 MB (detector) of FP32 tensors; responses to the client about 0.5 KB.
+
+GPU 0 during the `/ingest/upload` repetitions:
+
+| Ingest mode | GPU util mean % (nvidia-smi) | GPU memory peak MiB | own SM % (pmon) | foreign SM % (pmon) |
+|---|---:|---:|---:|---:|
+| `upload` | 91 (90-92) | 33020 (33020-33020) | 89 (89-91) | 0.0 (0.0-0.0) |
+
+Foreign load: another project keeps 16.4 GB resident on GPU 0 (`pmon` showed 0.0 percent
+foreign SM in all 6 measured repetitions and in 30 idle samples before them).
+
+Cross-checks: a first run with the VLM worker still polling (6 repetitions, older statistics
+code) gave 8.92 (8.70-8.98) images/s for upload and 8.92 (8.74-8.95) for batch; the storage run
+below (4 repetitions) gave 9.30 and 9.15. Upload and batch are the same pipeline, so the
+two routes agree within the spread.
+
+#### Cluster training
+
+`train_clusters` auto-label after each ingest, 12.8k items of 1,024 dimensions, IVF on CPU: 88 (68-125) s for upload and
+78 (68-80) s for batch (almost all in `cluster_residuals`). That is 30 to 55 percent of the ingest wall time
+(215-225 s). The spread is large; the cluster-refresh worker also fires every 200 new crops during the ingest.
+The region stage was not measured: it needs the segmenter tier (gated weights) and a VLM
+alongside Triton, which does not fit the 33 GB GPU 0 leaves free.
+
+#### Storage per image and per vector
+
+Measured in a separate run (2 repetitions per route) that merges until no deleted documents
+remain and the size repeats; the first run measured too early and saw up to 2x inflation from
+the cluster-refresh worker still rewriting documents. Reference: `docs/design/storage_sizing_and_ingest_baselines.md`.
+
+| Route | bytes/image | bytes/vector | vs 8.35 KB reference |
+|---|---:|---:|---:|
+| `upload` | 65424 (65206-65642) | 8846 (8817-8876) | 1.06x |
+| `batch` | 65298 (65230-65366) | 8830 (8820-8839) | 1.06x |
+
+Details (upload, settled): images index 8,758 B per image, items index 8,826 to 8,894 B per
+item (12,791 items, 6.4 per image, one vector each), 14,791 vectors in total, 65.4 KB per image.
+The formula of the storage document (`8.7 KB + K x 10.4 KB`) predicts 75 KB for K = 6.4; the
+measurement is 0.87x of that because this default pipeline stores no region boxes (about 1 KB of
+metadata per item less). Per vector the cost is 1.06x the 8.35 KB reference, so the reference holds.
+
+#### Triton model ceilings (perf_analyzer)
+
+Inferences per second counts samples, not requests. Latency columns are at concurrency 1.
+
+| Model | batch | infer/s at concurrency 1 | p50 ms at concurrency 1 | best infer/s | at concurrency |
+|---|---:|---:|---:|---:|---:|
+| `arcface_w600k_r50` | 1 | 52 | 18.8 | 2545 | 16 |
+| `arcface_w600k_r50` | 8 | 1379 | 5.5 | 5238 | 16 |
+| `arcface_w600k_r50` | 16 | 1762 | 8.4 | 5912 | 16 |
+| `arcface_w600k_r50` | 32 | 1970 | 15.1 | 5948 | 16 |
+| `mobileclip2_s2_image_encoder` | 1 | 24 | 40.2 | 551 | 16 |
+| `mobileclip2_s2_image_encoder` | 8 | 258 | 28.7 | 897 | 16 |
+| `mobileclip2_s2_image_encoder` | 16 | 312 | 47.8 | 905 | 11 |
+| `mobileclip2_s2_image_encoder` | 32 | 372 | 82.7 | 913 | 11 |
+| `pe_image_encoder` | 1 | 26 | 35.3 | 74 | 16 |
+| `pe_image_encoder` | 8 | 64 | 120.9 | 77 | 6 |
+| `pe_image_encoder` | 16 | 60 | 260.4 | 76 | 6 |
+| `pe_image_encoder` | 32 | 62 | 516.5 | 78 | 6 |
+| `scrfd_10g_bnkps` | 1 | 42 | 18.1 | 298 | 16 |
+| `yolov11_small_trt_end2end` | 1 | 23 | 39.4 | 303 | 16 |
+| `yolov11_small_trt_end2end` | 8 | 111 | 62.3 | 502 | 11 |
+| `yolov11_small_trt_end2end` | 16 | 123 | 120.0 | 353 | 6 |
+| `yolov11_small_trt_end2end` | 32 | 139 | 216.8 | 267 | 6 |
+
+PE tops out at 74 to 78 inferences/s whatever the batch size or concurrency: it is compute
+bound, and one `/ingest` image needs 7.39 of them. MobileCLIP (the `/embed/image` model) is
+12x faster per sample.
+
+#### Single-image endpoints
+
+200 images, `/detect`, `/embed/image`, `/faces/detect`, `/ocr/predict`, 1 and 4 client threads,
+3 repetitions. `/embed/image` at one thread has a cold first repetition (14 images/s; 128 warm).
+
+| Endpoint | client threads | images/s | p50 ms | p95 ms |
+|---|---:|---:|---:|---:|
+| `detect` | 1 | 10.7 (10.6-10.7) | 94 (93-94) | 105 (104-105) |
+| `detect` | 4 | 40.6 (39.2-40.9) | 98 (98-98) | 110 (110-112) |
+| `embed_image` | 1 | 116.0 (14.1-127.7) | 8 (7-70) | 11 (11-80) |
+| `embed_image` | 4 | 148.7 (147.4-165.4) | 10 (9-10) | 80 (77-80) |
+| `faces_detect` | 1 | 13.6 (12.4-13.7) | 68 (66-79) | 99 (98-116) |
+| `faces_detect` | 4 | 51.4 (51.1-51.8) | 74 (70-76) | 113 (112-113) |
+| `ocr_predict` | 1 | 7.4 (6.4-7.5) | 116 (116-142) | 247 (236-282) |
+| `ocr_predict` | 4 | 19.9 (19.5-19.9) | 166 (163-176) | 430 (418-442) |
+
+`/detect` takes 94 ms at the API for a detector inference of about 5 ms: 95 percent of a single
+request is host work (decode, letterbox, FP32 tensor, gRPC).
+
+#### VLM labeling
+
+`POST /curation/projects/{project}/vlm/label_batch`, 200 crops per repetition (a different 200 each
+time), 32 crops per request, 8 client threads, the catalog default model (bfloat16) on
+vLLM with GPU memory utilization 0.4 on GPU 0, Triton stopped for this run so it fits next to the 16 GB
+of the other project: **10.0 crops/s** (9.9-10.1), 0 errors, GPU 0 utilization
+83 percent. This reproduces the 10.0 crops/s measured earlier on 0.5.0. Re-labeling crops the model has
+already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cache, so vary the crops.
+
+#### Caveats
+
+- **The PE engine is FP32, and the FP16 build does not work on this TensorRT release.** The
+  `pe_image_encoder` plan is 1.27 GB, the size of the FP32 ONNX. The installer's model step bakes
+  FP16 into the ONNX first (`trt_utils.py` reports `fp16` and writes a 636 MB ONNX), then runs
+  `trtexec` with the profile `images` min 1x3x336x336, opt 8, max 32, workspace 8G, `--skipInference`
+  (`scripts/lib/model_setup.sh`, `_ms_pe_trtexec`). On this stack (TensorRT 11.1 in the Triton 26.06
+  image) that build fails at parse time on both `Einsum` nodes: `IEinsumLayer must have all
+  inputs of same type. Input 1 has type Half and input 0 has type Float` (`/visual/Einsum`, whose
+  second input is a float32 `Constant` left unconverted by the FP16 graph rewrite while the first input
+  was cast to half). The installer then retries from the FP32 ONNX, which builds. A fresh v0.5.0
+  install therefore ends up with the same FP32 engine as this baseline, so the baseline is the true
+  "before" for the default install, and the earlier FP16 expectation (about 170 images/s) is not
+  reachable without fixing the FP16 bake. That fix (keep `Einsum` in FP32 or convert its constant) is
+  a separate change; the FP16 effect is still not measured.
+- OpenSearch data and the upload store live on a RAID array (Docker data root), not on NVMe.
+  This affects `opensearch_write` and the upload route's persistence; treat them as upper bounds.
+- The VLM worker, polling a project that has data while no VLM is configured, burned about
+  2.7 cores while idle (18 projects of 2,000 images: 0.66 in the worker, 1.2 in the API,
+  0.85 in OpenSearch), so it was stopped for the throughput runs. Throughput did not change
+  (the GPU is the limit) but API CPU per image roughly doubled with it running.
+- Face and OCR models are measured only through their endpoints and perf_analyzer; ingest does not
+  call them. OCR recognition and detection (dynamic shapes) have no perf_analyzer points.
+- Closed loop, 4 threads x 32 images: Triton queue times (1.1 to 1.5 s for PE) are backlog, not a
+  configured delay. A concurrency sweep was not run.
+- Python harness and Triton share the host with other projects; the host load average was
+  4 to 5 before the runs. The foreign GPU load was zero at every sample.
+- COCO frames are 640 x 480, so costs that scale with pixels (decode, full-size crops) are
+  small here. The private high-resolution set B was not run.
+- Counts of 2,000 images only; the 10k pin and larger are not measured.
 
 ## Benchmarking
 

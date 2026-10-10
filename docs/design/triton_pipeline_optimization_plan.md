@@ -259,7 +259,7 @@ Design rules:
 
 | Set | Content | Reproducibility |
 |---|---|---|
-| A. Public COCO 4,000 | 4,000 images drawn with a fixed seed from COCO val2017 (5,000 images), license recorded per image | Committed manifest `scripts/datasets/manifests/coco_bench_4000.json` (image ids, sha256, bytes, width, height, license, seed). Built with `scripts/datasets/fetch_coco_subset.py` (`--val-only`, `--manifest`); it needs a uniform-random, all-class mode because its default selection is balanced over 10 classes, so add an option rather than a second script. |
+| A. Public COCO | Seeded draw over all classes from COCO 2017 (val2017 first, train2017 for the rest), allowed licenses only (Attribution, Attribution-ShareAlike, no known restrictions, US Government Work). The first baseline uses 2,000 images (1,279 val2017 + 721 train2017: only 1,279 val2017 images carry an allowed license); 10k, 50k and 100k come from the same command with a larger `--bench-set` | Committed pin `scripts/datasets/manifests/coco_bench_2000.json` (image ids, sha256, bytes, width, height, license, seed, annotation-archive sha256, manifest hash). Built and verified with `scripts/datasets/fetch_coco_subset.py --bench-set N --manifest PIN` and `--verify-only` (offline re-hash); logic in `scripts/datasets/bench_set.py`. |
 | B. Private 4,000 | 4,000 photos of about 12-20 MP drawn with a fixed seed from a private archive | Manifest (relative path, sha256, w, h, bytes, EXIF orientation) kept in gitignored `artifacts_local/bench/`, never committed. Built by `scripts/bench/bench_sets.py build-private --root <dir> --n 4000 --seed 42 --min-mp 12`. The images are read in place, read-only. |
 
 Plus small guard lists derived from B (200-image parity subset; 20 images with
@@ -295,7 +295,19 @@ vectors), items per image, and the crop-cache hit/miss counts
 | `scripts/bench/parity_capture.py`, `parity_compare.py` | new | Capture current outputs for the parity subsets (item docs without ids/timestamps, boxes, vectors keyed by `(sha256, box index)`, VLM labels, segmenter candidates), then compare against the gates of section 7 and exit non-zero on failure. `parity_compare` is the one piece that must be right: unit-test it on synthetic boxes, vectors and strings |
 | `tests/test_bench_*.py` | new | Tests for the above pure logic |
 
-Wave 0 implementation status: the manifest tool and the run harness are
+Wave 0 implementation status (updated with the v0.5.0 baseline): the pinned set is
+built by `fetch_coco_subset.py --bench-set`, and the single measurement entry point is
+`scripts/bench/baseline_suite.py` (phases `env`, `ingest`, `triton`, `endpoints`, `vlm`;
+pure logic in `suite_lib.py`, tables from `suite_report.py`). It records the hardware and
+software block, ingest through `/ingest/upload` and `/ingest/batch` with 3 repetitions
+(median and range), the stage timers, Triton per-model statistics before and after
+(`/v2/models/stats`, so `triton_stats_delta.py` is not needed), estimated bytes on the
+wire per model, API and Triton CPU seconds per image, GPU samples with the foreign share
+split out per process, cluster-training wall time, settled OpenSearch bytes per image and
+per vector, perf_analyzer points at batch 1/8/16/32 for five TensorRT models, the
+single-image endpoints, and a VLM labeling run. Results and the method are in
+`docs/PERFORMANCE.md` ("v0.5.0 baseline") and the raw JSON in `docs/benchmarks/`. Earlier
+tools: the manifest tool and the run harness are
 `scripts/bench/select_baseline_set.py` (`local` and `coco` modes, checksummed
 manifest, license sidecar) and `scripts/bench/run_baseline.py` (one command per
 set, `--compare` for deltas), with the shared logic in
@@ -307,8 +319,9 @@ metrics are scraped by the harness). The per-stage timer is
 embed, opensearch_write). Host-to-device is derived from Triton's
 `compute_input` counters, not timed in process. Still open: the in-process
 `ingest_stage_timer.py`, `triton_stats_delta.py` (the harness reads Triton's
-Prometheus counters instead), `parity_capture.py` / `parity_compare.py`,
-perf_analyzer points, checks C1-C7, and the recorded baseline tables.
+Prometheus counters instead; the new suite reads `/v2/models/stats`),
+`parity_capture.py` / `parity_compare.py`, checks C1-C3 and C5-C7, and set B. Done: the
+perf_analyzer points and the set A baseline table.
 
 Perf_analyzer points (from the Triton SDK image, `--network host`, gRPC,
 `--measurement-interval 5000 --stability-percentage 10`) for each TensorRT model
@@ -705,12 +718,81 @@ memory within the budget.
 - [ ] C1 ensemble skips unrequested steps:
 - [ ] C2 non-decoupled `async def execute` overlap:
 - [ ] C3 BLS per-call overhead, pool 64 MB vs 1 GiB:
-- [ ] C4 pool-fallback log lines under load:
-- [ ] C5 batcher delay under bursts:
+- [x] C4 pool-fallback log lines under load: none seen. The shipped `--log-verbose=1` prints a
+  `pinned memory allocation` / `deallocation` pair per tensor per request (12,038 allocation
+  lines in the retained log window) and no CUDA IPC, exhaustion or failure lines. The pinned pool is
+  used on every request, which is the host staging copy this plan removes.
+- [ ] C5 batcher delay under bursts: not isolated. Under saturation the PE batcher filled well
+  (mean batch 21.3 of 32, 15 percent of executions at 32).
 - [ ] C6 DALI to BLS second frame copy:
 - [ ] C7 VLM processor input size, segmenter input size:
-- [ ] Versions recorded: Triton, TensorRT, DALI, torch, driver
-- [ ] Baseline tables: set A, set B
+- [x] Versions recorded: Triton server 2.70.0 (image `openprocessor-triton:0.5.0`), TensorRT
+  runtime `libnvinfer.so.11`, driver 615.71.09, CUDA 13.4, OpenSearch 3.6.0. DALI and torch
+  are not part of the shipped Triton image.
+- [x] Baseline tables: set A (2,000 public COCO images), in `docs/PERFORMANCE.md`. Set B is
+  not run (private archive).
+
+### 11.1 Where the time goes (v0.5.0, set A, 2,000 COCO images)
+
+Measured on one RTX A6000 (GPU 0) alone, 3 repetitions per route, run-to-run spread under
+6 percent in images/s. COCO frames are small (640 x 480, 166 KB), so this ranks the waste on
+many small images; the full-resolution crop costs of section 2.1 need set B and are not
+visible here. Raw numbers: `docs/benchmarks/v050_baseline.json`.
+
+Per image the pipeline takes about 112 ms of wall time (8.9 images/s, `nvidia-smi`
+utilization 91 percent, per-process SM share 89 percent, no foreign load):
+
+| Where | Per image | Share | Evidence |
+|---|---:|---:|---|
+| PE image encoder GPU compute | 7.39 inferences x 13.7 ms = 101 ms | 90 % | Triton batch statistics: 292 ms per execution of mean batch 21.3; perf_analyzer ceiling 74-78 inferences/s flat from batch 8 to 32 |
+| Detector GPU compute | 1 inference x 4.9 ms = 5 ms | 4 % | batch statistics, mean batch 16 |
+| API CPU in timed stages (decode, letterbox resize, crop, crop JPEG encode) | 4.6 + 24.4 + 0.6 + 3.3 = 33 ms | 3 % of wall, 11 % of API CPU | `op_pipeline_stage_seconds` |
+| API CPU in all else | 0.27 to 0.9 s of CPU | not timed | cgroup CPU seconds 0.30 to 0.95 per image against 33 ms in timed stages |
+
+Ranked waste, largest payoff first (this order decides the waves):
+
+1. **PE embedding volume and engine precision (GPU, 90 percent of the time).** Each image costs
+   6.39 crop vectors plus one whole-frame vector. The shipped engine is 1.27 GB, the size of the
+   FP32 ONNX, and runs at 13.7 ms per image; the plan's own earlier private measurement of an FP16
+   engine was about 170 images/s (5.9 ms). The installer does try FP16 first (`trt_utils.py` writes
+   a 636 MB FP16 ONNX), but `trtexec` on TensorRT 11.1 rejects that ONNX (`IEinsumLayer must have
+   all inputs of same type`, a half and a float input) and the installer silently falls back to the
+   FP32 ONNX, so a fresh install gets the FP32 engine measured here. The first action is therefore a
+   code fix, not a rebuild: make the FP16 bake produce a buildable graph (keep `Einsum` in FP32 or
+   convert its constant), verify parity and re-run this baseline. After that the lever is the number of
+   embeddings per image (the embedding policy of #52, `selected` or `lazy`), then crop size
+   is irrelevant to this stage because PE input is fixed at 336 px.
+2. **API CPU outside the timed stages (host).** 0.30 to 0.95 CPU-seconds per image is ten
+   times the timed stages. Suspects, not yet timed: PE preprocessing (resize and FP32
+   normalization of 7.4 crops), serializing 14.9 MB of FP32 tensors per image, vector
+   JSON for OpenSearch. It does not bind on 48 cores at 9 images/s (2.7 to 8.5 cores), but
+   it will bind once item 1 doubles the GPU rate. Wave 1 must add timers for these three
+   before changing them (extend `stage_timing.py`).
+3. **FP32 tensors on the wire (host copies).** 14.9 MB per image goes to Triton (PE 10.0 MB,
+   detector 4.9 MB), 90 times the 166 KB JPEG, at 133 MB/s. Host-to-device for the
+   detector is 20.8 ms per batch of 16 (1.3 ms per image, 1 percent of wall). Not limiting today; uint8 inputs
+   (Wave 5) cut the volume 4x and matter more after items 1 and 2.
+4. **Cluster training after ingest (not Triton).** 68 to 125 s over 12.8k items, 30 to 55
+   percent of the 224 s ingest wall time, almost all in `cluster_residuals` (CPU, IVF).
+   Outside this plan's waves; file it separately.
+5. **OpenSearch writes.** 2 calls per image at about 200 ms each (400 ms of summed latency
+   per image, hidden by concurrency 4 x 32). The data volume sits on a RAID array, not NVMe, so
+   treat as an upper bound; it becomes visible only when items 1 and 2 are done.
+6. **Batching, queue delay, instance counts: little headroom.** PE batches fill (mean 21.3 of 32),
+   perf_analyzer shows no gain from larger batches or more concurrency, and the GPU is 91
+   percent busy, so a second PE instance cannot add throughput on one card. The 1.1 to 1.5 s PE
+   queue time per request is closed-loop backlog (128 images in flight), not a delay setting.
+   Per-model round trips are 2.07 PE requests plus 1 detector request per image, merged by the
+   dynamic batcher; they cost latency, not throughput.
+7. **CPU JPEG decode.** 4.6 ms per image (letterbox resize costs 5x that, 24.4 ms). 3 percent
+   of wall time on COCO, so GPU decode (Waves 2, 6, 7) is not worth doing on small public
+   images; its case rests on set B (12-20 MP photos), which this run did not cover.
+
+Side findings: with no VLM configured, the shipped `vlm-worker` still polls every project and
+gets HTTP 409 on each `label_batch`; with 19 projects of 2,000 images present it cost about
+2.7 cores (0.66 in the worker, 1.2 in the API, 0.85 in OpenSearch) while idle, and it
+disappeared when the projects were deleted. Single-image `/detect` takes 94 ms at the API for
+a 5 ms GPU inference (95 percent host path).
 
 ## 12. References
 
