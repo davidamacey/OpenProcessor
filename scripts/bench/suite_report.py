@@ -13,7 +13,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +22,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.bench.suite_lib import summarize
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 # Numbers from docs/design/storage_sizing_and_ingest_baselines.md section 1 and 3.
@@ -261,7 +265,7 @@ def endpoints(doc: dict[str, Any]) -> str:
     return table(['Endpoint', 'client threads', 'images/s', 'p50 ms', 'p95 ms'], rows)
 
 
-SECTIONS = {
+SECTIONS: dict[str, Callable[[dict[str, Any]], str]] = {
     'env': environment,
     'ingest': ingest_headline,
     'stages': ingest_stages,

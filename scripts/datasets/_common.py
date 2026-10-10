@@ -16,7 +16,7 @@ import random
 import time
 import urllib.error
 import urllib.request
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 
 if TYPE_CHECKING:
@@ -116,7 +116,7 @@ def write_csv(
     path: Path,
     rows: Iterable[dict[str, Any]],
     fieldnames: Sequence[str],
-    extrasaction: str = 'raise',
+    extrasaction: Literal['raise', 'ignore'] = 'raise',
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('w', newline='', encoding='utf-8') as f:

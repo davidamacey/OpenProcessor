@@ -218,7 +218,7 @@ def compare_storage(measured: dict[str, float], reference: dict[str, float]) -> 
     return {k: measured[k] / reference[k] for k in reference if k in measured and reference[k]}
 
 
-def foreign_gpu_summary(samples: list[dict[str, float]], own_pids: set[int]) -> dict[str, float]:
+def foreign_gpu_summary(samples: list[dict[int, float]], own_pids: set[int]) -> dict[str, float]:
     """Utilization attributed to processes outside the stack, from pmon samples.
 
     Each sample maps pid -> sm percent (``-`` already dropped). Returns mean and

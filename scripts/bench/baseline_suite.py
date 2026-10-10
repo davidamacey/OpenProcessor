@@ -429,7 +429,7 @@ def phase_endpoints(args: argparse.Namespace) -> dict[str, Any]:
     with httpx.Client(timeout=120.0) as client:
         for name, path in ENDPOINTS:
             for threads in (1, args.concurrency):
-                runs = []
+                runs: list[dict[str, Any]] = []
                 for _ in range(args.reps):
                     before = triton_snapshot(client, args.triton_url)
                     lat: list[float] = []

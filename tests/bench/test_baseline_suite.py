@@ -7,7 +7,7 @@ from scripts.bench.baseline_report import metrics_delta
 
 
 def test_stage_table_joins_seconds_and_bytes() -> None:
-    before = {}
+    before: dict[str, float] = {}
     after = {
         'op_pipeline_stage_seconds_sum{stage=decode}': 4.0,
         'op_pipeline_stage_seconds_count{stage=decode}': 8.0,
