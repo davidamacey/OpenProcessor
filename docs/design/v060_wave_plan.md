@@ -2,7 +2,9 @@
 
 Status: plan (nothing implemented). Milestone v0.6.0. Umbrella issues: #40 (pipeline), #56
 (vector quantization), #67 (request-driven plans), #42 (12 GB engines), #41 (image slimming).
-Work-package issues: #208 to #221, plus #207 and #153 (table in section 10).
+Work-package issues: #208 to #221, plus #207 and #153 (table in section 10), and #226 to #232 from
+the serving backend trade study (section 13,
+[v060_serving_backend_trade_study.md](v060_serving_backend_trade_study.md)).
 
 This is the **sequencing** plan for v0.6.0. It does not replace
 [triton_pipeline_optimization_plan.md](triton_pipeline_optimization_plan.md) (the "parent plan":
@@ -524,6 +526,13 @@ quantization benchmark is its OpenSearch-tuning arm.
 | WP-5.2 12 GB builds | #42 | 5 | WP-1.1, WP-1.6 | Sonnet |
 | WP-5.3 slim images | #41 | 5 | Waves 1-4 | Sonnet |
 | WP-V vector store evaluation | #221 (#56) | parallel | WP-0.0 | Opus / Sonnet |
+| WP-S1 Triton and client sweep (study X-1) | #226 | 1 | WP-1.1 | Sonnet / Sonnet |
+| WP-S2 PE engine efficiency (X-2) | #227 | 1 | WP-1.1 | Sonnet, Opus review / Sonnet |
+| WP-S3 data-parallel PE across GPUs (X-3) | #228 | 2 (first) | WP-S1, owner GPU window | Opus / Sonnet |
+| WP-S4 bulk ingest runner (X-4) | #229 | 2 (last) | WP-2.1-2.3, WP-S3 | Opus / Sonnet |
+| WP-S5 datastore write ceiling (X-5) | #230 | parallel (track V) | WP-0.0 | Sonnet / Sonnet |
+| WP-S6 ortloom-serve head-to-head (X-6) | #231 | parallel | WP-S2 | Sonnet / Opus decides |
+| WP-S7 scale ladder 10k, 100k, 1M (X-7) | #232 | each wave exit | shipped levers | Sonnet, owner schedules |
 
 Parallelism: WP-1.2, WP-1.4, WP-1.7 and WP-V can start at once after WP-0.0; WP-1.1 needs
 WP-0.1's capture of `ref-v050` first (the FP32-sized plan must be captured before it is rebuilt).
@@ -555,3 +564,49 @@ WP-0.1's capture of `ref-v050` first (the FP32-sized plan must be captured befor
 | O7 | Public runs use public datasets only (COCO, Open Images, ImageNet). The owner runs private-data benchmarks separately on his own non-public data; none of it is committed. |
 | O8 | One million images is the destination, not the first step: the work builds up the optimisation levers in order, measuring how fast this server can process a 1M-image batch with industry-standard practice. Scale points (2k, 10k, 100k, then 1M) are reached as levers land. |
 | O9 | Embed-all must be fast: some datasets (vehicles) need every crop embedded to cluster and label, so the selective policy stays configurable and is never the only way to be fast. |
+
+## 13. Adjustments from the serving backend trade study (2026-10-10)
+
+Source: [v060_serving_backend_trade_study.md](v060_serving_backend_trade_study.md) (roofline
+ceilings, trade matrix, experiments X-1 to X-7). The owner decisions of section 12 are unchanged;
+this section adds work packages and cross-references only.
+
+Findings that change the ordering:
+
+1. **PE is 99 % of the GPU arithmetic per image** (384 GFLOP per embedding, counted from the ONNX
+   graph; the detector is 22 GFLOP). After FP16 (PR #225: 17.4 img/s, GPU 74 % busy) the PE engine
+   runs at about 45 % of the A6000's FP16 peak, near the best published TensorRT ViT-L point on that
+   GPU. The one-A6000 ceiling at policy `all` is about 23.5 img/s (estimate).
+2. **The second A6000 is the largest single lever** (about 2x); every model is pinned to GPU 0
+   today. It moves ahead of the transport packages for images/s; WP-2.1/2.2 remain for host CPU and
+   latency.
+3. **Triton stays the model server.** ortloom-serve serves YOLO detection only today and cannot beat
+   Triton on a compute-bound ViT in the same TensorRT kernels; its JPEG-in decode pipeline is a
+   candidate arm for WP-2.4 on high-resolution photos, decided by WP-S6.
+
+Placement:
+
+| Wave | Added | Note |
+|---|---|---|
+| 1 | WP-S1 (#226) Triton and client sweep, WP-S2 (#227) PE engine efficiency | after WP-1.1; WP-S1 tells whether WP-1.2/1.3 must land before more GPU work (GPU busy < 85 % at every arm = host binds); parent plan Wave 4 config items are executed inside WP-S1 |
+| 2 | WP-S3 (#228) data-parallel PE across GPUs as the **first** Wave 2 item; WP-S4 (#229) bulk ingest runner as the **last** | WP-S3 needs the owner's GPU 2 window (study Q1); WP-S4 depends on WP-2.1 to 2.3 and WP-S3 |
+| parallel (track V) | WP-S5 (#230) datastore write ceiling and cluster pass at scale | shares the recall harness of WP-V (#221); feeds WP-3.1 (#218) with the 100k cluster stage table |
+| parallel | WP-S6 (#231) ortloom-serve head-to-head | after WP-S2 so Triton is measured tuned; decision rule in the study section 10 |
+| each wave exit | WP-S7 (#232) scale ladder 10k, 100k, 1M | implements O8; 1M from Open Images |
+
+Changes inside existing packages:
+
+- **WP-1.6 (#213).** TensorRT 11 removed implicit INT8 calibration and the precision builder flags;
+  use NVIDIA Model Optimizer explicit Q/DQ with FP16 as the high-precision type. A public A6000
+  measurement on CLIP ViT-L shows 1.33x at batch 8 with correct Q/DQ placement and a 2x slowdown with
+  Q/DQ on Transpose outputs and Add inputs (study [S18]); the variant list keeps (c) as the first
+  candidate.
+- **WP-2.2 (#215).** Stays system shared memory. Triton 26.06 and 26.09 list a known issue with
+  `tritonclient` CUDA shared memory in multithreaded clients (study [S9]), which confirms the earlier
+  exclusion of CUDA shared memory.
+- **WP-2.4 (#217).** The bake-off adds an nvImageCodec batched-decode arm and ortloom's nvJPEG
+  pipeline as an external reference (study X-8 note). GA102 has no hardware JPEG decoder; DALI's
+  hybrid Huffman path for images above 1 MP keeps a CPU cost (study section 3.4).
+- **Benchmark protocol (section 0 rule 3).** Every GPU run also records `nvidia-smi dmon -s pucv` so
+  power-capped clocks (300 W per A6000) are visible; trtexec numbers from TensorRT 11 (CUDA graphs on,
+  transfers off by default) are never compared with Triton end-to-end numbers.
