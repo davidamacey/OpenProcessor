@@ -467,3 +467,26 @@ def test_status_desired_line_is_the_requested_model_not_the_served_one(
     out = cli(shimmed, stack, 'vlm', 'status').stdout
     desired = next(ln for ln in out.splitlines() if ln.startswith('desired:'))
     assert desired.split()[-1] == 'qwen3-vl-4b'
+
+
+# ---- `models status` lists a precision fallback ---------------------------------
+
+
+def test_models_status_lists_a_precision_fallback(shimmed: Shimmed, stack: Path) -> None:
+    (stack / '.install').mkdir(exist_ok=True)
+    (stack / '.install' / 'precision.tsv').write_text(
+        'pe_image_encoder\tfp32_fallback\tFP16 build failed: IEinsumLayer mismatch\n'
+    )
+    # The shim serves no Triton index, so the command exits 1 after the
+    # ledger section: it must print even with Triton down.
+    result = cli(shimmed, stack, 'models', 'status')
+    assert 'Degraded precision' in result.stdout
+    assert 'pe_image_encoder' in result.stdout
+    assert 'IEinsumLayer mismatch' in result.stdout
+
+
+def test_models_status_is_quiet_when_every_engine_is_fp16(shimmed: Shimmed, stack: Path) -> None:
+    (stack / '.install').mkdir(exist_ok=True)
+    (stack / '.install' / 'precision.tsv').write_text('pe_image_encoder\tfp16\t\n')
+    result = cli(shimmed, stack, 'models', 'status')
+    assert 'Degraded precision' not in result.stdout

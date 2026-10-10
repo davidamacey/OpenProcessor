@@ -278,20 +278,92 @@ _ms_pe_trtexec() {
         --skipInference
 }
 
+# Per-model precision ledger (.install/precision.tsv: model, precision,
+# reason). "fp16" is a clean build; anything else is a recorded fallback that
+# model_setup_run_group reports loudly and `openprocessor models status`
+# lists, so a silent FP32 engine can never pass as the FP16 default.
+_ms_precision_file() {
+    printf '%s' "${MODEL_SETUP_PRECISION_FILE:-${OP_DIR:?OP_DIR not set}/.install/precision.tsv}"
+}
+
+# _ms_record_precision MODEL PRECISION REASON
+_ms_record_precision() {
+    [[ "${OP_DRY_RUN:-0}" == "1" ]] && return 0
+    local model="$1" precision="$2" reason="${3//$'\t'/ }" f tmp
+    f="$(_ms_precision_file)"
+    ( umask 077; mkdir -p "$(dirname "$f")" )
+    tmp="$(mktemp "${f}.XXXXXX")"
+    if [[ -f "$f" ]]; then
+        awk -F'\t' -v m="$model" '$1 != m' "$f" > "$tmp"
+    fi
+    printf '%s\t%s\t%s\n' "$model" "$precision" "$reason" >> "$tmp"
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$f"
+}
+
+# model_setup_precision_report: one line per model whose engine is not the
+# clean FP16 build ("model<TAB>precision<TAB>reason"); empty when all clean.
+model_setup_precision_report() {
+    local f
+    f="$(_ms_precision_file)"
+    [[ -f "$f" ]] || return 0
+    awk -F'\t' '$2 != "fp16"' "$f"
+}
+
+# _ms_warn_if_degraded GROUP: prints a warning per fallback-precision model of
+# the group; returns 0 when the group is degraded, 1 when it is clean.
+_ms_warn_if_degraded() {
+    local group="$1" model precision reason degraded=1 m
+    local -a group_models
+    read -ra group_models <<< "$(model_setup_group_models "$group")"
+    while IFS=$'\t' read -r model precision reason; do
+        [[ -n "$model" ]] || continue
+        for m in "${group_models[@]}"; do
+            [[ "$m" == "$model" ]] || continue
+            degraded=0
+            log_warn "model ${model}: shipped as FP32, NOT the FP16 default (${precision}). Reason: ${reason}"
+            log_warn "  Consequence: a roughly twice-as-large engine, about twice the GPU memory and lower throughput than FP16."
+            log_warn "  Group '${group}' is recorded as 'degraded'. Fix the cause, then run: ./openprocessor models install --only ${group}"
+        done
+    done < <(model_setup_precision_report)
+    return "$degraded"
+}
+
 # _ms_pe_build_engine: FP16-baked ONNX first, FP32 retry (the same
-# fallback export/build_pe_trt.sh has), entirely inside the containers.
+# fallback export/build_pe_trt.sh has), entirely inside the containers. The
+# FP32 retry is kept (an FP32 engine beats none) but is recorded in the
+# precision ledger with the FP16 failure reason, never as a clean build.
 _ms_pe_build_engine() {
-    _ms_api mkdir -p /app/models/pe_image_encoder/1
-    if _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
-            /app/models/pe_image_encoder.build.onnx \
-        && _ms_pe_trtexec pe_image_encoder.build.onnx; then
-        _ms_api rm -f /app/models/pe_image_encoder.build.onnx
+    local attempt_log raw reason
+    if [[ "${OP_DRY_RUN:-0}" == "1" ]]; then
+        _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
+            /app/models/pe_image_encoder.build.onnx
+        _ms_pe_trtexec pe_image_encoder.build.onnx
         return 0
     fi
-    echo "FP16 engine build failed; retrying from the FP32 ONNX"
+    attempt_log="$(_model_setup_logdir)/pe_image_trt.fp16_attempt.log"
+    raw="$(mktemp "${attempt_log}.XXXXXX")"
+    _ms_api mkdir -p /app/models/pe_image_encoder/1
+    if { _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
+            /app/models/pe_image_encoder.build.onnx \
+        && _ms_pe_trtexec pe_image_encoder.build.onnx; } >"$raw" 2>&1; then
+        ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
+        rm -f "$raw"
+        cat "$attempt_log"
+        _ms_api rm -f /app/models/pe_image_encoder.build.onnx
+        _ms_record_precision pe_image_encoder fp16 ""
+        return 0
+    fi
+    ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
+    rm -f "$raw"
+    cat "$attempt_log"
+    reason="$(grep -m1 -E 'bake_fp16_onnx failed|\[E\]|Error' "$attempt_log" | cut -c1-300)"
+    reason="${reason:-FP16 build failed, see ${attempt_log}}"
+    echo "FP16 engine build failed (${reason}); retrying from the FP32 ONNX"
     _ms_api cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
     if _ms_pe_trtexec pe_image_encoder.build.onnx; then
         _ms_api rm -f /app/models/pe_image_encoder.build.onnx
+        _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}"
         return 0
     fi
     return 1
@@ -398,7 +470,10 @@ model_setup_run_group() {
         return 0
     fi
 
-    if [[ -n "$outputs" ]] && group_should_skip "$outputs" "$models" "$state" "${MODEL_SETUP_TRITON_DIGEST:-}"; then
+    # A degraded group (fallback precision) is never "up to date": re-running
+    # retries the preferred precision.
+    if [[ -n "$outputs" ]] && [[ "$(model_setup_group_status "$group")" != degraded ]] \
+        && group_should_skip "$outputs" "$models" "$state" "${MODEL_SETUP_TRITON_DIGEST:-}"; then
         log_info "group ${group}: up to date, skipped"
         _ms_record "$group" skipped 0
         return 0
@@ -417,7 +492,11 @@ model_setup_run_group() {
             return 3
         fi
     done
-    _ms_record "$group" ok $((SECONDS - started))
+    if _ms_warn_if_degraded "$group"; then
+        _ms_record "$group" degraded $((SECONDS - started))
+    else
+        _ms_record "$group" ok $((SECONDS - started))
+    fi
     return 0
 }
 
@@ -479,7 +558,11 @@ model_setup_run_groups() {
                 triton_load_and_wait "$m" 120 || ok=0
             done
             if (( ok == 1 )); then
-                _ms_record "$g" ok 0
+                if _ms_warn_if_degraded "$g"; then
+                    _ms_record "$g" degraded 0
+                else
+                    _ms_record "$g" ok 0
+                fi
             else
                 _ms_record "$g" failed 0
                 failed+=("$g")

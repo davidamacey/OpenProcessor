@@ -2264,7 +2264,7 @@ do_rollback() {
 # 6.2 Summary
 # -----------------------------------------------------------------------------
 print_summary() {
-    local h="$1" api tri seg vlmp ml failed
+    local h="$1" api tri seg vlmp ml failed degraded
     api="$(read_env_var "$ENV_FILE" API_PORT || true)"
     tri="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT || true)"
     log_step "Summary"
@@ -2315,11 +2315,18 @@ print_summary() {
     else
         echo "  Security: every port is bound to ${OP_BIND_ADDRESS} only. The API has no auth; use a reverse proxy before exposing it."
     fi
-    failed="$(awk -F'\t' '$2 != "ok" && $2 != "skipped" && $2 != "planned" { printf "%s ", $1 }' "${OP_DIR}/.install/groups.tsv" 2>/dev/null || true)"
+    failed="$(awk -F'\t' '$2 != "ok" && $2 != "skipped" && $2 != "planned" && $2 != "degraded" { printf "%s ", $1 }' "${OP_DIR}/.install/groups.tsv" 2>/dev/null || true)"
     if [[ -n "$failed" ]]; then
         echo ""
         echo "  Failed model groups: ${failed}"
         for g in $failed; do echo "    re-run: ./openprocessor models install --only ${g}"; done
+    fi
+    degraded="$(awk -F'\t' '$2 == "degraded" { printf "%s ", $1 }' "${OP_DIR}/.install/groups.tsv" 2>/dev/null || true)"
+    if [[ -n "$degraded" ]]; then
+        echo ""
+        echo "  DEGRADED model groups (an FP32 fallback engine was built instead of FP16): ${degraded}"
+        echo "    details: ./openprocessor models status"
+        for g in $degraded; do echo "    retry FP16: ./openprocessor models install --only ${g}"; done
     fi
     echo ""
     echo "  Manage: cd ${OP_REAL_DIR} && ./openprocessor status|logs|health|stop|start"
