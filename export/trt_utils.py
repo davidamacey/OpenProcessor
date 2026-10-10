@@ -120,10 +120,17 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
         model,
         keep_io_types=True,
         # Numerically sensitive defaults plus ops TRT executes outside the
-        # FP16 path anyway (plugins, index math).
+        # FP16 path anyway (plugins, index math). Einsum is kept FP32 so the
+        # converter casts every input back to FP32: left unblocked it
+        # converts a Constant operand to FP16 while an explicit FP32 Cast
+        # feeds the other, and TensorRT's IEinsumLayer rejects mixed input
+        # types at ONNX parse (the PE image encoder's rotary-embedding
+        # angle table, where FP32 is also the right precision for
+        # position x frequency).
         op_block_list=[
             *float16.DEFAULT_OP_BLOCK_LIST,
             'EfficientNMS_TRT',
+            'Einsum',
             'NonMaxSuppression',
             'Range',
         ],

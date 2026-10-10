@@ -269,3 +269,90 @@ class TestTrtUtilsCli:
 
         assert stderr.getvalue().strip() == 'fp16'
         assert stdout.getvalue().strip() == str(out_path)
+
+
+def _einsum_rope_onnx(path: Path) -> Path:
+    """FP32 graph shaped like the PE image encoder's rotary-embedding
+    prologue: a float32 ``Constant`` (the frequency table) and an explicit
+    float32 ``Cast`` feeding an ``Einsum``, whose result goes through Cos."""
+    import numpy as np
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    x = helper.make_tensor_value_info('x', TensorProto.FLOAT, [4, 6])
+    y = helper.make_tensor_value_info('y', TensorProto.FLOAT, [4, 6, 8])
+    freqs = numpy_helper.from_array(np.linspace(0.1, 3.0, 8, dtype=np.float32))
+    graph = helper.make_graph(
+        [
+            helper.make_node('Add', ['x', 'x'], ['pos']),
+            helper.make_node('Cast', ['pos'], ['pos_f32'], to=TensorProto.FLOAT),
+            helper.make_node('Constant', [], ['freqs'], value=freqs),
+            helper.make_node('Einsum', ['pos_f32', 'freqs'], ['angles'], equation='..., f -> ... f'),
+            helper.make_node('Cos', ['angles'], ['y']),
+        ],
+        'rope',
+        [x],
+        [y],
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 17)], ir_version=8)
+    onnx.checker.check_model(model)
+    onnx.save(model, str(path))
+    return path
+
+
+def _mixed_type_einsum_inputs(model) -> list[str]:
+    """Names of Einsum nodes whose inputs do not all share one element type
+    (the condition TensorRT's IEinsumLayer rejects at ONNX parse)."""
+    import onnx
+
+    # The converter rewrites value_info entries to FP16 even where an explicit
+    # Cast keeps the tensor FP32, and inference trusts existing entries: drop
+    # them so every type is re-derived from the nodes.
+    stripped = onnx.ModelProto()
+    stripped.CopyFrom(model)
+    del stripped.graph.value_info[:]
+    inferred = onnx.shape_inference.infer_shapes(stripped)
+    types = {
+        vi.name: vi.type.tensor_type.elem_type
+        for vi in [*inferred.graph.value_info, *inferred.graph.input, *inferred.graph.output]
+    }
+    for init in inferred.graph.initializer:
+        types[init.name] = init.data_type
+    bad = []
+    for node in inferred.graph.node:
+        if node.op_type != 'Einsum':
+            continue
+        in_types = {types.get(name) for name in node.input}
+        if len(in_types) != 1:
+            bad.append(node.name or node.output[0])
+    return bad
+
+
+class TestBakeFp16OnnxEinsum:
+    """PE's FP16 build failed at ONNX parse under TRT 11.1: the baked graph
+    fed an Einsum one FP16 input (the converted Constant) and one FP32 input
+    (an explicit FP32 Cast), and IEinsumLayer needs a single input type."""
+
+    def test_baked_einsum_inputs_share_one_type(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pytest.importorskip('onnxconverter_common')
+        _install_fake_tensorrt(
+            monkeypatch,
+            explicit_batch_flag_exists=False,
+            deserializes_ok=True,
+            fp16_builder_flag_exists=False,
+        )
+        import onnx
+        import trt_utils
+
+        src = _einsum_rope_onnx(tmp_path / 'rope.onnx')
+        assert _mixed_type_einsum_inputs(onnx.load(str(src))) == []
+
+        baked = trt_utils.bake_fp16_onnx(src, tmp_path / 'rope.fp16.onnx')
+
+        model = onnx.load(str(baked))
+        onnx.checker.check_model(model)
+        assert _mixed_type_einsum_inputs(model) == []
+        # keep_io_types=True: the graph boundary stays FP32.
+        assert model.graph.output[0].type.tensor_type.elem_type == onnx.TensorProto.FLOAT

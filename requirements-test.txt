@@ -78,6 +78,8 @@ pytest-asyncio>=0.24.0
 
 # tests/curation/test_seed_class_registry.py (reads ONNX metadata)
 onnx
+# tests/test_trt_utils.py runs the real FP16 graph rewrite (skipped without it)
+onnxconverter-common
 
 # Lazy-imported by src/, but exercised by tests that are not marked live.
 faiss-cpu
