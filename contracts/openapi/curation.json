@@ -34719,7 +34719,17 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DatasetUndoReportWire"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DatasetImportJob"
+                    }
+                  ],
+                  "title": "Response Undo Dataset Import Curation Projects  Project  Datasets Imports  Import Id  Undo Post"
+                }
               }
             },
             "description": "Successful Response"

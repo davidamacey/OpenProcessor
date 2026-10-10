@@ -17,7 +17,6 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Path, Query
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.dependencies import VisualSearchDep
@@ -28,7 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/clusters',
     tags=['Clustering & Albums'],
-    default_response_class=ORJSONResponse,
 )
 
 

@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import Query
 
+from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._config_common_models import (
     ActiveConfigResponse,
@@ -257,13 +258,11 @@ async def create_open_vocab(
 
 @router.get('/open_vocab/{name}', response_model=OpenVocabDoc)
 async def get_open_vocab(name: str, opensearch: OpenSearchDep) -> Any:
-    from fastapi.responses import ORJSONResponse
-
     await get_config_store().refresh(opensearch)
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
-    return ORJSONResponse(
+    return WireJSONResponse(
         content=_to_doc(record).model_dump(), headers={'ETag': f'"{record.etag}"'}
     )
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._config_common_models import (
     ActivateResponse,
@@ -349,10 +350,8 @@ async def get_prompt_pack_route(name: str, opensearch: OpenSearchDep) -> Any:
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
-    from fastapi.responses import ORJSONResponse
-
     payload = _to_doc(record).model_dump()
-    return ORJSONResponse(content=payload, headers={'ETag': f'"{record.etag}"'})
+    return WireJSONResponse(content=payload, headers={'ETag': f'"{record.etag}"'})
 
 
 @router.get('/prompt_packs/{name}/revisions', response_model=PromptPackRevisionsResponse)
@@ -552,10 +551,9 @@ async def delete_prompt_pack_route(
             f'{name!r} changed since you loaded it',
             current_revision=exc.current_revision,
         ) from exc
-    # A 204 must carry no body and no JSON content-type -- ORJSONResponse
-    # (this router's default_response_class) would otherwise still stamp
-    # 'application/json' on an empty body, and a client calling .json()
-    # on it (as tests/curation/test_cross_project_leak.py's isolation
+    # A 204 must carry no body and no JSON content-type: a JSON response class
+    # would stamp 'application/json' on an empty body, and a client calling
+    # .json() on it (as tests/curation/test_cross_project_leak.py's isolation
     # sweep does on every JSON-labeled response) gets a JSONDecodeError.
     return Response(status_code=204)
 

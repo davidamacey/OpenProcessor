@@ -5,19 +5,20 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path as PathParam
-from fastapi.responses import FileResponse, ORJSONResponse
+from fastapi.responses import FileResponse
 
+from src.core.wire_json import WireJSONResponse
 from src.services.training import jobs as train_jobs
 from src.services.training.job_wire import artifact_media_type
 
 
-router = APIRouter(default_response_class=ORJSONResponse)
+router = APIRouter()
 
 
 @router.get('/manifest/{job_id}')
 async def get_manifest(
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
-) -> ORJSONResponse:
+) -> WireJSONResponse:
     """Return the run's ``manifest.json`` (lineage envelope).
 
     404 if the manifest doesn't exist yet — older runs that finished
@@ -26,7 +27,7 @@ async def get_manifest(
     manifest = await train_jobs.read_manifest(job_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail=f'no manifest for job {job_id!r}')
-    return ORJSONResponse(content=manifest)
+    return WireJSONResponse(content=manifest)
 
 
 # =============================================================================

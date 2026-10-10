@@ -19,7 +19,6 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.services.face_identity import FaceIdentityService, get_face_identity_service
@@ -30,7 +29,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/persons',
     tags=['Person Management'],
-    default_response_class=ORJSONResponse,
 )
 
 

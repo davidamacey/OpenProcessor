@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import ORJSONResponse
 
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
@@ -60,7 +59,7 @@ from src.services.training.profiles import RESERVED_OPTIMIZERS_YOLO26
 if TYPE_CHECKING:
     from src.services.training.job_models import AugmentationSpec
 
-router = APIRouter(default_response_class=ORJSONResponse)
+router = APIRouter()
 
 
 def refuse_unknown_augmentation_preset(augmentation: AugmentationSpec | None) -> None:

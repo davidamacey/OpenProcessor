@@ -478,7 +478,7 @@ async def resume_dataset_import(
     return job_wire(store, project=_slug())
 
 
-@router.post('/datasets/imports/{import_id}/undo', response_model=None)
+@router.post('/datasets/imports/{import_id}/undo')
 async def undo_dataset_import(
     import_id: str,
     body: DatasetUndoRequest,

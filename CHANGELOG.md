@@ -20,6 +20,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+### Changed
+
+- Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
+  routers, the error handlers and four routes that built it directly). Routes with a response
+  model serialize through Pydantic straight to bytes; the curation routes that return a
+  hand-built wire dict (review, crops, regions, search and others) render with orjson directly
+  (`src/core/wire_json.py`) and skip `jsonable_encoder`, so a 100-item review page serializes in
+  about 4 ms instead of about 69 ms and the acceptance log no longer repeats the deprecation
+  warning. Response bytes are unchanged; the one contract change is that
+  `POST .../datasets/imports/{import_id}/undo` now documents its response schema (#153).
+
 ### Fixed
 
 - The `curation-vlm-worker` no longer polls every project each cycle and takes a 409

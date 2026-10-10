@@ -6,7 +6,6 @@ from datetime import UTC
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Response
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import get_curation_config
@@ -32,7 +31,7 @@ logger = get_logger(__name__)
 
 config = get_curation_config()
 
-router = APIRouter(default_response_class=ORJSONResponse)
+router = APIRouter()
 
 
 class PromoteRequest(BaseModel):

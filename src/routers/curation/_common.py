@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import ORJSONResponse
 
 from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_cluster_geometry_fields,
@@ -51,6 +50,7 @@ from src.config.curation import (  # noqa: F401 - re-exported for the router mod
 )
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
+from src.core.wire_json import WireRoute
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
 from src.services.curation.open_vocab_fields import ensure_open_vocab_fields
@@ -73,9 +73,11 @@ logger = get_logger(__name__)
 config = get_curation_config()
 
 
+# ``WireRoute``: routes declared ``response_model=None`` return hand-built wire
+# dicts and are rendered directly (see src/core/wire_json.py).
 router = APIRouter(
     tags=[config.api_tag],
-    default_response_class=ORJSONResponse,
+    route_class=WireRoute,
 )
 
 
