@@ -103,17 +103,17 @@ def _crop_all(img: Image.Image, items: list[DetectedItem]) -> list[Image.Image]:
 
 
 def _full_frame_blur(img: Image.Image) -> tuple[np.ndarray, float]:
-    """The BGR frame and its Laplacian variance (the denominator of every box's ratio)."""
+    """The RGB frame and its Laplacian variance (the denominator of every box's ratio)."""
     with stage_timer('blur'):
-        img_bgr = np.ascontiguousarray(np.asarray(img.convert('RGB'))[:, :, ::-1])
-        return img_bgr, image_lap_var(img_bgr)
+        rgb = np.asarray(img if img.mode == 'RGB' else img.convert('RGB'))
+        return rgb, image_lap_var(rgb, 'rgb')
 
 
 def _box_blurs(
-    img_bgr: np.ndarray, boxes: list[tuple[float, float, float, float]]
+    rgb: np.ndarray, boxes: list[tuple[float, float, float, float]]
 ) -> list[float | None]:
     with stage_timer('blur'):
-        return [crop_lap_var(img_bgr, box) for box in boxes]
+        return [crop_lap_var(rgb, box, 'rgb') for box in boxes]
 
 
 def residual_placement(
@@ -218,10 +218,10 @@ async def index_items(
             image_doc.update(ctx.image_extra)
 
     try:
-        img_bgr, full_var = await run_cpu(_full_frame_blur, img)
+        rgb_frame, full_var = await run_cpu(_full_frame_blur, img)
     except Exception as exc:
         logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
-        img_bgr = None
+        rgb_frame = None
         full_var = 0.0
 
     bnorms = [_bbox_norm_fn(it.bbox_pixel, full_w, full_h) for it in items]
@@ -239,8 +239,8 @@ async def index_items(
         store = get_ivf_ingest_store()
 
     box_vars: list[float | None] = (
-        await run_cpu(_box_blurs, img_bgr, [item.bbox_pixel for item in items])
-        if img_bgr is not None
+        await run_cpu(_box_blurs, rgb_frame, [item.bbox_pixel for item in items])
+        if rgb_frame is not None
         else [None] * len(items)
     )
     await asyncio.gather(

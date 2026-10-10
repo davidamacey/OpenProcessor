@@ -136,3 +136,48 @@ class TestIsBlurry:
         mid_ratio = (low_ratio_thr + high_ratio_thr) / 2
         assert is_blurry(mid_ratio, low_box_thr - 1.0, mode='high') is False
         assert is_blurry(mid_ratio, low_box_thr - 1.0, mode='low') is True
+
+
+def _float64_laplacian_var(gray: np.ndarray) -> float:
+    """The computation laplacian_var ran before the integer path (the oracle)."""
+    import cv2
+
+    return round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
+
+
+class TestIntegerLaplacianMatchesTheFloatOne:
+    """The exact-integer variance rounds to what the float64 response gave."""
+
+    def test_random_images_of_many_shapes(self) -> None:
+        rng = np.random.default_rng(11)
+        shapes = [(1, 1), (1, 9), (9, 1), (2, 2), (3, 5), (7, 7), (31, 17), (120, 90), (480, 640)]
+        for shape in shapes:
+            for _ in range(8):
+                gray = rng.integers(0, 256, size=shape, dtype=np.uint8)
+                assert laplacian_var(gray) == _float64_laplacian_var(gray), shape
+
+    def test_extremes_of_the_response(self) -> None:
+        board = (np.indices((300, 400)).sum(axis=0) % 2 * 255).astype(np.uint8)
+        for gray in (board, np.zeros((50, 60), np.uint8), np.full((50, 60), 255, np.uint8)):
+            assert laplacian_var(gray) == _float64_laplacian_var(gray)
+
+    def test_smooth_and_noisy_photos(self) -> None:
+        rng = np.random.default_rng(12)
+        ramp = np.tile(np.linspace(0, 255, 256), (200, 1))
+        for noise in (0.0, 1.0, 12.0):
+            gray = np.clip(ramp + rng.normal(0, noise, ramp.shape), 0, 255).astype(np.uint8)
+            assert laplacian_var(gray) == _float64_laplacian_var(gray)
+
+    def test_float_input_keeps_the_float_path(self) -> None:
+        gray = np.random.default_rng(13).random((40, 50))  # float64
+        assert laplacian_var(gray) == _float64_laplacian_var(gray)
+
+
+class TestRgbOrderMatchesBgr:
+    def test_scores_are_the_same_for_the_same_picture_in_either_order(self) -> None:
+        rng = np.random.default_rng(14)
+        rgb = rng.integers(0, 256, size=(120, 160, 3), dtype=np.uint8)
+        bgr = np.ascontiguousarray(rgb[:, :, ::-1])
+        assert image_lap_var(rgb, 'rgb') == image_lap_var(bgr)
+        box = (10.0, 20.0, 90.0, 100.0)
+        assert crop_lap_var(rgb, box, 'rgb') == crop_lap_var(bgr, box)

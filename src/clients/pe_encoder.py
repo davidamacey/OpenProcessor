@@ -73,7 +73,8 @@ import numpy as np
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.detection.pe_preprocess import (
-    normalize_chw,
+    PE_SIZE,
+    normalize_into,
     resize_crop_rgb,
     whole_frame_chw,
     whole_frame_chw_from_bytes,
@@ -115,10 +116,10 @@ TextCacheInfo = namedtuple('TextCacheInfo', ['hits', 'misses', 'maxsize', 'currs
 def _preprocess_crops(crops: list[np.ndarray]) -> np.ndarray:
     """PE preprocessing of a list of HWC-uint8 crops into one ``(N, 3, 336, 336)`` batch."""
     with stage_timer('pe_preprocess'):
-        return np.stack(
-            [normalize_chw(resize_crop_rgb(crop)) for crop in crops],
-            axis=0,
-        ).astype(np.float32, copy=False)
+        batch = np.empty((len(crops), 3, PE_SIZE, PE_SIZE), dtype=np.float32)
+        for slot, crop in zip(batch, crops, strict=True):
+            normalize_into(slot, resize_crop_rgb(crop))
+        return batch
 
 
 def _timed_whole_frame(preprocess: Any, source: str | bytes) -> np.ndarray | None:
