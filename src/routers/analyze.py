@@ -15,7 +15,6 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config.settings import TritonModelConfig
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/analyze',
     tags=['Combined Analysis'],
-    default_response_class=ORJSONResponse,
 )
 
 
