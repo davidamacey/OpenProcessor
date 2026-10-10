@@ -37,3 +37,15 @@ def test_knn_fields_finds_top_level_and_nested_vectors() -> None:
 
 def test_chunks() -> None:
     assert [len(c) for c in bs.chunks(list(range(10)), 4)] == [4, 4, 2]
+
+
+def test_skip_flags_default_off_and_parse() -> None:
+    base = [
+        '--manifest', 'm.json', '--images', 'i', '--out', 'o.json', '--project', 'p',
+        '--api-url', 'a', '--triton-url', 't', '--opensearch-url', 'o',
+    ]  # fmt: skip
+    parser = bs.build_parser()
+    off = parser.parse_args(base)
+    assert (off.skip_cluster, off.skip_settle) == (False, False)
+    on = parser.parse_args([*base, '--skip-cluster', '--skip-settle'])
+    assert (on.skip_cluster, on.skip_settle) == (True, True)
