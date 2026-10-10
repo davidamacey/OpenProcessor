@@ -47,12 +47,8 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from scripts.curation._project_worker_utils import (
-    curation_api_prefix,
-    rotated,
-    scoped_url,
-    unpaused_projects,
-)
+from scripts.curation._project_worker_utils import curation_api_prefix, rotated, scoped_url
+from scripts.curation._vlm_activity import idle_backoff_s, projects_with_active_vlm
 from src.config.project_context import bind_project
 from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.ops_metrics import start_worker_metrics_server
@@ -422,7 +418,9 @@ async def run(args: argparse.Namespace) -> int:
             if queue.full():
                 await asyncio.sleep(0.05)
                 continue
-            projects = rotated(await unpaused_projects(registry, args.project), rotation)
+            projects = rotated(
+                await projects_with_active_vlm(opensearch, registry, args.project), rotation
+            )
             rotation += 1
             # In-flight ids are excluded server-side (must_not ids), so a
             # fetch only needs to refill the queue.
@@ -458,7 +456,11 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     stop_event.set()
                     return
-                await asyncio.sleep(args.poll_interval)
+                await asyncio.sleep(
+                    args.poll_interval
+                    if projects
+                    else idle_backoff_s(args.poll_interval, metrics['consecutive_empty_polls'])
+                )
                 continue
             metrics['consecutive_empty_polls'] = 0
 

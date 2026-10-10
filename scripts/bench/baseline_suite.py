@@ -69,7 +69,9 @@ from scripts.bench.suite_probes import (
     triton_snapshot,
     wait_idle,
 )
+from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 from scripts.datasets.bench_set import load_pin
+from src.config.settings import TritonModelConfig
 
 
 VLM_CLASSES = (
@@ -87,11 +89,11 @@ VLM_CLASSES = (
 PHASES = ('env', 'ingest', 'triton', 'endpoints', 'vlm')
 DEFAULT_PHASES = ('env', 'ingest', 'triton', 'endpoints')
 PERF_MODELS = (
-    'yolov11_small_trt_end2end',
-    'pe_image_encoder',
-    'scrfd_10g_bnkps',
-    'arcface_w600k_r50',
-    'mobileclip2_s2_image_encoder',
+    TritonModelConfig.YOLO_MODEL,
+    TritonModelConfig.PE_IMAGE_MODEL,
+    TritonModelConfig.FACE_DETECT_MODEL,
+    TritonModelConfig.ARCFACE_MODEL,
+    TritonModelConfig.CLIP_IMAGE_MODEL,
 )
 PERF_BATCHES = (1, 8, 16, 32)
 ENDPOINTS = (
@@ -264,11 +266,12 @@ def ingest_rep(
     idle = wait_idle(args.project)
     wire = Wire()
     slug = f'{args.prefix}-{mode}-{"warm" if warmup else f"r{rep}"}-{datetime.now(UTC):%H%M%S}'
-    base = f'{args.api_url}/curation/projects/{slug}'
+    base = scoped_url(args.api_url, curation_api_prefix(), slug, '')
     hooks = {'request': [wire.on_request], 'response': [wire.on_response]}
     with httpx.Client(timeout=httpx.Timeout(3600.0), event_hooks=hooks) as client:
         client.post(
-            f'{args.api_url}/curation/projects', json={'slug': slug, 'display_name': slug}
+            f'{args.api_url}{curation_api_prefix()}/projects',
+            json={'slug': slug, 'display_name': slug},
         ).raise_for_status()
         batches = chunks(files, args.batch_size)
         before_t = triton_snapshot(client, args.triton_url)
@@ -468,7 +471,7 @@ def phase_endpoints(args: argparse.Namespace) -> dict[str, Any]:
 
 def phase_vlm(args: argparse.Namespace, prior: dict[str, Any]) -> dict[str, Any]:
     slug = args.vlm_project or prior['ingest']['upload']['runs'][-1]['slug']
-    base = f'{args.api_url}/curation/projects/{slug}'
+    base = scoped_url(args.api_url, curation_api_prefix(), slug, '')
     os_url = args.opensearch_url.rstrip('/')
     with httpx.Client(timeout=httpx.Timeout(3600.0)) as client:
         index = next(
