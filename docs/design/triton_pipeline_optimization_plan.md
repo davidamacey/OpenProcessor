@@ -754,13 +754,12 @@ Ranked waste, largest payoff first (this order decides the waves):
 1. **PE embedding volume and engine precision (GPU, 90 percent of the time).** Each image costs
    6.39 crop vectors plus one whole-frame vector. The shipped engine is 1.27 GB, the size of the
    FP32 ONNX, and runs at 13.7 ms per image; the plan's own earlier private measurement of an FP16
-   engine was about 170 images/s (5.9 ms). The installer does try FP16 first (`trt_utils.py` writes
-   a 636 MB FP16 ONNX), but `trtexec` on TensorRT 11.1 rejects that ONNX (`IEinsumLayer must have
+   engine was about 170 embeddings/s (5.9 ms). The installer does try FP16 first (`trt_utils.py`
+   writes a 636 MB FP16 ONNX), but `trtexec` on TensorRT 11.1 rejects that ONNX (`IEinsumLayer must have
    all inputs of same type`, a half and a float input) and the installer silently falls back to the
-   FP32 ONNX, so a fresh install gets the FP32 engine measured here. The first action is therefore a
-   code fix, not a rebuild: make the FP16 bake produce a buildable graph (keep `Einsum` in FP32 or
-   convert its constant), verify parity and re-run this baseline. After that the lever is the number of
-   embeddings per image (the embedding policy of #52, `selected` or `lazy`), then crop size
+   FP32 ONNX, so a fresh install gets the FP32 engine measured here. The first action was therefore a
+   code fix, not a rebuild; it is done and measured in section 11.2. After that the lever is the
+   number of embeddings per image (the embedding policy of #52, `selected` or `lazy`); crop size
    is irrelevant to this stage because PE input is fixed at 336 px.
 2. **API CPU outside the timed stages (host).** 0.30 to 0.95 CPU-seconds per image is ten
    times the timed stages. Suspects, not yet timed: PE preprocessing (resize and FP32
@@ -793,6 +792,38 @@ gets HTTP 409 on each `label_batch`; with 19 projects of 2,000 images present it
 2.7 cores (0.66 in the worker, 1.2 in the API, 0.85 in OpenSearch) while idle, and it
 disappeared when the projects were deleted. Single-image `/detect` takes 94 ms at the API for
 a 5 ms GPU inference (95 percent host path).
+
+### 11.2 Wave 1 result: the FP16 PE engine (v0.6.0, set A, 2,000 COCO images)
+
+Same set, harness, host and GPU 0 as section 11.1; only the engine behind `pe_image_encoder`
+changed. Raw numbers: `docs/benchmarks/v060_fp16_pe.json` and
+`docs/benchmarks/v060_fp16_pe_engine.json`; the full tables are in `docs/PERFORMANCE.md`
+("v0.6.0 Wave 1"). Medians of 3 repetitions.
+
+| Metric | FP32 (11.1) | FP16 | Change |
+|---|---:|---:|---:|
+| `/ingest/upload` images/s | 8.93 | 17.41 (16.44-17.97) | 1.95x |
+| `/ingest/batch` images/s | 9.19 | 18.84 (17.36-19.50) | 2.05x |
+| PE ms per embedding | 13.7 | 5.5 | 0.40x |
+| PE GPU ms per image (7.4 embeddings) | 101.3 | 41.0 | 0.40x |
+| GPU utilization (`nvidia-smi`) | 91 % | 74 % | |
+| PE mean batch | 21.3 | 13.5 | |
+| Plan size | 1.27 GB | 0.64 GB | 0.51x |
+| Cosine similarity to the FP32 plan, 200 images | 1 | mean 0.9997, minimum 0.9976 | |
+
+- [x] Root cause: `onnxconverter-common` retypes tensors but not an existing `Cast(to=FLOAT)`, so
+  PE's float32 rotary table stayed an FP32 island feeding FP16 operands; TensorRT 11.1 rejects mixed
+  input types at ONNX parse. `bake_fp16_onnx` now keeps `Einsum` in FP32 and reconciles mixed
+  operands with casts after the rewrite. The installer's FP32 fallback is kept but is now a recorded,
+  loud `degraded` state.
+- [x] The estimate of section 11.1 (about 170 embeddings/s) holds: 5.5 ms per embedding is about 180/s.
+  The wall-clock gain (2x) is smaller than the PE gain (2.5x) because the GPU is no longer the sole
+  limit: it is 74 percent busy, and the host-side item 2 of section 11.1 is the next to measure.
+- [ ] Accuracy gates of section 7 (retrieval, clustering) on labelled sets: not run; only a 200-image
+  engine parity check is recorded.
+- [ ] MobileCLIP image encoder: its FP16 bake also failed at parse on TensorRT 11.1; after this fix it
+  parses but the build fails in TensorRT (`Could not find any implementation` for a reparam conv), so
+  its exporter still falls back to FP32 (#224).
 
 ## 12. References
 

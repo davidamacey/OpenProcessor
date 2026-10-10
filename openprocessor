@@ -345,7 +345,24 @@ cmd_models() {
     esac
 }
 
+# Engines that were not built at the preferred precision (the installer's
+# precision ledger). A local file, so it prints even when Triton is down.
+_models_precision_section() {
+    local degraded model precision reason
+    # shellcheck source=scripts/lib/model_setup.sh
+    source "${SCRIPT_DIR}/lib/model_setup.sh"
+    degraded="$(OP_DIR="$PROJECT_DIR" model_setup_precision_report)"
+    [[ -n "$degraded" ]] || return 0
+    echo -e "${BOLD}Degraded precision:${NC}"
+    while IFS=$'\t' read -r model precision reason; do
+        echo -e "  ${YELLOW}[${precision^^}]${NC} ${model}: not the FP16 default. ${reason}"
+    done <<< "$degraded"
+    echo "  Retry FP16 after fixing the cause: ./openprocessor models install --only pe"
+    echo ""
+}
+
 cmd_models_status() {
+    _models_precision_section
     log_info "Fetching the model repository index from Triton..."
     local response
     response=$(curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/index" 2>/dev/null)

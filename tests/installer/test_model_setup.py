@@ -292,3 +292,96 @@ def test_retry_step_does_not_retry_an_export_oom(tmp_path: Path, bash) -> None:
     assert marker.read_text().strip() == '1'
     assert 'permanent failure (oom)' in result.stdout + result.stderr
     assert '--gpu-plan' in result.stdout + result.stderr
+
+
+# ---- PE precision fallback must be loud, recorded and never a clean success ----
+
+FP16_TRT_ERROR = (
+    '[E] Error[4]: ITensor::getDimensions: Error Code 4: API Usage Error '
+    '(/visual/Einsum: IEinsumLayer must have all inputs of same type.)'
+)
+
+
+def _pe_group_script(tmp_path: Path, *, fp16_trtexec_fails: bool) -> str:
+    """Runs the real `pe` group with dc() standing in for docker compose:
+    trtexec fails on the FP16-baked ONNX (first call) when asked to, and
+    succeeds once the FP32 ONNX has been copied into place."""
+    fail = 'true' if fp16_trtexec_fails else 'false'
+    return (
+        f'source {LIB}; OP_DIR="{tmp_path}"; mkdir -p "{tmp_path}/.install"; sleep() {{ :; }}; '
+        'triton_load_and_wait() { return 0; }; '
+        'fp32_staged=0; '
+        'dc() { '
+        '  if [[ "$*" == *"cp /app/pytorch_models/pe_image_encoder.onnx"* ]]; then touch "$OP_DIR/fp32_staged"; fi; '
+        f'  if [[ "$*" == *trtexec* && {fail} == true && ! -e "$OP_DIR/fp32_staged" ]]; then '
+        f"    echo '{FP16_TRT_ERROR}'; return 1; "
+        '  fi; return 0; }; '
+        'model_setup_run_group pe; echo "rc=$?"'
+    )
+
+
+def test_pe_fp32_fallback_warns_loudly_and_is_recorded_as_degraded(tmp_path: Path, bash) -> None:
+    result = bash(_pe_group_script(tmp_path, fp16_trtexec_fails=True))
+    out = result.stdout + result.stderr
+    assert 'rc=0' in out  # the FP32 engine is kept: better than none
+    assert '[WARN]' in out
+    assert 'pe_image_encoder' in out
+    assert 'FP32' in out
+    assert 'IEinsumLayer must have all inputs of same type' in out  # the reason
+    assert 'throughput' in out  # the consequence
+    assert 'models install --only pe' in out
+    statuses = dict(
+        ln.split('\t')[:2] for ln in (tmp_path / '.install' / 'groups.tsv').read_text().splitlines()
+    )
+    assert statuses['pe'] == 'degraded'
+    model, precision, reason = (
+        (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+    )
+    assert (model, precision) == ('pe_image_encoder', 'fp32_fallback')
+    assert 'IEinsumLayer' in reason
+
+
+def test_pe_fp16_build_is_a_clean_ok_with_no_warning(tmp_path: Path, bash) -> None:
+    result = bash(_pe_group_script(tmp_path, fp16_trtexec_fails=False))
+    out = result.stdout + result.stderr
+    assert 'rc=0' in out
+    assert '[WARN]' not in out
+    statuses = dict(
+        ln.split('\t')[:2] for ln in (tmp_path / '.install' / 'groups.tsv').read_text().splitlines()
+    )
+    assert statuses['pe'] == 'ok'
+    assert (tmp_path / '.install' / 'precision.tsv').read_text().split('\t')[:2] == [
+        'pe_image_encoder',
+        'fp16',
+    ]
+
+
+def test_a_degraded_group_is_not_skipped_as_up_to_date(tmp_path: Path, bash) -> None:
+    models = tmp_path / 'models'
+    (models / 'pe_image_encoder' / '1').mkdir(parents=True)
+    (models / 'pe_image_encoder' / '1' / 'model.plan').write_text('x')
+    (models / 'pe_text_encoder' / '1').mkdir(parents=True)
+    (models / 'pe_text_encoder' / '1' / 'model.onnx').write_text('x')
+    (tmp_path / '.install').mkdir()
+    (tmp_path / '.install' / 'state.json').write_text('{"triton_image_digest": "sha256:abc"}')
+    base = (
+        f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; '
+        'triton_model_ready() { return 0; }; triton_load_and_wait() { return 0; }; '
+        'dc() { echo STEP-RAN; return 0; }; '
+    )
+    (tmp_path / '.install' / 'groups.tsv').write_text('pe\tok\t5\n')
+    assert 'up to date, skipped' in bash(base + 'model_setup_run_group pe').stdout
+    (tmp_path / '.install' / 'groups.tsv').write_text('pe\tdegraded\t5\n')
+    rerun = bash(base + 'model_setup_run_group pe').stdout
+    assert 'skipped' not in rerun
+    assert 'STEP-RAN' not in rerun  # step output goes to the step log...
+    assert 'step pe_weights: ok' in rerun  # ...but the steps did run again
+
+
+def test_precision_report_lists_only_non_fp16_models(tmp_path: Path, bash) -> None:
+    (tmp_path / '.install').mkdir()
+    (tmp_path / '.install' / 'precision.tsv').write_text(
+        'yolo\tfp16\t\npe_image_encoder\tfp32_fallback\tIEinsumLayer mismatch\n'
+    )
+    out = bash(f'source {LIB}; OP_DIR="{tmp_path}" model_setup_precision_report').stdout
+    assert out.strip() == 'pe_image_encoder\tfp32_fallback\tIEinsumLayer mismatch'
