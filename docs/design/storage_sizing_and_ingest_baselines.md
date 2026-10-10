@@ -125,9 +125,9 @@ poll the region drain count until zero, then measure storage after two forced me
 
 ## 7. What is open
 
-- Build the public baseline fetcher and pinned manifests (2k, 10k, 50k, 100k COCO images) and
-  record the table in `docs/PERFORMANCE.md` (#45).
-- Re-measure storage on that set and publish the table in `docs/PERFORMANCE.md`, the README and
-  docs-site (#45).
+- Done (#45): the public baseline fetcher with a pinned 2,000-image manifest (10k, 50k and 100k
+  come from the same command) and the re-measured table in `docs/PERFORMANCE.md` ("v0.5.0
+  baseline"): 8.83 KB per vector (1.06x the figure above) and 65.4 KB per image at 6.4 items per
+  image. Open: the README and docs-site copies of the storage table.
 - Quantization and recall benchmark, k-NN memory formula check (#56).
 - Shard cost per project and index sharing policy (#53).

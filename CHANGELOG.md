@@ -11,6 +11,16 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ## [Unreleased]
 
+### Added
+
+- A checksum-pinned public benchmark set: `fetch_coco_subset.py --bench-set N` draws a seeded,
+  license-filtered, all-class COCO 2017 set and pins per-image SHA-256 and bytes
+  (`scripts/datasets/manifests/coco_bench_2000.json`); `--verify-only` re-hashes a download offline (#45).
+- `scripts/bench/baseline_suite.py` and `suite_report.py`: one entry point that records the
+  environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
+  perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
+  `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+
 ## [0.5.0] - 2026-10-09
 
 The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate

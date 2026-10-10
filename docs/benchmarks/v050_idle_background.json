@@ -1,0 +1,8 @@
+{
+  "note": "CPU cores used by each stack container over a 20 s window with no request load, measured with scripts/bench/baseline_suite.py background_cores. No VLM endpoint was configured. 'projects' counts the projects holding ingested data (2,000 images each).",
+  "measurements": [
+    {"projects_with_data": 18, "vlm_worker": "running", "cores": {"api": 1.56, "vlm-worker": 0.66, "opensearch": 0.97, "detection-worker": 0.02, "cluster-refresh": 0.0}},
+    {"projects_with_data": 18, "vlm_worker": "stopped", "cores": {"api": 0.34, "vlm-worker": 0.0, "opensearch": 0.13, "detection-worker": 0.02, "cluster-refresh": 0.0}},
+    {"projects_with_data": 0, "vlm_worker": "running", "cores": {"api": 0.27, "vlm-worker": 0.03, "opensearch": 0.12, "detection-worker": 0.04, "cluster-refresh": 0.03}}
+  ]
+}
