@@ -752,14 +752,14 @@ utilization 91 percent, per-process SM share 89 percent, no foreign load):
 Ranked waste, largest payoff first (this order decides the waves):
 
 1. **PE embedding volume and engine precision (GPU, 90 percent of the time).** Each image costs
-   6.39 crop vectors plus one whole-frame vector. The shipped engine on this host is 1.27 GB,
-   the size of the FP32 ONNX (1.27 GB), and runs at 13.7 ms per image; the plan's own
-   earlier private measurement of an FP16 engine was about 170 images/s (5.9 ms). A fresh
-   v0.5.0 install bakes FP16 into the ONNX first (verified: `trt_utils.py` returns `fp16`
-   and writes a 636 MB ONNX), so the reused engine here (built 2026-09-26) is probably
-   stale rather than representative. The first action is therefore not code: rebuild the engine
-   through the installer path, confirm FP16 and re-run this baseline (the rebuild was not
-   possible in this run, see PERFORMANCE.md caveats). After that the lever is the number of
+   6.39 crop vectors plus one whole-frame vector. The shipped engine is 1.27 GB, the size of the
+   FP32 ONNX, and runs at 13.7 ms per image; the plan's own earlier private measurement of an FP16
+   engine was about 170 images/s (5.9 ms). The installer does try FP16 first (`trt_utils.py` writes
+   a 636 MB FP16 ONNX), but `trtexec` on TensorRT 11.1 rejects that ONNX (`IEinsumLayer must have
+   all inputs of same type`, a half and a float input) and the installer silently falls back to the
+   FP32 ONNX, so a fresh install gets the FP32 engine measured here. The first action is therefore a
+   code fix, not a rebuild: make the FP16 bake produce a buildable graph (keep `Einsum` in FP32 or
+   convert its constant), verify parity and re-run this baseline. After that the lever is the number of
    embeddings per image (the embedding policy of #52, `selected` or `lazy`), then crop size
    is irrelevant to this stage because PE input is fixed at 336 px.
 2. **API CPU outside the timed stages (host).** 0.30 to 0.95 CPU-seconds per image is ten

@@ -489,8 +489,9 @@ unless stated.
 **8.9 images/s** through `POST /curation/projects/{project}/ingest/upload` and
 **9.2 images/s** through `.../ingest/batch`, with the
 GPU 91 percent busy. The run-to-run spread is under 6 percent. 90 percent of the GPU time is
-the PE image encoder (7.4 embeddings per image), and the engine behind it looks stale
-(see Caveats), so this is a floor for a fresh install, not the ceiling.
+the PE image encoder (7.4 embeddings per image). That engine is FP32, and a fresh v0.5.0
+install builds the same FP32 engine (see Caveats), so this is the true "before" for the
+default install.
 
 #### Environment
 
@@ -511,7 +512,8 @@ OpenSearch `3.6.0`), installed with `setup-openprocessor.sh --version v0.5.0 --t
 core,curation --local-only --bind 127.0.0.1 --skip-models` into an isolated compose project on its own
 ports, GPU 0 only. The VLM worker was stopped for the measured ingest runs. OpenSearch
 heap 8 GB, no replicas, one node. Models: TensorRT engines built on 2026-09-26 and copied
-from an earlier v0.5.0 install on the same host (not rebuilt, see Caveats).
+from an earlier v0.5.0 install on the same host. The PE image encoder engine is FP32
+(1.27 GB); every other engine is consistent with FP16 by file size.
 
 #### Method
 
@@ -678,14 +680,19 @@ already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cach
 
 #### Caveats
 
-- **The PE engine is probably stale (FP32).** The reused `pe_image_encoder` plan was built on 2026-09-26 and is
-  1.27 GB, the size of the FP32 ONNX. A fresh v0.5.0 install bakes FP16 into the ONNX first
-  (verified here: `trt_utils.py` reports `fp16` and writes a 636 MB ONNX), which should roughly
-  halve the PE time (the optimization plan quotes about 170 images/s for FP16 on this card
-  against 74 to 78 here). The rebuild was blocked in this run's sandbox, so the baseline is
-  for the engines that were on disk and the FP16 effect is a prediction, not a measurement. Rebuilding and
-  re-running `baseline_suite.py` is the first step of the optimization work. The other engines are
-  consistent with FP16 by file size.
+- **The PE engine is FP32, and the FP16 build does not work on this TensorRT release.** The
+  `pe_image_encoder` plan is 1.27 GB, the size of the FP32 ONNX. The installer's model step bakes
+  FP16 into the ONNX first (`trt_utils.py` reports `fp16` and writes a 636 MB ONNX), then runs
+  `trtexec` with the profile `images` min 1x3x336x336, opt 8, max 32, workspace 8G, `--skipInference`
+  (`scripts/lib/model_setup.sh`, `_ms_pe_trtexec`). On this stack (TensorRT 11.1 in the Triton 26.06
+  image) that build fails at parse time on both `Einsum` nodes: `IEinsumLayer must have all
+  inputs of same type. Input 1 has type Half and input 0 has type Float` (`/visual/Einsum`, whose
+  second input is a float32 `Constant` left unconverted by the FP16 graph rewrite while the first input
+  was cast to half). The installer then retries from the FP32 ONNX, which builds. A fresh v0.5.0
+  install therefore ends up with the same FP32 engine as this baseline, so the baseline is the true
+  "before" for the default install, and the earlier FP16 expectation (about 170 images/s) is not
+  reachable without fixing the FP16 bake. That fix (keep `Einsum` in FP32 or convert its constant) is
+  a separate change; the FP16 effect is still not measured.
 - OpenSearch data and the upload store live on a RAID array (Docker data root), not on NVMe.
   This affects `opensearch_write` and the upload route's persistence; treat them as upper bounds.
 - The VLM worker, polling a project that has data while no VLM is configured, burned about
