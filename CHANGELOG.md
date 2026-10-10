@@ -20,6 +20,16 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+- `scripts/bench/parity.py` with `capture` and `compare` subcommands: the accuracy gate every
+  v0.6.0 change passes. `capture` ingests the pinned COCO set into a fresh project and stores the
+  per-stage outputs (detector boxes, crop rectangles, PE crop and whole-frame vectors, cluster
+  assignments and geometry, labels, optional MobileCLIP, face, OCR and VLM probes) as
+  `capture.json` plus a float16 NPZ, with hardware, git sha, image digests, engine record and
+  dataset manifest hash. `compare` measures a candidate against a reference (box matching, cosine,
+  neighbour overlap, cluster agreement and purity against the COCO ground truth, label agreement),
+  applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
+  FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
+
 ### Changed
 
 - Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
